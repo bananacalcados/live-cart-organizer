@@ -109,14 +109,15 @@ export function POSWhatsAppCheckoutDialog({
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
   const cartSubtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const parseNum = (v: string) => parseFloat((v || "").replace(",", ".")) || 0;
   const manualDiscount = (() => {
-    const val = parseFloat(discountValue);
+    const val = parseNum(discountValue);
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
   const couponDiscount = couponApplied ? Math.min(cartSubtotal, couponApplied.discount) : 0;
   const discountAmount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
-  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
+  const shippingAmount = freeShipping ? 0 : parseNum(shippingValue);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
   const handleApplyCoupon = async () => {
