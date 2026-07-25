@@ -140,7 +140,20 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkItemId, setLinkItemId] = useState<string>("");
   const [linking, setLinking] = useState(false);
+  const [templates, setTemplates] = useState<TrackingTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
+  const [showTplEditor, setShowTplEditor] = useState(false);
 
+  const loadTemplates = async (focusId?: string) => {
+    const { data } = await supabase
+      .from("pos_tracking_templates" as any)
+      .select("id, name, body, is_default")
+      .order("is_default", { ascending: false })
+      .order("name");
+    const list = ((data as any[]) || []) as TrackingTemplate[];
+    setTemplates(list);
+    setTemplateId((prev) => focusId || prev || list[0]?.id || "");
+  };
 
   useEffect(() => {
     const init: Record<string, CheckState> = {};
@@ -148,6 +161,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     setChecks(init);
 
     void loadNfeStatus();
+    void loadTemplates();
 
 
     supabase
@@ -160,6 +174,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id]);
+
 
   const allScanned = useMemo(
     () => order.items.every((it) => checks[it.id]?.scanned),
