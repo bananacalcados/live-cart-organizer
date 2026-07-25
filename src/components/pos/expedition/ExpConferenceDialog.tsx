@@ -14,9 +14,12 @@ import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTemplateEditor";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
+import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
 
 interface Props {
