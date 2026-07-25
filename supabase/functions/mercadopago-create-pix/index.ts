@@ -45,7 +45,7 @@ serve(async (req) => {
       throw new Error("orderId is required");
     }
 
-    const pixDiscountPct = Number(pixDiscountPercent) || 0;
+    let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -135,6 +135,26 @@ serve(async (req) => {
         : discountValue;
     }
     let totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
+
+    // Fallback: se o chamador não informou o percentual (chat, módulo Eventos, links antigos),
+    // usa o desconto PIX global configurado em app_settings — apenas para pedidos (orders),
+    // nunca para vendas do PDV (pos_sales), onde o valor é digitado manualmente.
+    if (pixDiscountPct <= 0 && order) {
+      try {
+        const { data: setting } = await supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", "pix_discount_percent")
+          .maybeSingle();
+        const globalPct = Number(String(setting?.value ?? "").replace(/"/g, "")) || 0;
+        if (globalPct > 0) {
+          pixDiscountPct = globalPct;
+          console.log(`[mp-pix] Desconto PIX global aplicado do app_settings: ${globalPct}%`);
+        }
+      } catch (e) {
+        console.error("[mp-pix] Falha ao ler pix_discount_percent:", e);
+      }
+    }
 
     // Apply PIX-specific discount (e.g. "5% OFF no PIX") so cobrança casa com o exibido no checkout
     if (pixDiscountPct > 0) {
@@ -268,6 +288,7 @@ serve(async (req) => {
         ticketUrl: pixData?.ticket_url || null,
         expirationDate: mpPayment.date_of_expiration || null,
         amount: totalAmount.toFixed(2),
+        pixDiscountPercent: pixDiscountPct,
       }),
       {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
