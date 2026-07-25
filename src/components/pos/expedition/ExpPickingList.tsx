@@ -40,6 +40,9 @@ const lineKey = (it: any) =>
 export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
   const [stock, setStock] = useState<Record<string, StockRow[]>>({});
+  const [resolved, setResolved] = useState<
+    Record<string, { name: string; variant: string | null; size: string | null; sku: string | null }>
+  >({});
   const [qtyDialog, setQtyDialog] = useState<PickLine | null>(null);
   const [qtyInput, setQtyInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
@@ -88,12 +91,15 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
       if (skus.length) filters.push(`sku.in.(${skus.map((s) => `"${s}"`).join(",")})`);
       const { data } = await supabase
         .from("pos_products")
-        .select("id, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)")
+        .select(
+          "id, name, variant, size, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)",
+        )
         .or(filters.join(","))
         .eq("pos_stores.is_simulation", false)
         .eq("pos_stores.is_active", true)
         .limit(1000);
       const map: Record<string, StockRow[]> = {};
+      const names: Record<string, { name: string; variant: string | null; size: string | null; sku: string | null }> = {};
       for (const r of (data || []) as any[]) {
         const row: StockRow = {
           product_id: r.id,
@@ -105,9 +111,13 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
           const arr = map[k] || [];
           arr.push(row);
           map[k] = arr;
+          if (!names[k] && r.name) {
+            names[k] = { name: r.name, variant: r.variant || null, size: r.size || null, sku: r.sku || null };
+          }
         }
       }
       setStock(map);
+      setResolved(names);
     } catch {
       /* best-effort */
     }
@@ -248,6 +258,11 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
       {lines.map((l) => {
         const done = separated[l.key] || 0;
         const locs = (l.barcode && stock[l.barcode]) || (l.sku && stock[l.sku]) || [];
+        const res = (l.barcode && resolved[l.barcode]) || (l.sku && resolved[l.sku]) || null;
+        const displayName = res?.name || l.product_name;
+        const displayVariant = res?.variant || l.variant_name;
+        const displaySize = res?.size || l.size;
+        const displaySku = res?.sku || l.sku;
         return (
           <div
             key={l.key}
@@ -260,9 +275,12 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
                 onCheckedChange={(v) => toggleLine(l, !!v)}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-xl font-black text-pos-text">{l.product_name}</p>
+                <p className="text-xl font-black text-pos-text">{displayName}</p>
+                {res && res.name !== l.product_name && (
+                  <p className="text-xs font-semibold text-pos-muted-text/70">Venda: {l.product_name}</p>
+                )}
                 <p className="text-base font-semibold text-pos-muted-text">
-                  {[l.variant_name, l.size && `Tam ${l.size}`, l.sku, l.barcode].filter(Boolean).join(" • ")}
+                  {[displayVariant, displaySize && `Tam ${displaySize}`, displaySku, l.barcode].filter(Boolean).join(" • ")}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {locs.length ? (
