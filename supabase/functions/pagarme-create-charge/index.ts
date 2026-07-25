@@ -792,6 +792,21 @@ serve(async (req) => {
 
     const params: ChargeRequest = rawParams;
 
+    // Saneia o e-mail do cliente (typos como "@gmail.coma" fazem o gateway recusar a cobrança)
+    if (params.customer) {
+      const emailResolution = resolvePayerEmail({
+        email: params.customer.email,
+        phone: params.customer.phone,
+        cpf: params.customer.cpf,
+        orderId: params.orderId,
+      });
+      if (emailResolution.fallbackUsed) {
+        console.warn(`[charge] E-mail ajustado/substituído (original inválido) → ${emailResolution.email}`);
+      }
+      params.customer.email = emailResolution.email;
+    }
+
+
     // Validate phone
     const phoneDigits = params.customer.phone.replace(/\D/g, "");
     if (phoneDigits.length < 10) {
