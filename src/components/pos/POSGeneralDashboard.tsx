@@ -555,6 +555,14 @@ export function POSGeneralDashboard({ onBack }: Props) {
             Faturamento Live já está incluído no Faturamento total (não é somado por cima).
           </p>
 
+          {/* CUSTOS DE ENTREGA/ENVIO (todas as lojas) */}
+          <DeliveryCostsCard
+            periodStart={periodRange.start}
+            periodEnd={periodRange.end}
+            periodLabel={periodRange.label}
+          />
+
+
           {/* SELLER TASK PROGRESS */}
           <Panel title="Progresso de tarefas das vendedoras" icon={ClipboardList}>
             <POSSellerTaskProgress stores={stores} />
