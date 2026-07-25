@@ -40,6 +40,8 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [scanInput, setScanInput] = useState("");
   const [tracking, setTracking] = useState(order.tracking_code || "");
+  const [trackingUrl, setTrackingUrl] = useState<string>((order as any).tracking_url || "");
+  const [deliveryDays, setDeliveryDays] = useState<string>((order as any).delivery_days || "");
   const [shipping, setShipping] = useState<ShippingFieldsValue>({
     carrier: order.shipping_carrier || order.delivery_method || "",
     courier: order.courier_name || "",
