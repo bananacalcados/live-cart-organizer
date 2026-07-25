@@ -1447,7 +1447,7 @@ export function MassTemplateDispatcher() {
         // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
           .from('dispatch_history')
-          .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false } as any)
+          .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false, total_recipients: guardResult.inserted } as any)
           .eq('id', dispatchId);
         if (actErr) throw actErr;
       }
