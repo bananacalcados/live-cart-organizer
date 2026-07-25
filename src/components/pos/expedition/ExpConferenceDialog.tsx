@@ -294,26 +294,64 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   };
 
 
+  /** Valores reais do pedido para preencher as variáveis da mensagem. */
+  const trackingValues: TrackingVarValues = useMemo(() => {
+    const full = String(order.customer_name || "").trim();
+    const addr = order.shipping_address || {};
+    return {
+      nome: full,
+      primeiro_nome: full.split(" ")[0] || "",
+      transportadora: carrier || courier || "",
+      prazo_entrega: deliveryDays || "",
+      codigo_rastreio: tracking.trim(),
+      link_rastreio: trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
+      valor_pedido: brl(order.total || 0),
+      endereco: formatShippingAddress(addr),
+      cidade: (addr as any)?.city || (addr as any)?.cidade || "",
+      estado: (addr as any)?.state || (addr as any)?.uf || "",
+      cep: (addr as any)?.zip_code || (addr as any)?.cep || "",
+      pedido_numero: String(order.id).slice(0, 8).toUpperCase(),
+      itens: order.items
+        .map((i) => `${i.quantity}x ${[i.product_name, i.variant_name, i.size && `Tam ${i.size}`].filter(Boolean).join(" ")}`)
+        .join("\n"),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl]);
+
   const sendTrackingWa = async () => {
-    const phone = (order.customer_phone || "").replace(/\D/g, "");
+    const phone = (order.resolved_phone || order.customer_phone || "").replace(/\D/g, "");
     if (!phone) return toast.error("Cliente sem WhatsApp");
     if (!numberId) return toast.error("Selecione a instância de WhatsApp");
     if (!tracking.trim()) return toast.error("Informe o código de rastreio");
+    const tpl = templates.find((t) => t.id === templateId) || templates[0];
+    if (!tpl) return toast.error("Nenhuma mensagem de rastreio cadastrada");
     setSendingWa(true);
     try {
-      const greeting = order.customer_name ? `Oi, ${String(order.customer_name).split(" ")[0]}!` : "Oi!";
-      const message = `${greeting} 📦\nSeu pedido foi despachado.\n\n*Transportadora:* ${carrier || "-"}\n*Código de rastreio:* ${tracking.trim()}\n*Acompanhe:* ${trackingLink(tracking.trim())}`;
+      const message = renderTrackingMessage(tpl.body, trackingValues).trim();
       const { data: num } = await supabase
         .from("whatsapp_numbers_safe")
         .select("provider")
         .eq("id", numberId)
         .maybeSingle();
-      const fn = (num as any)?.provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
-      const { error } = await supabase.functions.invoke(fn, {
-        body: { phone, message, whatsapp_number_id: numberId },
+      // Rota correta por provider (meta | zapi | uazapi | wasender) — antes caía sempre no zapi.
+      const messageId = await posSendText({
+        provider: (num as any)?.provider,
+        phone,
+        message,
+        numberId,
       });
-      if (error) throw error;
+      if (!messageId) throw new Error("O provedor não confirmou o envio da mensagem");
+      // Persiste o link/prazo informados para não perder o dado ao fechar o modal.
+      await supabase
+        .from("pos_sales")
+        .update({
+          tracking_code: tracking.trim() || null,
+          tracking_url: trackingUrl.trim() || null,
+          delivery_days: deliveryDays.trim() || null,
+        } as any)
+        .eq("id", order.id);
       toast.success("Rastreio enviado no WhatsApp");
+
     } catch (e: any) {
       toast.error(e?.message || "Erro ao enviar rastreio");
     } finally {
