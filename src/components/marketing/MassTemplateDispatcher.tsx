@@ -1406,7 +1406,7 @@ export function MassTemplateDispatcher() {
             rfm: rfmFilter, state: stateFilter, city: cityFilter,
             ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
           } as any,
-          total_recipients: phones.length,
+          total_recipients: 0,
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
@@ -1447,7 +1447,7 @@ export function MassTemplateDispatcher() {
         // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
           .from('dispatch_history')
-          .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false } as any)
+          .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false, total_recipients: guardResult.inserted } as any)
           .eq('id', dispatchId);
         if (actErr) throw actErr;
       }
@@ -1540,7 +1540,9 @@ export function MassTemplateDispatcher() {
           rfm: rfmFilter, state: stateFilter, city: cityFilter,
           ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
         } as any,
-        total_recipients: allPhones.length,
+        // Começa em 0: o número real da "Lista" é gravado pelo motor de cota
+        // (enqueue_dispatch_recipients_guarded) depois de aplicar as regras.
+        total_recipients: 0,
         rendered_message: renderedMessage || null,
         variables_config: variables as any,
         force_resend: forceResend,
@@ -1597,6 +1599,14 @@ export function MassTemplateDispatcher() {
         notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
         throw new Error('quota_zero');
       }
+
+      // Garante que a "Lista" exibida no relatório = elegíveis pós-motor de cota.
+      await supabase
+        .from('dispatch_history')
+        .update({ total_recipients: guardResult.inserted } as any)
+        .eq('id', dispatchId);
+
+
 
       if (editDispatchId) {
         toast.success(`✅ Disparo atualizado — ${guardResult.inserted} destinatários na lista`);
@@ -1691,7 +1701,7 @@ export function MassTemplateDispatcher() {
             rfm: rfmFilter, state: stateFilter, city: cityFilter,
             ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
           } as any,
-          total_recipients: slicePhones.length,
+          total_recipients: 0,
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
@@ -1724,6 +1734,10 @@ export function MassTemplateDispatcher() {
         if (guardResult.inserted === 0) {
           console.warn(`Parte ${i + 1}: motor bloqueou todos os destinatários — dispatch criado vazio`);
         }
+        await supabase
+          .from('dispatch_history')
+          .update({ total_recipients: guardResult.inserted } as any)
+          .eq('id', dispatchId);
         created++;
       }
 

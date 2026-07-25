@@ -334,7 +334,9 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                   failed: agg.failed || prev.stats?.failed || 0,
                   dispatched: prev.sent_count || reallyDispatched,
                   interactions: prev.stats?.interactions || 0,
-                  total: prev.total_recipients || allRecipients.length,
+                  // "Lista" = pessoas REALMENTE enfileiradas após o motor de cota
+                  // (linhas em dispatch_recipients), não a seleção bruta da tela.
+                  total: allRecipients.length || prev.total_recipients || 0,
                 },
               }
             : prev
