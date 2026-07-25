@@ -13107,6 +13107,7 @@ export type Database = {
           customer_phone: string | null
           customer_state: string | null
           customer_unified_id: string | null
+          delivery_days: string | null
           discount: number
           event_id: string | null
           expedition_finished_at: string | null
@@ -13156,6 +13157,7 @@ export type Database = {
           total: number
           tracking_carrier: string | null
           tracking_code: string | null
+          tracking_url: string | null
           updated_at: string
           vindi_transaction_id: string | null
         }
@@ -13182,6 +13184,7 @@ export type Database = {
           customer_phone?: string | null
           customer_state?: string | null
           customer_unified_id?: string | null
+          delivery_days?: string | null
           discount?: number
           event_id?: string | null
           expedition_finished_at?: string | null
@@ -13231,6 +13234,7 @@ export type Database = {
           total?: number
           tracking_carrier?: string | null
           tracking_code?: string | null
+          tracking_url?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
         }
@@ -13257,6 +13261,7 @@ export type Database = {
           customer_phone?: string | null
           customer_state?: string | null
           customer_unified_id?: string | null
+          delivery_days?: string | null
           discount?: number
           event_id?: string | null
           expedition_finished_at?: string | null
@@ -13306,6 +13311,7 @@ export type Database = {
           total?: number
           tracking_carrier?: string | null
           tracking_code?: string | null
+          tracking_url?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
         }
@@ -14178,6 +14184,33 @@ export type Database = {
           template_variables?: Json
           updated_at?: string
           whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      pos_tracking_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }

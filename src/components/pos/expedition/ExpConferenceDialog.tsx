@@ -14,9 +14,12 @@ import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTemplateEditor";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
+import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
 
 interface Props {
@@ -37,6 +40,8 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [scanInput, setScanInput] = useState("");
   const [tracking, setTracking] = useState(order.tracking_code || "");
+  const [trackingUrl, setTrackingUrl] = useState<string>((order as any).tracking_url || "");
+  const [deliveryDays, setDeliveryDays] = useState<string>((order as any).delivery_days || "");
   const [shipping, setShipping] = useState<ShippingFieldsValue>({
     carrier: order.shipping_carrier || order.delivery_method || "",
     courier: order.courier_name || "",
@@ -135,7 +140,20 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [linkItemId, setLinkItemId] = useState<string>("");
   const [linking, setLinking] = useState(false);
+  const [templates, setTemplates] = useState<TrackingTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
+  const [showTplEditor, setShowTplEditor] = useState(false);
 
+  const loadTemplates = async (focusId?: string) => {
+    const { data } = await supabase
+      .from("pos_tracking_templates" as any)
+      .select("id, name, body, is_default")
+      .order("is_default", { ascending: false })
+      .order("name");
+    const list = ((data as any[]) || []) as TrackingTemplate[];
+    setTemplates(list);
+    setTemplateId((prev) => focusId || prev || list[0]?.id || "");
+  };
 
   useEffect(() => {
     const init: Record<string, CheckState> = {};
@@ -143,6 +161,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     setChecks(init);
 
     void loadNfeStatus();
+    void loadTemplates();
 
 
     supabase
@@ -155,6 +174,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id]);
+
 
   const allScanned = useMemo(
     () => order.items.every((it) => checks[it.id]?.scanned),
@@ -274,26 +294,64 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   };
 
 
+  /** Valores reais do pedido para preencher as variáveis da mensagem. */
+  const trackingValues: TrackingVarValues = useMemo(() => {
+    const full = String(order.customer_name || "").trim();
+    const addr = order.shipping_address || {};
+    return {
+      nome: full,
+      primeiro_nome: full.split(" ")[0] || "",
+      transportadora: carrier || courier || "",
+      prazo_entrega: deliveryDays || "",
+      codigo_rastreio: tracking.trim(),
+      link_rastreio: trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
+      valor_pedido: brl(order.total || 0),
+      endereco: formatShippingAddress(addr),
+      cidade: (addr as any)?.city || (addr as any)?.cidade || "",
+      estado: (addr as any)?.state || (addr as any)?.uf || "",
+      cep: (addr as any)?.zip_code || (addr as any)?.cep || "",
+      pedido_numero: String(order.id).slice(0, 8).toUpperCase(),
+      itens: order.items
+        .map((i) => `${i.quantity}x ${[i.product_name, i.variant_name, i.size && `Tam ${i.size}`].filter(Boolean).join(" ")}`)
+        .join("\n"),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl]);
+
   const sendTrackingWa = async () => {
-    const phone = (order.customer_phone || "").replace(/\D/g, "");
+    const phone = (order.resolved_phone || order.customer_phone || "").replace(/\D/g, "");
     if (!phone) return toast.error("Cliente sem WhatsApp");
     if (!numberId) return toast.error("Selecione a instância de WhatsApp");
     if (!tracking.trim()) return toast.error("Informe o código de rastreio");
+    const tpl = templates.find((t) => t.id === templateId) || templates[0];
+    if (!tpl) return toast.error("Nenhuma mensagem de rastreio cadastrada");
     setSendingWa(true);
     try {
-      const greeting = order.customer_name ? `Oi, ${String(order.customer_name).split(" ")[0]}!` : "Oi!";
-      const message = `${greeting} 📦\nSeu pedido foi despachado.\n\n*Transportadora:* ${carrier || "-"}\n*Código de rastreio:* ${tracking.trim()}\n*Acompanhe:* ${trackingLink(tracking.trim())}`;
+      const message = renderTrackingMessage(tpl.body, trackingValues).trim();
       const { data: num } = await supabase
         .from("whatsapp_numbers_safe")
         .select("provider")
         .eq("id", numberId)
         .maybeSingle();
-      const fn = (num as any)?.provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
-      const { error } = await supabase.functions.invoke(fn, {
-        body: { phone, message, whatsapp_number_id: numberId },
+      // Rota correta por provider (meta | zapi | uazapi | wasender) — antes caía sempre no zapi.
+      const messageId = await posSendText({
+        provider: (num as any)?.provider,
+        phone,
+        message,
+        numberId,
       });
-      if (error) throw error;
+      if (!messageId) throw new Error("O provedor não confirmou o envio da mensagem");
+      // Persiste o link/prazo informados para não perder o dado ao fechar o modal.
+      await supabase
+        .from("pos_sales")
+        .update({
+          tracking_code: tracking.trim() || null,
+          tracking_url: trackingUrl.trim() || null,
+          delivery_days: deliveryDays.trim() || null,
+        } as any)
+        .eq("id", order.id);
       toast.success("Rastreio enviado no WhatsApp");
+
     } catch (e: any) {
       toast.error(e?.message || "Erro ao enviar rastreio");
     } finally {
@@ -333,8 +391,10 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           shipping_carrier: carrier,
           tracking_carrier: carrier,
           tracking_code: tracking.trim() || null,
+          tracking_url: trackingUrl.trim() || null,
+          delivery_days: deliveryDays.trim() || null,
           courier_name: courier.trim() || null,
-        })
+        } as any)
         .eq("id", order.id);
       if (error) throw error;
 
@@ -516,34 +576,75 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             </p>
             <ExpShippingFields value={shipping} onChange={setShipping} />
             {!isMototaxi(carrier) && !isPickup(carrier) && (
-              <div>
-                <Label className="text-base font-bold">Código de rastreio</Label>
-                <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-base font-bold">Código de rastreio</Label>
+                  <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
+                </div>
+                <div>
+                  <Label className="text-base font-bold">Prazo de entrega (dias úteis)</Label>
+                  <Input
+                    value={deliveryDays}
+                    onChange={(e) => setDeliveryDays(e.target.value)}
+                    className="h-12 text-base"
+                    placeholder="Ex: 5 a 8"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-base font-bold">Link de rastreio</Label>
+                  <Input
+                    value={trackingUrl}
+                    onChange={(e) => setTrackingUrl(e.target.value)}
+                    className="h-12 text-base"
+                    placeholder={tracking.trim() ? trackingLink(tracking.trim()) : "https://..."}
+                  />
+                </div>
               </div>
             )}
 
 
             {isCarrierWithTracking(carrier) && (
-              <div className="flex items-end gap-2 flex-wrap">
-                <div className="min-w-[220px]">
-                  <Label className="text-base font-bold">Instância WhatsApp</Label>
-                  <Select value={numberId} onValueChange={setNumberId}>
-                    <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      {numbers.map((n) => (
-                        <SelectItem key={n.id} value={n.id} className="text-base">
-                          {n.label || n.phone_display}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-3">
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="min-w-[240px] flex-1">
+                    <Label className="text-base font-bold">Mensagem de rastreio</Label>
+                    <Select value={templateId} onValueChange={setTemplateId}>
+                      <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione a mensagem" /></SelectTrigger>
+                      <SelectContent>
+                        {templates.map((t) => (
+                          <SelectItem key={t.id} value={t.id} className="text-base">
+                            {t.name}{t.is_default ? " (padrão)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" className="h-12 font-bold" onClick={() => setShowTplEditor(true)}>
+                    <Pencil className="h-4 w-4 mr-1" /> Editar / criar mensagem
+                  </Button>
                 </div>
-                <Button onClick={sendTrackingWa} disabled={sendingWa} variant="outline" className="h-12 font-bold">
-                  {sendingWa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
-                  Enviar rastreio no WhatsApp
-                </Button>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="min-w-[220px]">
+                    <Label className="text-base font-bold">Instância WhatsApp</Label>
+                    <Select value={numberId} onValueChange={setNumberId}>
+                      <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {numbers.map((n) => (
+                          <SelectItem key={n.id} value={n.id} className="text-base">
+                            {n.label || n.phone_display}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={sendTrackingWa} disabled={sendingWa} variant="outline" className="h-12 font-bold">
+                    {sendingWa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                    Enviar rastreio no WhatsApp
+                  </Button>
+                </div>
               </div>
             )}
+
           </div>
 
           <Button
@@ -606,6 +707,18 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             onSaved={() => setShowEdit(false)}
           />
         )}
+
+        <ExpTrackingTemplateEditor
+          open={showTplEditor}
+          onOpenChange={setShowTplEditor}
+          previewValues={trackingValues}
+          selectedId={templateId}
+          onSaved={(list, activeId) => {
+            setTemplates(list);
+            setTemplateId(activeId);
+          }}
+        />
+
       </DialogContent>
     </Dialog>
   );
