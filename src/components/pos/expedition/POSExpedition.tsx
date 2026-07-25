@@ -685,7 +685,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             </Button>
                           )}
 
-                          {stage === "novo" && o.is_avulso && (
+                          {stage === "novo" && o.is_avulso ? (
                             <Button
                               size="lg"
                               variant="outline"
@@ -694,7 +694,30 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             >
                               <Pencil className="h-5 w-5 mr-1" /> EDITAR PEDIDO
                             </Button>
+                          ) : (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-exp-prep text-exp-prep text-base font-black"
+                              onClick={() => setEditOrder(o)}
+                              title="Editar dados do pedido / NF-e"
+                            >
+                              <Pencil className="h-5 w-5 mr-1" /> EDITAR DADOS
+                            </Button>
                           )}
+                          {prevStage(o.expedition_stage) && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="text-base font-black"
+                              disabled={busyId === o.id}
+                              onClick={() => goBack(o)}
+                              title="Voltar para a etapa anterior"
+                            >
+                              <ChevronLeft className="h-5 w-5 mr-1" /> VOLTAR
+                            </Button>
+                          )}
+
                           {stage === "novo" && (
                             <Button
                               size="lg"
