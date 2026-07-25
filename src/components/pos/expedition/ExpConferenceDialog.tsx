@@ -707,6 +707,18 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             onSaved={() => setShowEdit(false)}
           />
         )}
+
+        <ExpTrackingTemplateEditor
+          open={showTplEditor}
+          onOpenChange={setShowTplEditor}
+          previewValues={trackingValues}
+          selectedId={templateId}
+          onSaved={(list, activeId) => {
+            setTemplates(list);
+            setTemplateId(activeId);
+          }}
+        />
+
       </DialogContent>
     </Dialog>
   );
