@@ -40,6 +40,9 @@ const lineKey = (it: any) =>
 export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
   const [stock, setStock] = useState<Record<string, StockRow[]>>({});
+  const [resolved, setResolved] = useState<
+    Record<string, { name: string; variant: string | null; size: string | null; sku: string | null }>
+  >({});
   const [qtyDialog, setQtyDialog] = useState<PickLine | null>(null);
   const [qtyInput, setQtyInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
