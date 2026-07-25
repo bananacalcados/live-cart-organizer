@@ -207,7 +207,7 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
         <td><strong>${l.product_name}</strong><br/><span style="font-size:11px;color:#555">${[l.variant_name, l.size && `Tam ${l.size}`, l.sku]
           .filter(Boolean)
           .join(" • ")}</span></td>
-        <td style="font-size:11px">${((l.barcode && stock[l.barcode]) || (l.sku && stock[l.sku]) || [])
+        <td style="font-size:11px">${(stock[(l.barcode || "").trim()] || stock[(l.sku || "").trim()] || [])
           .map((s) => `${s.store}: ${s.stock}`)
           .join(" | ") || "—"}</td>
         <td style="text-align:center;font-size:18px;font-weight:bold">${l.quantity}</td>
