@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+
 
 export type ExpStage = "novo" | "preparacao" | "separacao" | "conferencia" | "concluido";
 
