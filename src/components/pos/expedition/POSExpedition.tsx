@@ -638,6 +638,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {o.resolved_phone && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-emerald-500 text-emerald-600 text-base font-black"
+                              onClick={() => setChatOrder(o)}
+                              title={o.wa_instance_label ? `Conversa em ${o.wa_instance_label}` : "Abrir conversa"}
+                            >
+                              <MessageCircle className="h-5 w-5 mr-1" /> WHATSAPP
+                            </Button>
+                          )}
+
                           {stage === "novo" && o.is_avulso && (
                             <Button
                               size="lg"
