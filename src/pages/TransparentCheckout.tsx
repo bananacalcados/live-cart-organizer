@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CrossellModal, { type CrossellBlock } from "@/components/checkout/CrossellModal";
+import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 
 interface OrderProduct {
   title: string;
@@ -1725,7 +1726,7 @@ export default function TransparentCheckout() {
                   k,
                   (form as CustomerFormData)[k]?.toString().trim() ? (form as CustomerFormData)[k] : prevForm[k],
                 ]),
-              ) as CustomerFormData)
+              ) as unknown as CustomerFormData)
             : prevForm;
 
           // Grava o cadastro reaproveitado neste pedido, para que NF-e/expedição
