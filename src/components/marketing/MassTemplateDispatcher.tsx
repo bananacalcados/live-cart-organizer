@@ -1540,7 +1540,9 @@ export function MassTemplateDispatcher() {
           rfm: rfmFilter, state: stateFilter, city: cityFilter,
           ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
         } as any,
-        total_recipients: allPhones.length,
+        // Começa em 0: o número real da "Lista" é gravado pelo motor de cota
+        // (enqueue_dispatch_recipients_guarded) depois de aplicar as regras.
+        total_recipients: 0,
         rendered_message: renderedMessage || null,
         variables_config: variables as any,
         force_resend: forceResend,
