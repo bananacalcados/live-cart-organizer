@@ -10,6 +10,8 @@ import { Loader2, MapPin, Save, Pencil } from "lucide-react";
 import { ExpOrder, isPickup } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
+import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+
 
 interface Props {
   order: ExpOrder;
