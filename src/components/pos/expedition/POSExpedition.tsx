@@ -95,12 +95,14 @@ export function POSExpedition({ storeId, storeName }: Props) {
       .select("expedition_stage")
       .eq("store_id", storeId)
       .in("sale_type", ["live", "online"])
-      .neq("status", "cancelled")
+      .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
+      .or(PAID_FILTER)
       .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
     const c: Record<string, number> = {};
     for (const r of (data || []) as any[]) c[r.expedition_stage] = (c[r.expedition_stage] || 0) + 1;
     setCounts(c);
   };
+
 
   const load = async () => {
     if (!storeId) return;
