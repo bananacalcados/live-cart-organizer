@@ -109,14 +109,15 @@ export function POSWhatsAppCheckoutDialog({
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
   const cartSubtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const parseNum = (v: string) => parseFloat((v || "").replace(",", ".")) || 0;
   const manualDiscount = (() => {
-    const val = parseFloat(discountValue);
+    const val = parseNum(discountValue);
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
   const couponDiscount = couponApplied ? Math.min(cartSubtotal, couponApplied.discount) : 0;
   const discountAmount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
-  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
+  const shippingAmount = freeShipping ? 0 : parseNum(shippingValue);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
   const handleApplyCoupon = async () => {
@@ -356,25 +357,41 @@ export function POSWhatsAppCheckoutDialog({
 
                 {/* Discount & Shipping */}
                 <div className="space-y-4 border-t pt-4">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="min-w-0">
                       <Label className="text-base font-bold">Desconto</Label>
                       <div className="flex gap-1 mt-1">
-                        <Input value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} placeholder="0" className="h-12 text-lg font-bold" type="number" />
+                        <Input
+                          value={discountValue}
+                          onChange={(e) => setDiscountValue(e.target.value.replace(/[^\d.,]/g, ""))}
+                          placeholder="0"
+                          className="h-12 text-lg font-bold flex-1 min-w-0"
+                          inputMode="decimal"
+                        />
                         <button onClick={() => setDiscountType(discountType === "fixed" ? "percent" : "fixed")} className="h-12 px-3 rounded bg-muted text-base font-bold shrink-0">
                           {discountType === "fixed" ? "R$" : "%"}
                         </button>
                       </div>
                     </div>
-                    <div className="flex-1">
+                    <div className="min-w-0">
                       <Label className="text-base font-bold">Frete</Label>
-                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-12 text-lg font-bold mt-1" type="number" disabled={freeShipping} />
-                    </div>
-                    <div className="flex items-end gap-1.5 pb-3">
-                      <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
-                      <Label htmlFor="free-ship" className="text-sm font-bold cursor-pointer">Frete Grátis</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          value={shippingValue}
+                          onChange={(e) => setShippingValue(e.target.value.replace(/[^\d.,]/g, ""))}
+                          placeholder="0"
+                          className="h-12 text-lg font-bold flex-1 min-w-0"
+                          inputMode="decimal"
+                          disabled={freeShipping}
+                        />
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
+                          <Label htmlFor="free-ship" className="text-xs font-bold cursor-pointer whitespace-nowrap">Frete Grátis</Label>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
 
 
                   <div>
