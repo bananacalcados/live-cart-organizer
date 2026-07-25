@@ -14,6 +14,8 @@ import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
+import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+
 
 interface Props {
   order: ExpOrder;
