@@ -45,16 +45,19 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
   const [nfeReject, setNfeReject] = useState<string | null>(null);
+  const [nfeDoc, setNfeDoc] = useState<any | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
   const loadNfeStatus = async () => {
     const { data } = await supabase
       .from("fiscal_documents")
-      .select("status, numero, rejection_code, rejection_message")
+      .select("id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_code, rejection_message")
       .eq("pos_sale_id", order.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    setNfeDoc(data || null);
     setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null);
     const msg = (data as any)?.rejection_message || null;
     const code = (data as any)?.rejection_code || null;
@@ -63,7 +66,63 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         ? [code ? `Rejeição ${code}` : null, msg].filter(Boolean).join(": ")
         : null,
     );
+    return data as any;
   };
+
+  const isAuthorized = ["authorized", "autorizada", "autorizado"].includes(String(nfeDoc?.status || ""));
+
+  const copyChave = async () => {
+    if (!nfeDoc?.chave_acesso) return;
+    try {
+      await navigator.clipboard.writeText(nfeDoc.chave_acesso);
+      toast.success("Chave de acesso copiada");
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
+  const downloadXml = async () => {
+    let xml = nfeDoc?.xml_content as string | undefined;
+    if (!xml) {
+      setBackfilling(true);
+      try {
+        await supabase.functions.invoke("fiscal-backfill-danfe", { body: { document_id: nfeDoc?.id } });
+        const fresh = await loadNfeStatus();
+        xml = fresh?.xml_content;
+      } finally {
+        setBackfilling(false);
+      }
+    }
+    if (!xml) return toast.error("XML ainda não disponível para esta NF-e");
+    const blob = new Blob([xml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NFe-${nfeDoc?.chave_acesso || nfeDoc?.numero}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openDanfe = async () => {
+    let url = nfeDoc?.danfe_url as string | undefined;
+    if (!url) {
+      setBackfilling(true);
+      try {
+        await supabase.functions.invoke("fiscal-backfill-danfe", { body: { document_id: nfeDoc?.id } });
+        const fresh = await loadNfeStatus();
+        url = fresh?.danfe_url;
+      } finally {
+        setBackfilling(false);
+      }
+    }
+    if (!url) return toast.error("DANFE ainda não disponível para esta NF-e");
+    try {
+      await openFiscalDocument(url, { autoPrint: true });
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao abrir DANFE");
+    }
+  };
+
 
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
