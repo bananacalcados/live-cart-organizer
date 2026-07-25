@@ -1,4 +1,5 @@
 export type OrderStage = 
+  | 'pre_sale'
   | 'incomplete_order'
   | 'awaiting_confirmation'
   | 'new'
@@ -47,6 +48,7 @@ export interface Stage {
 }
 
 export const STAGES: Stage[] = [
+  { id: 'pre_sale', title: 'Pré Venda', color: 'bg-stage-pre-sale' },
   { id: 'incomplete_order', title: 'Pedido Incompleto', color: 'bg-stage-incomplete' },
   { id: 'awaiting_confirmation', title: 'Aguardando Confirmação', color: 'bg-stage-awaiting-confirm' },
   { id: 'new', title: 'Novo Pedido', color: 'bg-stage-new' },

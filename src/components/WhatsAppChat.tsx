@@ -687,6 +687,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   const getStageColorClass = (stageId: OrderStage) => {
     const colors: Record<OrderStage, string> = {
+      pre_sale: 'bg-[hsl(var(--stage-pre-sale))]',
       incomplete_order: 'bg-[hsl(var(--stage-incomplete))]',
       awaiting_confirmation: 'bg-[hsl(var(--stage-awaiting-confirm))]',
       new: 'bg-[hsl(var(--stage-new))]',
