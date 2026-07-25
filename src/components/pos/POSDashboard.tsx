@@ -315,6 +315,15 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} trend="wave" />
             </div>
 
+            <DeliveryCostsCard
+              storeId={storeId}
+              periodStart={getPeriodRange(period, customRange).start}
+              periodEnd={getPeriodRange(period, customRange).end}
+              periodLabel={periodLabel}
+            />
+
+
+
             {/* Metas da Loja (Dia / Semana / Mês) */}
             <div className="space-y-3">
               <div className="flex items-center justify-center">
