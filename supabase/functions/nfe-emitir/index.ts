@@ -319,7 +319,14 @@ Deno.serve(async (req) => {
     }
 
     const cpfDest = digits(order.customer_cpf);
-    if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário");
+    if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário (11 dígitos)");
+    // Valida dígitos verificadores para não gastar numeração com "Rejeição 237: CPF do destinatário inválido"
+    if (!isValidCpf(cpfDest)) {
+      throw new Error(
+        `CPF do destinatário inválido (${cpfDest}) — dígito verificador não confere. Corrija o CPF do cliente em "Editar dados do pedido / NF-e" e emita novamente.`,
+      );
+    }
+
 
     const ship = (order.shipping_address || {}) as any;
     const ufDestino = ufFromProvince(ship.province) || "MG";
