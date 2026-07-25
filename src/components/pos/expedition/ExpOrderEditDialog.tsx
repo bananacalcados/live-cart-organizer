@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, MapPin, Save, Pencil } from "lucide-react";
 import { ExpOrder, isPickup } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
@@ -49,9 +50,23 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
     courierProviderId: "",
     cost: "",
   });
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  const [sellerId, setSellerId] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
+    supabase
+      .from("pos_sellers")
+      .select("id, name")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setSellers((data as any) || []));
+  }, [open, storeId]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSellerId(order.seller_id || "");
     setForm({
       name: order.customer_name || pd.customer_name || "",
       phone: order.customer_phone || pd.customer_phone || "",
@@ -73,6 +88,8 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id]);
+
+
 
   const lookupCep = async (rawCep?: string) => {
     const cep = onlyDigits(rawCep ?? form.cep);
@@ -138,6 +155,7 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
           tracking_carrier: shipping.carrier || null,
           courier_name: shipping.courier.trim() || null,
           pickup_store_id: isPickup(shipping.carrier) ? storeId : null,
+          seller_id: sellerId || null,
         } as any)
         .eq("id", order.id);
       if (error) throw error;
@@ -246,8 +264,36 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
           </div>
 
           <div>
-            <h3 className="text-lg font-black mb-2">3. Envio</h3>
+            <h3 className="text-lg font-black mb-2">3. Vendedora</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label>Vendedora responsável</Label>
+                <Select value={sellerId || "none"} onValueChange={(v) => setSellerId(v === "none" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar vendedora" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem vendedora definida</SelectItem>
+                    {sellers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!order.seller_id && order.seller_label && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Atribuição atual (automática): {order.seller_label}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black mb-2">4. Envio</h3>
             <ExpShippingFields value={shipping} onChange={setShipping} compact />
+
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
