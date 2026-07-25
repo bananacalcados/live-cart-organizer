@@ -295,10 +295,10 @@ export async function fetchExpeditionOrders(
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
     const phone = salePhone(s);
     const suf = phone ? phone.slice(-8) : "";
-    const saleSeller = s.seller_id ? sellerMap.get(s.seller_id) || null : null;
-    const linkSeller = s.payment_details?.seller_name || null;
-    const chatSeller = suf ? attendantBySuffix.get(suf) || null : null;
-    const seller_label = saleSeller || linkSeller || chatSeller;
+    const saleSeller = storeIsOnlineOnly ? null : s.seller_id ? sellerMap.get(s.seller_id) || null : null;
+    const linkSeller = storeIsOnlineOnly ? null : s.payment_details?.seller_name || null;
+    const chatSeller = storeIsOnlineOnly ? null : suf ? attendantBySuffix.get(suf) || null : null;
+    const seller_label = saleSeller || linkSeller || chatSeller || null;
     const waId = suf ? instBySuffix.get(suf) || null : null;
     return {
       ...s,
@@ -310,6 +310,7 @@ export async function fetchExpeditionOrders(
       seller_name: saleSeller,
       seller_label,
       seller_source: saleSeller ? "sale" : linkSeller ? "link" : chatSeller ? "chat" : null,
+
       resolved_phone: phone,
       wa_number_id: waId,
       wa_instance_label: waId ? instMap.get(waId) || null : null,
