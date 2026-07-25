@@ -594,6 +594,28 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               </span>
                             )}
                           </div>
+                          <div className="mt-1 text-sm font-bold text-pos-muted-text flex items-center gap-3 flex-wrap">
+                            {o.seller_label && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-4 w-4" />
+                                {o.seller_label}
+                                <span className="font-medium opacity-70">
+                                  ({o.seller_source === "sale" ? "vendedora da venda" : o.seller_source === "link" ? "enviou o link/PIX" : "atendimento"})
+                                </span>
+                              </span>
+                            )}
+                            {o.resolved_phone && (
+                              <span className="flex items-center gap-1">
+                                <MessageCircle className="h-4 w-4" /> {o.resolved_phone}
+                              </span>
+                            )}
+                            {o.wa_instance_label && (
+                              <Badge variant="outline" className="text-xs font-bold">
+                                {o.wa_instance_label}
+                              </Badge>
+                            )}
+                          </div>
+
                           {o.shipping_address?.city && (
                             <div className="mt-1 text-sm font-medium text-pos-muted-text flex items-center gap-1">
                               <MapPin className="h-4 w-4" />
