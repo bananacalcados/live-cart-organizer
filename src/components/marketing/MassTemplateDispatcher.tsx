@@ -1734,6 +1734,10 @@ export function MassTemplateDispatcher() {
         if (guardResult.inserted === 0) {
           console.warn(`Parte ${i + 1}: motor bloqueou todos os destinatários — dispatch criado vazio`);
         }
+        await supabase
+          .from('dispatch_history')
+          .update({ total_recipients: guardResult.inserted } as any)
+          .eq('id', dispatchId);
         created++;
       }
 
