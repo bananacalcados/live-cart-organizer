@@ -39,10 +39,12 @@ const lineKey = (it: any) =>
 /** Etapa SEPARAÇÃO: lista unificada de produtos a separar (não de pedidos). */
 export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
-  const [stock, setStock] = useState<Record<string, { store: string; stock: number }[]>>({});
+  const [stock, setStock] = useState<Record<string, StockRow[]>>({});
   const [qtyDialog, setQtyDialog] = useState<PickLine | null>(null);
   const [qtyInput, setQtyInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
+  const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
+
 
   const lines = useMemo(() => {
     const map = new Map<string, PickLine>();
