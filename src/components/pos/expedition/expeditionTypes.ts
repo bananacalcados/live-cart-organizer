@@ -149,22 +149,34 @@ export async function fetchExpeditionOrders(
   storeId: string,
   stage: ExpStage,
 ): Promise<ExpOrder[]> {
-  const { data: sales, error } = await supabase
-    .from("pos_sales")
-    .select(
-      "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id",
-    )
-    .eq("store_id", storeId)
-    .eq("expedition_stage", stage)
-    .in("sale_type", ["live", "online"])
-    .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
-    .or(PAID_FILTER)
-    .order("created_at", { ascending: stage !== "concluido" })
-    .limit(400);
+  const SALE_COLS =
+    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
 
-  if (error) throw error;
+  const baseQuery = () =>
+    supabase
+      .from("pos_sales")
+      .select(SALE_COLS)
+      .eq("store_id", storeId)
+      .eq("expedition_stage", stage)
+      .in("sale_type", ["live", "online"])
+      .order("created_at", { ascending: stage !== "concluido" })
+      .limit(400);
+
+  let { data: sales, error } = await baseQuery()
+    .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
+    .or(PAID_FILTER);
+
+  // Fallback defensivo: se o filtro composto falhar no PostgREST, ainda exibimos
+  // a aba (apenas com o filtro simples de status não-pagos).
+  if (error) {
+    const retry = await baseQuery().not("status", "in", `(${UNPAID_STATUSES.join(",")})`);
+    if (retry.error) throw retry.error;
+    sales = retry.data as any;
+  }
+
   const rows = (sales || []) as any[];
   if (!rows.length) return [];
+
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
