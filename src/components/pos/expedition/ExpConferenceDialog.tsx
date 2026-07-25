@@ -91,18 +91,69 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     [order.items, checks],
   );
 
-  const handleScan = (raw?: string) => {
+  const handleScan = async (raw?: string) => {
     const code = (raw ?? scanInput).replace(/\s/g, "");
     if (!code) return;
     const item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
-    if (!item) {
-      toast.error("Código não pertence a este pedido (ou já bipado)");
+    if (item) {
+      setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
+      setScanInput("");
+      toast.success(`Bipado: ${item.product_name}`);
       return;
     }
-    setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
-    setScanInput("");
-    toast.success(`Bipado: ${item.product_name}`);
+    if (order.items.some((i) => i.barcode === code)) {
+      toast.error("Este código já foi bipado");
+      setScanInput("");
+      return;
+    }
+    // Código não vinculado (ex.: produto veio da Shopify/Tiny com outro GTIN).
+    // Buscamos o produto no catálogo do PDV e oferecemos vincular ao item do pedido.
+    let found: any = null;
+    try {
+      const { data } = await supabase
+        .from("pos_products")
+        .select("name, sku, barcode")
+        .or(`barcode.eq.${code},sku.eq.${code}`)
+        .limit(1)
+        .maybeSingle();
+      found = data;
+    } catch {
+      /* ignore */
+    }
+    const pending = order.items.filter((i) => !checks[i.id]?.scanned);
+    if (!pending.length) {
+      toast.error("Todos os itens deste pedido já foram bipados");
+      setScanInput("");
+      return;
+    }
+    setLinkItemId(pending.length === 1 ? pending[0].id : "");
+    setLinkCode(code);
+    toast.info(found ? `Código de "${found.name}" não vinculado a este pedido` : "Código não encontrado no pedido");
   };
+
+  const confirmLink = async () => {
+    if (!linkCode || !linkItemId) return toast.error("Selecione o item correspondente");
+    setLinking(true);
+    try {
+      const { error } = await supabase
+        .from("pos_sale_items")
+        .update({ barcode: linkCode })
+        .eq("id", linkItemId);
+      if (error) throw error;
+      const it = order.items.find((i) => i.id === linkItemId);
+      if (it) it.barcode = linkCode;
+      setChecks((p) => ({ ...p, [linkItemId]: { ...p[linkItemId], scanned: true } }));
+      toast.success("Código vinculado ao item e bipado");
+      setLinkCode(null);
+      setLinkItemId("");
+      setScanInput("");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao vincular código");
+    } finally {
+      setLinking(false);
+    }
+  };
+
 
   const emitNfe = async () => {
     setEmitting(true);
