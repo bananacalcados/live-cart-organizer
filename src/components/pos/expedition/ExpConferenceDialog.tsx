@@ -361,7 +361,13 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                 {emitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
                 Emitir NF-e
               </Button>
+              <Button variant="outline" className="font-bold" onClick={() => setShowEdit(true)}>
+                <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
+              </Button>
             </div>
+            <p className="mt-2 text-sm font-semibold text-pos-muted-text">
+              Rejeição de endereço? Corrija os dados aqui e emita novamente.
+            </p>
           </div>
 
           {/* Envio */}
@@ -369,30 +375,14 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             <p className="text-lg font-black flex items-center gap-2">
               <Truck className="h-5 w-5 text-exp-pick" /> 3. Envio e rastreio
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
+            <ExpShippingFields value={shipping} onChange={setShipping} />
+            {!isMototaxi(carrier) && !isPickup(carrier) && (
               <div>
-                <Label className="text-base font-bold">Forma de envio</Label>
-                <Select value={carrier} onValueChange={setCarrier}>
-                  <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {SHIPPING_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s} className="text-base">{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-base font-bold">Código de rastreio</Label>
+                <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
               </div>
-              {carrier === "Mototaxi" ? (
-                <div>
-                  <Label className="text-base font-bold">Entregador</Label>
-                  <Input value={courier} onChange={(e) => setCourier(e.target.value)} className="h-12 text-base" placeholder="Nome do mototaxista" />
-                </div>
-              ) : (
-                <div>
-                  <Label className="text-base font-bold">Código de rastreio</Label>
-                  <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
-                </div>
-              )}
-            </div>
+            )}
+
 
             {isCarrierWithTracking(carrier) && (
               <div className="flex items-end gap-2 flex-wrap">
