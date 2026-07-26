@@ -354,6 +354,40 @@ export function POSExpedition({ storeId, storeName }: Props) {
     }
   };
 
+  /** Retroagir em massa: volta os pedidos selecionados para a etapa anterior. */
+  const bulkGoBack = async () => {
+    const to = prevStage(stage);
+    if (!to || !bulkSelectedOrders.length) return;
+    setBulkBusy(true);
+    try {
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: to, expedition_finished_at: null })
+        .in("id", bulkSelectedOrders.map((o) => o.id));
+      if (error) throw error;
+      toast.success(`${bulkSelectedOrders.length} pedido(s) voltaram para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
+      setSelected(new Set());
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao retroagir em massa");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  /** Unifica manualmente os pedidos selecionados (mesmo que de clientes distintos). */
+  const bulkUnify = async () => {
+    if (bulkSelectedOrders.length < 2) return;
+    setBulkBusy(true);
+    try {
+      await unifyGroup(bulkSelectedOrders);
+      setSelected(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+
   return (
     <div className="flex flex-col h-full bg-pos-bg">
       {/* Header */}
