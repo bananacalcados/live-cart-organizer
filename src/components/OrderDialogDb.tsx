@@ -96,6 +96,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [freeShipping, setFreeShipping] = useState(false);
   const [hasGift, setHasGift] = useState(false);
+  const [giftDescription, setGiftDescription] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
@@ -169,6 +170,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setDiscountValue(editingOrder.discount_value || 0);
       setFreeShipping(editingOrder.free_shipping || false);
       setHasGift(editingOrder.has_gift || false);
+      setGiftDescription((editingOrder as any).gift_description || "");
       setCouponCode(editingOrder.coupon_code || "");
       setPaidExternally(editingOrder.paid_externally || false);
       setCustomShippingCost((editingOrder as any).custom_shipping_cost != null ? String((editingOrder as any).custom_shipping_cost) : "");
@@ -206,6 +208,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setDiscountValue(0);
     setFreeShipping(false);
     setHasGift(false);
+    setGiftDescription("");
     setCouponCode("");
     setPaidExternally(false);
     setCustomShippingCost("");
@@ -468,6 +471,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           discount_value: discountType ? (discountValue ?? 0) : 0,
           free_shipping: freeShipping,
           has_gift: hasGift,
+          gift_description: hasGift ? (giftDescription.trim() || null) : null,
           coupon_code: couponCode || null,
           paid_externally: paidExternally,
           is_pickup: isPickup,
@@ -534,7 +538,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               extraUpdates.discount_value = discountValue ?? 0;
             }
             if (freeShipping) extraUpdates.free_shipping = true;
-            if (hasGift) extraUpdates.has_gift = true;
+            if (hasGift) {
+              extraUpdates.has_gift = true;
+              extraUpdates.gift_description = giftDescription.trim() || null;
+            }
             if (couponCode) extraUpdates.coupon_code = couponCode;
             if (notes) extraUpdates.notes = notes;
             if (paidExternally) {
@@ -824,10 +831,28 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                       <Switch
                         id="hasGift"
                         checked={hasGift}
-                        onCheckedChange={setHasGift}
+                        onCheckedChange={(v) => {
+                          setHasGift(v);
+                          if (!v) setGiftDescription("");
+                        }}
                       />
                     </div>
+                    {hasGift && (
+                      <div className="space-y-1">
+                        <Label htmlFor="giftDescription">Qual o brinde?</Label>
+                        <Input
+                          id="giftDescription"
+                          placeholder="Ex: Meia soquete, Necessaire, Chaveiro..."
+                          value={giftDescription}
+                          onChange={(e) => setGiftDescription(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Essa informação vai automaticamente para o pedido na Expedição do PDV.
+                        </p>
+                      </div>
+                    )}
                   </div>
+
 
 
 
