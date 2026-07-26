@@ -213,6 +213,10 @@ interface ChargeRequest {
   };
   billingAddress: BillingAddress;
   totalAmountCents: number;
+  /** Valor "limpo" do pedido (sem juros do parcelamento). O Mercado Pago sempre
+   *  deve receber este valor: quando há juros, é o próprio MP que os aplica. */
+  baseAmountCents?: number;
+
   shippingAmount?: number;
   // ── Mercado Pago (tokenização no frontend via MercadoPago.JS V2) ──
   // Quando o SDK do MP carrega no checkout, ele gera um token de cartão + device_id
@@ -246,7 +250,11 @@ async function chargeMercadoPago(
   const email = mpAccount.is_sandbox
     ? "test@testuser.com"
     : (params.customer.email || `${cpf}@cliente.bananacalcados.com.br`);
-  const amount = Math.round(params.totalAmountCents) / 100;
+  // Nunca inflar o valor no MP: o Mercado Pago aplica sozinho o custo do
+  // parcelamento quando a conta não absorve os juros daquela quantidade de parcelas.
+  // Enviar um valor já inflado faria o cliente pagar juros sobre juros.
+  const amount = Math.round(params.baseAmountCents ?? params.totalAmountCents) / 100;
+
   const nameParts = (params.customer.name || "Cliente").trim().split(/\s+/);
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || ".";
@@ -284,7 +292,34 @@ async function chargeMercadoPago(
     if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
   }
 
+  // Diagnóstico: registra se a conta MP realmente cobre "sem juros" nessa quantidade
+  // de parcelas. Se não cobrir, o cliente será cobrado com juros pelo próprio MP.
+  const nInst = Number(params.installments || 1);
+  if (nInst > 1) {
+    try {
+      const q = new URLSearchParams({
+        amount: amount.toFixed(2),
+        payment_method_id: String(params.mpPaymentMethodId),
+      });
+      const insRes = await fetch(
+        `https://api.mercadopago.com/v1/payment_methods/installments?${q.toString()}`,
+        { headers: { Authorization: `Bearer ${mpAccount.access_token}` } },
+      );
+      if (insRes.ok) {
+        const insData = await insRes.json();
+        const pc = (insData?.[0]?.payer_costs || []).find((c: any) => c.installments === nInst);
+        if (pc) {
+          console.log(`[mercadopago] parcelamento ${nInst}x → rate=${pc.installment_rate} total=${pc.total_amount} (base ${amount})`);
+          if (Number(pc.installment_rate || 0) > 0) {
+            console.warn(`[mercadopago] ATENÇÃO: conta NÃO absorve juros em ${nInst}x — cliente pagará R$ ${pc.total_amount}. Configure "parcelamento sem juros" na conta MP.`);
+          }
+        }
+      }
+    } catch (_) { /* diagnóstico não bloqueia a cobrança */ }
+  }
+
   try {
+
     const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
