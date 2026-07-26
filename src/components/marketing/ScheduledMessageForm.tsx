@@ -514,6 +514,15 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   useEffect(() => { if (open) fetchTemplates(); }, [open]);
 
+  // Ao fechar o modal, limpa o painel de "outra campanha" e o formulário (exceto edição)
+  useEffect(() => {
+    if (!open) {
+      setShowOtherCampaigns(false);
+      setSelectedOtherCampaignId(null);
+      if (!editingMessage) resetForm();
+    }
+  }, [open]);
+
   const fetchTemplates = async () => {
     const { data } = await supabase.from('group_message_templates').select('*').order('created_at', { ascending: false });
     setTemplates((data || []) as MessageTemplate[]);
