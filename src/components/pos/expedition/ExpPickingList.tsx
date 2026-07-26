@@ -330,6 +330,23 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
                   >
                     <Pencil className="h-3 w-3 mr-1" /> Ajustar estoque
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 font-bold border-exp-prep text-exp-prep"
+                    onClick={() =>
+                      setPurchaseTarget({
+                        product_name: displayName,
+                        variant_name: displayVariant,
+                        size: displaySize,
+                        sku: displaySku,
+                        barcode: l.barcode,
+                        suggestedQty: Math.max(1, l.quantity),
+                      })
+                    }
+                  >
+                    <ShoppingCart className="h-3 w-3 mr-1" /> Solicitar compra
+                  </Button>
                 </div>
 
 
