@@ -313,10 +313,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
     if (open && stage === "separacao") loadStock(o);
   };
 
+  const bulkSelectedOrders = useMemo(
+    () => filtered.filter((o) => selected.has(o.id)),
+    [filtered, selected],
+  );
+
   const bulkEligible = useMemo(
     () => filtered.filter((o) => selected.has(o.id) && !(o.is_avulso && !o.avulso_ready) && stage !== "conferencia" && stage !== "concluido"),
     [filtered, selected, stage],
   );
+
 
   const toggleSelect = (id: string) =>
     setSelected((prev) => {
@@ -353,6 +359,40 @@ export function POSExpedition({ storeId, storeName }: Props) {
       setBulkBusy(false);
     }
   };
+
+  /** Retroagir em massa: volta os pedidos selecionados para a etapa anterior. */
+  const bulkGoBack = async () => {
+    const to = prevStage(stage);
+    if (!to || !bulkSelectedOrders.length) return;
+    setBulkBusy(true);
+    try {
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: to, expedition_finished_at: null })
+        .in("id", bulkSelectedOrders.map((o) => o.id));
+      if (error) throw error;
+      toast.success(`${bulkSelectedOrders.length} pedido(s) voltaram para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
+      setSelected(new Set());
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao retroagir em massa");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  /** Unifica manualmente os pedidos selecionados (mesmo que de clientes distintos). */
+  const bulkUnify = async () => {
+    if (bulkSelectedOrders.length < 2) return;
+    setBulkBusy(true);
+    try {
+      await unifyGroup(bulkSelectedOrders);
+      setSelected(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-full bg-pos-bg">
@@ -554,15 +594,42 @@ export function POSExpedition({ storeId, storeName }: Props) {
               <span className="text-sm font-bold text-pos-text">
                 {selected.size} selecionado(s) — {bulkEligible.length} pronto(s) para avançar
               </span>
-              <Button
-                size="sm"
-                className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
-                disabled={bulkBusy || bulkEligible.length === 0}
-                onClick={bulkAdvance}
-              >
-                {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-                AVANÇAR {bulkEligible.length} EM MASSA
-              </Button>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {stage === "preparacao" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold border-exp-prep text-exp-prep"
+                    disabled={bulkBusy || bulkSelectedOrders.length < 2}
+                    onClick={bulkUnify}
+                  >
+                    <Layers className="h-4 w-4 mr-1" />
+                    UNIFICAR {bulkSelectedOrders.length} EM 1 ENVIO
+                  </Button>
+                )}
+                {prevStage(stage) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-black"
+                    disabled={bulkBusy || bulkSelectedOrders.length === 0}
+                    onClick={bulkGoBack}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    RETROAGIR {bulkSelectedOrders.length} EM MASSA
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
+                  disabled={bulkBusy || bulkEligible.length === 0}
+                  onClick={bulkAdvance}
+                >
+                  {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                  AVANÇAR {bulkEligible.length} EM MASSA
+                </Button>
+              </div>
+
             </>
           )}
         </div>
@@ -592,31 +659,36 @@ export function POSExpedition({ storeId, storeName }: Props) {
             <p className="mt-3 text-xl font-bold text-pos-muted-text">Nenhum pedido nesta etapa</p>
           </div>
         ) : (
-          groups.map(([key, list]) => {
+          groups.map(([key, list], gi) => {
             const unified = list.length > 1 && !!list[0].expedition_group_id;
             const canUnify = stage === "preparacao" && list.length > 1 && !unified;
             return (
-              <div key={key} className="space-y-2">
+              <div
+                key={key}
+                className={`space-y-2 ${gi > 0 ? "pt-4 mt-4 border-t-4 border-dashed border-pos-border" : ""}`}
+              >
                 {(unified || canUnify) && (
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-exp-prep/10 border-2 border-exp-prep/30">
-                    <Layers className="h-5 w-5 text-exp-prep" />
-                    <span className="text-base font-bold text-pos-text">
+                  <div className="flex items-center gap-4 px-5 py-4 rounded-xl bg-exp-prep/15 border-4 border-exp-prep/50 shadow-pos-card flex-wrap">
+                    <Layers className="h-8 w-8 text-exp-prep shrink-0" />
+                    <span className="text-xl md:text-2xl font-black text-pos-text">
                       {list.length} pedidos de {list[0].customer_name || "mesmo cliente"}
                       {unified ? " — ENVIO UNIFICADO" : ""}
                     </span>
                     {canUnify ? (
-                      <Button size="sm" className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-bold" onClick={() => unifyGroup(list)}>
-                        Unificar em 1 envio
+                      <Button size="lg" className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-black text-base" onClick={() => unifyGroup(list)}>
+                        <Layers className="h-5 w-5 mr-2" /> Unificar em 1 envio
                       </Button>
                     ) : (
                       unified && (
-                        <Button size="sm" variant="outline" className="ml-auto" onClick={() => undoUnify(list)}>
+                        <Button size="lg" variant="outline" className="ml-auto font-bold" onClick={() => undoUnify(list)}>
                           Desfazer unificação
                         </Button>
                       )
                     )}
                   </div>
                 )}
+
+
 
                 {list.map((o) => (
                   <div
