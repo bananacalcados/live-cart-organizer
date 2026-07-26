@@ -1211,17 +1211,52 @@ function CardPaymentForm({
     address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
   });
 
+  // ── Condições REAIS de parcelamento do Mercado Pago (gateway #1) ──
+  // O MP só absorve juros até onde a conta estiver configurada. Se pedirmos 10x
+  // e a conta só cobre 6x, o MP financia e cobra juros do cliente. Aqui buscamos
+  // as condições reais (por BIN do cartão) para nunca anunciar "sem juros" mentiroso.
+  const [mpOptions, setMpOptions] = useState<Array<{
+    installments: number; installmentAmount: number; totalAmount: number; interestFree: boolean;
+  }> | null>(null);
+  const cardBin = cardNumber.replace(/\D/g, "").slice(0, 8);
+
+  useEffect(() => {
+    if (!amount || amount <= 0) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("mercadopago-installments", {
+          body: { amount, bin: cardBin.length >= 6 ? cardBin : undefined, paymentMethodId: "visa" },
+        });
+        if (cancelled || error || !data?.options?.length) return;
+        setMpOptions(data.options);
+      } catch { /* mantém fallback local */ }
+    }, cardBin.length >= 6 ? 400 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [amount, cardBin.length >= 6 ? cardBin : ""]);
+
   const installmentOptions = [];
   for (let i = 1; i <= installmentConfig.max_installments; i++) {
+    const mp = mpOptions?.find((o) => o.installments === i);
+    if (mpOptions && !mp) continue; // parcela não oferecida pelo emissor
     const calc = calculateInstallmentAmount(amount, i, installmentConfig);
+    const value = mp ? mp.installmentAmount : calc.installmentValue;
+    const total = mp ? mp.totalAmount : calc.totalWithInterest;
+    const hasInterest = mp ? !mp.interestFree : calc.hasInterest;
     const label = i === 1
       ? `1x de R$ ${amount.toFixed(2)} (à vista)`
-      : `${i}x de R$ ${calc.installmentValue.toFixed(2)}${calc.hasInterest ? ` (total R$ ${calc.totalWithInterest.toFixed(2)})` : " sem juros"}`;
+      : `${i}x de R$ ${value.toFixed(2)}${hasInterest ? ` (total R$ ${total.toFixed(2)} com juros)` : " sem juros"}`;
     installmentOptions.push({ value: String(i), label });
   }
 
   const selectedInstallments = parseInt(installments);
+  const selectedMp = mpOptions?.find((o) => o.installments === selectedInstallments);
+  // Valor enviado ao gateway = SEMPRE o total do pedido. Quando o parcelamento tem
+  // juros, quem soma os juros é o próprio gateway (não podemos inflar o valor,
+  // senão o cliente pagaria juros em cima de juros).
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
+  const chargeAmount = selectedMp ? amount : totalWithInterest;
+
 
   const handleSubmit = async () => {
     // Prevent double-click with ref (synchronous check)
