@@ -65,6 +65,7 @@ export interface DbOrder {
   free_shipping?: boolean;
   shipping_cost?: number;
   has_gift?: boolean;
+  gift_description?: string | null;
   coupon_code?: string;
   checkout_started_at?: string;
   eligible_for_prize?: boolean;
