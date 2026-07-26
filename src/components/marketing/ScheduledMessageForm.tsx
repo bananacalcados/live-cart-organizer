@@ -462,7 +462,10 @@ function BlockEditor({
 }
 
 // ─── Main Composer ───
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId }: ScheduledMessageFormProps) {
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
+  const [showOtherCampaigns, setShowOtherCampaigns] = useState(false);
+  const [selectedOtherCampaignId, setSelectedOtherCampaignId] = useState<string | null>(null);
+  const [isSchedulingOther, setIsSchedulingOther] = useState(false);
   const [blocks, setBlocks] = useState<MessageBlock[]>([createBlock('text')]);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("12:00");
