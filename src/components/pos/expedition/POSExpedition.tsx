@@ -594,15 +594,42 @@ export function POSExpedition({ storeId, storeName }: Props) {
               <span className="text-sm font-bold text-pos-text">
                 {selected.size} selecionado(s) — {bulkEligible.length} pronto(s) para avançar
               </span>
-              <Button
-                size="sm"
-                className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
-                disabled={bulkBusy || bulkEligible.length === 0}
-                onClick={bulkAdvance}
-              >
-                {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-                AVANÇAR {bulkEligible.length} EM MASSA
-              </Button>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {stage === "preparacao" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold border-exp-prep text-exp-prep"
+                    disabled={bulkBusy || bulkSelectedOrders.length < 2}
+                    onClick={bulkUnify}
+                  >
+                    <Layers className="h-4 w-4 mr-1" />
+                    UNIFICAR {bulkSelectedOrders.length} EM 1 ENVIO
+                  </Button>
+                )}
+                {prevStage(stage) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-black"
+                    disabled={bulkBusy || bulkSelectedOrders.length === 0}
+                    onClick={bulkGoBack}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    RETROAGIR {bulkSelectedOrders.length} EM MASSA
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
+                  disabled={bulkBusy || bulkEligible.length === 0}
+                  onClick={bulkAdvance}
+                >
+                  {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                  AVANÇAR {bulkEligible.length} EM MASSA
+                </Button>
+              </div>
+
             </>
           )}
         </div>
