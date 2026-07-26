@@ -219,10 +219,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, []);
 
   // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
-  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] }[]>([]);
+  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[]; whatsapp_number_id?: string | null; is_active?: boolean }[]>([]);
   const fetchOtherCampaignGroups = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns')
-      .select('id, name, target_groups')
+      .select('id, name, target_groups, whatsapp_number_id, is_active')
       .neq('id', campaignId);
     setOtherCampaignGroups((data || []) as any);
   }, [campaignId]);
