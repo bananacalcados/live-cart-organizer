@@ -260,7 +260,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           for (let i = 0; i < block.mediaItems.length; i++) {
             const item = block.mediaItems[i];
             allInserts.push({
-              campaign_id: campaignId,
+              campaign_id: cid,
               message_type: block.type,
               message_content: item.caption || null,
               media_url: item.url,
@@ -276,7 +276,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           }
         } else if (block.type === 'text') {
           allInserts.push({
-            campaign_id: campaignId,
+            campaign_id: cid,
             message_type: 'text',
             message_content: block.content,
             scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
@@ -290,7 +290,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         } else if (block.type === 'poll') {
           allInserts.push({
-            campaign_id: campaignId,
+            campaign_id: cid,
             message_type: 'poll',
             message_content: block.content,
             poll_options: block.pollOptions.filter(o => o.trim()),
@@ -306,7 +306,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         } else if (block.type === 'audio') {
           allInserts.push({
-            campaign_id: campaignId,
+            campaign_id: cid,
             message_type: 'audio',
             media_url: block.mediaUrl,
             scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
@@ -330,7 +330,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           const item = data.mediaItems[i];
           const itemTime = new Date(scheduledAt.getTime() + i * 5000);
           const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-            campaign_id: campaignId,
+            campaign_id: cid,
             message_type: data.messageType,
             message_content: item.caption || null,
             media_url: item.url,
@@ -344,7 +344,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
       } else {
         const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-          campaign_id: campaignId,
+          campaign_id: cid,
           message_type: data.messageType,
           message_content: data.messageContent,
           media_url: data.mediaUrl || null,
