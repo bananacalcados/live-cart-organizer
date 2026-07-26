@@ -796,6 +796,25 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             )}
                           </div>
 
+                          {o.has_gift && (
+                            <div
+                              className={`mt-2 rounded-lg px-4 py-3 border-4 ${
+                                o.gift_after_completion
+                                  ? "bg-destructive text-destructive-foreground border-destructive"
+                                  : "bg-amber-400 text-amber-950 border-amber-600"
+                              }`}
+                            >
+                              <div className="text-xl font-black uppercase tracking-wide">
+                                🎁 BRINDE: {o.gift_description?.trim() || "não especificado"}
+                              </div>
+                              {o.gift_after_completion && (
+                                <div className="text-base font-black uppercase mt-1">
+                                  ⚠ Brinde não foi adicionado antes da expedição ser concluída
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {o.shipping_address?.city && (
                             <div className="mt-1 text-sm font-medium text-pos-muted-text flex items-center gap-1">
                               <MapPin className="h-4 w-4" />
