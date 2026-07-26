@@ -670,6 +670,13 @@ Deno.serve(async (req) => {
     const conversionChannelMap: Record<string, { channel: string; converted: number; valor_convertido: number }> = {};
     // NEW: matrix capture-channel × sale-channel for converted leads.
     const matrixMap: Record<string, { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }> = {};
+    // Drill-down: converted leads for a given capture channel (only when requested).
+    const listChannel: string | null = typeof body.list_channel === "string" && body.list_channel.trim()
+      ? String(body.list_channel).trim()
+      : null;
+    const convertedList: any[] = [];
+
+
 
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
