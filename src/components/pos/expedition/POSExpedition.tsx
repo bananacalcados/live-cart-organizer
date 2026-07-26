@@ -659,31 +659,36 @@ export function POSExpedition({ storeId, storeName }: Props) {
             <p className="mt-3 text-xl font-bold text-pos-muted-text">Nenhum pedido nesta etapa</p>
           </div>
         ) : (
-          groups.map(([key, list]) => {
+          groups.map(([key, list], gi) => {
             const unified = list.length > 1 && !!list[0].expedition_group_id;
             const canUnify = stage === "preparacao" && list.length > 1 && !unified;
             return (
-              <div key={key} className="space-y-2">
+              <div
+                key={key}
+                className={`space-y-2 ${gi > 0 ? "pt-4 mt-4 border-t-4 border-dashed border-pos-border" : ""}`}
+              >
                 {(unified || canUnify) && (
-                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-exp-prep/10 border-2 border-exp-prep/30">
-                    <Layers className="h-5 w-5 text-exp-prep" />
-                    <span className="text-base font-bold text-pos-text">
+                  <div className="flex items-center gap-4 px-5 py-4 rounded-xl bg-exp-prep/15 border-4 border-exp-prep/50 shadow-pos-card flex-wrap">
+                    <Layers className="h-8 w-8 text-exp-prep shrink-0" />
+                    <span className="text-xl md:text-2xl font-black text-pos-text">
                       {list.length} pedidos de {list[0].customer_name || "mesmo cliente"}
                       {unified ? " — ENVIO UNIFICADO" : ""}
                     </span>
                     {canUnify ? (
-                      <Button size="sm" className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-bold" onClick={() => unifyGroup(list)}>
-                        Unificar em 1 envio
+                      <Button size="lg" className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-black text-base" onClick={() => unifyGroup(list)}>
+                        <Layers className="h-5 w-5 mr-2" /> Unificar em 1 envio
                       </Button>
                     ) : (
                       unified && (
-                        <Button size="sm" variant="outline" className="ml-auto" onClick={() => undoUnify(list)}>
+                        <Button size="lg" variant="outline" className="ml-auto font-bold" onClick={() => undoUnify(list)}>
                           Desfazer unificação
                         </Button>
                       )
                     )}
                   </div>
                 )}
+
+
 
                 {list.map((o) => (
                   <div
