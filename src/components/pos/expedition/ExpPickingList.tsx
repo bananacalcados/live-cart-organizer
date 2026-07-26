@@ -39,7 +39,7 @@ const lineKey = (it: any) =>
   ].join("|");
 
 /** Etapa SEPARAÇÃO: lista unificada de produtos a separar (não de pedidos). */
-export function ExpPickingList({ orders, stage, onRefresh }: Props) {
+export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
   const [stock, setStock] = useState<Record<string, StockRow[]>>({});
   const [resolved, setResolved] = useState<
@@ -49,6 +49,8 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   const [qtyInput, setQtyInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
+
 
 
   const lines = useMemo(() => {
