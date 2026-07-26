@@ -509,6 +509,8 @@ Deno.serve(async (req) => {
     // counts as "captado no período", which is what the user expects).
     type LeadAgg = {
       phone: string;
+      name: string;
+      instagram: string;
       firstEverDate: Date;
       firstEverSource: string;
       firstEverTag: string;
@@ -520,13 +522,13 @@ Deno.serve(async (req) => {
     };
 
     // Load ALL raw lead rows first (we need a global view to detect event mirrors).
-    type LeadRow = { phone: string; source: string; campaign_tag: string; metadata: any; created: Date };
+    type LeadRow = { phone: string; name: string; instagram: string; source: string; campaign_tag: string; metadata: any; created: Date };
     const allLeadRows: LeadRow[] = [];
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("lp_leads")
-        .select("phone, source, campaign_tag, metadata, created_at")
+        .select("phone, name, instagram, source, campaign_tag, metadata, created_at")
         .not("phone", "is", null)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
@@ -535,6 +537,8 @@ Deno.serve(async (req) => {
         if (!p) continue;
         allLeadRows.push({
           phone: p,
+          name: (l as any).name || "",
+          instagram: (l as any).instagram || "",
           source: l.source || "",
           campaign_tag: l.campaign_tag || "",
           metadata: l.metadata || null,
@@ -544,6 +548,7 @@ Deno.serve(async (req) => {
       if (data.length < 1000) break;
       off += 1000;
     }
+
 
     // ── Item 1: EVENT-MIRROR DEDUP ──
     // external_lead rows tagged `event_lead:<uuid>` are 100% mirrors of a real
@@ -597,6 +602,8 @@ Deno.serve(async (req) => {
       const created = r.created;
       const agg = (leadByPhone[r.phone] ||= {
         phone: r.phone,
+        name: r.name,
+        instagram: r.instagram,
         firstEverDate: created,
         firstEverSource: r.source,
         firstEverTag: r.campaign_tag,
@@ -606,6 +613,9 @@ Deno.serve(async (req) => {
         firstInPeriodTag: "",
         firstInPeriodMeta: null,
       });
+      if (!agg.name && r.name) agg.name = r.name;
+      if (!agg.instagram && r.instagram) agg.instagram = r.instagram;
+
       if (created < agg.firstEverDate) {
         agg.firstEverDate = created;
         agg.firstEverSource = r.source;
@@ -660,6 +670,13 @@ Deno.serve(async (req) => {
     const conversionChannelMap: Record<string, { channel: string; converted: number; valor_convertido: number }> = {};
     // NEW: matrix capture-channel × sale-channel for converted leads.
     const matrixMap: Record<string, { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }> = {};
+    // Drill-down: converted leads for a given capture channel (only when requested).
+    const listChannel: string | null = typeof body.list_channel === "string" && body.list_channel.trim()
+      ? String(body.list_channel).trim()
+      : null;
+    const convertedList: any[] = [];
+
+
 
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
@@ -757,17 +774,47 @@ Deno.serve(async (req) => {
       mx.valor_convertido += conversionSale.total;
 
       // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
+      let leadQualifyingRevenue = 0;
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
         cap.purchases++;
         cap.revenue += s.total;
+        leadQualifyingRevenue += s.total;
 
         const mk = `${s.date.getFullYear()}-${String(s.date.getMonth() + 1).padStart(2, "0")}`;
         const m = (monthMap[mk] ||= { month: mk, purchases: 0, revenue: 0 });
         m.purchases++;
         m.revenue += s.total;
       }
+
+      // Drill-down list for one capture channel (leads that converted).
+      if (listChannel && chKey === listChannel) {
+        convertedList.push({
+          phone: lead.phone,
+          name: lead.name || "",
+          instagram: lead.instagram || "",
+          capture_channel: chKey,
+          captured_at: capDate ? capDate.toISOString() : null,
+          conversion_at: conversionSale.date.toISOString(),
+          conversion_value: Math.round(conversionSale.total * 100) / 100,
+          conversion_channel: convCh,
+          purchases: qualifying.length,
+          total_revenue: Math.round(leadQualifyingRevenue * 100) / 100,
+          was_customer_before: hadPriorSales,
+        });
+      }
+    }
+
+    // Drill-down response: only the converted-lead list for the requested channel.
+    if (listChannel) {
+      convertedList.sort((a, b) => (a.conversion_at < b.conversion_at ? 1 : -1));
+      return new Response(JSON.stringify({
+        mode,
+        list_channel: listChannel,
+        total: convertedList.length,
+        leads: convertedList,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
 

@@ -14,6 +14,8 @@ import {
   UserCheck, Sparkles, BarChart3, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConvertedLeadsDialog } from "./ConvertedLeadsDialog";
+
 
 type Summary = {
   leads_in_scope: number;
@@ -89,14 +91,20 @@ export function LeadsAnalyticsDashboard() {
   const [onlyNewLeads, setOnlyNewLeads] = useState(true);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [drillChannel, setDrillChannel] = useState<string | null>(null);
+  const [lastParams, setLastParams] = useState<Record<string, unknown>>({});
+
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { from, to } = computeRange(preset, customFrom, customTo);
+      const params = { mode, date_from: from, date_to: to, include_existing_customers: !onlyNewLeads };
+      setLastParams(params);
       const { data: res, error } = await supabase.functions.invoke("marketing-leads-dashboard", {
-        body: { mode, date_from: from, date_to: to, include_existing_customers: !onlyNewLeads },
+        body: params,
       });
+
       if (error) throw error;
       if ((res as any)?.error) throw new Error((res as any).error);
       setData(res as DashboardData);
@@ -144,7 +152,9 @@ export function LeadsAnalyticsDashboard() {
   const matrixInSync = !s || matrixGrandConverted === s.leads_converted;
 
   return (
+    <>
     <Card className="border-primary/20">
+
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -291,10 +301,15 @@ export function LeadsAnalyticsDashboard() {
                   </thead>
                   <tbody>
                     {data!.sources.map(src => (
-                      <tr key={src.source} className="border-b last:border-0">
+                      <tr
+                        key={src.source}
+                        className="border-b last:border-0 cursor-pointer hover:bg-muted/50"
+                        onClick={() => src.converted > 0 && setDrillChannel(src.source)}
+                        title={src.converted > 0 ? "Ver leads que converteram" : undefined}
+                      >
                         <td className="py-1.5 pr-2 font-medium">{src.source}</td>
                         <td className="py-1.5 px-2 text-right">{src.leads}</td>
-                        <td className="py-1.5 px-2 text-right">{src.converted}</td>
+                        <td className="py-1.5 px-2 text-right underline decoration-dotted">{src.converted}</td>
                         <td className="py-1.5 px-2 text-right">
                           <Badge variant="outline" className="text-[10px]">{src.conversion_rate}%</Badge>
                         </td>
@@ -302,6 +317,7 @@ export function LeadsAnalyticsDashboard() {
                         <td className="py-1.5 pl-2 text-right font-semibold">{fmtBRL(src.revenue)}</td>
                       </tr>
                     ))}
+
                     {data!.sources.length === 0 && (
                       <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Sem dados no período.</td></tr>
                     )}
@@ -438,8 +454,17 @@ export function LeadsAnalyticsDashboard() {
         ) : null}
       </CardContent>
     </Card>
+
+    <ConvertedLeadsDialog
+      open={!!drillChannel}
+      onOpenChange={(o) => !o && setDrillChannel(null)}
+      channel={drillChannel || ""}
+      params={lastParams}
+    />
+    </>
   );
 }
+
 
 function KpiCard({ icon, label, value, sub, accent }: {
   icon: React.ReactNode; label: string; value: string; sub?: string;
