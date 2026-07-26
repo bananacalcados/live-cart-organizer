@@ -1160,7 +1160,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
                 <Wallet className="h-4 w-4 text-primary" />
                 <div>
-                  <span>Pago Fora (Yampi/Shopify)</span>
+                  <span className="font-semibold">Pago por fora</span>
                   <p className="text-xs text-muted-foreground font-normal">
                     {(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'
                       ? 'Pagamento confirmado pelo gateway — não pode ser alterado.'
