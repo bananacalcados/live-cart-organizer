@@ -885,6 +885,47 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             <Switch checked={mentionAll} onCheckedChange={setMentionAll} />
           </div>
         </div>
+        {/* Agendar em outra campanha */}
+        {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && showOtherCampaigns && (
+          <div className="border rounded-lg p-3 space-y-2">
+            <Label className="text-xs">Escolha a campanha onde deseja agendar esta mensagem</Label>
+            <p className="text-[10px] text-muted-foreground">
+              Será usada a mesma data e horário selecionados acima
+              {scheduledDate ? ` (${format(scheduledDate, "dd/MM/yyyy")} às ${scheduledTime})` : ""}.
+            </p>
+            <ScrollArea className="max-h-44">
+              <div className="space-y-1 pr-2">
+                {otherCampaigns.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedOtherCampaignId(c.id)}
+                    className={cn(
+                      "w-full text-left text-xs p-2 rounded border transition-colors",
+                      selectedOtherCampaignId === c.id
+                        ? "border-primary bg-primary/10 font-medium"
+                        : "border-border hover:bg-muted",
+                    )}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+            <div className="flex gap-2">
+              {selectedOtherCampaignId && (
+                <Button size="sm" onClick={handleConfirmOtherCampaign} disabled={isSchedulingOther} className="gap-1">
+                  {isSchedulingOther ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarIcon className="h-3.5 w-3.5" />}
+                  CONFIRMAR
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={() => { setShowOtherCampaigns(false); setSelectedOtherCampaignId(null); }}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           {!editingMessage && onSendNow && (
@@ -893,9 +934,15 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               Enviar Agora
             </Button>
           )}
+          {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && (
+            <Button variant="outline" onClick={() => setShowOtherCampaigns(v => !v)} className="gap-1">
+              <CalendarIcon className="h-4 w-4" />
+              Agendar em Outra Campanha
+            </Button>
+          )}
           <Button onClick={editingMessage ? handleUpdate : handleSubmit} disabled={isSaving} className="gap-1">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {editingMessage ? "Salvar" : "Enviar Mensagem"}
+            {editingMessage ? "Salvar" : "Agendar"}
           </Button>
         </DialogFooter>
       </DialogContent>
