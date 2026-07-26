@@ -219,11 +219,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, []);
 
   // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
-  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[]; whatsapp_number_id?: string | null; is_active?: boolean }[]>([]);
+  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] | null; whatsapp_number_id?: string | null; status?: string | null; created_at?: string }[]>([]);
   const fetchOtherCampaignGroups = useCallback(async () => {
-    const { data } = await supabase.from('group_campaigns')
-      .select('id, name, target_groups, whatsapp_number_id, is_active')
-      .neq('id', campaignId);
+    const { data, error } = await supabase.from('group_campaigns')
+      .select('id, name, target_groups, whatsapp_number_id, status, created_at')
+      .neq('id', campaignId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Erro ao carregar campanhas VIP:', error);
+      toast.error('Erro ao carregar outras campanhas VIP');
+      setOtherCampaignGroups([]);
+      return;
+    }
     setOtherCampaignGroups((data || []) as any);
   }, [campaignId]);
 
