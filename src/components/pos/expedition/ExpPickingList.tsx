@@ -7,9 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
 import { ExpOrder, ExpStage, nextStage } from "./expeditionTypes";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
+import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
 
 
 interface Props {
