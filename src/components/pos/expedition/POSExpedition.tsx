@@ -600,7 +600,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
         )}
       </div>
 
-      {stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
@@ -654,8 +654,14 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
 
 
+      {showPurchases && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ExpPurchasePanel storeId={storeId} storeName={storeName} />
+        </div>
+      )}
+
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
