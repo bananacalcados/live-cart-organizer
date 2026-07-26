@@ -806,6 +806,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Drill-down response: only the converted-lead list for the requested channel.
+    if (listChannel) {
+      convertedList.sort((a, b) => (a.conversion_at < b.conversion_at ? 1 : -1));
+      return new Response(JSON.stringify({
+        mode,
+        list_channel: listChannel,
+        total: convertedList.length,
+        leads: convertedList,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
 
     // Channels (bar chart) and sources (table) are both the capture-channel
