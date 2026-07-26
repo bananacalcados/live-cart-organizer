@@ -509,6 +509,8 @@ Deno.serve(async (req) => {
     // counts as "captado no período", which is what the user expects).
     type LeadAgg = {
       phone: string;
+      name: string;
+      instagram: string;
       firstEverDate: Date;
       firstEverSource: string;
       firstEverTag: string;
@@ -520,13 +522,13 @@ Deno.serve(async (req) => {
     };
 
     // Load ALL raw lead rows first (we need a global view to detect event mirrors).
-    type LeadRow = { phone: string; source: string; campaign_tag: string; metadata: any; created: Date };
+    type LeadRow = { phone: string; name: string; instagram: string; source: string; campaign_tag: string; metadata: any; created: Date };
     const allLeadRows: LeadRow[] = [];
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("lp_leads")
-        .select("phone, source, campaign_tag, metadata, created_at")
+        .select("phone, name, instagram, source, campaign_tag, metadata, created_at")
         .not("phone", "is", null)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
@@ -535,6 +537,8 @@ Deno.serve(async (req) => {
         if (!p) continue;
         allLeadRows.push({
           phone: p,
+          name: (l as any).name || "",
+          instagram: (l as any).instagram || "",
           source: l.source || "",
           campaign_tag: l.campaign_tag || "",
           metadata: l.metadata || null,
@@ -544,6 +548,7 @@ Deno.serve(async (req) => {
       if (data.length < 1000) break;
       off += 1000;
     }
+
 
     // ── Item 1: EVENT-MIRROR DEDUP ──
     // external_lead rows tagged `event_lead:<uuid>` are 100% mirrors of a real
