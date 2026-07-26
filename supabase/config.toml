@@ -298,3 +298,6 @@ verify_jwt = false
 
 [functions.pos-tiny-sync-products]
 verify_jwt = false
+
+[functions.mercadopago-installments]
+verify_jwt = false
