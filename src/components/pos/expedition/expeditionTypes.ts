@@ -79,6 +79,10 @@ export interface ExpOrder {
   tracking_carrier: string | null;
   courier_name: string | null;
   pickup_store_id: string | null;
+  has_gift?: boolean | null;
+  gift_description?: string | null;
+  gift_added_at?: string | null;
+  gift_after_completion?: boolean | null;
   instagram?: string | null;
   delivery_method?: string | null;
   items: ExpItem[];
