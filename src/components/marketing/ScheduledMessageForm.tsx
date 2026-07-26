@@ -895,7 +895,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           </div>
         </div>
         {/* Agendar em outra campanha */}
-        {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && showOtherCampaigns && (
+        {!editingMessage && showOtherCampaigns && (
           <div className="border rounded-lg p-3 space-y-2">
             <Label className="text-xs">Escolha a campanha onde deseja agendar esta mensagem</Label>
             <p className="text-[10px] text-muted-foreground">
@@ -904,6 +904,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </p>
             <ScrollArea className="max-h-44">
               <div className="space-y-1 pr-2">
+                {otherCampaigns.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-2">Nenhuma outra campanha disponível.</p>
+                )}
                 {otherCampaigns.map(c => (
                   <button
                     key={c.id}
@@ -943,7 +946,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               Enviar Agora
             </Button>
           )}
-          {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && (
+          {!editingMessage && (
             <Button variant="outline" onClick={() => setShowOtherCampaigns(v => !v)} className="gap-1">
               <CalendarIcon className="h-4 w-4" />
               Agendar em Outra Campanha
