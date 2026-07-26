@@ -1337,6 +1337,8 @@ function CardPaymentForm({
             country: "BR",
           },
           totalAmountCents: totalCents,
+          baseAmountCents: baseCents,
+
         },
       });
 
