@@ -313,10 +313,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
     if (open && stage === "separacao") loadStock(o);
   };
 
+  const bulkSelectedOrders = useMemo(
+    () => filtered.filter((o) => selected.has(o.id)),
+    [filtered, selected],
+  );
+
   const bulkEligible = useMemo(
     () => filtered.filter((o) => selected.has(o.id) && !(o.is_avulso && !o.avulso_ready) && stage !== "conferencia" && stage !== "concluido"),
     [filtered, selected, stage],
   );
+
 
   const toggleSelect = (id: string) =>
     setSelected((prev) => {
