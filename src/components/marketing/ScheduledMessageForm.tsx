@@ -904,6 +904,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </p>
             <ScrollArea className="max-h-44">
               <div className="space-y-1 pr-2">
+                {otherCampaigns.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-2">Nenhuma outra campanha disponível.</p>
+                )}
                 {otherCampaigns.map(c => (
                   <button
                     key={c.id}
