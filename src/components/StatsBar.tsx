@@ -85,19 +85,19 @@ export function StatsBar({ orders }: StatsBarProps) {
   ];
 
   return (
-    <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 mb-2">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="flex-shrink-0 min-w-[150px] bg-card border border-border/50 rounded-xl p-3 shadow-card"
+          className="bg-card border border-border/50 rounded-xl p-4 shadow-card"
         >
-          <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-lg ${stat.bgColor}`}>
+              <stat.icon className={`h-5 w-5 ${stat.color}`} />
             </div>
             <div className="min-w-0">
-              <p className="text-lg font-bold text-foreground truncate">{stat.value}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{stat.label}</p>
+              <p className="text-2xl font-extrabold leading-tight text-foreground truncate">{stat.value}</p>
+              <p className="text-xs font-medium text-muted-foreground truncate">{stat.label}</p>
             </div>
           </div>
         </div>
