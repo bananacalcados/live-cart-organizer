@@ -824,10 +824,28 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                       <Switch
                         id="hasGift"
                         checked={hasGift}
-                        onCheckedChange={setHasGift}
+                        onCheckedChange={(v) => {
+                          setHasGift(v);
+                          if (!v) setGiftDescription("");
+                        }}
                       />
                     </div>
+                    {hasGift && (
+                      <div className="space-y-1">
+                        <Label htmlFor="giftDescription">Qual o brinde?</Label>
+                        <Input
+                          id="giftDescription"
+                          placeholder="Ex: Meia soquete, Necessaire, Chaveiro..."
+                          value={giftDescription}
+                          onChange={(e) => setGiftDescription(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Essa informação vai automaticamente para o pedido na Expedição do PDV.
+                        </p>
+                      </div>
+                    )}
                   </div>
+
 
 
 
