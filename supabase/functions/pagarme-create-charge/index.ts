@@ -250,7 +250,11 @@ async function chargeMercadoPago(
   const email = mpAccount.is_sandbox
     ? "test@testuser.com"
     : (params.customer.email || `${cpf}@cliente.bananacalcados.com.br`);
-  const amount = Math.round(params.totalAmountCents) / 100;
+  // Nunca inflar o valor no MP: o Mercado Pago aplica sozinho o custo do
+  // parcelamento quando a conta não absorve os juros daquela quantidade de parcelas.
+  // Enviar um valor já inflado faria o cliente pagar juros sobre juros.
+  const amount = Math.round(params.baseAmountCents ?? params.totalAmountCents) / 100;
+
   const nameParts = (params.customer.name || "Cliente").trim().split(/\s+/);
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || ".";
