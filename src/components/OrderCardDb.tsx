@@ -693,7 +693,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         {order.has_gift && (
           <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
             <Gift className="h-3 w-3 mr-1" />
-            Brinde
+            Brinde{order.gift_description ? `: ${order.gift_description}` : ""}
           </Badge>
         )}
         {order.free_shipping && (
