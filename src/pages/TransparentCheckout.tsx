@@ -1288,7 +1288,9 @@ function CardPaymentForm({
 
     trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
-      const totalCents = Math.round(totalWithInterest * 100);
+      const totalCents = Math.round(chargeAmount * 100);
+      const baseCents = Math.round(amount * 100);
+
 
       // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
       const mpToken = await tokenizeCardMP({
