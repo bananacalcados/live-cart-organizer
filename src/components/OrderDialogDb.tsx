@@ -829,18 +829,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                     </div>
                   </div>
 
-                  {/* Coupon Code */}
-                  <div className="space-y-2 pt-3 border-t">
-                    <Label className="flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Cupom de Desconto (Yampi)
-                    </Label>
-                    <Input
-                      placeholder="Código do cupom (ex: DESCONTO20)"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    />
-                  </div>
+
+
 
                   {/* Free Shipping Toggle */}
                   <div className="flex items-center justify-between pt-3 border-t">
@@ -932,43 +922,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Label>
 
             <div className="space-y-2">
-              {/* Checkout Loja */}
-              <Button
-                type="button"
-                className="w-full h-12 text-base font-bold bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
-                onClick={async () => {
-                  if (!editingOrder) {
-                    toast.error("Salve o pedido primeiro");
-                    return;
-                  }
-                  try {
-                    const parsedShipping = customShippingCost ? parseFloat(customShippingCost) : null;
-                    const orderUpdates: Partial<DbOrder> = {
-                      products: localProducts,
-                      discount_type: discountType || null,
-                      discount_value: discountType ? (discountValue ?? 0) : 0,
-                      free_shipping: freeShipping,
-                      has_gift: hasGift,
-                      coupon_code: couponCode || null,
-                      notes: notes || null,
-                      shipping_cost: editingOrder.shipping_cost ?? null,
-                      custom_shipping_cost: parsedShipping,
-                    } as any;
-                    await updateOrder(editingOrder.id, orderUpdates);
-                    const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
-                    setCartLink(url);
-                    toast.success("Pedido salvo e link do checkout gerado!");
-                  } catch (error) {
-                    console.error("Error saving order before checkout link:", error);
-                    toast.error("Erro ao salvar pedido antes de gerar link");
-                  }
-                }}
-                disabled={localProducts.length === 0 || !editingOrder}
-              >
-                <Lock className="h-5 w-5" />
-                Checkout Loja (+10 pts)
-              </Button>
-
               {/* Yampi + PayPal — ocultos temporariamente (mantidos no código para retorno futuro) */}
               {false && (
                 <div className="grid grid-cols-2 gap-2">
@@ -993,45 +946,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 </div>
               )}
 
-              {/* PIX */}
-              <Button
-                type="button"
-                className="w-full h-11 text-sm font-bold bg-[hsl(160,70%,40%)] hover:opacity-90 text-white gap-2"
-                onClick={generatePixLink}
-                disabled={isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
-              >
-                {isGeneratingPixLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                PIX
-              </Button>
-
-              {/* Código PIX gerado — para copiar novamente */}
-              {pixCode && (
-                <div className="space-y-1 rounded-md border border-[hsl(160,70%,40%)]/40 bg-[hsl(160,70%,40%)]/5 p-2">
-                  <Label className="text-xs font-semibold text-[hsl(160,70%,30%)]">Código PIX gerado (copia e cola)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      value={pixCode}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="h-9 text-xs font-mono"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 shrink-0 gap-1"
-                      onClick={() => {
-                        navigator.clipboard.writeText(pixCode)
-                          .then(() => toast.success("Código PIX copiado!"))
-                          .catch(() => window.prompt("Copie o código PIX:", pixCode));
-                      }}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copiar
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               {/* Na Entrega */}
               <Button
@@ -1066,62 +980,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 Na Entrega {isDelivery && "✓"}
               </Button>
 
-              {/* Retirar na Loja */}
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  className={`w-full h-11 text-sm font-bold gap-2 ${isPickup ? 'bg-[hsl(170,60%,40%)] text-white ring-2 ring-[hsl(170,60%,40%)] ring-offset-2' : 'bg-[hsl(170,60%,40%)] hover:bg-[hsl(170,60%,35%)] text-white'}`}
-                  onClick={() => {
-                    if (!editingOrder) {
-                      toast.error("Salve o pedido primeiro");
-                      return;
-                    }
-                    setIsPickup(!isPickup);
-                    setIsDelivery(false);
-                    if (!isPickup) {
-                      setCustomShippingCost("0");
-                      setFreeShipping(true);
-                    }
-                  }}
-                  disabled={localProducts.length === 0 || !editingOrder}
-                >
-                  <Package className="h-5 w-5" />
-                  Retirar na Loja {isPickup && "✓"}
-                </Button>
 
-                {isPickup && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {pickupStores.map((store) => (
-                      <Button
-                        key={store.id}
-                        type="button"
-                        variant={pickupStoreId === store.id ? "default" : "outline"}
-                        className={`h-12 text-sm font-bold gap-2 ${pickupStoreId === store.id ? 'bg-[hsl(170,60%,40%)] text-white' : 'border-2 border-[hsl(170,60%,40%)] text-[hsl(170,60%,40%)]'}`}
-                        onClick={async () => {
-                          setPickupStoreId(store.id);
-                          setCustomShippingCost("0");
-                          setFreeShipping(true);
-                          // Generate registration link for pickup
-                          const url = `${window.location.origin}/register/${editingOrder!.id}`;
-                          setCartLink(url);
-                          // Save to DB
-                          await updateOrder(editingOrder!.id, {
-                            is_pickup: true,
-                            pickup_store_id: store.id,
-                            is_delivery: false,
-                            custom_shipping_cost: 0,
-                            free_shipping: true,
-                          } as any);
-                          toast.success(`Retirada na ${store.name} selecionada! Frete zerado.`);
-                        }}
-                      >
-                        <Store className="h-4 w-4" />
-                        {store.name.replace('Loja ', '')}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
+
             </div>
 
             {/* Cart link */}
@@ -1160,7 +1020,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
                 <Wallet className="h-4 w-4 text-primary" />
                 <div>
-                  <span>Pago Fora (Yampi/Shopify)</span>
+                  <span className="font-semibold">Pago por fora</span>
                   <p className="text-xs text-muted-foreground font-normal">
                     {(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'
                       ? 'Pagamento confirmado pelo gateway — não pode ser alterado.'
@@ -1279,22 +1139,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             )}
 
 
-            {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full text-primary hover:bg-primary/10"
-                onClick={handleCreateShopifyOrder}
-                disabled={isCreatingShopifyOrder || localProducts.length === 0}
-              >
-                {isCreatingShopifyOrder ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <ShoppingBag className="h-4 w-4 mr-2" />
-                )}
-                Criar Pedido na Shopify
-              </Button>
-            )}
             {editingOrder && editingOrder.is_paid && isPhysicalEvent && (
               <div className="text-xs text-center text-muted-foreground bg-secondary/40 rounded-md py-2 px-3">
                 Evento de loja física — pedido é enviado automaticamente para o PDV ao ser pago. Sem criação na Shopify.
