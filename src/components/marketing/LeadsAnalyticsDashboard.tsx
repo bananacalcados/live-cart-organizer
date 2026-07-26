@@ -452,8 +452,17 @@ export function LeadsAnalyticsDashboard() {
         ) : null}
       </CardContent>
     </Card>
+
+    <ConvertedLeadsDialog
+      open={!!drillChannel}
+      onOpenChange={(o) => !o && setDrillChannel(null)}
+      channel={drillChannel || ""}
+      params={lastParams}
+    />
+    </>
   );
 }
+
 
 function KpiCard({ icon, label, value, sub, accent }: {
   icon: React.ReactNode; label: string; value: string; sub?: string;
