@@ -895,7 +895,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           </div>
         </div>
         {/* Agendar em outra campanha */}
-        {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && showOtherCampaigns && (
+        {!editingMessage && showOtherCampaigns && (
           <div className="border rounded-lg p-3 space-y-2">
             <Label className="text-xs">Escolha a campanha onde deseja agendar esta mensagem</Label>
             <p className="text-[10px] text-muted-foreground">
