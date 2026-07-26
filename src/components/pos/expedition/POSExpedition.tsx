@@ -216,8 +216,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
       arr.push(o);
       map.set(key, arr);
     }
-    return [...map.entries()];
-  }, [filtered]);
+    const entries = [...map.entries()];
+    if (stage === "preparacao") {
+      // Clientes com mais de 1 pedido primeiro (para não esquecer de unificar o envio)
+      entries.sort((a, b) => {
+        const am = a[1].length > 1 ? 1 : 0;
+        const bm = b[1].length > 1 ? 1 : 0;
+        if (am !== bm) return bm - am;
+        if (am === 1 && b[1].length !== a[1].length) return b[1].length - a[1].length;
+        return 0;
+      });
+    }
+    return entries;
+  }, [filtered, stage]);
+
 
   const advance = async (o: ExpOrder, target?: ExpStage) => {
     const to = target || nextStage(o.expedition_stage);
