@@ -414,6 +414,13 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         }
         onDone={loadStock}
       />
+
+      <ExpPurchaseRequestDialog
+        open={!!purchaseTarget}
+        onOpenChange={(v) => !v && setPurchaseTarget(null)}
+        storeId={storeId || ""}
+        target={purchaseTarget}
+      />
     </div>
 
   );
