@@ -12911,6 +12911,101 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_purchase_lists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          name: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          name: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          name?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pos_purchase_requests: {
+        Row: {
+          barcode: string | null
+          cost_price: number
+          created_at: string
+          id: string
+          list_id: string | null
+          notes: string | null
+          product_name: string
+          quantity: number
+          requested_by: string | null
+          requested_by_name: string | null
+          size: string | null
+          sku: string | null
+          status: string
+          store_id: string | null
+          updated_at: string
+          variant_name: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          cost_price?: number
+          created_at?: string
+          id?: string
+          list_id?: string | null
+          notes?: string | null
+          product_name: string
+          quantity?: number
+          requested_by?: string | null
+          requested_by_name?: string | null
+          size?: string | null
+          sku?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          cost_price?: number
+          created_at?: string
+          id?: string
+          list_id?: string | null
+          notes?: string | null
+          product_name?: string
+          quantity?: number
+          requested_by?: string | null
+          requested_by_name?: string | null
+          size?: string | null
+          sku?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_purchase_requests_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "pos_purchase_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_returns: {
         Row: {
           created_at: string

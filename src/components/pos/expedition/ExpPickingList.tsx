@@ -7,15 +7,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
 import { ExpOrder, ExpStage, nextStage } from "./expeditionTypes";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
+import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
 
 
 interface Props {
   orders: ExpOrder[];
   stage: ExpStage;
   onRefresh: () => void;
+  storeId?: string;
 }
 
 interface PickLine {
@@ -37,7 +39,7 @@ const lineKey = (it: any) =>
   ].join("|");
 
 /** Etapa SEPARAÇÃO: lista unificada de produtos a separar (não de pedidos). */
-export function ExpPickingList({ orders, stage, onRefresh }: Props) {
+export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
   const [stock, setStock] = useState<Record<string, StockRow[]>>({});
   const [resolved, setResolved] = useState<
@@ -47,6 +49,8 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   const [qtyInput, setQtyInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
+  const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
+
 
 
   const lines = useMemo(() => {
@@ -326,6 +330,23 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
                   >
                     <Pencil className="h-3 w-3 mr-1" /> Ajustar estoque
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 font-bold border-exp-prep text-exp-prep"
+                    onClick={() =>
+                      setPurchaseTarget({
+                        product_name: displayName,
+                        variant_name: displayVariant,
+                        size: displaySize,
+                        sku: displaySku,
+                        barcode: l.barcode,
+                        suggestedQty: Math.max(1, l.quantity),
+                      })
+                    }
+                  >
+                    <ShoppingCart className="h-3 w-3 mr-1" /> Solicitar compra
+                  </Button>
                 </div>
 
 
@@ -392,6 +413,13 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
           []
         }
         onDone={loadStock}
+      />
+
+      <ExpPurchaseRequestDialog
+        open={!!purchaseTarget}
+        onOpenChange={(v) => !v && setPurchaseTarget(null)}
+        storeId={storeId || ""}
+        target={purchaseTarget}
       />
     </div>
 
