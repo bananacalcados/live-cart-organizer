@@ -602,6 +602,8 @@ Deno.serve(async (req) => {
       const created = r.created;
       const agg = (leadByPhone[r.phone] ||= {
         phone: r.phone,
+        name: r.name,
+        instagram: r.instagram,
         firstEverDate: created,
         firstEverSource: r.source,
         firstEverTag: r.campaign_tag,
@@ -611,6 +613,9 @@ Deno.serve(async (req) => {
         firstInPeriodTag: "",
         firstInPeriodMeta: null,
       });
+      if (!agg.name && r.name) agg.name = r.name;
+      if (!agg.instagram && r.instagram) agg.instagram = r.instagram;
+
       if (created < agg.firstEverDate) {
         agg.firstEverDate = created;
         agg.firstEverSource = r.source;
