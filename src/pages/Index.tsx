@@ -182,6 +182,10 @@ const Index = () => {
           </div>
         )}
 
+        <div className="container pt-2">
+          <StatsBar orders={orders} />
+        </div>
+
         {currentEventId && <EventInnerDashboard eventId={currentEventId} />}
 
         {currentEventId && currentEvent && (
@@ -240,7 +244,7 @@ const Index = () => {
             </div>
 
             <TabsContent value="kanban">
-              <StatsBar orders={orders} />
+              
               
               {isLoading ? (
                 <div className="text-center py-12 text-muted-foreground">

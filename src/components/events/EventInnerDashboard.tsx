@@ -117,10 +117,20 @@ export function EventInnerDashboard({ eventId }: Props) {
     },
   ];
 
+  const [primary, ...secondary] = metrics;
+
   return (
     <div className="container py-2 space-y-2">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
-        {metrics.map((m) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <Card className="p-4 col-span-2 lg:col-span-2 border-primary/30">
+          <div className="flex items-center gap-2">
+            <primary.icon className={cn("h-5 w-5", primary.tone)} />
+            <span className="text-xs font-semibold text-muted-foreground">{primary.label}</span>
+          </div>
+          <p className="mt-1 text-2xl font-extrabold leading-tight">{primary.value}</p>
+          {primary.sub && <p className="text-[11px] text-muted-foreground">{primary.sub}</p>}
+        </Card>
+        {secondary.map((m) => (
           <Card key={m.label} className="p-3">
             <div className="flex items-center gap-1.5">
               <m.icon className={cn("h-4 w-4", m.tone)} />
