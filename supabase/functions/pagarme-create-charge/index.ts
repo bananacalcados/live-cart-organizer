@@ -292,7 +292,34 @@ async function chargeMercadoPago(
     if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
   }
 
+  // Diagnóstico: registra se a conta MP realmente cobre "sem juros" nessa quantidade
+  // de parcelas. Se não cobrir, o cliente será cobrado com juros pelo próprio MP.
+  const nInst = Number(params.installments || 1);
+  if (nInst > 1) {
+    try {
+      const q = new URLSearchParams({
+        amount: amount.toFixed(2),
+        payment_method_id: String(params.mpPaymentMethodId),
+      });
+      const insRes = await fetch(
+        `https://api.mercadopago.com/v1/payment_methods/installments?${q.toString()}`,
+        { headers: { Authorization: `Bearer ${mpAccount.access_token}` } },
+      );
+      if (insRes.ok) {
+        const insData = await insRes.json();
+        const pc = (insData?.[0]?.payer_costs || []).find((c: any) => c.installments === nInst);
+        if (pc) {
+          console.log(`[mercadopago] parcelamento ${nInst}x → rate=${pc.installment_rate} total=${pc.total_amount} (base ${amount})`);
+          if (Number(pc.installment_rate || 0) > 0) {
+            console.warn(`[mercadopago] ATENÇÃO: conta NÃO absorve juros em ${nInst}x — cliente pagará R$ ${pc.total_amount}. Configure "parcelamento sem juros" na conta MP.`);
+          }
+        }
+      }
+    } catch (_) { /* diagnóstico não bloqueia a cobrança */ }
+  }
+
   try {
+
     const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
