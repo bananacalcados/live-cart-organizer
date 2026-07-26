@@ -14,6 +14,8 @@ import {
   UserCheck, Sparkles, BarChart3, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConvertedLeadsDialog } from "./ConvertedLeadsDialog";
+
 
 type Summary = {
   leads_in_scope: number;
