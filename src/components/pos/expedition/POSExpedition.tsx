@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle, Send } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -27,6 +27,7 @@ import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
+import { ExpPurchasePanel } from "./ExpPurchasePanel";
 
 
 
@@ -53,6 +54,7 @@ const stageIcon: Record<ExpStage, any> = {
 
 export function POSExpedition({ storeId, storeName }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
+  const [showPurchases, setShowPurchases] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -454,7 +456,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
         </div>
 
         {/* Stage bar */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
           {EXP_STAGES.map((s) => {
             const Icon = stageIcon[s.id];
             const active = stage === s.id;
@@ -482,6 +484,21 @@ export function POSExpedition({ storeId, storeName }: Props) {
               </button>
             );
           })}
+          <button
+            onClick={() => setShowPurchases((v) => !v)}
+            className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
+              showPurchases
+                ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
+                : "bg-pos-elevated border-exp-prep/40 hover:scale-[1.01]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ShoppingCart className={`h-6 w-6 ${showPurchases ? "text-white" : "text-exp-prep"}`} />
+              <span className={`text-lg font-black uppercase leading-tight ${showPurchases ? "text-white" : "text-pos-text"}`}>
+                Compras
+              </span>
+            </div>
+          </button>
         </div>
 
         {showFilters && (
@@ -641,7 +658,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
-            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} />
+            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
             <p className="text-base font-black text-pos-text uppercase pt-2">
               Pedidos desta etapa ({filtered.length})
             </p>
