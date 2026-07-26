@@ -81,6 +81,8 @@ interface ScheduledMessageFormProps {
   editingMessage?: EditingMessage | null;
   onUpdate?: (id: string, data: ScheduledMessageData) => Promise<void>;
   campaignId?: string;
+  otherCampaigns?: { id: string; name: string }[];
+  onScheduleToCampaign?: (data: ScheduledMessageData, targetCampaignId: string) => Promise<void>;
 }
 
 const VARIABLES = [
