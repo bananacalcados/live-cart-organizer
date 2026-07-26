@@ -946,7 +946,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               Enviar Agora
             </Button>
           )}
-          {!editingMessage && onScheduleToCampaign && otherCampaigns.length > 0 && (
+          {!editingMessage && (
             <Button variant="outline" onClick={() => setShowOtherCampaigns(v => !v)} className="gap-1">
               <CalendarIcon className="h-4 w-4" />
               Agendar em Outra Campanha
