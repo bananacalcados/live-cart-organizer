@@ -829,18 +829,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                     </div>
                   </div>
 
-                  {/* Coupon Code */}
-                  <div className="space-y-2 pt-3 border-t">
-                    <Label className="flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Cupom de Desconto (Yampi)
-                    </Label>
-                    <Input
-                      placeholder="Código do cupom (ex: DESCONTO20)"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    />
-                  </div>
+
+
 
                   {/* Free Shipping Toggle */}
                   <div className="flex items-center justify-between pt-3 border-t">
