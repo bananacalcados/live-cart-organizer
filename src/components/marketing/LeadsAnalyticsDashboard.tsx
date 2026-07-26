@@ -97,9 +97,12 @@ export function LeadsAnalyticsDashboard() {
     setLoading(true);
     try {
       const { from, to } = computeRange(preset, customFrom, customTo);
+      const params = { mode, date_from: from, date_to: to, include_existing_customers: !onlyNewLeads };
+      setLastParams(params);
       const { data: res, error } = await supabase.functions.invoke("marketing-leads-dashboard", {
-        body: { mode, date_from: from, date_to: to, include_existing_customers: !onlyNewLeads },
+        body: params,
       });
+
       if (error) throw error;
       if ((res as any)?.error) throw new Error((res as any).error);
       setData(res as DashboardData);
