@@ -359,7 +359,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         toast.success("Mensagem agendada!");
       }
     }
-    fetchMessages();
+    if (cid === campaignId) fetchMessages();
+  };
+
+  const handleAddMessage = async (data: ScheduledMessageData) => {
+    await insertScheduledMessage(data);
+  };
+
+  const handleScheduleToCampaign = async (data: ScheduledMessageData, targetCampaignId: string) => {
+    const target = otherCampaignGroups.find(c => c.id === targetCampaignId) as any;
+    await insertScheduledMessage(data, targetCampaignId, target?.whatsapp_number_id ?? null);
   };
 
   const handleSendNow = async (data: ScheduledMessageData) => {
