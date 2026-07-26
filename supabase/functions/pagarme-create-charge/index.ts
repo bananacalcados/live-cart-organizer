@@ -213,6 +213,10 @@ interface ChargeRequest {
   };
   billingAddress: BillingAddress;
   totalAmountCents: number;
+  /** Valor "limpo" do pedido (sem juros do parcelamento). O Mercado Pago sempre
+   *  deve receber este valor: quando há juros, é o próprio MP que os aplica. */
+  baseAmountCents?: number;
+
   shippingAmount?: number;
   // ── Mercado Pago (tokenização no frontend via MercadoPago.JS V2) ──
   // Quando o SDK do MP carrega no checkout, ele gera um token de cartão + device_id
