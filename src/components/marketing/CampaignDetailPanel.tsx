@@ -237,11 +237,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
-  const handleAddMessage = async (data: ScheduledMessageData) => {
+  const insertScheduledMessage = async (
+    data: ScheduledMessageData,
+    targetCampaignId?: string,
+    targetNumberId?: string | null,
+  ) => {
+    const cid = targetCampaignId || campaignId;
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
-    const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
+    const campaignNumberId = targetNumberId || (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     const multiMediaTypes = ['image', 'video', 'document'];
 
