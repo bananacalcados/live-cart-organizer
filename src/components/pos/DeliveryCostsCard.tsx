@@ -52,32 +52,33 @@ export function DeliveryCostsCard({ storeId, periodStart, periodEnd, periodLabel
   const carrier = total - moto;
 
   return (
-    <div className="rounded-2xl bg-pos-card border-2 border-pos-border p-4">
+    <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4">
       <div className="flex items-center gap-2">
-        <Truck className="h-5 w-5 text-exp-pick" />
-        <h3 className="text-lg font-black text-pos-text uppercase">Custos de entrega/envio</h3>
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-pos-muted-text" />}
+        <Truck className="h-5 w-5 text-emerald-400" />
+        <h3 className="text-lg font-black text-zinc-100 uppercase">Custos de entrega/envio</h3>
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
       </div>
-      <p className="text-sm font-semibold text-pos-muted-text">{periodLabel || "Período selecionado"}</p>
-      <p className="mt-2 text-3xl font-black text-pos-text">{brl(total)}</p>
+      <p className="text-sm font-semibold text-zinc-400">{periodLabel || "Período selecionado"}</p>
+      <p className="mt-2 text-3xl font-black text-zinc-50">{brl(total)}</p>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-pos-elevated p-2">
-          <p className="text-xs font-bold text-pos-muted-text uppercase">Mototáxi</p>
-          <p className="text-base font-black text-pos-text">{brl(moto)}</p>
+        <div className="rounded-lg bg-zinc-800/70 p-2">
+          <p className="text-xs font-bold text-zinc-400 uppercase">Mototáxi</p>
+          <p className="text-base font-black text-zinc-100">{brl(moto)}</p>
         </div>
-        <div className="rounded-lg bg-pos-elevated p-2">
-          <p className="text-xs font-bold text-pos-muted-text uppercase">Transportadora</p>
-          <p className="text-base font-black text-pos-text">{brl(carrier)}</p>
+        <div className="rounded-lg bg-zinc-800/70 p-2">
+          <p className="text-xs font-bold text-zinc-400 uppercase">Transportadora</p>
+          <p className="text-base font-black text-zinc-100">{brl(carrier)}</p>
         </div>
-        <div className="rounded-lg bg-pos-elevated p-2">
-          <p className="text-xs font-bold text-pos-muted-text uppercase">A pagar</p>
-          <p className="text-base font-black text-amber-500">{brl(pending)}</p>
+        <div className="rounded-lg bg-zinc-800/70 p-2">
+          <p className="text-xs font-bold text-zinc-400 uppercase">A pagar</p>
+          <p className="text-base font-black text-amber-400">{brl(pending)}</p>
         </div>
       </div>
-      <p className="mt-2 text-xs font-semibold text-pos-muted-text">
+      <p className="mt-2 text-xs font-semibold text-zinc-400">
         {rows.length} lançamento(s) de envio no período
       </p>
     </div>
+
   );
 }
 
