@@ -89,6 +89,9 @@ export function LeadsAnalyticsDashboard() {
   const [onlyNewLeads, setOnlyNewLeads] = useState(true);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [drillChannel, setDrillChannel] = useState<string | null>(null);
+  const [lastParams, setLastParams] = useState<Record<string, unknown>>({});
+
 
   const load = useCallback(async () => {
     setLoading(true);
