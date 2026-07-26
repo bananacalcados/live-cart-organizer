@@ -10822,6 +10822,7 @@ export type Database = {
           eligible_for_prize: boolean | null
           event_id: string | null
           free_shipping: boolean | null
+          gift_description: string | null
           has_gift: boolean | null
           has_unread_messages: boolean
           id: string
@@ -10874,6 +10875,7 @@ export type Database = {
           eligible_for_prize?: boolean | null
           event_id?: string | null
           free_shipping?: boolean | null
+          gift_description?: string | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
@@ -10926,6 +10928,7 @@ export type Database = {
           eligible_for_prize?: boolean | null
           event_id?: string | null
           free_shipping?: boolean | null
+          gift_description?: string | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
@@ -13211,6 +13214,10 @@ export type Database = {
           expedition_status: string
           external_order_id: string | null
           external_source: string | null
+          gift_added_at: string | null
+          gift_after_completion: boolean
+          gift_description: string | null
+          has_gift: boolean
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
@@ -13288,6 +13295,10 @@ export type Database = {
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
+          gift_added_at?: string | null
+          gift_after_completion?: boolean
+          gift_description?: string | null
+          has_gift?: boolean
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
@@ -13365,6 +13376,10 @@ export type Database = {
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
+          gift_added_at?: string | null
+          gift_after_completion?: boolean
+          gift_description?: string | null
+          has_gift?: boolean
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
