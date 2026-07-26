@@ -17,6 +17,7 @@ interface Props {
   orders: ExpOrder[];
   stage: ExpStage;
   onRefresh: () => void;
+  storeId?: string;
 }
 
 interface PickLine {
