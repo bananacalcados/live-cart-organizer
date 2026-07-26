@@ -922,21 +922,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <div className="w-full text-[11px] text-center text-muted-foreground bg-secondary/40 rounded-md py-1.5 px-2">
               Evento de loja física — pedido vai automaticamente para o PDV ao ser pago.
             </div>
-          ) : hasRegistration ? (
-            <Button
-              variant="default"
-              size="sm"
-              className="w-full text-xs gap-1"
-              onClick={handleCreateShopifyOrder}
-              disabled={isCreatingShopifyOrder}
-            >
-              {isCreatingShopifyOrder ? (
-                <><Loader2 className="h-3 w-3 animate-spin" /> Criando...</>
-              ) : (
-                <><ShoppingBag className="h-3 w-3" /> Criar Pedido Shopify</>
-              )}
-            </Button>
-          ) : (
+          ) : hasRegistration ? null : (
             <Button
               variant="outline"
               size="sm"
@@ -956,20 +942,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               Copiar Link de Cadastro
             </Button>
            )}
-          {!isManualRoutingEvent && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowPOSDialog(true);
-              }}
-            >
-              <Store className="h-3 w-3" />
-              Enviar ao PDV (Retirada)
-            </Button>
-          )}
+
 
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
