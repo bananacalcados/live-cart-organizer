@@ -932,43 +932,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Label>
 
             <div className="space-y-2">
-              {/* Checkout Loja */}
-              <Button
-                type="button"
-                className="w-full h-12 text-base font-bold bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
-                onClick={async () => {
-                  if (!editingOrder) {
-                    toast.error("Salve o pedido primeiro");
-                    return;
-                  }
-                  try {
-                    const parsedShipping = customShippingCost ? parseFloat(customShippingCost) : null;
-                    const orderUpdates: Partial<DbOrder> = {
-                      products: localProducts,
-                      discount_type: discountType || null,
-                      discount_value: discountType ? (discountValue ?? 0) : 0,
-                      free_shipping: freeShipping,
-                      has_gift: hasGift,
-                      coupon_code: couponCode || null,
-                      notes: notes || null,
-                      shipping_cost: editingOrder.shipping_cost ?? null,
-                      custom_shipping_cost: parsedShipping,
-                    } as any;
-                    await updateOrder(editingOrder.id, orderUpdates);
-                    const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
-                    setCartLink(url);
-                    toast.success("Pedido salvo e link do checkout gerado!");
-                  } catch (error) {
-                    console.error("Error saving order before checkout link:", error);
-                    toast.error("Erro ao salvar pedido antes de gerar link");
-                  }
-                }}
-                disabled={localProducts.length === 0 || !editingOrder}
-              >
-                <Lock className="h-5 w-5" />
-                Checkout Loja (+10 pts)
-              </Button>
-
               {/* Yampi + PayPal — ocultos temporariamente (mantidos no código para retorno futuro) */}
               {false && (
                 <div className="grid grid-cols-2 gap-2">
@@ -993,45 +956,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 </div>
               )}
 
-              {/* PIX */}
-              <Button
-                type="button"
-                className="w-full h-11 text-sm font-bold bg-[hsl(160,70%,40%)] hover:opacity-90 text-white gap-2"
-                onClick={generatePixLink}
-                disabled={isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
-              >
-                {isGeneratingPixLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                PIX
-              </Button>
-
-              {/* Código PIX gerado — para copiar novamente */}
-              {pixCode && (
-                <div className="space-y-1 rounded-md border border-[hsl(160,70%,40%)]/40 bg-[hsl(160,70%,40%)]/5 p-2">
-                  <Label className="text-xs font-semibold text-[hsl(160,70%,30%)]">Código PIX gerado (copia e cola)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      value={pixCode}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="h-9 text-xs font-mono"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 shrink-0 gap-1"
-                      onClick={() => {
-                        navigator.clipboard.writeText(pixCode)
-                          .then(() => toast.success("Código PIX copiado!"))
-                          .catch(() => window.prompt("Copie o código PIX:", pixCode));
-                      }}
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copiar
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               {/* Na Entrega */}
               <Button
