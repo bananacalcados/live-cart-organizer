@@ -291,10 +291,15 @@ export function LeadsAnalyticsDashboard() {
                   </thead>
                   <tbody>
                     {data!.sources.map(src => (
-                      <tr key={src.source} className="border-b last:border-0">
+                      <tr
+                        key={src.source}
+                        className="border-b last:border-0 cursor-pointer hover:bg-muted/50"
+                        onClick={() => src.converted > 0 && setDrillChannel(src.source)}
+                        title={src.converted > 0 ? "Ver leads que converteram" : undefined}
+                      >
                         <td className="py-1.5 pr-2 font-medium">{src.source}</td>
                         <td className="py-1.5 px-2 text-right">{src.leads}</td>
-                        <td className="py-1.5 px-2 text-right">{src.converted}</td>
+                        <td className="py-1.5 px-2 text-right underline decoration-dotted">{src.converted}</td>
                         <td className="py-1.5 px-2 text-right">
                           <Badge variant="outline" className="text-[10px]">{src.conversion_rate}%</Badge>
                         </td>
@@ -302,6 +307,7 @@ export function LeadsAnalyticsDashboard() {
                         <td className="py-1.5 pl-2 text-right font-semibold">{fmtBRL(src.revenue)}</td>
                       </tr>
                     ))}
+
                     {data!.sources.length === 0 && (
                       <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Sem dados no período.</td></tr>
                     )}
