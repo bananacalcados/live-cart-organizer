@@ -681,12 +681,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             </Badge>
           </button>
         )}
-        {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && !isPhysicalEvent && (
-          <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Sem Shopify
-          </Badge>
-        )}
         {order.paid_externally && (
           <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
             <Wallet className="h-3 w-3 mr-1" />
