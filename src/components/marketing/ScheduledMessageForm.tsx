@@ -589,10 +589,26 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     setIsSaving(true);
     try {
       await onSubmit(buildData());
-      resetForm();
-      onOpenChange(false);
+      toast.success("AGENDAMENTO CONFIRMADO", {
+        description: "A mensagem continua aberta para agendar em outra campanha.",
+      });
     } catch { toast.error("Erro ao salvar"); }
     finally { setIsSaving(false); }
+  };
+
+  const handleConfirmOtherCampaign = async () => {
+    if (!onScheduleToCampaign || !selectedOtherCampaignId || !validate()) return;
+    setIsSchedulingOther(true);
+    try {
+      const target = otherCampaigns.find(c => c.id === selectedOtherCampaignId);
+      await onScheduleToCampaign(buildData(), selectedOtherCampaignId);
+      toast.success("AGENDAMENTO CONFIRMADO", {
+        description: target ? `Mensagem agendada na campanha ${target.name}.` : undefined,
+      });
+      setSelectedOtherCampaignId(null);
+      setShowOtherCampaigns(false);
+    } catch { toast.error("Erro ao agendar na outra campanha"); }
+    finally { setIsSchedulingOther(false); }
   };
 
   const handleSendNow = async () => {
