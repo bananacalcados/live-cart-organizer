@@ -150,7 +150,9 @@ export function LeadsAnalyticsDashboard() {
   const matrixInSync = !s || matrixGrandConverted === s.leads_converted;
 
   return (
+    <>
     <Card className="border-primary/20">
+
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <BarChart3 className="h-5 w-5 text-primary" />
