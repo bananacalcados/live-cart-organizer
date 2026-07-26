@@ -774,18 +774,38 @@ Deno.serve(async (req) => {
       mx.valor_convertido += conversionSale.total;
 
       // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
+      let leadQualifyingRevenue = 0;
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
         cap.purchases++;
         cap.revenue += s.total;
+        leadQualifyingRevenue += s.total;
 
         const mk = `${s.date.getFullYear()}-${String(s.date.getMonth() + 1).padStart(2, "0")}`;
         const m = (monthMap[mk] ||= { month: mk, purchases: 0, revenue: 0 });
         m.purchases++;
         m.revenue += s.total;
       }
+
+      // Drill-down list for one capture channel (leads that converted).
+      if (listChannel && chKey === listChannel) {
+        convertedList.push({
+          phone: lead.phone,
+          name: lead.name || "",
+          instagram: lead.instagram || "",
+          capture_channel: chKey,
+          captured_at: capDate ? capDate.toISOString() : null,
+          conversion_at: conversionSale.date.toISOString(),
+          conversion_value: Math.round(conversionSale.total * 100) / 100,
+          conversion_channel: convCh,
+          purchases: qualifying.length,
+          total_revenue: Math.round(leadQualifyingRevenue * 100) / 100,
+          was_customer_before: hadPriorSales,
+        });
+      }
     }
+
 
 
     // Channels (bar chart) and sources (table) are both the capture-channel
