@@ -1599,6 +1599,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         editingMessage={editingMessage}
         onUpdate={handleUpdateMessage}
         campaignId={campaignId}
+        otherCampaigns={otherCampaignGroups.map(c => ({ id: c.id, name: c.name }))}
+        onScheduleToCampaign={handleScheduleToCampaign}
       />
 
       {/* CREATE GROUP DIALOG */}
