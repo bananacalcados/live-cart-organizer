@@ -1139,22 +1139,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             )}
 
 
-            {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full text-primary hover:bg-primary/10"
-                onClick={handleCreateShopifyOrder}
-                disabled={isCreatingShopifyOrder || localProducts.length === 0}
-              >
-                {isCreatingShopifyOrder ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <ShoppingBag className="h-4 w-4 mr-2" />
-                )}
-                Criar Pedido na Shopify
-              </Button>
-            )}
             {editingOrder && editingOrder.is_paid && isPhysicalEvent && (
               <div className="text-xs text-center text-muted-foreground bg-secondary/40 rounded-md py-2 px-3">
                 Evento de loja física — pedido é enviado automaticamente para o PDV ao ser pago. Sem criação na Shopify.
