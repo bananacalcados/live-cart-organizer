@@ -64,6 +64,15 @@ const sanitize = (s: string) => String(s ?? "")
   .replace(/[^A-Za-z0-9 ]/g, " ")
   .replace(/\s+/g, " ").trim();
 
+const usable = (v: any, min = 2) => sanitize(String(v ?? "")).length >= min;
+const firstUsable = (values: any[], min = 2) => {
+  for (const v of values) {
+    const s = sanitize(String(v ?? ""));
+    if (s.length >= min) return s;
+  }
+  return "";
+};
+
 function ufFromProvince(p: string | null | undefined): string | null {
   if (!p) return null;
   const up = p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -78,6 +87,20 @@ function splitStreetNumber(addr1: string | null | undefined): { logradouro: stri
   const m = s.match(/^(.*?)[,\s]+(\d{1,6}[A-Za-z]?)\s*$/);
   if (m) return { logradouro: m[1].trim().replace(/,$/, ""), numero: m[2] };
   return { logradouro: s, numero: "S/N" };
+}
+
+async function lookupAddressByCep(cep: string): Promise<any | null> {
+  const cleanCep = digits(cep);
+  if (cleanCep.length !== 8) return null;
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const json = await r.json();
+    if (json?.erro) return null;
+    return json;
+  } catch {
+    return null;
+  }
 }
 
 async function lookupIbge(city: string, uf: string): Promise<string | null> {
@@ -172,20 +195,33 @@ Deno.serve(async (req) => {
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
         .from("pos_sales")
-        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
+        .select("id, store_id, customer_id, customer_name, customer_phone, customer_email, customer_cpf, customer_cep, customer_city, customer_state, payment_details, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
 
       // Cliente: vem de pos_customers se houver customer_id, senão usa shipping_address
-      let cpf: string | null = null;
-      let email: string | null = null;
+      const pd = ((sale as any).payment_details || {}) as any;
+      let cpf: string | null = (sale as any).customer_cpf || pd.customer_cpf || null;
+      let email: string | null = (sale as any).customer_email || pd.customer_email || null;
       let custRec: any = null;
       if ((sale as any).customer_id) {
         const { data: c } = await supabase
           .from("pos_customers")
           .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
           .eq("id", (sale as any).customer_id).maybeSingle();
-        if (c) { cpf = (c as any).cpf || null; email = (c as any).email || null; custRec = c; }
+        if (c) { cpf = (c as any).cpf || cpf; email = (c as any).email || email; custRec = c; }
+      }
+      if (!custRec) {
+        const suffix = digits((sale as any).customer_phone || pd.customer_phone || pd.customer_whatsapp).slice(-8);
+        if (suffix.length === 8) {
+          const { data: cs } = await supabase
+            .from("pos_customers")
+            .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
+            .like("whatsapp", `%${suffix}`)
+            .limit(1);
+          const c = (cs || [])[0] || null;
+          if (c) { cpf = (c as any).cpf || cpf; email = (c as any).email || email; custRec = c; }
+        }
       }
 
       // Normaliza shipping_address (pode vir tanto do PDV {address, number, ...} quanto do checkout {address1, province, zip})
@@ -198,17 +234,40 @@ Deno.serve(async (req) => {
         return l ? l : snap;
       };
       const liveAddress1 = custRec
-        ? [pickAddr(custRec.address, sa.address), pickAddr(custRec.address_number, sa.number)].filter(Boolean).join(", ")
+        ? [pickAddr(custRec.address, sa.address || pd.customer_address), pickAddr(custRec.address_number, sa.number || pd.customer_address_number)].filter(Boolean).join(", ")
         : null;
       const shipping_address = {
-        zip: pickAddr(custRec?.cep, sa.zip || sa.cep),
-        province: pickAddr(custRec?.state, sa.province || sa.state),
-        city: pickAddr(custRec?.city, sa.city),
-        address1: (liveAddress1 || sa.address1 || [sa.address, sa.number].filter(Boolean).join(", ")),
-        address2: pickAddr(custRec?.neighborhood, sa.address2 || sa.neighborhood || sa.complement),
-        number: pickAddr(custRec?.address_number, sa.number),
-        neighborhood: pickAddr(custRec?.neighborhood, sa.neighborhood),
+        zip: pickAddr(custRec?.cep, sa.zip || sa.cep || (sale as any).customer_cep || pd.customer_cep || pd.cep),
+        province: pickAddr(custRec?.state, sa.province || sa.state || (sale as any).customer_state || pd.customer_state || pd.state),
+        city: pickAddr(custRec?.city, sa.city || (sale as any).customer_city || pd.customer_city || pd.city),
+        address1: (liveAddress1 || sa.address1 || [sa.address || pd.customer_address, sa.number || pd.customer_address_number].filter(Boolean).join(", ")),
+        address2: pickAddr(custRec?.neighborhood, sa.neighborhood || sa.address2 || pd.customer_neighborhood || sa.complement || pd.customer_complement),
+        number: pickAddr(custRec?.address_number, sa.number || pd.customer_address_number),
+        neighborhood: pickAddr(custRec?.neighborhood, sa.neighborhood || pd.customer_neighborhood),
       };
+
+      const persistedAddress = {
+        ...(sa || {}),
+        cep: digits(shipping_address.zip) || null,
+        address: firstUsable([custRec?.address, sa.address, pd.customer_address, sa.address1], 3) || null,
+        number: sanitize(String(shipping_address.number || "")) || null,
+        complement: sanitize(String(custRec?.complement || sa.complement || pd.customer_complement || "")) || null,
+        neighborhood: firstUsable([shipping_address.neighborhood, shipping_address.address2], 2) || null,
+        city: firstUsable([shipping_address.city], 2) || null,
+        state: (ufFromProvince(shipping_address.province) || sanitize(String(shipping_address.province || "")).toUpperCase()).slice(0, 2) || null,
+      };
+      const saleUpdates: Record<string, any> = {};
+      if (cpf && !(sale as any).customer_cpf) saleUpdates.customer_cpf = digits(cpf);
+      if (email && !(sale as any).customer_email) saleUpdates.customer_email = email;
+      if (!(sale as any).customer_name && custRec?.name) saleUpdates.customer_name = custRec.name;
+      if (!(sale as any).customer_phone && custRec?.whatsapp) saleUpdates.customer_phone = custRec.whatsapp;
+      if (persistedAddress.cep && !(sale as any).customer_cep) saleUpdates.customer_cep = persistedAddress.cep;
+      if (persistedAddress.city && !(sale as any).customer_city) saleUpdates.customer_city = persistedAddress.city;
+      if (persistedAddress.state && !(sale as any).customer_state) saleUpdates.customer_state = persistedAddress.state;
+      if (persistedAddress.cep || persistedAddress.address || persistedAddress.neighborhood) saleUpdates.shipping_address = persistedAddress;
+      if (Object.keys(saleUpdates).length) {
+        await supabase.from("pos_sales").update(saleUpdates).eq("id", (sale as any).id);
+      }
 
       // company do store
       let storeCompanyId: string | null = null;
@@ -219,8 +278,8 @@ Deno.serve(async (req) => {
 
       order = {
         customer_cpf: cpf,
-        customer_name: (sale as any).customer_name || null,
-        customer_phone: (sale as any).customer_phone || null,
+        customer_name: (sale as any).customer_name || custRec?.name || null,
+        customer_phone: (sale as any).customer_phone || custRec?.whatsapp || null,
         customer_email: email,
         shipping_address,
         total_shipping: 0,
@@ -342,17 +401,25 @@ Deno.serve(async (req) => {
 
 
     const ship = (order.shipping_address || {}) as any;
-    const ufDestino = ufFromProvince(ship.province) || "MG";
     const cepDest = digits(ship.zip ?? ship.cep);
     if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
-    const cidadeDest = sanitize(ship.city || "").toUpperCase();
+    const cepInfo = await lookupAddressByCep(cepDest);
+    const ufDestino = ufFromProvince(ship.province || ship.state || cepInfo?.uf) || "MG";
+    const cidadeDest = firstUsable([ship.city, cepInfo?.localidade], 2).toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
-    const split = splitStreetNumber(ship.address1);
-    const logradouro = split.logradouro;
+    const streetSource = firstUsable([
+      ship.address1,
+      [ship.address, ship.number].filter(Boolean).join(", "),
+      ship.logradouro,
+      ship.street,
+      cepInfo?.logradouro,
+    ], 3);
+    const split = splitStreetNumber(streetSource);
+    const logradouro = firstUsable([split.logradouro, cepInfo?.logradouro, "Rua nao informada"], 3);
     // Prioriza o campo dedicado `number` (PDV/checkout/Tiny guardam separado do logradouro)
-    const numero = (ship.number && String(ship.number).trim()) ? String(ship.number).trim() : split.numero;
-    const bairro = sanitize(ship.address2 || ship.neighborhood || "Centro").slice(0, 60) || "Centro";
+    const numero = firstUsable([ship.number, split.numero, "S/N"], 1).slice(0, 10) || "S/N";
+    const bairro = firstUsable([ship.neighborhood, ship.address2, ship.bairro, cepInfo?.bairro, "Centro"], 2).slice(0, 60) || "Centro";
 
     // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
     const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
@@ -557,11 +624,11 @@ Deno.serve(async (req) => {
         IndicadorIe: 9,
         Endereco: {
           Cep: cepDest,
-          Logradouro: sanitize(logradouro).slice(0, 60) || "S/N",
+          Logradouro: sanitize(logradouro).slice(0, 60) || "Rua nao informada",
           Numero: sanitize(numero).slice(0, 10) || "S/N",
           Bairro: bairro,
           ...(ibgeDest ? { CodMunicipio: ibgeDest } : {}),
-          Municipio: sanitize(ship.city || "").slice(0, 60),
+          Municipio: cidadeDest.slice(0, 60),
           Uf: ufDestino,
           CodPais: 1058,
           Pais: "BRASIL",
