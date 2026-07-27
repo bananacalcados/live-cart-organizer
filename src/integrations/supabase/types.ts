@@ -10884,6 +10884,7 @@ export type Database = {
           discount_value: number | null
           eligible_for_prize: boolean | null
           event_id: string | null
+          expected_payment_method: string | null
           free_shipping: boolean | null
           gift_description: string | null
           has_gift: boolean | null
@@ -10908,9 +10909,11 @@ export type Database = {
           paid_externally: boolean | null
           payment_confirmed_source: string | null
           payment_method_label: string | null
+          payment_on_delivery: boolean
           pickup_store_id: string | null
           pos_sale_id: string | null
           products: Json
+          release_to_expedition: boolean
           shipping_cost: number | null
           shipping_info: Json | null
           shopify_order_id: string | null
@@ -10937,6 +10940,7 @@ export type Database = {
           discount_value?: number | null
           eligible_for_prize?: boolean | null
           event_id?: string | null
+          expected_payment_method?: string | null
           free_shipping?: boolean | null
           gift_description?: string | null
           has_gift?: boolean | null
@@ -10961,9 +10965,11 @@ export type Database = {
           paid_externally?: boolean | null
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
+          payment_on_delivery?: boolean
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
+          release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
           shopify_order_id?: string | null
@@ -10990,6 +10996,7 @@ export type Database = {
           discount_value?: number | null
           eligible_for_prize?: boolean | null
           event_id?: string | null
+          expected_payment_method?: string | null
           free_shipping?: boolean | null
           gift_description?: string | null
           has_gift?: boolean | null
@@ -11014,9 +11021,11 @@ export type Database = {
           paid_externally?: boolean | null
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
+          payment_on_delivery?: boolean
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
+          release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
           shopify_order_id?: string | null
@@ -13269,8 +13278,11 @@ export type Database = {
           customer_state: string | null
           customer_unified_id: string | null
           delivery_days: string | null
+          delivery_payment_method: string | null
+          delivery_payment_received_at: string | null
           discount: number
           event_id: string | null
+          expected_payment_method: string | null
           expedition_finished_at: string | null
           expedition_group_id: string | null
           expedition_stage: string | null
@@ -13301,6 +13313,7 @@ export type Database = {
           payment_link: string | null
           payment_method: string | null
           payment_method_detail: string | null
+          payment_on_delivery: boolean
           pickup_store_id: string | null
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type: string
@@ -13350,8 +13363,11 @@ export type Database = {
           customer_state?: string | null
           customer_unified_id?: string | null
           delivery_days?: string | null
+          delivery_payment_method?: string | null
+          delivery_payment_received_at?: string | null
           discount?: number
           event_id?: string | null
+          expected_payment_method?: string | null
           expedition_finished_at?: string | null
           expedition_group_id?: string | null
           expedition_stage?: string | null
@@ -13382,6 +13398,7 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          payment_on_delivery?: boolean
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
@@ -13431,8 +13448,11 @@ export type Database = {
           customer_state?: string | null
           customer_unified_id?: string | null
           delivery_days?: string | null
+          delivery_payment_method?: string | null
+          delivery_payment_received_at?: string | null
           discount?: number
           event_id?: string | null
+          expected_payment_method?: string | null
           expedition_finished_at?: string | null
           expedition_group_id?: string | null
           expedition_stage?: string | null
@@ -13463,6 +13483,7 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          payment_on_delivery?: boolean
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
