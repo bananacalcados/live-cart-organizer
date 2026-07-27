@@ -15,6 +15,7 @@ import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
 import { OrderFullViewDialog } from "./OrderFullViewDialog";
 import { MarkOrderPaidDialog } from "./MarkOrderPaidDialog";
+import { PayOnDeliveryDialog } from "./PayOnDeliveryDialog";
 
 
 import { Order } from "@/types/order";
@@ -78,6 +79,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showFichaDialog, setShowFichaDialog] = useState(false);
   const [showFullViewDialog, setShowFullViewDialog] = useState(false);
   const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
+  const [showPayOnDeliveryDialog, setShowPayOnDeliveryDialog] = useState(false);
 
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
@@ -943,19 +945,42 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
           {!order.is_paid && !order.paid_externally && (
-            <Button
-              variant="default"
-              size="sm"
-              className="w-full text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMarkPaidDialog(true);
-              }}
-            >
-              <CheckCircle2 className="h-3 w-3" />
-              PAGO
-            </Button>
+            <>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMarkPaidDialog(true);
+                }}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                PAGO
+              </Button>
+
+              {(order as any).payment_on_delivery ? (
+                <div className="w-full text-[11px] text-center font-bold rounded-md py-1.5 px-2 bg-stage-awaiting-mototaxi/15 text-stage-awaiting-mototaxi border border-stage-awaiting-mototaxi/40">
+                  PAGAMENTO NA ENTREGA
+                  {(order as any).expected_payment_method ? ` · ${(order as any).expected_payment_method}` : ""}
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs gap-1 border-stage-awaiting-mototaxi/50 text-stage-awaiting-mototaxi hover:bg-stage-awaiting-mototaxi/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPayOnDeliveryDialog(true);
+                  }}
+                >
+                  <Bike className="h-3 w-3" />
+                  Pagar na entrega
+                </Button>
+              )}
+            </>
           )}
+
 
 
 
@@ -1154,6 +1179,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
         total={finalValue}
       />
+
+      <PayOnDeliveryDialog
+        open={showPayOnDeliveryDialog}
+        onOpenChange={setShowPayOnDeliveryDialog}
+        orderId={order.id}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
 
 
 

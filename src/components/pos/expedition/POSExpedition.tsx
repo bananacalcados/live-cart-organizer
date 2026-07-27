@@ -29,6 +29,7 @@ import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
+import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 
 
 
@@ -65,6 +66,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
+  const [deliveryPayOrder, setDeliveryPayOrder] = useState<ExpOrder | null>(null);
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
 
@@ -801,6 +803,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             )}
                           </div>
 
+                          {o.payment_on_delivery && (
+                            <div className="mt-2 rounded-lg px-4 py-3 border-4 bg-stage-awaiting-mototaxi text-white border-stage-awaiting-mototaxi">
+                              <div className="text-xl font-black uppercase tracking-wide">
+                                🏍 PAGAMENTO NA ENTREGA — NÃO ENTREGAR SEM RECEBER
+                              </div>
+                              <div className="text-base font-black uppercase mt-1">
+                                Cobrar {brl(o.total)}
+                                {o.expected_payment_method ? ` · ${o.expected_payment_method}` : ""}
+                              </div>
+                            </div>
+                          )}
+
                           {o.has_gift && (
                             <div
                               className={`mt-2 rounded-lg px-4 py-3 border-4 ${
@@ -840,6 +854,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {o.payment_on_delivery && (
+                            <Button
+                              size="lg"
+                              className="bg-exp-done text-white text-base font-black"
+                              onClick={() => setDeliveryPayOrder(o)}
+                            >
+                              <CheckCircle2 className="h-5 w-5 mr-1" /> RECEBIDO NA ENTREGA
+                            </Button>
+                          )}
+
                           {o.resolved_phone && (
                             <Button
                               size="lg"
@@ -1015,6 +1039,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      <ExpDeliveryPaymentDialog
+        open={!!deliveryPayOrder}
+        onOpenChange={(v) => !v && setDeliveryPayOrder(null)}
+        order={deliveryPayOrder}
+        onDone={() => {
+          setDeliveryPayOrder(null);
+          load();
+          loadCounts();
+        }}
+      />
 
 
       {chatOrder && (

@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, payment_method_label, installments")
+      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, paid_externally, payment_method_label, installments, payment_on_delivery, expected_payment_method, release_to_expedition")
       .eq("id", order_id)
       .maybeSingle();
 
@@ -125,7 +125,8 @@ Deno.serve(async (req) => {
     // Pedido de live JÁ PAGO online (PIX) → entra como receita ('paid' + paid_at),
     // contando no Faturamento Live. Só pedidos NÃO pagos ficam como 'pending_pickup'
     // (aguardando pagamento na retirada / aba Retiradas).
-    const isPaid = !!(order as any).is_paid;
+    const isPaid = !!(order as any).is_paid || !!(order as any).paid_externally;
+    const payOnDelivery = !!(order as any).payment_on_delivery && !isPaid;
     const saleStatus = isPaid ? "paid" : "pending_pickup";
     const paidAt = isPaid ? new Date().toISOString() : null;
 
@@ -146,7 +147,9 @@ Deno.serve(async (req) => {
         event_id: order.event_id,
         revenue_attribution: "store",
         payment_method: (order as any).payment_method_label || null,
-        notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}`,
+        payment_on_delivery: payOnDelivery,
+        expected_payment_method: payOnDelivery ? (order as any).expected_payment_method || null : null,
+        notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}${payOnDelivery ? " · PAGAMENTO NA ENTREGA" : ""}`,
         payment_details: {
           source: "live_event_auto_route",
           event_channel: event.channel,
@@ -154,6 +157,8 @@ Deno.serve(async (req) => {
           customer_whatsapp: whatsapp,
           payment_method: (order as any).payment_method_label || null,
           installments: (order as any).installments || null,
+          payment_on_delivery: payOnDelivery,
+          expected_payment_method: (order as any).expected_payment_method || null,
         },
 
       })

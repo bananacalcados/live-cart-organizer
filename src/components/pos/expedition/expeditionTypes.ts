@@ -83,6 +83,11 @@ export interface ExpOrder {
   gift_description?: string | null;
   gift_added_at?: string | null;
   gift_after_completion?: boolean | null;
+  /** Pedido liberado para expedição sem pagamento — recebe na entrega (mototaxista). */
+  payment_on_delivery?: boolean | null;
+  expected_payment_method?: string | null;
+  delivery_payment_received_at?: string | null;
+  delivery_payment_method?: string | null;
   instagram?: string | null;
   delivery_method?: string | null;
   items: ExpItem[];
@@ -196,7 +201,7 @@ export async function fetchExpeditionOrders(
   stage: ExpStage,
 ): Promise<ExpOrder[]> {
   const SALE_COLS =
-    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion";
+    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method";
 
   const baseQuery = () =>
     supabase
@@ -220,8 +225,21 @@ export async function fetchExpeditionOrders(
     sales = retry.data as any;
   }
 
-  const rows = (sales || []) as any[];
+  // Pedidos liberados como PAGAMENTO NA ENTREGA entram na Expedição mesmo
+  // sem pagamento confirmado (mototaxista recebe no ato da entrega).
+  let rows = (sales || []) as any[];
+  try {
+    const { data: podSales } = await baseQuery().eq("payment_on_delivery", true);
+    for (const s of (podSales || []) as any[]) {
+      if (s.status === "cancelled") continue;
+      if (!rows.some((r) => r.id === s.id)) rows.push(s);
+    }
+  } catch {
+    /* best-effort */
+  }
+
   if (!rows.length) return [];
+
 
   // Loja 100% online (Site/Live) não tem vendedora humana: nenhuma venda dela
   // pode ser atribuída a vendedora/atendente.
@@ -363,6 +381,10 @@ export function mergeExpeditionGroup(list: ExpOrder[]): ExpOrder {
     gift_description:
       sorted.map((o) => o.gift_description).filter(Boolean).join(" | ") || master.gift_description,
     gift_after_completion: sorted.some((o) => !!o.gift_after_completion),
+    payment_on_delivery: sorted.some((o) => !!o.payment_on_delivery),
+    expected_payment_method:
+      sorted.find((o) => o.payment_on_delivery && o.expected_payment_method)?.expected_payment_method ||
+      master.expected_payment_method,
     group_order_ids: sorted.map((o) => o.id),
   };
 }
