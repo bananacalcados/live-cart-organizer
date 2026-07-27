@@ -63,14 +63,14 @@ export function StatsBar({ orders }: StatsBarProps) {
     },
     {
       label: "Faturamento Total",
-      value: `R$ ${totalValue.toFixed(2)}`,
+      value: brl(totalValue),
       icon: Receipt,
       color: "text-accent",
       bgColor: "bg-accent/10",
     },
     {
       label: "Faturamento Recebido",
-      value: `R$ ${receivedValue.toFixed(2)}`,
+      value: brl(receivedValue),
       icon: DollarSign,
       color: "text-stage-paid",
       bgColor: "bg-stage-paid/10",
