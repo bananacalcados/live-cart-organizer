@@ -93,6 +93,28 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
     return { sent, errors, skipped, pending, rate };
   }, [logs]);
 
+  // Atribuição (30 dias): quanto foi reportado como compra de SITE (pixel) x
+  // LOJA FÍSICA (dataset offline), e quanto foi redirecionado/deduplicado.
+  const attribution = useMemo(() => {
+    let website = 0, offline = 0, routed = 0, deduped = 0;
+    for (const l of logs) {
+      if (l.event_name !== "Purchase") continue;
+      const summary: any = l.payload_summary || {};
+      if (l.channel === "live" && l.status === "sent") { website++; continue; }
+      if (l.channel === "pdv") {
+        if (summary.attribution === "website") {
+          if (summary.routed_to === "meta-capi-event") { routed++; website++; }
+          else deduped++;
+          continue;
+        }
+        if (l.status === "sent") offline++;
+      }
+    }
+    const total = website + offline;
+    return { website, offline, routed, deduped, websitePct: total ? (website / total) * 100 : 0 };
+  }, [logs]);
+
+
   const filtered = useMemo(() => logs.filter(l => {
     if (channel !== "all" && l.channel !== channel) return false;
     if (statusFilter !== "all" && l.status !== statusFilter) return false;
