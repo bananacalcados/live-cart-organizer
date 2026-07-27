@@ -18,6 +18,8 @@ import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTempla
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { hydrateSaleCustomer } from "./customerHydrate";
+
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
