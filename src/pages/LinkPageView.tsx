@@ -126,7 +126,16 @@ export default function LinkPageView() {
     setSubmittingLead(true);
     try {
       const { data: res } = await supabase.functions.invoke("link-page-capture-lead", {
-        body: { pageId: data!.page.id, name: leadName.trim(), phone: leadPhone },
+        body: {
+          pageId: data!.page.id,
+          name: leadName.trim(),
+          phone: leadPhone,
+          // Sinais de clique da Meta (memória de atribuição de 90 dias)
+          fbclid: search.get("fbclid"),
+          fbp: getFbp(),
+          fbc: getFbc(),
+          source_url: window.location.href,
+        },
       });
       const lid = res?.leadId || null;
       setLeadId(lid);
