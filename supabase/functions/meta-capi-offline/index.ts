@@ -425,6 +425,9 @@ Deno.serve(async (req) => {
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
     const co = await hashIfPresent("br");
 
+    const ge = customer?.gender ? await hashIfPresent(String(customer.gender).trim().toLowerCase().charAt(0)) : undefined;
+
+
     // Etapa 4: cliente que clicou num anúncio (CTWA/typebot/LP) e converteu
     // presencialmente na loja — recupera fbc/fbp pela memória de atribuição.
     let fbcMem: string | null = null;
