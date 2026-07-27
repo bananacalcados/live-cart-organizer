@@ -45,7 +45,13 @@ serve(async (req) => {
       metadata,
       custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
       disqualified,     // true quando o lead não atendeu a condição da pergunta
+      // Etapa 3 — sinais de clique da Meta capturados no navegador da lead
+      fbclid,
+      fbp,
+      fbc,
+      source_url,
     } = body || {};
+
 
     if (!event_id || !source || !name || !phone) {
       return new Response(JSON.stringify({ error: 'event_id, source, name and phone are required' }),
