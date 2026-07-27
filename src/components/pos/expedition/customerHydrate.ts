@@ -83,6 +83,11 @@ export async function hydrateSaleCustomer(
   order: ExpOrder,
   saleIds?: string[],
 ): Promise<{ cpf: string | null; email: string | null }> {
+  const orderRow = order as ExpOrder & {
+    customer_cep?: string | null;
+    customer_city?: string | null;
+    customer_state?: string | null;
+  };
   const currentCpf = digits(order.customer_cpf || (order.payment_details as any)?.customer_cpf);
   const currentEmail = order.customer_email || (order.payment_details as any)?.customer_email || null;
 
@@ -122,9 +127,9 @@ export async function hydrateSaleCustomer(
   }
 
   const mergedCep = digits(mergedAddr.cep || mergedAddr.zip);
-  if (mergedCep.length === 8 && !order.customer_cep) updates.customer_cep = mergedCep;
-  if (useful(mergedAddr.city, 2) && !order.customer_city) updates.customer_city = mergedAddr.city;
-  if (useful(mergedAddr.state, 2) && !order.customer_state) updates.customer_state = String(mergedAddr.state).toUpperCase();
+  if (mergedCep.length === 8 && !orderRow.customer_cep) updates.customer_cep = mergedCep;
+  if (useful(mergedAddr.city, 2) && !orderRow.customer_city) updates.customer_city = mergedAddr.city;
+  if (useful(mergedAddr.state, 2) && !orderRow.customer_state) updates.customer_state = String(mergedAddr.state).toUpperCase();
   if (JSON.stringify(mergedAddr) !== JSON.stringify(currentAddr)) updates.shipping_address = mergedAddr;
 
   if (Object.keys(updates).length) {
