@@ -133,6 +133,7 @@ async function routeToWebsitePixel(
   }
 
   const shipAddr: any = sale.shipping_address || {};
+  const pd: any = sale.payment_details || {};
   const value = Number(sale.total || 0);
 
   if (value <= 0) {
