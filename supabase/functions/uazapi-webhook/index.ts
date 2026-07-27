@@ -666,6 +666,26 @@ serve(async (req) => {
         if (adReferral) {
           console.log(`[uazapi-webhook] Ad referral (CTWA) detectado para ${phone}:`, JSON.stringify(adReferral));
         }
+        // Memória de atribuição Meta (90 dias): guarda o clique do anúncio
+        // para reinjetar o `fbc` quando a cliente converter dias depois.
+        try {
+          const clid =
+            extractCtwaClid(ext) ||
+            (asString((ext as Record<string, unknown>).sourceId) || null);
+          if (clid) {
+            const fbc = buildFbc(clid);
+            saveMetaAttribution(supabase, {
+              phone,
+              fbc,
+              ctwa_clid: clid,
+              ad_id: asString((ext as Record<string, unknown>).sourceId) || null,
+              source_url: (adReferral?.source_url as string) || null,
+              origin: "whatsapp_ctwa",
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.error("[uazapi-webhook] meta attribution error:", e);
+        }
       } else {
         // Diagnóstico: se o payload parece conter dados de anúncio mas não
         // conseguimos extrair, logamos a mensagem crua para ajustar o parser.
