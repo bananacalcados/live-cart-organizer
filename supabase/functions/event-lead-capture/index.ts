@@ -135,6 +135,28 @@ serve(async (req) => {
       lead = inserted;
     }
 
+    // ===== Etapa 3: memória de atribuição (90 dias) =====
+    // Guarda os sinais de clique do anúncio pelo telefone da lead. Assim, quando
+    // ela comprar depois (link da live, PDV, loja física), o fbc ainda existe.
+    try {
+      const fbcResolved = (fbc as string | null) || buildFbc(fbclid as string | null);
+      if (fbcResolved || fbp) {
+        await saveMetaAttribution(supabase, {
+          phone: e164,
+          fbc: fbcResolved,
+          fbp: (fbp as string) || null,
+          fbclid: (fbclid as string) || null,
+          source_url: (source_url as string) || null,
+          origin: source === 'typebot' ? 'typebot' : 'event_lp',
+          lead_id: lead?.id ? String(lead.id) : null,
+        });
+      }
+    } catch (e) {
+      console.warn('[event-lead-capture] attribution memory save failed:', e);
+    }
+
+
+
     // Fetch source config (vip group link etc.)
     let vip_group_link: string | null = null;
     let success_message: string | null = null;
