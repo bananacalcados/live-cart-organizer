@@ -86,6 +86,12 @@ export interface ExpOrder {
   instagram?: string | null;
   delivery_method?: string | null;
   items: ExpItem[];
+  /**
+   * Preenchido apenas quando o card representa um ENVIO UNIFICADO
+   * (vários pedidos do mesmo cliente agrupados por expedition_group_id).
+   * Contém os ids de TODAS as vendas do grupo, incluindo a principal.
+   */
+  group_order_ids?: string[];
   origin: ExpOrigin;
   is_avulso: boolean;
   avulso_ready: boolean;
@@ -335,3 +341,28 @@ export const customerKey = (o: ExpOrder) =>
     (o.customer_phone || "").replace(/\D/g, "").slice(-8) ||
     (o.customer_name || "").toLowerCase().trim() ||
     o.id) as string;
+
+/**
+ * Junta os pedidos de um ENVIO UNIFICADO em um único "pedido" de conferência.
+ * A venda mais antiga vira a principal (dados do cliente/envio/NF-e) e os itens
+ * de todas as vendas do grupo são somados. Não altera nada no banco.
+ */
+export function mergeExpeditionGroup(list: ExpOrder[]): ExpOrder {
+  if (list.length <= 1) return list[0];
+  const sorted = [...list].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  const master = sorted[0];
+  return {
+    ...master,
+    items: sorted.flatMap((o) => o.items),
+    total: sorted.reduce((s, o) => s + (Number(o.total) || 0), 0),
+    subtotal: sorted.reduce((s, o) => s + (Number(o.subtotal) || 0), 0),
+    discount: sorted.reduce((s, o) => s + (Number(o.discount) || 0), 0),
+    has_gift: sorted.some((o) => !!o.has_gift),
+    gift_description:
+      sorted.map((o) => o.gift_description).filter(Boolean).join(" | ") || master.gift_description,
+    gift_after_completion: sorted.some((o) => !!o.gift_after_completion),
+    group_order_ids: sorted.map((o) => o.id),
+  };
+}

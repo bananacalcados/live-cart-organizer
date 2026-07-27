@@ -20,6 +20,7 @@ import {
   trackingLink,
   UNPAID_STATUSES,
   PAID_FILTER,
+  mergeExpeditionGroup,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
@@ -697,7 +698,11 @@ export function POSExpedition({ storeId, storeName }: Props) {
           groups.map(([key, list], gi) => {
             const unified = list.length > 1 && !!list[0].expedition_group_id;
             const canUnify = stage === "preparacao" && list.length > 1 && !unified;
+            // Na CONFERÊNCIA um envio unificado é conferido como UM pedido só.
+            const cards = stage === "conferencia" && unified ? [mergeExpeditionGroup(list)] : list;
             return (
+
+
               <div
                 key={key}
                 className={`space-y-2 ${gi > 0 ? "pt-4 mt-4 border-t-4 border-dashed border-pos-border" : ""}`}
@@ -725,7 +730,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
 
 
-                {list.map((o) => (
+                {cards.map((o) => (
                   <div
                     key={o.id}
                     className={`rounded-xl bg-pos-card border-2 ${stageStyles[stage].ring} shadow-pos-card overflow-hidden`}
