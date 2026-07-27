@@ -1039,6 +1039,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
         />
       )}
 
+      <ExpDeliveryPaymentDialog
+        open={!!deliveryPayOrder}
+        onOpenChange={(v) => !v && setDeliveryPayOrder(null)}
+        order={deliveryPayOrder}
+        onDone={() => {
+          setDeliveryPayOrder(null);
+          load();
+          loadCounts();
+        }}
+      />
+
 
       {chatOrder && (
         <WhatsAppChatDialog
