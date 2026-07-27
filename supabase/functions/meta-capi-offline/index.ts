@@ -491,6 +491,7 @@ Deno.serve(async (req) => {
       zp: zp ? [zp] : undefined,
       country: co ? [co] : undefined,
       ge: ge ? [ge] : undefined,
+      db: db ? [db] : undefined,
       external_id: externalId ? [externalId] : undefined,
       fbc: fbcMem || undefined,
       fbp: fbpMem || undefined,
