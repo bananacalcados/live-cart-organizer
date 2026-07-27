@@ -1179,6 +1179,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         total={finalValue}
       />
 
+      <PayOnDeliveryDialog
+        open={showPayOnDeliveryDialog}
+        onOpenChange={setShowPayOnDeliveryDialog}
+        orderId={order.id}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
+
 
 
       {order.customer?.whatsapp && (
