@@ -29,6 +29,7 @@ import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
+import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 
 
 
