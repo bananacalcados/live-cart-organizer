@@ -208,6 +208,26 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
         <KpiCard label="Taxa sucesso" value={`${kpis.rate.toFixed(1)}%`} icon={Activity} color="text-orange-600" />
       </div>
 
+      {/* Atribuição Site x Loja Física (30 dias) */}
+      <div className="px-4 pt-3">
+        <div className="rounded-lg border border-border bg-white p-3">
+          <p className="text-xs font-semibold text-muted-foreground mb-2">
+            Atribuição dos últimos 30 dias — como cada compra foi reportada à Meta
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard label="Compras SITE (pixel)" value={attribution.website} icon={Activity} color="text-blue-600" />
+            <KpiCard label="Compras LOJA FÍSICA" value={attribution.offline} icon={Activity} color="text-purple-600" />
+            <KpiCard label="Roteadas p/ o site" value={attribution.routed} icon={Activity} color="text-emerald-600" />
+            <KpiCard label="Duplicatas evitadas" value={attribution.deduped} icon={AlertTriangle} color="text-amber-600" />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            {attribution.websitePct.toFixed(0)}% das compras foram reportadas como venda de site.
+            Vendas de Live, link de checkout e PDV &gt; Online contam como site; só balcão vai para o dataset de loja física.
+          </p>
+        </div>
+      </div>
+
+
       {/* Pixels cadastrados */}
       <div className="px-4 pt-4">
         <div className="rounded-xl border border-border bg-white shadow-sm p-4">
