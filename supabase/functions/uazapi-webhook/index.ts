@@ -678,7 +678,11 @@ serve(async (req) => {
               phone,
               fbc,
               ctwa_clid: clid,
-              ad_id: asString((ext as Record<string, unknown>).sourceId) || null,
+              // Na uazapi o `sourceId` é o próprio ctwa_clid; só guardamos como
+              // ad_id quando vier realmente um ID numérico de anúncio.
+              ad_id: /^\d{6,}$/.test(String(asString((ext as Record<string, unknown>).sourceId) || ""))
+                ? asString((ext as Record<string, unknown>).sourceId)
+                : null,
               source_url: (adReferral?.source_url as string) || null,
               origin: "whatsapp_ctwa",
             }).catch(() => {});
