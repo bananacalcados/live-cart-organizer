@@ -93,6 +93,28 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
     return { sent, errors, skipped, pending, rate };
   }, [logs]);
 
+  // Atribuição (30 dias): quanto foi reportado como compra de SITE (pixel) x
+  // LOJA FÍSICA (dataset offline), e quanto foi redirecionado/deduplicado.
+  const attribution = useMemo(() => {
+    let website = 0, offline = 0, routed = 0, deduped = 0;
+    for (const l of logs) {
+      if (l.event_name !== "Purchase") continue;
+      const summary: any = l.payload_summary || {};
+      if (l.channel === "live" && l.status === "sent") { website++; continue; }
+      if (l.channel === "pdv") {
+        if (summary.attribution === "website") {
+          if (summary.routed_to === "meta-capi-event") { routed++; website++; }
+          else deduped++;
+          continue;
+        }
+        if (l.status === "sent") offline++;
+      }
+    }
+    const total = website + offline;
+    return { website, offline, routed, deduped, websitePct: total ? (website / total) * 100 : 0 };
+  }, [logs]);
+
+
   const filtered = useMemo(() => logs.filter(l => {
     if (channel !== "all" && l.channel !== channel) return false;
     if (statusFilter !== "all" && l.status !== statusFilter) return false;
@@ -185,6 +207,26 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
         <KpiCard label="Pendentes" value={kpis.pending} icon={Clock} color="text-sky-600" />
         <KpiCard label="Taxa sucesso" value={`${kpis.rate.toFixed(1)}%`} icon={Activity} color="text-orange-600" />
       </div>
+
+      {/* Atribuição Site x Loja Física (30 dias) */}
+      <div className="px-4 pt-3">
+        <div className="rounded-lg border border-border bg-white p-3">
+          <p className="text-xs font-semibold text-muted-foreground mb-2">
+            Atribuição dos últimos 30 dias — como cada compra foi reportada à Meta
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KpiCard label="Compras SITE (pixel)" value={attribution.website} icon={Activity} color="text-blue-600" />
+            <KpiCard label="Compras LOJA FÍSICA" value={attribution.offline} icon={Activity} color="text-purple-600" />
+            <KpiCard label="Roteadas p/ o site" value={attribution.routed} icon={Activity} color="text-emerald-600" />
+            <KpiCard label="Duplicatas evitadas" value={attribution.deduped} icon={AlertTriangle} color="text-amber-600" />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            {attribution.websitePct.toFixed(0)}% das compras foram reportadas como venda de site.
+            Vendas de Live, link de checkout e PDV &gt; Online contam como site; só balcão vai para o dataset de loja física.
+          </p>
+        </div>
+      </div>
+
 
       {/* Pixels cadastrados */}
       <div className="px-4 pt-4">

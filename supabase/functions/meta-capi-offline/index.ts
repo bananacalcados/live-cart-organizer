@@ -13,6 +13,9 @@
 //   - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
+import { classifySaleAttribution, type AttributionInput } from "../_shared/meta-attribution.ts";
+
 
 const DATASET_ID = "1346445220878187"; // Visita Loja Física
 const corsHeaders = {
@@ -36,12 +39,10 @@ function stripAccents(s: string): string {
 }
 
 function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/[^0-9]/g, "");
-  if (!digits) return "";
-  // Garante DDI 55 pro Brasil
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
+  // Padrão único do projeto: E.164 BR com DDI 55 e 9º dígito garantido.
+  return normalizeMetaPhone(raw);
 }
+
 
 function normalizeEmail(raw: string): string {
   return (raw || "").trim().toLowerCase();
@@ -82,7 +83,134 @@ async function hashIfPresent(raw: string | null | undefined): Promise<string | u
   return await sha256Hex(trimmed);
 }
 
+
+/**
+ * Venda classificada como compra de SITE: em vez de mandar para o dataset
+ * offline, encaminha para o pixel online via `meta-capi-event`.
+ *
+ * - Se a venda veio de um pedido de checkout que JÁ enviou o Purchase ao pixel,
+ *   não envia nada (evita a dupla contagem que inflava o ROAS).
+ * - Caso contrário, envia com event_id determinístico para permitir dedupe.
+ */
+async function routeToWebsitePixel(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  sale: any,
+  reason: string,
+  testCode?: string,
+): Promise<Record<string, unknown>> {
+  const saleId = sale.id as string;
+
+  // Já contabilizado pelo pedido de checkout (browser + CAPI com mesmo event_id)?
+  if (sale.source_order_id) {
+    const { data: order } = await supabase
+      .from("orders")
+      .select("id, meta_capi_purchase_sent_at")
+      .eq("id", sale.source_order_id)
+      .maybeSingle();
+
+    if (order?.meta_capi_purchase_sent_at) {
+      await supabase.from("meta_capi_offline_log").upsert({
+        sale_id: saleId,
+        event_name: "Purchase",
+        event_id: `skipped_${saleId}`,
+        dataset_id: DATASET_ID,
+        status: "skipped",
+        error_message: `website attribution (${reason}) — Purchase já enviado ao pixel pelo pedido ${sale.source_order_id}`,
+        payload_summary: { attribution: "website", reason, deduped_with_order: sale.source_order_id },
+      }, { onConflict: "sale_id,event_name" });
+
+      return { ok: true, skipped: true, attribution: "website", reason: "already_sent_by_checkout_order" };
+    }
+  }
+
+  const shipAddr: any = sale.shipping_address || {};
+  const value = Number(sale.total || 0);
+
+  if (value <= 0) {
+    await supabase.from("meta_capi_offline_log").upsert({
+      sale_id: saleId,
+      event_name: "Purchase",
+      event_id: `skipped_${saleId}`,
+      dataset_id: DATASET_ID,
+      status: "skipped",
+      error_message: "website attribution — valor zero/negativo",
+      payload_summary: { attribution: "website", reason },
+    }, { onConflict: "sale_id,event_name" });
+    return { ok: true, skipped: true, attribution: "website", reason: "zero_value" };
+  }
+
+  const body: Record<string, unknown> = {
+    event_name: "Purchase",
+    event_id: sale.source_order_id
+      ? `purchase_order_${sale.source_order_id}`
+      : `purchase_sale_${saleId}`,
+    order_id: sale.source_order_id || saleId,
+    value,
+    currency: "BRL",
+    action_source: "website",
+    event_source_url: "https://checkout.bananacalcados.com.br/",
+    phone: sale.customer_phone || shipAddr.phone || undefined,
+    email: sale.customer_email || shipAddr.email || undefined,
+    full_name: sale.customer_name || shipAddr.name || undefined,
+    cpf: sale.customer_cpf || shipAddr.cpf || undefined,
+    city: sale.customer_city || shipAddr.city || undefined,
+    state: sale.customer_state || shipAddr.state || undefined,
+    zip: sale.customer_cep || shipAddr.cep || shipAddr.zip || undefined,
+    country: "BR",
+    from_server: true,
+  };
+  if (testCode) body.test_event_code = testCode;
+
+  let ok = false;
+  let respJson: any = {};
+  let httpStatus = 0;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/meta-capi-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    httpStatus = resp.status;
+    respJson = await resp.json().catch(() => ({}));
+    ok = resp.ok && respJson?.ok !== false;
+  } catch (e) {
+    respJson = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // Registra no log offline como "skipped" (não foi para o dataset offline),
+  // deixando rastro de que a venda foi roteada para o pixel online.
+  await supabase.from("meta_capi_offline_log").upsert({
+    sale_id: saleId,
+    event_name: "Purchase",
+    event_id: String(body.event_id),
+    dataset_id: DATASET_ID,
+    status: "skipped",
+    http_status: httpStatus || null,
+    meta_response: respJson,
+    error_message: ok
+      ? null
+      : `website attribution — falha ao enviar ao pixel: ${respJson?.error || httpStatus}`,
+    sent_at: new Date().toISOString(),
+    payload_summary: {
+      attribution: "website",
+      reason,
+      routed_to: "meta-capi-event",
+      value,
+      forwarded_ok: ok,
+    },
+  }, { onConflict: "sale_id,event_name" });
+
+  return { ok, skipped: true, attribution: "website", reason, routed_to: "pixel", event_id: body.event_id, meta_response: respJson };
+}
+
 // ============ Handler ============
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -141,7 +269,9 @@ Deno.serve(async (req) => {
         id, total, status, created_at, paid_at, payment_method, sale_type,
         customer_id, store_id, notes, external_source, external_order_id,
         customer_name, customer_phone, customer_email, customer_cpf,
-        customer_city, customer_state, customer_cep, shipping_address
+        customer_city, customer_state, customer_cep, shipping_address,
+        payment_gateway, payment_link, mercadopago_payment_id, appmax_order_id,
+        vindi_transaction_id, pagarme_order_id, source_order_id, event_id
       `)
       .eq("id", saleId)
       .maybeSingle();
@@ -163,22 +293,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Skip Shopify-sourced sales: those events are already sent by the site (browser Pixel/CAPI)
-    // or by the Live event module at checkout. Resending here would duplicate events.
-    if (sale.external_source === "shopify") {
+    // ============ ROTEAMENTO ONLINE x OFFLINE ============
+    // A classificação é feita pela FORMA DE PAGAMENTO, não pela loja que
+    // registrou a venda. Live / link de checkout / PDV>Online são compras de
+    // SITE e vão para o pixel; só balcão vai para o dataset offline.
+    const { attribution, reason } = classifySaleAttribution(sale as AttributionInput);
+
+    if (attribution === "none") {
       await supabase.from("meta_capi_offline_log").upsert({
         sale_id: saleId,
         event_name: "Purchase",
-        event_id: `skipped_shopify_${saleId}`,
+        event_id: `skipped_${saleId}`,
         dataset_id: DATASET_ID,
         status: "skipped",
-        error_message: "shopify source — event already sent by site/live module",
+        error_message: `not reportable: ${reason}`,
       }, { onConflict: "sale_id,event_name" });
       return new Response(
-        JSON.stringify({ ok: true, skipped: true, reason: "shopify_source" }),
+        JSON.stringify({ ok: true, skipped: true, attribution, reason }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    if (attribution === "website") {
+      const result = await routeToWebsitePixel(supabase, SUPABASE_URL, SERVICE_ROLE_KEY, sale, reason, TEST_CODE);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     // Idempotência: se já foi enviado com sucesso, retorna sem reenviar
     const { data: existingLog } = await supabase

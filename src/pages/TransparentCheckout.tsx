@@ -1896,6 +1896,14 @@ export default function TransparentCheckout() {
         // Meta cookies (capture in browser) so the server-side CAPI Purchase can match strongly
         ...(getFbp() ? { fbp: getFbp() } : {}),
         ...(getFbc() ? { fbc: getFbc() } : {}),
+        // Sinais do navegador: usados no Purchase server-side (CAPI) para elevar o match
+        ...(typeof navigator !== "undefined" && navigator.userAgent
+          ? { client_user_agent: navigator.userAgent.slice(0, 500) }
+          : {}),
+        ...(typeof window !== "undefined" && window.location?.href
+          ? { event_source_url: window.location.href.split("?")[0].slice(0, 500) }
+          : {}),
+
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 

@@ -3721,11 +3721,14 @@ export type Database = {
           address_number: string
           cep: string
           city: string
+          client_ip: string | null
+          client_user_agent: string | null
           complement: string | null
           cpf: string
           created_at: string
           customer_id: string | null
           email: string
+          event_source_url: string | null
           fbc: string | null
           fbp: string | null
           full_name: string
@@ -3744,11 +3747,14 @@ export type Database = {
           address_number: string
           cep: string
           city: string
+          client_ip?: string | null
+          client_user_agent?: string | null
           complement?: string | null
           cpf: string
           created_at?: string
           customer_id?: string | null
           email: string
+          event_source_url?: string | null
           fbc?: string | null
           fbp?: string | null
           full_name: string
@@ -3767,11 +3773,14 @@ export type Database = {
           address_number?: string
           cep?: string
           city?: string
+          client_ip?: string | null
+          client_user_agent?: string | null
           complement?: string | null
           cpf?: string
           created_at?: string
           customer_id?: string | null
           email?: string
+          event_source_url?: string | null
           fbc?: string | null
           fbp?: string | null
           full_name?: string
@@ -20276,11 +20285,14 @@ export type Database = {
           address_number: string
           cep: string
           city: string
+          client_ip: string | null
+          client_user_agent: string | null
           complement: string | null
           cpf: string
           created_at: string
           customer_id: string | null
           email: string
+          event_source_url: string | null
           fbc: string | null
           fbp: string | null
           full_name: string

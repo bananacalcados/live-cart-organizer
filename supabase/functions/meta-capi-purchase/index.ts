@@ -20,6 +20,7 @@
 //   - client_ip_address : raw IPv4/IPv6 (not hashed)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +45,8 @@ function stripAccents(s: string): string {
 
 /** Phone: digits only. Meta accepts with country code (no +). */
 function normalizePhone(raw: string): string {
-  return (raw || "").replace(/[^0-9]/g, "");
+  // Padrão único do projeto: E.164 BR com DDI 55 e 9º dígito garantido.
+  return normalizeMetaPhone(raw);
 }
 
 /** Email: trim + lowercase. */
