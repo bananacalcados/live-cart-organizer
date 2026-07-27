@@ -20,6 +20,7 @@ import {
   trackingLink,
   UNPAID_STATUSES,
   PAID_FILTER,
+  mergeExpeditionGroup,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
@@ -729,7 +730,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
 
 
-                {list.map((o) => (
+                {cards.map((o) => (
                   <div
                     key={o.id}
                     className={`rounded-xl bg-pos-card border-2 ${stageStyles[stage].ring} shadow-pos-card overflow-hidden`}
