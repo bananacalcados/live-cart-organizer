@@ -801,6 +801,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             )}
                           </div>
 
+                          {o.payment_on_delivery && (
+                            <div className="mt-2 rounded-lg px-4 py-3 border-4 bg-stage-awaiting-mototaxi text-white border-stage-awaiting-mototaxi">
+                              <div className="text-xl font-black uppercase tracking-wide">
+                                🏍 PAGAMENTO NA ENTREGA — NÃO ENTREGAR SEM RECEBER
+                              </div>
+                              <div className="text-base font-black uppercase mt-1">
+                                Cobrar {brl(o.total)}
+                                {o.expected_payment_method ? ` · ${o.expected_payment_method}` : ""}
+                              </div>
+                            </div>
+                          )}
+
                           {o.has_gift && (
                             <div
                               className={`mt-2 rounded-lg px-4 py-3 border-4 ${
