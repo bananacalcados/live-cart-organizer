@@ -230,23 +230,60 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ============ Etapa 4: memória de atribuição (90 dias) ============
+    // ============ Etapa 5: identidade unificada no CRM ============
+    // Resolve a pessoa por telefone / CPF / e-mail / Instagram para (a) completar
+    // PII faltante e (b) permitir buscar a memória de atribuição em TODOS os
+    // telefones já usados por ela.
+    let _birthDate: string | undefined;
+    let _gender: string | undefined;
+    let _customerRef: string | undefined;
+    const identity = await resolveCrmIdentity(supabase, {
+      phone: phoneDigits || _phone,
+      email: _email,
+      cpf: _cpf,
+      instagram: (instagram as string | undefined) ?? undefined,
+    });
+    if (identity) {
+      _email = _email ?? identity.email ?? undefined;
+      _fullName = _fullName ?? identity.name ?? undefined;
+      _city = _city ?? identity.city ?? undefined;
+      _state = _state ?? identity.state ?? undefined;
+      _zip = _zip ?? identity.cep ?? undefined;
+      _cpf = _cpf ?? identity.cpf ?? undefined;
+      _birthDate = identity.birth_date ?? undefined;
+      _gender = identity.gender ?? undefined;
+      _customerRef = identity.customer_code ?? identity.customer_id ?? undefined;
+    }
+
+    // ============ Etapa 4 + 5: memória de atribuição (90 dias, multi-telefone) ============
     // Quando o evento não traz fbc/fbp (link de live, checkout compartilhado no
     // WhatsApp, conversão dias depois do clique), recupera os sinais gravados
-    // para o telefone da cliente.
+    // para qualquer telefone conhecido da cliente.
     let _attrOrigin: string | null = null;
-    if (phoneDigits && (!_fbc || !_fbp)) {
+    let _attrMatchedPhone: string | null = null;
+    if (!_fbc || !_fbp) {
       try {
-        const stored = await getMetaAttribution(supabase, phoneDigits);
+        const candidates = identity?.phones?.length ? identity.phones : (phoneDigits ? [phoneDigits] : []);
+        const stored = await getMetaAttributionForPhones(supabase, candidates);
         if (stored) {
           if (!_fbc && stored.fbc) _fbc = stored.fbc;
           if (!_fbp && stored.fbp) _fbp = stored.fbp;
           _attrOrigin = stored.origin;
+          _attrMatchedPhone = stored.matched_phone;
+        } else if (phoneDigits) {
+          const legacy = await getMetaAttribution(supabase, phoneDigits);
+          if (legacy) {
+            if (!_fbc && legacy.fbc) _fbc = legacy.fbc;
+            if (!_fbp && legacy.fbp) _fbp = legacy.fbp;
+            _attrOrigin = legacy.origin;
+            _attrMatchedPhone = phoneDigits;
+          }
         }
       } catch (e) {
         console.warn("[meta-capi-event] attribution memory lookup failed:", e);
       }
     }
+
 
 
     // ============ Build hashed user_data ============
