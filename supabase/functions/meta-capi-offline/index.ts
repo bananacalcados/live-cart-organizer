@@ -420,7 +420,7 @@ Deno.serve(async (req) => {
       phone: phoneNorm || phoneRaw,
       email: emailRaw,
       cpf: cpfRaw,
-      instagram: (customer?.instagram_handle as string | undefined) ?? (sale.instagram_handle as string | undefined),
+      });
     });
 
     const emailEff = emailRaw || identity?.email || "";
