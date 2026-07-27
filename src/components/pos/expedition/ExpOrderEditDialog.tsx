@@ -12,6 +12,8 @@ import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+import { fetchExpeditionCustomer } from "./customerHydrate";
+
 
 
 
