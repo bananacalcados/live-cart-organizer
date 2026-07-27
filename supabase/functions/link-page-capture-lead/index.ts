@@ -3,6 +3,7 @@
 // - Se é lead novo -> cria/atualiza ad_leads com source=link_page + tag da página.
 // - Sempre grava em link_page_leads.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
