@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { classifySaleAttribution, type AttributionInput } from "../_shared/meta-attribution.ts";
+import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 
 
 const DATASET_ID = "1346445220878187"; // Visita Loja Física
