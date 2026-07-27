@@ -118,6 +118,9 @@ Deno.serve(async (req) => {
       fbp,
       client_user_agent,
       client_ip_address,
+      // true quando a chamada vem de um trigger/edge function (não do navegador):
+      // nesse caso os headers da request são do servidor e NÃO devem virar sinais do cliente.
+      from_server,
       // Meta config
       action_source: actionSourceFromClient,
       event_source_url,
@@ -167,6 +170,9 @@ Deno.serve(async (req) => {
     let _zip = zip as string | undefined;
     let _phone = phone as string | undefined;
     let _cpf = cpf as string | undefined;
+    let _clientUaStored: string | undefined;
+    let _clientIpStored: string | undefined;
+    let _sourceUrlStored: string | undefined;
     let _fbp = fbp as string | undefined;
     let _fbc = fbc as string | undefined;
 
@@ -175,7 +181,7 @@ Deno.serve(async (req) => {
       try {
         const { data: cr } = await supabase
           .from("customer_registrations")
-          .select("full_name, email, whatsapp, city, state, cep, cpf, fbp, fbc")
+          .select("full_name, email, whatsapp, city, state, cep, cpf, fbp, fbc, client_user_agent, client_ip, event_source_url")
           .eq("order_id", order_id)
           .maybeSingle();
         if (cr) {
@@ -188,6 +194,9 @@ Deno.serve(async (req) => {
           _cpf = _cpf ?? (cr.cpf as string | undefined) ?? undefined;
           _fbp = _fbp ?? (cr.fbp as string | undefined) ?? undefined;
           _fbc = _fbc ?? (cr.fbc as string | undefined) ?? undefined;
+          _clientUaStored = (cr.client_user_agent as string | undefined) ?? undefined;
+          _clientIpStored = (cr.client_ip as string | undefined) ?? undefined;
+          _sourceUrlStored = (cr.event_source_url as string | undefined) ?? undefined;
         }
       } catch (e) {
         console.warn("[meta-capi-event] order enrichment failed:", e);
@@ -240,8 +249,15 @@ Deno.serve(async (req) => {
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
 
-    const clientIp = client_ip_address || extractClientIp(req);
-    const clientUa = client_user_agent || req.headers.get("user-agent") || undefined;
+    // Sinais do navegador: prioridade para o que veio do cliente, depois o que foi
+    // persistido no checkout. Só cai nos headers da request quando a chamada é do
+    // próprio navegador — em chamadas server-side (trigger/edge) os headers são do
+    // servidor e poluiriam o match da Meta.
+    const isServerCall = from_server === true;
+    const clientIp = client_ip_address || _clientIpStored ||
+      (isServerCall ? undefined : extractClientIp(req));
+    const clientUa = client_user_agent || _clientUaStored ||
+      (isServerCall ? undefined : (req.headers.get("user-agent") || undefined));
 
     const userData: Record<string, unknown> = {
       ph: ph ? [ph] : undefined,
@@ -289,7 +305,8 @@ Deno.serve(async (req) => {
       user_data: userData,
       custom_data: customData,
     };
-    if (event_source_url) eventData.event_source_url = event_source_url;
+    const sourceUrl = event_source_url || _sourceUrlStored;
+    if (sourceUrl) eventData.event_source_url = sourceUrl;
 
     const payload: Record<string, unknown> = { data: [eventData] };
     if (TEST_CODE) (payload as any).test_event_code = TEST_CODE;
