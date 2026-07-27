@@ -83,6 +83,10 @@ export function POSWhatsAppPixDialog({
         status: "online_pending",
         sale_type: "online",
         payment_gateway: "pix",
+        // Colunas diretas: garantem match de identidade (Meta CAPI/CRM) mesmo
+        // antes de a Expedição completar o cadastro do cliente.
+        customer_name: customerName || null,
+        customer_phone: (phone || "").replace(/\D/g, "") || null,
         payment_details: {
           customer_name: customerName || null,
           customer_phone: phone,
