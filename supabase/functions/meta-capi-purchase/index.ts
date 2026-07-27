@@ -226,6 +226,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============ Etapa 4: memória de atribuição (90 dias) ============
+    let fbcFinal = (fbcFromClient as string | undefined) || undefined;
+    let fbpFinal = (fbpFromClient as string | undefined) || undefined;
+    let attributionOrigin: string | null = null;
+    if (phoneDigits && (!fbcFinal || !fbpFinal)) {
+      try {
+        const stored = await getMetaAttribution(supabase, phoneDigits);
+        if (stored) {
+          if (!fbcFinal && stored.fbc) fbcFinal = stored.fbc;
+          if (!fbpFinal && stored.fbp) fbpFinal = stored.fbp;
+          attributionOrigin = stored.origin;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-purchase] attribution memory lookup failed:", e);
+      }
+    }
+
     // ============ Build hashed user_data ============
     const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
     const em = email ? await hashIfPresent(normalizeEmail(email)) : undefined;
@@ -250,11 +267,12 @@ Deno.serve(async (req) => {
       st: st ? [st] : undefined,
       country: co ? [co] : undefined,
       // Raw (non-hashed) signals — Meta requires plain text for these:
-      fbc: fbcFromClient || undefined,
-      fbp: fbpFromClient || undefined,
+      fbc: fbcFinal || undefined,
+      fbp: fbpFinal || undefined,
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
+
 
     // Strip undefined to keep payload clean
     Object.keys(userData).forEach((k) => userData[k] === undefined && delete userData[k]);
