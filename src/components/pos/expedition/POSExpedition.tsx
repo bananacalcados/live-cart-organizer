@@ -852,6 +852,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {o.payment_on_delivery && (
+                            <Button
+                              size="lg"
+                              className="bg-exp-done text-white text-base font-black"
+                              onClick={() => setDeliveryPayOrder(o)}
+                            >
+                              <CheckCircle2 className="h-5 w-5 mr-1" /> RECEBIDO NA ENTREGA
+                            </Button>
+                          )}
+
                           {o.resolved_phone && (
                             <Button
                               size="lg"
