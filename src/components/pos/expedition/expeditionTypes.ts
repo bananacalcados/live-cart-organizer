@@ -83,6 +83,11 @@ export interface ExpOrder {
   gift_description?: string | null;
   gift_added_at?: string | null;
   gift_after_completion?: boolean | null;
+  /** Pedido liberado para expedição sem pagamento — recebe na entrega (mototaxista). */
+  payment_on_delivery?: boolean | null;
+  expected_payment_method?: string | null;
+  delivery_payment_received_at?: string | null;
+  delivery_payment_method?: string | null;
   instagram?: string | null;
   delivery_method?: string | null;
   items: ExpItem[];
