@@ -420,8 +420,8 @@ Deno.serve(async (req) => {
       phone: phoneNorm || phoneRaw,
       email: emailRaw,
       cpf: cpfRaw,
-      });
     });
+
 
     const emailEff = emailRaw || identity?.email || "";
     const nameEff = nameRaw || identity?.name || "";
