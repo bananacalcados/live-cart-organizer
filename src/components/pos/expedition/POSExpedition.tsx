@@ -65,6 +65,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
+  const [deliveryPayOrder, setDeliveryPayOrder] = useState<ExpOrder | null>(null);
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
 
