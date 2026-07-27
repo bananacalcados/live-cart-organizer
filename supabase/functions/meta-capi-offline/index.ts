@@ -141,7 +141,9 @@ Deno.serve(async (req) => {
         id, total, status, created_at, paid_at, payment_method, sale_type,
         customer_id, store_id, notes, external_source, external_order_id,
         customer_name, customer_phone, customer_email, customer_cpf,
-        customer_city, customer_state, customer_cep, shipping_address
+        customer_city, customer_state, customer_cep, shipping_address,
+        payment_gateway, payment_link, mercadopago_payment_id, appmax_order_id,
+        vindi_transaction_id, pagarme_order_id, source_order_id, event_id
       `)
       .eq("id", saleId)
       .maybeSingle();
@@ -163,22 +165,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Skip Shopify-sourced sales: those events are already sent by the site (browser Pixel/CAPI)
-    // or by the Live event module at checkout. Resending here would duplicate events.
-    if (sale.external_source === "shopify") {
+    // ============ ROTEAMENTO ONLINE x OFFLINE ============
+    // A classificação é feita pela FORMA DE PAGAMENTO, não pela loja que
+    // registrou a venda. Live / link de checkout / PDV>Online são compras de
+    // SITE e vão para o pixel; só balcão vai para o dataset offline.
+    const { attribution, reason } = classifySaleAttribution(sale as AttributionInput);
+
+    if (attribution === "none") {
       await supabase.from("meta_capi_offline_log").upsert({
         sale_id: saleId,
         event_name: "Purchase",
-        event_id: `skipped_shopify_${saleId}`,
+        event_id: `skipped_${saleId}`,
         dataset_id: DATASET_ID,
         status: "skipped",
-        error_message: "shopify source — event already sent by site/live module",
+        error_message: `not reportable: ${reason}`,
       }, { onConflict: "sale_id,event_name" });
       return new Response(
-        JSON.stringify({ ok: true, skipped: true, reason: "shopify_source" }),
+        JSON.stringify({ ok: true, skipped: true, attribution, reason }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    if (attribution === "website") {
+      const result = await routeToWebsitePixel(supabase, SUPABASE_URL, SERVICE_ROLE_KEY, sale, reason, TEST_CODE);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     // Idempotência: se já foi enviado com sucesso, retorna sem reenviar
     const { data: existingLog } = await supabase
