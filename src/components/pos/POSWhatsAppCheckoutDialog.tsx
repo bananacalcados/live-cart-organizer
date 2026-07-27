@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
+import { materializePosCustomer } from "@/lib/posCustomerResolve";
+
 
 interface CartItem {
   id: string;
@@ -143,6 +145,14 @@ export function POSWhatsAppCheckoutDialog({
     if (cart.length === 0) { toast.error("Adicione produtos"); return; }
     setGenerating(true);
     try {
+      // Garante que a cliente exista em pos_customers assim que o link nasce,
+      // para que expedição/NF-e consiga puxar CPF/e-mail/endereço mesmo antes
+      // do pagamento ou quando o pagamento for confirmado por outro canal.
+      const cleanPhone = phone.replace(/\D/g, "");
+      const posCustomer = cleanPhone
+        ? await materializePosCustomer({ name: customerName || "Cliente", whatsapp: cleanPhone })
+        : null;
+
       const salePayload = {
         store_id: storeId,
         subtotal: cartSubtotal,
@@ -151,6 +161,9 @@ export function POSWhatsAppCheckoutDialog({
         status: "online_pending",
         sale_type: "online",
         payment_gateway: "store-checkout",
+        customer_id: posCustomer?.id || null,
+        customer_name: customerName || null,
+        customer_phone: cleanPhone || null,
         payment_details: {
           link_origin: "whatsapp_chat",
           customer_name: customerName || null,
@@ -214,6 +227,7 @@ export function POSWhatsAppCheckoutDialog({
       setGenerating(false);
     }
   };
+
 
   const handleSendLink = async () => {
     if (!generatedLink) return;
