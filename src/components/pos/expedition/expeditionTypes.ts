@@ -86,6 +86,12 @@ export interface ExpOrder {
   instagram?: string | null;
   delivery_method?: string | null;
   items: ExpItem[];
+  /**
+   * Preenchido apenas quando o card representa um ENVIO UNIFICADO
+   * (vários pedidos do mesmo cliente agrupados por expedition_group_id).
+   * Contém os ids de TODAS as vendas do grupo, incluindo a principal.
+   */
+  group_order_ids?: string[];
   origin: ExpOrigin;
   is_avulso: boolean;
   avulso_ready: boolean;
