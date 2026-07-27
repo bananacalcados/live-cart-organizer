@@ -309,6 +309,27 @@ export default function CatalogLeadPage() {
       supabase.from("catalog_lead_pages").update({ leads_count: ((config as any).leads_count || 0) + 1 } as any).eq("id", config!.id).then();
 
       const regId = (regData as any)?.id || null;
+
+      // Sinais de clique da Meta (memória de atribuição de 90 dias)
+      try {
+        const fbp = getFbp();
+        const fbc = getFbc();
+        const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+        if (fbp || fbc || fbclid) {
+          supabase.functions.invoke("meta-attribution-capture", {
+            body: {
+              phone: phoneClean,
+              fbp,
+              fbc,
+              fbclid,
+              source_url: window.location.href,
+              origin: "catalog_lead_page",
+              lead_id: regId,
+            },
+          }).then(() => {}, () => {});
+        }
+      } catch { /* atribuição nunca bloqueia o cadastro */ }
+
       setRegistrationId(regId);
       localStorage.setItem(`catalog_lead_${slug}`, JSON.stringify({ instagram: igClean, whatsapp: phoneClean, registrationId: regId }));
       setRegistered(true);
