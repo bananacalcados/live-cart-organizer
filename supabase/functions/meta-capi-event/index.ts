@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
       email,
       full_name,
       cpf, // optional external_id
+      instagram, // opcional: @ do Instagram (etapa 5 — identidade unificada)
+
       city,
       state,
       zip,
