@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getFbp, getFbc } from "@/lib/metaPixel";
 import { cpGetSale, cpCreateOrder, cpUpdateOrder } from "@/lib/checkoutPublic";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
