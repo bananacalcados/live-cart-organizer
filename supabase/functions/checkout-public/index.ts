@@ -7,6 +7,7 @@
 // write is field-whitelisted and validated here.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { saveMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -418,7 +419,25 @@ serve(async (req) => {
           .from("customer_registrations")
           .upsert(reg, { onConflict: "order_id" });
         if (error) return json({ error: error.message }, 500);
+
+        // Etapa 4: alimenta a memória de atribuição (90 dias) com os sinais do
+        // navegador. Se a cliente comprar de novo dias depois (live, PDV, loja
+        // física), o fbc/fbp continua disponível pelo telefone.
+        try {
+          if (reg.whatsapp && (reg.fbc || reg.fbp)) {
+            await saveMetaAttribution(supabase, {
+              phone: String(reg.whatsapp),
+              fbc: (reg.fbc as string) || null,
+              fbp: (reg.fbp as string) || null,
+              source_url: (reg.event_source_url as string) || null,
+              origin: "checkout",
+            });
+          }
+        } catch (e) {
+          console.warn("[checkout-public] attribution memory save failed:", e);
+        }
         return json({ ok: true });
+
       }
 
       // ── Public live-commerce helpers (sanitized, no direct anon table access) ──

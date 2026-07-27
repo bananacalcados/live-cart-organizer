@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { classifySaleAttribution, type AttributionInput } from "../_shared/meta-attribution.ts";
+import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 
 
 const DATASET_ID = "1346445220878187"; // Visita Loja Física
@@ -426,6 +427,25 @@ Deno.serve(async (req) => {
 
     const ge = customer?.gender ? await hashIfPresent(String(customer.gender).trim().toLowerCase().charAt(0)) : undefined;
 
+
+    // Etapa 4: cliente que clicou num anúncio (CTWA/typebot/LP) e converteu
+    // presencialmente na loja — recupera fbc/fbp pela memória de atribuição.
+    let fbcMem: string | null = null;
+    let fbpMem: string | null = null;
+    let attributionOrigin: string | null = null;
+    if (phoneNorm) {
+      try {
+        const stored = await getMetaAttribution(supabase, phoneNorm);
+        if (stored) {
+          fbcMem = stored.fbc;
+          fbpMem = stored.fbp;
+          attributionOrigin = stored.origin;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-offline] attribution memory lookup failed:", e);
+      }
+    }
+
     const userData: Record<string, unknown> = {
       ph: ph ? [ph] : undefined,
       em: em ? [em] : undefined,
@@ -437,10 +457,13 @@ Deno.serve(async (req) => {
       country: co ? [co] : undefined,
       ge: ge ? [ge] : undefined,
       external_id: externalId ? [externalId] : undefined,
+      fbc: fbcMem || undefined,
+      fbp: fbpMem || undefined,
       // Agente de usuário genérico (Meta exige presença na CAPI)
       client_user_agent: "Mozilla/5.0 (PDV Banana Calçados Offline)",
     };
     Object.keys(userData).forEach((k) => userData[k] === undefined && delete userData[k]);
+
 
     // 5) Monta o payload
     const eventId = `pos_purchase_${saleId}`;
@@ -502,6 +525,9 @@ Deno.serve(async (req) => {
         has_city: !!ct,
         has_state: !!st,
         has_zip: !!zp,
+        has_fbc: !!fbcMem,
+        has_fbp: !!fbpMem,
+        attribution_origin: attributionOrigin,
         value,
         store_name: storeName,
         customer_name: nameRaw || null,
