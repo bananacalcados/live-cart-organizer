@@ -301,12 +301,19 @@ Deno.serve(async (req) => {
     const zp = _zip ? await hashIfPresent(normalizeZip(_zip)) : undefined;
     const co = await hashIfPresent(normalizeCountry(country || "BR"));
 
-    // Optional external_id from CPF (digits only)
+    // Optional external_id: CPF (mais forte) ou o código do cliente no CRM
     let externalId: string | undefined;
     if (_cpf) {
       const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
+    if (!externalId && _customerRef) {
+      externalId = await sha256Hex(String(_customerRef).trim().toLowerCase());
+    }
+
+    // Etapa 5: nascimento e gênero vindos do CRM
+    const db = await hashIfPresent(normalizeBirthDate(_birthDate));
+    const ge = await hashIfPresent(normalizeGender(_gender));
 
     // Sinais do navegador: prioridade para o que veio do cliente, depois o que foi
     // persistido no checkout. Só cai nos headers da request quando a chamada é do
@@ -326,6 +333,8 @@ Deno.serve(async (req) => {
       ct: ct ? [ct] : undefined,
       st: st ? [st] : undefined,
       zp: zp ? [zp] : undefined,
+      db: db ? [db] : undefined,
+      ge: ge ? [ge] : undefined,
       country: co ? [co] : undefined,
       external_id: externalId ? [externalId] : undefined,
       fbc: _fbc || undefined,
@@ -333,6 +342,7 @@ Deno.serve(async (req) => {
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
+
     Object.keys(userData).forEach((k) => userData[k] === undefined && delete userData[k]);
 
     // event_id: prefer client-provided (browser dedupe). Otherwise build deterministic for Purchase.
