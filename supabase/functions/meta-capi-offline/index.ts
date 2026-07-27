@@ -248,6 +248,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     saleId = body?.sale_id || null;
     testEventCodeFromBody = body?.test_event_code;
+    // Reenvio retroativo: ignora a trava de idempotência para reenviar o mesmo
+    // event_id enriquecido (a Meta deduplica por event_id + event_name).
+    const forceResend = body?.force === true;
 
     if (!saleId || typeof saleId !== "string") {
       return new Response(JSON.stringify({ error: "sale_id is required" }), {
