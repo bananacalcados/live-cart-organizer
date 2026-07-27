@@ -18,6 +18,8 @@ import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTempla
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { hydrateSaleCustomer } from "./customerHydrate";
+
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
@@ -261,15 +263,18 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
   const emitNfe = async () => {
     // Pré-validação local: evita rejeição 237 (CPF do destinatário inválido) na SEFAZ.
-    const cpf = order.customer_cpf || (order.payment_details as any)?.customer_cpf || "";
-    if (!isValidCpf(cpf)) {
-      const msg = onlyDigitsCpf(cpf)
-        ? `CPF do cliente inválido (${formatCpf(cpf)}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
+    // Se a venda não tem CPF/e-mail, puxamos da ficha do cliente e persistimos.
+    const { cpf } = await hydrateSaleCustomer(order, groupIds);
+    if (cpf) order.customer_cpf = cpf;
+    if (!isValidCpf(cpf || "")) {
+      const msg = onlyDigitsCpf(cpf || "")
+        ? `CPF do cliente inválido (${formatCpf(cpf || "")}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
         : 'Pedido sem CPF do destinatário. Informe em "Editar dados do pedido / NF-e".';
       setNfeReject(msg);
       toast.error(msg, { duration: 12000 });
       return;
     }
+
     setEmitting(true);
     try {
       let data: any = null;

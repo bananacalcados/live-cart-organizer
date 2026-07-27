@@ -12,6 +12,8 @@ import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+import { fetchExpeditionCustomer } from "./customerHydrate";
+
 
 
 
@@ -98,8 +100,31 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
       courierProviderId: "",
       cost: order.shipping_cost != null ? String(order.shipping_cost) : "",
     });
+    // A venda pode ter nascido sem CPF/e-mail/endereço (PIX avulso, link, live):
+    // completamos com a ficha viva do cliente, sem sobrescrever o que já existe.
+    let cancelled = false;
+    fetchExpeditionCustomer(order).then((c) => {
+      if (!c || cancelled) return;
+      setForm((f) => ({
+        name: f.name || c.name || "",
+        phone: f.phone || c.phone || "",
+        cpf: f.cpf || (c.cpf ? formatCpf(c.cpf) : ""),
+        email: f.email || c.email || "",
+        cep: f.cep || c.cep || "",
+        address: f.address || c.address || "",
+        number: f.number || c.number || "",
+        complement: f.complement || c.complement || "",
+        neighborhood: f.neighborhood || c.neighborhood || "",
+        city: f.city || c.city || "",
+        state: f.state || (c.state || "").toUpperCase(),
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id]);
+
 
 
 
