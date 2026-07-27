@@ -131,7 +131,7 @@ export default function LinkPageView() {
           name: leadName.trim(),
           phone: leadPhone,
           // Sinais de clique da Meta (memória de atribuição de 90 dias)
-          fbclid: search.get("fbclid"),
+          fbclid: searchParams.get("fbclid"),
           fbp: getFbp(),
           fbc: getFbc(),
           source_url: window.location.href,
