@@ -171,10 +171,34 @@ Deno.serve(async (req) => {
     let fullName = fullNameFromClient as string | undefined;
     let city = cityFromClient as string | undefined;
     let state = stateFromClient as string | undefined;
+    let zip = zipFromClient as string | undefined;
+    let cpf = cpfFromClient as string | undefined;
+    let birthDate: string | undefined;
+    let gender: string | undefined;
+    let externalId: string | undefined;
     const country = countryFromClient || "BR";
 
     const phoneDigits = normalizePhone(phone);
     const phoneSuffix = phoneDigits.slice(-8);
+
+    // ---- Etapa 5: identidade unificada (telefone / CPF / e-mail / Instagram) ----
+    const identity = await resolveCrmIdentity(supabase, {
+      phone: phoneDigits || phone,
+      email,
+      cpf,
+      instagram: instagramFromClient as string | undefined,
+    });
+    if (identity) {
+      email = email ?? identity.email ?? undefined;
+      fullName = fullName ?? identity.name ?? undefined;
+      city = city ?? identity.city ?? undefined;
+      state = state ?? identity.state ?? undefined;
+      zip = zip ?? identity.cep ?? undefined;
+      cpf = cpf ?? identity.cpf ?? undefined;
+      birthDate = identity.birth_date ?? undefined;
+      gender = identity.gender ?? undefined;
+      externalId = identity.customer_code ?? identity.customer_id ?? undefined;
+    }
 
     if (phoneSuffix && (!email || !fullName || !city || !state)) {
       try {
@@ -230,22 +254,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ============ Etapa 4: memória de atribuição (90 dias) ============
+    // ============ Etapa 4 + 5: memória de atribuição (90 dias, multi-telefone) ============
     let fbcFinal = (fbcFromClient as string | undefined) || undefined;
     let fbpFinal = (fbpFromClient as string | undefined) || undefined;
     let attributionOrigin: string | null = null;
-    if (phoneDigits && (!fbcFinal || !fbpFinal)) {
+    let attributionMatchedPhone: string | null = null;
+    if (!fbcFinal || !fbpFinal) {
       try {
-        const stored = await getMetaAttribution(supabase, phoneDigits);
+        const candidates = identity?.phones?.length ? identity.phones : (phoneDigits ? [phoneDigits] : []);
+        const stored = await getMetaAttributionForPhones(supabase, candidates);
         if (stored) {
           if (!fbcFinal && stored.fbc) fbcFinal = stored.fbc;
           if (!fbpFinal && stored.fbp) fbpFinal = stored.fbp;
           attributionOrigin = stored.origin;
+          attributionMatchedPhone = stored.matched_phone;
+        } else if (phoneDigits) {
+          const legacy = await getMetaAttribution(supabase, phoneDigits);
+          if (legacy) {
+            if (!fbcFinal && legacy.fbc) fbcFinal = legacy.fbc;
+            if (!fbpFinal && legacy.fbp) fbpFinal = legacy.fbp;
+            attributionOrigin = legacy.origin;
+            attributionMatchedPhone = phoneDigits;
+          }
         }
       } catch (e) {
         console.warn("[meta-capi-purchase] attribution memory lookup failed:", e);
       }
     }
+
 
     // ============ Build hashed user_data ============
     const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
