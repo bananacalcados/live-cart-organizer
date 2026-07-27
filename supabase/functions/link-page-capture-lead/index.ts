@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { pageId, name, phone } = await req.json();
+    const { pageId, name, phone, fbclid, fbp, fbc, source_url } = await req.json();
     if (!pageId || !name || !phone) {
       return new Response(JSON.stringify({ error: "pageId, name, phone required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
