@@ -39,12 +39,10 @@ function stripAccents(s: string): string {
 }
 
 function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/[^0-9]/g, "");
-  if (!digits) return "";
-  // Garante DDI 55 pro Brasil
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
+  // Padrão único do projeto: E.164 BR com DDI 55 e 9º dígito garantido.
+  return normalizeMetaPhone(raw);
 }
+
 
 function normalizeEmail(raw: string): string {
   return (raw || "").trim().toLowerCase();
