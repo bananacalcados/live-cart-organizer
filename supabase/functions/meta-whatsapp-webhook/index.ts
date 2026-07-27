@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { logRouting } from "../_shared/routing-log.ts";
 import { classifySendError } from "../_shared/meta-send-error.ts";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

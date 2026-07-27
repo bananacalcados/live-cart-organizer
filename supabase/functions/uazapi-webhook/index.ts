@@ -4,6 +4,7 @@ import { routeMessage, isOperatorCooldownActive } from "../_shared/message-route
 import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
+import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
