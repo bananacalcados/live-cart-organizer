@@ -473,6 +473,23 @@ serve(async (req) => {
 
             if (referralData) {
               console.log(`Ad referral detected for ${phone}:`, JSON.stringify(referralData));
+              // Memória de atribuição Meta (90 dias): guarda o clique do anúncio
+              // para reinjetar o `fbc` quando a cliente converter dias depois.
+              try {
+                const clid = referralData.ctwa_clid || null;
+                if (clid) {
+                  saveMetaAttribution(supabase, {
+                    phone,
+                    fbc: buildFbc(clid),
+                    ctwa_clid: clid,
+                    ad_id: referralData.source_id || null,
+                    source_url: referralData.source_url || null,
+                    origin: "whatsapp_ctwa",
+                  }).catch(() => {});
+                }
+              } catch (e) {
+                console.error("[meta-wa] meta attribution error:", e);
+              }
             }
 
             // Capture quoted message context (reply)
