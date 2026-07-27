@@ -20,6 +20,15 @@ const calculateOrderValue = (order: DbOrder) => {
   return subtotal;
 };
 
+// Compact BRL: no cents, thousands separator, abbreviated when very large
+const brl = (v: number) => {
+  if (Math.abs(v) >= 1_000_000) {
+    return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}mi`;
+  }
+  return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+};
+
+
 export function StatsBar({ orders }: StatsBarProps) {
   const totalOrders = orders.length;
   
