@@ -699,6 +699,8 @@ export function POSExpedition({ storeId, storeName }: Props) {
             const canUnify = stage === "preparacao" && list.length > 1 && !unified;
             // Na CONFERÊNCIA um envio unificado é conferido como UM pedido só.
             const cards = stage === "conferencia" && unified ? [mergeExpeditionGroup(list)] : list;
+            return (
+
 
               <div
                 key={key}
