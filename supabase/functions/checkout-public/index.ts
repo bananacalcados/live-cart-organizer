@@ -411,6 +411,9 @@ serve(async (req) => {
         const { data: ord } = await supabase
           .from("orders").select("id, is_paid").eq("id", reg.order_id).maybeSingle();
         if (!ord || ord.is_paid) return json({ error: "order not eligible" }, 400);
+        // IP do cliente: só o servidor consegue observar (usado no match da CAPI)
+        const fwd = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+        if (fwd) reg.client_ip = fwd;
         const { error } = await supabase
           .from("customer_registrations")
           .upsert(reg, { onConflict: "order_id" });
