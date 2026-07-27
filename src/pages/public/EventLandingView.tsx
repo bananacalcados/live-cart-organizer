@@ -115,6 +115,12 @@ export default function EventLandingView() {
           utm_source: search.get('utm_source'),
           utm_medium: search.get('utm_medium'),
           utm_campaign: search.get('utm_campaign'),
+          // Sinais de clique da Meta (memória de atribuição de 90 dias)
+          fbclid: search.get('fbclid'),
+          fbp: getFbp(),
+          fbc: getFbc(),
+          source_url: window.location.href,
+
         },
       });
       if (error) throw error;
