@@ -1147,6 +1147,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={order}
       />
 
+      <MarkOrderPaidDialog
+        open={showMarkPaidDialog}
+        onOpenChange={setShowMarkPaidDialog}
+        orderId={order.id}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
+
 
       {order.customer?.whatsapp && (
         <WhatsAppChatDialog
