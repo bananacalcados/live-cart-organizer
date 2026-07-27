@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
+import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
