@@ -942,6 +942,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
+          {!order.is_paid && !order.paid_externally && (
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMarkPaidDialog(true);
+              }}
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              PAGO
+            </Button>
+          )}
+
+
+
           <Button
             variant="outline"
             size="sm"
