@@ -20,6 +20,15 @@ const calculateOrderValue = (order: DbOrder) => {
   return subtotal;
 };
 
+// Compact BRL: no cents, thousands separator, abbreviated when very large
+const brl = (v: number) => {
+  if (Math.abs(v) >= 1_000_000) {
+    return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}mi`;
+  }
+  return `R$ ${Math.round(v).toLocaleString("pt-BR")}`;
+};
+
+
 export function StatsBar({ orders }: StatsBarProps) {
   const totalOrders = orders.length;
   
@@ -63,14 +72,14 @@ export function StatsBar({ orders }: StatsBarProps) {
     },
     {
       label: "Faturamento Total",
-      value: `R$ ${totalValue.toFixed(2)}`,
+      value: brl(totalValue),
       icon: Receipt,
       color: "text-accent",
       bgColor: "bg-accent/10",
     },
     {
       label: "Faturamento Recebido",
-      value: `R$ ${receivedValue.toFixed(2)}`,
+      value: brl(receivedValue),
       icon: DollarSign,
       color: "text-stage-paid",
       bgColor: "bg-stage-paid/10",
@@ -95,8 +104,8 @@ export function StatsBar({ orders }: StatsBarProps) {
             <div className={`p-2.5 rounded-lg ${stat.bgColor}`}>
               <stat.icon className={`h-5 w-5 ${stat.color}`} />
             </div>
-            <div className="min-w-0">
-              <p className="text-2xl font-extrabold leading-tight text-foreground truncate">{stat.value}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl xl:text-2xl font-extrabold leading-tight text-foreground break-words [overflow-wrap:anywhere]">{stat.value}</p>
               <p className="text-xs font-medium text-muted-foreground truncate">{stat.label}</p>
             </div>
           </div>
