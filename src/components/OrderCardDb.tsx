@@ -14,6 +14,7 @@ import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
 import { OrderFullViewDialog } from "./OrderFullViewDialog";
+import { MarkOrderPaidDialog } from "./MarkOrderPaidDialog";
 
 
 import { Order } from "@/types/order";
