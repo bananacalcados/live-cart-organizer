@@ -14,6 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
+import { materializePosCustomer } from "@/lib/posCustomerResolve";
+
 
 interface CartItem {
   id: string;
