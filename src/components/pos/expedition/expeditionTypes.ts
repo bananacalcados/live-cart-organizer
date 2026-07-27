@@ -381,6 +381,10 @@ export function mergeExpeditionGroup(list: ExpOrder[]): ExpOrder {
     gift_description:
       sorted.map((o) => o.gift_description).filter(Boolean).join(" | ") || master.gift_description,
     gift_after_completion: sorted.some((o) => !!o.gift_after_completion),
+    payment_on_delivery: sorted.some((o) => !!o.payment_on_delivery),
+    expected_payment_method:
+      sorted.find((o) => o.payment_on_delivery && o.expected_payment_method)?.expected_payment_method ||
+      master.expected_payment_method,
     group_order_ids: sorted.map((o) => o.id),
   };
 }
