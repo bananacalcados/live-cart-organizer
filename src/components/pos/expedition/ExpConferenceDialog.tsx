@@ -37,6 +37,12 @@ interface CheckState {
 }
 
 export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished }: Props) {
+  // Envio unificado: o card representa vários pedidos do mesmo cliente.
+  const groupIds = useMemo(
+    () => (order.group_order_ids?.length ? order.group_order_ids : [order.id]),
+    [order],
+  );
+  const isUnified = groupIds.length > 1;
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [scanInput, setScanInput] = useState("");
   const [tracking, setTracking] = useState(order.tracking_code || "");
@@ -266,7 +272,15 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     }
     setEmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: order.id } });
+      let data: any = null;
+      let error: any = null;
+      // Envio unificado: cada venda tem a sua própria NF-e — emitimos uma a uma.
+      for (const sid of groupIds) {
+        const res = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: sid } });
+        data = res.data;
+        error = res.error;
+        if (error || (res.data as any)?.error) break;
+      }
       if (error) {
         const msg = await extractEdgeError(error, "Erro ao emitir NF-e");
         setNfeReject(msg);
@@ -340,7 +354,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           tracking_url: trackingUrl.trim() || null,
           delivery_days: deliveryDays.trim() || null,
         } as any)
-        .eq("id", order.id);
+        .in("id", groupIds);
       toast.success("Rastreio enviado no WhatsApp");
 
     } catch (e: any) {
@@ -362,9 +376,9 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
     setFinishing(true);
     try {
-      await supabase.from("pos_expedition_checks").delete().eq("sale_id", order.id);
+      await supabase.from("pos_expedition_checks").delete().in("sale_id", groupIds);
       const rows = order.items.map((it) => ({
-        sale_id: order.id,
+        sale_id: it.sale_id || order.id,
         sale_item_id: it.id,
         barcode: it.barcode,
         scanned: !!checks[it.id]?.scanned,
@@ -386,7 +400,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           delivery_days: deliveryDays.trim() || null,
           courier_name: courier.trim() || null,
         } as any)
-        .eq("id", order.id);
+        .in("id", groupIds);
       if (error) throw error;
 
       await saveExpeditionShippingCost({
@@ -416,6 +430,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           <DialogTitle className="text-2xl font-black flex items-center gap-2">
             <ScanBarcode className="h-7 w-7 text-exp-check" />
             Conferência — {order.customer_name || "Cliente"}
+            {isUnified && (
+              <Badge className="bg-exp-check text-white text-sm font-black">
+                ENVIO UNIFICADO · {groupIds.length} pedidos
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
