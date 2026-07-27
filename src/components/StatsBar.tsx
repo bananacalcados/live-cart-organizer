@@ -104,8 +104,8 @@ export function StatsBar({ orders }: StatsBarProps) {
             <div className={`p-2.5 rounded-lg ${stat.bgColor}`}>
               <stat.icon className={`h-5 w-5 ${stat.color}`} />
             </div>
-            <div className="min-w-0">
-              <p className="text-2xl font-extrabold leading-tight text-foreground truncate">{stat.value}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl xl:text-2xl font-extrabold leading-tight text-foreground break-words [overflow-wrap:anywhere]">{stat.value}</p>
               <p className="text-xs font-medium text-muted-foreground truncate">{stat.label}</p>
             </div>
           </div>
