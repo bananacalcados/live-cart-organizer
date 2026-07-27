@@ -125,11 +125,15 @@ Deno.serve(async (req) => {
       city: cityFromClient,
       state: stateFromClient,
       country: countryFromClient,
+      zip: zipFromClient,
+      cpf: cpfFromClient,
+      instagram: instagramFromClient,
       fbc: fbcFromClient,
       fbp: fbpFromClient,
       client_user_agent: uaFromClient,
       action_source: actionSourceFromClient,
     } = body || {};
+
 
     if (!phone || !value || value <= 0) {
       return new Response(
