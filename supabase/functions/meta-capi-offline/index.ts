@@ -16,6 +16,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { classifySaleAttribution, type AttributionInput } from "../_shared/meta-attribution.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
+import {
+  resolveCrmIdentity,
+  getMetaAttributionForPhones,
+  normalizeBirthDate,
+  normalizeGender,
+} from "../_shared/crm-identity.ts";
 
 
 const DATASET_ID = "1346445220878187"; // Visita Loja Física
@@ -408,43 +414,72 @@ Deno.serve(async (req) => {
 
     // 4) Hasheia PIIs (SHA-256)
     const phoneNorm = normalizePhone(phoneRaw);
-    const ph = phoneNorm ? await sha256Hex(phoneNorm) : undefined;
-    const em = emailRaw ? await sha256Hex(normalizeEmail(emailRaw)) : undefined;
-    const externalId = cpfRaw ? await sha256Hex(normalizeCpf(cpfRaw)) : (sale.customer_id ? await sha256Hex(sale.customer_id) : undefined);
 
-    const { first, last } = splitName(nameRaw);
+    // ---- Etapa 5: identidade unificada no CRM (telefone / CPF / e-mail / Instagram) ----
+    const identity = await resolveCrmIdentity(supabase, {
+      phone: phoneNorm || phoneRaw,
+      email: emailRaw,
+      cpf: cpfRaw,
+    });
+
+
+    const emailEff = emailRaw || identity?.email || "";
+    const nameEff = nameRaw || identity?.name || "";
+    const cpfEff = cpfRaw || identity?.cpf || "";
+
+    const ph = phoneNorm ? await sha256Hex(phoneNorm) : undefined;
+    const em = emailEff ? await sha256Hex(normalizeEmail(emailEff)) : undefined;
+    const externalId = cpfEff
+      ? await sha256Hex(normalizeCpf(cpfEff))
+      : (identity?.customer_code
+        ? await sha256Hex(String(identity.customer_code).toLowerCase())
+        : (sale.customer_id ? await sha256Hex(sale.customer_id) : undefined));
+
+    const { first, last } = splitName(nameEff);
     const fn = first ? await hashIfPresent(normalizeName(first)) : undefined;
     const ln = last ? await hashIfPresent(normalizeName(last)) : undefined;
 
-    // Cidade/estado/cep: prefere o do cliente; depois inline da venda; depois shipping_address; fallback pro da loja
-    const cityRaw = customer?.city || sale.customer_city || shipAddr.city || store?.city || "";
-    const stateRaw = customer?.state || sale.customer_state || shipAddr.state || shipAddr.province_code || store?.state || "";
-    const zipRaw = customer?.cep || sale.customer_cep || shipAddr.cep || shipAddr.zip || store?.cep || "";
+    // Cidade/estado/cep: prefere o do cliente; depois inline da venda; depois shipping_address; CRM; fallback pro da loja
+    const cityRaw = customer?.city || sale.customer_city || shipAddr.city || identity?.city || store?.city || "";
+    const stateRaw = customer?.state || sale.customer_state || shipAddr.state || shipAddr.province_code || identity?.state || store?.state || "";
+    const zipRaw = customer?.cep || sale.customer_cep || shipAddr.cep || shipAddr.zip || identity?.cep || store?.cep || "";
     const ct = cityRaw ? await hashIfPresent(normalizeCity(cityRaw)) : undefined;
     const st = stateRaw ? await hashIfPresent(normalizeState(stateRaw)) : undefined;
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
     const co = await hashIfPresent("br");
 
-    const ge = customer?.gender ? await hashIfPresent(String(customer.gender).trim().toLowerCase().charAt(0)) : undefined;
+    const genderRaw = customer?.gender || identity?.gender || null;
+    const ge = await hashIfPresent(normalizeGender(genderRaw));
+    const db = await hashIfPresent(normalizeBirthDate(identity?.birth_date ?? null));
 
-
-    // Etapa 4: cliente que clicou num anúncio (CTWA/typebot/LP) e converteu
-    // presencialmente na loja — recupera fbc/fbp pela memória de atribuição.
+    // Etapa 4 + 5: cliente que clicou num anúncio (CTWA/typebot/LP) e converteu
+    // presencialmente na loja — recupera fbc/fbp pela memória de atribuição,
+    // testando todos os telefones conhecidos da pessoa.
     let fbcMem: string | null = null;
     let fbpMem: string | null = null;
     let attributionOrigin: string | null = null;
-    if (phoneNorm) {
-      try {
-        const stored = await getMetaAttribution(supabase, phoneNorm);
-        if (stored) {
-          fbcMem = stored.fbc;
-          fbpMem = stored.fbp;
-          attributionOrigin = stored.origin;
+    let attributionMatchedPhone: string | null = null;
+    try {
+      const candidates = identity?.phones?.length ? identity.phones : (phoneNorm ? [phoneNorm] : []);
+      const stored = await getMetaAttributionForPhones(supabase, candidates);
+      if (stored) {
+        fbcMem = stored.fbc;
+        fbpMem = stored.fbp;
+        attributionOrigin = stored.origin;
+        attributionMatchedPhone = stored.matched_phone;
+      } else if (phoneNorm) {
+        const legacy = await getMetaAttribution(supabase, phoneNorm);
+        if (legacy) {
+          fbcMem = legacy.fbc;
+          fbpMem = legacy.fbp;
+          attributionOrigin = legacy.origin;
+          attributionMatchedPhone = phoneNorm;
         }
-      } catch (e) {
-        console.warn("[meta-capi-offline] attribution memory lookup failed:", e);
       }
+    } catch (e) {
+      console.warn("[meta-capi-offline] attribution memory lookup failed:", e);
     }
+
 
     const userData: Record<string, unknown> = {
       ph: ph ? [ph] : undefined,
@@ -456,6 +491,7 @@ Deno.serve(async (req) => {
       zp: zp ? [zp] : undefined,
       country: co ? [co] : undefined,
       ge: ge ? [ge] : undefined,
+      db: db ? [db] : undefined,
       external_id: externalId ? [externalId] : undefined,
       fbc: fbcMem || undefined,
       fbp: fbpMem || undefined,

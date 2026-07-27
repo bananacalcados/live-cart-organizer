@@ -22,6 +22,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
+import {
+  resolveCrmIdentity,
+  getMetaAttributionForPhones,
+  normalizeBirthDate,
+  normalizeGender,
+} from "../_shared/crm-identity.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,11 +132,15 @@ Deno.serve(async (req) => {
       city: cityFromClient,
       state: stateFromClient,
       country: countryFromClient,
+      zip: zipFromClient,
+      cpf: cpfFromClient,
+      instagram: instagramFromClient,
       fbc: fbcFromClient,
       fbp: fbpFromClient,
       client_user_agent: uaFromClient,
       action_source: actionSourceFromClient,
     } = body || {};
+
 
     if (!phone || !value || value <= 0) {
       return new Response(
@@ -167,10 +178,34 @@ Deno.serve(async (req) => {
     let fullName = fullNameFromClient as string | undefined;
     let city = cityFromClient as string | undefined;
     let state = stateFromClient as string | undefined;
+    let zip = zipFromClient as string | undefined;
+    let cpf = cpfFromClient as string | undefined;
+    let birthDate: string | undefined;
+    let gender: string | undefined;
+    let externalId: string | undefined;
     const country = countryFromClient || "BR";
 
     const phoneDigits = normalizePhone(phone);
     const phoneSuffix = phoneDigits.slice(-8);
+
+    // ---- Etapa 5: identidade unificada (telefone / CPF / e-mail / Instagram) ----
+    const identity = await resolveCrmIdentity(supabase, {
+      phone: phoneDigits || phone,
+      email,
+      cpf,
+      instagram: instagramFromClient as string | undefined,
+    });
+    if (identity) {
+      email = email ?? identity.email ?? undefined;
+      fullName = fullName ?? identity.name ?? undefined;
+      city = city ?? identity.city ?? undefined;
+      state = state ?? identity.state ?? undefined;
+      zip = zip ?? identity.cep ?? undefined;
+      cpf = cpf ?? identity.cpf ?? undefined;
+      birthDate = identity.birth_date ?? undefined;
+      gender = identity.gender ?? undefined;
+      externalId = identity.customer_code ?? identity.customer_id ?? undefined;
+    }
 
     if (phoneSuffix && (!email || !fullName || !city || !state)) {
       try {
@@ -226,22 +261,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ============ Etapa 4: memória de atribuição (90 dias) ============
+    // ============ Etapa 4 + 5: memória de atribuição (90 dias, multi-telefone) ============
     let fbcFinal = (fbcFromClient as string | undefined) || undefined;
     let fbpFinal = (fbpFromClient as string | undefined) || undefined;
     let attributionOrigin: string | null = null;
-    if (phoneDigits && (!fbcFinal || !fbpFinal)) {
+    let attributionMatchedPhone: string | null = null;
+    if (!fbcFinal || !fbpFinal) {
       try {
-        const stored = await getMetaAttribution(supabase, phoneDigits);
+        const candidates = identity?.phones?.length ? identity.phones : (phoneDigits ? [phoneDigits] : []);
+        const stored = await getMetaAttributionForPhones(supabase, candidates);
         if (stored) {
           if (!fbcFinal && stored.fbc) fbcFinal = stored.fbc;
           if (!fbpFinal && stored.fbp) fbpFinal = stored.fbp;
           attributionOrigin = stored.origin;
+          attributionMatchedPhone = stored.matched_phone;
+        } else if (phoneDigits) {
+          const legacy = await getMetaAttribution(supabase, phoneDigits);
+          if (legacy) {
+            if (!fbcFinal && legacy.fbc) fbcFinal = legacy.fbc;
+            if (!fbpFinal && legacy.fbp) fbpFinal = legacy.fbp;
+            attributionOrigin = legacy.origin;
+            attributionMatchedPhone = phoneDigits;
+          }
         }
       } catch (e) {
         console.warn("[meta-capi-purchase] attribution memory lookup failed:", e);
       }
     }
+
 
     // ============ Build hashed user_data ============
     const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
@@ -255,6 +302,13 @@ Deno.serve(async (req) => {
     const st = state ? await hashIfPresent(normalizeState(state)) : undefined;
     const co = await hashIfPresent(normalizeCountry(country));
 
+    // Etapa 5: sinais extras de casamento (CEP, nascimento, gênero, external_id)
+    const zipDigits = String(zip ?? "").replace(/\D/g, "");
+    const zp = zipDigits.length >= 8 ? await hashIfPresent(zipDigits.slice(0, 8)) : undefined;
+    const db = await hashIfPresent(normalizeBirthDate(birthDate));
+    const ge = await hashIfPresent(normalizeGender(gender));
+    const extId = externalId ? await hashIfPresent(String(externalId).trim().toLowerCase()) : undefined;
+
     const clientIp = extractClientIp(req);
     const clientUa = uaFromClient || req.headers.get("user-agent") || undefined;
 
@@ -265,6 +319,10 @@ Deno.serve(async (req) => {
       ln: ln ? [ln] : undefined,
       ct: ct ? [ct] : undefined,
       st: st ? [st] : undefined,
+      zp: zp ? [zp] : undefined,
+      db: db ? [db] : undefined,
+      ge: ge ? [ge] : undefined,
+      external_id: extId ? [extId] : undefined,
       country: co ? [co] : undefined,
       // Raw (non-hashed) signals — Meta requires plain text for these:
       fbc: fbcFinal || undefined,
@@ -272,6 +330,7 @@ Deno.serve(async (req) => {
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
+
 
 
     // Strip undefined to keep payload clean
@@ -339,11 +398,19 @@ Deno.serve(async (req) => {
           has_name: !!fn,
           has_city: !!ct,
           has_state: !!st,
+          has_zip: !!zp,
+          has_birthdate: !!db,
+          has_gender: !!ge,
+          has_external_id: !!extId,
           has_fbc: !!fbcFinal,
           has_fbp: !!fbpFinal,
           attribution_origin: attributionOrigin,
+          attribution_matched_phone: attributionMatchedPhone ? `***${attributionMatchedPhone.slice(-4)}` : null,
+          identity_matched_by: identity?.matched_by ?? null,
+          identity_phones_tried: identity?.phones?.length ?? 0,
           has_ip: !!clientIp,
         },
+
         meta_response: respJson,
       }),
       {
