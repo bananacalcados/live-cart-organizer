@@ -230,6 +230,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============ Etapa 4: memória de atribuição (90 dias) ============
+    // Quando o evento não traz fbc/fbp (link de live, checkout compartilhado no
+    // WhatsApp, conversão dias depois do clique), recupera os sinais gravados
+    // para o telefone da cliente.
+    let _attrOrigin: string | null = null;
+    if (phoneDigits && (!_fbc || !_fbp)) {
+      try {
+        const stored = await getMetaAttribution(supabase, phoneDigits);
+        if (stored) {
+          if (!_fbc && stored.fbc) _fbc = stored.fbc;
+          if (!_fbp && stored.fbp) _fbp = stored.fbp;
+          _attrOrigin = stored.origin;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-event] attribution memory lookup failed:", e);
+      }
+    }
+
+
     // ============ Build hashed user_data ============
     const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
     const em = _email ? await hashIfPresent(normalizeEmail(_email)) : undefined;
