@@ -14,6 +14,7 @@ import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
 import { OrderFullViewDialog } from "./OrderFullViewDialog";
+import { MarkOrderPaidDialog } from "./MarkOrderPaidDialog";
 
 
 import { Order } from "@/types/order";
@@ -76,6 +77,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showPOSDialog, setShowPOSDialog] = useState(false);
   const [showFichaDialog, setShowFichaDialog] = useState(false);
   const [showFullViewDialog, setShowFullViewDialog] = useState(false);
+  const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
 
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
@@ -940,6 +942,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
+          {!order.is_paid && !order.paid_externally && (
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMarkPaidDialog(true);
+              }}
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              PAGO
+            </Button>
+          )}
+
+
+
           <Button
             variant="outline"
             size="sm"
@@ -1127,6 +1146,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         onOpenChange={setShowFullViewDialog}
         order={order}
       />
+
+      <MarkOrderPaidDialog
+        open={showMarkPaidDialog}
+        onOpenChange={setShowMarkPaidDialog}
+        orderId={order.id}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
 
 
       {order.customer?.whatsapp && (
