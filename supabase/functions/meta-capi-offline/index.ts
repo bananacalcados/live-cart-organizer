@@ -248,6 +248,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     saleId = body?.sale_id || null;
     testEventCodeFromBody = body?.test_event_code;
+    // Reenvio retroativo: ignora a trava de idempotência para reenviar o mesmo
+    // event_id enriquecido (a Meta deduplica por event_id + event_name).
+    const forceResend = body?.force === true;
 
     if (!saleId || typeof saleId !== "string") {
       return new Response(JSON.stringify({ error: "sale_id is required" }), {
@@ -338,7 +341,7 @@ Deno.serve(async (req) => {
       .eq("event_name", "Purchase")
       .maybeSingle();
 
-    if (existingLog?.status === "sent") {
+    if (existingLog?.status === "sent" && !forceResend) {
       return new Response(
         JSON.stringify({ ok: true, skipped: true, reason: "already sent", event_id: existingLog.event_id }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
