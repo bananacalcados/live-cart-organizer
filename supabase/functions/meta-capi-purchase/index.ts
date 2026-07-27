@@ -295,6 +295,13 @@ Deno.serve(async (req) => {
     const st = state ? await hashIfPresent(normalizeState(state)) : undefined;
     const co = await hashIfPresent(normalizeCountry(country));
 
+    // Etapa 5: sinais extras de casamento (CEP, nascimento, gênero, external_id)
+    const zipDigits = String(zip ?? "").replace(/\D/g, "");
+    const zp = zipDigits.length >= 8 ? await hashIfPresent(zipDigits.slice(0, 8)) : undefined;
+    const db = await hashIfPresent(normalizeBirthDate(birthDate));
+    const ge = await hashIfPresent(normalizeGender(gender));
+    const extId = externalId ? await hashIfPresent(String(externalId).trim().toLowerCase()) : undefined;
+
     const clientIp = extractClientIp(req);
     const clientUa = uaFromClient || req.headers.get("user-agent") || undefined;
 
@@ -305,6 +312,10 @@ Deno.serve(async (req) => {
       ln: ln ? [ln] : undefined,
       ct: ct ? [ct] : undefined,
       st: st ? [st] : undefined,
+      zp: zp ? [zp] : undefined,
+      db: db ? [db] : undefined,
+      ge: ge ? [ge] : undefined,
+      external_id: extId ? [extId] : undefined,
       country: co ? [co] : undefined,
       // Raw (non-hashed) signals — Meta requires plain text for these:
       fbc: fbcFinal || undefined,
@@ -312,6 +323,7 @@ Deno.serve(async (req) => {
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
+
 
 
     // Strip undefined to keep payload clean
