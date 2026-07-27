@@ -10111,6 +10111,60 @@ export type Database = {
           },
         ]
       }
+      meta_attribution_identities: {
+        Row: {
+          ad_id: string | null
+          click_time: string | null
+          ctwa_clid: string | null
+          expires_at: string
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          lead_id: string | null
+          metadata: Json
+          origin: string | null
+          phone: string
+          source_url: string | null
+        }
+        Insert: {
+          ad_id?: string | null
+          click_time?: string | null
+          ctwa_clid?: string | null
+          expires_at?: string
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          lead_id?: string | null
+          metadata?: Json
+          origin?: string | null
+          phone: string
+          source_url?: string | null
+        }
+        Update: {
+          ad_id?: string | null
+          click_time?: string | null
+          ctwa_clid?: string | null
+          expires_at?: string
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          lead_id?: string | null
+          metadata?: Json
+          origin?: string | null
+          phone?: string
+          source_url?: string | null
+        }
+        Relationships: []
+      }
       meta_capi_lead_events: {
         Row: {
           campaign_id: string | null
@@ -21112,6 +21166,21 @@ export type Database = {
       upsert_landing_customer: {
         Args: { p_instagram: string; p_phone: string; p_tag: string }
         Returns: undefined
+      }
+      upsert_meta_attribution: {
+        Args: {
+          p_ad_id?: string
+          p_click_time?: string
+          p_ctwa_clid?: string
+          p_fbc?: string
+          p_fbclid?: string
+          p_fbp?: string
+          p_lead_id?: string
+          p_origin?: string
+          p_phone: string
+          p_source_url?: string
+        }
+        Returns: string
       }
       vip_group_member_phone_suffixes: { Args: never; Returns: string[] }
       vip_groups_interaction_ranking: {

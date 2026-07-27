@@ -4,6 +4,7 @@ import { routeMessage, isOperatorCooldownActive } from "../_shared/message-route
 import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
+import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -664,6 +665,30 @@ serve(async (req) => {
         adReferral = buildAdReferral(ext);
         if (adReferral) {
           console.log(`[uazapi-webhook] Ad referral (CTWA) detectado para ${phone}:`, JSON.stringify(adReferral));
+        }
+        // Memória de atribuição Meta (90 dias): guarda o clique do anúncio
+        // para reinjetar o `fbc` quando a cliente converter dias depois.
+        try {
+          const clid =
+            extractCtwaClid(ext) ||
+            (asString((ext as Record<string, unknown>).sourceId) || null);
+          if (clid) {
+            const fbc = buildFbc(clid);
+            saveMetaAttribution(supabase, {
+              phone,
+              fbc,
+              ctwa_clid: clid,
+              // Na uazapi o `sourceId` é o próprio ctwa_clid; só guardamos como
+              // ad_id quando vier realmente um ID numérico de anúncio.
+              ad_id: /^\d{6,}$/.test(String(asString((ext as Record<string, unknown>).sourceId) || ""))
+                ? asString((ext as Record<string, unknown>).sourceId)
+                : null,
+              source_url: (adReferral?.source_url as string) || null,
+              origin: "whatsapp_ctwa",
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.error("[uazapi-webhook] meta attribution error:", e);
         }
       } else {
         // Diagnóstico: se o payload parece conter dados de anúncio mas não
