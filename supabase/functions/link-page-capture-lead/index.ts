@@ -127,6 +127,25 @@ Deno.serve(async (req) => {
       ad_lead_id: adLeadId,
     }).select("id").single();
 
+    // ===== Etapa 3: memória de atribuição (90 dias) =====
+    try {
+      const fbcResolved = (fbc as string | null) || buildFbc(fbclid as string | null);
+      if (fbcResolved || fbp) {
+        await saveMetaAttribution(supabase, {
+          phone: e164,
+          fbc: fbcResolved,
+          fbp: (fbp as string) || null,
+          fbclid: (fbclid as string) || null,
+          source_url: (source_url as string) || null,
+          origin: "link_page",
+          lead_id: lpLead?.id ? String(lpLead.id) : null,
+        });
+      }
+    } catch (e) {
+      console.warn("[link-page-capture-lead] attribution memory save failed:", e);
+    }
+
+
     return new Response(JSON.stringify({
       success: true,
       leadId: lpLead?.id || null,
