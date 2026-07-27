@@ -16,6 +16,16 @@ export interface HydratedCustomer {
 }
 
 const digits = (v?: string | null) => (v || "").replace(/\D/g, "");
+const text = (v?: string | null) => String(v || "").trim();
+const useful = (v?: string | null, min = 2) => text(v).length >= min;
+
+const currentAddressValue = (addr: any, keys: string[]) => {
+  for (const key of keys) {
+    const value = text(addr?.[key]);
+    if (value) return value;
+  }
+  return "";
+};
 
 /**
  * A venda (pos_sales) muitas vezes nasce sem CPF/e-mail (PIX avulso, link, live),
@@ -73,9 +83,13 @@ export async function hydrateSaleCustomer(
   order: ExpOrder,
   saleIds?: string[],
 ): Promise<{ cpf: string | null; email: string | null }> {
+  const orderRow = order as ExpOrder & {
+    customer_cep?: string | null;
+    customer_city?: string | null;
+    customer_state?: string | null;
+  };
   const currentCpf = digits(order.customer_cpf || (order.payment_details as any)?.customer_cpf);
   const currentEmail = order.customer_email || (order.payment_details as any)?.customer_email || null;
-  if (currentCpf.length === 11 && currentEmail) return { cpf: currentCpf, email: currentEmail };
 
   const c = await fetchExpeditionCustomer(order);
   if (!c) return { cpf: currentCpf || null, email: currentEmail };
@@ -87,6 +101,36 @@ export async function hydrateSaleCustomer(
   if (!currentCpf && cpf) updates.customer_cpf = cpf;
   if (!currentEmail && email) updates.customer_email = email;
   if (!order.customer_name && c.name) updates.customer_name = c.name;
+  if (!order.customer_phone && c.phone) updates.customer_phone = digits(c.phone) || c.phone;
+
+  const currentAddr = ((order.shipping_address || {}) as any) || {};
+  const mergedAddr: Record<string, any> = { ...currentAddr };
+  const cep = digits(currentAddressValue(currentAddr, ["cep", "zip"]));
+  if (cep.length !== 8 && digits(c.cep).length === 8) mergedAddr.cep = digits(c.cep);
+  if (!useful(currentAddressValue(currentAddr, ["address", "address1", "logradouro"]), 3) && useful(c.address, 3)) {
+    mergedAddr.address = c.address;
+  }
+  if (!text(currentAddressValue(currentAddr, ["number", "numero"])) && text(c.number)) {
+    mergedAddr.number = c.number;
+  }
+  if (!useful(currentAddressValue(currentAddr, ["neighborhood", "bairro", "address2"]), 2) && useful(c.neighborhood, 2)) {
+    mergedAddr.neighborhood = c.neighborhood;
+  }
+  if (!useful(currentAddressValue(currentAddr, ["city", "cidade"]), 2) && useful(c.city, 2)) {
+    mergedAddr.city = c.city;
+  }
+  if (!useful(currentAddressValue(currentAddr, ["state", "province", "uf"]), 2) && useful(c.state, 2)) {
+    mergedAddr.state = c.state?.toUpperCase() || null;
+  }
+  if (!text(currentAddressValue(currentAddr, ["complement", "complemento"])) && text(c.complement)) {
+    mergedAddr.complement = c.complement;
+  }
+
+  const mergedCep = digits(mergedAddr.cep || mergedAddr.zip);
+  if (mergedCep.length === 8 && !orderRow.customer_cep) updates.customer_cep = mergedCep;
+  if (useful(mergedAddr.city, 2) && !orderRow.customer_city) updates.customer_city = mergedAddr.city;
+  if (useful(mergedAddr.state, 2) && !orderRow.customer_state) updates.customer_state = String(mergedAddr.state).toUpperCase();
+  if (JSON.stringify(mergedAddr) !== JSON.stringify(currentAddr)) updates.shipping_address = mergedAddr;
 
   if (Object.keys(updates).length) {
     const ids = saleIds?.length ? saleIds : [order.id];
