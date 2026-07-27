@@ -280,6 +280,7 @@ Deno.serve(async (req) => {
         customer_id, store_id, notes, external_source, external_order_id,
         customer_name, customer_phone, customer_email, customer_cpf,
         customer_city, customer_state, customer_cep, shipping_address,
+        payment_details,
         payment_gateway, payment_link, mercadopago_payment_id, appmax_order_id,
         vindi_transaction_id, pagarme_order_id, source_order_id, event_id
       `)
@@ -391,12 +392,17 @@ Deno.serve(async (req) => {
 
     // shipping_address jsonb fallback (transparent checkout / shopify)
     const shipAddr: any = sale.shipping_address || {};
+    // PIX avulso (gerado no chat do WhatsApp): os dados do cliente ficam só
+    // dentro de payment_details até a Expedição preencher as colunas.
+    const payDet: any = sale.payment_details || {};
 
     // Validação: precisa ter pelo menos UM identificador do cliente
-    const phoneRaw = customer?.whatsapp || sale.customer_phone || shipAddr.phone || "";
-    const emailRaw = customer?.email || sale.customer_email || shipAddr.email || "";
-    const cpfRaw = customer?.cpf || sale.customer_cpf || shipAddr.cpf || "";
-    const nameRaw = customer?.name || sale.customer_name || shipAddr.name || "";
+    const phoneRaw = customer?.whatsapp || sale.customer_phone || shipAddr.phone
+      || payDet.customer_whatsapp || payDet.customer_phone || payDet.phone || "";
+    const emailRaw = customer?.email || sale.customer_email || shipAddr.email || payDet.customer_email || "";
+    const cpfRaw = customer?.cpf || sale.customer_cpf || shipAddr.cpf || payDet.customer_cpf || "";
+    const nameRaw = customer?.name || sale.customer_name || shipAddr.name || payDet.customer_name || "";
+
 
     if (!phoneRaw && !emailRaw && !cpfRaw) {
       const errMsg = "no customer identifiers (phone/email/cpf) — skipping";
