@@ -64,7 +64,6 @@ const sanitize = (s: string) => String(s ?? "")
   .replace(/[^A-Za-z0-9 ]/g, " ")
   .replace(/\s+/g, " ").trim();
 
-const usable = (v: any, min = 2) => sanitize(String(v ?? "")).length >= min;
 const firstUsable = (values: any[], min = 2) => {
   for (const v of values) {
     const s = sanitize(String(v ?? ""));
