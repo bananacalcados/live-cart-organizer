@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +46,13 @@ serve(async (req) => {
       metadata,
       custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
       disqualified,     // true quando o lead não atendeu a condição da pergunta
+      // Etapa 3 — sinais de clique da Meta capturados no navegador da lead
+      fbclid,
+      fbp,
+      fbc,
+      source_url,
     } = body || {};
+
 
     if (!event_id || !source || !name || !phone) {
       return new Response(JSON.stringify({ error: 'event_id, source, name and phone are required' }),
@@ -127,6 +134,28 @@ serve(async (req) => {
       }
       lead = inserted;
     }
+
+    // ===== Etapa 3: memória de atribuição (90 dias) =====
+    // Guarda os sinais de clique do anúncio pelo telefone da lead. Assim, quando
+    // ela comprar depois (link da live, PDV, loja física), o fbc ainda existe.
+    try {
+      const fbcResolved = (fbc as string | null) || buildFbc(fbclid as string | null);
+      if (fbcResolved || fbp) {
+        await saveMetaAttribution(supabase, {
+          phone: e164,
+          fbc: fbcResolved,
+          fbp: (fbp as string) || null,
+          fbclid: (fbclid as string) || null,
+          source_url: (source_url as string) || null,
+          origin: source === 'typebot' ? 'typebot' : 'event_lp',
+          lead_id: lead?.id ? String(lead.id) : null,
+        });
+      }
+    } catch (e) {
+      console.warn('[event-lead-capture] attribution memory save failed:', e);
+    }
+
+
 
     // Fetch source config (vip group link etc.)
     let vip_group_link: string | null = null;

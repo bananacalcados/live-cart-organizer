@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { getFbp, getFbc } from '@/lib/metaPixel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -115,6 +116,12 @@ export default function EventLandingView() {
           utm_source: search.get('utm_source'),
           utm_medium: search.get('utm_medium'),
           utm_campaign: search.get('utm_campaign'),
+          // Sinais de clique da Meta (memória de atribuição de 90 dias)
+          fbclid: search.get('fbclid'),
+          fbp: getFbp(),
+          fbc: getFbc(),
+          source_url: window.location.href,
+
         },
       });
       if (error) throw error;

@@ -3,6 +3,7 @@
 // - Se é lead novo -> cria/atualiza ad_leads com source=link_page + tag da página.
 // - Sempre grava em link_page_leads.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +30,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { pageId, name, phone } = await req.json();
+    const { pageId, name, phone, fbclid, fbp, fbc, source_url } = await req.json();
     if (!pageId || !name || !phone) {
       return new Response(JSON.stringify({ error: "pageId, name, phone required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -125,6 +126,25 @@ Deno.serve(async (req) => {
       is_existing_customer: !!existingCustomer,
       ad_lead_id: adLeadId,
     }).select("id").single();
+
+    // ===== Etapa 3: memória de atribuição (90 dias) =====
+    try {
+      const fbcResolved = (fbc as string | null) || buildFbc(fbclid as string | null);
+      if (fbcResolved || fbp) {
+        await saveMetaAttribution(supabase, {
+          phone: e164,
+          fbc: fbcResolved,
+          fbp: (fbp as string) || null,
+          fbclid: (fbclid as string) || null,
+          source_url: (source_url as string) || null,
+          origin: "link_page",
+          lead_id: lpLead?.id ? String(lpLead.id) : null,
+        });
+      }
+    } catch (e) {
+      console.warn("[link-page-capture-lead] attribution memory save failed:", e);
+    }
+
 
     return new Response(JSON.stringify({
       success: true,
