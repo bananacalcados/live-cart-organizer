@@ -83,7 +83,134 @@ async function hashIfPresent(raw: string | null | undefined): Promise<string | u
   return await sha256Hex(trimmed);
 }
 
+
+/**
+ * Venda classificada como compra de SITE: em vez de mandar para o dataset
+ * offline, encaminha para o pixel online via `meta-capi-event`.
+ *
+ * - Se a venda veio de um pedido de checkout que JÁ enviou o Purchase ao pixel,
+ *   não envia nada (evita a dupla contagem que inflava o ROAS).
+ * - Caso contrário, envia com event_id determinístico para permitir dedupe.
+ */
+async function routeToWebsitePixel(
+  supabase: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  sale: any,
+  reason: string,
+  testCode?: string,
+): Promise<Record<string, unknown>> {
+  const saleId = sale.id as string;
+
+  // Já contabilizado pelo pedido de checkout (browser + CAPI com mesmo event_id)?
+  if (sale.source_order_id) {
+    const { data: order } = await supabase
+      .from("orders")
+      .select("id, meta_capi_purchase_sent_at")
+      .eq("id", sale.source_order_id)
+      .maybeSingle();
+
+    if (order?.meta_capi_purchase_sent_at) {
+      await supabase.from("meta_capi_offline_log").upsert({
+        sale_id: saleId,
+        event_name: "Purchase",
+        event_id: `skipped_${saleId}`,
+        dataset_id: DATASET_ID,
+        status: "skipped",
+        error_message: `website attribution (${reason}) — Purchase já enviado ao pixel pelo pedido ${sale.source_order_id}`,
+        payload_summary: { attribution: "website", reason, deduped_with_order: sale.source_order_id },
+      }, { onConflict: "sale_id,event_name" });
+
+      return { ok: true, skipped: true, attribution: "website", reason: "already_sent_by_checkout_order" };
+    }
+  }
+
+  const shipAddr: any = sale.shipping_address || {};
+  const value = Number(sale.total || 0);
+
+  if (value <= 0) {
+    await supabase.from("meta_capi_offline_log").upsert({
+      sale_id: saleId,
+      event_name: "Purchase",
+      event_id: `skipped_${saleId}`,
+      dataset_id: DATASET_ID,
+      status: "skipped",
+      error_message: "website attribution — valor zero/negativo",
+      payload_summary: { attribution: "website", reason },
+    }, { onConflict: "sale_id,event_name" });
+    return { ok: true, skipped: true, attribution: "website", reason: "zero_value" };
+  }
+
+  const body: Record<string, unknown> = {
+    event_name: "Purchase",
+    event_id: sale.source_order_id
+      ? `purchase_order_${sale.source_order_id}`
+      : `purchase_sale_${saleId}`,
+    order_id: sale.source_order_id || saleId,
+    value,
+    currency: "BRL",
+    action_source: "website",
+    event_source_url: "https://checkout.bananacalcados.com.br/",
+    phone: sale.customer_phone || shipAddr.phone || undefined,
+    email: sale.customer_email || shipAddr.email || undefined,
+    full_name: sale.customer_name || shipAddr.name || undefined,
+    cpf: sale.customer_cpf || shipAddr.cpf || undefined,
+    city: sale.customer_city || shipAddr.city || undefined,
+    state: sale.customer_state || shipAddr.state || undefined,
+    zip: sale.customer_cep || shipAddr.cep || shipAddr.zip || undefined,
+    country: "BR",
+    from_server: true,
+  };
+  if (testCode) body.test_event_code = testCode;
+
+  let ok = false;
+  let respJson: any = {};
+  let httpStatus = 0;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/meta-capi-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    httpStatus = resp.status;
+    respJson = await resp.json().catch(() => ({}));
+    ok = resp.ok && respJson?.ok !== false;
+  } catch (e) {
+    respJson = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // Registra no log offline como "skipped" (não foi para o dataset offline),
+  // deixando rastro de que a venda foi roteada para o pixel online.
+  await supabase.from("meta_capi_offline_log").upsert({
+    sale_id: saleId,
+    event_name: "Purchase",
+    event_id: String(body.event_id),
+    dataset_id: DATASET_ID,
+    status: "skipped",
+    http_status: httpStatus || null,
+    meta_response: respJson,
+    error_message: ok
+      ? null
+      : `website attribution — falha ao enviar ao pixel: ${respJson?.error || httpStatus}`,
+    sent_at: new Date().toISOString(),
+    payload_summary: {
+      attribution: "website",
+      reason,
+      routed_to: "meta-capi-event",
+      value,
+      forwarded_ok: ok,
+    },
+  }, { onConflict: "sale_id,event_name" });
+
+  return { ok, skipped: true, attribution: "website", reason, routed_to: "pixel", event_id: body.event_id, meta_response: respJson };
+}
+
 // ============ Handler ============
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
