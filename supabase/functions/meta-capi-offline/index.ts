@@ -341,7 +341,7 @@ Deno.serve(async (req) => {
       .eq("event_name", "Purchase")
       .maybeSingle();
 
-    if (existingLog?.status === "sent") {
+    if (existingLog?.status === "sent" && !forceResend) {
       return new Response(
         JSON.stringify({ ok: true, skipped: true, reason: "already sent", event_id: existingLog.event_id }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
