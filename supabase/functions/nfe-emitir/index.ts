@@ -423,7 +423,8 @@ Deno.serve(async (req) => {
     if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
     const cepInfo = await lookupAddressByCep(cepDest);
     const ufDestino = ufFromProvince(ship.province || ship.state || cepInfo?.uf) || "MG";
-    const cidadeDest = firstUsable([ship.city, cepInfo?.localidade], 2).toUpperCase();
+    // Prioriza a grafia oficial do ViaCEP: o nome precisa bater com o CodMunicipio enviado.
+    const cidadeDest = firstUsable([cepInfo?.localidade, ship.city], 2).toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
     const streetSource = firstUsable([
