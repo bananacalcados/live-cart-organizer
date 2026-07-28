@@ -898,6 +898,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               <Pencil className="h-5 w-5 mr-1" /> EDITAR DADOS
                             </Button>
                           )}
+
+                          {(stage === "novo" || stage === "preparacao" || stage === "conferencia") && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-exp-pick text-exp-pick text-base font-black"
+                              onClick={() => setItemsOrder(o)}
+                              title="Adicionar, trocar ou remover produtos do pedido"
+                            >
+                              <Package className="h-5 w-5 mr-1" /> EDITAR PRODUTOS
+                            </Button>
+                          )}
                           {prevStage(o.expedition_stage) && (
                             <Button
                               size="lg"
