@@ -977,6 +977,15 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               <Send className="h-5 w-5 mr-1" /> ENVIAR RASTREIO
                             </Button>
                           )}
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            className="border-2 border-destructive text-destructive text-base font-black"
+                            onClick={() => setDeleteOrder(o)}
+                            title="Excluir/estornar este pedido da expedição"
+                          >
+                            <Trash2 className="h-5 w-5 mr-1" /> EXCLUIR
+                          </Button>
                         </div>
                       </div>
                     </div>
