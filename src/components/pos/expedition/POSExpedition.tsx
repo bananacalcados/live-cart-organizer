@@ -1054,6 +1054,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
         />
       )}
 
+      {itemsOrder && (
+        <ExpItemsEditDialog
+          order={itemsOrder}
+          storeId={itemsOrder.store_id || storeId}
+          open={!!itemsOrder}
+          onOpenChange={(v) => !v && setItemsOrder(null)}
+          onSaved={() => {
+            setItemsOrder(null);
+            load();
+          }}
+        />
+      )}
+
+
       <ExpDeliveryPaymentDialog
         open={!!deliveryPayOrder}
         onOpenChange={(v) => !v && setDeliveryPayOrder(null)}
