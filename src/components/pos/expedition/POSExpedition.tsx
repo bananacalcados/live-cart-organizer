@@ -72,6 +72,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
   const [itemsOrder, setItemsOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
+  const [deleteOrder, setDeleteOrder] = useState<ExpOrder | null>(null);
 
 
 
