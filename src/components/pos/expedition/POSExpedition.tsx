@@ -31,6 +31,7 @@ import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
+import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 
 
 
@@ -71,6 +72,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
   const [itemsOrder, setItemsOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
+  const [deleteOrder, setDeleteOrder] = useState<ExpOrder | null>(null);
 
 
 
@@ -975,6 +977,15 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               <Send className="h-5 w-5 mr-1" /> ENVIAR RASTREIO
                             </Button>
                           )}
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            className="border-2 border-destructive text-destructive text-base font-black"
+                            onClick={() => setDeleteOrder(o)}
+                            title="Excluir/estornar este pedido da expedição"
+                          >
+                            <Trash2 className="h-5 w-5 mr-1" /> EXCLUIR
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1067,6 +1078,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
         />
       )}
 
+
+      <ExpDeleteOrderDialog
+        order={deleteOrder}
+        open={!!deleteOrder}
+        onOpenChange={(v) => !v && setDeleteOrder(null)}
+        onDeleted={() => {
+          setDeleteOrder(null);
+          load();
+          loadCounts();
+        }}
+      />
 
       <ExpDeliveryPaymentDialog
         open={!!deliveryPayOrder}

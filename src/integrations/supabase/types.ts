@@ -20112,6 +20112,14 @@ export type Database = {
         Args: { p_dry_run?: boolean; p_rule?: string }
         Returns: Json
       }
+      expedition_cancel_sale: {
+        Args: {
+          p_reason?: string
+          p_restore_stock?: boolean
+          p_sale_id: string
+        }
+        Returns: Json
+      }
       expedition_update_sale_items: {
         Args: { p_items: Json; p_sale_id: string }
         Returns: Json
