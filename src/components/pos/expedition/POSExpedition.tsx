@@ -25,6 +25,7 @@ import {
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { ExpItemsEditDialog } from "./ExpItemsEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
