@@ -652,7 +652,7 @@ Deno.serve(async (req) => {
           Logradouro: sanitize(logradouro).slice(0, 60) || "Rua nao informada",
           Numero: sanitize(numero).slice(0, 10) || "S/N",
           Bairro: bairro,
-          ...(ibgeDest ? { CodMunicipio: ibgeDest } : {}),
+          CodMunicipio: ibgeDest,
           Municipio: cidadeDest.slice(0, 60),
           Uf: ufDestino,
           CodPais: 1058,
