@@ -102,16 +102,35 @@ async function lookupAddressByCep(cep: string): Promise<any | null> {
   }
 }
 
-async function lookupIbge(city: string, uf: string): Promise<string | null> {
+const UF_IBGE_PREFIX: Record<string, string> = {
+  RO:"11", AC:"12", AM:"13", RR:"14", PA:"15", AP:"16", TO:"17", MA:"21", PI:"22", CE:"23",
+  RN:"24", PB:"25", PE:"26", AL:"27", SE:"28", BA:"29", MG:"31", ES:"32", RJ:"33", SP:"35",
+  PR:"41", SC:"42", RS:"43", MS:"50", MT:"51", GO:"52", DF:"53",
+};
+
+/**
+ * Código IBGE do município de destino.
+ * ORDEM IMPORTA: o ViaCEP já devolve o `ibge` do CEP consultado — é a fonte mais
+ * confiável e imune a diferenças de grafia ("Nova Brasilândia D'Oeste" x
+ * "Nova Brasilandia d Oeste"). A BrasilAPI entra só como fallback (ela cai com
+ * 504 com frequência, e quando falhava a nota saía SEM CodMunicipio → a SEFAZ
+ * devolvia "Rejeição 200: código do município do destinatário inválido").
+ */
+async function lookupIbge(city: string, uf: string, cepIbge?: string | null): Promise<string | null> {
+  const fromCep = digits(cepIbge);
+  if (fromCep.length === 7 && (!UF_IBGE_PREFIX[uf] || fromCep.startsWith(UF_IBGE_PREFIX[uf]))) return fromCep;
   try {
     const r = await fetch(`https://brasilapi.com.br/api/ibge/municipios/v1/${uf}?providers=dados-abertos-br`, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     const arr = await r.json();
-    const target = sanitize(city).toUpperCase();
-    const hit = arr.find((m: any) => sanitize(m.nome).toUpperCase() === target);
-    return hit?.codigo_ibge || null;
+    const norm = (s: string) => sanitize(s).toUpperCase().replace(/\s+/g, "");
+    const target = norm(city);
+    const hit = arr.find((m: any) => norm(m.nome) === target)
+      || arr.find((m: any) => norm(m.nome).startsWith(target) || target.startsWith(norm(m.nome)));
+    return hit?.codigo_ibge ? String(hit.codigo_ibge) : null;
   } catch { return null; }
 }
+
 
 // Fallback Tiny: pedidos Beta sincronizados (ou vindos do checkout-transparente) podem ter
 // shipping_address/CPF vazios. Busca os dados direto no Tiny ERP usando o tiny_order_id e
@@ -404,7 +423,8 @@ Deno.serve(async (req) => {
     if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
     const cepInfo = await lookupAddressByCep(cepDest);
     const ufDestino = ufFromProvince(ship.province || ship.state || cepInfo?.uf) || "MG";
-    const cidadeDest = firstUsable([ship.city, cepInfo?.localidade], 2).toUpperCase();
+    // Prioriza a grafia oficial do ViaCEP: o nome precisa bater com o CodMunicipio enviado.
+    const cidadeDest = firstUsable([cepInfo?.localidade, ship.city], 2).toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
     const streetSource = firstUsable([
@@ -430,8 +450,14 @@ Deno.serve(async (req) => {
     const tipoAmbiente = ambiente === "producao" ? "1" : "2";
     const ufOrigem: string = company.address_state || "MG";
 
-    // 3. IBGE do município de destino
-    const ibgeDest = await lookupIbge(ship.city || "", ufDestino);
+    // 3. IBGE do município de destino (ViaCEP primeiro, BrasilAPI como fallback)
+    const ibgeDest = await lookupIbge(cidadeDest || ship.city || "", ufDestino, cepInfo?.ibge);
+    if (!ibgeDest) {
+      throw new Error(
+        `Não foi possível resolver o código IBGE do município "${cidadeDest}/${ufDestino}" (CEP ${cepDest}). ` +
+        `Confira o CEP/cidade em "Editar dados do pedido / NF-e" e emita novamente — sem esse código a SEFAZ rejeita com "Rejeição 200".`,
+      );
+    }
 
     // 4. Monta produtos com snapshot fiscal
     const produtos: any[] = [];
@@ -626,7 +652,7 @@ Deno.serve(async (req) => {
           Logradouro: sanitize(logradouro).slice(0, 60) || "Rua nao informada",
           Numero: sanitize(numero).slice(0, 10) || "S/N",
           Bairro: bairro,
-          ...(ibgeDest ? { CodMunicipio: ibgeDest } : {}),
+          CodMunicipio: ibgeDest,
           Municipio: cidadeDest.slice(0, 60),
           Uf: ufDestino,
           CodPais: 1058,

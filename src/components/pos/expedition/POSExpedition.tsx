@@ -25,6 +25,7 @@ import {
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { ExpItemsEditDialog } from "./ExpItemsEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
@@ -68,6 +69,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
   const [deliveryPayOrder, setDeliveryPayOrder] = useState<ExpOrder | null>(null);
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
+  const [itemsOrder, setItemsOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
 
 
@@ -896,6 +898,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               <Pencil className="h-5 w-5 mr-1" /> EDITAR DADOS
                             </Button>
                           )}
+
+                          {(stage === "novo" || stage === "preparacao" || stage === "conferencia") && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-exp-pick text-exp-pick text-base font-black"
+                              onClick={() => setItemsOrder(o)}
+                              title="Adicionar, trocar ou remover produtos do pedido"
+                            >
+                              <Package className="h-5 w-5 mr-1" /> EDITAR PRODUTOS
+                            </Button>
+                          )}
                           {prevStage(o.expedition_stage) && (
                             <Button
                               size="lg"
@@ -1039,6 +1053,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      {itemsOrder && (
+        <ExpItemsEditDialog
+          order={itemsOrder}
+          storeId={itemsOrder.store_id || storeId}
+          open={!!itemsOrder}
+          onOpenChange={(v) => !v && setItemsOrder(null)}
+          onSaved={() => {
+            setItemsOrder(null);
+            load();
+          }}
+        />
+      )}
+
 
       <ExpDeliveryPaymentDialog
         open={!!deliveryPayOrder}

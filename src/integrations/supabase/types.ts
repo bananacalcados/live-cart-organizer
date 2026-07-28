@@ -20112,6 +20112,10 @@ export type Database = {
         Args: { p_dry_run?: boolean; p_rule?: string }
         Returns: Json
       }
+      expedition_update_sale_items: {
+        Args: { p_items: Json; p_sale_id: string }
+        Returns: Json
+      }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
