@@ -1079,6 +1079,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
       )}
 
 
+      <ExpDeleteOrderDialog
+        order={deleteOrder}
+        open={!!deleteOrder}
+        onOpenChange={(v) => !v && setDeleteOrder(null)}
+        onDeleted={() => {
+          setDeleteOrder(null);
+          load();
+          loadCounts();
+        }}
+      />
+
       <ExpDeliveryPaymentDialog
         open={!!deliveryPayOrder}
         onOpenChange={(v) => !v && setDeliveryPayOrder(null)}
