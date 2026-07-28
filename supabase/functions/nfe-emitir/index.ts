@@ -450,8 +450,14 @@ Deno.serve(async (req) => {
     const tipoAmbiente = ambiente === "producao" ? "1" : "2";
     const ufOrigem: string = company.address_state || "MG";
 
-    // 3. IBGE do município de destino
-    const ibgeDest = await lookupIbge(ship.city || "", ufDestino);
+    // 3. IBGE do município de destino (ViaCEP primeiro, BrasilAPI como fallback)
+    const ibgeDest = await lookupIbge(cidadeDest || ship.city || "", ufDestino, cepInfo?.ibge);
+    if (!ibgeDest) {
+      throw new Error(
+        `Não foi possível resolver o código IBGE do município "${cidadeDest}/${ufDestino}" (CEP ${cepDest}). ` +
+        `Confira o CEP/cidade em "Editar dados do pedido / NF-e" e emita novamente — sem esse código a SEFAZ rejeita com "Rejeição 200".`,
+      );
+    }
 
     // 4. Monta produtos com snapshot fiscal
     const produtos: any[] = [];
