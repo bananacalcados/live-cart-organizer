@@ -85,6 +85,35 @@ export default function LiveMemberArea() {
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
   const itemsSigRef = useRef<string | null>(null);
 
+  /** SEO da página pública (link fica na bio do Instagram). */
+  useEffect(() => {
+    const title = "Minha Área | Banana Calçados";
+    const description =
+      "Acesse sua área de cliente Banana Calçados: confira os itens anotados na Live, confirme seu pedido e pague com PIX.";
+    document.title = title;
+
+    const upsert = (selector: string, attrs: Record<string, string>) => {
+      let el = document.head.querySelector<HTMLMetaElement | HTMLLinkElement>(selector);
+      if (!el) {
+        el = document.createElement(selector.startsWith("link") ? "link" : "meta") as any;
+        document.head.appendChild(el!);
+      }
+      Object.entries(attrs).forEach(([k, v]) => el!.setAttribute(k, v));
+    };
+
+    upsert('meta[name="description"]', { name: "description", content: description });
+    upsert('meta[name="robots"]', { name: "robots", content: "index, follow" });
+    upsert('meta[property="og:title"]', { property: "og:title", content: title });
+    upsert('meta[property="og:description"]', { property: "og:description", content: description });
+    upsert('meta[property="og:type"]', { property: "og:type", content: "website" });
+    upsert('meta[name="twitter:card"]', { name: "twitter:card", content: "summary_large_image" });
+    upsert('link[rel="canonical"]', {
+      rel: "canonical",
+      href: "https://checkout.bananacalcados.com.br/minha-area",
+    });
+  }, []);
+
+
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, "").slice(0, 11);
     if (d.length <= 2) return d;
