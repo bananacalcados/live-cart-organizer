@@ -301,3 +301,6 @@ verify_jwt = false
 
 [functions.mercadopago-installments]
 verify_jwt = false
+
+[functions.event-order-route-to-pos]
+verify_jwt = false
