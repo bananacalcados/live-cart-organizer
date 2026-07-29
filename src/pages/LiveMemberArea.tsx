@@ -215,7 +215,7 @@ export default function LiveMemberArea() {
           AO VIVO
         </div>
       )}
-      <h1 className="text-xl font-bold px-6">{event?.name || "Minha Área"}</h1>
+      <h1 className="text-xl font-bold px-6">MINHA ÁREA</h1>
     </div>
   );
 
