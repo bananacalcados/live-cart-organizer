@@ -838,7 +838,7 @@ function StepPayment({
   onBack: () => void;
   onProcessingChange?: (processing: boolean) => void;
 }) {
-   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
+   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(null);
    const [showAllMethods, setShowAllMethods] = useState(true);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
 
@@ -894,7 +894,49 @@ function StepPayment({
                     installmentConfig={installmentConfig}
                     onPaymentConfirmed={onPaymentConfirmed}
                     onProcessingChange={onProcessingChange}
+                    mode="credit"
+                    onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
                   />
+               </div>
+             )}
+           </>
+         )}
+
+         {/* Cartão de débito */}
+         {(showAllMethods || selectedMethod === "debit") && (
+           <>
+             <button
+               onClick={() => { setSelectedMethod("debit"); setShowAllMethods(false); }}
+               className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
+                 selectedMethod === "debit"
+                   ? "border-foreground bg-card shadow-sm"
+                   : "border-border bg-card hover:border-muted-foreground"
+               }`}
+             >
+               <div className="flex items-center gap-3">
+                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                   selectedMethod === "debit" ? "border-foreground" : "border-muted-foreground"
+                 }`}>
+                   {selectedMethod === "debit" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
+                 </div>
+                 <span className="text-sm font-semibold">Cartão de débito</span>
+               </div>
+               <span className="text-[10px] text-muted-foreground font-medium">à vista</span>
+             </button>
+
+             {selectedMethod === "debit" && (
+               <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
+                 <CardPaymentForm
+                   orderId={orderId}
+                   amount={amount}
+                   products={products}
+                   form={form}
+                   installmentConfig={installmentConfig}
+                   onPaymentConfirmed={onPaymentConfirmed}
+                   onProcessingChange={onProcessingChange}
+                   mode="debit"
+                   onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
+                 />
                </div>
              )}
            </>
