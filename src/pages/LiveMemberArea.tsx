@@ -439,10 +439,37 @@ export default function LiveMemberArea() {
                   )}
                 </div>
               ))}
-              <div className="flex justify-between items-center pt-1">
-                <span className="text-sm text-muted-foreground">Total</span>
-                <span className="text-xl font-bold">{brl(order.total)}</span>
+              <div className="pt-1 space-y-1">
+                {typeof order.subtotal === "number" && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Produtos</span>
+                    <span>{brl(order.subtotal)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Frete</span>
+                  <span>
+                    {order.free_shipping || !order.shipping_cost
+                      ? "Grátis"
+                      : brl(order.shipping_cost)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total</span>
+                  <span className="text-xl font-bold">{brl(order.total)}</span>
+                </div>
+                {!order.is_paid && !!order.pix_discount_percent && (
+                  <div className="flex justify-between items-center rounded-xl bg-primary/10 px-3 py-2 mt-1">
+                    <span className="text-xs font-semibold text-primary">
+                      No PIX ({order.pix_discount_percent}% OFF)
+                    </span>
+                    <span className="text-lg font-extrabold text-primary">
+                      {brl(order.pix_total ?? order.total)}
+                    </span>
+                  </div>
+                )}
               </div>
+
 
               {order.is_paid ? (
                 <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-3 text-primary font-semibold text-sm">
