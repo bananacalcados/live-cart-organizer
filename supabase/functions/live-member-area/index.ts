@@ -215,20 +215,92 @@ Deno.serve(async (req) => {
     }
 
 
-    function orderTotal(order: any) {
+    function orderSubtotal(order: any) {
       const items = Array.isArray(order?.products) ? order.products : [];
-      const sub = items.reduce(
+      return items.reduce(
         (s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1),
         0,
       );
-      return sub + Number(order?.shipping_cost || 0);
+    }
+
+    function orderTotal(order: any) {
+      return orderSubtotal(order) + Number(order?.shipping_cost || 0);
+    }
+
+    /**
+     * Ponto 6 — frete fixo da Live: se o pedido ainda não tem frete definido,
+     * aplica a regra do evento (fixo / grátis acima de X) antes de mandar
+     * a cliente para o checkout. Nunca sobrescreve frete já escolhido.
+     */
+    async function applyEventShipping(order: any) {
+      if (!order || order.is_paid) return order;
+      if (order.free_shipping) return order;
+      if (Number(order.shipping_cost || 0) > 0) return order;
+      if (!order.event_id) return order;
+
+      const { data: ev } = await supabase
+        .from("events")
+        .select("default_shipping_cost, free_shipping_threshold")
+        .eq("id", order.event_id)
+        .maybeSingle();
+      if (!ev) return order;
+
+      const fixed = Number(ev.default_shipping_cost || 0);
+      const freeAbove = Number(ev.free_shipping_threshold || 0);
+      const subtotal = orderSubtotal(order);
+
+      let shippingCost: number | null = null;
+      let freeShipping = false;
+      if (freeAbove > 0 && subtotal >= freeAbove) {
+        shippingCost = 0;
+        freeShipping = true;
+      } else if (fixed > 0) {
+        shippingCost = fixed;
+      }
+      if (shippingCost === null) return order;
+
+      await supabase
+        .from("orders")
+        .update({
+          shipping_cost: shippingCost,
+          free_shipping: freeShipping,
+          shipping_info: {
+            source: "event_rule",
+            carrier: freeShipping ? "Frete Grátis (regra do evento)" : "Frete fixo do evento",
+            price: shippingCost,
+            applied_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", order.id);
+
+      return { ...order, shipping_cost: shippingCost, free_shipping: freeShipping };
+    }
+
+    /** Desconto PIX global (app_settings.pix_discount_percent), ex.: 5%. */
+    async function pixDiscountPercent(): Promise<number> {
+      try {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", "pix_discount_percent")
+          .maybeSingle();
+        const pct = Number(String(data?.value ?? "").replace(/"/g, "")) || 0;
+        return pct > 0 && pct < 100 ? pct : 0;
+      } catch {
+        return 0;
+      }
     }
 
     async function buildState(session: any) {
       // Sempre resolve a live corrente (link único global), não a live da sessão.
       const event = await resolveCurrentEvent();
-      const { order, customer } = await loadOrder(event?.id || null, session.phone);
+      const loaded = await loadOrder(event?.id || null, session.phone);
+      const customer = loaded.customer;
+      const order = await applyEventShipping(loaded.order);
       const history = await loadHistory(session.phone, order?.id || null);
+      const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
+
+
 
 
       let reg: any = null;
