@@ -72,7 +72,12 @@ export default function LiveMemberArea() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const pollRef = useRef<number | null>(null);
+  /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
+  const confirmDismissedRef = useRef<string | null>(null);
+  /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
+  const itemsSigRef = useRef<string | null>(null);
 
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, "").slice(0, 11);
