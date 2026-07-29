@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +39,7 @@ interface MemberState {
   } | null;
 }
 
-const TOKEN_KEY = (slug: string) => `live_member_token_${slug}`;
+const TOKEN_KEY = "live_member_token";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 async function callApi(payload: Record<string, unknown>) {
@@ -50,7 +49,6 @@ async function callApi(payload: Record<string, unknown>) {
 }
 
 export default function LiveMemberArea() {
-  const { slug = "" } = useParams();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [event, setEvent] = useState<{ id: string; name: string; is_live: boolean } | null>(null);
@@ -78,28 +76,28 @@ export default function LiveMemberArea() {
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
-      localStorage.setItem(TOKEN_KEY(slug), data.token);
+      localStorage.setItem(TOKEN_KEY, data.token);
       setStep("area");
       if (data.order && !data.order.confirmed_at && !data.order.is_paid) setConfirmOpen(true);
     },
-    [slug],
+    [],
   );
 
   // Bootstrap + sessão salva
   useEffect(() => {
     (async () => {
       try {
-        const boot = await callApi({ action: "bootstrap", slug });
+        const boot = await callApi({ action: "bootstrap" });
         if (!boot?.ok) {
           setNotFound(true);
           return;
         }
         setEvent(boot.event);
-        const token = localStorage.getItem(TOKEN_KEY(slug));
+        const token = localStorage.getItem(TOKEN_KEY);
         if (token) {
           const st = await callApi({ action: "state", token });
           if (st?.ok) applyState(st);
-          else localStorage.removeItem(TOKEN_KEY(slug));
+          else localStorage.removeItem(TOKEN_KEY);
         }
       } catch {
         setNotFound(true);
@@ -107,7 +105,7 @@ export default function LiveMemberArea() {
         setLoading(false);
       }
     })();
-  }, [slug, applyState]);
+  }, [applyState]);
 
   // Atualização em tempo quase-real do pedido (itens novos anotados na live)
   useEffect(() => {
@@ -144,7 +142,7 @@ export default function LiveMemberArea() {
   const enter = async (withName?: string) => {
     setBusy(true);
     try {
-      const res = await callApi({ action: "enter", slug, phone, name: withName || undefined });
+      const res = await callApi({ action: "enter", phone, name: withName || undefined });
       if (!res?.ok) {
         toast.error(res?.error || "Não foi possível entrar");
         return;
