@@ -51,6 +51,13 @@ function newToken() {
   return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
+/** IP do requisitante (proxy-aware), usado como chave de rate limit. */
+function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for") || "";
+  return (fwd.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim();
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -62,6 +69,31 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const action = String(body?.action || "");
+    const ip = clientIp(req);
+
+    /**
+     * Ponto 7 — anti-abuso. Retorna true quando ainda está dentro da cota.
+     * Falha "aberta" (permite) se o banco não responder, para não travar clientes reais.
+     */
+    async function allow(key: string, limit: number, windowSeconds: number) {
+      const { data, error } = await supabase.rpc("live_member_rate_limit", {
+        _key: key,
+        _limit: limit,
+        _window_seconds: windowSeconds,
+      });
+      if (error) {
+        console.error("[rate-limit]", key, error.message);
+        return true;
+      }
+      return data !== false;
+    }
+
+    // Cota global por IP para qualquer ação (protege o endpoint público inteiro)
+    if (!(await allow(`ip:${ip}`, 120, 60))) {
+      return json({ ok: false, error: "Muitas requisições. Tente novamente em instantes." }, 429);
+    }
+
+
 
     // ---------- helpers ----------
     /**
@@ -395,7 +427,17 @@ Deno.serve(async (req) => {
     }
 
     if (action === "enter") {
+      // Anti-abuso: 10 entradas por IP a cada 10 min e 6 por telefone/hora.
+      if (!(await allow(`enter-ip:${ip}`, 10, 600))) {
+        return json({ ok: false, error: "Muitas tentativas de acesso. Aguarde alguns minutos." }, 429);
+      }
+      const phoneKey = normalizePhone(body.phone);
+      if (phoneKey && !(await allow(`enter:${phoneKey}`, 6, 3600))) {
+        return json({ ok: false, error: "Muitas tentativas com este número. Tente mais tarde." }, 429);
+      }
+
       const event = await resolveCurrentEvent();
+
 
       const phone = normalizePhone(body.phone);
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
@@ -501,7 +543,15 @@ Deno.serve(async (req) => {
     }
 
     if (action === "send_otp") {
+      // Anti-spam de OTP: 3 códigos por telefone a cada 10 min e 10 por IP/hora.
+      if (!(await allow(`otp:${session.phone}`, 3, 600))) {
+        return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
+      }
+      if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
+        return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
+      }
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/live-send-verification`, {
+
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -517,6 +567,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "verify_otp") {
+      // Anti-força bruta: 8 tentativas por telefone a cada 10 min.
+      if (!(await allow(`otpv:${session.phone}`, 8, 600))) {
+        return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+      }
       const code = String(body.code || "").replace(/\D/g, "");
       const { data: rec } = await supabase
         .from("live_phone_verifications")
