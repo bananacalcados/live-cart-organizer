@@ -51,6 +51,13 @@ function newToken() {
   return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
+/** IP do requisitante (proxy-aware), usado como chave de rate limit. */
+function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for") || "";
+  return (fwd.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim();
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
