@@ -586,7 +586,14 @@ export default function LiveMemberArea() {
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRMAR"}
             </Button>
-            <Button variant="ghost" className="w-full h-12" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="ghost"
+              className="w-full h-12"
+              onClick={() => {
+                confirmDismissedRef.current = order.id;
+                setConfirmOpen(false);
+              }}
+            >
               Agora não
             </Button>
           </div>
