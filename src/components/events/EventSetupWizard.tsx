@@ -589,16 +589,16 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                   </button>
                 </div>
                 {operationMode === "member_area" && (
-                  <div className="space-y-1 pt-1">
-                    <Label className="text-xs text-muted-foreground">Link público da área</Label>
-                    <Input
-                      placeholder="live-julho-2"
-                      value={memberAreaSlug}
-                      onChange={(e) => setMemberAreaSlug(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground break-all">
-                      checkout.bananacalcados.com.br/minha-area/
-                      {slugify(memberAreaSlug || name) || "sua-live"}
+                  <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
+                    <Label className="text-xs text-muted-foreground">
+                      Link único da Área de Clientes (o mesmo para todas as lives — use na bio)
+                    </Label>
+                    <p className="text-sm font-semibold break-all">
+                      checkout.bananacalcados.com.br/minha-area
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      A cliente entra pelo WhatsApp, vê o pedido da live que estiver no ar e o
+                      histórico de compras anteriores.
                     </p>
                   </div>
                 )}
