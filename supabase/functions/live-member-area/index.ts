@@ -427,7 +427,17 @@ Deno.serve(async (req) => {
     }
 
     if (action === "enter") {
+      // Anti-abuso: 10 entradas por IP a cada 10 min e 6 por telefone/hora.
+      if (!(await allow(`enter-ip:${ip}`, 10, 600))) {
+        return json({ ok: false, error: "Muitas tentativas de acesso. Aguarde alguns minutos." }, 429);
+      }
+      const phoneKey = normalizePhone(body.phone);
+      if (phoneKey && !(await allow(`enter:${phoneKey}`, 6, 3600))) {
+        return json({ ok: false, error: "Muitas tentativas com este número. Tente mais tarde." }, 429);
+      }
+
       const event = await resolveCurrentEvent();
+
 
       const phone = normalizePhone(body.phone);
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
