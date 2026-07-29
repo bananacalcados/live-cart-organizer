@@ -552,6 +552,57 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
                 </p>
               </div>
+
+              {/* Modo de operação da live */}
+              <div className="space-y-2">
+                <Label>Como essa live vai funcionar? *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode("manual")}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === "manual"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">Manual</p>
+                    <p className="text-xs text-muted-foreground">
+                      Do jeito de hoje: a equipe monta e envia o link de pagamento.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode("member_area")}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === "member_area"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">Área de Clientes</p>
+                    <p className="text-xs text-muted-foreground">
+                      Link único na live: a cliente confirma e paga sozinha.
+                    </p>
+                  </button>
+                </div>
+                {operationMode === "member_area" && (
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs text-muted-foreground">Link público da área</Label>
+                    <Input
+                      placeholder="live-julho-2"
+                      value={memberAreaSlug}
+                      onChange={(e) => setMemberAreaSlug(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground break-all">
+                      checkout.bananacalcados.com.br/minha-area/
+                      {slugify(memberAreaSlug || name) || "sua-live"}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
