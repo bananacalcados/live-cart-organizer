@@ -298,17 +298,18 @@ Deno.serve(async (req) => {
           await supabase.from("event_leads").insert({
             event_id: event.id,
             name,
-
-          phone,
-          phone_suffix: suffix8(phone),
-          source: "member_area",
-        });
+            phone,
+            phone_suffix: suffix8(phone),
+            source: "member_area",
+          });
+        }
       }
 
       const token = newToken();
       const { data: session } = await supabase
         .from("live_member_sessions")
-        .insert({ token, event_id: event.id, phone, name })
+        .insert({ token, event_id: event?.id || null, phone, name })
+
         .select()
         .single();
 
