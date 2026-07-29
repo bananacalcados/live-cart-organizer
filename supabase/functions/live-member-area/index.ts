@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "confirm_order") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
       if (order.is_paid) return json(await buildState(session));
 
@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "reject_item") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
       if (order.is_paid) return json({ ok: false, error: "Pedido já pago" }, 400);
 
@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save_details") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido para vincular os dados" }, 400);
 
       const { data: reg } = await supabase
