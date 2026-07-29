@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
 import { lpUpdateViewer } from "@/lib/livePublic";
 import { initMetaPixel, trackPixelEvent, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
-import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
+import { initMercadoPago, tokenizeCardMP, getCardCapabilities, type CardCapabilities, type CardMode } from "@/lib/mercadopago";
 import {
   fireInitiateCheckout,
   fireAddPaymentInfo,
@@ -1130,14 +1130,18 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
   );
 }
 
-// ── Credit Card Payment Form (step 3) ───────────────────────────
+// ── Card Payment Form (step 3) — crédito e débito ───────────────
 function CardPaymentForm({
   orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
+  mode = "credit", onSwitchMode,
 }: {
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onProcessingChange?: (processing: boolean) => void;
+  mode?: CardMode;
+  onSwitchMode?: (mode: CardMode) => void;
 }) {
+  const isDebit = mode === "debit";
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -1180,7 +1184,7 @@ function CardPaymentForm({
         const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
+          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
         // Check if attempt finished (failed)
@@ -1194,7 +1198,7 @@ function CardPaymentForm({
         }
         if (attempt && attempt.status === "success") {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
+          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
       } catch {}
@@ -1220,8 +1224,28 @@ function CardPaymentForm({
   }> | null>(null);
   const cardBin = cardNumber.replace(/\D/g, "").slice(0, 8);
 
+  // ── Capacidades reais do cartão (BIN) — roda em silêncio, só para validar ──
+  const [cardCaps, setCardCaps] = useState<CardCapabilities | null>(null);
   useEffect(() => {
-    if (!amount || amount <= 0) return;
+    let cancelled = false;
+    if (cardBin.length < 6) { setCardCaps(null); return; }
+    const t = setTimeout(async () => {
+      const caps = await getCardCapabilities(cardBin);
+      if (!cancelled) setCardCaps(caps);
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [cardBin]);
+
+  // Divergência entre a função escolhida e o que o cartão realmente oferece.
+  const mismatch: CardMode | null = (() => {
+    if (!cardCaps) return null;
+    if (!isDebit && !cardCaps.hasCredit && cardCaps.hasDebit) return "debit";
+    if (isDebit && !cardCaps.hasDebit && cardCaps.hasCredit) return "credit";
+    return null;
+  })();
+
+  useEffect(() => {
+    if (isDebit || !amount || amount <= 0) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
@@ -1233,7 +1257,7 @@ function CardPaymentForm({
       } catch { /* mantém fallback local */ }
     }, cardBin.length >= 6 ? 400 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [amount, cardBin.length >= 6 ? cardBin : ""]);
+  }, [amount, isDebit, cardBin.length >= 6 ? cardBin : ""]);
 
   const installmentOptions = [];
   for (let i = 1; i <= installmentConfig.max_installments; i++) {
@@ -1249,13 +1273,13 @@ function CardPaymentForm({
     installmentOptions.push({ value: String(i), label });
   }
 
-  const selectedInstallments = parseInt(installments);
+  const selectedInstallments = isDebit ? 1 : parseInt(installments);
   const selectedMp = mpOptions?.find((o) => o.installments === selectedInstallments);
   // Valor enviado ao gateway = SEMPRE o total do pedido. Quando o parcelamento tem
   // juros, quem soma os juros é o próprio gateway (não podemos inflar o valor,
   // senão o cliente pagaria juros em cima de juros).
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
-  const chargeAmount = selectedMp ? amount : totalWithInterest;
+  const chargeAmount = isDebit ? amount : (selectedMp ? amount : totalWithInterest);
 
 
   const handleSubmit = async () => {
@@ -1286,7 +1310,7 @@ function CardPaymentForm({
     attemptIdRef.current = attemptId;
     sessionStorage.setItem(`checkout_payment_${orderId}`, attemptId);
 
-    trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
+    trackPixelEvent("AddPaymentInfo", { content_category: isDebit ? "debit_card" : "credit_card" });
     try {
       const totalCents = Math.round(chargeAmount * 100);
       const baseCents = Math.round(amount * 100);
@@ -1300,7 +1324,16 @@ function CardPaymentForm({
         expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
         cvv: cvv.trim(),
         cpf: form.cpf.replace(/\D/g, ""),
-      });
+      }, mode);
+
+      // Débito só roda pelo Mercado Pago — sem token não há como cobrar.
+      if (isDebit && !mpToken) {
+        sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        processingRef.current = false;
+        setIsProcessing(false);
+        setPaymentError("Não conseguimos validar seu cartão de débito agora. Tente novamente ou pague no Pix.");
+        return;
+      }
 
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
@@ -1317,9 +1350,11 @@ function CardPaymentForm({
           ...(mpToken ? {
             mpCardToken: mpToken.mpCardToken,
             mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpPaymentTypeId: mpToken.mpPaymentTypeId,
             mpIssuerId: mpToken.mpIssuerId,
             mpDeviceId: mpToken.mpDeviceId,
           } : {}),
+          paymentMode: mode,
           installments: selectedInstallments,
           customer: {
             name: form.fullName,
@@ -1372,7 +1407,7 @@ function CardPaymentForm({
       if (data?.already_paid) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success("Pagamento já confirmado!");
-        onPaymentConfirmed({ platform: "cached", method: "credit_card", customerData: buildCustomerData() });
+        onPaymentConfirmed({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
         return;
       }
 
@@ -1385,7 +1420,7 @@ function CardPaymentForm({
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
-        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: buildCustomerData() });
+        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
       }
@@ -1400,7 +1435,7 @@ function CardPaymentForm({
           if (freshOrder?.is_paid) {
             sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
-            onPaymentConfirmed({ platform: "appmax", method: "credit_card", customerData: buildCustomerData() });
+            onPaymentConfirmed({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
             return;
           }
         } catch (_) { /* ignore poll error */ }
@@ -1469,20 +1504,42 @@ function CardPaymentForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-sm">Parcelas</Label>
-        <Select value={installments} onValueChange={setInstallments}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {installmentOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {!isDebit ? (
+        <div className="space-y-2">
+          <Label className="text-sm">Parcelas</Label>
+          <Select value={installments} onValueChange={setInstallments}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {installmentOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Débito é sempre à vista, em 1x — sem parcelas e sem o desconto do Pix.
+        </p>
+      )}
 
-      <Button onClick={handleSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
-        <Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}
+      {mismatch && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+          <p className="text-sm font-medium">
+            {mismatch === "debit"
+              ? "Esse cartão é de débito — quer pagar no débito?"
+              : "Esse cartão é de crédito — quer pagar no crédito?"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Do jeito que está agora, a operadora provavelmente vai recusar a compra.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => onSwitchMode?.(mismatch)}>
+            {mismatch === "debit" ? "Pagar no débito" : "Pagar no crédito"}
+          </Button>
+        </div>
+      )}
+
+      <Button onClick={handleSubmit} disabled={isProcessing || !!mismatch} className="w-full h-14 text-lg font-semibold" size="lg">
+        <Lock className="h-5 w-5 mr-2" />Pagar R$ {(isDebit ? amount : totalWithInterest).toFixed(2)}
       </Button>
     </div>
   );
