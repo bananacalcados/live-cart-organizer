@@ -64,13 +64,27 @@ Deno.serve(async (req) => {
     const action = String(body?.action || "");
 
     // ---------- helpers ----------
-    async function loadEventBySlug(slug: string) {
-      const { data } = await supabase
-        .from("events")
-        .select("id, name, member_area_slug, operation_mode, is_active, is_live_broadcasting, instagram_live_url")
-        .eq("member_area_slug", String(slug || "").toLowerCase())
-        .maybeSingle();
-      return data;
+    /**
+     * Link ÚNICO e global (bio do Instagram): não existe slug por live.
+     * O evento "corrente" é a live em transmissão; se nenhuma estiver no ar,
+     * o evento mais recente em modo Área de Clientes. Pode ser null (sem live).
+     */
+    async function resolveCurrentEvent() {
+      const base = () =>
+        supabase
+          .from("events")
+          .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url")
+          .eq("operation_mode", "member_area")
+          .neq("is_active", false);
+
+      const { data: live } = await base()
+        .eq("is_live_broadcasting", true)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (live?.[0]) return live[0];
+
+      const { data: latest } = await base().order("created_at", { ascending: false }).limit(1);
+      return latest?.[0] || null;
     }
 
     async function loadSession(token: string) {
@@ -85,16 +99,22 @@ Deno.serve(async (req) => {
       return data;
     }
 
-    /** Pedido "ativo" da cliente no evento. */
-    async function loadOrder(eventId: string, phone: string) {
+    async function loadCustomers(phone: string) {
       const suf = suffix8(phone);
-      const { data: customers } = await supabase
+      const { data } = await supabase
         .from("customers")
         .select("id, instagram_handle, whatsapp")
         .not("whatsapp", "is", null)
         .ilike("whatsapp", `%${suf}`);
-      const ids = (customers || []).map((c: any) => c.id);
+      return data || [];
+    }
+
+    /** Pedido "ativo" da cliente no evento corrente. */
+    async function loadOrder(eventId: string | null, phone: string) {
+      const customers = await loadCustomers(phone);
+      const ids = customers.map((c: any) => c.id);
       if (!ids.length) return { order: null, customer: null };
+      if (!eventId) return { order: null, customer: customers[0] };
 
       const { data: orders } = await supabase
         .from("orders")
@@ -106,10 +126,49 @@ Deno.serve(async (req) => {
         .limit(1);
       const order = orders?.[0] || null;
       const customer = order
-        ? (customers || []).find((c: any) => c.id === order.customer_id) || customers![0]
-        : customers![0];
+        ? customers.find((c: any) => c.id === order.customer_id) || customers[0]
+        : customers[0];
       return { order, customer };
     }
+
+    /** Histórico: pedidos da cliente em TODAS as lives (exceto o pedido atual). */
+    async function loadHistory(phone: string, currentOrderId: string | null) {
+      const customers = await loadCustomers(phone);
+      const ids = customers.map((c: any) => c.id);
+      if (!ids.length) return [];
+
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("id, event_id, products, shipping_cost, is_paid, paid_at, stage, created_at")
+        .in("customer_id", ids)
+        .neq("stage", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      const list = (orders || []).filter((o: any) => o.id !== currentOrderId);
+      if (!list.length) return [];
+
+      const eventIds = [...new Set(list.map((o: any) => o.event_id).filter(Boolean))];
+      const { data: evs } = await supabase.from("events").select("id, name").in("id", eventIds);
+      const nameById = new Map((evs || []).map((e: any) => [e.id, e.name]));
+
+      return list.map((o: any) => ({
+        id: o.id,
+        event_name: nameById.get(o.event_id) || null,
+        created_at: o.created_at,
+        is_paid: !!o.is_paid,
+        paid_at: o.paid_at,
+        stage: o.stage,
+        items: (Array.isArray(o.products) ? o.products : []).map((p: any) => ({
+          title: p.title,
+          variant: p.variant,
+          quantity: Number(p.quantity || 1),
+          price: Number(p.price || 0),
+          image: p.image || null,
+        })),
+        total: orderTotal(o),
+      }));
+    }
+
 
     function orderTotal(order: any) {
       const items = Array.isArray(order?.products) ? order.products : [];
@@ -121,12 +180,11 @@ Deno.serve(async (req) => {
     }
 
     async function buildState(session: any) {
-      const { order, customer } = await loadOrder(session.event_id, session.phone);
-      const { data: event } = await supabase
-        .from("events")
-        .select("id, name, is_live_broadcasting, instagram_live_url")
-        .eq("id", session.event_id)
-        .maybeSingle();
+      // Sempre resolve a live corrente (link único global), não a live da sessão.
+      const event = await resolveCurrentEvent();
+      const { order, customer } = await loadOrder(event?.id || null, session.phone);
+      const history = await loadHistory(session.phone, order?.id || null);
+
 
       let reg: any = null;
       if (order?.id) {
@@ -189,35 +247,34 @@ Deno.serve(async (req) => {
               checkout_url: `/checkout/order/${order.id}`,
             }
           : null,
+        history,
       };
     }
 
     // ---------- actions ----------
     if (action === "bootstrap") {
-      const event = await loadEventBySlug(body.slug);
-      if (!event || event.operation_mode !== "member_area" || event.is_active === false) {
-        return json({ ok: false, error: "not_found" }, 404);
-      }
+      const event = await resolveCurrentEvent();
       return json({
         ok: true,
-        event: {
-          id: event.id,
-          name: event.name,
-          is_live: !!event.is_live_broadcasting,
-          instagram_live_url: event.instagram_live_url,
-        },
+        event: event
+          ? {
+              id: event.id,
+              name: event.name,
+              is_live: !!event.is_live_broadcasting,
+              instagram_live_url: event.instagram_live_url,
+            }
+          : null,
       });
     }
 
     if (action === "enter") {
-      const event = await loadEventBySlug(body.slug);
-      if (!event || event.operation_mode !== "member_area") return json({ ok: false, error: "not_found" }, 404);
+      const event = await resolveCurrentEvent();
 
       const phone = normalizePhone(body.phone);
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      const { customer } = await loadOrder(event.id, phone);
+      const { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName) return json({ ok: true, needsName: true });
@@ -230,26 +287,29 @@ Deno.serve(async (req) => {
         await supabase.from("customers").update({ instagram_handle: name }).eq("id", customer.id);
       }
 
-      const { data: existingLead } = await supabase
-        .from("event_leads")
-        .select("id")
-        .eq("event_id", event.id)
-        .eq("phone", phone)
-        .maybeSingle();
-      if (!existingLead) {
-        await supabase.from("event_leads").insert({
-          event_id: event.id,
-          name,
-          phone,
-          phone_suffix: suffix8(phone),
-          source: "member_area",
-        });
+      if (event?.id) {
+        const { data: existingLead } = await supabase
+          .from("event_leads")
+          .select("id")
+          .eq("event_id", event.id)
+          .eq("phone", phone)
+          .maybeSingle();
+        if (!existingLead) {
+          await supabase.from("event_leads").insert({
+            event_id: event.id,
+            name,
+            phone,
+            phone_suffix: suffix8(phone),
+            source: "member_area",
+          });
+        }
       }
 
       const token = newToken();
       const { data: session } = await supabase
         .from("live_member_sessions")
-        .insert({ token, event_id: event.id, phone, name })
+        .insert({ token, event_id: event?.id || null, phone, name })
+
         .select()
         .single();
 
@@ -268,7 +328,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "confirm_order") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
       if (order.is_paid) return json(await buildState(session));
 
@@ -286,7 +346,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "reject_item") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
       if (order.is_paid) return json({ ok: false, error: "Pedido já pago" }, 400);
 
@@ -353,7 +413,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save_details") {
-      const { order } = await loadOrder(session.event_id, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) return json({ ok: false, error: "Nenhum pedido para vincular os dados" }, 400);
 
       const { data: reg } = await supabase

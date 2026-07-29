@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   CreditCard,
+  History,
   Loader2,
   Lock,
   MessageCircle,
@@ -38,9 +38,17 @@ interface MemberState {
     payment_window_expires_at: string | null;
     checkout_url: string;
   } | null;
+  history?: {
+    id: string;
+    event_name: string | null;
+    created_at: string;
+    is_paid: boolean;
+    total: number;
+    items: { title: string; variant?: string; quantity: number; price: number }[];
+  }[];
 }
 
-const TOKEN_KEY = (slug: string) => `live_member_token_${slug}`;
+const TOKEN_KEY = "live_member_token";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 async function callApi(payload: Record<string, unknown>) {
@@ -50,7 +58,6 @@ async function callApi(payload: Record<string, unknown>) {
 }
 
 export default function LiveMemberArea() {
-  const { slug = "" } = useParams();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [event, setEvent] = useState<{ id: string; name: string; is_live: boolean } | null>(null);
@@ -78,28 +85,28 @@ export default function LiveMemberArea() {
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
-      localStorage.setItem(TOKEN_KEY(slug), data.token);
+      localStorage.setItem(TOKEN_KEY, data.token);
       setStep("area");
       if (data.order && !data.order.confirmed_at && !data.order.is_paid) setConfirmOpen(true);
     },
-    [slug],
+    [],
   );
 
   // Bootstrap + sessão salva
   useEffect(() => {
     (async () => {
       try {
-        const boot = await callApi({ action: "bootstrap", slug });
+        const boot = await callApi({ action: "bootstrap" });
         if (!boot?.ok) {
           setNotFound(true);
           return;
         }
         setEvent(boot.event);
-        const token = localStorage.getItem(TOKEN_KEY(slug));
+        const token = localStorage.getItem(TOKEN_KEY);
         if (token) {
           const st = await callApi({ action: "state", token });
           if (st?.ok) applyState(st);
-          else localStorage.removeItem(TOKEN_KEY(slug));
+          else localStorage.removeItem(TOKEN_KEY);
         }
       } catch {
         setNotFound(true);
@@ -107,7 +114,7 @@ export default function LiveMemberArea() {
         setLoading(false);
       }
     })();
-  }, [slug, applyState]);
+  }, [applyState]);
 
   // Atualização em tempo quase-real do pedido (itens novos anotados na live)
   useEffect(() => {
@@ -144,7 +151,7 @@ export default function LiveMemberArea() {
   const enter = async (withName?: string) => {
     setBusy(true);
     try {
-      const res = await callApi({ action: "enter", slug, phone, name: withName || undefined });
+      const res = await callApi({ action: "enter", phone, name: withName || undefined });
       if (!res?.ok) {
         toast.error(res?.error || "Não foi possível entrar");
         return;
@@ -208,7 +215,7 @@ export default function LiveMemberArea() {
           AO VIVO
         </div>
       )}
-      <h1 className="text-xl font-bold px-6">{event?.name}</h1>
+      <h1 className="text-xl font-bold px-6">{event?.name || "Minha Área"}</h1>
     </div>
   );
 
@@ -374,6 +381,39 @@ export default function LiveMemberArea() {
             </>
           )}
         </section>
+
+        {/* Histórico de compras (todas as lives) */}
+        {Array.isArray(state?.history) && state!.history.length > 0 && (
+          <section className="rounded-2xl border-2 border-border p-4 mt-5 space-y-3">
+            <h2 className="font-bold text-base flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" /> Meus pedidos anteriores
+            </h2>
+            {state!.history.map((h) => (
+              <div key={h.id} className="rounded-xl bg-muted/40 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground truncate">
+                    {h.event_name || "Pedido"} ·{" "}
+                    {new Date(h.created_at).toLocaleDateString("pt-BR")}
+                  </p>
+                  <span
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      h.is_paid ? "bg-primary/15 text-primary" : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {h.is_paid ? "PAGO" : "EM ABERTO"}
+                  </span>
+                </div>
+                {h.items.map((it, i) => (
+                  <p key={i} className="text-sm">
+                    {it.quantity}x {it.title}
+                    {it.variant ? ` — ${it.variant}` : ""}
+                  </p>
+                ))}
+                <p className="text-sm font-bold">{brl(h.total)}</p>
+              </div>
+            ))}
+          </section>
+        )}
 
         {/* Meus dados */}
         <section className="rounded-2xl border-2 border-border p-4 mt-5 space-y-3">
