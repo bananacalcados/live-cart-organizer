@@ -5271,11 +5271,13 @@ export type Database = {
           live_broadcast_started_at: string | null
           live_url_updated_at: string | null
           manual_pos_routing: boolean
+          member_area_slug: string | null
           meta_template_body_variables: Json | null
           meta_template_header_variable: string | null
           meta_template_language: string | null
           meta_template_name: string | null
           name: string
+          operation_mode: string
           setup_completed: boolean
           start_date: string | null
           store_ids: string[] | null
@@ -5312,11 +5314,13 @@ export type Database = {
           live_broadcast_started_at?: string | null
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
+          member_area_slug?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
           meta_template_name?: string | null
           name: string
+          operation_mode?: string
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -5353,11 +5357,13 @@ export type Database = {
           live_broadcast_started_at?: string | null
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
+          member_area_slug?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
           meta_template_name?: string | null
           name?: string
+          operation_mode?: string
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -8922,6 +8928,50 @@ export type Database = {
           },
         ]
       }
+      live_member_sessions: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          expires_at: string
+          id: string
+          last_seen_at: string
+          name: string | null
+          otp_verified_until: string | null
+          phone: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          expires_at?: string
+          id?: string
+          last_seen_at?: string
+          name?: string | null
+          otp_verified_until?: string | null
+          phone: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          expires_at?: string
+          id?: string
+          last_seen_at?: string
+          name?: string | null
+          otp_verified_until?: string | null
+          phone?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_member_sessions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_phone_verifications: {
         Row: {
           code: string
@@ -10877,6 +10927,7 @@ export type Database = {
           coupon_code: string | null
           created_at: string
           custom_shipping_cost: number | null
+          customer_confirmed_at: string | null
           customer_id: string
           customer_unified_id: string | null
           delivery_method: string | null
@@ -10910,6 +10961,7 @@ export type Database = {
           payment_confirmed_source: string | null
           payment_method_label: string | null
           payment_on_delivery: boolean
+          payment_window_expires_at: string | null
           pickup_store_id: string | null
           pos_sale_id: string | null
           products: Json
@@ -10933,6 +10985,7 @@ export type Database = {
           coupon_code?: string | null
           created_at?: string
           custom_shipping_cost?: number | null
+          customer_confirmed_at?: string | null
           customer_id: string
           customer_unified_id?: string | null
           delivery_method?: string | null
@@ -10966,6 +11019,7 @@ export type Database = {
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean
+          payment_window_expires_at?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
@@ -10989,6 +11043,7 @@ export type Database = {
           coupon_code?: string | null
           created_at?: string
           custom_shipping_cost?: number | null
+          customer_confirmed_at?: string | null
           customer_id?: string
           customer_unified_id?: string | null
           delivery_method?: string | null
@@ -11022,6 +11077,7 @@ export type Database = {
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean
+          payment_window_expires_at?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
@@ -20124,6 +20180,7 @@ export type Database = {
         Args: { p_items: Json; p_sale_id: string }
         Returns: Json
       }
+      expire_live_payment_windows: { Args: never; Returns: number }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }

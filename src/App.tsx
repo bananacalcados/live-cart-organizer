@@ -53,6 +53,7 @@ const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
 const EventLandingView = lazy(() => import("./pages/public/EventLandingView"));
 const EventTypebotView = lazy(() => import("./pages/public/EventTypebotView"));
 const EventCaptureBuilder = lazy(() => import("./pages/events/EventCaptureBuilder"));
+const LiveMemberArea = lazy(() => import("./pages/LiveMemberArea"));
 
 const Companies = lazy(() => import("./pages/admin/Companies"));
 const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
@@ -104,7 +105,9 @@ const App = () => (
               <Route path="/r/:token" element={<ReviewReferralPage />} />
               <Route path="/live/:slug" element={<EventLandingView />} />
               <Route path="/typebot/:slug" element={<EventTypebotView />} />
+              <Route path="/minha-area/:slug" element={<LiveMemberArea />} />
               <Route path="/events/:eventId/capture" element={<ProtectedRoute requiredModule="events"><EventCaptureBuilder /></ProtectedRoute>} />
+
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />

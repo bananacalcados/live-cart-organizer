@@ -304,3 +304,6 @@ verify_jwt = false
 
 [functions.event-order-route-to-pos]
 verify_jwt = false
+
+[functions.live-member-area]
+verify_jwt = false

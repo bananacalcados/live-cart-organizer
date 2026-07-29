@@ -84,6 +84,8 @@ const Events = () => {
   const [shippingCost, setShippingCost] = useState("");
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
+  const [operationMode, setOperationMode] = useState<string>("manual");
+  const [memberAreaSlug, setMemberAreaSlug] = useState<string>("");
   const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
   const [channelPreferences, setChannelPreferences] = useState<string[]>(["whatsapp"]);
   const [automationEnabled, setAutomationEnabled] = useState<boolean>(true);
@@ -332,6 +334,8 @@ const Events = () => {
     setShippingCost("");
     setSelectedWhatsAppId("");
     setChannel("site");
+    setOperationMode("manual");
+    setMemberAreaSlug("");
     setChannelPreference("whatsapp");
     setChannelPreferences(["whatsapp"]);
     setAutomationEnabled(true);
@@ -356,6 +360,8 @@ const Events = () => {
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
+    setOperationMode((event as any).operation_mode || "manual");
+    setMemberAreaSlug((event as any).member_area_slug || "");
     const singular = (event as any).channel_preference || "whatsapp";
     setChannelPreference(singular);
     const prefsArr = ((event as any).channel_preferences as string[]) || [];
