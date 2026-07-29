@@ -226,6 +226,10 @@ interface ChargeRequest {
   mpDeviceId?: string;
   mpPaymentMethodId?: string;
   mpIssuerId?: string;
+  /** Tipo do meio tokenizado (credit_card | debit_card) */
+  mpPaymentTypeId?: string;
+  /** Função escolhida pelo cliente no checkout. "debit" força Mercado Pago 1x, sem cascata. */
+  paymentMode?: "credit" | "debit";
   paymentAttemptId?: string;
 }
 
@@ -255,6 +259,7 @@ async function chargeMercadoPago(
   // Enviar um valor já inflado faria o cliente pagar juros sobre juros.
   const amount = Math.round(params.baseAmountCents ?? params.totalAmountCents) / 100;
 
+  const isDebit = params.paymentMode === "debit" || params.mpPaymentTypeId === "debit_card";
   const nameParts = (params.customer.name || "Cliente").trim().split(/\s+/);
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || ".";
@@ -270,7 +275,7 @@ async function chargeMercadoPago(
     transaction_amount: Number(amount.toFixed(2)),
     token: params.mpCardToken,
     description: `Pedido #${String(params.orderId).substring(0, 8)}`,
-    installments: params.installments || 1,
+    installments: isDebit ? 1 : (params.installments || 1),
     payment_method_id: params.mpPaymentMethodId,
     payer,
   };
@@ -294,7 +299,7 @@ async function chargeMercadoPago(
 
   // Diagnóstico: registra se a conta MP realmente cobre "sem juros" nessa quantidade
   // de parcelas. Se não cobrir, o cliente será cobrado com juros pelo próprio MP.
-  const nInst = Number(params.installments || 1);
+  const nInst = isDebit ? 1 : Number(params.installments || 1);
   if (nInst > 1) {
     try {
       const q = new URLSearchParams({
