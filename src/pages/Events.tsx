@@ -297,6 +297,7 @@ const Events = () => {
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
+        ...modeFields,
         channel_preference: primaryChannel,
         channel_preferences: channelPreferences,
         automation_enabled: automationEnabled,
@@ -315,6 +316,7 @@ const Events = () => {
       if (eventId) {
         const updates: any = {
           channel,
+          ...modeFields,
           default_store_id: defaultStoreId,
           store_ids: storeIds,
           manual_pos_routing: manualPosRouting,
