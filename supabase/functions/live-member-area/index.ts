@@ -356,14 +356,24 @@ Deno.serve(async (req) => {
               id: order.id,
               stage: order.stage,
               products: order.products || [],
+              subtotal: Math.round(orderSubtotal(order) * 100) / 100,
               shipping_cost: Number(order.shipping_cost || 0),
-              total: orderTotal(order),
+              free_shipping: !!order.free_shipping,
+              total: Math.round(orderTotal(order) * 100) / 100,
+              pix_discount_percent: pixPct,
+              pix_discount: pixPct
+                ? Math.round(orderTotal(order) * (pixPct / 100) * 100) / 100
+                : 0,
+              pix_total: pixPct
+                ? Math.round(orderTotal(order) * (1 - pixPct / 100) * 100) / 100
+                : Math.round(orderTotal(order) * 100) / 100,
               is_paid: !!order.is_paid,
               confirmed_at: order.customer_confirmed_at,
               payment_window_expires_at: order.payment_window_expires_at,
               checkout_url: `/checkout/order/${order.id}`,
             }
           : null,
+
         history,
       };
     }
