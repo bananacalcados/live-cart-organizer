@@ -99,6 +99,33 @@ Deno.serve(async (req) => {
       return data;
     }
 
+    /**
+     * Ponto 5 — Lead → CRM: garante o contato em customers_unified (telefone E.164,
+     * dedupe por CPF/telefone/e-mail/IG). Nunca quebra o fluxo em caso de erro.
+     */
+    async function upsertUnified(args: {
+      phone: string;
+      name?: string | null;
+      cpf?: string | null;
+      email?: string | null;
+    }) {
+      try {
+        const rawName = String(args.name || "").trim();
+        const isHandle = rawName.startsWith("@");
+        const { error } = await supabase.rpc("find_or_create_unified_customer", {
+          p_phone: args.phone,
+          p_name: rawName ? rawName.replace(/^@/, "") : null,
+          p_instagram: isHandle ? rawName.replace(/^@/, "") : null,
+          p_cpf: args.cpf ? String(args.cpf).replace(/\D/g, "").slice(0, 11) || null : null,
+          p_email: args.email ? String(args.email).trim().toLowerCase() : null,
+          p_source: "member_area",
+        });
+        if (error) console.error("[live-member-area] unified upsert", error.message);
+      } catch (e) {
+        console.error("[live-member-area] unified upsert", e);
+      }
+    }
+
     async function loadCustomers(phone: string) {
       const suf = suffix8(phone);
       const { data } = await supabase
@@ -108,6 +135,7 @@ Deno.serve(async (req) => {
         .ilike("whatsapp", `%${suf}`);
       return data || [];
     }
+
 
     /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
     async function loadOrder(eventId: string | null, phone: string) {
