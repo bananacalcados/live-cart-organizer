@@ -350,7 +350,11 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Ponto 5 — lead entra no CRM unificado (RFM/disparos)
+      await upsertUnified({ phone, name });
+
       const token = newToken();
+
       const { data: session } = await supabase
         .from("live_member_sessions")
         .insert({ token, event_id: event?.id || null, phone, name })
