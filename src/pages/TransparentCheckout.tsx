@@ -1417,6 +1417,14 @@ function CardPaymentForm({
         return;
       }
 
+      // 3DS (débito): o banco exige autenticação. Abrimos o desafio e ficamos no polling.
+      if (data?.threeDsUrl) {
+        window.open(data.threeDsUrl, "_blank", "noopener");
+        toast.info("Conclua a autenticação do seu banco para finalizar o pagamento.");
+        pollPaymentResult(attemptId);
+        return;
+      }
+
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
@@ -1457,7 +1465,7 @@ function CardPaymentForm({
           <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
           <h3 className="font-bold text-lg text-amber-800 dark:text-amber-300">Processando seu pagamento...</h3>
           <p className="text-sm text-amber-700 dark:text-amber-400">
-            Estamos verificando com a operadora do seu cartão de crédito.
+            Estamos verificando com a operadora do seu cartão de {isDebit ? "débito" : "crédito"}.
           </p>
           <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
             ⚠️ Não feche esta página. Isso pode levar alguns segundos.
