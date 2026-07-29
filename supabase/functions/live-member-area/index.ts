@@ -557,6 +557,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "verify_otp") {
+      // Anti-força bruta: 8 tentativas por telefone a cada 10 min.
+      if (!(await allow(`otpv:${session.phone}`, 8, 600))) {
+        return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+      }
       const code = String(body.code || "").replace(/\D/g, "");
       const { data: rec } = await supabase
         .from("live_phone_verifications")
