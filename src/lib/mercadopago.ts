@@ -81,26 +81,85 @@ export interface MpTokenResult {
   mpPaymentMethodId: string;
   mpIssuerId?: string;
   mpDeviceId?: string;
+  /** Tipo real do meio escolhido: credit_card | debit_card */
+  mpPaymentTypeId?: string;
+}
+
+export type CardMode = "credit" | "debit";
+
+export interface CardCapabilities {
+  bin: string;
+  hasCredit: boolean;
+  hasDebit: boolean;
+  /** payment_method_id por função (ex.: visa / debvisa) */
+  creditMethodId?: string;
+  debitMethodId?: string;
+}
+
+const capabilitiesCache = new Map<string, CardCapabilities>();
+
+/**
+ * Consulta TODOS os meios de pagamento do BIN e classifica em crédito/débito.
+ * Retorna null quando o SDK não está disponível ou o BIN é desconhecido.
+ */
+export async function getCardCapabilities(binRaw: string): Promise<CardCapabilities | null> {
+  const bin = String(binRaw || "").replace(/\D/g, "").slice(0, 8);
+  if (bin.length < 6) return null;
+  const cached = capabilitiesCache.get(bin);
+  if (cached) return cached;
+
+  try {
+    const ready = await initMercadoPago();
+    if (!ready || !mpInstance) return null;
+
+    const pm = await mpInstance.getPaymentMethods({ bin });
+    const results: any[] = pm?.results || [];
+    if (!results.length) return null;
+
+    const credit = results.find((r) => r?.payment_type_id === "credit_card");
+    const debit = results.find((r) => r?.payment_type_id === "debit_card");
+
+    const caps: CardCapabilities = {
+      bin,
+      hasCredit: !!credit,
+      hasDebit: !!debit,
+      creditMethodId: credit?.id,
+      debitMethodId: debit?.id,
+    };
+    capabilitiesCache.set(bin, caps);
+    return caps;
+  } catch (e) {
+    console.warn("[MP] getCardCapabilities falhou:", e);
+    return null;
+  }
 }
 
 /**
  * Tokeniza o cartão no navegador. Retorna null em qualquer falha
- * (o checkout então cai no fluxo Pagar.me com o cartão cru).
+ * (no crédito o checkout cai no fluxo Pagar.me com o cartão cru;
+ *  no débito a falha deve ser tratada como erro pelo chamador).
  */
-export async function tokenizeCardMP(card: MpCardInput): Promise<MpTokenResult | null> {
+export async function tokenizeCardMP(card: MpCardInput, mode: CardMode = "credit"): Promise<MpTokenResult | null> {
   try {
     const ready = await initMercadoPago();
     if (!ready || !mpInstance) return null;
 
     const bin = card.number.replace(/\D/g, "").slice(0, 8);
 
-    // Descobre payment_method_id (visa, master, elo, ...) e issuer pelo BIN
+    // Descobre payment_method_id respeitando a função escolhida (crédito x débito)
     let paymentMethodId: string | undefined;
+    let paymentTypeId: string | undefined;
     let issuerId: string | undefined;
     try {
       const pm = await mpInstance.getPaymentMethods({ bin });
-      paymentMethodId = pm?.results?.[0]?.id;
-      const issuerFromPm = pm?.results?.[0]?.issuer?.id;
+      const results: any[] = pm?.results || [];
+      const wantedType = mode === "debit" ? "debit_card" : "credit_card";
+      const match = results.find((r) => r?.payment_type_id === wantedType)
+        // fallback: se não achou o tipo pedido, usa o primeiro (mantém comportamento antigo no crédito)
+        || (mode === "credit" ? results[0] : undefined);
+      paymentMethodId = match?.id;
+      paymentTypeId = match?.payment_type_id;
+      const issuerFromPm = match?.issuer?.id;
       if (issuerFromPm) issuerId = String(issuerFromPm);
     } catch (e) {
       console.warn("[MP] getPaymentMethods falhou:", e);
@@ -129,11 +188,13 @@ export async function tokenizeCardMP(card: MpCardInput): Promise<MpTokenResult |
     return {
       mpCardToken: tokenResp.id,
       mpPaymentMethodId: paymentMethodId,
+      mpPaymentTypeId: paymentTypeId,
       mpIssuerId: issuerId,
       mpDeviceId: window.MP_DEVICE_SESSION_ID,
     };
   } catch (e) {
-    console.warn("[MP] tokenizeCardMP falhou (segue no Pagar.me):", e);
+    console.warn("[MP] tokenizeCardMP falhou:", e);
     return null;
   }
 }
+
