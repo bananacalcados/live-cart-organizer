@@ -65,6 +65,32 @@ export const STAGES: Stage[] = [
   { id: 'cancelled', title: 'Cancelado', color: 'bg-stage-cancelled' },
 ];
 
+// Colunas usadas em lives no modo "Área de Clientes" (a própria cliente confirma e paga).
+export const MEMBER_AREA_STAGE_IDS: OrderStage[] = [
+  'pre_sale',
+  'awaiting_confirmation',
+  'new',
+  'awaiting_payment',
+  'paid',
+  'completed',
+  'cancelled',
+];
+
+const MEMBER_AREA_TITLES: Partial<Record<OrderStage, string>> = {
+  pre_sale: 'Montando',
+  new: 'Novo Pedido (confirmado)',
+  completed: 'Expedição',
+};
+
+export const getStagesForMode = (operationMode?: string | null): Stage[] => {
+  if (operationMode !== 'member_area') return STAGES;
+  return MEMBER_AREA_STAGE_IDS.map((id) => {
+    const base = STAGES.find((s) => s.id === id)!;
+    return { ...base, title: MEMBER_AREA_TITLES[id] || base.title };
+  });
+};
+
+
 // Check if an order has all required fields filled
 export const isOrderComplete = (order: { products: Array<{ title: string; variant: string }>; customer?: { instagram_handle?: string; whatsapp?: string } | null }): boolean => {
   // Must have customer name (instagram_handle)

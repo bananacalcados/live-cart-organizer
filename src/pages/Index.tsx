@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
 import { Header } from "@/components/Header";
 import { KanbanBoardDb } from "@/components/KanbanBoardDb";
+import { getStagesForMode } from "@/types/order";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { StatsBar } from "@/components/StatsBar";
 
@@ -252,7 +253,7 @@ const Index = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
+                  <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} stages={getStagesForMode((currentEvent as any)?.operation_mode)} />
                 </div>
               )}
             </TabsContent>

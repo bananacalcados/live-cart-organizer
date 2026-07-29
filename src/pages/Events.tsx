@@ -84,6 +84,8 @@ const Events = () => {
   const [shippingCost, setShippingCost] = useState("");
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
+  const [operationMode, setOperationMode] = useState<string>("manual");
+  const [memberAreaSlug, setMemberAreaSlug] = useState<string>("");
   const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
   const [channelPreferences, setChannelPreferences] = useState<string[]>(["whatsapp"]);
   const [automationEnabled, setAutomationEnabled] = useState<boolean>(true);
@@ -240,6 +242,20 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
+    // Área de Clientes: slug público único da live (link fixado no Instagram)
+    const slugify = (v: string) =>
+      v
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+    const modeFields = {
+      operation_mode: operationMode,
+      member_area_slug:
+        operationMode === "member_area" ? slugify(memberAreaSlug || name) || null : null,
+    };
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
     const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
     const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
@@ -281,6 +297,7 @@ const Events = () => {
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
+        ...modeFields,
         channel_preference: primaryChannel,
         channel_preferences: channelPreferences,
         automation_enabled: automationEnabled,
@@ -299,6 +316,7 @@ const Events = () => {
       if (eventId) {
         const updates: any = {
           channel,
+          ...modeFields,
           default_store_id: defaultStoreId,
           store_ids: storeIds,
           manual_pos_routing: manualPosRouting,
@@ -332,6 +350,8 @@ const Events = () => {
     setShippingCost("");
     setSelectedWhatsAppId("");
     setChannel("site");
+    setOperationMode("manual");
+    setMemberAreaSlug("");
     setChannelPreference("whatsapp");
     setChannelPreferences(["whatsapp"]);
     setAutomationEnabled(true);
@@ -356,6 +376,8 @@ const Events = () => {
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
+    setOperationMode((event as any).operation_mode || "manual");
+    setMemberAreaSlug((event as any).member_area_slug || "");
     const singular = (event as any).channel_preference || "whatsapp";
     setChannelPreference(singular);
     const prefsArr = ((event as any).channel_preferences as string[]) || [];
@@ -531,7 +553,64 @@ const Events = () => {
                       Defina quando a live vai acontecer (pode ser uma data futura). Para eventos de vários dias, preencha a data de fim — assim conseguimos medir a duração depois.
                     </p>
                   </div>
+                   {/* Modo de operação da live */}
+                   <div className="space-y-2">
+                     <Label>Como essa live vai funcionar? *</Label>
+                     <div className="grid grid-cols-2 gap-2">
+                       <button
+                         type="button"
+                         onClick={() => setOperationMode("manual")}
+                         className={`rounded-lg border-2 p-3 text-left transition ${
+                           operationMode === "manual"
+                             ? "border-primary bg-primary/10"
+                             : "border-border hover:border-primary/40"
+                         }`}
+                       >
+                         <p className="font-semibold text-sm">Manual</p>
+                         <p className="text-xs text-muted-foreground">
+                           Do jeito de hoje: a equipe monta e envia o link de pagamento.
+                         </p>
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setOperationMode("member_area")}
+                         className={`rounded-lg border-2 p-3 text-left transition ${
+                           operationMode === "member_area"
+                             ? "border-primary bg-primary/10"
+                             : "border-border hover:border-primary/40"
+                         }`}
+                       >
+                         <p className="font-semibold text-sm">Área de Clientes</p>
+                         <p className="text-xs text-muted-foreground">
+                           Link único na live: a cliente confirma e paga sozinha.
+                         </p>
+                       </button>
+                     </div>
+                     {operationMode === "member_area" && (
+                       <div className="space-y-1 pt-1">
+                         <Label htmlFor="memberAreaSlug" className="text-xs text-muted-foreground">
+                           Link público da área
+                         </Label>
+                         <Input
+                           id="memberAreaSlug"
+                           placeholder="live-julho-2"
+                           value={memberAreaSlug}
+                           onChange={(e) => setMemberAreaSlug(e.target.value)}
+                         />
+                         <p className="text-xs text-muted-foreground break-all">
+                           checkout.bananacalcados.com.br/minha-area/
+                           {(memberAreaSlug || name || "sua-live")
+                             .normalize("NFD")
+                             .replace(/[\u0300-\u036f]/g, "")
+                             .toLowerCase()
+                             .replace(/[^a-z0-9]+/g, "-")
+                             .replace(/^-+|-+$/g, "")}
+                         </p>
+                       </div>
+                     )}
+                   </div>
                    {/* Canal do evento — define onde o pedido é roteado */}
+
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
                        <Store className="h-4 w-4" />
