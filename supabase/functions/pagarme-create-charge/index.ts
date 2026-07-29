@@ -56,6 +56,8 @@ interface ChargeResult {
   isSandbox?: boolean;
   stopCascade?: boolean;
   declineCategory?: DeclineCategory;
+  /** URL de autenticação 3DS (débito). Cliente precisa concluir o desafio do banco. */
+  threeDsUrl?: string;
 }
 
 function normalizeFailureCode(value: unknown) {
@@ -363,6 +365,23 @@ async function chargeMercadoPago(
 
     if (data.status === "approved") {
       return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, isSandbox: mpAccount.is_sandbox };
+    }
+    // 3DS: alguns cartões de débito exigem autenticação do banco.
+    const threeDsUrl = data?.three_ds_info?.external_resource_url
+      || data?.transaction_details?.external_resource_url
+      || null;
+    if (data.status === "pending" && (data.status_detail === "pending_challenge" || threeDsUrl)) {
+      return {
+        success: false,
+        pending: true,
+        stopCascade: true,
+        gateway: "mercadopago",
+        transactionId: String(data.id),
+        mpAccountId: mpAccount.account_id,
+        threeDsUrl: threeDsUrl || undefined,
+        error: "Autenticação do banco necessária (3DS).",
+        isSandbox: mpAccount.is_sandbox,
+      };
     }
     if (data.status === "in_process" || data.status === "pending") {
       return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
@@ -1134,6 +1153,20 @@ serve(async (req) => {
     let mpAccountIdForOrder: string | null = null;
     let result: ChargeResult;
 
+    // DÉBITO: só Mercado Pago, sempre 1x. Nenhum fallback com cartão cru
+    // (Pagar.me/VINDI/AppMax tratam o plástico como crédito → recusa ou cobrança errada).
+    const isDebitCharge = chargeParams.paymentMode === "debit" || chargeParams.mpPaymentTypeId === "debit_card";
+    if (isDebitCharge) {
+      chargeParams.installments = 1;
+      params.installments = 1;
+      if (!chargeParams.mpCardToken) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Não foi possível validar o cartão de débito. Recarregue a página e tente novamente, ou pague no Pix." }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
       result = await chargeMercadoPago(chargeParams, products, supabase);
@@ -1156,12 +1189,12 @@ serve(async (req) => {
 
     // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    if (!result.success && !result.isSandbox && !result.stopCascade) {
+    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
       result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp);
     }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
-    if (!result.success && !result.isSandbox && !result.stopCascade) {
+    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
       if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
       console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
 
@@ -1182,7 +1215,7 @@ serve(async (req) => {
     }
 
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
-    if (!result.success && !result.isSandbox && !result.stopCascade) {
+    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
@@ -1255,12 +1288,14 @@ serve(async (req) => {
       }
 
 
-      const paymentLabel = normalizeGatewayPaymentLabel({
-        gateway: result.gateway,
-        paymentTypeId: result.gateway === "mercadopago" ? "credit_card" : undefined,
-        paymentMethodId: result.gateway === "mercadopago" ? "credit_card" : undefined,
-        installments: params.installments,
-      }) || (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito");
+      const paymentLabel = isDebitCharge
+        ? "Cartão de Débito"
+        : (normalizeGatewayPaymentLabel({
+            gateway: result.gateway,
+            paymentTypeId: result.gateway === "mercadopago" ? "credit_card" : undefined,
+            paymentMethodId: result.gateway === "mercadopago" ? "credit_card" : undefined,
+            installments: params.installments,
+          }) || (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito"));
       const paidAt = new Date().toISOString();
 
       if (orderSource === "orders") {
