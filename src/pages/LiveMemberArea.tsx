@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   CreditCard,
+  History,
   Loader2,
   Lock,
   MessageCircle,
@@ -37,6 +38,14 @@ interface MemberState {
     payment_window_expires_at: string | null;
     checkout_url: string;
   } | null;
+  history?: {
+    id: string;
+    event_name: string | null;
+    created_at: string;
+    is_paid: boolean;
+    total: number;
+    items: { title: string; variant?: string; quantity: number; price: number }[];
+  }[];
 }
 
 const TOKEN_KEY = "live_member_token";
