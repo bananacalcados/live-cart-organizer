@@ -66,15 +66,14 @@ Deno.serve(async (req) => {
     // ---------- helpers ----------
     /**
      * Link ÚNICO e global (bio do Instagram): não existe slug por live.
-     * O evento "corrente" é a live em transmissão; se nenhuma estiver no ar,
-     * o evento mais recente em modo Área de Clientes. Pode ser null (sem live).
+     * Vale para QUALQUER evento (manual ou área de clientes).
+     * Prioriza a live no ar; senão, o evento ativo mais recente.
      */
     async function resolveCurrentEvent() {
       const base = () =>
         supabase
           .from("events")
           .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url")
-          .eq("operation_mode", "member_area")
           .neq("is_active", false);
 
       const { data: live } = await base()
@@ -86,6 +85,7 @@ Deno.serve(async (req) => {
       const { data: latest } = await base().order("created_at", { ascending: false }).limit(1);
       return latest?.[0] || null;
     }
+
 
     async function loadSession(token: string) {
       if (!token) return null;
