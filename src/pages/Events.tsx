@@ -242,6 +242,20 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
+    // Área de Clientes: slug público único da live (link fixado no Instagram)
+    const slugify = (v: string) =>
+      v
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+    const modeFields = {
+      operation_mode: operationMode,
+      member_area_slug:
+        operationMode === "member_area" ? slugify(memberAreaSlug || name) || null : null,
+    };
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
     const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
     const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
