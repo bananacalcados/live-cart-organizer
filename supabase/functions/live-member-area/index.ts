@@ -180,12 +180,11 @@ Deno.serve(async (req) => {
     }
 
     async function buildState(session: any) {
-      const { order, customer } = await loadOrder(session.event_id, session.phone);
-      const { data: event } = await supabase
-        .from("events")
-        .select("id, name, is_live_broadcasting, instagram_live_url")
-        .eq("id", session.event_id)
-        .maybeSingle();
+      // Sempre resolve a live corrente (link único global), não a live da sessão.
+      const event = await resolveCurrentEvent();
+      const { order, customer } = await loadOrder(event?.id || null, session.phone);
+      const history = await loadHistory(session.phone, order?.id || null);
+
 
       let reg: any = null;
       if (order?.id) {
