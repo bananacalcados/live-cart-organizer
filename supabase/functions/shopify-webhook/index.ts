@@ -144,9 +144,82 @@ Deno.serve(async (req) => {
     const discount = Number(o.total_discounts || 0);
     const shippingCost = Number(o.total_shipping_price_set?.shop_money?.amount || 0);
     const items = (o.line_items || []) as any[];
-    const customerName = o.customer ? `${o.customer.first_name || ""} ${o.customer.last_name || ""}`.trim() : null;
-    const customerPhone = o.phone || o.customer?.phone || null;
     const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
+
+    // Alguns webhooks chegam sem endereço/atributos completos. Nesse caso buscamos
+    // o pedido completo na Admin API para não perder CPF/endereço.
+    let full = o;
+    if (!o.shipping_address && !o.billing_address) {
+      const dom = Deno.env.get("SHOPIFY_STORE_DOMAIN");
+      const tok = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+      if (dom && tok) {
+        try {
+          const rr = await fetch(
+            `https://${dom}/admin/api/2024-01/orders/${externalId}.json?fields=id,name,customer,phone,email,shipping_address,billing_address,note_attributes`,
+            { headers: { "X-Shopify-Access-Token": tok, "Content-Type": "application/json" } },
+          );
+          if (rr.ok) {
+            const j = await rr.json();
+            if (j.order) full = { ...o, ...j.order };
+          }
+        } catch (e) {
+          console.warn("shopify order refetch failed", (e as any)?.message);
+        }
+      }
+    }
+
+    const addr = full.shipping_address || full.billing_address || {};
+    const notesAttrs = full.note_attributes || [];
+    const customerName = full.customer
+      ? `${full.customer.first_name || ""} ${full.customer.last_name || ""}`.trim() || (addr.name || null)
+      : (addr.name || null);
+    const customerPhone = full.phone || full.customer?.phone || addr.phone || full.billing_address?.phone || null;
+    const customerEmail = (full.email || full.customer?.email || "").trim() || null;
+    const customerCpf = digits(findNoteAttr(notesAttrs, /cpf/i, /cnpj/i)) || null;
+    const customerCity = addr.city || null;
+    const customerState = addr.province_code || addr.province || null;
+    const customerCep = digits(addr.zip) || null;
+    const { street, number } = splitStreetNumber(addr.address1);
+    const custAddress = street;
+    const custNumber = number || findNoteAttr(notesAttrs, /n[uú]mero/i, /^num/i);
+    const custComplement = (addr.address2 || "").trim() || findNoteAttr(notesAttrs, /complement/i);
+    const custNeighborhood = findNoteAttr(notesAttrs, /bairro/i, /neighborhood/i) || (addr.company || "").trim() || null;
+    const phoneClean = digits(customerPhone);
+
+    // Vincula/cria o cliente no PDV (CPF > telefone)
+    let customerId: string | null = null;
+    if (customerCpf) {
+      const { data: ex } = await supabase.from("pos_customers").select("id").eq("cpf", customerCpf).maybeSingle();
+      if (ex) customerId = ex.id;
+    }
+    if (!customerId && phoneClean) {
+      const { data: ex } = await supabase.from("pos_customers").select("id").eq("whatsapp", phoneClean).maybeSingle();
+      if (ex) customerId = ex.id;
+    }
+    if (customerName || phoneClean || customerCpf) {
+      const custPayload: Record<string, any> = {
+        name: customerName,
+        whatsapp: phoneClean || null,
+        email: customerEmail,
+        address: custAddress || null,
+        address_number: custNumber || null,
+        complement: custComplement || null,
+        neighborhood: custNeighborhood || null,
+        city: customerCity,
+        state: customerState,
+        cep: customerCep,
+      };
+      if (customerCpf) custPayload.cpf = customerCpf;
+      const cleanCust = Object.fromEntries(
+        Object.entries(custPayload).filter(([, v]) => v !== null && v !== undefined && v !== ""),
+      );
+      if (customerId) {
+        await supabase.from("pos_customers").update(cleanCust).eq("id", customerId);
+      } else {
+        const { data: nc } = await supabase.from("pos_customers").insert(cleanCust).select("id").single();
+        customerId = nc?.id || null;
+      }
+    }
 
     const { data: sale, error } = await supabase
       .from("pos_sales")
@@ -160,8 +233,19 @@ Deno.serve(async (req) => {
         payment_gateway: "shopify",
         subtotal, discount, total,
         shipping_cost: shippingCost,
+        customer_id: customerId,
         customer_name: customerName,
         customer_phone: customerPhone,
+        customer_email: customerEmail,
+        customer_cpf: customerCpf,
+        customer_city: customerCity,
+        customer_state: customerState,
+        customer_cep: customerCep,
+        shipping_address: {
+          address: custAddress, address_number: custNumber, complement: custComplement,
+          neighborhood: custNeighborhood, city: customerCity, state: customerState,
+          cep: customerCep, name: customerName, phone: phoneClean || null,
+        },
         paid_at: o.created_at,
         created_at: o.created_at,
         notes: `Shopify ${o.name || ""}`.trim(),
