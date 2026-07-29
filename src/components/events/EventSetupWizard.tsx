@@ -270,6 +270,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.start_date = startDate || null;
       updates.end_date = endDate || null;
       updates.channel = channel;
+      updates.operation_mode = operationMode;
+      updates.member_area_slug =
+        operationMode === "member_area" ? slugify(memberAreaSlug || name) || null : null;
       const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
       updates.store_ids = isMulti
