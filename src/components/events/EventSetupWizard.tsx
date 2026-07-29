@@ -93,6 +93,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [channel, setChannel] = useState<string>("site");
+  const [operationMode, setOperationMode] = useState<string>("manual");
+  const [memberAreaSlug, setMemberAreaSlug] = useState("");
 
   // Frete
   const [shippingCost, setShippingCost] = useState("");
