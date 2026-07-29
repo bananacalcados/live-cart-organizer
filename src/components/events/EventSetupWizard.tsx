@@ -82,6 +82,14 @@ const toNum = (v: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+const slugify = (v: string) =>
+  (v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
 export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Props) {
   // Step state
   const [stepIndex, setStepIndex] = useState(0);
