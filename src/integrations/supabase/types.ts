@@ -8928,6 +8928,24 @@ export type Database = {
           },
         ]
       }
+      live_member_rate_limits: {
+        Row: {
+          hits: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          hits?: number
+          key: string
+          window_start?: string
+        }
+        Update: {
+          hits?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       live_member_sessions: {
         Row: {
           created_at: string
@@ -20765,6 +20783,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      live_member_rate_limit: {
+        Args: { _key: string; _limit: number; _window_seconds: number }
+        Returns: boolean
       }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
