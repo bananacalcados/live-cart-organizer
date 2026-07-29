@@ -386,6 +386,17 @@ export default function LiveMemberArea() {
         <section className="rounded-2xl border-2 border-border p-4 space-y-3">
           <h2 className="font-bold text-base flex items-center gap-2">
             <ShoppingBag className="h-5 w-5 text-primary" /> Meu pedido
+            <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+              {syncing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" /> atualizando
+                </>
+              ) : (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-primary animate-pulse" /> ao vivo
+                </>
+              )}
+            </span>
           </h2>
 
           {!order || order.products.length === 0 ? (
@@ -394,7 +405,8 @@ export default function LiveMemberArea() {
                 Você ainda não tem nenhum produto reservado.
               </p>
               <p className="text-muted-foreground text-xs">
-                Comente na live o produto e o tamanho que você quer — a gente reserva pra você aqui.
+                Comente na live o produto e o tamanho que você quer — assim que a gente anotar, aparece
+                aqui automaticamente.
               </p>
             </div>
           ) : (
