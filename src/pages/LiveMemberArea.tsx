@@ -373,6 +373,39 @@ export default function LiveMemberArea() {
           )}
         </section>
 
+        {/* Histórico de compras (todas as lives) */}
+        {Array.isArray(state?.history) && state!.history.length > 0 && (
+          <section className="rounded-2xl border-2 border-border p-4 mt-5 space-y-3">
+            <h2 className="font-bold text-base flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" /> Meus pedidos anteriores
+            </h2>
+            {state!.history.map((h) => (
+              <div key={h.id} className="rounded-xl bg-muted/40 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground truncate">
+                    {h.event_name || "Pedido"} ·{" "}
+                    {new Date(h.created_at).toLocaleDateString("pt-BR")}
+                  </p>
+                  <span
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      h.is_paid ? "bg-primary/15 text-primary" : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {h.is_paid ? "PAGO" : "EM ABERTO"}
+                  </span>
+                </div>
+                {h.items.map((it, i) => (
+                  <p key={i} className="text-sm">
+                    {it.quantity}x {it.title}
+                    {it.variant ? ` — ${it.variant}` : ""}
+                  </p>
+                ))}
+                <p className="text-sm font-bold">{brl(h.total)}</p>
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* Meus dados */}
         <section className="rounded-2xl border-2 border-border p-4 mt-5 space-y-3">
           <h2 className="font-bold text-base flex items-center gap-2">
