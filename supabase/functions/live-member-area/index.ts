@@ -69,6 +69,31 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const action = String(body?.action || "");
+    const ip = clientIp(req);
+
+    /**
+     * Ponto 7 — anti-abuso. Retorna true quando ainda está dentro da cota.
+     * Falha "aberta" (permite) se o banco não responder, para não travar clientes reais.
+     */
+    async function allow(key: string, limit: number, windowSeconds: number) {
+      const { data, error } = await supabase.rpc("live_member_rate_limit", {
+        _key: key,
+        _limit: limit,
+        _window_seconds: windowSeconds,
+      });
+      if (error) {
+        console.error("[rate-limit]", key, error.message);
+        return true;
+      }
+      return data !== false;
+    }
+
+    // Cota global por IP para qualquer ação (protege o endpoint público inteiro)
+    if (!(await allow(`ip:${ip}`, 120, 60))) {
+      return json({ ok: false, error: "Muitas requisições. Tente novamente em instantes." }, 429);
+    }
+
+
 
     // ---------- helpers ----------
     /**
