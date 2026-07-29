@@ -72,7 +72,12 @@ export default function LiveMemberArea() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const pollRef = useRef<number | null>(null);
+  /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
+  const confirmDismissedRef = useRef<string | null>(null);
+  /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
+  const itemsSigRef = useRef<string | null>(null);
 
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, "").slice(0, 11);
@@ -81,12 +86,21 @@ export default function LiveMemberArea() {
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   };
 
+  /** Assinatura simples dos itens do pedido pra detectar mudanças vindas da live. */
+  const itemsSignature = (order: any) =>
+    order
+      ? `${order.id}:${(order.products || [])
+          .map((p: any) => `${p.id ?? p.title}x${p.quantity ?? 1}`)
+          .join("|")}`
+      : "none";
+
   const applyState = useCallback(
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
       localStorage.setItem(TOKEN_KEY, data.token);
       setStep("area");
+      itemsSigRef.current = itemsSignature(data.order);
       if (data.order && !data.order.confirmed_at && !data.order.is_paid) setConfirmOpen(true);
     },
     [],
@@ -116,24 +130,81 @@ export default function LiveMemberArea() {
     })();
   }, [applyState]);
 
-  // Atualização em tempo quase-real do pedido (itens novos anotados na live)
-  useEffect(() => {
-    if (step !== "area" || !state?.token) return;
-    pollRef.current = window.setInterval(async () => {
+  /**
+   * Atualização em tempo quase-real: a vendedora anota o item na live e a cliente
+   * vê aparecer sozinho, sem recarregar. Polling curto (6s) enquanto a aba está
+   * visível, pausado quando ela sai da aba, e refresh imediato ao voltar.
+   */
+  const refreshState = useCallback(
+    async (token: string, silent = true) => {
       try {
-        const st = await callApi({ action: "state", token: state.token });
-        if (st?.ok) {
-          setState(st);
-          if (st.order && !st.order.confirmed_at && !st.order.is_paid) setConfirmOpen(true);
+        if (!silent) setSyncing(true);
+        const st = await callApi({ action: "state", token });
+        if (!st?.ok) return;
+        setState(st);
+
+        const sig = itemsSignature(st.order);
+        const had = itemsSigRef.current;
+        if (had && had !== sig && st.order?.products?.length) {
+          const prevCount = had.split("|").filter(Boolean).length;
+          const nextCount = sig.split("|").filter(Boolean).length;
+          if (had !== "none" && nextCount > prevCount) {
+            toast.success("Novo item adicionado ao seu pedido 🛍️");
+          }
+          // Itens mudaram → volta a pedir confirmação
+          confirmDismissedRef.current = null;
+        }
+        itemsSigRef.current = sig;
+
+        if (
+          st.order &&
+          !st.order.confirmed_at &&
+          !st.order.is_paid &&
+          st.order.products?.length &&
+          confirmDismissedRef.current !== st.order.id
+        ) {
+          setConfirmOpen(true);
         }
       } catch {
         /* silencioso */
+      } finally {
+        setSyncing(false);
       }
-    }, 15000);
-    return () => {
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const token = state?.token;
+    if (step !== "area" || !token) return;
+
+    const start = () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
+      pollRef.current = window.setInterval(() => refreshState(token), 6000);
     };
-  }, [step, state?.token]);
+    const stop = () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshState(token, false);
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
+  }, [step, state?.token, refreshState]);
+
 
   // Contador da janela de pagamento
   useEffect(() => {
@@ -315,6 +386,17 @@ export default function LiveMemberArea() {
         <section className="rounded-2xl border-2 border-border p-4 space-y-3">
           <h2 className="font-bold text-base flex items-center gap-2">
             <ShoppingBag className="h-5 w-5 text-primary" /> Meu pedido
+            <span className="ml-auto flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+              {syncing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" /> atualizando
+                </>
+              ) : (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-primary animate-pulse" /> ao vivo
+                </>
+              )}
+            </span>
           </h2>
 
           {!order || order.products.length === 0 ? (
@@ -323,7 +405,8 @@ export default function LiveMemberArea() {
                 Você ainda não tem nenhum produto reservado.
               </p>
               <p className="text-muted-foreground text-xs">
-                Comente na live o produto e o tamanho que você quer — a gente reserva pra você aqui.
+                Comente na live o produto e o tamanho que você quer — assim que a gente anotar, aparece
+                aqui automaticamente.
               </p>
             </div>
           ) : (
@@ -515,7 +598,14 @@ export default function LiveMemberArea() {
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRMAR"}
             </Button>
-            <Button variant="ghost" className="w-full h-12" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="ghost"
+              className="w-full h-12"
+              onClick={() => {
+                confirmDismissedRef.current = order.id;
+                setConfirmOpen(false);
+              }}
+            >
               Agora não
             </Button>
           </div>
