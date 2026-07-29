@@ -1,47 +1,59 @@
-## Objetivo
+# Débito no Checkout — 3 opções de pagamento
 
-No modal de criação de mensagens de Grupos VIP (Marketing > Grupos VIPs > campanha), permitir:
-1. Renomear o botão "Enviar Mensagem" para **Agendar**.
-2. Ao agendar, o modal **não fecha** e aparece uma confirmação.
-3. Novo botão **Agendar em Outra Campanha**, que lista as demais campanhas, permite escolher uma e confirmar o agendamento da MESMA mensagem, usando a data/horário escolhidos no próprio modal.
+Objetivo: adicionar **Débito** como terceira forma de pagamento no checkout transparente, ao lado de PIX (5% off) e Crédito, com detecção por BIN rodando em silêncio apenas como validação amigável.
 
-## Comportamento final
+Regras de produto:
+- Três botões: **PIX (5% off)** · **Crédito** · **Débito**
+- Débito é sempre 1x, sem seletor de parcelas, sem desconto PIX
+- BIN detecta as funções do cartão em silêncio. Se o cliente escolheu Crédito e o cartão só tem débito (ou vice-versa), aparece um aviso inline com botão "Pagar no débito" que troca a aba. Nada de modal bloqueante.
+- Cartão com as duas funções: respeita o botão escolhido, sem perguntar nada.
+- Débito **só** pelo Mercado Pago. O fallback para Pagar.me/AppMax com cartão cru fica bloqueado nesse caminho, para não gerar cobrança duplicada ou recusa confusa.
 
-```text
-[Cancelar]  [Enviar Agora]  [Agendar em Outra Campanha]  [Agendar]
+---
 
-Ao clicar em "Agendar em Outra Campanha":
-  → abre um painel dentro do modal com a lista das outras campanhas
-  → seleciono uma campanha (radio/lista clicável)
-  → aparece botão [CONFIRMAR]
-  → clico → toast "AGENDAMENTO CONFIRMADO"
-  → painel fecha, modal de mensagem continua aberto
-```
+## Etapa 1 — Camada de detecção (sem mudar UI)
+Ampliar `src/lib/mercadopago.ts`:
+- Nova função `getCardCapabilities(bin)` que retorna **todos** os métodos do BIN, classificando em `hasCredit` / `hasDebit` (hoje o código pega só `results[0]`, que é a raiz do problema).
+- `tokenizeCardMP` passa a aceitar `mode: "credit" | "debit"` e escolhe o `payment_method_id` correspondente em vez do primeiro da lista.
+- Cache simples por BIN para não consultar o SDK a cada tecla.
 
-- "Enviar Agora" continua igual (envia na hora e fecha o modal).
-- "Agendar" agenda na campanha atual, mostra toast "Agendamento confirmado" e **mantém o modal aberto** (mensagem preservada para reaproveitar em outra campanha).
-- Em modo de edição de mensagem existente, nada muda: continua "Salvar" e fechando o modal.
+**Avaliação da etapa:** typecheck limpo + teste manual em navegador digitando um BIN de crédito e um de débito, conferindo no console que `hasCredit`/`hasDebit` e o `payment_method_id` escolhido saem corretos. Nenhuma mudança visível no checkout ainda — o fluxo de crédito atual precisa continuar idêntico.
+
+## Etapa 2 — Backend: aceitar cobrança em débito
+- `pagarme-create-charge` (que hoje concentra a cascata) passa a aceitar `paymentMode: "debit"`, forçando o caminho Mercado Pago com `installments: 1` e o `payment_method_id` de débito vindo do token, sem cair para outros gateways.
+- Tratar a resposta de **3DS**: quando o MP devolver URL de autenticação, retornar essa URL para o front em vez de erro.
+- `_shared/payment-method-sync.ts`: rotular corretamente "Cartão de Débito" (o normalizador já lê `payment_type_id`, falta só garantir a gravação do rótulo e do gateway).
+
+**Avaliação da etapa:** deploy da function + chamada de teste direta com token de débito de sandbox, verificando status retornado, gravação em `orders`/`pos_sales` e rótulo "Cartão de Débito". Confirmar por uma chamada de crédito que o caminho antigo não regrediu.
+
+## Etapa 3 — UI: terceiro botão e formulário de débito
+Em `src/pages/TransparentCheckout.tsx`:
+- `selectedMethod` passa de `"pix" | "card"` para `"pix" | "credit" | "debit"`.
+- Terceiro botão **Débito** na lista de métodos, com o mesmo padrão visual dos existentes.
+- Formulário de débito reaproveita os campos do cartão, **sem** o `Select` de parcelas, exibindo "à vista" e o valor total.
+- Rótulos: PIX mantém "5% de desconto"; Débito mostra "à vista, sem desconto" para não gerar expectativa errada.
+
+**Avaliação da etapa:** screenshot dos três botões em viewport mobile e desktop; conferir que ao escolher Débito o seletor de parcelas some e o valor exibido é o total cheio, e que PIX/Crédito continuam com o comportamento e os valores de hoje.
+
+## Etapa 4 — Aviso cruzado por BIN
+- Ao completar 6–8 dígitos, comparar a escolha do cliente com as capacidades do cartão.
+- Divergência → alerta inline (não modal) acima do botão de pagar: *"Esse cartão é de débito — quer pagar no débito?"* com botão que troca a aba preservando os dados já digitados.
+- Cartão com as duas funções → nenhum aviso.
+- Enquanto o aviso de "só débito" estiver ativo na aba Crédito, o botão de pagar fica desabilitado, para o cliente não tomar recusa sem entender.
+
+**Avaliação da etapa:** teste em navegador com três BINs (só crédito, só débito, múltiplo) confirmando: aviso correto em cada caso, troca de aba preservando número/nome/validade, e ausência total de aviso no cartão múltiplo.
+
+## Etapa 5 — Rastreamento, 3DS e verificação final
+- Eventos de pixel/CAPI com `content_category: "debit_card"` e o `payment_method_label` correto no Purchase.
+- Fluxo de 3DS: redirecionar para o challenge do banco e voltar ao checkout tratando aprovado/recusado.
+- Varredura final: confirmar que PIX e Crédito seguem idênticos ao comportamento atual (valores, desconto de 5%, parcelas, cascata de gateways) e que o débito não aparece em links que não devem aceitá-lo.
+
+**Avaliação da etapa:** teste ponta a ponta das três formas de pagamento no preview, conferindo pedido gravado, rótulo do método, valor cobrado e ausência de erros no console e nos logs das functions.
+
+---
 
 ## Detalhes técnicos
-
-**1. `src/components/marketing/CampaignDetailPanel.tsx`**
-- Extrair a lógica de `handleAddMessage` para uma função `insertScheduledMessage(data, targetCampaignId, targetNumberId)` — mesma montagem de blocos/`message_group_id`/`block_order` que existe hoje, só parametrizando `campaign_id` e `whatsapp_number_id`. Nenhuma mudança de schema.
-- `handleAddMessage` passa a chamar essa função com a campanha atual (comportamento atual preservado).
-- Nova prop passada ao formulário:
-  - `otherCampaigns`: já existe o fetch `fetchOtherCampaignGroups` (`group_campaigns` com `.neq('id', campaignId)`); estender o select para incluir `whatsapp_number_id` e `is_active`, e reaproveitar a lista.
-  - `onScheduleToCampaign(data, campaignId)`: usa `insertScheduledMessage` com o `whatsapp_number_id` da campanha de destino (fallback: o número atual).
-- `fetchMessages()` só é chamado quando o destino for a campanha atual (evita re-render desnecessário).
-
-**2. `src/components/marketing/ScheduledMessageForm.tsx`**
-- Novas props opcionais: `otherCampaigns?: {id, name, whatsapp_number_id}[]` e `onScheduleToCampaign?: (data, campaignId) => Promise<void>`. Sendo opcionais, nenhum outro uso do componente quebra.
-- Rodapé:
-  - Botão principal: texto `Agendar` (mantém `Salvar` quando `editingMessage`).
-  - `handleSubmit` deixa de chamar `resetForm()`/`onOpenChange(false)` no fluxo de novo agendamento; em vez disso mostra `toast.success("Agendamento confirmado")` e mantém estado.
-  - Botão `Agendar em Outra Campanha` (visível só quando `!editingMessage` e há outras campanhas) alterna um painel inline acima do rodapé.
-- Painel de seleção: lista rolável das outras campanhas com destaque na selecionada; ao ter seleção, exibe `CONFIRMAR`. Ao confirmar: valida (mesma `validate()`), chama `onScheduleToCampaign(buildData(), campanhaEscolhida)`, exibe toast **"AGENDAMENTO CONFIRMADO"**, limpa a seleção e fecha só o painel.
-- Reaproveita a data/horário já preenchidos no modal (`buildData()`), como pedido.
-
-## Riscos e mitigação
-- Nenhuma alteração de banco, edge function ou fluxo de disparo — só inserção na tabela já existente `group_campaign_scheduled_messages` com outro `campaign_id`.
-- Props novas são opcionais, então o componente segue compatível.
-- O botão "Enviar Agora" e a edição de mensagens não são tocados.
+- Arquivos principais: `src/lib/mercadopago.ts`, `src/pages/TransparentCheckout.tsx`, `supabase/functions/pagarme-create-charge/index.ts`, `supabase/functions/_shared/payment-method-sync.ts`.
+- `StoreCheckout.tsx` e `Checkout.tsx` ficam de fora nesta rodada — podemos replicar depois que o débito estiver validado em produção no checkout transparente.
+- Sem migração de banco: os campos de método/gateway já existem.
+- Ponto de maior risco: 3DS. Se o teste em sandbox mostrar comportamento instável, isolo o débito atrás de uma flag de configuração para ligar/desligar sem novo deploy.
