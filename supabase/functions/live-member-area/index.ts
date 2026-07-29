@@ -533,7 +533,15 @@ Deno.serve(async (req) => {
     }
 
     if (action === "send_otp") {
+      // Anti-spam de OTP: 3 códigos por telefone a cada 10 min e 10 por IP/hora.
+      if (!(await allow(`otp:${session.phone}`, 3, 600))) {
+        return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
+      }
+      if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
+        return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
+      }
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/live-send-verification`, {
+
         method: "POST",
         headers: {
           "Content-Type": "application/json",
