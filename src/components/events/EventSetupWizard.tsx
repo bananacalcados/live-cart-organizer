@@ -82,6 +82,14 @@ const toNum = (v: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+const slugify = (v: string) =>
+  (v || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
 export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Props) {
   // Step state
   const [stepIndex, setStepIndex] = useState(0);
@@ -93,6 +101,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [channel, setChannel] = useState<string>("site");
+  const [operationMode, setOperationMode] = useState<string>("manual");
+  const [memberAreaSlug, setMemberAreaSlug] = useState("");
 
   // Frete
   const [shippingCost, setShippingCost] = useState("");
@@ -150,6 +160,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setStartDate(e.start_date || "");
     setEndDate(e.end_date || "");
     setChannel(e.channel || "site");
+    setOperationMode(e.operation_mode || "manual");
+    setMemberAreaSlug(e.member_area_slug || "");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
@@ -258,6 +270,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.start_date = startDate || null;
       updates.end_date = endDate || null;
       updates.channel = channel;
+      updates.operation_mode = operationMode;
+      updates.member_area_slug =
+        operationMode === "member_area" ? slugify(memberAreaSlug || name) || null : null;
       const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
       updates.store_ids = isMulti
@@ -536,6 +551,57 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     ? "Pedido pago NÃO é enviado automático. No card você escolhe a loja e a vendedora que fez a venda. Conta como Faturamento Live da loja."
                     : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
                 </p>
+              </div>
+
+              {/* Modo de operação da live */}
+              <div className="space-y-2">
+                <Label>Como essa live vai funcionar? *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode("manual")}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === "manual"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">Manual</p>
+                    <p className="text-xs text-muted-foreground">
+                      Do jeito de hoje: a equipe monta e envia o link de pagamento.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode("member_area")}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === "member_area"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">Área de Clientes</p>
+                    <p className="text-xs text-muted-foreground">
+                      Link único na live: a cliente confirma e paga sozinha.
+                    </p>
+                  </button>
+                </div>
+                {operationMode === "member_area" && (
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs text-muted-foreground">Link público da área</Label>
+                    <Input
+                      placeholder="live-julho-2"
+                      value={memberAreaSlug}
+                      onChange={(e) => setMemberAreaSlug(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground break-all">
+                      checkout.bananacalcados.com.br/minha-area/
+                      {slugify(memberAreaSlug || name) || "sua-live"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
