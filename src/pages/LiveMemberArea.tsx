@@ -31,13 +31,19 @@ interface MemberState {
     id: string;
     stage: string;
     products: any[];
+    subtotal?: number;
     shipping_cost: number;
+    free_shipping?: boolean;
     total: number;
+    pix_discount_percent?: number;
+    pix_discount?: number;
+    pix_total?: number;
     is_paid: boolean;
     confirmed_at: string | null;
     payment_window_expires_at: string | null;
     checkout_url: string;
   } | null;
+
   history?: {
     id: string;
     event_name: string | null;
