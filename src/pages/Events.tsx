@@ -553,7 +553,64 @@ const Events = () => {
                       Defina quando a live vai acontecer (pode ser uma data futura). Para eventos de vários dias, preencha a data de fim — assim conseguimos medir a duração depois.
                     </p>
                   </div>
+                   {/* Modo de operação da live */}
+                   <div className="space-y-2">
+                     <Label>Como essa live vai funcionar? *</Label>
+                     <div className="grid grid-cols-2 gap-2">
+                       <button
+                         type="button"
+                         onClick={() => setOperationMode("manual")}
+                         className={`rounded-lg border-2 p-3 text-left transition ${
+                           operationMode === "manual"
+                             ? "border-primary bg-primary/10"
+                             : "border-border hover:border-primary/40"
+                         }`}
+                       >
+                         <p className="font-semibold text-sm">Manual</p>
+                         <p className="text-xs text-muted-foreground">
+                           Do jeito de hoje: a equipe monta e envia o link de pagamento.
+                         </p>
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setOperationMode("member_area")}
+                         className={`rounded-lg border-2 p-3 text-left transition ${
+                           operationMode === "member_area"
+                             ? "border-primary bg-primary/10"
+                             : "border-border hover:border-primary/40"
+                         }`}
+                       >
+                         <p className="font-semibold text-sm">Área de Clientes</p>
+                         <p className="text-xs text-muted-foreground">
+                           Link único na live: a cliente confirma e paga sozinha.
+                         </p>
+                       </button>
+                     </div>
+                     {operationMode === "member_area" && (
+                       <div className="space-y-1 pt-1">
+                         <Label htmlFor="memberAreaSlug" className="text-xs text-muted-foreground">
+                           Link público da área
+                         </Label>
+                         <Input
+                           id="memberAreaSlug"
+                           placeholder="live-julho-2"
+                           value={memberAreaSlug}
+                           onChange={(e) => setMemberAreaSlug(e.target.value)}
+                         />
+                         <p className="text-xs text-muted-foreground break-all">
+                           checkout.bananacalcados.com.br/minha-area/
+                           {(memberAreaSlug || name || "sua-live")
+                             .normalize("NFD")
+                             .replace(/[\u0300-\u036f]/g, "")
+                             .toLowerCase()
+                             .replace(/[^a-z0-9]+/g, "-")
+                             .replace(/^-+|-+$/g, "")}
+                         </p>
+                       </div>
+                     )}
+                   </div>
                    {/* Canal do evento — define onde o pedido é roteado */}
+
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
                        <Store className="h-4 w-4" />
