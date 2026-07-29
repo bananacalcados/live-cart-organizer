@@ -996,8 +996,9 @@ function StepPayment({
          {/* Botão para trocar forma de pagamento */}
          {selectedMethod && !showAllMethods && (
            <button
+             type="button"
              onClick={() => setShowAllMethods(true)}
-             className="w-full text-center text-sm text-primary font-medium py-2 hover:underline transition-all"
+             className="w-full mt-2 rounded-xl border-2 border-primary bg-primary/10 text-primary text-base sm:text-lg font-bold py-3.5 sm:py-4 px-4 shadow-sm hover:bg-primary/20 active:scale-[0.99] transition-all"
            >
              Alterar forma de pagamento
            </button>
