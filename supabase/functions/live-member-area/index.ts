@@ -66,15 +66,14 @@ Deno.serve(async (req) => {
     // ---------- helpers ----------
     /**
      * Link ÚNICO e global (bio do Instagram): não existe slug por live.
-     * O evento "corrente" é a live em transmissão; se nenhuma estiver no ar,
-     * o evento mais recente em modo Área de Clientes. Pode ser null (sem live).
+     * Vale para QUALQUER evento (manual ou área de clientes).
+     * Prioriza a live no ar; senão, o evento ativo mais recente.
      */
     async function resolveCurrentEvent() {
       const base = () =>
         supabase
           .from("events")
           .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url")
-          .eq("operation_mode", "member_area")
           .neq("is_active", false);
 
       const { data: live } = await base()
@@ -86,6 +85,7 @@ Deno.serve(async (req) => {
       const { data: latest } = await base().order("created_at", { ascending: false }).limit(1);
       return latest?.[0] || null;
     }
+
 
     async function loadSession(token: string) {
       if (!token) return null;
@@ -109,27 +109,44 @@ Deno.serve(async (req) => {
       return data || [];
     }
 
-    /** Pedido "ativo" da cliente no evento corrente. */
+    /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
     async function loadOrder(eventId: string | null, phone: string) {
       const customers = await loadCustomers(phone);
       const ids = customers.map((c: any) => c.id);
       if (!ids.length) return { order: null, customer: null };
-      if (!eventId) return { order: null, customer: customers[0] };
 
-      const { data: orders } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("event_id", eventId)
-        .in("customer_id", ids)
-        .not("stage", "in", "(cancelled)")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      const order = orders?.[0] || null;
+      let order: any = null;
+
+      if (eventId) {
+        const { data: orders } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("event_id", eventId)
+          .in("customer_id", ids)
+          .not("stage", "in", "(cancelled)")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        order = orders?.[0] || null;
+      }
+
+      if (!order) {
+        // Fallback: pedido em aberto mais recente em QUALQUER evento (inclusive modo manual)
+        const { data: any_orders } = await supabase
+          .from("orders")
+          .select("*")
+          .in("customer_id", ids)
+          .not("stage", "in", "(cancelled,delivered)")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        order = any_orders?.[0] || null;
+      }
+
       const customer = order
         ? customers.find((c: any) => c.id === order.customer_id) || customers[0]
         : customers[0];
       return { order, customer };
     }
+
 
     /** Histórico: pedidos da cliente em TODAS as lives (exceto o pedido atual). */
     async function loadHistory(phone: string, currentOrderId: string | null) {
