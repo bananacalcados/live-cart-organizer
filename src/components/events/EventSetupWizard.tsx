@@ -160,6 +160,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setStartDate(e.start_date || "");
     setEndDate(e.end_date || "");
     setChannel(e.channel || "site");
+    setOperationMode(e.operation_mode || "manual");
+    setMemberAreaSlug(e.member_area_slug || "");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
