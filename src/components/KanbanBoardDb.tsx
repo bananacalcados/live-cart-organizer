@@ -1,5 +1,5 @@
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { STAGES, OrderStage } from "@/types/order";
+import { STAGES, OrderStage, Stage } from "@/types/order";
 import { OrderCardDb } from "./OrderCardDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
@@ -7,9 +7,10 @@ import { DbOrder } from "@/types/database";
 interface KanbanBoardDbProps {
   orders: DbOrder[];
   onEditOrder: (order: DbOrder) => void;
+  stages?: Stage[];
 }
 
-export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
+export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBoardDbProps) {
   const { moveOrder, deleteOrder } = useDbOrderStore();
 
   const handleDragEnd = (result: DropResult) => {
@@ -27,7 +28,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4 px-1">
-        {STAGES.map((stage) => {
+        {stages.map((stage) => {
           const stageOrders = getOrdersByStage(stage.id);
           return (
             <div key={stage.id} className="flex-shrink-0 w-80 flex flex-col max-h-[calc(100vh-320px)]">
