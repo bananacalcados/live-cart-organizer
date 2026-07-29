@@ -105,6 +105,7 @@ const App = () => (
               <Route path="/r/:token" element={<ReviewReferralPage />} />
               <Route path="/live/:slug" element={<EventLandingView />} />
               <Route path="/typebot/:slug" element={<EventTypebotView />} />
+              <Route path="/minha-area" element={<LiveMemberArea />} />
               <Route path="/minha-area/:slug" element={<LiveMemberArea />} />
               <Route path="/events/:eventId/capture" element={<ProtectedRoute requiredModule="events"><EventCaptureBuilder /></ProtectedRoute>} />
 
