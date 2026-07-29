@@ -247,35 +247,34 @@ Deno.serve(async (req) => {
               checkout_url: `/checkout/order/${order.id}`,
             }
           : null,
+        history,
       };
     }
 
     // ---------- actions ----------
     if (action === "bootstrap") {
-      const event = await loadEventBySlug(body.slug);
-      if (!event || event.operation_mode !== "member_area" || event.is_active === false) {
-        return json({ ok: false, error: "not_found" }, 404);
-      }
+      const event = await resolveCurrentEvent();
       return json({
         ok: true,
-        event: {
-          id: event.id,
-          name: event.name,
-          is_live: !!event.is_live_broadcasting,
-          instagram_live_url: event.instagram_live_url,
-        },
+        event: event
+          ? {
+              id: event.id,
+              name: event.name,
+              is_live: !!event.is_live_broadcasting,
+              instagram_live_url: event.instagram_live_url,
+            }
+          : null,
       });
     }
 
     if (action === "enter") {
-      const event = await loadEventBySlug(body.slug);
-      if (!event || event.operation_mode !== "member_area") return json({ ok: false, error: "not_found" }, 404);
+      const event = await resolveCurrentEvent();
 
       const phone = normalizePhone(body.phone);
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      const { customer } = await loadOrder(event.id, phone);
+      const { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName) return json({ ok: true, needsName: true });
@@ -288,16 +287,18 @@ Deno.serve(async (req) => {
         await supabase.from("customers").update({ instagram_handle: name }).eq("id", customer.id);
       }
 
-      const { data: existingLead } = await supabase
-        .from("event_leads")
-        .select("id")
-        .eq("event_id", event.id)
-        .eq("phone", phone)
-        .maybeSingle();
-      if (!existingLead) {
-        await supabase.from("event_leads").insert({
-          event_id: event.id,
-          name,
+      if (event?.id) {
+        const { data: existingLead } = await supabase
+          .from("event_leads")
+          .select("id")
+          .eq("event_id", event.id)
+          .eq("phone", phone)
+          .maybeSingle();
+        if (!existingLead) {
+          await supabase.from("event_leads").insert({
+            event_id: event.id,
+            name,
+
           phone,
           phone_suffix: suffix8(phone),
           source: "member_area",
