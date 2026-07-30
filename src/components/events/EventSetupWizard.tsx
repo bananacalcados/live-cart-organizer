@@ -119,6 +119,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
   const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
 
+  // Aviso automático no WhatsApp (Área de Clientes)
+  const [maNotifyEnabled, setMaNotifyEnabled] = useState(false);
+  const [maWaId, setMaWaId] = useState<string>("none");
+  const [maTemplateName, setMaTemplateName] = useState<string | null>(null);
+  const [maTemplateLanguage, setMaTemplateLanguage] = useState("pt_BR");
+  const [maTemplateBodyVars, setMaTemplateBodyVars] = useState<string[]>([]);
+  const [maTemplateHeaderVar, setMaTemplateHeaderVar] = useState<string | null>(null);
+
+
   // Parcelamento
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
