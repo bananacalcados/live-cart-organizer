@@ -218,7 +218,10 @@ Deno.serve(async (req) => {
 
       const { data: orders } = await supabase
         .from("orders")
-        .select("id, event_id, products, shipping_cost, is_paid, paid_at, stage, created_at")
+        .select(
+          "id, event_id, products, shipping_cost, free_shipping, discount_type, discount_value, is_paid, paid_at, stage, created_at",
+        )
+
         .in("customer_id", ids)
         .neq("stage", "cancelled")
         .order("created_at", { ascending: false })
@@ -244,7 +247,12 @@ Deno.serve(async (req) => {
           price: Number(p.price || 0),
           image: p.image || null,
         })),
-        total: orderTotal(o),
+        total:
+          Math.round(
+            (Math.max(0, orderSubtotal(o) - orderDiscount(o)) +
+              (o.free_shipping ? 0 : Number(o.shipping_cost || 0))) * 100,
+          ) / 100,
+
       }));
     }
 
@@ -257,9 +265,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    function orderTotal(order: any) {
-      return orderSubtotal(order) + Number(order?.shipping_cost || 0);
+    /** Desconto do pedido (fixo ou percentual) aplicado sobre os produtos. */
+    function orderDiscount(order: any) {
+      const st = orderSubtotal(order);
+      if (!order?.discount_type || !order?.discount_value) return 0;
+      const raw =
+        order.discount_type === "percentage"
+          ? st * (Number(order.discount_value) / 100)
+          : Number(order.discount_value);
+      return Math.min(st, Math.max(0, Math.round(raw * 100) / 100));
     }
+
+    /** A cliente escolheu o frete na área de membros? */
+    function shippingChosen(order: any) {
+      return (order?.shipping_info as any)?.source === "member_area";
+    }
+
+    /** Frete considerado no total: só depois que a cliente escolhe a forma de envio. */
+    function orderShipping(order: any) {
+      if (!shippingChosen(order)) return 0;
+      return order?.free_shipping ? 0 : Number(order?.shipping_cost || 0);
+    }
+
+    function orderTotal(order: any) {
+      return (
+        Math.max(0, orderSubtotal(order) - orderDiscount(order)) + orderShipping(order)
+      );
+    }
+
 
     /**
      * Ponto 6 — frete fixo da Live: se o pedido ainda não tem frete definido,
@@ -333,7 +366,25 @@ Deno.serve(async (req) => {
       const event = await resolveCurrentEvent();
       const loaded = await loadOrder(event?.id || null, session.phone);
       const customer = loaded.customer;
-      const order = await applyEventShipping(loaded.order);
+      // O frete NÃO é aplicado automaticamente: a cliente escolhe a forma de envio
+      // na etapa de endereço. Aplicar antes cobraria frete duas vezes.
+      const order = loaded.order;
+      if (
+        order &&
+        !order.is_paid &&
+        (order.shipping_info as any)?.source === "event_rule" &&
+        Number(order.shipping_cost || 0) > 0
+      ) {
+        await supabase
+          .from("orders")
+          .update({ shipping_cost: 0, free_shipping: false, shipping_info: null })
+          .eq("id", order.id);
+        order.shipping_cost = 0;
+        order.free_shipping = false;
+        order.shipping_info = null;
+      }
+
+
       const history = await loadHistory(session.phone, order?.id || null);
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
 
@@ -401,30 +452,47 @@ Deno.serve(async (req) => {
             }
           : { masked: false, empty: true },
         order: order
-          ? {
-              id: order.id,
-              stage: order.stage,
-              products: order.products || [],
-              subtotal: Math.round(orderSubtotal(order) * 100) / 100,
-              shipping_cost: Number(order.shipping_cost || 0),
-              shipping_method: shippingMethod,
-              shipping_label: (order.shipping_info as any)?.carrier || null,
-              free_shipping: !!order.free_shipping,
+          ? (() => {
+              const st = orderSubtotal(order);
+              const disc = orderDiscount(order);
+              const ratio = st > 0 ? Math.max(0, st - disc) / st : 1;
+              const chosen = shippingChosen(order);
+              const ship = orderShipping(order);
+              const tot = Math.round(orderTotal(order) * 100) / 100;
+              return {
+                id: order.id,
+                stage: order.stage,
+                products: (order.products || []).map((p: any) => {
+                  const full = Number(p.price || 0);
+                  const eff = Math.round(full * ratio * 100) / 100;
+                  return {
+                    ...p,
+                    price: full,
+                    full_price: full,
+                    effective_price: eff,
+                    has_discount: disc > 0 && eff < full,
+                  };
+                }),
+                subtotal: Math.round(st * 100) / 100,
+                discount: disc,
+                shipping_pending: !chosen,
+                shipping_cost: ship,
+                shipping_method: shippingMethod,
+                shipping_label: chosen ? (order.shipping_info as any)?.carrier || null : null,
+                free_shipping: chosen && !!order.free_shipping,
 
-              total: Math.round(orderTotal(order) * 100) / 100,
-              pix_discount_percent: pixPct,
-              pix_discount: pixPct
-                ? Math.round(orderTotal(order) * (pixPct / 100) * 100) / 100
-                : 0,
-              pix_total: pixPct
-                ? Math.round(orderTotal(order) * (1 - pixPct / 100) * 100) / 100
-                : Math.round(orderTotal(order) * 100) / 100,
-              is_paid: !!order.is_paid,
-              confirmed_at: order.customer_confirmed_at,
-              payment_window_expires_at: order.payment_window_expires_at,
-              checkout_url: `/checkout/order/${order.id}`,
-            }
+                total: tot,
+                pix_discount_percent: pixPct,
+                pix_discount: pixPct ? Math.round(tot * (pixPct / 100) * 100) / 100 : 0,
+                pix_total: pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot,
+                is_paid: !!order.is_paid,
+                confirmed_at: order.customer_confirmed_at,
+                payment_window_expires_at: order.payment_window_expires_at,
+                checkout_url: `/checkout/order/${order.id}`,
+              };
+            })()
           : null,
+
 
         history,
       };
@@ -698,7 +766,7 @@ Deno.serve(async (req) => {
 
       const event = await resolveCurrentEvent();
       const { order } = await loadOrder(event?.id || null, session.phone);
-      const subtotal = order ? orderSubtotal(order) : 0;
+      const subtotal = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
 
       let fixed = 0;
       let freeAbove = 0;

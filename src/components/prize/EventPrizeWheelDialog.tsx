@@ -137,7 +137,7 @@ export function EventPrizeWheelDialog({ wheel, phone, name, onClose, onDone }: P
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/85 overflow-y-auto flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black/85 overflow-y-auto flex items-start justify-center p-4 pb-[50vh]">
       <div className="relative w-full max-w-md rounded-3xl p-6 bg-gradient-to-b from-[#2a1a4a] via-[#1a1030] to-[#12081f] border-2 border-yellow-400/40 shadow-[0_0_60px_rgba(255,200,0,0.25)]">
         <button
           onClick={onClose}
@@ -184,11 +184,19 @@ export function EventPrizeWheelDialog({ wheel, phone, name, onClose, onDone }: P
                   <>
                     <Input
                       value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onFocus={(e) =>
+                        setTimeout(
+                          () => e.target.scrollIntoView({ block: "center", behavior: "smooth" }),
+                          250,
+                        )
+                      }
                       inputMode="numeric"
-                      placeholder="0000"
-                      className="h-14 text-center text-2xl font-bold tracking-[0.5em] bg-white/10 text-white border-white/20"
+                      maxLength={6}
+                      placeholder="000000"
+                      className="h-14 text-center text-2xl font-bold tracking-[0.4em] bg-white/10 text-white border-white/20"
                     />
+
                     <Button
                       onClick={verifyOtp}
                       disabled={otp.length < 4 || busy}

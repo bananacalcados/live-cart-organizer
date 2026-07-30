@@ -52,11 +52,14 @@ interface MemberState {
     stage: string;
     products: any[];
     subtotal?: number;
+    discount?: number;
+    shipping_pending?: boolean;
     shipping_cost: number;
     shipping_method?: string | null;
     shipping_label?: string | null;
     free_shipping?: boolean;
     total: number;
+
     pix_discount_percent?: number;
     pix_discount?: number;
     pix_total?: number;
@@ -684,11 +687,19 @@ export default function LiveMemberArea() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-primary leading-tight">{p.title}</p>
-                  <p className="text-sm text-primary/80">
-                    {p.variant ? `${p.variant} · ` : ""}
-                    {brl(Number(p.price || 0))}
+                  <p className="text-sm text-primary/80 flex flex-wrap items-center gap-1.5">
+                    {p.variant ? <span>{p.variant} ·</span> : null}
+                    {p.has_discount && (
+                      <span className="line-through opacity-60">
+                        {brl(Number(p.full_price ?? p.price ?? 0))}
+                      </span>
+                    )}
+                    <span className="font-bold">
+                      {brl(Number(p.effective_price ?? p.price ?? 0))}
+                    </span>
                   </p>
                 </div>
+
               </div>
             ))}
           </div>
@@ -997,7 +1008,14 @@ export default function LiveMemberArea() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{p.title}</p>
                     <p className="text-xs text-muted-foreground">{p.variant}</p>
-                    <p className="text-sm font-bold">{brl(Number(p.price || 0))}</p>
+                    <p className="text-sm font-bold flex items-center gap-1.5">
+                      {p.has_discount && (
+                        <span className="text-xs font-normal line-through text-muted-foreground">
+                          {brl(Number(p.full_price ?? p.price ?? 0))}
+                        </span>
+                      )}
+                      {brl(Number(p.effective_price ?? p.price ?? 0))}
+                    </p>
                   </div>
                   {!order.is_paid && (
                     <button
@@ -1018,14 +1036,23 @@ export default function LiveMemberArea() {
                     <span>{brl(order.subtotal)}</span>
                   </div>
                 )}
+                {!!order.discount && (
+                  <div className="flex justify-between text-sm text-primary font-medium">
+                    <span>Desconto</span>
+                    <span>-{brl(order.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Frete</span>
                   <span>
-                    {order.free_shipping || !order.shipping_cost
-                      ? "Grátis"
-                      : brl(order.shipping_cost)}
+                    {order.shipping_pending
+                      ? "Calculado no envio"
+                      : order.free_shipping || !order.shipping_cost
+                        ? "Grátis"
+                        : brl(order.shipping_cost)}
                   </span>
                 </div>
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Total</span>
                   <span className="text-xl font-bold">{brl(order.total)}</span>
@@ -1200,19 +1227,28 @@ export default function LiveMemberArea() {
 
       {/* Modal: OTP */}
       {otpOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-          <div className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/70 overflow-y-auto flex items-start justify-center p-4">
+          <div className="bg-background w-full sm:max-w-md rounded-3xl p-6 space-y-4 mt-6 mb-[60vh]">
             <h3 className="text-lg font-bold text-center">Digite o código do WhatsApp</h3>
             <Input
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onFocus={(e) =>
+                setTimeout(
+                  () => e.target.scrollIntoView({ block: "center", behavior: "smooth" }),
+                  250,
+                )
+              }
               inputMode="numeric"
-              className="h-16 text-center text-2xl font-bold tracking-[0.5em]"
+              maxLength={6}
+              placeholder="000000"
+              className="h-16 text-center text-2xl font-bold tracking-[0.4em]"
               autoFocus
             />
             <Button
               className="w-full h-16 text-base font-bold"
               disabled={otp.length < 4 || busy}
+
               onClick={async () => {
                 const res = await act({ action: "verify_otp", code: otp });
                 if (res?.ok) {
