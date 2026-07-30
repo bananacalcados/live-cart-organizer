@@ -353,11 +353,23 @@ Deno.serve(async (req) => {
       const otpUnlocked =
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
       const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
+      const shippingMethod = (order?.shipping_info as any)?.method || null;
+      /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
+      const onboarding = {
+        address: !!(reg?.cep && reg?.address && reg?.address_number),
+        shipping: !!shippingMethod,
+        cpf: !!reg?.cpf,
+        email: !!reg?.email,
+      };
 
       return {
         ok: true,
         token: session.token,
         event,
+        onboarding,
+        onboardingComplete:
+          onboarding.address && onboarding.shipping && onboarding.cpf && onboarding.email,
+
         name: session.name || customer?.instagram_handle || null,
         phone: session.phone,
         otpUnlocked,
