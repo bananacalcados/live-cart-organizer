@@ -9193,6 +9193,7 @@ export type Database = {
           name: string | null
           otp_verified_until: string | null
           phone: string
+          shipping_quote: Json | null
           token: string
         }
         Insert: {
@@ -9204,6 +9205,7 @@ export type Database = {
           name?: string | null
           otp_verified_until?: string | null
           phone: string
+          shipping_quote?: Json | null
           token: string
         }
         Update: {
@@ -9215,6 +9217,7 @@ export type Database = {
           name?: string | null
           otp_verified_until?: string | null
           phone?: string
+          shipping_quote?: Json | null
           token?: string
         }
         Relationships: [
