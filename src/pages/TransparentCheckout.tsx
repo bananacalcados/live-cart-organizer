@@ -38,21 +38,6 @@ interface OrderData {
   eventId?: string;
 }
 
-
-interface CustomerFormData {
-  fullName: string;
-  email: string;
-  cpf: string;
-  whatsapp: string;
-  cep: string;
-  address: string;
-  addressNumber: string;
-  complement: string;
-  neighborhood: string;
-  city: string;
-  state: string;
-}
-
 // ── Validators ──────────────────────────────────────────────────
 const EMAIL_DOMAIN_TYPOS: Record<string, string> = {
   "gmail.coma": "gmail.com", "gmail.con": "gmail.com", "gmail.comm": "gmail.com",
