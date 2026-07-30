@@ -429,30 +429,47 @@ Deno.serve(async (req) => {
             }
           : { masked: false, empty: true },
         order: order
-          ? {
-              id: order.id,
-              stage: order.stage,
-              products: order.products || [],
-              subtotal: Math.round(orderSubtotal(order) * 100) / 100,
-              shipping_cost: Number(order.shipping_cost || 0),
-              shipping_method: shippingMethod,
-              shipping_label: (order.shipping_info as any)?.carrier || null,
-              free_shipping: !!order.free_shipping,
+          ? (() => {
+              const st = orderSubtotal(order);
+              const disc = orderDiscount(order);
+              const ratio = st > 0 ? Math.max(0, st - disc) / st : 1;
+              const chosen = shippingChosen(order);
+              const ship = orderShipping(order);
+              const tot = Math.round(orderTotal(order) * 100) / 100;
+              return {
+                id: order.id,
+                stage: order.stage,
+                products: (order.products || []).map((p: any) => {
+                  const full = Number(p.price || 0);
+                  const eff = Math.round(full * ratio * 100) / 100;
+                  return {
+                    ...p,
+                    price: full,
+                    full_price: full,
+                    effective_price: eff,
+                    has_discount: disc > 0 && eff < full,
+                  };
+                }),
+                subtotal: Math.round(st * 100) / 100,
+                discount: disc,
+                shipping_pending: !chosen,
+                shipping_cost: ship,
+                shipping_method: shippingMethod,
+                shipping_label: chosen ? (order.shipping_info as any)?.carrier || null : null,
+                free_shipping: chosen && !!order.free_shipping,
 
-              total: Math.round(orderTotal(order) * 100) / 100,
-              pix_discount_percent: pixPct,
-              pix_discount: pixPct
-                ? Math.round(orderTotal(order) * (pixPct / 100) * 100) / 100
-                : 0,
-              pix_total: pixPct
-                ? Math.round(orderTotal(order) * (1 - pixPct / 100) * 100) / 100
-                : Math.round(orderTotal(order) * 100) / 100,
-              is_paid: !!order.is_paid,
-              confirmed_at: order.customer_confirmed_at,
-              payment_window_expires_at: order.payment_window_expires_at,
-              checkout_url: `/checkout/order/${order.id}`,
-            }
+                total: tot,
+                pix_discount_percent: pixPct,
+                pix_discount: pixPct ? Math.round(tot * (pixPct / 100) * 100) / 100 : 0,
+                pix_total: pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot,
+                is_paid: !!order.is_paid,
+                confirmed_at: order.customer_confirmed_at,
+                payment_window_expires_at: order.payment_window_expires_at,
+                checkout_url: `/checkout/order/${order.id}`,
+              };
+            })()
           : null,
+
 
         history,
       };
