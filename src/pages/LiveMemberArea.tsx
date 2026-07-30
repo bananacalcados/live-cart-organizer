@@ -1008,7 +1008,14 @@ export default function LiveMemberArea() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{p.title}</p>
                     <p className="text-xs text-muted-foreground">{p.variant}</p>
-                    <p className="text-sm font-bold">{brl(Number(p.price || 0))}</p>
+                    <p className="text-sm font-bold flex items-center gap-1.5">
+                      {p.has_discount && (
+                        <span className="text-xs font-normal line-through text-muted-foreground">
+                          {brl(Number(p.full_price ?? p.price ?? 0))}
+                        </span>
+                      )}
+                      {brl(Number(p.effective_price ?? p.price ?? 0))}
+                    </p>
                   </div>
                   {!order.is_paid && (
                     <button
@@ -1029,14 +1036,23 @@ export default function LiveMemberArea() {
                     <span>{brl(order.subtotal)}</span>
                   </div>
                 )}
+                {!!order.discount && (
+                  <div className="flex justify-between text-sm text-primary font-medium">
+                    <span>Desconto</span>
+                    <span>-{brl(order.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Frete</span>
                   <span>
-                    {order.free_shipping || !order.shipping_cost
-                      ? "Grátis"
-                      : brl(order.shipping_cost)}
+                    {order.shipping_pending
+                      ? "Calculado no envio"
+                      : order.free_shipping || !order.shipping_cost
+                        ? "Grátis"
+                        : brl(order.shipping_cost)}
                   </span>
                 </div>
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Total</span>
                   <span className="text-xl font-bold">{brl(order.total)}</span>
