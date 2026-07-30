@@ -496,61 +496,75 @@ export default function LiveMemberArea() {
   const loadShippingOptions = async (cep: string) => {
     setShipLoading(true);
     try {
-      const res = await act({ action: "shipping_options", cep });
+      const res = await act({ action: "shipping_options", cep }, { quiet: true });
       setShipOptions(res?.options || []);
     } finally {
       setShipLoading(false);
     }
   };
 
-  const saveAddressStep = async () => {
-    const res = await act({
-      action: "save_details",
-      details: {
-        cep: addr.cep,
-        address: addr.address,
-        address_number: addr.address_number,
-        complement: addr.complement,
-        neighborhood: addr.neighborhood,
-        city: addr.city,
-        state: addr.state,
+  /**
+   * As etapas avançam NA HORA e o salvamento acontece em segundo plano.
+   * Se o servidor recusar, voltamos para a etapa anterior com o aviso.
+   */
+  const advance = async (
+    next: OnboardStep | "area",
+    back: OnboardStep,
+    payload: Record<string, unknown>,
+    errorMsg: string,
+    onDone?: () => void,
+  ) => {
+    if (next === "area") setStep("area");
+    else setOnboardStep(next);
+    onDone?.();
+    const res = await act(payload, { quiet: true });
+    if (!res?.ok) {
+      toast.error(
+        res?.error === "otp_required"
+          ? "Confirme o código do WhatsApp para alterar seus dados"
+          : res?.error || errorMsg,
+      );
+      if (next === "area") setStep("onboarding");
+      setOnboardStep(back);
+    }
+  };
+
+  const saveAddressStep = () =>
+    advance(
+      "shipping",
+      "address",
+      {
+        action: "save_details",
+        details: {
+          cep: addr.cep,
+          address: addr.address,
+          address_number: addr.address_number,
+          complement: addr.complement,
+          neighborhood: addr.neighborhood,
+          city: addr.city,
+          state: addr.state,
+        },
       },
-    });
-    if (!res?.ok) {
-      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar seus dados" : res?.error || "Erro ao salvar");
-      return;
-    }
-    setOnboardStep("shipping");
-    loadShippingOptions(addr.cep);
-  };
+      "Erro ao salvar",
+      () => loadShippingOptions(addr.cep),
+    );
 
-  const chooseShipping = async (methodId: string) => {
-    const res = await act({ action: "set_shipping", method: methodId, cep: addr.cep });
-    if (!res?.ok) {
-      toast.error(res?.error || "Não foi possível escolher o envio");
-      return;
-    }
-    setOnboardStep("cpf");
-  };
+  const chooseShipping = (methodId: string) =>
+    advance(
+      "cpf",
+      "shipping",
+      { action: "set_shipping", method: methodId, cep: addr.cep },
+      "Não foi possível escolher o envio",
+    );
 
-  const saveCpfStep = async () => {
-    const res = await act({ action: "save_details", details: { cpf } });
-    if (!res?.ok) {
-      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o CPF" : res?.error || "Erro ao salvar");
-      return;
-    }
-    setOnboardStep("email");
-  };
+  const saveCpfStep = () =>
+    advance("email", "cpf", { action: "save_details", details: { cpf } }, "Erro ao salvar");
 
-  const saveEmailStep = async () => {
-    const res = await act({ action: "save_details", details: { email } });
-    if (!res?.ok) {
-      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o e-mail" : res?.error || "Erro ao salvar");
-      return;
-    }
-    toast.success("Tudo pronto! Agora é só pagar 🎉");
-    setStep("area");
-  };
+  const saveEmailStep = () =>
+    advance("area", "email", { action: "save_details", details: { email } }, "Erro ao salvar", () =>
+      toast.success("Tudo pronto! Agora é só pagar 🎉"),
+    );
+
 
   const goCheckout = (method: "pix" | "card" | "debit") => {
     if (!state?.order) return;
