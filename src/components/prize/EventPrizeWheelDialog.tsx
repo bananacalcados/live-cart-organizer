@@ -22,9 +22,20 @@ export interface PublicWheel {
 
 async function api(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("event-prize-wheel", { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // A função responde 4xx/403 com JSON útil (ex.: otp_required); o SDK trata como erro.
+    const ctx = (error as any)?.context;
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const body = await ctx.json();
+        if (body && typeof body === "object") return body as any;
+      } catch { /* ignora */ }
+    }
+    throw new Error(error.message);
+  }
   return data as any;
 }
+
 
 /** Busca as roletas ativas do evento corrente para um telefone. */
 export function useEventPrizeWheels(phone?: string | null, eventId?: string | null) {
