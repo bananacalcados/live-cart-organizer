@@ -526,13 +526,20 @@ Deno.serve(async (req) => {
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
       const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
       const shippingMethod = (order?.shipping_info as any)?.method || null;
+      // Retirada na loja / mototaxista não exigem endereço completo.
+      const noAddressNeeded = ["pickup", "local", "motoboy", "delivery_local"].includes(
+        String(shippingMethod || ""),
+      );
       /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
       const onboarding = {
-        address: !!(reg?.cep && reg?.address && reg?.address_number),
+        address: noAddressNeeded
+          ? !!reg?.cep
+          : !!(reg?.cep && reg?.address && reg?.address_number),
         shipping: !!shippingMethod,
         cpf: !!reg?.cpf,
         email: !!reg?.email,
       };
+
 
       return {
         ok: true,
