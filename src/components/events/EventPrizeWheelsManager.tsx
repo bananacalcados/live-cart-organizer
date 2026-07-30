@@ -292,7 +292,18 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                   </Button>
                 </div>
 
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-2 text-[11px] font-medium text-muted-foreground">
+                  <span className="col-span-1">Cor</span>
+                  <span className="col-span-3">Nome do prêmio</span>
+                  <span className="col-span-3">Tipo de prêmio</span>
+                  <span className="col-span-1">Valor</span>
+                  <span className="col-span-2">Chance (peso)</span>
+                  <span className="col-span-1">Validade</span>
+                  <span className="col-span-1" />
+                </div>
+
                 {(wheel.segments || []).map((seg) => (
+
                   <div
                     key={seg.id}
                     className="grid grid-cols-12 gap-2 items-center rounded-lg border p-2"
@@ -370,9 +381,12 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                     </Button>
                   </div>
                 ))}
-                <p className="text-[11px] text-muted-foreground">
-                  Colunas: cor · prêmio · tipo · valor · peso da chance (%) · validade em dias.
-                </p>
+                <div className="rounded-md border bg-muted/40 p-2 space-y-1 text-[11px] text-muted-foreground">
+                  <p><strong className="text-foreground">Valor</strong> — depende do tipo: Desconto % = porcentagem (ex.: 10 = 10% OFF); Desconto R$ = reais (ex.: 20 = R$ 20 de desconto); Frete grátis, Prêmio físico e "Não foi dessa vez" = deixe 0 (o valor é ignorado).</p>
+                  <p><strong className="text-foreground">Chance (peso)</strong> — não precisa somar 100. É um peso relativo: a % real aparece ao lado e é calculada como peso ÷ soma de todos os pesos. Peso maior = sai mais vezes; peso 0 = nunca sai.</p>
+                  <p><strong className="text-foreground">Validade</strong> — por quantos dias o prêmio ganho fica válido para ser usado no próximo pedido (ex.: 30 = expira em 30 dias).</p>
+                </div>
+
               </div>
             </CardContent>
           </Card>
