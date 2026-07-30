@@ -387,14 +387,35 @@ export function InitialMessageEditor({
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="h-3 w-3" /> Pré-visualização (com dados fictícios)
                 </div>
-                {previewBlocks.map((p, i) => (
-                  <div
-                    key={i}
-                    className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words max-w-[85%]"
-                  >
-                    {p || <span className="text-muted-foreground italic">(vazio)</span>}
-                  </div>
-                ))}
+                {previewBlocks.map((p, i) => {
+                  const blkBtns = buttonsForBlock(i).filter((b) => (b.title || "").trim());
+                  return (
+                    <div key={i} className="space-y-2">
+                      <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words max-w-[85%]">
+                        {p || <span className="text-muted-foreground italic">(vazio)</span>}
+                      </div>
+                      {blkBtns.length > 0 && (
+                        <div className="bg-muted border rounded-lg px-3 py-2 max-w-[85%] space-y-2">
+                          <div className="text-sm">👇 Toque em uma opção:</div>
+                          <div className="space-y-1">
+                            {blkBtns.map((b) => (
+                              <div
+                                key={b.id}
+                                className="text-xs text-center font-medium rounded-md border border-primary/40 text-primary py-1.5 px-2 truncate"
+                              >
+                                {b.title.slice(0, 20)}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Enviado como mensagem separada logo após o bloco.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
               </CardContent>
             </Card>
           )}
