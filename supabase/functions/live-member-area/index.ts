@@ -659,8 +659,8 @@ Deno.serve(async (req) => {
       await upsertUnified({
         phone: session.phone,
         name: (payload.full_name as string) || session.name,
-        cpf: payload.cpf as string | null,
-        email: payload.email as string | null,
+        cpf: (payload.cpf as string) ?? null,
+        email: (payload.email as string) ?? null,
       });
 
 
@@ -673,7 +673,119 @@ Deno.serve(async (req) => {
       return json(await buildState(fresh));
     }
 
+    /**
+     * Opções de envio da área de membros. Retirada na loja e mototaxista
+     * só aparecem para CEP de Governador Valadares/MG.
+     */
+    async function shippingChoices(rawCep: string) {
+      const cep = String(rawCep || "").replace(/\D/g, "").slice(0, 8);
+      let city: string | null = null;
+      let uf: string | null = null;
+      if (cep.length === 8) {
+        try {
+          const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+          const j = await r.json();
+          if (!j?.erro) {
+            city = j.localidade || null;
+            uf = j.uf || null;
+          }
+        } catch {
+          /* ignora — segue só com envio padrão */
+        }
+      }
+      const isGV =
+        uf === "MG" && String(city || "").toLowerCase().includes("governador valadares");
+
+      const event = await resolveCurrentEvent();
+      const { order } = await loadOrder(event?.id || null, session.phone);
+      const subtotal = order ? orderSubtotal(order) : 0;
+
+      let fixed = 0;
+      let freeAbove = 0;
+      if (order?.event_id) {
+        const { data: ev } = await supabase
+          .from("events")
+          .select("default_shipping_cost, free_shipping_threshold")
+          .eq("id", order.event_id)
+          .maybeSingle();
+        fixed = Number(ev?.default_shipping_cost || 0);
+        freeAbove = Number(ev?.free_shipping_threshold || 0);
+      }
+      const deliveryCost = freeAbove > 0 && subtotal >= freeAbove ? 0 : fixed;
+
+      let motoCost = 15;
+      try {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", "gv_mototaxi_cost")
+          .maybeSingle();
+        const v = Number(String(data?.value ?? "").replace(/"/g, ""));
+        if (v > 0) motoCost = v;
+      } catch {
+        /* usa padrão */
+      }
+
+      const options: { id: string; label: string; description: string; cost: number }[] = [
+        {
+          id: "delivery",
+          label: "Envio para o meu endereço",
+          description: deliveryCost > 0 ? "Transportadora / Correios" : "Frete grátis nesta compra",
+          cost: deliveryCost,
+        },
+      ];
+      if (isGV) {
+        options.push({
+          id: "pickup",
+          label: "Retirada na loja",
+          description: "Você retira na loja em Governador Valadares",
+          cost: 0,
+        });
+        options.push({
+          id: "mototaxi",
+          label: "Entrega por mototaxista",
+          description: "Somente Governador Valadares — entrega no mesmo dia",
+          cost: motoCost,
+        });
+      }
+      return { city, uf, isGV, options };
+    }
+
+    if (action === "shipping_options") {
+      const r = await shippingChoices(String(body.cep || ""));
+      return json({ ok: true, ...r });
+    }
+
+    if (action === "set_shipping") {
+      const event = await resolveCurrentEvent();
+      const { order } = await loadOrder(event?.id || null, session.phone);
+      if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 400);
+      if (order.is_paid) return json({ ok: false, error: "Pedido já pago" }, 400);
+
+      const { options } = await shippingChoices(String(body.cep || ""));
+      const chosen = options.find((o) => o.id === String(body.method || ""));
+      if (!chosen) return json({ ok: false, error: "Forma de envio indisponível" });
+
+      await supabase
+        .from("orders")
+        .update({
+          shipping_cost: chosen.cost,
+          free_shipping: chosen.cost === 0,
+          shipping_info: {
+            source: "member_area",
+            method: chosen.id,
+            carrier: chosen.label,
+            price: chosen.cost,
+            applied_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", order.id);
+
+      return json(await buildState(session));
+    }
+
     return json({ ok: false, error: "unknown_action" }, 400);
+
   } catch (e) {
     console.error("[live-member-area]", e);
     return json({ ok: false, error: String((e as Error).message || e) }, 500);
