@@ -345,43 +345,56 @@ export default function LiveMemberArea() {
   // ---------- Etapa 1: WhatsApp ----------
   if (step === "phone") {
     return (
-      <div className="min-h-screen bg-background text-foreground px-6">
-        <div className="max-w-sm mx-auto">
-          {Header}
-          <p className="text-muted-foreground text-center text-sm mb-6">
-            Digite seu WhatsApp para entrar na sua área e ver seus produtos.
-          </p>
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8">
+          <div className="flex flex-col items-center text-center">
+            <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
+            <p className="mt-2 text-muted-foreground text-base leading-snug">
+              Digite seu WhatsApp pra continuar
+            </p>
+          </div>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               enter();
             }}
-            className="space-y-4"
+            className="mt-8 space-y-6"
           >
-            <div className="space-y-2">
-              <Label className="text-base">Seu WhatsApp</Label>
+            <div className="space-y-2 text-left">
+              <Label className="text-sm text-muted-foreground">Whatsapp</Label>
               <Input
                 value={phone}
                 onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="(33) 99999-9999"
                 inputMode="tel"
-                className="h-16 text-[18px]"
+                className="h-14 text-[18px] rounded-xl"
                 autoFocus
               />
             </div>
             <Button
               type="submit"
               disabled={phone.replace(/\D/g, "").length < 10 || busy}
-              className="w-full h-16 text-base font-bold gap-2"
+              className="w-full h-14 text-base font-semibold rounded-xl gap-2"
             >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
-              ENTRAR NA MINHA ÁREA
+              {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+              Continuar
             </Button>
           </form>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
         </div>
       </div>
     );
   }
+
 
   // ---------- Etapa 2: Nome ----------
   if (step === "name") {
