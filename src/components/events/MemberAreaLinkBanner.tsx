@@ -1,29 +1,17 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, ExternalLink, Link2 } from "lucide-react";
 import { toast } from "sonner";
 
-const BASE = "https://checkout.bananacalcados.com.br/minha-area";
-
-function slugify(v: string) {
-  return v
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+/** Link ÚNICO e global: nunca muda de live para live. */
+const MEMBER_AREA_URL = "https://checkout.bananacalcados.com.br/minha-area";
 
 /** Link público da Área de Membros — grande e em destaque. */
-export function MemberAreaLinkBanner({ event }: { event: any }) {
+export function MemberAreaLinkBanner({ event }: { event?: any }) {
   const [copied, setCopied] = useState(false);
 
-  const url = useMemo(() => {
-    const slug = (event as any)?.member_area_slug || slugify(event?.name || "");
-    return slug ? `${BASE}/${slug}` : BASE;
-  }, [event]);
+  const url = MEMBER_AREA_URL;
 
-  if (!event) return null;
 
   const copy = async () => {
     await navigator.clipboard.writeText(url);
