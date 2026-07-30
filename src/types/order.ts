@@ -68,6 +68,7 @@ export const STAGES: Stage[] = [
 // Colunas usadas em lives no modo "Área de Clientes" (a própria cliente confirma e paga).
 export const MEMBER_AREA_STAGE_IDS: OrderStage[] = [
   'pre_sale',
+  'incomplete_order',
   'awaiting_confirmation',
   'new',
   'awaiting_payment',
@@ -78,9 +79,12 @@ export const MEMBER_AREA_STAGE_IDS: OrderStage[] = [
 
 const MEMBER_AREA_TITLES: Partial<Record<OrderStage, string>> = {
   pre_sale: 'Montando',
+  incomplete_order: 'Pedido Incompleto',
+  awaiting_confirmation: 'Aguardando Confirmação da Cliente',
   new: 'Novo Pedido (confirmado)',
   completed: 'Expedição',
 };
+
 
 export const getStagesForMode = (operationMode?: string | null): Stage[] => {
   if (operationMode !== 'member_area') return STAGES;

@@ -25,11 +25,21 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
   const getOrdersByStage = (stage: OrderStage) =>
     orders.filter((order) => order.stage === stage);
 
+  // Nenhum pedido pode ficar invisível: etapas fora das colunas configuradas
+  // (ex.: modo Área de Membros) aparecem numa coluna extra "Outras etapas".
+  const knownStageIds = new Set(stages.map((s) => s.id));
+  const orphanOrders = orders.filter((o) => !knownStageIds.has(o.stage as OrderStage));
+  const columns: Stage[] = orphanOrders.length
+    ? [...stages, { id: "__others__" as OrderStage, title: "Outras etapas", color: "bg-muted-foreground" }]
+    : stages;
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4 px-1">
-        {stages.map((stage) => {
-          const stageOrders = getOrdersByStage(stage.id);
+        {columns.map((stage) => {
+          const stageOrders =
+            (stage.id as string) === "__others__" ? orphanOrders : getOrdersByStage(stage.id);
+
           return (
             <div key={stage.id} className="flex-shrink-0 w-80 flex flex-col max-h-[calc(100vh-320px)]">
               <div className="kanban-column flex flex-col h-full">

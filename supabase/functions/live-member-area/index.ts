@@ -383,12 +383,41 @@ Deno.serve(async (req) => {
         .ilike("whatsapp", `%${suf}`)
         .order("created_at", { ascending: false })
         .limit(10);
-      return (
-        (data || []).find(
-          (r: any) => r.order_id !== excludeOrderId && (r.cep || r.cpf || r.email),
-        ) || null
+      const found = (data || []).find(
+        (r: any) => r.order_id !== excludeOrderId && (r.cep || r.cpf || r.email),
       );
+      if (found) return found;
+      // Fallback: cliente já cadastrada no PDV (pos_customers), mas que nunca
+      // passou pela área de membros. Reaproveita a ficha para não pedir
+      // endereço/CPF/e-mail de novo.
+      try {
+        const { data: pc } = await supabase
+          .from("pos_customers")
+          .select(
+            "name, email, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state, updated_at",
+          )
+          .like("whatsapp", `%${suf}`)
+          .order("updated_at", { ascending: false })
+          .limit(5);
+        const master = (pc || []).find((r: any) => r.cep || r.cpf || r.email);
+        if (!master) return null;
+        return {
+          full_name: master.name || null,
+          cpf: master.cpf || null,
+          email: master.email || null,
+          cep: master.cep || null,
+          address: master.address || null,
+          address_number: master.address_number || null,
+          complement: master.complement || null,
+          neighborhood: master.neighborhood || null,
+          city: master.city || null,
+          state: master.state || null,
+        };
+      } catch {
+        return null;
+      }
     }
+
 
     /** Última forma de envio escolhida pela cliente na área de membros. */
     async function previousShipping(phone: string, excludeOrderId: string | null) {
