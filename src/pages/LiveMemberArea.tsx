@@ -627,9 +627,10 @@ export default function LiveMemberArea() {
 
   /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */
   const payForm: CustomerFormData | null = (() => {
-    const d = state?.details || {};
+    // Usa os dados completos (payDetails) — o mascaramento por OTP vale só
+    // para exibição/edição, não deve bloquear o pagamento.
+    const d = state?.payDetails || state?.details || {};
     if (d.masked) return null;
-    const fullName = (d.full_name || state?.name || "").trim();
     const f: CustomerFormData = {
       fullName,
       email: (d.email || email || "").trim(),
