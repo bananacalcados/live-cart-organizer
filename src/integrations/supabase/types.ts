@@ -11182,6 +11182,7 @@ export type Database = {
           cart_link: string | null
           checkout_started_at: string | null
           checkout_token: string | null
+          confirmed_items_signature: string | null
           coupon_code: string | null
           created_at: string
           custom_shipping_cost: number | null
@@ -11240,6 +11241,7 @@ export type Database = {
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
+          confirmed_items_signature?: string | null
           coupon_code?: string | null
           created_at?: string
           custom_shipping_cost?: number | null
@@ -11298,6 +11300,7 @@ export type Database = {
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
+          confirmed_items_signature?: string | null
           coupon_code?: string | null
           created_at?: string
           custom_shipping_cost?: number | null

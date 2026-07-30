@@ -236,7 +236,10 @@ export default function LiveMemberArea() {
   };
   const needsConfirm = (data: any) => {
     const o = data?.order;
-    if (!o || o.is_paid || o.confirmed_at || !o.products?.length) return false;
+    if (!o || o.is_paid || !o.products?.length) return false;
+    // O servidor é a fonte da verdade: só pede confirmação de novo se os itens mudaram.
+    if (typeof o.needs_confirm === "boolean") return o.needs_confirm;
+    if (o.confirmed_at) return false;
     return readAnswered()[o.id] !== itemsSignature(o);
   };
   const needsOnboarding = (data: any) =>

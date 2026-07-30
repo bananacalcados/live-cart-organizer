@@ -257,6 +257,15 @@ Deno.serve(async (req) => {
     }
 
 
+    /** Assinatura dos itens do pedido — muda quando produtos/quantidades mudam. */
+    function itemsSignature(order: any) {
+      const items = Array.isArray(order?.products) ? order.products : [];
+      return `${order?.id}:${items
+        .map((p: any) => `${p.id ?? p.shopifyId ?? p.title}x${p.quantity ?? 1}`)
+        .join("|")}`;
+    }
+
+
     function orderSubtotal(order: any) {
       const items = Array.isArray(order?.products) ? order.products : [];
       return items.reduce(
@@ -615,6 +624,14 @@ Deno.serve(async (req) => {
                 pix_total: pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot,
                 is_paid: !!order.is_paid,
                 confirmed_at: order.customer_confirmed_at,
+                items_signature: itemsSignature(order),
+                // Só volta a pedir confirmação se os itens mudaram depois do "sim".
+                needs_confirm:
+                  !order.is_paid &&
+                  (order.products || []).length > 0 &&
+                  (!order.customer_confirmed_at ||
+                    (!!order.confirmed_items_signature &&
+                      order.confirmed_items_signature !== itemsSignature(order))),
                 payment_window_expires_at: order.payment_window_expires_at,
                 checkout_url: `/checkout/order/${order.id}`,
               };
@@ -785,17 +802,20 @@ Deno.serve(async (req) => {
       if (order.is_paid) return json(await buildState(session));
 
       const expires = new Date(Date.now() + PAYMENT_WINDOW_MIN * 60_000).toISOString();
-      await supabase
+      const { error: confErr } = await supabase
         .from("orders")
         .update({
           stage: "new",
           customer_confirmed_at: new Date().toISOString(),
+          confirmed_items_signature: itemsSignature(order),
           payment_window_expires_at: expires,
         })
         .eq("id", order.id);
+      if (confErr) return json({ ok: false, error: confErr.message }, 500);
 
       return json(await buildState(session));
     }
+
 
     if (action === "reject_item") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
