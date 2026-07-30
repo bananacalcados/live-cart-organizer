@@ -369,6 +369,21 @@ Deno.serve(async (req) => {
       // O frete NÃO é aplicado automaticamente: a cliente escolhe a forma de envio
       // na etapa de endereço. Aplicar antes cobraria frete duas vezes.
       const order = loaded.order;
+      if (
+        order &&
+        !order.is_paid &&
+        (order.shipping_info as any)?.source === "event_rule" &&
+        Number(order.shipping_cost || 0) > 0
+      ) {
+        await supabase
+          .from("orders")
+          .update({ shipping_cost: 0, free_shipping: false, shipping_info: null })
+          .eq("id", order.id);
+        order.shipping_cost = 0;
+        order.free_shipping = false;
+        order.shipping_info = null;
+      }
+
 
       const history = await loadHistory(session.phone, order?.id || null);
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
