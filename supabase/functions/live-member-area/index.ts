@@ -793,17 +793,20 @@ Deno.serve(async (req) => {
       if (order.is_paid) return json(await buildState(session));
 
       const expires = new Date(Date.now() + PAYMENT_WINDOW_MIN * 60_000).toISOString();
-      await supabase
+      const { error: confErr } = await supabase
         .from("orders")
         .update({
           stage: "new",
           customer_confirmed_at: new Date().toISOString(),
+          confirmed_items_signature: itemsSignature(order),
           payment_window_expires_at: expires,
         })
         .eq("id", order.id);
+      if (confErr) return json({ ok: false, error: confErr.message }, 500);
 
       return json(await buildState(session));
     }
+
 
     if (action === "reject_item") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
