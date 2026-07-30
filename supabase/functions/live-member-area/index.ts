@@ -490,10 +490,11 @@ Deno.serve(async (req) => {
               } else {
                 const { data: created } = await supabase
                   .from("customer_registrations")
-                  .insert({ order_id: order.id, whatsapp: session.phone, ...patch })
+                  .insert(withRegDefaults({ order_id: order.id, whatsapp: session.phone, ...patch }))
                   .select()
                   .maybeSingle();
                 reg = created || { order_id: order.id, ...patch };
+
               }
             }
           }
