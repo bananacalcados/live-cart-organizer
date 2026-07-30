@@ -262,9 +262,12 @@ const Index = () => {
               <EventPromotionManager eventId={currentEventId} />
             </TabsContent>
 
-            <TabsContent value="prizes">
+            <TabsContent value="prizes" className="space-y-6">
+              <MemberAreaLinkBanner event={currentEvent} />
+              <EventPrizeWheelsManager eventId={currentEventId} />
               <PrizeEligibleList eventId={currentEventId} />
             </TabsContent>
+
 
             <TabsContent value="meta-templates">
               <MetaTemplateCreator />
