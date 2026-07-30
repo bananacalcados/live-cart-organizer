@@ -21,6 +21,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import CrossellModal, { type CrossellBlock } from "@/components/checkout/CrossellModal";
 import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
+import {
+  StepPayment,
+  stripDDI,
+  type OrderProduct,
+  type CustomerFormData,
+  type InstallmentConfig,
+} from "@/components/checkout/PaymentSection";
 
 
 interface OrderData {
