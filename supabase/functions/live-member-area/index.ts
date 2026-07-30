@@ -268,9 +268,12 @@ Deno.serve(async (req) => {
      */
     async function applyEventShipping(order: any) {
       if (!order || order.is_paid) return order;
+      // Frete escolhido pela própria cliente na área de membros manda sempre.
+      if ((order.shipping_info as any)?.source === "member_area") return order;
       if (order.free_shipping) return order;
       if (Number(order.shipping_cost || 0) > 0) return order;
       if (!order.event_id) return order;
+
 
       const { data: ev } = await supabase
         .from("events")
@@ -350,11 +353,23 @@ Deno.serve(async (req) => {
       const otpUnlocked =
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
       const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
+      const shippingMethod = (order?.shipping_info as any)?.method || null;
+      /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
+      const onboarding = {
+        address: !!(reg?.cep && reg?.address && reg?.address_number),
+        shipping: !!shippingMethod,
+        cpf: !!reg?.cpf,
+        email: !!reg?.email,
+      };
 
       return {
         ok: true,
         token: session.token,
         event,
+        onboarding,
+        onboardingComplete:
+          onboarding.address && onboarding.shipping && onboarding.cpf && onboarding.email,
+
         name: session.name || customer?.instagram_handle || null,
         phone: session.phone,
         otpUnlocked,
@@ -392,7 +407,10 @@ Deno.serve(async (req) => {
               products: order.products || [],
               subtotal: Math.round(orderSubtotal(order) * 100) / 100,
               shipping_cost: Number(order.shipping_cost || 0),
+              shipping_method: shippingMethod,
+              shipping_label: (order.shipping_info as any)?.carrier || null,
               free_shipping: !!order.free_shipping,
+
               total: Math.round(orderTotal(order) * 100) / 100,
               pix_discount_percent: pixPct,
               pix_discount: pixPct
@@ -584,30 +602,52 @@ Deno.serve(async (req) => {
 
       const { data: reg } = await supabase
         .from("customer_registrations")
-        .select("id, cpf, cep, email")
+        .select("*")
         .eq("order_id", order.id)
         .maybeSingle();
 
-      const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
       const otpUnlocked =
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
-      if (hasDetails && !otpUnlocked) return json({ ok: false, error: "otp_required" }, 403);
 
       const d = body.details || {};
+      const sanitize: Record<string, (v: unknown) => string | null> = {
+        cpf: (v) => String(v || "").replace(/\D/g, "").slice(0, 11) || null,
+        email: (v) => String(v || "").trim().slice(0, 160) || null,
+        cep: (v) => String(v || "").replace(/\D/g, "").slice(0, 8) || null,
+        address: (v) => String(v || "").slice(0, 200) || null,
+        address_number: (v) => String(v || "").slice(0, 20) || null,
+        complement: (v) => String(v || "").slice(0, 120) || null,
+        neighborhood: (v) => String(v || "").slice(0, 120) || null,
+        city: (v) => String(v || "").slice(0, 120) || null,
+        state: (v) => String(v || "").slice(0, 2).toUpperCase() || null,
+      };
+
+      const changes: Record<string, unknown> = {};
+      for (const [key, fn] of Object.entries(sanitize)) {
+        if (!(key in d)) continue;
+        changes[key] = fn((d as any)[key]);
+      }
+
+      // Sem OTP a cliente só PREENCHE campos vazios (onboarding). Alterar um dado
+      // já existente continua exigindo o código do WhatsApp.
+      if (!otpUnlocked && reg) {
+        for (const [key, value] of Object.entries(changes)) {
+          const current = (reg as any)[key];
+          if (current && String(current).trim() && String(current) !== String(value ?? "")) {
+            return json({ ok: false, error: "otp_required" });
+          }
+        }
+      }
+
       const payload: Record<string, unknown> = {
         order_id: order.id,
-        full_name: String(d.full_name || session.name || "").slice(0, 120),
-        cpf: String(d.cpf || "").replace(/\D/g, "").slice(0, 11) || null,
-        email: String(d.email || "").trim().slice(0, 160) || null,
         whatsapp: session.phone,
-        cep: String(d.cep || "").replace(/\D/g, "").slice(0, 8) || null,
-        address: String(d.address || "").slice(0, 200) || null,
-        address_number: String(d.address_number || "").slice(0, 20) || null,
-        complement: String(d.complement || "").slice(0, 120) || null,
-        neighborhood: String(d.neighborhood || "").slice(0, 120) || null,
-        city: String(d.city || "").slice(0, 120) || null,
-        state: String(d.state || "").slice(0, 2).toUpperCase() || null,
+        ...changes,
       };
+      if (!reg?.full_name || (d.full_name && otpUnlocked)) {
+        payload.full_name = String(d.full_name || session.name || "").slice(0, 120);
+      }
+
 
       if (reg?.id) {
         await supabase.from("customer_registrations").update(payload).eq("id", reg.id);
@@ -619,8 +659,8 @@ Deno.serve(async (req) => {
       await upsertUnified({
         phone: session.phone,
         name: (payload.full_name as string) || session.name,
-        cpf: payload.cpf as string | null,
-        email: payload.email as string | null,
+        cpf: (payload.cpf as string) ?? null,
+        email: (payload.email as string) ?? null,
       });
 
 
@@ -633,7 +673,119 @@ Deno.serve(async (req) => {
       return json(await buildState(fresh));
     }
 
+    /**
+     * Opções de envio da área de membros. Retirada na loja e mototaxista
+     * só aparecem para CEP de Governador Valadares/MG.
+     */
+    async function shippingChoices(rawCep: string) {
+      const cep = String(rawCep || "").replace(/\D/g, "").slice(0, 8);
+      let city: string | null = null;
+      let uf: string | null = null;
+      if (cep.length === 8) {
+        try {
+          const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+          const j = await r.json();
+          if (!j?.erro) {
+            city = j.localidade || null;
+            uf = j.uf || null;
+          }
+        } catch {
+          /* ignora — segue só com envio padrão */
+        }
+      }
+      const isGV =
+        uf === "MG" && String(city || "").toLowerCase().includes("governador valadares");
+
+      const event = await resolveCurrentEvent();
+      const { order } = await loadOrder(event?.id || null, session.phone);
+      const subtotal = order ? orderSubtotal(order) : 0;
+
+      let fixed = 0;
+      let freeAbove = 0;
+      if (order?.event_id) {
+        const { data: ev } = await supabase
+          .from("events")
+          .select("default_shipping_cost, free_shipping_threshold")
+          .eq("id", order.event_id)
+          .maybeSingle();
+        fixed = Number(ev?.default_shipping_cost || 0);
+        freeAbove = Number(ev?.free_shipping_threshold || 0);
+      }
+      const deliveryCost = freeAbove > 0 && subtotal >= freeAbove ? 0 : fixed;
+
+      let motoCost = 15;
+      try {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", "gv_mototaxi_cost")
+          .maybeSingle();
+        const v = Number(String(data?.value ?? "").replace(/"/g, ""));
+        if (v > 0) motoCost = v;
+      } catch {
+        /* usa padrão */
+      }
+
+      const options: { id: string; label: string; description: string; cost: number }[] = [
+        {
+          id: "delivery",
+          label: "Envio para o meu endereço",
+          description: deliveryCost > 0 ? "Transportadora / Correios" : "Frete grátis nesta compra",
+          cost: deliveryCost,
+        },
+      ];
+      if (isGV) {
+        options.push({
+          id: "pickup",
+          label: "Retirada na loja",
+          description: "Você retira na loja em Governador Valadares",
+          cost: 0,
+        });
+        options.push({
+          id: "mototaxi",
+          label: "Entrega por mototaxista",
+          description: "Somente Governador Valadares — entrega no mesmo dia",
+          cost: motoCost,
+        });
+      }
+      return { city, uf, isGV, options };
+    }
+
+    if (action === "shipping_options") {
+      const r = await shippingChoices(String(body.cep || ""));
+      return json({ ok: true, ...r });
+    }
+
+    if (action === "set_shipping") {
+      const event = await resolveCurrentEvent();
+      const { order } = await loadOrder(event?.id || null, session.phone);
+      if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 400);
+      if (order.is_paid) return json({ ok: false, error: "Pedido já pago" }, 400);
+
+      const { options } = await shippingChoices(String(body.cep || ""));
+      const chosen = options.find((o) => o.id === String(body.method || ""));
+      if (!chosen) return json({ ok: false, error: "Forma de envio indisponível" });
+
+      await supabase
+        .from("orders")
+        .update({
+          shipping_cost: chosen.cost,
+          free_shipping: chosen.cost === 0,
+          shipping_info: {
+            source: "member_area",
+            method: chosen.id,
+            carrier: chosen.label,
+            price: chosen.cost,
+            applied_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", order.id);
+
+      return json(await buildState(session));
+    }
+
     return json({ ok: false, error: "unknown_action" }, 400);
+
   } catch (e) {
     console.error("[live-member-area]", e);
     return json({ ok: false, error: String((e as Error).message || e) }, 500);

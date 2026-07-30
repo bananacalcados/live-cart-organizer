@@ -14,6 +14,7 @@ import {
   LogOut,
 
   MessageCircle,
+  QrCode,
   ShoppingBag,
   Timer,
   Trash2,
@@ -25,7 +26,16 @@ import {
 } from "@/components/prize/EventPrizeWheelDialog";
 
 
-type Step = "phone" | "name" | "area";
+type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
+type OnboardStep = "address" | "shipping" | "cpf" | "email";
+
+interface ShippingOption {
+  id: string;
+  label: string;
+  description: string;
+  cost: number;
+}
+
 
 interface MemberState {
   token: string;
@@ -35,12 +45,16 @@ interface MemberState {
   otpUnlocked: boolean;
   hasDetails: boolean;
   details: any;
+  onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
+  onboardingComplete?: boolean;
   order: {
     id: string;
     stage: string;
     products: any[];
     subtotal?: number;
     shipping_cost: number;
+    shipping_method?: string | null;
+    shipping_label?: string | null;
     free_shipping?: boolean;
     total: number;
     pix_discount_percent?: number;
@@ -51,6 +65,7 @@ interface MemberState {
     payment_window_expires_at: string | null;
     checkout_url: string;
   } | null;
+
 
   history?: {
     id: string;
@@ -63,6 +78,7 @@ interface MemberState {
 }
 
 const TOKEN_KEY = "live_member_token";
+const ANSWERED_KEY = "live_member_confirm_answered";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 async function callApi(payload: Record<string, unknown>) {
@@ -80,7 +96,6 @@ export default function LiveMemberArea() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -90,10 +105,18 @@ export default function LiveMemberArea() {
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
-  const confirmDismissedRef = useRef<string | null>(null);
+  /** Onboarding pós-confirmação (endereço → envio → CPF → e-mail). */
+  const [onboardStep, setOnboardStep] = useState<OnboardStep>("address");
+  const [addr, setAddr] = useState<any>({});
+  const [cepLoading, setCepLoading] = useState(false);
+  const [shipOptions, setShipOptions] = useState<ShippingOption[]>([]);
+  const [shipLoading, setShipLoading] = useState(false);
+  const [cpf, setCpf] = useState("");
+  const [email, setEmail] = useState("");
+
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
   const itemsSigRef = useRef<string | null>(null);
+
 
   /** Roletas de prêmio disponíveis para esta cliente neste evento. */
   const { wheels, refresh: refreshWheels } = useEventPrizeWheels(
@@ -147,7 +170,6 @@ export default function LiveMemberArea() {
     setPhone("");
     setName("");
     setOtp("");
-    setConfirmOpen(false);
     setOtpOpen(false);
     setDetailsOpen(false);
     setStep("phone");
@@ -170,14 +192,74 @@ export default function LiveMemberArea() {
           .join("|")}`
       : "none";
 
+  /**
+   * A confirmação é pedida UMA ÚNICA VEZ por pedido. Depois que a cliente
+   * responde (confirmou ou recusou), só volta a aparecer se novos itens forem
+   * anotados na live.
+   */
+  const readAnswered = (): Record<string, string> => {
+    try {
+      return JSON.parse(localStorage.getItem(ANSWERED_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  };
+  const markAnswered = (order: any) => {
+    const map = readAnswered();
+    map[order.id] = itemsSignature(order);
+    localStorage.setItem(ANSWERED_KEY, JSON.stringify(map));
+  };
+  const needsConfirm = (data: any) => {
+    const o = data?.order;
+    if (!o || o.is_paid || o.confirmed_at || !o.products?.length) return false;
+    return readAnswered()[o.id] !== itemsSignature(o);
+  };
+  const needsOnboarding = (data: any) =>
+    !!data?.order && !data.order.is_paid && !data.onboardingComplete;
+
+  /** Decide em que etapa a cliente deve cair depois de carregar o estado. */
+  const routeFor = (data: any): Step => {
+    if (needsConfirm(data)) return "confirm";
+    if (data?.order?.confirmed_at && needsOnboarding(data)) return "onboarding";
+    return "area";
+  };
+
+  /** Primeira etapa do onboarding ainda pendente. */
+  const firstPendingOnboard = (data: any): OnboardStep => {
+    const ob = data?.onboarding || {};
+    if (!ob.address) return "address";
+    if (!ob.shipping) return "shipping";
+    if (!ob.cpf) return "cpf";
+    return "email";
+  };
+
+  const hydrateForms = (data: any) => {
+    const d = data?.details || {};
+    if (!d.masked) {
+      setAddr({
+        cep: d.cep || "",
+        address: d.address || "",
+        address_number: d.address_number || "",
+        complement: d.complement || "",
+        neighborhood: d.neighborhood || "",
+        city: d.city || "",
+        state: d.state || "",
+      });
+      setCpf(d.cpf || "");
+      setEmail(d.email || "");
+    }
+  };
+
   const applyState = useCallback(
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
       localStorage.setItem(TOKEN_KEY, data.token);
-      setStep("area");
       itemsSigRef.current = itemsSignature(data.order);
-      if (data.order && !data.order.confirmed_at && !data.order.is_paid) setConfirmOpen(true);
+      hydrateForms(data);
+      const next = routeFor(data);
+      if (next === "onboarding") setOnboardStep(firstPendingOnboard(data));
+      setStep(next);
     },
     [],
   );
@@ -227,20 +309,11 @@ export default function LiveMemberArea() {
           if (had !== "none" && nextCount > prevCount) {
             toast.success("Novo item adicionado ao seu pedido 🛍️");
           }
-          // Itens mudaram → volta a pedir confirmação
-          confirmDismissedRef.current = null;
         }
         itemsSigRef.current = sig;
 
-        if (
-          st.order &&
-          !st.order.confirmed_at &&
-          !st.order.is_paid &&
-          st.order.products?.length &&
-          confirmDismissedRef.current !== st.order.id
-        ) {
-          setConfirmOpen(true);
-        }
+        // Só interrompe a navegação quando ela está parada na área principal.
+        if (needsConfirm(st)) setStep((s) => (s === "area" ? "confirm" : s));
       } catch {
         /* silencioso */
       } finally {
@@ -249,6 +322,7 @@ export default function LiveMemberArea() {
     },
     [],
   );
+
 
   useEffect(() => {
     const token = state?.token;
@@ -329,6 +403,128 @@ export default function LiveMemberArea() {
       setBusy(false);
     }
   };
+
+  // ---------- Confirmação (uma única vez por pedido) ----------
+  const confirmOrder = async () => {
+    const current = state?.order;
+    const res = await act({ action: "confirm_order" });
+    if (res?.ok) {
+      if (current) markAnswered(current);
+      hydrateForms(res);
+      if (needsOnboarding(res)) {
+        setOnboardStep(firstPendingOnboard(res));
+        setStep("onboarding");
+      } else {
+        setStep("area");
+      }
+    }
+  };
+
+  const rejectAll = async () => {
+    const current = state?.order;
+    if (current) markAnswered(current);
+    let res: any = null;
+    for (let i = (current?.products?.length || 0) - 1; i >= 0; i--) {
+      res = await act({ action: "reject_item", index: i });
+    }
+    if (res?.ok) hydrateForms(res);
+    setStep("area");
+    toast.success("Tudo bem! Os itens foram retirados do seu pedido.");
+  };
+
+  // ---------- Onboarding ----------
+  const lookupCep = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    setAddr((a: any) => ({ ...a, cep: digits }));
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const j = await r.json();
+      if (j?.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setAddr((a: any) => ({
+        ...a,
+        cep: digits,
+        address: j.logradouro || a.address || "",
+        neighborhood: j.bairro || "",
+        city: j.localidade || "",
+        state: j.uf || "",
+      }));
+    } catch {
+      toast.error("Não foi possível buscar o CEP agora");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const loadShippingOptions = async (cep: string) => {
+    setShipLoading(true);
+    try {
+      const res = await act({ action: "shipping_options", cep });
+      setShipOptions(res?.options || []);
+    } finally {
+      setShipLoading(false);
+    }
+  };
+
+  const saveAddressStep = async () => {
+    const res = await act({
+      action: "save_details",
+      details: {
+        cep: addr.cep,
+        address: addr.address,
+        address_number: addr.address_number,
+        complement: addr.complement,
+        neighborhood: addr.neighborhood,
+        city: addr.city,
+        state: addr.state,
+      },
+    });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar seus dados" : res?.error || "Erro ao salvar");
+      return;
+    }
+    setOnboardStep("shipping");
+    loadShippingOptions(addr.cep);
+  };
+
+  const chooseShipping = async (methodId: string) => {
+    const res = await act({ action: "set_shipping", method: methodId, cep: addr.cep });
+    if (!res?.ok) {
+      toast.error(res?.error || "Não foi possível escolher o envio");
+      return;
+    }
+    setOnboardStep("cpf");
+  };
+
+  const saveCpfStep = async () => {
+    const res = await act({ action: "save_details", details: { cpf } });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o CPF" : res?.error || "Erro ao salvar");
+      return;
+    }
+    setOnboardStep("email");
+  };
+
+  const saveEmailStep = async () => {
+    const res = await act({ action: "save_details", details: { email } });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o e-mail" : res?.error || "Erro ao salvar");
+      return;
+    }
+    toast.success("Tudo pronto! Agora é só pagar 🎉");
+    setStep("area");
+  };
+
+  const goCheckout = (method: "pix" | "card" | "debit") => {
+    if (!state?.order) return;
+    window.location.href = `${state.order.checkout_url}?method=${method}`;
+  };
+
+
 
   if (loading) {
     return (
@@ -459,6 +655,262 @@ export default function LiveMemberArea() {
       </div>
     );
   }
+
+  const BackToLiveLink = (
+    <button
+      type="button"
+      onClick={backToLive}
+      className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft className="h-4 w-4" /> Voltar pra live
+    </button>
+  );
+
+  // ---------- Etapa 3: Confirmação do produto (uma vez por pedido) ----------
+  if (step === "confirm" && state?.order?.products?.length) {
+    const o = state.order;
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          <div className="space-y-2">
+            {o.products.map((p: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-primary/10 p-3">
+                <div className="h-14 w-14 rounded-xl bg-card flex items-center justify-center overflow-hidden shrink-0">
+                  {p.image ? (
+                    <img src={p.image} alt={p.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <ShoppingBag className="h-6 w-6 text-primary" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary leading-tight">{p.title}</p>
+                  <p className="text-sm text-primary/80">
+                    {p.variant ? `${p.variant} · ` : ""}
+                    {brl(Number(p.price || 0))}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-6 text-center text-lg font-bold leading-snug">
+            {o.products.length > 1 ? "Estes produtos são seus" : "Este produto é seu"}
+          </p>
+          <p className="mt-1 text-center text-muted-foreground leading-snug">
+            Só confirme se for realmente ficar com o produto
+          </p>
+
+          <div className="mt-6 space-y-3">
+            <Button
+              className="w-full h-14 text-base font-bold rounded-xl"
+              disabled={busy}
+              onClick={confirmOrder}
+            >
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sim, confirmar"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-14 text-base font-semibold rounded-xl"
+              disabled={busy}
+              onClick={rejectAll}
+            >
+              Não quero mais
+            </Button>
+          </div>
+
+          {BackToLiveLink}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Etapa 4: Dados de envio por etapas ----------
+  if (step === "onboarding") {
+    const stepsOrder: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const idx = stepsOrder.indexOf(onboardStep);
+    const titles: Record<OnboardStep, string> = {
+      address: "Falta pouco pra confirmar",
+      shipping: "Como você quer receber?",
+      cpf: "Seu CPF",
+      email: "Seu e-mail",
+    };
+
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-start sm:items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          <div className="flex gap-1.5">
+            {stepsOrder.map((s, i) => (
+              <div
+                key={s}
+                className={`h-1.5 flex-1 rounded-full ${i <= idx ? "bg-primary" : "bg-muted"}`}
+              />
+            ))}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{idx} de 4 etapas concluídas</p>
+          <h2 className="mt-1 text-2xl font-bold leading-tight">{titles[onboardStep]}</h2>
+
+          {onboardStep === "address" && (
+            <div className="mt-5 space-y-3">
+              <Label className="text-sm text-muted-foreground">Endereço de entrega</Label>
+              <div className="relative">
+                <Input
+                  value={addr.cep || ""}
+                  onChange={(e) => lookupCep(e.target.value)}
+                  placeholder="Buscar por CEP"
+                  inputMode="numeric"
+                  className="h-14 text-[16px] rounded-xl"
+                  autoFocus
+                />
+                {cepLoading && (
+                  <Loader2 className="h-5 w-5 animate-spin absolute right-4 top-4 text-muted-foreground" />
+                )}
+              </div>
+              {!!addr.city && (
+                <>
+                  <Input
+                    value={addr.address || ""}
+                    onChange={(e) => setAddr((a: any) => ({ ...a, address: e.target.value }))}
+                    placeholder="Rua"
+                    className="h-14 text-[16px] rounded-xl"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      value={addr.address_number || ""}
+                      onChange={(e) =>
+                        setAddr((a: any) => ({ ...a, address_number: e.target.value }))
+                      }
+                      placeholder="Número"
+                      className="h-14 text-[16px] rounded-xl"
+                    />
+                    <Input
+                      value={addr.complement || ""}
+                      onChange={(e) => setAddr((a: any) => ({ ...a, complement: e.target.value }))}
+                      placeholder="Complemento"
+                      className="h-14 text-[16px] rounded-xl"
+                    />
+                  </div>
+                  <Input
+                    value={addr.neighborhood || ""}
+                    onChange={(e) => setAddr((a: any) => ({ ...a, neighborhood: e.target.value }))}
+                    placeholder="Bairro"
+                    className="h-14 text-[16px] rounded-xl"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {addr.city}/{addr.state}
+                  </p>
+                </>
+              )}
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl mt-2"
+                disabled={
+                  busy ||
+                  String(addr.cep || "").replace(/\D/g, "").length !== 8 ||
+                  !addr.address ||
+                  !addr.address_number
+                }
+                onClick={saveAddressStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+            </div>
+          )}
+
+          {onboardStep === "shipping" && (
+            <div className="mt-5 space-y-3">
+              {shipLoading ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                shipOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    disabled={busy}
+                    onClick={() => chooseShipping(opt.id)}
+                    className="w-full text-left rounded-xl border-2 border-border hover:border-primary p-4 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold">{opt.label}</span>
+                      <span className="font-bold text-primary">
+                        {opt.cost > 0 ? brl(opt.cost) : "Grátis"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{opt.description}</p>
+                  </button>
+                ))
+              )}
+              <button
+                onClick={() => setOnboardStep("address")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Alterar endereço
+              </button>
+            </div>
+          )}
+
+          {onboardStep === "cpf" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">Usamos só para emitir sua nota fiscal.</p>
+              <Input
+                value={cpf}
+                onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                placeholder="000.000.000-00"
+                inputMode="numeric"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || cpf.replace(/\D/g, "").length !== 11}
+                onClick={saveCpfStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+              <button
+                onClick={() => setOnboardStep("shipping")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Voltar
+              </button>
+            </div>
+          )}
+
+          {onboardStep === "email" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Enviamos a nota fiscal e o código de rastreio neste e-mail.
+              </p>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@email.com"
+                inputMode="email"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || !/^\S+@\S+\.\S+$/.test(email.trim())}
+                onClick={saveEmailStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Concluir"}
+              </Button>
+              <button
+                onClick={() => setOnboardStep("cpf")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Voltar
+              </button>
+            </div>
+          )}
+
+          {BackToLiveLink}
+        </div>
+      </div>
+    );
+  }
+
+
 
   // ---------- Área do cliente ----------
   const order = state?.order;
@@ -602,18 +1054,47 @@ export default function LiveMemberArea() {
                       <Timer className="h-5 w-5" /> Pague em {mm}:{ss}
                     </div>
                   )}
-                  <Button
-                    className="w-full h-16 text-base font-bold gap-2"
-                    onClick={() => (window.location.href = order.checkout_url)}
-                  >
-                    <CreditCard className="h-5 w-5" /> PAGAR AGORA
-                  </Button>
+                  {!state?.onboardingComplete ? (
+                    <Button
+                      className="w-full h-16 text-base font-bold"
+                      onClick={() => {
+                        setOnboardStep(firstPendingOnboard(state));
+                        setStep("onboarding");
+                      }}
+                    >
+                      COMPLETAR MEUS DADOS DE ENVIO
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full h-16 text-base font-bold gap-2"
+                        onClick={() => goCheckout("pix")}
+                      >
+                        <QrCode className="h-5 w-5" /> PAGAR NO PIX
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full h-16 text-base font-bold gap-2 border-2 border-primary"
+                        onClick={() => goCheckout("card")}
+                      >
+                        <CreditCard className="h-5 w-5" /> PAGAR NO CARTÃO DE CRÉDITO
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full h-16 text-base font-bold gap-2 border-2 border-border"
+                        onClick={() => goCheckout("debit")}
+                      >
+                        <CreditCard className="h-5 w-5" /> PAGAR NO DÉBITO
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <Button className="w-full h-16 text-base font-bold" onClick={() => setConfirmOpen(true)}>
+                <Button className="w-full h-16 text-base font-bold" onClick={() => setStep("confirm")}>
                   CONFIRMAR MEU PEDIDO
                 </Button>
               )}
+
             </>
           )}
         </section>
@@ -714,56 +1195,8 @@ export default function LiveMemberArea() {
         </a>
       </div>
 
-      {/* Modal: confirmar pedido */}
-      {confirmOpen && order && order.products.length > 0 && !order.confirmed_at && !order.is_paid && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-          <div className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-center">Confirma este pedido?</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {order.products.map((p: any, i: number) => (
-                <div key={i} className="flex gap-3 items-center">
-                  {p.image && <img src={p.image} alt={p.title} className="w-14 h-14 rounded-lg object-cover" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">{p.variant}</p>
-                  </div>
-                  <span className="text-sm font-bold">{brl(Number(p.price || 0))}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between font-bold">
-              <span>Total</span>
-              <span>{brl(order.total)}</span>
-            </div>
-            <p className="text-xs text-center text-muted-foreground">
-              Ao confirmar você tem 20 minutos para pagar. O estoque só é reservado após o pagamento.
-            </p>
-            <Button
-              className="w-full h-16 text-base font-bold"
-              disabled={busy}
-              onClick={async () => {
-                const res = await act({ action: "confirm_order" });
-                if (res?.ok) {
-                  setConfirmOpen(false);
-                  toast.success("Pedido confirmado!");
-                }
-              }}
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRMAR"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full h-12"
-              onClick={() => {
-                confirmDismissedRef.current = order.id;
-                setConfirmOpen(false);
-              }}
-            >
-              Agora não
-            </Button>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Modal: OTP */}
       {otpOpen && (
