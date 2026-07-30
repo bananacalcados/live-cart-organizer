@@ -268,9 +268,12 @@ Deno.serve(async (req) => {
      */
     async function applyEventShipping(order: any) {
       if (!order || order.is_paid) return order;
+      // Frete escolhido pela própria cliente na área de membros manda sempre.
+      if ((order.shipping_info as any)?.source === "member_area") return order;
       if (order.free_shipping) return order;
       if (Number(order.shipping_cost || 0) > 0) return order;
       if (!order.event_id) return order;
+
 
       const { data: ev } = await supabase
         .from("events")
