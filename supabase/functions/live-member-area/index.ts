@@ -858,6 +858,16 @@ Deno.serve(async (req) => {
         .eq("id", order.id);
       if (confErr) return json({ ok: false, error: confErr.message }, 500);
 
+      // Dispara o template Meta configurado na etapa MENSAGEM do evento (com link do carrinho).
+      // Best-effort: falha no envio nunca bloqueia a confirmação.
+      try {
+        await supabase.functions.invoke("event-order-template-send", {
+          body: { orderId: order.id },
+        });
+      } catch (e) {
+        console.error("[confirm_order] falha ao enviar template:", e);
+      }
+
       return json(await buildState(session));
     }
 
