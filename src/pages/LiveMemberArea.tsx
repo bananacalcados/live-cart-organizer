@@ -16,6 +16,12 @@ import {
   Timer,
   Trash2,
 } from "lucide-react";
+import {
+  EventPrizeWheelDialog,
+  PublicWheel,
+  useEventPrizeWheels,
+} from "@/components/prize/EventPrizeWheelDialog";
+
 
 type Step = "phone" | "name" | "area";
 
