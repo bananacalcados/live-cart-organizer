@@ -1227,19 +1227,28 @@ export default function LiveMemberArea() {
 
       {/* Modal: OTP */}
       {otpOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-          <div className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/70 overflow-y-auto flex items-start justify-center p-4">
+          <div className="bg-background w-full sm:max-w-md rounded-3xl p-6 space-y-4 mt-6 mb-[60vh]">
             <h3 className="text-lg font-bold text-center">Digite o código do WhatsApp</h3>
             <Input
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onFocus={(e) =>
+                setTimeout(
+                  () => e.target.scrollIntoView({ block: "center", behavior: "smooth" }),
+                  250,
+                )
+              }
               inputMode="numeric"
-              className="h-16 text-center text-2xl font-bold tracking-[0.5em]"
+              maxLength={6}
+              placeholder="000000"
+              className="h-16 text-center text-2xl font-bold tracking-[0.4em]"
               autoFocus
             />
             <Button
               className="w-full h-16 text-base font-bold"
               disabled={otp.length < 4 || busy}
+
               onClick={async () => {
                 const res = await act({ action: "verify_otp", code: otp });
                 if (res?.ok) {
