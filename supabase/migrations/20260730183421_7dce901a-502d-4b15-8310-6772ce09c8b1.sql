@@ -1,0 +1,2 @@
+update products_master set shopify_product_id = null where id = '82a03908-d46f-4a3e-b4a5-ddf365a400b7';
+update product_variants set shopify_variant_id = null where master_id = '82a03908-d46f-4a3e-b4a5-ddf365a400b7';
