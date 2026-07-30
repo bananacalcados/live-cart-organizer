@@ -3,6 +3,8 @@
 // Regras: evento precisa estar ativo/dentro da janela, roleta ativa, 1 giro por telefone (configurável),
 // e OTP no WhatsApp para participantes quando exigido.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
