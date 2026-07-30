@@ -615,6 +615,14 @@ Deno.serve(async (req) => {
                 pix_total: pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot,
                 is_paid: !!order.is_paid,
                 confirmed_at: order.customer_confirmed_at,
+                items_signature: itemsSignature(order),
+                // Só volta a pedir confirmação se os itens mudaram depois do "sim".
+                needs_confirm:
+                  !order.is_paid &&
+                  (order.products || []).length > 0 &&
+                  (!order.customer_confirmed_at ||
+                    (!!order.confirmed_items_signature &&
+                      order.confirmed_items_signature !== itemsSignature(order))),
                 payment_window_expires_at: order.payment_window_expires_at,
                 checkout_url: `/checkout/order/${order.id}`,
               };
