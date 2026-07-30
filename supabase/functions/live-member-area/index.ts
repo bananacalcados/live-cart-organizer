@@ -2,6 +2,8 @@
 // Identidade = telefone digitado (sem OTP na entrada, para captar leads).
 // OTP funciona como "cofre": só libera leitura/edição dos dados pessoais.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
