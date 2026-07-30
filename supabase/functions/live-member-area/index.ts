@@ -805,7 +805,14 @@ Deno.serve(async (req) => {
           if (target) {
             await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
             customer = { ...target, whatsapp: phone } as any;
+            // Pedido que estava incompleto por falta do WhatsApp já pode seguir
+            await supabase
+              .from("orders")
+              .update({ stage: "awaiting_confirmation" })
+              .eq("customer_id", target.id)
+              .eq("stage", "incomplete_order");
           }
+
         }
       }
 
