@@ -717,6 +717,62 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 }}
               />
 
+              {/* Aviso automático no WhatsApp (Área de Clientes) */}
+              <div className="space-y-3 rounded-lg border-2 border-accent/40 p-3 bg-accent/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <Smartphone className="h-4 w-4 text-accent" /> Aviso automático no WhatsApp
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enviado automaticamente para a cliente com o link da Área de Clientes quando o
+                      pedido dela é criado/atualizado na live.
+                    </p>
+                  </div>
+                  <Switch checked={maNotifyEnabled} onCheckedChange={setMaNotifyEnabled} />
+                </div>
+
+                {maNotifyEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Instância de WhatsApp (Meta API)</Label>
+                      <Select value={maWaId} onValueChange={setMaWaId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o número WhatsApp..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Usar a mesma instância acima</SelectItem>
+                          {numbers
+                            .filter((n) => (n.provider || "meta") === "meta")
+                            .map((n) => (
+                              <SelectItem key={n.id} value={n.id}>
+                                {n.label}{" "}
+                                <span className="text-muted-foreground ml-1">({n.phone_display})</span>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <MetaTemplateConfigurator
+                      whatsappNumberId={maWhatsappNumberId || whatsappNumberId}
+                      templateName={maTemplateName}
+                      language={maTemplateLanguage}
+                      bodyVariables={maTemplateBodyVars}
+                      headerVariable={maTemplateHeaderVar}
+                      onChange={(next) => {
+                        setMaTemplateName(next.templateName);
+                        setMaTemplateLanguage(next.language);
+                        setMaTemplateBodyVars(next.bodyVariables);
+                        setMaTemplateHeaderVar(next.headerVariable);
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+
+
+
               <InitialMessageEditor
                 enabled={initialMessageEnabled}
                 blocks={initialMessageBlocks}
