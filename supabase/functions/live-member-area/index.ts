@@ -769,7 +769,7 @@ Deno.serve(async (req) => {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      const { customer } = await loadOrder(event?.id || null, phone);
+      let { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName) return json({ ok: true, needsName: true });
@@ -788,6 +788,35 @@ Deno.serve(async (req) => {
         await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
       }
 
+      // Telefone verificado: se ainda não achamos a cliente pelo número, casa
+      // pelo @ do Instagram (pedido criado na live sem WhatsApp). Assim o número
+      // digitado aqui entra automaticamente no cadastro dela dentro do evento.
+      if (!customer && providedName) {
+        const handle = providedName.replace(/^@/, "").trim().toLowerCase();
+        if (handle) {
+          const { data: byHandle } = await supabase
+            .from("customers")
+            .select("id, instagram_handle, whatsapp")
+            .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`)
+            .limit(5);
+          const target = (byHandle || []).find(
+            (c: any) => !c.whatsapp || !String(c.whatsapp).trim(),
+          );
+          if (target) {
+            await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
+            customer = { ...target, whatsapp: phone } as any;
+            // Pedido que estava incompleto por falta do WhatsApp já pode seguir
+            await supabase
+              .from("orders")
+              .update({ stage: "awaiting_confirmation" })
+              .eq("customer_id", target.id)
+              .eq("stage", "incomplete_order");
+          }
+
+        }
+      }
+
+
 
 
       // Garante cadastro do contato + lead da live
@@ -796,6 +825,7 @@ Deno.serve(async (req) => {
       } else if (providedName && !customer.instagram_handle) {
         await supabase.from("customers").update({ instagram_handle: name }).eq("id", customer.id);
       }
+
 
       if (event?.id) {
         const { data: existingLead } = await supabase
