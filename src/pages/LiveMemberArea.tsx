@@ -1116,29 +1116,46 @@ export default function LiveMemberArea() {
                     >
                       COMPLETAR MEUS DADOS DE ENVIO
                     </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <Button
-                        className="w-full h-16 text-base font-bold gap-2"
+                  ) : payForm ? (
+                    <div className="rounded-2xl border-2 border-border p-3">
+                      <StepPayment
+                        orderId={order.id}
+                        amount={order.total}
+                        products={(order.products || []).map((p: any) => ({
+                          title: p.title,
+                          variant: p.variant,
+                          price: Number(p.effective_price ?? p.price ?? 0),
+                          quantity: Number(p.quantity || 1),
+                          image: p.image,
+                        }))}
+                        form={payForm}
+                        installmentConfig={installmentConfig}
+                        stepBadge={null}
+                        onPaymentConfirmed={handlePaymentConfirmed}
+                      />
+                      <button
+                        type="button"
                         onClick={() => goCheckout("pix")}
+                        className="w-full mt-3 text-xs text-muted-foreground underline"
                       >
-                        <QrCode className="h-5 w-5" /> PAGAR NO PIX
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full h-16 text-base font-bold gap-2 border-2 border-primary"
-                        onClick={() => goCheckout("card")}
-                      >
-                        <CreditCard className="h-5 w-5" /> PAGAR NO CARTÃO DE CRÉDITO
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full h-16 text-base font-bold gap-2 border-2 border-border"
-                        onClick={() => goCheckout("debit")}
-                      >
-                        <CreditCard className="h-5 w-5" /> PAGAR NO DÉBITO
-                      </Button>
+                        Prefiro pagar pelo link do checkout
+                      </button>
                     </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full h-16 text-base font-bold border-2 border-primary"
+                      onClick={async () => {
+                        const res = await act({ action: "send_otp" });
+                        if (res?.ok) {
+                          setOtpOpen(true);
+                          toast.success("Código enviado no seu WhatsApp");
+                        } else toast.error(res?.error || "Falha ao enviar código");
+                      }}
+                      disabled={busy}
+                    >
+                      <Lock className="h-5 w-5 mr-2" /> LIBERAR MEUS DADOS PARA PAGAR
+                    </Button>
                   )}
                 </div>
               ) : (
