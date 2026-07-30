@@ -543,26 +543,15 @@ Deno.serve(async (req) => {
     }
 
     if (action === "send_otp") {
-      // Anti-spam de OTP: 3 códigos por telefone a cada 10 min e 10 por IP/hora.
+      // Anti-spam de OTP: 3 envios por telefone a cada 10 min e 10 por IP/hora.
       if (!(await allow(`otp:${session.phone}`, 3, 600))) {
         return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
       }
       if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
         return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
       }
-      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/live-send-verification`, {
-
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify({ phone: session.phone }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        return json({ ok: false, error: data?.error || "Falha ao enviar código" }, 500);
-      }
+      const r = await sendAccessCode(supabase, session.phone);
+      if (!r.ok) return json({ ok: false, error: r.error || "Falha ao enviar código" }, 500);
       return json({ ok: true });
     }
 
@@ -572,20 +561,9 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
       }
       const code = String(body.code || "").replace(/\D/g, "");
-      const { data: rec } = await supabase
-        .from("live_phone_verifications")
-        .select("id, code, expires_at")
-        .eq("phone", session.phone)
-        .eq("verified", false)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const ok = await verifyAccessCode(supabase, session.phone, code);
+      if (!ok) return json({ ok: false, error: "Código incorreto." });
 
-      if (!rec) return json({ ok: false, error: "Código não encontrado. Solicite um novo." });
-      if (new Date(rec.expires_at) < new Date()) return json({ ok: false, error: "Código expirado." });
-      if (rec.code !== code) return json({ ok: false, error: "Código incorreto." });
-
-      await supabase.from("live_phone_verifications").update({ verified: true }).eq("id", rec.id);
       const until = new Date(Date.now() + OTP_SESSION_MIN * 60_000).toISOString();
       const { data: updated } = await supabase
         .from("live_member_sessions")
@@ -596,6 +574,7 @@ Deno.serve(async (req) => {
 
       return json(await buildState(updated));
     }
+
 
     if (action === "save_details") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
