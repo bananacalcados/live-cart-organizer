@@ -184,11 +184,19 @@ export function EventPrizeWheelDialog({ wheel, phone, name, onClose, onDone }: P
                   <>
                     <Input
                       value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onFocus={(e) =>
+                        setTimeout(
+                          () => e.target.scrollIntoView({ block: "center", behavior: "smooth" }),
+                          250,
+                        )
+                      }
                       inputMode="numeric"
-                      placeholder="0000"
-                      className="h-14 text-center text-2xl font-bold tracking-[0.5em] bg-white/10 text-white border-white/20"
+                      maxLength={6}
+                      placeholder="000000"
+                      className="h-14 text-center text-2xl font-bold tracking-[0.4em] bg-white/10 text-white border-white/20"
                     />
+
                     <Button
                       onClick={verifyOtp}
                       disabled={otp.length < 4 || busy}
