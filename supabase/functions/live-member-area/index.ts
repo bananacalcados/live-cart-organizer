@@ -326,7 +326,9 @@ Deno.serve(async (req) => {
 
       const fixed = Number(ev.default_shipping_cost || 0);
       const freeAbove = Number(ev.free_shipping_threshold || 0);
-      const subtotal = orderSubtotal(order);
+      // Regra do frete grátis usa o valor REAL do pedido (com desconto aplicado),
+      // nunca o subtotal cheio dos produtos.
+      const subtotal = Math.max(0, orderSubtotal(order) - orderDiscount(order));
 
       let shippingCost: number | null = null;
       let freeShipping = false;
