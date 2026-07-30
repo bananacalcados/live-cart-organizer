@@ -769,14 +769,37 @@ Deno.serve(async (req) => {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      const { customer } = await loadOrder(event?.id || null, phone);
+      let { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName) return json({ ok: true, needsName: true });
       if (!name) name = providedName;
 
+      // Se ainda não achamos a cliente pelo telefone, tenta casar pelo @ do
+      // Instagram (pedido criado na live sem WhatsApp). Assim o número digitado
+      // aqui entra automaticamente no cadastro da cliente dentro do evento.
+      let linkedByHandle = false;
+      if (!customer && providedName) {
+        const handle = providedName.replace(/^@/, "").trim().toLowerCase();
+        if (handle) {
+          const { data: byHandle } = await supabase
+            .from("customers")
+            .select("id, instagram_handle, whatsapp")
+            .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`)
+            .limit(5);
+          const target = (byHandle || []).find(
+            (c: any) => !c.whatsapp || !String(c.whatsapp).trim(),
+          );
+          if (target) {
+            await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
+            customer = { ...target, whatsapp: phone };
+            linkedByHandle = true;
+          }
+        }
+      }
+
       // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
-      if (!(await isKnownCustomer(phone))) {
+      if (!linkedByHandle && !(await isKnownCustomer(phone))) {
         const code = String(body.otp || "").replace(/\D/g, "");
         if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
         if (!(await allow(`otpv:${phone}`, 8, 600))) {
@@ -796,6 +819,7 @@ Deno.serve(async (req) => {
       } else if (providedName && !customer.instagram_handle) {
         await supabase.from("customers").update({ instagram_handle: name }).eq("id", customer.id);
       }
+
 
       if (event?.id) {
         const { data: existingLead } = await supabase
