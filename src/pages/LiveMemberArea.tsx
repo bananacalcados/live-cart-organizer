@@ -11,6 +11,8 @@ import {
   History,
   Loader2,
   Lock,
+  LogOut,
+
   MessageCircle,
   ShoppingBag,
   Timer,
