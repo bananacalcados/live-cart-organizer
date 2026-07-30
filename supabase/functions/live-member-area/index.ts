@@ -756,6 +756,24 @@ Deno.serve(async (req) => {
         0,
       );
 
+      // A opção de entrega deve refletir exatamente o pedido/evento, e não o
+      // menor preço bruto devolvido pela transportadora.
+      let eventFixed = 0;
+      let eventFreeAbove = 0;
+      const shippingEventId = order?.event_id || event?.id || null;
+      if (shippingEventId) {
+        const { data: shippingEvent } = await supabase
+          .from("events")
+          .select("default_shipping_cost, free_shipping_threshold")
+          .eq("id", shippingEventId)
+          .maybeSingle();
+        eventFixed = Number(shippingEvent?.default_shipping_cost || 0);
+        eventFreeAbove = Number(shippingEvent?.free_shipping_threshold || 0);
+      }
+      const orderHasFreeShipping = order?.free_shipping === true;
+      const eventThresholdReached = eventFreeAbove > 0 && subtotal >= eventFreeAbove;
+      const forceFreeDelivery = orderHasFreeShipping || eventThresholdReached;
+
       let quotes: any[] = [];
       if (cep.length === 8) {
         try {
@@ -770,7 +788,8 @@ Deno.serve(async (req) => {
               total_value: subtotal,
               items_count: itemsCount || 1,
               order_id: order?.id || null,
-              event_id: order?.event_id || event?.id || null,
+               event_id: shippingEventId,
+               free_shipping: orderHasFreeShipping,
             }),
           });
           const j = await r.json().catch(() => null);
@@ -793,37 +812,33 @@ Deno.serve(async (req) => {
         delivery_days: number | null;
       }[] = [];
 
-      // 1) Envio para o endereço = frete FIXO (regra do evento aplicada pela quote).
+      // 1) Envio para o endereço. Prioridade obrigatória:
+      //    grátis no pedido > grátis por faixa do evento > fixo do evento > cotação.
       const deliveryQuotes = quotes.filter(
         (q) => !["pickup", "local"].includes(q.type),
       );
       if (deliveryQuotes.length) {
-        const best = deliveryQuotes.reduce((a, c) => (Number(c.price) < Number(a.price) ? c : a));
+        const eventQuote = deliveryQuotes.find((q) => ["event_free", "event_fixed"].includes(q.type));
+        const best = eventQuote || deliveryQuotes.reduce((a, c) => (Number(c.price) < Number(a.price) ? c : a));
         const days = best.delivery_days ?? null;
+        const cost = forceFreeDelivery
+          ? 0
+          : eventFixed > 0
+            ? eventFixed
+            : Math.max(0, Number(best.price) || 0);
         options.push({
           id: "delivery",
           label: "Envio para o meu endereço",
           description:
-            Number(best.price) > 0
+            cost > 0
               ? [best.carrier, eta(days)].filter(Boolean).join(" · ")
               : ["Frete grátis nesta compra", eta(days)].filter(Boolean).join(" · "),
-          cost: Math.round(Number(best.price) * 100) / 100,
+          cost: Math.round(cost * 100) / 100,
           delivery_days: days,
         });
       } else {
-        // Fallback: usa o frete fixo do evento se a cotação não respondeu.
-        let fixed = 0;
-        let freeAbove = 0;
-        if (order?.event_id) {
-          const { data: ev } = await supabase
-            .from("events")
-            .select("default_shipping_cost, free_shipping_threshold")
-            .eq("id", order.event_id)
-            .maybeSingle();
-          fixed = Number(ev?.default_shipping_cost || 0);
-          freeAbove = Number(ev?.free_shipping_threshold || 0);
-        }
-        const cost = freeAbove > 0 && subtotal >= freeAbove ? 0 : fixed;
+        // Fallback seguro quando a transportadora não responde.
+        const cost = forceFreeDelivery ? 0 : eventFixed;
         options.push({
           id: "delivery",
           label: "Envio para o meu endereço",

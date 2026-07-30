@@ -419,7 +419,10 @@ export default function LiveMemberArea() {
     setBusy(true);
     try {
       const res = await callApi({ ...payload, token: state.token });
-      if (res?.ok) setState(res);
+      // Algumas ações (ex.: shipping_options) retornam apenas dados auxiliares.
+      // Não substituir o estado completo por essas respostas, pois isso apagava
+      // o token da sessão e impedia o clique seguinte em uma forma de envio.
+      if (res?.ok && res?.token) setState(res);
       return res;
     } catch (e: any) {
       toast.error(e.message || "Erro");
