@@ -394,11 +394,22 @@ export default function LiveMemberArea() {
     return () => window.clearInterval(i);
   }, [state?.order?.payment_window_expires_at, state?.order?.is_paid]);
 
-  const enter = async (withName?: string) => {
+  const enter = async (withName?: string, code?: string) => {
     setBusy(true);
     try {
-      const res = await callApi({ action: "enter", phone, name: withName || undefined });
+      const res = await callApi({
+        action: "enter",
+        phone,
+        name: withName || name.trim() || undefined,
+        otp: code || undefined,
+      });
       if (!res?.ok) {
+        // Cadastro novo sem pedidos: confirma o WhatsApp uma única vez.
+        if (res?.needsOtp) {
+          setStep("signup_otp");
+          if (code) toast.error(res?.error || "Código incorreto");
+          return;
+        }
         toast.error(res?.error || "Não foi possível entrar");
         return;
       }
@@ -413,6 +424,7 @@ export default function LiveMemberArea() {
       setBusy(false);
     }
   };
+
 
   /** Aplica a resposta do servidor sem perder o histórico (respostas rápidas o omitem). */
   const mergeState = (res: any) =>
