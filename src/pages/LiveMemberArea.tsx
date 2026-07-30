@@ -655,6 +655,262 @@ export default function LiveMemberArea() {
     );
   }
 
+  const BackToLiveLink = (
+    <button
+      type="button"
+      onClick={backToLive}
+      className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft className="h-4 w-4" /> Voltar pra live
+    </button>
+  );
+
+  // ---------- Etapa 3: Confirmação do produto (uma vez por pedido) ----------
+  if (step === "confirm" && state?.order?.products?.length) {
+    const o = state.order;
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          <div className="space-y-2">
+            {o.products.map((p: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-primary/10 p-3">
+                <div className="h-14 w-14 rounded-xl bg-card flex items-center justify-center overflow-hidden shrink-0">
+                  {p.image ? (
+                    <img src={p.image} alt={p.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <ShoppingBag className="h-6 w-6 text-primary" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary leading-tight">{p.title}</p>
+                  <p className="text-sm text-primary/80">
+                    {p.variant ? `${p.variant} · ` : ""}
+                    {brl(Number(p.price || 0))}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-6 text-center text-lg font-bold leading-snug">
+            {o.products.length > 1 ? "Estes produtos são seus" : "Este produto é seu"}
+          </p>
+          <p className="mt-1 text-center text-muted-foreground leading-snug">
+            Só confirme se for realmente ficar com o produto
+          </p>
+
+          <div className="mt-6 space-y-3">
+            <Button
+              className="w-full h-14 text-base font-bold rounded-xl"
+              disabled={busy}
+              onClick={confirmOrder}
+            >
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sim, confirmar"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-14 text-base font-semibold rounded-xl"
+              disabled={busy}
+              onClick={rejectAll}
+            >
+              Não quero mais
+            </Button>
+          </div>
+
+          {BackToLiveLink}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Etapa 4: Dados de envio por etapas ----------
+  if (step === "onboarding") {
+    const stepsOrder: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const idx = stepsOrder.indexOf(onboardStep);
+    const titles: Record<OnboardStep, string> = {
+      address: "Falta pouco pra confirmar",
+      shipping: "Como você quer receber?",
+      cpf: "Seu CPF",
+      email: "Seu e-mail",
+    };
+
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-start sm:items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          <div className="flex gap-1.5">
+            {stepsOrder.map((s, i) => (
+              <div
+                key={s}
+                className={`h-1.5 flex-1 rounded-full ${i <= idx ? "bg-primary" : "bg-muted"}`}
+              />
+            ))}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{idx} de 4 etapas concluídas</p>
+          <h2 className="mt-1 text-2xl font-bold leading-tight">{titles[onboardStep]}</h2>
+
+          {onboardStep === "address" && (
+            <div className="mt-5 space-y-3">
+              <Label className="text-sm text-muted-foreground">Endereço de entrega</Label>
+              <div className="relative">
+                <Input
+                  value={addr.cep || ""}
+                  onChange={(e) => lookupCep(e.target.value)}
+                  placeholder="Buscar por CEP"
+                  inputMode="numeric"
+                  className="h-14 text-[16px] rounded-xl"
+                  autoFocus
+                />
+                {cepLoading && (
+                  <Loader2 className="h-5 w-5 animate-spin absolute right-4 top-4 text-muted-foreground" />
+                )}
+              </div>
+              {!!addr.city && (
+                <>
+                  <Input
+                    value={addr.address || ""}
+                    onChange={(e) => setAddr((a: any) => ({ ...a, address: e.target.value }))}
+                    placeholder="Rua"
+                    className="h-14 text-[16px] rounded-xl"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      value={addr.address_number || ""}
+                      onChange={(e) =>
+                        setAddr((a: any) => ({ ...a, address_number: e.target.value }))
+                      }
+                      placeholder="Número"
+                      className="h-14 text-[16px] rounded-xl"
+                    />
+                    <Input
+                      value={addr.complement || ""}
+                      onChange={(e) => setAddr((a: any) => ({ ...a, complement: e.target.value }))}
+                      placeholder="Complemento"
+                      className="h-14 text-[16px] rounded-xl"
+                    />
+                  </div>
+                  <Input
+                    value={addr.neighborhood || ""}
+                    onChange={(e) => setAddr((a: any) => ({ ...a, neighborhood: e.target.value }))}
+                    placeholder="Bairro"
+                    className="h-14 text-[16px] rounded-xl"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {addr.city}/{addr.state}
+                  </p>
+                </>
+              )}
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl mt-2"
+                disabled={
+                  busy ||
+                  String(addr.cep || "").replace(/\D/g, "").length !== 8 ||
+                  !addr.address ||
+                  !addr.address_number
+                }
+                onClick={saveAddressStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+            </div>
+          )}
+
+          {onboardStep === "shipping" && (
+            <div className="mt-5 space-y-3">
+              {shipLoading ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                shipOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    disabled={busy}
+                    onClick={() => chooseShipping(opt.id)}
+                    className="w-full text-left rounded-xl border-2 border-border hover:border-primary p-4 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold">{opt.label}</span>
+                      <span className="font-bold text-primary">
+                        {opt.cost > 0 ? brl(opt.cost) : "Grátis"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{opt.description}</p>
+                  </button>
+                ))
+              )}
+              <button
+                onClick={() => setOnboardStep("address")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Alterar endereço
+              </button>
+            </div>
+          )}
+
+          {onboardStep === "cpf" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">Usamos só para emitir sua nota fiscal.</p>
+              <Input
+                value={cpf}
+                onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                placeholder="000.000.000-00"
+                inputMode="numeric"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || cpf.replace(/\D/g, "").length !== 11}
+                onClick={saveCpfStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+              <button
+                onClick={() => setOnboardStep("shipping")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Voltar
+              </button>
+            </div>
+          )}
+
+          {onboardStep === "email" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Enviamos a nota fiscal e o código de rastreio neste e-mail.
+              </p>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@email.com"
+                inputMode="email"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || !/^\S+@\S+\.\S+$/.test(email.trim())}
+                onClick={saveEmailStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Concluir"}
+              </Button>
+              <button
+                onClick={() => setOnboardStep("cpf")}
+                className="text-sm text-muted-foreground underline"
+              >
+                Voltar
+              </button>
+            </div>
+          )}
+
+          {BackToLiveLink}
+        </div>
+      </div>
+    );
+  }
+
+
+
   // ---------- Área do cliente ----------
   const order = state?.order;
   const mm = remaining != null ? String(Math.floor(remaining / 60)).padStart(2, "0") : null;
