@@ -119,6 +119,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
   const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
 
+  // Aviso automático no WhatsApp (Área de Clientes)
+  const [maNotifyEnabled, setMaNotifyEnabled] = useState(false);
+  const [maWaId, setMaWaId] = useState<string>("none");
+  const [maTemplateName, setMaTemplateName] = useState<string | null>(null);
+  const [maTemplateLanguage, setMaTemplateLanguage] = useState("pt_BR");
+  const [maTemplateBodyVars, setMaTemplateBodyVars] = useState<string[]>([]);
+  const [maTemplateHeaderVar, setMaTemplateHeaderVar] = useState<string | null>(null);
+
+
   // Parcelamento
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
@@ -130,6 +139,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
   const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
+  const maWhatsappNumberId = maWaId === "none" ? null : maWaId;
 
   useEffect(() => {
     if (open && numbers.length === 0) fetchNumbers();
@@ -173,6 +183,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setInitialMessageBlocks((e.initial_message_blocks as string[]) || []);
     setIgButtons((e.ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
     setIgAutomations((e.ig_automations as IgAutomation[]) || []);
+    setMaNotifyEnabled(Boolean(e.member_area_notify_enabled));
+    setMaWaId(e.member_area_wa_number_id || "none");
+    setMaTemplateName(e.member_area_template_name || null);
+    setMaTemplateLanguage(e.member_area_template_language || "pt_BR");
+    setMaTemplateBodyVars((e.member_area_template_body_variables as string[]) || []);
+    setMaTemplateHeaderVar(e.member_area_template_header_variable || null);
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
@@ -292,6 +308,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.initial_message_blocks = initialMessageBlocks;
       updates.ig_initial_message_buttons = igButtons;
       updates.ig_automations = igAutomations;
+      updates.member_area_notify_enabled = maNotifyEnabled;
+      updates.member_area_wa_number_id = maWhatsappNumberId;
+      updates.member_area_template_name = maTemplateName;
+      updates.member_area_template_language = maTemplateLanguage;
+      updates.member_area_template_body_variables = maTemplateBodyVars;
+      updates.member_area_template_header_variable = maTemplateHeaderVar;
       // Keep channel preference consistent: a Meta instance + template means the
       // event dispatches via Meta WhatsApp template, not a plain session message.
       if (whatsappNumberId && metaTemplateName) {
@@ -694,6 +716,62 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                   setMetaTemplateHeaderVar(next.headerVariable);
                 }}
               />
+
+              {/* Aviso automático no WhatsApp (Área de Clientes) */}
+              <div className="space-y-3 rounded-lg border-2 border-accent/40 p-3 bg-accent/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <Smartphone className="h-4 w-4 text-accent" /> Aviso automático no WhatsApp
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enviado automaticamente para a cliente com o link da Área de Clientes quando o
+                      pedido dela é criado/atualizado na live.
+                    </p>
+                  </div>
+                  <Switch checked={maNotifyEnabled} onCheckedChange={setMaNotifyEnabled} />
+                </div>
+
+                {maNotifyEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Instância de WhatsApp (Meta API)</Label>
+                      <Select value={maWaId} onValueChange={setMaWaId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o número WhatsApp..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Usar a mesma instância acima</SelectItem>
+                          {numbers
+                            .filter((n) => (n.provider || "meta") === "meta")
+                            .map((n) => (
+                              <SelectItem key={n.id} value={n.id}>
+                                {n.label}{" "}
+                                <span className="text-muted-foreground ml-1">({n.phone_display})</span>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <MetaTemplateConfigurator
+                      whatsappNumberId={maWhatsappNumberId || whatsappNumberId}
+                      templateName={maTemplateName}
+                      language={maTemplateLanguage}
+                      bodyVariables={maTemplateBodyVars}
+                      headerVariable={maTemplateHeaderVar}
+                      onChange={(next) => {
+                        setMaTemplateName(next.templateName);
+                        setMaTemplateLanguage(next.language);
+                        setMaTemplateBodyVars(next.bodyVariables);
+                        setMaTemplateHeaderVar(next.headerVariable);
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+
+
 
               <InitialMessageEditor
                 enabled={initialMessageEnabled}

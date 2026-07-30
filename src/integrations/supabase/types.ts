@@ -5271,7 +5271,13 @@ export type Database = {
           live_broadcast_started_at: string | null
           live_url_updated_at: string | null
           manual_pos_routing: boolean
+          member_area_notify_enabled: boolean
           member_area_slug: string | null
+          member_area_template_body_variables: Json | null
+          member_area_template_header_variable: string | null
+          member_area_template_language: string | null
+          member_area_template_name: string | null
+          member_area_wa_number_id: string | null
           meta_template_body_variables: Json | null
           meta_template_header_variable: string | null
           meta_template_language: string | null
@@ -5314,7 +5320,13 @@ export type Database = {
           live_broadcast_started_at?: string | null
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
+          member_area_notify_enabled?: boolean
           member_area_slug?: string | null
+          member_area_template_body_variables?: Json | null
+          member_area_template_header_variable?: string | null
+          member_area_template_language?: string | null
+          member_area_template_name?: string | null
+          member_area_wa_number_id?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
@@ -5357,7 +5369,13 @@ export type Database = {
           live_broadcast_started_at?: string | null
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
+          member_area_notify_enabled?: boolean
           member_area_slug?: string | null
+          member_area_template_body_variables?: Json | null
+          member_area_template_header_variable?: string | null
+          member_area_template_language?: string | null
+          member_area_template_name?: string | null
+          member_area_wa_number_id?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
