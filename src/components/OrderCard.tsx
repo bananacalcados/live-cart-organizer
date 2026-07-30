@@ -113,6 +113,14 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
         </div>
       )}
 
+      {order.whatsapp && (
+        <div className="mb-3">
+          <CustomerAccessCodeBadge phone={order.whatsapp} />
+        </div>
+      )}
+
+
+
       {order.products.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
