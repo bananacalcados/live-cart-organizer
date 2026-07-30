@@ -34,7 +34,9 @@ interface ShippingOption {
   label: string;
   description: string;
   cost: number;
+  delivery_days?: number | null;
 }
+
 
 
 interface MemberState {
@@ -86,9 +88,24 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 
 async function callApi(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("live-member-area", { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // A mensagem real vem no corpo da resposta; sem isso o usuário só vê "non-2xx".
+    let detail = error.message;
+    try {
+      const ctx = (error as any)?.context;
+      if (ctx?.text) {
+        const raw = await ctx.text();
+        const parsed = JSON.parse(raw);
+        if (parsed?.error) detail = parsed.error;
+      }
+    } catch {
+      /* mantém a mensagem padrão */
+    }
+    throw new Error(detail);
+  }
   return data as any;
 }
+
 
 export default function LiveMemberArea() {
   const [loading, setLoading] = useState(true);
@@ -847,6 +864,14 @@ export default function LiveMemberArea() {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{opt.description}</p>
+                    {opt.id === "delivery" && opt.delivery_days ? (
+                      <p className="text-xs font-medium text-foreground mt-1">
+                        Chega em até {opt.delivery_days}{" "}
+                        {opt.delivery_days > 1 ? "dias úteis" : "dia útil"} após a postagem
+                      </p>
+                    ) : null}
+
+
                   </button>
                 ))
               )}
