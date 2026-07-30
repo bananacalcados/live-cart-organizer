@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Copy, ExternalLink, Link2 } from "lucide-react";
 import { toast } from "sonner";
+import { OtpAccessCodeSettingsDialog } from "./OtpAccessCodeSettingsDialog";
+
 
 /** Link ÚNICO e global: nunca muda de live para live. */
 const MEMBER_AREA_URL = "https://checkout.bananacalcados.com.br/minha-area";
