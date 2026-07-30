@@ -98,25 +98,67 @@ Deno.serve(async (req) => {
         sent++;
       } else if (cfg.channel === "instagram") {
         if (!igHandle) { await markSkipped(supabase, row.id, "no_ig_username"); skipped++; continue; }
+        const igUsername = String(igHandle).replace(/^@/, "").trim();
+        const messageText = resolveText(cfg.message_text || "", ctx);
+        if (!messageText.trim()) { await markSkipped(supabase, row.id, "no_message_text"); skipped++; continue; }
+
+        // Reúne comment_ids recentes para private_reply (janela 24h pode estar fechada)
+        const fallbackCommentIds: string[] = [];
+        try {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: cmts } = await supabase
+            .from("live_comments")
+            .select("comment_id")
+            .eq("event_id", ord.event_id)
+            .ilike("username", igUsername)
+            .gte("created_at", sevenDaysAgo)
+            .order("created_at", { ascending: false })
+            .limit(5);
+          for (const c of (cmts || [])) if ((c as any)?.comment_id) fallbackCommentIds.push((c as any).comment_id);
+        } catch (_) { /* ignore */ }
+
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/instagram-dm-send`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            username: igHandle,
-            text: resolveText(cfg.message_text || "", ctx),
-            buttons: (cfg.buttons || []).map((b: any) => ({
-              label: resolveText(b.label || "", ctx),
-              url: resolveText(b.url || "", ctx),
-            })),
+            username: igUsername,
+            message: messageText,
+            eventId: ord.event_id,
+            fallbackCommentIds,
           }),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) throw new Error(data?.error || `ig send failed (${resp.status})`);
+
+        // Botões (opcional) — enviados numa segunda mensagem
+        const btns = (cfg.buttons || [])
+          .map((b: any) => ({
+            type: "web_url" as const,
+            title: resolveText(b.label || b.title || "", ctx).slice(0, 20),
+            url: resolveText(b.url || "", ctx),
+          }))
+          .filter((b: any) => b.title && b.url);
+        if (btns.length) {
+          try {
+            await fetch(`${SUPABASE_URL}/functions/v1/instagram-dm-send-buttons`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: igUsername,
+                text: "👇 Toque em uma opção:",
+                buttons: btns.slice(0, 3),
+                eventId: ord.event_id,
+              }),
+            });
+          } catch (e) { console.warn("[dispatcher] ig buttons failed:", e); }
+        }
+
         await supabase.from("event_followup_dispatches").update({
           status: "sent", sent_at: new Date().toISOString(),
           attempts: (row.attempts || 0) + 1,
         }).eq("id", row.id);
         sent++;
+
       } else {
         await markSkipped(supabase, row.id, "unknown_channel"); skipped++;
       }
