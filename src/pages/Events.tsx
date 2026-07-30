@@ -1,3 +1,4 @@
+import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
