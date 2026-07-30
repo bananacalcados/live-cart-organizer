@@ -592,7 +592,7 @@ Deno.serve(async (req) => {
           : null,
 
 
-        history,
+        history: history ?? undefined,
       };
     }
 
@@ -661,7 +661,7 @@ Deno.serve(async (req) => {
       }
 
       // Ponto 5 — lead entra no CRM unificado (RFM/disparos)
-      await upsertUnified({ phone, name });
+      background(upsertUnified({ phone, name }));
 
       const token = newToken();
 
