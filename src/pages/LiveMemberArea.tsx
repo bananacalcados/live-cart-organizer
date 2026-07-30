@@ -77,6 +77,7 @@ interface MemberState {
 }
 
 const TOKEN_KEY = "live_member_token";
+const ANSWERED_KEY = "live_member_confirm_answered";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 async function callApi(payload: Record<string, unknown>) {
