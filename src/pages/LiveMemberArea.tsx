@@ -414,23 +414,28 @@ export default function LiveMemberArea() {
     }
   };
 
-  const act = async (payload: Record<string, unknown>) => {
+  /** Aplica a resposta do servidor sem perder o histórico (respostas rápidas o omitem). */
+  const mergeState = (res: any) =>
+    setState((prev: any) => ({ ...res, history: res.history ?? prev?.history }));
+
+  const act = async (payload: Record<string, unknown>, opts: { quiet?: boolean } = {}) => {
     if (!state?.token) return null;
-    setBusy(true);
+    if (!opts.quiet) setBusy(true);
     try {
       const res = await callApi({ ...payload, token: state.token });
       // Algumas ações (ex.: shipping_options) retornam apenas dados auxiliares.
       // Não substituir o estado completo por essas respostas, pois isso apagava
       // o token da sessão e impedia o clique seguinte em uma forma de envio.
-      if (res?.ok && res?.token) setState(res);
+      if (res?.ok && res?.token) mergeState(res);
       return res;
     } catch (e: any) {
-      toast.error(e.message || "Erro");
+      if (!opts.quiet) toast.error(e.message || "Erro");
       return null;
     } finally {
-      setBusy(false);
+      if (!opts.quiet) setBusy(false);
     }
   };
+
 
   // ---------- Confirmação (uma única vez por pedido) ----------
   const confirmOrder = async () => {
