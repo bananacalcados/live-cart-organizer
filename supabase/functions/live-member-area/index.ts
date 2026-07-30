@@ -398,6 +398,27 @@ Deno.serve(async (req) => {
       return (prev?.shipping_info as any) || null;
     }
 
+    /**
+     * `customer_registrations` tem várias colunas NOT NULL. Como a área de
+     * membros salva os dados por etapas (endereço → CPF → e-mail), qualquer
+     * INSERT parcial quebrava e NADA era salvo. Estes helpers garantem que
+     * nunca enviamos NULL para colunas obrigatórias.
+     */
+    const REG_REQUIRED = [
+      "full_name", "cpf", "email", "whatsapp", "cep",
+      "address", "address_number", "neighborhood", "city", "state",
+    ];
+    function nonNullReg(payload: Record<string, unknown>) {
+      const out: Record<string, unknown> = { ...payload };
+      for (const k of REG_REQUIRED) if (k in out && out[k] == null) out[k] = "";
+      return out;
+    }
+    function withRegDefaults(payload: Record<string, unknown>) {
+      const out = nonNullReg(payload);
+      for (const k of REG_REQUIRED) if (out[k] == null) out[k] = "";
+      return out;
+    }
+
     /** Executa em segundo plano (não segura a resposta da etapa). */
     function background(p: Promise<unknown>) {
       try {
@@ -408,6 +429,7 @@ Deno.serve(async (req) => {
         p.catch(() => {});
       }
     }
+
 
     async function buildState(session: any, opts: { skipHistory?: boolean } = {}) {
       // Sempre resolve a live corrente (link único global), não a live da sessão.
