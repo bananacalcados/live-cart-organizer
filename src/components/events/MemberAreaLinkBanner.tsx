@@ -26,6 +26,10 @@ export function MemberAreaLinkBanner({ event }: { event?: any }) {
         <Link2 className="h-4 w-4" /> Link da Área de Membros (bio do Instagram)
       </p>
       <p className="mt-2 break-all text-xl sm:text-2xl font-black text-primary">{url}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Link fixo — o mesmo para todas as lives. O sistema identifica a live no ar automaticamente.
+      </p>
+
       <div className="mt-4 flex flex-wrap gap-2">
         <Button onClick={copy} size="lg" className="gap-2 font-bold">
           <Copy className="h-4 w-4" /> {copied ? "COPIADO!" : "COPIAR LINK"}
