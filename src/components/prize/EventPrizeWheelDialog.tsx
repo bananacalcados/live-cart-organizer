@@ -137,7 +137,7 @@ export function EventPrizeWheelDialog({ wheel, phone, name, onClose, onDone }: P
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/85 overflow-y-auto flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black/85 overflow-y-auto flex items-start justify-center p-4 pb-[50vh]">
       <div className="relative w-full max-w-md rounded-3xl p-6 bg-gradient-to-b from-[#2a1a4a] via-[#1a1030] to-[#12081f] border-2 border-yellow-400/40 shadow-[0_0_60px_rgba(255,200,0,0.25)]">
         <button
           onClick={onClose}
