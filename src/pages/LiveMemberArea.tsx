@@ -631,6 +631,7 @@ export default function LiveMemberArea() {
     // para exibição/edição, não deve bloquear o pagamento.
     const d = state?.payDetails || state?.details || {};
     if (d.masked) return null;
+    const fullName = (d.full_name || state?.name || "").trim();
     const f: CustomerFormData = {
       fullName,
       email: (d.email || email || "").trim(),
