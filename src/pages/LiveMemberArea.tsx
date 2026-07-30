@@ -52,6 +52,7 @@ interface MemberState {
   otpUnlocked: boolean;
   hasDetails: boolean;
   details: any;
+  payDetails?: any;
   onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
   onboardingComplete?: boolean;
   order: {
