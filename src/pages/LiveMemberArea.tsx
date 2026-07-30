@@ -131,12 +131,34 @@ export default function LiveMemberArea() {
   }, []);
 
 
+  /** Volta para a página anterior (a live / link de origem). */
+  const backToLive = () => {
+    if (window.history.length > 1) window.history.back();
+    else window.location.href = "https://www.instagram.com/bananacalcados/";
+  };
+
+  /** Sai da área de membros e volta para a etapa de WhatsApp. */
+  const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    setState(null);
+    setPhone("");
+    setName("");
+    setOtp("");
+    setConfirmOpen(false);
+    setOtpOpen(false);
+    setDetailsOpen(false);
+    setStep("phone");
+    toast.success("Você saiu da área de membros");
+  };
+
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, "").slice(0, 11);
     if (d.length <= 2) return d;
     if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   };
+
 
   /** Assinatura simples dos itens do pedido pra detectar mudanças vindas da live. */
   const itemsSignature = (order: any) =>
