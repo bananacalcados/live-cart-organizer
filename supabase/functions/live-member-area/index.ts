@@ -257,6 +257,15 @@ Deno.serve(async (req) => {
     }
 
 
+    /** Assinatura dos itens do pedido — muda quando produtos/quantidades mudam. */
+    function itemsSignature(order: any) {
+      const items = Array.isArray(order?.products) ? order.products : [];
+      return `${order?.id}:${items
+        .map((p: any) => `${p.id ?? p.shopifyId ?? p.title}x${p.quantity ?? 1}`)
+        .join("|")}`;
+    }
+
+
     function orderSubtotal(order: any) {
       const items = Array.isArray(order?.products) ? order.products : [];
       return items.reduce(
