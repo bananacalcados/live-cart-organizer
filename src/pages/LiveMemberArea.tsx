@@ -52,6 +52,7 @@ interface MemberState {
   otpUnlocked: boolean;
   hasDetails: boolean;
   details: any;
+  payDetails?: any;
   onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
   onboardingComplete?: boolean;
   order: {
@@ -626,7 +627,9 @@ export default function LiveMemberArea() {
 
   /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */
   const payForm: CustomerFormData | null = (() => {
-    const d = state?.details || {};
+    // Usa os dados completos (payDetails) — o mascaramento por OTP vale só
+    // para exibição/edição, não deve bloquear o pagamento.
+    const d = state?.payDetails || state?.details || {};
     if (d.masked) return null;
     const fullName = (d.full_name || state?.name || "").trim();
     const f: CustomerFormData = {
@@ -1319,18 +1322,13 @@ export default function LiveMemberArea() {
                     </div>
                   ) : (
                     <Button
-                      variant="outline"
-                      className="w-full h-16 text-base font-bold border-2 border-primary"
-                      onClick={async () => {
-                        const res = await act({ action: "send_otp" });
-                        if (res?.ok) {
-                          setOtpOpen(true);
-                          toast.success("Código enviado no seu WhatsApp");
-                        } else toast.error(res?.error || "Falha ao enviar código");
+                      className="w-full h-16 text-base font-bold"
+                      onClick={() => {
+                        setOnboardStep(firstPendingOnboard(state));
+                        setStep("onboarding");
                       }}
-                      disabled={busy}
                     >
-                      <Lock className="h-5 w-5 mr-2" /> LIBERAR MEUS DADOS PARA PAGAR
+                      COMPLETAR MEUS DADOS PARA PAGAR
                     </Button>
                   )}
                 </div>

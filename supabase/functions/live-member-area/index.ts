@@ -588,6 +588,22 @@ Deno.serve(async (req) => {
               state: reg?.state || null,
             }
           : { masked: false, empty: true },
+        // Dados completos usados APENAS para preencher o pagamento (gateway).
+        // Não são exibidos na tela — a visualização/edição continua exigindo OTP.
+        payDetails: hasDetails
+          ? {
+              full_name: reg?.full_name || null,
+              cpf: reg?.cpf || null,
+              email: reg?.email || null,
+              cep: reg?.cep || null,
+              address: reg?.address || null,
+              address_number: reg?.address_number || null,
+              complement: reg?.complement || null,
+              neighborhood: reg?.neighborhood || null,
+              city: reg?.city || null,
+              state: reg?.state || null,
+            }
+          : null,
         order: order
           ? (() => {
               const st = orderSubtotal(order);
