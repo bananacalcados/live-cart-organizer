@@ -247,7 +247,12 @@ Deno.serve(async (req) => {
           price: Number(p.price || 0),
           image: p.image || null,
         })),
-        total: orderTotal(o),
+        total:
+          Math.round(
+            (Math.max(0, orderSubtotal(o) - orderDiscount(o)) +
+              (o.free_shipping ? 0 : Number(o.shipping_cost || 0))) * 100,
+          ) / 100,
+
       }));
     }
 
