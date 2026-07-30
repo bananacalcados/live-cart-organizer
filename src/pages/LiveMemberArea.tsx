@@ -31,7 +31,7 @@ import {
 } from "@/components/checkout/PaymentSection";
 
 
-type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
+type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
 type OnboardStep = "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
