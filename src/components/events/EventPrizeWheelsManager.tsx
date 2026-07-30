@@ -292,7 +292,18 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                   </Button>
                 </div>
 
+                <div className="hidden sm:grid grid-cols-12 gap-2 px-2 text-[11px] font-medium text-muted-foreground">
+                  <span className="col-span-1">Cor</span>
+                  <span className="col-span-3">Nome do prêmio</span>
+                  <span className="col-span-3">Tipo de prêmio</span>
+                  <span className="col-span-1">Valor</span>
+                  <span className="col-span-2">Chance (peso)</span>
+                  <span className="col-span-1">Validade</span>
+                  <span className="col-span-1" />
+                </div>
+
                 {(wheel.segments || []).map((seg) => (
+
                   <div
                     key={seg.id}
                     className="grid grid-cols-12 gap-2 items-center rounded-lg border p-2"
