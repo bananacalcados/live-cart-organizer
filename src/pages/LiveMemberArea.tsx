@@ -14,6 +14,7 @@ import {
   LogOut,
 
   MessageCircle,
+  QrCode,
   ShoppingBag,
   Timer,
   Trash2,
