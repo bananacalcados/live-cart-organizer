@@ -407,7 +407,10 @@ Deno.serve(async (req) => {
               products: order.products || [],
               subtotal: Math.round(orderSubtotal(order) * 100) / 100,
               shipping_cost: Number(order.shipping_cost || 0),
+              shipping_method: shippingMethod,
+              shipping_label: (order.shipping_info as any)?.carrier || null,
               free_shipping: !!order.free_shipping,
+
               total: Math.round(orderTotal(order) * 100) / 100,
               pix_discount_percent: pixPct,
               pix_discount: pixPct
