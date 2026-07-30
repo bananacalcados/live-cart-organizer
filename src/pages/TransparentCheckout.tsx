@@ -490,7 +490,8 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
     setFreightOptions([]);
     setSelectedFreight(null);
     try {
-      const totalValue = orderData?.subtotal || 0;
+      // Valor usado na regra de frete grátis do evento: subtotal COM desconto.
+      const totalValue = Math.max(0, (orderData?.subtotal || 0) - (orderData?.discountAmount || 0));
       const totalQty = orderData?.products.reduce((s, p) => s + p.quantity, 0) || 1;
       const { data, error } = await supabase.functions.invoke("checkout-quote-freight", {
         body: {
