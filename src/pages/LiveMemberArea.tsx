@@ -1053,18 +1053,47 @@ export default function LiveMemberArea() {
                       <Timer className="h-5 w-5" /> Pague em {mm}:{ss}
                     </div>
                   )}
-                  <Button
-                    className="w-full h-16 text-base font-bold gap-2"
-                    onClick={() => (window.location.href = order.checkout_url)}
-                  >
-                    <CreditCard className="h-5 w-5" /> PAGAR AGORA
-                  </Button>
+                  {!state?.onboardingComplete ? (
+                    <Button
+                      className="w-full h-16 text-base font-bold"
+                      onClick={() => {
+                        setOnboardStep(firstPendingOnboard(state));
+                        setStep("onboarding");
+                      }}
+                    >
+                      COMPLETAR MEUS DADOS DE ENVIO
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full h-16 text-base font-bold gap-2"
+                        onClick={() => goCheckout("pix")}
+                      >
+                        <QrCode className="h-5 w-5" /> PAGAR NO PIX
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full h-16 text-base font-bold gap-2 border-2 border-primary"
+                        onClick={() => goCheckout("card")}
+                      >
+                        <CreditCard className="h-5 w-5" /> PAGAR NO CARTÃO DE CRÉDITO
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full h-16 text-base font-bold gap-2 border-2 border-border"
+                        onClick={() => goCheckout("debit")}
+                      >
+                        <CreditCard className="h-5 w-5" /> PAGAR NO DÉBITO
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <Button className="w-full h-16 text-base font-bold" onClick={() => setConfirmOpen(true)}>
+                <Button className="w-full h-16 text-base font-bold" onClick={() => setStep("confirm")}>
                   CONFIRMAR MEU PEDIDO
                 </Button>
               )}
+
             </>
           )}
         </section>
