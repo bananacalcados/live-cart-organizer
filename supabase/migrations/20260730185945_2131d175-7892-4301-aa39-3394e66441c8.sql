@@ -1,0 +1,1 @@
+UPDATE public.orders SET stage='new' WHERE id='d533ba65-f61d-45cd-92ae-5f7c4cf69542' AND stage='contacted';

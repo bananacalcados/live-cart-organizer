@@ -53,6 +53,7 @@ serve(async (req) => {
     let metaTemplateLanguage: string = 'pt_BR';
     let metaTemplateBodyVars: string[] = [];
     let metaTemplateHeaderVar: string | null = null;
+    let operationMode: string | null = null;
     let initialMessageEnabled = false;
     let initialMessageBlocks: string[] = [];
     let igInitialButtons: Array<{ blockIndex: number; buttons: Array<{ id: string; type: 'url' | 'automation'; title: string; urlToken?: string; automationId?: string }> }> = [];
@@ -61,10 +62,11 @@ serve(async (req) => {
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
+        .select('operation_mode, whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
         .eq('id', order.event_id)
         .single();
 
+      operationMode = (eventData as any)?.operation_mode || null;
       if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
       channelPreferences = ((eventData as any)?.channel_preferences as string[]) || [];
       if (!channelPreferences.length) channelPreferences = [channelPreference];
@@ -199,7 +201,11 @@ serve(async (req) => {
       p_order_id: orderId,
       p_stage: initialStage,
     });
-    await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
+    // Em modo "Área de Membros" a coluna "Contatado" não existe no Kanban:
+    // o pedido confirmado deve permanecer em "Novo Pedido (confirmado)".
+    if (operationMode !== 'member_area') {
+      await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
+    }
 
     // ===== Branch: Meta WhatsApp Template (overrides 3-block send for WA) =====
     // If the event's WhatsApp number is a Meta API instance AND a template is
