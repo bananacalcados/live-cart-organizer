@@ -25,7 +25,16 @@ import {
 } from "@/components/prize/EventPrizeWheelDialog";
 
 
-type Step = "phone" | "name" | "area";
+type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
+type OnboardStep = "address" | "shipping" | "cpf" | "email";
+
+interface ShippingOption {
+  id: string;
+  label: string;
+  description: string;
+  cost: number;
+}
+
 
 interface MemberState {
   token: string;
