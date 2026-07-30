@@ -168,7 +168,6 @@ export default function LiveMemberArea() {
     setPhone("");
     setName("");
     setOtp("");
-    setConfirmOpen(false);
     setOtpOpen(false);
     setDetailsOpen(false);
     setStep("phone");
@@ -191,14 +190,74 @@ export default function LiveMemberArea() {
           .join("|")}`
       : "none";
 
+  /**
+   * A confirmação é pedida UMA ÚNICA VEZ por pedido. Depois que a cliente
+   * responde (confirmou ou recusou), só volta a aparecer se novos itens forem
+   * anotados na live.
+   */
+  const readAnswered = (): Record<string, string> => {
+    try {
+      return JSON.parse(localStorage.getItem(ANSWERED_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  };
+  const markAnswered = (order: any) => {
+    const map = readAnswered();
+    map[order.id] = itemsSignature(order);
+    localStorage.setItem(ANSWERED_KEY, JSON.stringify(map));
+  };
+  const needsConfirm = (data: any) => {
+    const o = data?.order;
+    if (!o || o.is_paid || o.confirmed_at || !o.products?.length) return false;
+    return readAnswered()[o.id] !== itemsSignature(o);
+  };
+  const needsOnboarding = (data: any) =>
+    !!data?.order && !data.order.is_paid && !data.onboardingComplete;
+
+  /** Decide em que etapa a cliente deve cair depois de carregar o estado. */
+  const routeFor = (data: any): Step => {
+    if (needsConfirm(data)) return "confirm";
+    if (data?.order?.confirmed_at && needsOnboarding(data)) return "onboarding";
+    return "area";
+  };
+
+  /** Primeira etapa do onboarding ainda pendente. */
+  const firstPendingOnboard = (data: any): OnboardStep => {
+    const ob = data?.onboarding || {};
+    if (!ob.address) return "address";
+    if (!ob.shipping) return "shipping";
+    if (!ob.cpf) return "cpf";
+    return "email";
+  };
+
+  const hydrateForms = (data: any) => {
+    const d = data?.details || {};
+    if (!d.masked) {
+      setAddr({
+        cep: d.cep || "",
+        address: d.address || "",
+        address_number: d.address_number || "",
+        complement: d.complement || "",
+        neighborhood: d.neighborhood || "",
+        city: d.city || "",
+        state: d.state || "",
+      });
+      setCpf(d.cpf || "");
+      setEmail(d.email || "");
+    }
+  };
+
   const applyState = useCallback(
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
       localStorage.setItem(TOKEN_KEY, data.token);
-      setStep("area");
       itemsSigRef.current = itemsSignature(data.order);
-      if (data.order && !data.order.confirmed_at && !data.order.is_paid) setConfirmOpen(true);
+      hydrateForms(data);
+      const next = routeFor(data);
+      if (next === "onboarding") setOnboardStep(firstPendingOnboard(data));
+      setStep(next);
     },
     [],
   );
@@ -248,20 +307,11 @@ export default function LiveMemberArea() {
           if (had !== "none" && nextCount > prevCount) {
             toast.success("Novo item adicionado ao seu pedido 🛍️");
           }
-          // Itens mudaram → volta a pedir confirmação
-          confirmDismissedRef.current = null;
         }
         itemsSigRef.current = sig;
 
-        if (
-          st.order &&
-          !st.order.confirmed_at &&
-          !st.order.is_paid &&
-          st.order.products?.length &&
-          confirmDismissedRef.current !== st.order.id
-        ) {
-          setConfirmOpen(true);
-        }
+        // Só interrompe a navegação quando ela está parada na área principal.
+        if (needsConfirm(st)) setStep((s) => (s === "area" ? "confirm" : s));
       } catch {
         /* silencioso */
       } finally {
@@ -270,6 +320,7 @@ export default function LiveMemberArea() {
     },
     [],
   );
+
 
   useEffect(() => {
     const token = state?.token;
