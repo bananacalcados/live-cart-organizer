@@ -85,7 +85,9 @@ export default function LiveMemberArea() {
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
+
   /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
   const confirmDismissedRef = useRef<string | null>(null);
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
