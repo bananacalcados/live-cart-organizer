@@ -687,11 +687,19 @@ export default function LiveMemberArea() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-primary leading-tight">{p.title}</p>
-                  <p className="text-sm text-primary/80">
-                    {p.variant ? `${p.variant} · ` : ""}
-                    {brl(Number(p.price || 0))}
+                  <p className="text-sm text-primary/80 flex flex-wrap items-center gap-1.5">
+                    {p.variant ? <span>{p.variant} ·</span> : null}
+                    {p.has_discount && (
+                      <span className="line-through opacity-60">
+                        {brl(Number(p.full_price ?? p.price ?? 0))}
+                      </span>
+                    )}
+                    <span className="font-bold">
+                      {brl(Number(p.effective_price ?? p.price ?? 0))}
+                    </span>
                   </p>
                 </div>
+
               </div>
             ))}
           </div>
