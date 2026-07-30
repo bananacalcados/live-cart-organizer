@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Trophy, Users, Wallet } from "lucide-react";
+import { Copy, Loader2, Plus, Save, Trash2, Trophy, Users, Wallet } from "lucide-react";
 
 interface Segment {
   id: string;
