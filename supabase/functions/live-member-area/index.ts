@@ -358,7 +358,10 @@ Deno.serve(async (req) => {
       const event = await resolveCurrentEvent();
       const loaded = await loadOrder(event?.id || null, session.phone);
       const customer = loaded.customer;
-      const order = await applyEventShipping(loaded.order);
+      // O frete NÃO é aplicado automaticamente: a cliente escolhe a forma de envio
+      // na etapa de endereço. Aplicar antes cobraria frete duas vezes.
+      const order = loaded.order;
+
       const history = await loadHistory(session.phone, order?.id || null);
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
 
