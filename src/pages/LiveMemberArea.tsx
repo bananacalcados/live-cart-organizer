@@ -864,6 +864,13 @@ export default function LiveMemberArea() {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{opt.description}</p>
+                    {opt.id === "delivery" && opt.delivery_days ? (
+                      <p className="text-xs font-medium text-foreground mt-1">
+                        Chega em até {opt.delivery_days} dia{opt.delivery_days > 1 ? "s" : ""} útil
+                        {opt.delivery_days > 1 ? "eis" : ""} após a postagem
+                      </p>
+                    ) : null}
+
                   </button>
                 ))
               )}
