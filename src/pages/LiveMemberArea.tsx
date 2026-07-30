@@ -93,6 +93,15 @@ export default function LiveMemberArea() {
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
   const itemsSigRef = useRef<string | null>(null);
 
+  /** Roletas de prêmio disponíveis para esta cliente neste evento. */
+  const { wheels, refresh: refreshWheels } = useEventPrizeWheels(
+    state?.phone || null,
+    state?.event?.id || null,
+  );
+  const availableWheels = wheels.filter((w) => w.eligible && w.spins_used < w.max_spins);
+
+
+
   /** SEO da página pública (link fica na bio do Instagram). */
   useEffect(() => {
     const title = "Minha Área | Banana Calçados";
