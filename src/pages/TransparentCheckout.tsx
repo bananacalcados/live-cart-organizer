@@ -1104,7 +1104,7 @@ export default function TransparentCheckout() {
           const applied = await ensureEventShippingOnOrder({
             orderId: order.id,
             eventId: order.event_id,
-            subtotal,
+            subtotal: Math.max(0, subtotal - discountAmount),
             currentShippingCost: order.shipping_cost,
             currentFreeShipping: order.free_shipping,
           });
