@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
 
     // ---------- SPIN ----------
     if (action === "spin") {
-      if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
+      if (!phone) return json({ ok: false, error: "Telefone inválido" });
       const wheelId = String(body?.wheel_id || "");
       const name = String(body?.name || "").trim().slice(0, 120) || null;
 
@@ -256,35 +256,35 @@ Deno.serve(async (req) => {
         .select("*, segments:event_prize_wheel_segments(*)")
         .eq("id", wheelId)
         .maybeSingle();
-      if (!wheel) return json({ ok: false, error: "Roleta não encontrada" }, 404);
-      if (!wheelOpen(wheel)) return json({ ok: false, error: "Esta roleta não está ativa." }, 400);
+      if (!wheel) return json({ ok: false, error: "Roleta não encontrada" });
+      if (!wheelOpen(wheel)) return json({ ok: false, error: "Esta roleta não está ativa." });
 
       const ev = await resolveEvent(wheel.event_id);
-      if (eventClosed(ev)) return json({ ok: false, error: "Este evento já foi encerrado." }, 400);
+      if (eventClosed(ev)) return json({ ok: false, error: "Este evento já foi encerrado." });
 
       if ((await spinsUsed(wheel.id, phone)) >= wheel.max_spins_per_customer) {
-        return json({ ok: false, error: "Você já girou esta roleta." }, 400);
+        return json({ ok: false, error: "Você já girou esta roleta." });
       }
 
       if (wheel.audience === "payers") {
         const total = await paidTotalInEvent(wheel.event_id, phone);
         if (total <= 0) {
-          return json({ ok: false, error: "Esta roleta é exclusiva para quem comprou neste evento." }, 403);
+          return json({ ok: false, error: "Esta roleta é exclusiva para quem comprou neste evento." });
         }
         if (total < Number(wheel.min_purchase_value || 0)) {
           return json({
             ok: false,
             error: `Esta roleta exige compras a partir de R$ ${Number(wheel.min_purchase_value).toFixed(2)} neste evento.`,
-          }, 403);
+          });
         }
       } else if (wheel.require_otp && !(await otpVerified(phone))) {
-        return json({ ok: false, error: "otp_required" }, 403);
+        return json({ ok: false, error: "otp_required" });
       }
 
       const segments = (wheel.segments || [])
         .filter((s: any) => s.is_active)
         .sort((a: any, b: any) => a.sort_order - b.sort_order);
-      if (segments.length < 2) return json({ ok: false, error: "Roleta sem prêmios configurados" }, 400);
+      if (segments.length < 2) return json({ ok: false, error: "Roleta sem prêmios configurados" });
 
       // Sorteio ponderado no servidor (o front só anima até o índice retornado)
       const total = segments.reduce((s: number, x: any) => s + Number(x.probability || 0), 0) || 1;
