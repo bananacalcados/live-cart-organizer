@@ -775,10 +775,22 @@ Deno.serve(async (req) => {
       if (!name && !providedName) return json({ ok: true, needsName: true });
       if (!name) name = providedName;
 
-      // Se ainda não achamos a cliente pelo telefone, tenta casar pelo @ do
-      // Instagram (pedido criado na live sem WhatsApp). Assim o número digitado
-      // aqui entra automaticamente no cadastro da cliente dentro do evento.
-      let linkedByHandle = false;
+      // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
+      if (!(await isKnownCustomer(phone))) {
+        const code = String(body.otp || "").replace(/\D/g, "");
+        if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
+        if (!(await allow(`otpv:${phone}`, 8, 600))) {
+          return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+        }
+        if (!(await verifyAccessCode(supabase, phone, code))) {
+          return json({ ok: false, error: "Código incorreto.", needsOtp: true });
+        }
+        await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
+      }
+
+      // Telefone verificado: se ainda não achamos a cliente pelo número, casa
+      // pelo @ do Instagram (pedido criado na live sem WhatsApp). Assim o número
+      // digitado aqui entra automaticamente no cadastro dela dentro do evento.
       if (!customer && providedName) {
         const handle = providedName.replace(/^@/, "").trim().toLowerCase();
         if (handle) {
@@ -792,24 +804,11 @@ Deno.serve(async (req) => {
           );
           if (target) {
             await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
-            customer = { ...target, whatsapp: phone };
-            linkedByHandle = true;
+            customer = { ...target, whatsapp: phone } as any;
           }
         }
       }
 
-      // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
-      if (!linkedByHandle && !(await isKnownCustomer(phone))) {
-        const code = String(body.otp || "").replace(/\D/g, "");
-        if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
-        if (!(await allow(`otpv:${phone}`, 8, 600))) {
-          return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
-        }
-        if (!(await verifyAccessCode(supabase, phone, code))) {
-          return json({ ok: false, error: "Código incorreto.", needsOtp: true });
-        }
-        await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
-      }
 
 
 
