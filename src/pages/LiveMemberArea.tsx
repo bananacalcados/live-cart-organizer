@@ -44,12 +44,16 @@ interface MemberState {
   otpUnlocked: boolean;
   hasDetails: boolean;
   details: any;
+  onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
+  onboardingComplete?: boolean;
   order: {
     id: string;
     stage: string;
     products: any[];
     subtotal?: number;
     shipping_cost: number;
+    shipping_method?: string | null;
+    shipping_label?: string | null;
     free_shipping?: boolean;
     total: number;
     pix_discount_percent?: number;
@@ -60,6 +64,7 @@ interface MemberState {
     payment_window_expires_at: string | null;
     checkout_url: string;
   } | null;
+
 
   history?: {
     id: string;
