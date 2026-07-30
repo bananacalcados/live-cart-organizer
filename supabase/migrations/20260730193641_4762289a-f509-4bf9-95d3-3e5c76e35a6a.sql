@@ -1,0 +1,1 @@
+update public.event_followup_dispatches set status='pending', attempts=0, error_message=null where status in ('failed','pending') and error_message like '%username and (message or mediaUrl) are required%';
