@@ -139,6 +139,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
   const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
+  const maWhatsappNumberId = maWaId === "none" ? null : maWaId;
 
   useEffect(() => {
     if (open && numbers.length === 0) fetchNumbers();
