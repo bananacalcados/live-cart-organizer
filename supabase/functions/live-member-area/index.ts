@@ -713,6 +713,21 @@ Deno.serve(async (req) => {
       if (!name && !providedName) return json({ ok: true, needsName: true });
       if (!name) name = providedName;
 
+      // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
+      if (!(await isKnownCustomer(phone))) {
+        const code = String(body.otp || "").replace(/\D/g, "");
+        if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
+        if (!(await allow(`otpv:${phone}`, 8, 600))) {
+          return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+        }
+        if (!(await verifyAccessCode(supabase, phone, code))) {
+          return json({ ok: false, error: "Código incorreto.", needsOtp: true });
+        }
+        await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
+      }
+
+
+
       // Garante cadastro do contato + lead da live
       if (!customer) {
         await supabase.from("customers").insert({ instagram_handle: name, whatsapp: phone });
