@@ -746,6 +746,37 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </Button>
         </div>
       )}
+
+      {/* Envio manual do template Meta configurado no evento */}
+      {order.stage === 'awaiting_confirmation' && order.customer?.whatsapp && (
+        <div className="mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1.5 h-7 border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10"
+            disabled={sendingTemplate}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSendingTemplate(true);
+              try {
+                const { data, error } = await supabase.functions.invoke('event-order-template-send', {
+                  body: { orderId: order.id },
+                });
+                if (error) throw error;
+                if ((data as any)?.error) throw new Error((data as any).error);
+                toast.success('Mensagem de template enviada!');
+              } catch (err: any) {
+                toast.error(err?.message || 'Erro ao enviar template');
+              } finally {
+                setSendingTemplate(false);
+              }
+            }}
+          >
+            {sendingTemplate ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageCircle className="h-3 w-3" />}
+            ENVIAR MSG API
+          </Button>
+        </div>
+      )}
       {order.customer?.whatsapp && (
         <div className="flex items-center gap-2 mb-3">
           <a
