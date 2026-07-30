@@ -53,11 +53,49 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!master.shopify_product_id) {
-      return new Response(
-        JSON.stringify({ error: "Produto ainda não foi enviado à Shopify. Use o botão 'Enviar para Shopify' primeiro." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    const apiVerCheck = "2024-10";
+
+    // Auto-recriação: se o produto foi apagado na Shopify (ou nunca enviado),
+    // limpa os IDs locais e recria via create-master-product-shopify.
+    async function recreate(reason: string) {
+      await supabase
+        .from("products_master")
+        .update({ shopify_product_id: null })
+        .eq("id", master_id);
+      await supabase
+        .from("product_variants")
+        .update({ shopify_variant_id: null })
+        .eq("master_id", master_id);
+
+      const createRes = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/create-master-product-shopify`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ master_id }),
+        },
       );
+      const createJson = await createRes.json().catch(() => ({}));
+      return new Response(
+        JSON.stringify({ ...createJson, recreated: true, reason }),
+        { status: createRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!master.shopify_product_id) {
+      return await recreate("produto ainda não existia na Shopify");
+    }
+
+    // Verifica se o produto ainda existe na Shopify
+    const checkRes = await fetch(
+      `https://${SHOPIFY_DOMAIN}/admin/api/${apiVerCheck}/products/${master.shopify_product_id}.json`,
+      { headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN, "Content-Type": "application/json" } },
+    );
+    if (checkRes.status === 404) {
+      return await recreate("produto foi apagado na Shopify");
     }
 
     const { data: variants } = await supabase
