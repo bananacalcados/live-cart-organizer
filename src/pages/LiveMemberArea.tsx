@@ -549,16 +549,26 @@ export default function LiveMemberArea() {
       () => loadShippingOptions(addr.cep),
     );
 
+  /** Pula etapas cujos dados já estão salvos no cadastro da cliente. */
+  const nextAfter = (current: OnboardStep): OnboardStep | "area" => {
+    const ob: any = state?.onboarding || {};
+    const order: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    for (const s of order.slice(order.indexOf(current) + 1)) {
+      if (!ob[s]) return s;
+    }
+    return "area";
+  };
+
   const chooseShipping = (methodId: string) =>
     advance(
-      "cpf",
+      nextAfter("shipping"),
       "shipping",
       { action: "set_shipping", method: methodId, cep: addr.cep },
       "Não foi possível escolher o envio",
     );
 
   const saveCpfStep = () =>
-    advance("email", "cpf", { action: "save_details", details: { cpf } }, "Erro ao salvar");
+    advance(nextAfter("cpf"), "cpf", { action: "save_details", details: { cpf } }, "Erro ao salvar");
 
   const saveEmailStep = () =>
     advance("area", "email", { action: "save_details", details: { email } }, "Erro ao salvar", () =>
