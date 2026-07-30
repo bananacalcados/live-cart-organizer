@@ -52,11 +52,14 @@ interface MemberState {
     stage: string;
     products: any[];
     subtotal?: number;
+    discount?: number;
+    shipping_pending?: boolean;
     shipping_cost: number;
     shipping_method?: string | null;
     shipping_label?: string | null;
     free_shipping?: boolean;
     total: number;
+
     pix_discount_percent?: number;
     pix_discount?: number;
     pix_total?: number;
