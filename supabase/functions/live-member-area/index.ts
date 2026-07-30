@@ -642,7 +642,55 @@ Deno.serve(async (req) => {
       });
     }
 
+    /**
+     * OTP só é exigido de quem NUNCA se identificou: sem pedido no evento,
+     * sem pedido antigo, sem cadastro e sem verificação anterior de WhatsApp.
+     */
+    async function isKnownCustomer(phone: string) {
+      const suf = suffix8(phone);
+      const customers = await loadCustomers(phone);
+      const ids = customers.map((c: any) => c.id);
+      if (ids.length) {
+        const { count } = await supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .in("customer_id", ids);
+        if ((count || 0) > 0) return true;
+      }
+      const { data: reg } = await supabase
+        .from("customer_registrations")
+        .select("id")
+        .ilike("whatsapp", `%${suf}`)
+        .limit(1)
+        .maybeSingle();
+      if (reg) return true;
+      const { data: ver } = await supabase
+        .from("live_phone_verifications")
+        .select("id")
+        .eq("phone", phone)
+        .eq("verified", true)
+        .limit(1)
+        .maybeSingle();
+      return !!ver;
+    }
+
+    // Envio de código ANTES da sessão (cadastro novo sem pedidos).
+    if (action === "send_otp" && !body.token) {
+      const ph = normalizePhone(body.phone);
+      if (!ph) return json({ ok: false, error: "Telefone inválido" }, 400);
+      if (!(await allow(`otp:${ph}`, 3, 600))) {
+        return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
+      }
+      if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
+        return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
+      }
+      const r = await sendAccessCode(supabase, ph);
+      if (!r.ok) return json({ ok: false, error: r.error || "Falha ao enviar código" }, 500);
+      return json({ ok: true });
+    }
+
     if (action === "enter") {
+
       // Anti-abuso: 10 entradas por IP a cada 10 min e 6 por telefone/hora.
       if (!(await allow(`enter-ip:${ip}`, 10, 600))) {
         return json({ ok: false, error: "Muitas tentativas de acesso. Aguarde alguns minutos." }, 429);
