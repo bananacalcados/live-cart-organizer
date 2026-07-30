@@ -602,30 +602,52 @@ Deno.serve(async (req) => {
 
       const { data: reg } = await supabase
         .from("customer_registrations")
-        .select("id, cpf, cep, email")
+        .select("*")
         .eq("order_id", order.id)
         .maybeSingle();
 
-      const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
       const otpUnlocked =
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
-      if (hasDetails && !otpUnlocked) return json({ ok: false, error: "otp_required" }, 403);
 
       const d = body.details || {};
+      const sanitize: Record<string, (v: unknown) => string | null> = {
+        cpf: (v) => String(v || "").replace(/\D/g, "").slice(0, 11) || null,
+        email: (v) => String(v || "").trim().slice(0, 160) || null,
+        cep: (v) => String(v || "").replace(/\D/g, "").slice(0, 8) || null,
+        address: (v) => String(v || "").slice(0, 200) || null,
+        address_number: (v) => String(v || "").slice(0, 20) || null,
+        complement: (v) => String(v || "").slice(0, 120) || null,
+        neighborhood: (v) => String(v || "").slice(0, 120) || null,
+        city: (v) => String(v || "").slice(0, 120) || null,
+        state: (v) => String(v || "").slice(0, 2).toUpperCase() || null,
+      };
+
+      const changes: Record<string, unknown> = {};
+      for (const [key, fn] of Object.entries(sanitize)) {
+        if (!(key in d)) continue;
+        changes[key] = fn((d as any)[key]);
+      }
+
+      // Sem OTP a cliente só PREENCHE campos vazios (onboarding). Alterar um dado
+      // já existente continua exigindo o código do WhatsApp.
+      if (!otpUnlocked && reg) {
+        for (const [key, value] of Object.entries(changes)) {
+          const current = (reg as any)[key];
+          if (current && String(current).trim() && String(current) !== String(value ?? "")) {
+            return json({ ok: false, error: "otp_required" });
+          }
+        }
+      }
+
       const payload: Record<string, unknown> = {
         order_id: order.id,
-        full_name: String(d.full_name || session.name || "").slice(0, 120),
-        cpf: String(d.cpf || "").replace(/\D/g, "").slice(0, 11) || null,
-        email: String(d.email || "").trim().slice(0, 160) || null,
         whatsapp: session.phone,
-        cep: String(d.cep || "").replace(/\D/g, "").slice(0, 8) || null,
-        address: String(d.address || "").slice(0, 200) || null,
-        address_number: String(d.address_number || "").slice(0, 20) || null,
-        complement: String(d.complement || "").slice(0, 120) || null,
-        neighborhood: String(d.neighborhood || "").slice(0, 120) || null,
-        city: String(d.city || "").slice(0, 120) || null,
-        state: String(d.state || "").slice(0, 2).toUpperCase() || null,
+        ...changes,
       };
+      if (!reg?.full_name || (d.full_name && otpUnlocked)) {
+        payload.full_name = String(d.full_name || session.name || "").slice(0, 120);
+      }
+
 
       if (reg?.id) {
         await supabase.from("customer_registrations").update(payload).eq("id", reg.id);
