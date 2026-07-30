@@ -24,6 +24,11 @@ import {
   PublicWheel,
   useEventPrizeWheels,
 } from "@/components/prize/EventPrizeWheelDialog";
+import {
+  StepPayment,
+  type CustomerFormData,
+  type InstallmentConfig,
+} from "@/components/checkout/PaymentSection";
 
 
 type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
