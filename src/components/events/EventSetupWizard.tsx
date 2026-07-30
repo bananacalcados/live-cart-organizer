@@ -183,6 +183,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setInitialMessageBlocks((e.initial_message_blocks as string[]) || []);
     setIgButtons((e.ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
     setIgAutomations((e.ig_automations as IgAutomation[]) || []);
+    setMaNotifyEnabled(Boolean(e.member_area_notify_enabled));
+    setMaWaId(e.member_area_wa_number_id || "none");
+    setMaTemplateName(e.member_area_template_name || null);
+    setMaTemplateLanguage(e.member_area_template_language || "pt_BR");
+    setMaTemplateBodyVars((e.member_area_template_body_variables as string[]) || []);
+    setMaTemplateHeaderVar(e.member_area_template_header_variable || null);
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
