@@ -467,7 +467,18 @@ export default function LiveMemberArea() {
     <div className="min-h-screen bg-background text-foreground pb-28">
       <div className="max-w-md mx-auto px-5">
         {Header}
-        <p className="text-center text-lg font-semibold -mt-3 mb-6">Oi, {state?.name} 👋</p>
+        <p className="text-center text-lg font-semibold -mt-3 mb-4">Oi, {state?.name} 👋</p>
+
+        <div className="flex gap-2 mb-6">
+          <Button variant="outline" className="flex-1 h-11 gap-2 text-xs font-semibold" onClick={backToLive}>
+            <ArrowLeft className="h-4 w-4" /> VOLTAR PRA LIVE
+          </Button>
+          <Button variant="ghost" className="flex-1 h-11 gap-2 text-xs font-semibold text-muted-foreground" onClick={logout}>
+            <LogOut className="h-4 w-4" /> SAIR DA ÁREA
+          </Button>
+        </div>
+
+
 
         {/* Roleta de prêmios */}
         {availableWheels.length > 0 && (
