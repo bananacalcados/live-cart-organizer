@@ -197,10 +197,16 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
         (acc: number, p: any) => acc + Number(p.price || 0) * Number(p.quantity || 1),
         0,
       );
+      // A regra de frete grátis do evento considera o valor COM desconto.
+      const discountAmount = order.discount_type && order.discount_value
+        ? order.discount_type === "percentage"
+          ? subtotal * (Number(order.discount_value) / 100)
+          : Number(order.discount_value)
+        : 0;
       const applied = await ensureEventShippingOnOrder({
         orderId: order.id,
         eventId: order.event_id,
-        subtotal,
+        subtotal: Math.max(0, subtotal - discountAmount),
         currentShippingCost: order.shipping_cost,
         currentFreeShipping: order.free_shipping,
       });
