@@ -10,6 +10,9 @@ import { StatsBar } from "@/components/StatsBar";
 import { OrderReportDialog } from "@/components/OrderReportDialog";
 
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
+import { EventPrizeWheelsManager } from "@/components/events/EventPrizeWheelsManager";
+import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
+
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
