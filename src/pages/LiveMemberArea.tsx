@@ -403,6 +403,128 @@ export default function LiveMemberArea() {
     }
   };
 
+  // ---------- Confirmação (uma única vez por pedido) ----------
+  const confirmOrder = async () => {
+    const current = state?.order;
+    const res = await act({ action: "confirm_order" });
+    if (res?.ok) {
+      if (current) markAnswered(current);
+      hydrateForms(res);
+      if (needsOnboarding(res)) {
+        setOnboardStep(firstPendingOnboard(res));
+        setStep("onboarding");
+      } else {
+        setStep("area");
+      }
+    }
+  };
+
+  const rejectAll = async () => {
+    const current = state?.order;
+    if (current) markAnswered(current);
+    let res: any = null;
+    for (let i = (current?.products?.length || 0) - 1; i >= 0; i--) {
+      res = await act({ action: "reject_item", index: i });
+    }
+    if (res?.ok) hydrateForms(res);
+    setStep("area");
+    toast.success("Tudo bem! Os itens foram retirados do seu pedido.");
+  };
+
+  // ---------- Onboarding ----------
+  const lookupCep = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    setAddr((a: any) => ({ ...a, cep: digits }));
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const j = await r.json();
+      if (j?.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setAddr((a: any) => ({
+        ...a,
+        cep: digits,
+        address: j.logradouro || a.address || "",
+        neighborhood: j.bairro || "",
+        city: j.localidade || "",
+        state: j.uf || "",
+      }));
+    } catch {
+      toast.error("Não foi possível buscar o CEP agora");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const loadShippingOptions = async (cep: string) => {
+    setShipLoading(true);
+    try {
+      const res = await act({ action: "shipping_options", cep });
+      setShipOptions(res?.options || []);
+    } finally {
+      setShipLoading(false);
+    }
+  };
+
+  const saveAddressStep = async () => {
+    const res = await act({
+      action: "save_details",
+      details: {
+        cep: addr.cep,
+        address: addr.address,
+        address_number: addr.address_number,
+        complement: addr.complement,
+        neighborhood: addr.neighborhood,
+        city: addr.city,
+        state: addr.state,
+      },
+    });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar seus dados" : res?.error || "Erro ao salvar");
+      return;
+    }
+    setOnboardStep("shipping");
+    loadShippingOptions(addr.cep);
+  };
+
+  const chooseShipping = async (methodId: string) => {
+    const res = await act({ action: "set_shipping", method: methodId, cep: addr.cep });
+    if (!res?.ok) {
+      toast.error(res?.error || "Não foi possível escolher o envio");
+      return;
+    }
+    setOnboardStep("cpf");
+  };
+
+  const saveCpfStep = async () => {
+    const res = await act({ action: "save_details", details: { cpf } });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o CPF" : res?.error || "Erro ao salvar");
+      return;
+    }
+    setOnboardStep("email");
+  };
+
+  const saveEmailStep = async () => {
+    const res = await act({ action: "save_details", details: { email } });
+    if (!res?.ok) {
+      toast.error(res?.error === "otp_required" ? "Confirme o código do WhatsApp para alterar o e-mail" : res?.error || "Erro ao salvar");
+      return;
+    }
+    toast.success("Tudo pronto! Agora é só pagar 🎉");
+    setStep("area");
+  };
+
+  const goCheckout = (method: "pix" | "card" | "debit") => {
+    if (!state?.order) return;
+    window.location.href = `${state.order.checkout_url}?method=${method}`;
+  };
+
+
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
