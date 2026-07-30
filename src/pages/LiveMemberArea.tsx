@@ -94,7 +94,6 @@ export default function LiveMemberArea() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -104,10 +103,18 @@ export default function LiveMemberArea() {
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
-  const confirmDismissedRef = useRef<string | null>(null);
+  /** Onboarding pós-confirmação (endereço → envio → CPF → e-mail). */
+  const [onboardStep, setOnboardStep] = useState<OnboardStep>("address");
+  const [addr, setAddr] = useState<any>({});
+  const [cepLoading, setCepLoading] = useState(false);
+  const [shipOptions, setShipOptions] = useState<ShippingOption[]>([]);
+  const [shipLoading, setShipLoading] = useState(false);
+  const [cpf, setCpf] = useState("");
+  const [email, setEmail] = useState("");
+
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
   const itemsSigRef = useRef<string | null>(null);
+
 
   /** Roletas de prêmio disponíveis para esta cliente neste evento. */
   const { wheels, refresh: refreshWheels } = useEventPrizeWheels(
