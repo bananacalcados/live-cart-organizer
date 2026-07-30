@@ -39,6 +39,8 @@ export function MemberAreaLinkBanner({ event }: { event?: any }) {
             <ExternalLink className="h-4 w-4" /> ABRIR
           </a>
         </Button>
+        <OtpAccessCodeSettingsDialog />
+
       </div>
     </div>
   );
