@@ -766,7 +766,7 @@ Deno.serve(async (req) => {
 
       const event = await resolveCurrentEvent();
       const { order } = await loadOrder(event?.id || null, session.phone);
-      const subtotal = order ? orderSubtotal(order) : 0;
+      const subtotal = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
 
       let fixed = 0;
       let freeAbove = 0;
