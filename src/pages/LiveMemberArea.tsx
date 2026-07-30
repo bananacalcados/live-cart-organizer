@@ -1322,18 +1322,13 @@ export default function LiveMemberArea() {
                     </div>
                   ) : (
                     <Button
-                      variant="outline"
-                      className="w-full h-16 text-base font-bold border-2 border-primary"
-                      onClick={async () => {
-                        const res = await act({ action: "send_otp" });
-                        if (res?.ok) {
-                          setOtpOpen(true);
-                          toast.success("Código enviado no seu WhatsApp");
-                        } else toast.error(res?.error || "Falha ao enviar código");
+                      className="w-full h-16 text-base font-bold"
+                      onClick={() => {
+                        setOnboardStep(firstPendingOnboard(state));
+                        setStep("onboarding");
                       }}
-                      disabled={busy}
                     >
-                      <Lock className="h-5 w-5 mr-2" /> LIBERAR MEUS DADOS PARA PAGAR
+                      COMPLETAR MEUS DADOS PARA PAGAR
                     </Button>
                   )}
                 </div>
