@@ -821,23 +821,19 @@ Deno.serve(async (req) => {
         await supabase.from("customer_registrations").insert(payload);
       }
 
-      // Ponto 5 — enriquece o CRM unificado com CPF/e-mail/nome informados
-      await upsertUnified({
-        phone: session.phone,
-        name: (payload.full_name as string) || session.name,
-        cpf: (payload.cpf as string) ?? null,
-        email: (payload.email as string) ?? null,
-      });
+      // Ponto 5 — enriquece o CRM unificado (em segundo plano, não trava a etapa)
+      background(
+        upsertUnified({
+          phone: session.phone,
+          name: (payload.full_name as string) || session.name,
+          cpf: (payload.cpf as string) ?? null,
+          email: (payload.email as string) ?? null,
+        }),
+      );
 
-
-
-      const { data: fresh } = await supabase
-        .from("live_member_sessions")
-        .select("*")
-        .eq("id", session.id)
-        .single();
-      return json(await buildState(fresh));
+      return json(await buildState(session, { skipHistory: true }));
     }
+
 
     /**
      * Opções de envio da área de membros — as MESMAS do link de checkout:
