@@ -361,7 +361,55 @@ Deno.serve(async (req) => {
       }
     }
 
-    async function buildState(session: any) {
+    /**
+     * Dados que a cliente JÁ informou antes (mesmo WhatsApp, outro pedido).
+     * É o que faz o cadastro "ficar salvo" entre lives: cada pedido novo
+     * herda endereço/CPF/e-mail do último cadastro dela.
+     */
+    async function previousRegistration(phone: string, excludeOrderId: string | null) {
+      const suf = suffix8(phone);
+      const { data } = await supabase
+        .from("customer_registrations")
+        .select("*")
+        .ilike("whatsapp", `%${suf}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return (
+        (data || []).find(
+          (r: any) => r.order_id !== excludeOrderId && (r.cep || r.cpf || r.email),
+        ) || null
+      );
+    }
+
+    /** Última forma de envio escolhida pela cliente na área de membros. */
+    async function previousShipping(phone: string, excludeOrderId: string | null) {
+      const customers = await loadCustomers(phone);
+      const ids = customers.map((c: any) => c.id);
+      if (!ids.length) return null;
+      const { data } = await supabase
+        .from("orders")
+        .select("id, shipping_info, created_at")
+        .in("customer_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      const prev = (data || []).find(
+        (o: any) => o.id !== excludeOrderId && (o.shipping_info as any)?.source === "member_area",
+      );
+      return (prev?.shipping_info as any) || null;
+    }
+
+    /** Executa em segundo plano (não segura a resposta da etapa). */
+    function background(p: Promise<unknown>) {
+      try {
+        // @ts-ignore — disponível no runtime das edge functions
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+        else p.catch(() => {});
+      } catch {
+        p.catch(() => {});
+      }
+    }
+
+    async function buildState(session: any, opts: { skipHistory?: boolean } = {}) {
       // Sempre resolve a live corrente (link único global), não a live da sessão.
       const event = await resolveCurrentEvent();
       const loaded = await loadOrder(event?.id || null, session.phone);
@@ -385,7 +433,7 @@ Deno.serve(async (req) => {
       }
 
 
-      const history = await loadHistory(session.phone, order?.id || null);
+      const history = opts.skipHistory ? null : await loadHistory(session.phone, order?.id || null);
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
 
 
@@ -399,7 +447,57 @@ Deno.serve(async (req) => {
           .eq("order_id", order.id)
           .maybeSingle();
         reg = data;
+
+        // ── Cadastro salvo: herda o que ela já informou em pedidos anteriores.
+        const missing = !reg?.cep || !reg?.address || !reg?.address_number || !reg?.cpf || !reg?.email;
+        if (missing) {
+          const prev = await previousRegistration(session.phone, order.id);
+          if (prev) {
+            const fields = [
+              "full_name", "cpf", "email", "cep", "address", "address_number",
+              "complement", "neighborhood", "city", "state",
+            ];
+            const patch: Record<string, unknown> = {};
+            for (const f of fields) {
+              if (!reg?.[f] && prev[f]) patch[f] = prev[f];
+            }
+            if (Object.keys(patch).length) {
+              if (reg?.id) {
+                await supabase.from("customer_registrations").update(patch).eq("id", reg.id);
+                reg = { ...reg, ...patch };
+              } else {
+                const { data: created } = await supabase
+                  .from("customer_registrations")
+                  .insert({ order_id: order.id, whatsapp: session.phone, ...patch })
+                  .select()
+                  .maybeSingle();
+                reg = created || { order_id: order.id, ...patch };
+              }
+            }
+          }
+        }
+
+        // ── Envio salvo: reaplica a forma de envio escolhida antes (mesmo CEP).
+        if (
+          !order.is_paid &&
+          (order.shipping_info as any)?.source !== "member_area" &&
+          reg?.cep
+        ) {
+          const prevShip = await previousShipping(session.phone, order.id);
+          if (prevShip?.method && String(prevShip.cep || "") === String(reg.cep)) {
+            const cost = Number(prevShip.price || 0);
+            const info = { ...prevShip, inherited: true, applied_at: new Date().toISOString() };
+            await supabase
+              .from("orders")
+              .update({ shipping_cost: cost, free_shipping: cost === 0, shipping_info: info })
+              .eq("id", order.id);
+            order.shipping_cost = cost;
+            order.free_shipping = cost === 0;
+            order.shipping_info = info;
+          }
+        }
       }
+
 
       const otpUnlocked =
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
