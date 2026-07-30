@@ -31,7 +31,7 @@ import {
 } from "@/components/checkout/PaymentSection";
 
 
-type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
+type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
 type OnboardStep = "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
@@ -394,11 +394,22 @@ export default function LiveMemberArea() {
     return () => window.clearInterval(i);
   }, [state?.order?.payment_window_expires_at, state?.order?.is_paid]);
 
-  const enter = async (withName?: string) => {
+  const enter = async (withName?: string, code?: string) => {
     setBusy(true);
     try {
-      const res = await callApi({ action: "enter", phone, name: withName || undefined });
+      const res = await callApi({
+        action: "enter",
+        phone,
+        name: withName || name.trim() || undefined,
+        otp: code || undefined,
+      });
       if (!res?.ok) {
+        // Cadastro novo sem pedidos: confirma o WhatsApp uma única vez.
+        if (res?.needsOtp) {
+          setStep("signup_otp");
+          if (code) toast.error(res?.error || "Código incorreto");
+          return;
+        }
         toast.error(res?.error || "Não foi possível entrar");
         return;
       }
@@ -413,6 +424,7 @@ export default function LiveMemberArea() {
       setBusy(false);
     }
   };
+
 
   /** Aplica a resposta do servidor sem perder o histórico (respostas rápidas o omitem). */
   const mergeState = (res: any) =>
@@ -777,6 +789,65 @@ export default function LiveMemberArea() {
       </div>
     );
   }
+
+  // ---------- Etapa 2b: Confirmar WhatsApp (só cadastro novo sem pedidos) ----------
+  if (step === "signup_otp") {
+    return (
+      <div className="min-h-screen bg-background text-foreground px-6">
+        <div className="max-w-sm mx-auto pb-[40vh]">
+          <button
+            onClick={() => setStep("phone")}
+            className="mt-6 inline-flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar
+          </button>
+          {Header}
+          <p className="text-muted-foreground text-center text-sm mb-6">
+            Confirme seu WhatsApp para criar seu cadastro. Enviamos um código para {phone}.
+          </p>
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              className="w-full h-14 font-semibold"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const res = await callApi({ action: "send_otp", phone });
+                  if (res?.ok) toast.success("Código enviado no seu WhatsApp");
+                  else toast.error(res?.error || "Falha ao enviar código");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              RECEBER CÓDIGO NO WHATSAPP
+            </Button>
+            <Input
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onFocus={(e) =>
+                setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 250)
+              }
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="000000"
+              className="h-16 text-center text-2xl font-bold tracking-[0.4em]"
+            />
+            <Button
+              className="w-full h-16 text-base font-bold"
+              disabled={otp.length < 4 || busy}
+              onClick={() => enter(undefined, otp)}
+            >
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRMAR E ENTRAR"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
 
   const BackToLiveLink = (
     <button

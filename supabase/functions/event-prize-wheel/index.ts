@@ -193,8 +193,9 @@ Deno.serve(async (req) => {
           name: w.name,
           audience: w.audience,
           min_purchase_value: Number(w.min_purchase_value || 0),
-          require_otp: !!w.require_otp && w.audience === "participants",
-          otp_verified: phone ? await otpVerified(phone) : false,
+          require_otp: false, // OTP não é exigido para girar a roleta
+          otp_verified: true,
+
           spins_used: used,
           max_spins: w.max_spins_per_customer,
           eligible,
@@ -264,9 +265,8 @@ Deno.serve(async (req) => {
             error: `Esta roleta exige compras a partir de R$ ${Number(wheel.min_purchase_value).toFixed(2)} neste evento.`,
           });
         }
-      } else if (wheel.require_otp && !(await otpVerified(phone))) {
-        return json({ ok: false, error: "otp_required" });
       }
+
 
       const segments = (wheel.segments || [])
         .filter((s: any) => s.is_active)
