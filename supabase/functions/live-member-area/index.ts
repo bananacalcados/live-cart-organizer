@@ -257,9 +257,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    function orderTotal(order: any) {
-      return orderSubtotal(order) + Number(order?.shipping_cost || 0);
+    /** Desconto do pedido (fixo ou percentual) aplicado sobre os produtos. */
+    function orderDiscount(order: any) {
+      const st = orderSubtotal(order);
+      if (!order?.discount_type || !order?.discount_value) return 0;
+      const raw =
+        order.discount_type === "percentage"
+          ? st * (Number(order.discount_value) / 100)
+          : Number(order.discount_value);
+      return Math.min(st, Math.max(0, Math.round(raw * 100) / 100));
     }
+
+    /** A cliente escolheu o frete na área de membros? */
+    function shippingChosen(order: any) {
+      return (order?.shipping_info as any)?.source === "member_area";
+    }
+
+    /** Frete considerado no total: só depois que a cliente escolhe a forma de envio. */
+    function orderShipping(order: any) {
+      if (!shippingChosen(order)) return 0;
+      return order?.free_shipping ? 0 : Number(order?.shipping_cost || 0);
+    }
+
+    function orderTotal(order: any) {
+      return (
+        Math.max(0, orderSubtotal(order) - orderDiscount(order)) + orderShipping(order)
+      );
+    }
+
 
     /**
      * Ponto 6 — frete fixo da Live: se o pedido ainda não tem frete definido,
