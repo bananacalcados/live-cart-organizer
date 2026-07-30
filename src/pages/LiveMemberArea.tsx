@@ -544,6 +544,71 @@ export default function LiveMemberArea() {
     window.location.href = `${state.order.checkout_url}?method=${method}`;
   };
 
+  // ── Pagamento nativo na Área de Membros ───────────────────────────────
+  // Reaproveita EXATAMENTE a etapa 3 do checkout transparente. Os dados
+  // enviados ao gateway são os mesmos salvos no cadastro do pedido
+  // (customer_registrations), então o link do checkout segue sincronizado.
+  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+    max_installments: 12,
+    interest_free_installments: 6,
+    monthly_interest_rate: 2.49,
+  });
+
+  useEffect(() => {
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "installment_config")
+      .maybeSingle()
+      .then(({ data }) => {
+        const cfg = data?.value as any;
+        if (cfg) {
+          setInstallmentConfig({
+            max_installments: cfg.max_installments || 12,
+            interest_free_installments: cfg.interest_free_installments || 6,
+            monthly_interest_rate: cfg.monthly_interest_rate || 2.49,
+          });
+        }
+      });
+  }, []);
+
+  /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */
+  const payForm: CustomerFormData | null = (() => {
+    const d = state?.details || {};
+    if (d.masked) return null;
+    const fullName = (d.full_name || state?.name || "").trim();
+    const f: CustomerFormData = {
+      fullName,
+      email: (d.email || email || "").trim(),
+      cpf: (d.cpf || cpf || "").replace(/\D/g, ""),
+      whatsapp: state?.phone || "",
+      cep: (d.cep || addr.cep || "").replace(/\D/g, ""),
+      address: d.address || addr.address || "",
+      addressNumber: d.address_number || addr.address_number || "",
+      complement: d.complement || addr.complement || "",
+      neighborhood: d.neighborhood || addr.neighborhood || "",
+      city: d.city || addr.city || "",
+      state: d.state || addr.state || "",
+    };
+    const ok = f.fullName && f.email && f.cpf.length === 11 && f.cep.length === 8 && f.address && f.city && f.state;
+    return ok ? f : null;
+  })();
+
+  /** Após aprovação, atualiza o estado — o pedido já foi marcado como pago pelo gateway/webhook. */
+  const handlePaymentConfirmed = async () => {
+    toast.success("Pagamento confirmado! 🎉");
+    const token = state?.token;
+    if (!token) return;
+    for (let i = 0; i < 5; i++) {
+      const res = await callApi({ action: "state", token }).catch(() => null);
+      if (res?.ok) {
+        setState(res);
+        if (res.order?.is_paid) break;
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  };
+
 
 
   if (loading) {
