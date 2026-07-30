@@ -1165,56 +1165,8 @@ export default function LiveMemberArea() {
         </a>
       </div>
 
-      {/* Modal: confirmar pedido */}
-      {confirmOpen && order && order.products.length > 0 && !order.confirmed_at && !order.is_paid && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-          <div className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-center">Confirma este pedido?</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {order.products.map((p: any, i: number) => (
-                <div key={i} className="flex gap-3 items-center">
-                  {p.image && <img src={p.image} alt={p.title} className="w-14 h-14 rounded-lg object-cover" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">{p.variant}</p>
-                  </div>
-                  <span className="text-sm font-bold">{brl(Number(p.price || 0))}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between font-bold">
-              <span>Total</span>
-              <span>{brl(order.total)}</span>
-            </div>
-            <p className="text-xs text-center text-muted-foreground">
-              Ao confirmar você tem 20 minutos para pagar. O estoque só é reservado após o pagamento.
-            </p>
-            <Button
-              className="w-full h-16 text-base font-bold"
-              disabled={busy}
-              onClick={async () => {
-                const res = await act({ action: "confirm_order" });
-                if (res?.ok) {
-                  setConfirmOpen(false);
-                  toast.success("Pedido confirmado!");
-                }
-              }}
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONFIRMAR"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full h-12"
-              onClick={() => {
-                confirmDismissedRef.current = order.id;
-                setConfirmOpen(false);
-              }}
-            >
-              Agora não
-            </Button>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Modal: OTP */}
       {otpOpen && (
