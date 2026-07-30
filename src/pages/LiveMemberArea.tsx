@@ -24,6 +24,11 @@ import {
   PublicWheel,
   useEventPrizeWheels,
 } from "@/components/prize/EventPrizeWheelDialog";
+import {
+  StepPayment,
+  type CustomerFormData,
+  type InstallmentConfig,
+} from "@/components/checkout/PaymentSection";
 
 
 type Step = "phone" | "name" | "confirm" | "onboarding" | "area";
@@ -542,6 +547,71 @@ export default function LiveMemberArea() {
   const goCheckout = (method: "pix" | "card" | "debit") => {
     if (!state?.order) return;
     window.location.href = `${state.order.checkout_url}?method=${method}`;
+  };
+
+  // ── Pagamento nativo na Área de Membros ───────────────────────────────
+  // Reaproveita EXATAMENTE a etapa 3 do checkout transparente. Os dados
+  // enviados ao gateway são os mesmos salvos no cadastro do pedido
+  // (customer_registrations), então o link do checkout segue sincronizado.
+  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+    max_installments: 12,
+    interest_free_installments: 6,
+    monthly_interest_rate: 2.49,
+  });
+
+  useEffect(() => {
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "installment_config")
+      .maybeSingle()
+      .then(({ data }) => {
+        const cfg = data?.value as any;
+        if (cfg) {
+          setInstallmentConfig({
+            max_installments: cfg.max_installments || 12,
+            interest_free_installments: cfg.interest_free_installments || 6,
+            monthly_interest_rate: cfg.monthly_interest_rate || 2.49,
+          });
+        }
+      });
+  }, []);
+
+  /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */
+  const payForm: CustomerFormData | null = (() => {
+    const d = state?.details || {};
+    if (d.masked) return null;
+    const fullName = (d.full_name || state?.name || "").trim();
+    const f: CustomerFormData = {
+      fullName,
+      email: (d.email || email || "").trim(),
+      cpf: (d.cpf || cpf || "").replace(/\D/g, ""),
+      whatsapp: state?.phone || "",
+      cep: (d.cep || addr.cep || "").replace(/\D/g, ""),
+      address: d.address || addr.address || "",
+      addressNumber: d.address_number || addr.address_number || "",
+      complement: d.complement || addr.complement || "",
+      neighborhood: d.neighborhood || addr.neighborhood || "",
+      city: d.city || addr.city || "",
+      state: d.state || addr.state || "",
+    };
+    const ok = f.fullName && f.email && f.cpf.length === 11 && f.cep.length === 8 && f.address && f.city && f.state;
+    return ok ? f : null;
+  })();
+
+  /** Após aprovação, atualiza o estado — o pedido já foi marcado como pago pelo gateway/webhook. */
+  const handlePaymentConfirmed = async () => {
+    toast.success("Pagamento confirmado! 🎉");
+    const token = state?.token;
+    if (!token) return;
+    for (let i = 0; i < 5; i++) {
+      const res = await callApi({ action: "state", token }).catch(() => null);
+      if (res?.ok) {
+        setState(res);
+        if (res.order?.is_paid) break;
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
   };
 
 
@@ -1116,29 +1186,46 @@ export default function LiveMemberArea() {
                     >
                       COMPLETAR MEUS DADOS DE ENVIO
                     </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <Button
-                        className="w-full h-16 text-base font-bold gap-2"
+                  ) : payForm ? (
+                    <div className="rounded-2xl border-2 border-border p-3">
+                      <StepPayment
+                        orderId={order.id}
+                        amount={order.total}
+                        products={(order.products || []).map((p: any) => ({
+                          title: p.title,
+                          variant: p.variant,
+                          price: Number(p.effective_price ?? p.price ?? 0),
+                          quantity: Number(p.quantity || 1),
+                          image: p.image,
+                        }))}
+                        form={payForm}
+                        installmentConfig={installmentConfig}
+                        stepBadge={null}
+                        onPaymentConfirmed={handlePaymentConfirmed}
+                      />
+                      <button
+                        type="button"
                         onClick={() => goCheckout("pix")}
+                        className="w-full mt-3 text-xs text-muted-foreground underline"
                       >
-                        <QrCode className="h-5 w-5" /> PAGAR NO PIX
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full h-16 text-base font-bold gap-2 border-2 border-primary"
-                        onClick={() => goCheckout("card")}
-                      >
-                        <CreditCard className="h-5 w-5" /> PAGAR NO CARTÃO DE CRÉDITO
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full h-16 text-base font-bold gap-2 border-2 border-border"
-                        onClick={() => goCheckout("debit")}
-                      >
-                        <CreditCard className="h-5 w-5" /> PAGAR NO DÉBITO
-                      </Button>
+                        Prefiro pagar pelo link do checkout
+                      </button>
                     </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full h-16 text-base font-bold border-2 border-primary"
+                      onClick={async () => {
+                        const res = await act({ action: "send_otp" });
+                        if (res?.ok) {
+                          setOtpOpen(true);
+                          toast.success("Código enviado no seu WhatsApp");
+                        } else toast.error(res?.error || "Falha ao enviar código");
+                      }}
+                      disabled={busy}
+                    >
+                      <Lock className="h-5 w-5 mr-2" /> LIBERAR MEUS DADOS PARA PAGAR
+                    </Button>
                   )}
                 </div>
               ) : (

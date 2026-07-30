@@ -1,66 +1,40 @@
 ## Objetivo
 
-Um **link único e público** fixado na Live do Instagram. Todo mundo clica no mesmo link, digita o WhatsApp e entra na sua própria área: vê o pedido montado por você, confirma o item (que vai direto para *Novo Pedido*) e paga. Dados pessoais ficam mascarados e só são revelados com código OTP enviado no WhatsApp.
+Pagar direto na Área de Membros (`/minha-area`), sem redirecionar para o link do checkout — mas **reaproveitando exatamente** o código da etapa 3 do checkout transparente. O link do checkout continua existindo e funcionando igual.
 
-Decisões fechadas: colunas do Kanban conforme proposto · estoque só é reservado no pagamento · janela de pagamento de 20 minutos.
+## Como funciona hoje
 
----
+- `src/pages/TransparentCheckout.tsx` (2.420 linhas) contém a etapa 3 inteira:
+  - `StepPayment` (linha 822): seletor PIX / Crédito / Débito, parcelas, "Alterar forma de pagamento".
+  - `PixPaymentForm` (1016): chama `mercadopago-create-pix`, QR Code, polling de status, desconto PIX.
+  - `CardPaymentForm` (1177): tokenização Mercado Pago (`src/lib/mercadopago.ts`), BIN/capacidades crédito x débito, 3DS, cascata de gateways, `handlePaymentConfirmed`, Meta Pixel/CAPI.
+- `src/pages/LiveMemberArea.tsx` linha 544 apenas redireciona: `window.location.href = checkout_url?method=...`.
+- O webhook de pagamento (`payment-webhook`) já marca o pedido como pago pelo `orderId` — como a Área de Membros usará **o mesmo `order.id`**, o pedido move para PAGO no módulo Eventos automaticamente, sem código novo.
 
-## Fase 0 — Modo do evento
+## Plano
 
-Campo **Modo de operação** no cadastro/edição do evento:
-- **Manual** — comportamento atual, sem nenhuma alteração.
-- **Área de Clientes** — gera slug público (`/live/<slug>`) e ativa o Kanban adaptado.
+### 1. Extrair a etapa 3 para um componente compartilhado (sem reescrever nada)
+Mover, **sem alterar a lógica**, de `TransparentCheckout.tsx` para `src/components/checkout/PaymentSection.tsx`:
+- `StepPayment`, `PixPaymentForm`, `CardPaymentForm`, `calculateInstallmentAmount` e os helpers de formatação/validação que elas usam (`isValidCPF`, `formatCardNumber`, `formatExpiry`, etc.) — estes vão para `src/lib/checkout/formatters.ts`.
+- `TransparentCheckout.tsx` passa a importar esses componentes. Comportamento idêntico, zero regressão esperada (mesmo código, só realocado).
 
-## Fase 1 — Entrada pelo link público
+### 2. Usar o componente na Área de Membros
+Em `LiveMemberArea.tsx`, substituir o redirecionamento por um passo `payment` que renderiza `<StepPayment />` com:
+- `orderId` = id do pedido do evento (mesmo id do checkout),
+- `orderData` = itens com preço efetivo (com desconto), frete escolhido, total,
+- `form` = CustomerFormData montado a partir do cadastro já preenchido no onboarding (nome, telefone, e-mail, CPF, CEP, rua, número, bairro, cidade, UF),
+- `pixDiscountPercent` e config de parcelas vindos do mesmo lugar que o checkout usa.
 
-- Tela 1: **WhatsApp** (normalizado em E.164, com 9º dígito).
-- Se o telefone não tem cadastro → Tela 2: **Nome completo**, salvo como lead da live.
-- Se já tem cadastro → entra direto.
-- Se já tem pedido montado no Kanban → entra e abre o modal de confirmação.
-- Sem OTP nesta etapa: a área serve também para captação de leads durante a live.
+Assim os gateways recebem nome, telefone, e-mail, CPF, endereço completo e valor do frete — porque é literalmente a mesma função de envio.
 
-## Fase 2 — Área do cliente
+### 3. Espelhar o cadastro no pedido/checkout
+Cada etapa do onboarding (nome → endereço/frete → CPF/e-mail) já grava via `live-member-area`. Ajuste: essa função passa a persistir os mesmos campos que o checkout grava (`customer_registrations` / `pos_customers` / `shipping_info` / `shipping_cost` do pedido), usando os mesmos helpers já existentes. Resultado: abrir o link do checkout depois mostra tudo preenchido, e vice-versa.
 
-- Cabeçalho com nome + selo "ao vivo".
-- **Meu pedido**: itens anotados por você (foto, descrição, cor/tamanho, preço), com ação por item.
-- Sem pedido: estado vazio com CTA para comentar na live / falar no WhatsApp.
-- **Meus dados**: nome visível; CPF, e-mail e endereço mascarados.
-
-## Fase 3 — OTP como cofre
-
-- "Ver / editar meus dados" dispara código de 4 dígitos no WhatsApp daquele número.
-- Validado, libera leitura e edição por 30 minutos de sessão.
-- Primeiro preenchimento não exige OTP; a partir do momento em que há dados salvos, toda leitura/edição exige.
-
-## Fase 4 — Confirmação move para Novo Pedido
-
-- Modal **CONFIRMAR / NÃO QUERO** por item.
-- Confirmar → pedido vai automaticamente para **Novo Pedido** com carimbo de data/hora da confirmação.
-- Recusar → item removido; se era o único, pedido encerrado.
-- Itens adicionados por você durante a live aparecem em tempo real para confirmação.
-
-## Fase 5 — Kanban do modo Link
-
-`Montando` → `Aguardando confirmação` → `Novo Pedido` → `Aguardando pagamento` → `Pago` → `Expedição`.
-Eventos em modo Manual mantêm as colunas atuais.
-
-## Fase 6 — Pagamento (janela de 20 min)
-
-- Pix (5% off), Crédito e Débito, com o checkout transparente atual, dentro da própria área.
-- Contador regressivo de **20 minutos** a partir da confirmação. Expirado, o pedido volta para *Aguardando confirmação* e o cliente pode reabrir.
-- **Estoque só é reservado no pagamento confirmado** — antes disso nada é retido.
-- Pós-pagamento: status e rastreio na mesma tela.
-
----
+### 4. Pós-pagamento
+Reusar `handlePaymentConfirmed` do checkout (Meta Pixel/CAPI, dedupe, cross-sell) e, na Área de Membros, exibir a tela de "Pagamento confirmado" com histórico atualizado e o botão da roleta.
 
 ## Detalhes técnicos
 
-- Nova rota pública `/live/:slug` (sem autenticação Supabase), servida por edge function pública, no padrão já usado em `link-page-public`.
-- Coluna `operation_mode` e `public_slug` em `events`.
-- Sessão do cliente por telefone em armazenamento local + token curto emitido pela edge function; nenhuma leitura direta de tabela pelo navegador.
-- OTP reaproveita `live-send-verification` / `live-verify-code`, com escopo "revelar dados" e expiração de 30 min.
-- Dados sensíveis nunca trafegam mascarados-no-front: a edge function só devolve CPF/endereço completos após OTP validado.
-- Confirmação de item chama RPC que atualiza o estágio do pedido e registra `confirmed_at`.
-- Expiração de 20 min tratada por job/varredura no servidor, não apenas por timer no navegador.
-- UI mobile-first: botões de 56-64px, uma decisão por tela, alto contraste, voltar sempre visível.
+- Nenhuma edge function nova: `mercadopago-create-pix`, `process-payment`, `payment-webhook` e `checkout-public` são os mesmos.
+- Nenhuma tabela nova.
+- Risco principal é o refactor de extração; mitigado por mover o código intacto e validar o checkout transparente (PIX, crédito 1x/parcelado, débito) antes de plugar na Área de Membros.
