@@ -816,10 +816,24 @@ Deno.serve(async (req) => {
 
 
       if (reg?.id) {
-        await supabase.from("customer_registrations").update(payload).eq("id", reg.id);
+        const { error: upErr } = await supabase
+          .from("customer_registrations")
+          .update(nonNullReg(payload))
+          .eq("id", reg.id);
+        if (upErr) {
+          console.error("[live-member-area] save_details update", upErr);
+          return json({ ok: false, error: `Erro ao salvar dados: ${upErr.message}` });
+        }
       } else {
-        await supabase.from("customer_registrations").insert(payload);
+        const { error: insErr } = await supabase
+          .from("customer_registrations")
+          .insert(withRegDefaults(payload));
+        if (insErr) {
+          console.error("[live-member-area] save_details insert", insErr);
+          return json({ ok: false, error: `Erro ao salvar dados: ${insErr.message}` });
+        }
       }
+
 
       // Ponto 5 — enriquece o CRM unificado (em segundo plano, não trava a etapa)
       background(
