@@ -398,6 +398,27 @@ Deno.serve(async (req) => {
       return (prev?.shipping_info as any) || null;
     }
 
+    /**
+     * `customer_registrations` tem várias colunas NOT NULL. Como a área de
+     * membros salva os dados por etapas (endereço → CPF → e-mail), qualquer
+     * INSERT parcial quebrava e NADA era salvo. Estes helpers garantem que
+     * nunca enviamos NULL para colunas obrigatórias.
+     */
+    const REG_REQUIRED = [
+      "full_name", "cpf", "email", "whatsapp", "cep",
+      "address", "address_number", "neighborhood", "city", "state",
+    ];
+    function nonNullReg(payload: Record<string, unknown>) {
+      const out: Record<string, unknown> = { ...payload };
+      for (const k of REG_REQUIRED) if (k in out && out[k] == null) out[k] = "";
+      return out;
+    }
+    function withRegDefaults(payload: Record<string, unknown>) {
+      const out = nonNullReg(payload);
+      for (const k of REG_REQUIRED) if (out[k] == null) out[k] = "";
+      return out;
+    }
+
     /** Executa em segundo plano (não segura a resposta da etapa). */
     function background(p: Promise<unknown>) {
       try {
@@ -408,6 +429,7 @@ Deno.serve(async (req) => {
         p.catch(() => {});
       }
     }
+
 
     async function buildState(session: any, opts: { skipHistory?: boolean } = {}) {
       // Sempre resolve a live corrente (link único global), não a live da sessão.
@@ -468,10 +490,11 @@ Deno.serve(async (req) => {
               } else {
                 const { data: created } = await supabase
                   .from("customer_registrations")
-                  .insert({ order_id: order.id, whatsapp: session.phone, ...patch })
+                  .insert(withRegDefaults({ order_id: order.id, whatsapp: session.phone, ...patch }))
                   .select()
                   .maybeSingle();
                 reg = created || { order_id: order.id, ...patch };
+
               }
             }
           }
@@ -503,13 +526,20 @@ Deno.serve(async (req) => {
         !!session.otp_verified_until && new Date(session.otp_verified_until) > new Date();
       const hasDetails = !!(reg && (reg.cpf || reg.cep || reg.email));
       const shippingMethod = (order?.shipping_info as any)?.method || null;
+      // Retirada na loja / mototaxista não exigem endereço completo.
+      const noAddressNeeded = ["pickup", "local", "motoboy", "delivery_local"].includes(
+        String(shippingMethod || ""),
+      );
       /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
       const onboarding = {
-        address: !!(reg?.cep && reg?.address && reg?.address_number),
+        address: noAddressNeeded
+          ? !!reg?.cep
+          : !!(reg?.cep && reg?.address && reg?.address_number),
         shipping: !!shippingMethod,
         cpf: !!reg?.cpf,
         email: !!reg?.email,
       };
+
 
       return {
         ok: true,
@@ -816,10 +846,24 @@ Deno.serve(async (req) => {
 
 
       if (reg?.id) {
-        await supabase.from("customer_registrations").update(payload).eq("id", reg.id);
+        const { error: upErr } = await supabase
+          .from("customer_registrations")
+          .update(nonNullReg(payload))
+          .eq("id", reg.id);
+        if (upErr) {
+          console.error("[live-member-area] save_details update", upErr);
+          return json({ ok: false, error: `Erro ao salvar dados: ${upErr.message}` });
+        }
       } else {
-        await supabase.from("customer_registrations").insert(payload);
+        const { error: insErr } = await supabase
+          .from("customer_registrations")
+          .insert(withRegDefaults(payload));
+        if (insErr) {
+          console.error("[live-member-area] save_details insert", insErr);
+          return json({ ok: false, error: `Erro ao salvar dados: ${insErr.message}` });
+        }
       }
+
 
       // Ponto 5 — enriquece o CRM unificado (em segundo plano, não trava a etapa)
       background(
