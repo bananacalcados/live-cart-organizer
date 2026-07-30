@@ -16,6 +16,12 @@ import {
   Timer,
   Trash2,
 } from "lucide-react";
+import {
+  EventPrizeWheelDialog,
+  PublicWheel,
+  useEventPrizeWheels,
+} from "@/components/prize/EventPrizeWheelDialog";
+
 
 type Step = "phone" | "name" | "area";
 
@@ -79,11 +85,22 @@ export default function LiveMemberArea() {
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
+
   /** Não reabrir o modal de confirmação se a cliente já fechou (a cada polling). */
   const confirmDismissedRef = useRef<string | null>(null);
   /** Assinatura dos itens do pedido, pra avisar quando a vendedora anota algo novo. */
   const itemsSigRef = useRef<string | null>(null);
+
+  /** Roletas de prêmio disponíveis para esta cliente neste evento. */
+  const { wheels, refresh: refreshWheels } = useEventPrizeWheels(
+    state?.phone || null,
+    state?.event?.id || null,
+  );
+  const availableWheels = wheels.filter((w) => w.eligible && w.spins_used < w.max_spins);
+
+
 
   /** SEO da página pública (link fica na bio do Instagram). */
   useEffect(() => {
@@ -416,6 +433,32 @@ export default function LiveMemberArea() {
       <div className="max-w-md mx-auto px-5">
         {Header}
         <p className="text-center text-lg font-semibold -mt-3 mb-6">Oi, {state?.name} 👋</p>
+
+        {/* Roleta de prêmios */}
+        {availableWheels.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {availableWheels.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => setActiveWheel(w)}
+                className="w-full rounded-2xl px-5 py-4 font-black text-white text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 shadow-lg shadow-orange-500/40 animate-pulse hover:scale-[1.02] transition-transform"
+              >
+                🎰 ROLETA DE PRÊMIOS — {w.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeWheel && (
+          <EventPrizeWheelDialog
+            wheel={activeWheel}
+            phone={state?.phone || phone.replace(/\D/g, "")}
+            name={state?.name}
+            onClose={() => setActiveWheel(null)}
+            onDone={refreshWheels}
+          />
+        )}
+
 
         {/* Meu pedido */}
         <section className="rounded-2xl border-2 border-border p-4 space-y-3">

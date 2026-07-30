@@ -10,6 +10,9 @@ import { StatsBar } from "@/components/StatsBar";
 import { OrderReportDialog } from "@/components/OrderReportDialog";
 
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
+import { EventPrizeWheelsManager } from "@/components/events/EventPrizeWheelsManager";
+import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
+
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
@@ -262,9 +265,12 @@ const Index = () => {
               <EventPromotionManager eventId={currentEventId} />
             </TabsContent>
 
-            <TabsContent value="prizes">
+            <TabsContent value="prizes" className="space-y-6">
+              <MemberAreaLinkBanner event={currentEvent} />
+              <EventPrizeWheelsManager eventId={currentEventId} />
               <PrizeEligibleList eventId={currentEventId} />
             </TabsContent>
+
 
             <TabsContent value="meta-templates">
               <MetaTemplateCreator />

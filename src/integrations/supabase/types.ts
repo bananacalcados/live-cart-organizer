@@ -3630,12 +3630,15 @@ export type Database = {
       }
       customer_prizes: {
         Row: {
+          applied_order_id: string | null
           campaign_id: string | null
           coupon_code: string
           created_at: string
           customer_email: string | null
           customer_name: string | null
           customer_phone: string
+          event_id: string | null
+          event_segment_id: string | null
           expires_at: string
           id: string
           is_redeemed: boolean
@@ -3651,14 +3654,18 @@ export type Database = {
           store_id: string | null
           unified_customer_id: string | null
           updated_at: string
+          wheel_id: string | null
         }
         Insert: {
+          applied_order_id?: string | null
           campaign_id?: string | null
           coupon_code: string
           created_at?: string
           customer_email?: string | null
           customer_name?: string | null
           customer_phone: string
+          event_id?: string | null
+          event_segment_id?: string | null
           expires_at: string
           id?: string
           is_redeemed?: boolean
@@ -3674,14 +3681,18 @@ export type Database = {
           store_id?: string | null
           unified_customer_id?: string | null
           updated_at?: string
+          wheel_id?: string | null
         }
         Update: {
+          applied_order_id?: string | null
           campaign_id?: string | null
           coupon_code?: string
           created_at?: string
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string
+          event_id?: string | null
+          event_segment_id?: string | null
           expires_at?: string
           id?: string
           is_redeemed?: boolean
@@ -3697,6 +3708,7 @@ export type Database = {
           store_id?: string | null
           unified_customer_id?: string | null
           updated_at?: string
+          wheel_id?: string | null
         }
         Relationships: [
           {
@@ -5020,6 +5032,180 @@ export type Database = {
           pinned_by_name?: string | null
         }
         Relationships: []
+      }
+      event_prize_spins: {
+        Row: {
+          created_at: string
+          customer_name: string | null
+          event_id: string
+          id: string
+          phone: string
+          phone_suffix: string | null
+          prize_id: string | null
+          prize_label: string | null
+          segment_id: string | null
+          wheel_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string | null
+          event_id: string
+          id?: string
+          phone: string
+          phone_suffix?: string | null
+          prize_id?: string | null
+          prize_label?: string | null
+          segment_id?: string | null
+          wheel_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string | null
+          event_id?: string
+          id?: string
+          phone?: string
+          phone_suffix?: string | null
+          prize_id?: string | null
+          prize_label?: string | null
+          segment_id?: string | null
+          wheel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_prize_spins_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_prize_spins_prize_id_fkey"
+            columns: ["prize_id"]
+            isOneToOne: false
+            referencedRelation: "customer_prizes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_prize_spins_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "event_prize_wheel_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_prize_spins_wheel_id_fkey"
+            columns: ["wheel_id"]
+            isOneToOne: false
+            referencedRelation: "event_prize_wheels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_prize_wheel_segments: {
+        Row: {
+          color: string
+          created_at: string
+          expiry_days: number
+          id: string
+          is_active: boolean
+          label: string
+          prize_type: string
+          prize_value: number
+          probability: number
+          sort_order: number
+          updated_at: string
+          wheel_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          expiry_days?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          prize_type?: string
+          prize_value?: number
+          probability?: number
+          sort_order?: number
+          updated_at?: string
+          wheel_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          expiry_days?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          prize_type?: string
+          prize_value?: number
+          probability?: number
+          sort_order?: number
+          updated_at?: string
+          wheel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_prize_wheel_segments_wheel_id_fkey"
+            columns: ["wheel_id"]
+            isOneToOne: false
+            referencedRelation: "event_prize_wheels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_prize_wheels: {
+        Row: {
+          audience: string
+          created_at: string
+          ends_at: string | null
+          event_id: string
+          id: string
+          is_active: boolean
+          max_spins_per_customer: number
+          min_purchase_value: number
+          name: string
+          require_otp: boolean
+          starts_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          created_at?: string
+          ends_at?: string | null
+          event_id: string
+          id?: string
+          is_active?: boolean
+          max_spins_per_customer?: number
+          min_purchase_value?: number
+          name: string
+          require_otp?: boolean
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          created_at?: string
+          ends_at?: string | null
+          event_id?: string
+          id?: string
+          is_active?: boolean
+          max_spins_per_customer?: number
+          min_purchase_value?: number
+          name?: string
+          require_otp?: boolean
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_prize_wheels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       event_promotions: {
         Row: {
@@ -19857,6 +20043,10 @@ export type Database = {
           swap_only: number
           total_variants: number
         }[]
+      }
+      apply_event_prize_to_order: {
+        Args: { p_order_id: string }
+        Returns: Json
       }
       apply_shopify_links: { Args: { _links: Json }; Returns: number }
       apply_variant_normalization: {

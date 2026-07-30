@@ -1,3 +1,4 @@
+import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -914,11 +915,15 @@ const Events = () => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {(event as any).operation_mode === "member_area" && (
+                          <MemberAreaLinkBanner event={event} />
+                        )}
                         {event.description && (
                           <p className="text-sm text-muted-foreground line-clamp-2">
                             {event.description}
                           </p>
                         )}
+
                         {(event as any).whatsapp_number_id && (() => {
                           const wn = whatsappNumbers.find(n => n.id === (event as any).whatsapp_number_id);
                           return wn ? (
