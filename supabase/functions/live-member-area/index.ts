@@ -973,6 +973,20 @@ Deno.serve(async (req) => {
 
     if (action === "shipping_options") {
       const r = await shippingChoices(String(body.cep || ""));
+      // Guarda a cotação na sessão: a escolha seguinte não precisa cotar de novo
+      // (a cotação com transportadora é o que deixava a etapa lenta).
+      background(
+        supabase
+          .from("live_member_sessions")
+          .update({
+            shipping_quote: {
+              cep: String(body.cep || "").replace(/\D/g, "").slice(0, 8),
+              options: r.options,
+              at: new Date().toISOString(),
+            },
+          })
+          .eq("id", session.id) as unknown as Promise<unknown>,
+      );
       return json({ ok: true, ...r });
     }
 
@@ -982,8 +996,17 @@ Deno.serve(async (req) => {
       if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" });
       if (order.is_paid) return json({ ok: false, error: "Pedido já pago" });
 
-      const { options } = await shippingChoices(String(body.cep || ""));
-      const chosen = options.find((o) => o.id === String(body.method || ""));
+      const cepDigits = String(body.cep || "").replace(/\D/g, "").slice(0, 8);
+      const cached = (session as any).shipping_quote;
+      const cacheFresh =
+        cached?.cep === cepDigits &&
+        Array.isArray(cached?.options) &&
+        Date.now() - new Date(cached.at || 0).getTime() < 15 * 60_000;
+
+      const options = cacheFresh
+        ? (cached.options as any[])
+        : (await shippingChoices(cepDigits)).options;
+      const chosen = options.find((o: any) => o.id === String(body.method || ""));
       if (!chosen) return json({ ok: false, error: "Forma de envio indisponível" });
 
       const { error: upErr } = await supabase
@@ -998,7 +1021,7 @@ Deno.serve(async (req) => {
             description: chosen.description,
             price: chosen.cost,
             delivery_days: chosen.delivery_days,
-            cep: String(body.cep || "").replace(/\D/g, "").slice(0, 8),
+            cep: cepDigits,
             applied_at: new Date().toISOString(),
           },
         })
@@ -1009,8 +1032,9 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: `Erro ao salvar envio: ${upErr.message}` });
       }
 
-      return json(await buildState(session));
+      return json(await buildState(session, { skipHistory: true }));
     }
+
 
 
     return json({ ok: false, error: "unknown_action" }, 400);
