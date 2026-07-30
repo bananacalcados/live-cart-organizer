@@ -308,6 +308,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.initial_message_blocks = initialMessageBlocks;
       updates.ig_initial_message_buttons = igButtons;
       updates.ig_automations = igAutomations;
+      updates.member_area_notify_enabled = maNotifyEnabled;
+      updates.member_area_wa_number_id = maWhatsappNumberId;
+      updates.member_area_template_name = maTemplateName;
+      updates.member_area_template_language = maTemplateLanguage;
+      updates.member_area_template_body_variables = maTemplateBodyVars;
+      updates.member_area_template_header_variable = maTemplateHeaderVar;
       // Keep channel preference consistent: a Meta instance + template means the
       // event dispatches via Meta WhatsApp template, not a plain session message.
       if (whatsappNumberId && metaTemplateName) {
