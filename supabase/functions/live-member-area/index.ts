@@ -218,7 +218,10 @@ Deno.serve(async (req) => {
 
       const { data: orders } = await supabase
         .from("orders")
-        .select("id, event_id, products, shipping_cost, is_paid, paid_at, stage, created_at")
+        .select(
+          "id, event_id, products, shipping_cost, free_shipping, discount_type, discount_value, is_paid, paid_at, stage, created_at",
+        )
+
         .in("customer_id", ids)
         .neq("stage", "cancelled")
         .order("created_at", { ascending: false })
