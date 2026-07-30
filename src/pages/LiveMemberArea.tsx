@@ -417,6 +417,32 @@ export default function LiveMemberArea() {
         {Header}
         <p className="text-center text-lg font-semibold -mt-3 mb-6">Oi, {state?.name} 👋</p>
 
+        {/* Roleta de prêmios */}
+        {availableWheels.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {availableWheels.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => setActiveWheel(w)}
+                className="w-full rounded-2xl px-5 py-4 font-black text-white text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 shadow-lg shadow-orange-500/40 animate-pulse hover:scale-[1.02] transition-transform"
+              >
+                🎰 ROLETA DE PRÊMIOS — {w.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeWheel && (
+          <EventPrizeWheelDialog
+            wheel={activeWheel}
+            phone={state?.phone || phone.replace(/\D/g, "")}
+            name={state?.name}
+            onClose={() => setActiveWheel(null)}
+            onDone={refreshWheels}
+          />
+        )}
+
+
         {/* Meu pedido */}
         <section className="rounded-2xl border-2 border-border p-4 space-y-3">
           <h2 className="font-bold text-base flex items-center gap-2">
