@@ -265,9 +265,8 @@ Deno.serve(async (req) => {
             error: `Esta roleta exige compras a partir de R$ ${Number(wheel.min_purchase_value).toFixed(2)} neste evento.`,
           });
         }
-      } else if (wheel.require_otp && !(await otpVerified(phone))) {
-        return json({ ok: false, error: "otp_required" });
       }
+
 
       const segments = (wheel.segments || [])
         .filter((s: any) => s.is_active)
