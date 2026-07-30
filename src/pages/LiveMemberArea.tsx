@@ -11,6 +11,8 @@ import {
   History,
   Loader2,
   Lock,
+  LogOut,
+
   MessageCircle,
   ShoppingBag,
   Timer,
@@ -131,12 +133,34 @@ export default function LiveMemberArea() {
   }, []);
 
 
+  /** Volta para a página anterior (a live / link de origem). */
+  const backToLive = () => {
+    if (window.history.length > 1) window.history.back();
+    else window.location.href = "https://www.instagram.com/bananacalcados/";
+  };
+
+  /** Sai da área de membros e volta para a etapa de WhatsApp. */
+  const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    setState(null);
+    setPhone("");
+    setName("");
+    setOtp("");
+    setConfirmOpen(false);
+    setOtpOpen(false);
+    setDetailsOpen(false);
+    setStep("phone");
+    toast.success("Você saiu da área de membros");
+  };
+
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, "").slice(0, 11);
     if (d.length <= 2) return d;
     if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   };
+
 
   /** Assinatura simples dos itens do pedido pra detectar mudanças vindas da live. */
   const itemsSignature = (order: any) =>
@@ -345,43 +369,56 @@ export default function LiveMemberArea() {
   // ---------- Etapa 1: WhatsApp ----------
   if (step === "phone") {
     return (
-      <div className="min-h-screen bg-background text-foreground px-6">
-        <div className="max-w-sm mx-auto">
-          {Header}
-          <p className="text-muted-foreground text-center text-sm mb-6">
-            Digite seu WhatsApp para entrar na sua área e ver seus produtos.
-          </p>
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8">
+          <div className="flex flex-col items-center text-center">
+            <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
+            <p className="mt-2 text-muted-foreground text-base leading-snug">
+              Digite seu WhatsApp pra continuar
+            </p>
+          </div>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               enter();
             }}
-            className="space-y-4"
+            className="mt-8 space-y-6"
           >
-            <div className="space-y-2">
-              <Label className="text-base">Seu WhatsApp</Label>
+            <div className="space-y-2 text-left">
+              <Label className="text-sm text-muted-foreground">Whatsapp</Label>
               <Input
                 value={phone}
                 onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="(33) 99999-9999"
                 inputMode="tel"
-                className="h-16 text-[18px]"
+                className="h-14 text-[18px] rounded-xl"
                 autoFocus
               />
             </div>
             <Button
               type="submit"
               disabled={phone.replace(/\D/g, "").length < 10 || busy}
-              className="w-full h-16 text-base font-bold gap-2"
+              className="w-full h-14 text-base font-semibold rounded-xl gap-2"
             >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
-              ENTRAR NA MINHA ÁREA
+              {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+              Continuar
             </Button>
           </form>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
         </div>
       </div>
     );
   }
+
 
   // ---------- Etapa 2: Nome ----------
   if (step === "name") {
@@ -432,7 +469,18 @@ export default function LiveMemberArea() {
     <div className="min-h-screen bg-background text-foreground pb-28">
       <div className="max-w-md mx-auto px-5">
         {Header}
-        <p className="text-center text-lg font-semibold -mt-3 mb-6">Oi, {state?.name} 👋</p>
+        <p className="text-center text-lg font-semibold -mt-3 mb-4">Oi, {state?.name} 👋</p>
+
+        <div className="flex gap-2 mb-6">
+          <Button variant="outline" className="flex-1 h-11 gap-2 text-xs font-semibold" onClick={backToLive}>
+            <ArrowLeft className="h-4 w-4" /> VOLTAR PRA LIVE
+          </Button>
+          <Button variant="ghost" className="flex-1 h-11 gap-2 text-xs font-semibold text-muted-foreground" onClick={logout}>
+            <LogOut className="h-4 w-4" /> SAIR DA ÁREA
+          </Button>
+        </div>
+
+
 
         {/* Roleta de prêmios */}
         {availableWheels.length > 0 && (
