@@ -34,7 +34,9 @@ interface ShippingOption {
   label: string;
   description: string;
   cost: number;
+  delivery_days?: number | null;
 }
+
 
 
 interface MemberState {
