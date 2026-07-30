@@ -3536,6 +3536,39 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_access_codes: {
+        Row: {
+          code: string
+          created_at: string
+          customer_name: string | null
+          id: string
+          notes: string | null
+          phone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          notes?: string | null
+          phone: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          notes?: string | null
+          phone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       customer_list_memberships: {
         Row: {
           added_at: string
@@ -11364,6 +11397,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      otp_template_settings: {
+        Row: {
+          code_variable_index: number
+          copy_code_button: boolean
+          fallback_to_text: boolean
+          id: boolean
+          template_language: string
+          template_name: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          code_variable_index?: number
+          copy_code_button?: boolean
+          fallback_to_text?: boolean
+          id?: boolean
+          template_language?: string
+          template_name?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          code_variable_index?: number
+          copy_code_button?: boolean
+          fallback_to_text?: boolean
+          id?: boolean
+          template_language?: string
+          template_name?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
       }
       payment_method_fees: {
         Row: {
@@ -20760,6 +20826,10 @@ export type Database = {
           out_serie: number
         }[]
       }
+      get_or_create_customer_access_code: {
+        Args: { _phone: string }
+        Returns: string
+      }
       get_order_status: { Args: { p_order_id: string }; Returns: Json }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
@@ -21390,6 +21460,10 @@ export type Database = {
       set_active_mp_account: {
         Args: { p_account_id: string }
         Returns: boolean
+      }
+      set_customer_access_code: {
+        Args: { _code: string; _phone: string }
+        Returns: string
       }
       set_event_live_active: { Args: { p_event_id: string }; Returns: string }
       set_fiscal_sequence_start: {

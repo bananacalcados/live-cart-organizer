@@ -6,6 +6,8 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
+import { CustomerAccessCodeBadge } from "./events/CustomerAccessCodeBadge";
+
 
 interface OrderCardProps {
   order: Order;
@@ -112,6 +114,14 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
           </Button>
         </div>
       )}
+
+      {order.whatsapp && (
+        <div className="mb-3">
+          <CustomerAccessCodeBadge phone={order.whatsapp} />
+        </div>
+      )}
+
+
 
       {order.products.length > 0 ? (
         <div className="space-y-2">

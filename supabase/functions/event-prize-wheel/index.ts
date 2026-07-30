@@ -3,6 +3,8 @@
 // Regras: evento precisa estar ativo/dentro da janela, roleta ativa, 1 giro por telefone (configurável),
 // e OTP no WhatsApp para participantes quando exigido.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -211,39 +213,24 @@ Deno.serve(async (req) => {
     // ---------- SEND OTP ----------
     if (action === "send_otp") {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
-      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/live-send-verification`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        return json({ ok: false, error: data?.error || "Falha ao enviar código" }, 500);
-      }
+      const r = await sendAccessCode(supabase, phone);
+      if (!r.ok) return json({ ok: false, error: r.error || "Falha ao enviar código" }, 500);
       return json({ ok: true });
     }
 
-    // ---------- VERIFY OTP ----------
+    // ---------- VERIFY OTP (código permanente) ----------
     if (action === "verify_otp") {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
       const code = String(body?.code || "").replace(/\D/g, "");
-      const { data: rec } = await supabase
+      const ok = await verifyAccessCode(supabase, phone, code);
+      if (!ok) return json({ ok: false, error: "Código incorreto." });
+      // Marca a verificação para a janela de 2h usada pelo otpVerified()
+      await supabase
         .from("live_phone_verifications")
-        .select("id, code, expires_at")
-        .eq("phone", phone)
-        .eq("verified", false)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!rec) return json({ ok: false, error: "Código não encontrado. Solicite um novo." });
-      if (new Date(rec.expires_at) < new Date()) return json({ ok: false, error: "Código expirado." });
-      if (rec.code !== code) return json({ ok: false, error: "Código incorreto." });
-      await supabase.from("live_phone_verifications").update({ verified: true }).eq("id", rec.id);
+        .insert({ phone, code, verified: true });
       return json({ ok: true });
     }
+
 
     // ---------- SPIN ----------
     if (action === "spin") {
