@@ -1110,7 +1110,11 @@ export default function StoreCheckout() {
         discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
          // Link avulso nunca tem frete
          shipping_amount: isCustom ? 0 : Number(paymentDetails.shipping_amount ?? 0),
-         free_shipping: isCustom ? true : Boolean(paymentDetails.free_shipping),
+         free_shipping: isCustom
+           ? true
+           : (paymentDetails.free_shipping === undefined && paymentDetails.link_origin === "online_hub"
+               ? Number(paymentDetails.shipping_amount ?? 0) === 0
+               : Boolean(paymentDetails.free_shipping)),
         customer_name: customerName,
         customer_phone: customerPhone,
         items: saleItems,
