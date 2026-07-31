@@ -449,6 +449,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           discount_type: discountType,
           discount_value: discountValue,
           shipping_amount: shippingAmount,
+          free_shipping: Number(shippingAmount || 0) === 0,
           has_gift: hasGift,
           gift_description: hasGift ? giftDescription : null,
           net_product_total: cartTotal,
