@@ -452,6 +452,52 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
               <Field icon={Calendar} label="Pago em" value={fmtDateTime(data.paid_at)} />
             </Section>
 
+            {/* Histórico de pagamento (auditoria) */}
+            <Section title="Histórico de pagamento" icon={CreditCard} className="lg:col-span-2">
+              {payEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-1">
+                  Nenhuma tentativa registrada para este pedido.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {payEvents.map((ev) => {
+                    const label = PAY_EVENT_LABELS[ev.event_type] || ev.event_type;
+                    const tone = PAY_EVENT_TONE[ev.event_type] || "outline";
+                    return (
+                      <li
+                        key={ev.id}
+                        className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 px-2 py-1.5"
+                      >
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {fmtDateTime(ev.created_at)}
+                        </span>
+                        <Badge variant={tone as any} className="text-[10px]">{label}</Badge>
+                        {ev.method && (
+                          <span className="text-[11px] uppercase text-muted-foreground">{ev.method}</span>
+                        )}
+                        {ev.gateway && (
+                          <span className="text-[11px] text-muted-foreground">via {ev.gateway}</span>
+                        )}
+                        {Number(ev.amount) > 0 && (
+                          <span className="text-[11px] font-medium">{fmtMoney(Number(ev.amount))}</span>
+                        )}
+                        {ev.source && (
+                          <span className="text-[10px] text-muted-foreground">
+                            ({ev.source === "member_area" ? "área de membros" : ev.source})
+                          </span>
+                        )}
+                        {ev.detail && (
+                          <span className="w-full text-[11px] italic text-muted-foreground">{ev.detail}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Section>
+
+
+
             {/* Datas e status */}
             <Section title="Datas e status" icon={Calendar} className="lg:col-span-2">
               <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-4">
