@@ -1202,20 +1202,49 @@ export default function LiveMemberArea() {
         {Array.isArray((state as any)?.prizes) && (state as any).prizes.length > 0 && (
           <section className="mb-6 rounded-2xl border-2 border-orange-400/60 bg-orange-500/10 p-4 space-y-2">
             <h2 className="font-bold text-base flex items-center gap-2">🎁 Meus prêmios</h2>
-            {(state as any).prizes.map((p: any) => (
-              <div key={p.id} className="rounded-xl bg-background/70 px-3 py-2">
-                <p className="text-sm font-bold">{p.label}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {p.is_physical ? "Prêmio físico — enviado junto com seu pedido" : `Cupom ${p.coupon_code}`}
-                  {" · "}
-                  {p.days_left <= 0
-                    ? "expira hoje"
-                    : p.days_left === 1
-                    ? "expira em 1 dia"
-                    : `expira em ${p.days_left} dias`}
-                </p>
-              </div>
-            ))}
+            {(state as any).prizes.map((p: any) => {
+              const st: string = p.fulfillment_status || "available";
+              const fmt = (iso?: string | null) =>
+                iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+              const badge = !p.is_physical
+                ? null
+                : st === "reserved"
+                ? { txt: `RESERVADO no pedido #${String(p.reserved_order_id || "").slice(0, 8)}`, cls: "bg-amber-500/20 text-amber-700" }
+                : st === "shipped"
+                ? { txt: `ENVIADO${p.shipped_at ? ` em ${fmt(p.shipped_at)}` : ""}`, cls: "bg-emerald-500/20 text-emerald-700" }
+                : st === "forfeited"
+                ? { txt: "CANCELADO — pedido cancelado/estornado", cls: "bg-muted text-muted-foreground" }
+                : st === "expired"
+                ? { txt: "EXPIRADO", cls: "bg-muted text-muted-foreground" }
+                : { txt: "DISPONÍVEL", cls: "bg-orange-500/20 text-orange-700" };
+              const inactive = st === "forfeited" || st === "expired";
+              return (
+                <div key={p.id} className={`rounded-xl bg-background/70 px-3 py-2 ${inactive ? "opacity-60" : ""}`}>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold flex-1">{p.label}</p>
+                    {badge && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                        {badge.txt}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {p.is_physical ? "Prêmio físico — enviado junto com seu pedido" : `Cupom ${p.coupon_code}`}
+                    {(!p.is_physical || st === "available") && (
+                      <>
+                        {" · "}
+                        {p.days_left <= 0
+                          ? "expira hoje"
+                          : p.days_left === 1
+                          ? "expira em 1 dia"
+                          : `expira em ${p.days_left} dias`}
+                      </>
+                    )}
+                    {p.is_physical && st === "reserved" && " · prazo congelado até o envio"}
+                  </p>
+                </div>
+              );
+            })}
           </section>
         )}
 
