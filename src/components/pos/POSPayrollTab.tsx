@@ -242,6 +242,69 @@ export function POSPayrollTab({ periodRange }: Props) {
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 
+  /** Cria funcionário administrativo (sem vínculo com vendedora). */
+  const createEmployee = async () => {
+    const name = newEmployeeName.trim();
+    if (!name) { toast.error("Informe o nome do funcionário"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .insert({ name, role_title: newEmployeeRole.trim() || null, is_employee_only: true } as any);
+      if (error) throw error;
+      setNewEmployeeName(""); setNewEmployeeRole("");
+      toast.success(`Funcionário "${name}" criado`);
+      await load();
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+  /** Campos permanentes da ficha (cargo, provisionamentos, encargos). */
+  const setPersonField = async (personId: string, field: string, value: any) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .update({ [field]: value } as any).eq("id", personId);
+      if (error) throw error;
+      setPeople((prev) => prev.map((p) => (p.id === personId ? { ...p, [field]: value } as Person : p)));
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+  /** Lançamentos do período: horas extras e bônus de benefícios. */
+  const setPeriodField = async (
+    personId: string,
+    field: "overtime_hours" | "overtime_value" | "benefits_bonus",
+    value: number,
+  ) => {
+    setSaving(true);
+    try {
+      const current = periodEntries.find((e) => e.person_id === personId);
+      const payload = {
+        person_id: personId,
+        period_start: startDate,
+        period_end: endDate,
+        overtime_hours: current?.overtime_hours ?? 0,
+        overtime_value: current?.overtime_value ?? 0,
+        benefits_bonus: current?.benefits_bonus ?? 0,
+        [field]: value,
+      };
+      const { error } = await supabase.from("pos_payroll_period_entries")
+        .upsert(payload as any, { onConflict: "person_id,period_start,period_end" });
+      if (error) throw error;
+      setPeriodEntries((prev) => {
+        const exists = prev.some((e) => e.person_id === personId);
+        if (exists) return prev.map((e) => (e.person_id === personId ? { ...e, [field]: value } : e));
+        return [...prev, {
+          person_id: personId,
+          overtime_hours: payload.overtime_hours,
+          overtime_value: payload.overtime_value,
+          benefits_bonus: payload.benefits_bonus,
+        } as PeriodEntry];
+      });
+      toast.success("Lançamento salvo");
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+
+
 
   const toggleLiveParticipant = async (personId: string, storeId: string, checked: boolean) => {
     setSaving(true);
