@@ -232,10 +232,12 @@ interface ComputeInput {
   goals: PayrollGoal[];
   /** Eventos em que a pessoa NÃO participou (opt-out). Sem registro = participa. */
   eventOptOuts?: { person_id: string; event_id: string }[];
+  /** Lançamentos manuais do período (horas extras, bônus de benefícios). */
+  periodEntries?: PayrollPeriodEntry[];
 }
 
 export function computePayroll(input: ComputeInput): PayrollResult {
-  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts } = input;
+  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries } = input;
 
   const storeKeyById = new Map<string, StoreKey>();
   for (const s of stores) storeKeyById.set(s.id, storeKeyFromName(s.name));
@@ -245,6 +247,9 @@ export function computePayroll(input: ComputeInput): PayrollResult {
 
   const personBySeller = new Map<string, string>();
   for (const ps of peopleSellers) personBySeller.set(ps.seller_id, ps.person_id);
+
+  const entryByPerson = new Map<string, PayrollPeriodEntry>();
+  for (const e of periodEntries || []) entryByPerson.set(e.person_id, e);
 
   // Metas por seller_id → soma por pessoa
   const goalBySeller = new Map<string, number>();
@@ -270,11 +275,27 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       roleBonusPercent: 0,
       roleBonusValue: 0,
       totalPayout: 0,
+      roleTitle: p.role_title || "",
+      isEmployeeOnly: !!p.is_employee_only,
+      overtimeHours: 0,
+      overtimeValue: 0,
+      benefitsBonus: 0,
+      provision13: 0,
+      provisionVacation: 0,
+      provisionVacationBonus: 0,
+      provisionNotice: 0,
+      provisionCharges: 0,
+      provisionTotal: 0,
+      grossSalary: 0,
+      salaryPlusCommission: 0,
+      withProvision: 0,
+      totalCost: 0,
       tiers: [],
       stores: [],
       liveEvents: [],
     });
   }
+
 
   // Pool de live agrupado por loja + evento
   const livePool = new Map<string, { storeKey: StoreKey; eventId: string | null; net: number; storeId: string }>();
