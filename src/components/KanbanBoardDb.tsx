@@ -65,7 +65,39 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
       setCompleteRegs((prev) => ({ ...prev, ...next }));
     })();
     return () => { cancelled = true; };
-  }, [unknownKey]);
+  }, [unknownKey, completeRegs]);
+
+  /**
+   * Tempo real: quando a cliente preenche/atualiza o cadastro na área de
+   * membros, o card muda de coluna na hora (NOVO PEDIDO → AGUARDANDO
+   * PAGAMENTO) sem precisar recarregar a página.
+   */
+  const orderIdsKey = orders.map((o) => o.id).sort().join(",");
+  useEffect(() => {
+    const ids = new Set(orderIdsKey ? orderIdsKey.split(",") : []);
+    if (!ids.size) return;
+    const channel = supabase
+      .channel(`kanban-regs-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customer_registrations" },
+        (payload: any) => {
+          const orderId = payload?.new?.order_id || payload?.old?.order_id;
+          if (!orderId || !ids.has(orderId)) return;
+          setCompleteRegs((prev) => {
+            const next = { ...prev };
+            delete next[orderId];
+            return next;
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orderIdsKey]);
+
+
 
   // Regra: pago -> PAGO. Cadastro completo mas não pago -> AGUARDANDO PAGAMENTO.
   // Confirmou pedido mas cadastro incompleto -> NOVO PEDIDO. Nunca cai em "Outras etapas".

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -123,10 +123,10 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
   const [row, setRow] = useState<any | null>(null);
   const [storeName, setStoreName] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open || !order?.id) return;
-    (async () => {
-      setLoading(true);
+  const load = useCallback(
+    async (silent = false) => {
+      if (!order?.id) return;
+      if (!silent) setLoading(true);
       try {
         const [{ data: orderRow }, { data: regRow }] = await Promise.all([
           supabase.from("orders").select("*").eq("id", order.id).maybeSingle(),
@@ -164,10 +164,42 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
       } catch (e) {
         console.error("[OrderFullView] load error:", e);
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
-    })();
-  }, [open, order?.id, order?.customer_id]);
+    },
+    [order?.id, order?.customer_id],
+  );
+
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    load();
+  }, [open, order?.id, load]);
+
+  /**
+   * Tempo real: enquanto o modal está aberto, qualquer alteração feita pela
+   * cliente na área de membros (endereço, CEP, CPF, e-mail, frete, pagamento)
+   * aparece aqui na hora, sem precisar fechar e abrir de novo.
+   */
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    const channel = supabase
+      .channel(`order-full-view-${order.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "customer_registrations", filter: `order_id=eq.${order.id}` },
+        () => load(true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${order.id}` },
+        () => load(true),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, order?.id, load]);
+
 
   const data = { ...(order as any), ...(row || {}) };
   const products: any[] = Array.isArray(data.products) ? data.products : [];
