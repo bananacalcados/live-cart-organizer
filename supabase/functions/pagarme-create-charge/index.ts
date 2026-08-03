@@ -4,6 +4,7 @@ import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
