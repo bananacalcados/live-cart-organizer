@@ -20933,6 +20933,32 @@ export type Database = {
         Returns: Json
       }
       get_live_events_summary: { Args: { p_mes_ref: string }; Returns: Json }
+      get_member_area_leads: {
+        Args: {
+          p_days?: number
+          p_event_id?: string
+          p_limit?: number
+          p_search?: string
+        }
+        Returns: {
+          captured_at: string
+          event_id: string
+          event_name: string
+          first_lead_at: string
+          first_lead_source: string
+          id: string
+          is_customer: boolean
+          last_purchase_at: string
+          name: string
+          phone: string
+          prize_count: number
+          prizes: Json
+          source: string
+          total_orders: number
+          total_spent: number
+          was_existing_lead: boolean
+        }[]
+      }
       get_meta_capi_vault_state: {
         Args: never
         Returns: {
