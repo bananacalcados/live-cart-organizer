@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
       const base = () =>
         supabase
           .from("events")
-          .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url")
+          .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id")
           .neq("is_active", false);
 
       const { data: live } = await base()
@@ -728,6 +728,17 @@ Deno.serve(async (req) => {
     // ---------- actions ----------
     if (action === "bootstrap") {
       const event = await resolveCurrentEvent();
+      // Telefone público da instância de WhatsApp configurada no evento (botão "Falar com uma vendedora").
+      let supportPhone: string | null = null;
+      if (event?.whatsapp_number_id) {
+        const { data: num } = await supabase
+          .from("whatsapp_numbers")
+          .select("phone_display")
+          .eq("id", event.whatsapp_number_id)
+          .maybeSingle();
+        const digits = String((num as any)?.phone_display || "").replace(/\D/g, "");
+        if (digits.length >= 10) supportPhone = digits.startsWith("55") ? digits : `55${digits}`;
+      }
       return json({
         ok: true,
         event: event
@@ -736,6 +747,7 @@ Deno.serve(async (req) => {
               name: event.name,
               is_live: !!event.is_live_broadcasting,
               instagram_live_url: event.instagram_live_url,
+              support_phone: supportPhone,
             }
           : null,
       });
