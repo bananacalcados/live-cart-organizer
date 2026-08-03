@@ -193,6 +193,32 @@ serve(async (req) => {
     const boletoId = boleto.id as string;
     const externalRef = `boleto:${boletoId}`;
 
+    // 🎡 Prêmio da roleta no boleto — mesma regra do PIX.
+    // Prêmio físico nunca entra como desconto (o resolver só considera cupom %, valor fixo e frete grátis).
+    let chargeAmount = amountNum;
+    let prizeInfo: { label: string; couponCode: string; discountAmount: number; freeShipping: boolean } | null = null;
+    try {
+      const prize = await resolveAndReservePrize(supabase, {
+        orderId: boletoId,
+        phone: customer_phone || null,
+        baseAmount: amountNum,
+        shippingAmount: 0,
+      });
+      if (prize && prize.discountAmount > 0) {
+        chargeAmount = Math.max(1, Math.round((amountNum - prize.discountAmount) * 100) / 100);
+        prizeInfo = {
+          label: prize.label,
+          couponCode: prize.couponCode,
+          discountAmount: prize.discountAmount,
+          freeShipping: prize.freeShipping,
+        };
+        await supabase.from("pos_boletos").update({ amount: chargeAmount }).eq("id", boletoId);
+        console.log(`[mp-boleto] Prêmio ${prize.label} aplicado: -R$ ${prize.discountAmount.toFixed(2)} → R$ ${chargeAmount.toFixed(2)}`);
+      }
+    } catch (prizeErr) {
+      console.error("[mp-boleto] Falha ao aplicar prêmio (ignorado):", prizeErr);
+    }
+
     // 2) Cria pagamento boleto no MP
     const payerAddress = {
       zip_code: zip,
@@ -204,7 +230,8 @@ serve(async (req) => {
     };
 
     const boletoBody = {
-      transaction_amount: Math.round(amountNum * 100) / 100,
+      transaction_amount: Math.round(chargeAmount * 100) / 100,
+
       description: description || `Boleto Banana Calçados — ${customer_name}`,
       payment_method_id: "bolbradesco",
       date_of_expiration: formatMpDate(dueDate),
