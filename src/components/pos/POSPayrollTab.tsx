@@ -130,6 +130,16 @@ export function POSPayrollTab({ periodRange }: Props) {
     sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
   }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
 
+  const totals = useMemo(() => result.people.reduce(
+    (acc, p) => ({
+      commission: acc.commission + p.commissionValue,
+      salary: acc.salary + p.baseSalary,
+      bonus: acc.bonus + p.roleBonusValue,
+      payout: acc.payout + p.totalPayout,
+    }),
+    { commission: 0, salary: 0, bonus: 0, payout: 0 },
+  ), [result.people]);
+
   const dialogPerson = useMemo(
     () => result.people.find((p) => p.personId === liveDialogPerson) || null,
     [result.people, liveDialogPerson],
