@@ -349,25 +349,33 @@ Deno.serve(async (req) => {
         // Prêmio FÍSICO: já anexa como brinde no pedido aberto do evento (expedição enxerga).
         if (winner.prize_type === "product") {
           try {
-            const { data: openOrder } = await supabase
-              .from("orders")
-              .select("id")
-              .eq("event_id", wheel.event_id)
-              .eq("is_paid", false)
-              .filter("customer_id", "not.is", null)
-              .order("created_at", { ascending: false })
+            const { data: custs } = await supabase
+              .from("customers")
+              .select("id,whatsapp")
+              .ilike("whatsapp", `%${suffix8(phone)}`)
               .limit(20);
-            // Deixa o banco resolver o vínculo por telefone (RPC valida cliente do pedido).
-            for (const o of openOrder || []) {
-              const { data: res } = await supabase.rpc("attach_physical_prize_to_order", {
-                p_order_id: o.id,
-              });
-              if ((res as any)?.attached) break;
+            const ids = (custs || []).map((c: any) => c.id);
+            if (ids.length) {
+              const { data: openOrders } = await supabase
+                .from("orders")
+                .select("id")
+                .eq("event_id", wheel.event_id)
+                .eq("is_paid", false)
+                .in("customer_id", ids)
+                .order("created_at", { ascending: false })
+                .limit(5);
+              for (const o of openOrders || []) {
+                const { data: res } = await supabase.rpc("attach_physical_prize_to_order", {
+                  p_order_id: o.id,
+                });
+                if ((res as any)?.attached) break;
+              }
             }
           } catch (e) {
             console.error("[event-prize-wheel] attach physical prize", (e as Error).message);
           }
         }
+
       }
 
 
