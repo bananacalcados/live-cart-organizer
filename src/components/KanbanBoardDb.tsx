@@ -3,6 +3,8 @@ import { STAGES, OrderStage, Stage } from "@/types/order";
 import { OrderCardDb } from "./OrderCardDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+
 
 interface KanbanBoardDbProps {
   orders: DbOrder[];
