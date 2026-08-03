@@ -734,7 +734,7 @@ export function POSPayrollTab({ periodRange }: Props) {
               <table className="w-full text-[12px]">
                 <thead className="bg-zinc-800 text-zinc-300">
                   <tr>
-                    <th className="text-left p-2 font-semibold sticky left-0 bg-zinc-800">Vendedora</th>
+                    <th className="text-left p-2 font-semibold sticky left-0 bg-zinc-800">Pessoa</th>
                     {CHANNEL_KEYS.map((k) => (
                       <th key={k} className="text-right p-2 font-medium whitespace-nowrap">{CHANNEL_LABELS[k]}</th>
                     ))}
@@ -745,7 +745,13 @@ export function POSPayrollTab({ periodRange }: Props) {
                     <th className="text-right p-2 font-semibold">Comissão</th>
                     <th className="text-right p-2 font-semibold">Salário</th>
                     <th className="text-right p-2 font-semibold whitespace-nowrap">Gratificação</th>
-                    <th className="text-right p-2 font-semibold text-sky-300">Total a pagar</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">H. extras</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Bruto s/ provisão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Salário + Comissão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Provisão</th>
+                    <th className="text-right p-2 font-semibold text-sky-300 whitespace-nowrap">Com provisão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Bônus benefícios</th>
+                    <th className="text-right p-2 font-semibold text-emerald-300 whitespace-nowrap">Custo total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -767,6 +773,12 @@ export function POSPayrollTab({ periodRange }: Props) {
                         </span>
                         {p.stores.length > 1 && (
                           <Badge variant="outline" className="ml-1 text-[9px] border-amber-600 text-amber-400">2 lojas</Badge>
+                        )}
+                        {p.isEmployeeOnly && (
+                          <Badge variant="outline" className="ml-1 text-[9px] border-sky-700 text-sky-300">Administrativo</Badge>
+                        )}
+                        {p.roleTitle && (
+                          <span className="block text-[9px] text-zinc-500">{p.roleTitle}</span>
                         )}
                       </td>
                       {CHANNEL_KEYS.map((k) => {
@@ -804,11 +816,29 @@ export function POSPayrollTab({ periodRange }: Props) {
                           </>
                         ) : "—"}
                       </td>
-                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.totalPayout)}</td>
+                      <td className="p-2 text-right text-zinc-300">
+                        {p.overtimeValue || p.overtimeHours ? (
+                          <>
+                            {BRL(p.overtimeValue)}
+                            <span className="block text-[9px] text-zinc-500">{p.overtimeHours.toLocaleString("pt-BR")}h</span>
+                          </>
+                        ) : "—"}
+                      </td>
+                      <td className="p-2 text-right text-zinc-200">{BRL(p.grossSalary)}</td>
+                      <td className="p-2 text-right text-zinc-100 font-semibold">{BRL(p.salaryPlusCommission)}</td>
+                      <td
+                        className="p-2 text-right text-amber-300"
+                        title={`13º ${BRL(p.provision13)} · Férias ${BRL(p.provisionVacation)} · 1/3 ${BRL(p.provisionVacationBonus)} · Aviso prévio ${BRL(p.provisionNotice)}${p.provisionCharges ? ` · Encargos ${BRL(p.provisionCharges)}` : ""}`}
+                      >
+                        {p.provisionTotal ? BRL(p.provisionTotal) : "—"}
+                      </td>
+                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.withProvision)}</td>
+                      <td className="p-2 text-right text-zinc-300">{p.benefitsBonus ? BRL(p.benefitsBonus) : "—"}</td>
+                      <td className="p-2 text-right font-bold text-emerald-300">{BRL(p.totalCost)}</td>
                     </tr>
                     {isOpen && p.goal > 0 && (
                       <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
-                        <td colSpan={CHANNEL_KEYS.length + 9} className="p-3">
+                        <td colSpan={CHANNEL_KEYS.length + 15} className="p-3">
                           <div className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold mb-1.5">
                             Metas escalonadas — {p.name}
                           </div>
@@ -820,7 +850,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                     );
                   })}
                   {result.people.length === 0 && (
-                    <tr><td colSpan={CHANNEL_KEYS.length + 9} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
+                    <tr><td colSpan={CHANNEL_KEYS.length + 15} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
                   )}
                 </tbody>
                 {result.people.length > 0 && (
@@ -831,10 +861,17 @@ export function POSPayrollTab({ periodRange }: Props) {
                       <td className="p-2 text-right text-orange-400">{BRL(totals.commission)}</td>
                       <td className="p-2 text-right">{BRL(totals.salary)}</td>
                       <td className="p-2 text-right">{BRL(totals.bonus)}</td>
-                      <td className="p-2 text-right text-sky-300">{BRL(totals.payout)}</td>
+                      <td className="p-2 text-right">{BRL(totals.overtime)}</td>
+                      <td className="p-2 text-right">{BRL(totals.gross)}</td>
+                      <td className="p-2 text-right">{BRL(totals.salCom)}</td>
+                      <td className="p-2 text-right text-amber-300">{BRL(totals.provision)}</td>
+                      <td className="p-2 text-right text-sky-300">{BRL(totals.withProvision)}</td>
+                      <td className="p-2 text-right">{BRL(totals.benefits)}</td>
+                      <td className="p-2 text-right text-emerald-300">{BRL(totals.totalCost)}</td>
                     </tr>
                   </tfoot>
                 )}
+
               </table>
             </ScrollArea>
           </div>
