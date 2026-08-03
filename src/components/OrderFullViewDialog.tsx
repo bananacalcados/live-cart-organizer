@@ -33,6 +33,30 @@ interface OrderFullViewDialogProps {
 
 const fmtMoney = (v: number) => `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
 
+const PAY_EVENT_LABELS: Record<string, string> = {
+  opened_pix: "Abriu PIX",
+  pix_requested: "Solicitou PIX",
+  pix_generated: "PIX gerado",
+  pix_error: "Erro ao gerar PIX",
+  opened_card: "Abriu cartão de crédito",
+  opened_debit: "Abriu cartão de débito",
+  card_submitted: "Enviou cartão",
+  card_3ds_challenge: "Autenticação 3DS aberta",
+  card_approved: "Cartão aprovado",
+  card_failed: "Cartão recusado",
+  abandoned: "Abandonou o pagamento",
+  left_to_checkout_link: "Foi para o link do checkout",
+  entrou_sem_pedido: "Entrou sem pedido",
+};
+
+const PAY_EVENT_TONE: Record<string, string> = {
+  pix_generated: "secondary",
+  card_approved: "default",
+  card_failed: "destructive",
+  pix_error: "destructive",
+  abandoned: "destructive",
+};
+
 const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
 
@@ -199,6 +223,36 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
       supabase.removeChannel(channel);
     };
   }, [open, order?.id, load]);
+
+
+  // ── Histórico de tentativas de pagamento (auditoria) ──
+  const [payEvents, setPayEvents] = useState<any[]>([]);
+  const loadPayEvents = useCallback(async () => {
+    if (!order?.id) return;
+    const { data } = await (supabase as any)
+      .from("order_payment_events")
+      .select("*")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setPayEvents(Array.isArray(data) ? data : []);
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    loadPayEvents();
+    const ch = supabase
+      .channel(`order-pay-events-${order.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_payment_events", filter: `order_id=eq.${order.id}` },
+        () => loadPayEvents(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [open, order?.id, loadPayEvents]);
 
 
   const data = { ...(order as any), ...(row || {}) };
@@ -421,6 +475,52 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
               <Field icon={CreditCard} label="Origem da confirmação" value={paymentSource} />
               <Field icon={Calendar} label="Pago em" value={fmtDateTime(data.paid_at)} />
             </Section>
+
+            {/* Histórico de pagamento (auditoria) */}
+            <Section title="Histórico de pagamento" icon={CreditCard} className="lg:col-span-2">
+              {payEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-1">
+                  Nenhuma tentativa registrada para este pedido.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {payEvents.map((ev) => {
+                    const label = PAY_EVENT_LABELS[ev.event_type] || ev.event_type;
+                    const tone = PAY_EVENT_TONE[ev.event_type] || "outline";
+                    return (
+                      <li
+                        key={ev.id}
+                        className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 px-2 py-1.5"
+                      >
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {fmtDateTime(ev.created_at)}
+                        </span>
+                        <Badge variant={tone as any} className="text-[10px]">{label}</Badge>
+                        {ev.method && (
+                          <span className="text-[11px] uppercase text-muted-foreground">{ev.method}</span>
+                        )}
+                        {ev.gateway && (
+                          <span className="text-[11px] text-muted-foreground">via {ev.gateway}</span>
+                        )}
+                        {Number(ev.amount) > 0 && (
+                          <span className="text-[11px] font-medium">{fmtMoney(Number(ev.amount))}</span>
+                        )}
+                        {ev.source && (
+                          <span className="text-[10px] text-muted-foreground">
+                            ({ev.source === "member_area" ? "área de membros" : ev.source})
+                          </span>
+                        )}
+                        {ev.detail && (
+                          <span className="w-full text-[11px] italic text-muted-foreground">{ev.detail}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Section>
+
+
 
             {/* Datas e status */}
             <Section title="Datas e status" icon={Calendar} className="lg:col-span-2">

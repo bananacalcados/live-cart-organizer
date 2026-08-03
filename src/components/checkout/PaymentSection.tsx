@@ -94,6 +94,7 @@ export function StepPayment({
   backLabel,
   stepBadge = "3 de 3",
   prizeAppliedCents = 0,
+  onStepEvent,
 }: {
   orderId: string;
   amount: number;
@@ -107,7 +108,10 @@ export function StepPayment({
   stepBadge?: string | null;
   /** Prêmio da roleta (em centavos) já abatido no total exibido — evita abater 2x no servidor. */
   prizeAppliedCents?: number;
+  /** Auditoria opcional dos passos de pagamento (abriu PIX, enviou cartão, recusado...). */
+  onStepEvent?: (event: string, data?: Record<string, unknown>) => void;
 }) {
+
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(null);
    const [showAllMethods, setShowAllMethods] = useState(true);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
@@ -139,7 +143,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "card") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("card"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("card"); setShowAllMethods(false); onStepEvent?.("opened_card", { method: "credit_card" }); }}
                className={`w-full flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "card"
                    ? "border-foreground bg-card shadow-sm"
@@ -164,6 +168,7 @@ export function StepPayment({
                     form={form}
                     installmentConfig={installmentConfig}
                     onPaymentConfirmed={onPaymentConfirmed}
+                    onStepEvent={onStepEvent}
                     onProcessingChange={onProcessingChange}
                     mode="credit"
                     onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
@@ -177,7 +182,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "debit") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("debit"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("debit"); setShowAllMethods(false); onStepEvent?.("opened_debit", { method: "debit_card" }); }}
                className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "debit"
                    ? "border-foreground bg-card shadow-sm"
@@ -205,6 +210,7 @@ export function StepPayment({
                    form={form}
                    installmentConfig={installmentConfig}
                    onPaymentConfirmed={onPaymentConfirmed}
+                   onStepEvent={onStepEvent}
                    onProcessingChange={onProcessingChange}
                    mode="debit"
                    onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
@@ -218,7 +224,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "pix") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("pix"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("pix"); setShowAllMethods(false); onStepEvent?.("opened_pix", { method: "pix" }); }}
                className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "pix"
                    ? "border-foreground bg-card shadow-sm"
@@ -259,6 +265,7 @@ export function StepPayment({
                    pixDiscountPercent={pixDiscountPercent}
                    form={form}
                    onPaymentConfirmed={onPaymentConfirmed}
+                   onStepEvent={onStepEvent}
                  />
                </div>
              )}
@@ -287,7 +294,7 @@ export function StepPayment({
 }
 
 // ── PIX Payment Form (step 3) ───────────────────────────────────
-function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPaymentConfirmed }: { orderId: string; amount: number; pixDiscountPercent?: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
+function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPaymentConfirmed, onStepEvent }: { orderId: string; amount: number; pixDiscountPercent?: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void; onStepEvent?: (event: string, data?: Record<string, unknown>) => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
@@ -323,6 +330,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
   }, [pixPaymentId, pixPaid, orderId]);
 
   const handleGeneratePix = async () => {
+    onStepEvent?.("pix_requested", { method: "pix", amount });
     setIsGenerating(true);
     trackPixelEvent("AddPaymentInfo", { content_category: "pix" });
 
@@ -387,9 +395,11 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
       }
       if (!data?.qrCode) throw new Error("QR Code não retornado");
       setPixData(data);
+      onStepEvent?.("pix_generated", { method: "pix", gateway: "mercadopago", amount, paymentId: data?.paymentId ?? null });
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro desconhecido";
+      onStepEvent?.("pix_error", { method: "pix", gateway: "mercadopago", amount, detail: msg });
       if (msg.toLowerCase().includes("estoque") || msg.toLowerCase().includes("sem estoque")) {
         toast.error(msg, { duration: 8000 });
       } else if (msg.includes("CPF")) {
@@ -450,7 +460,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
 // ── Card Payment Form (step 3) — crédito e débito ───────────────
 function CardPaymentForm({
   orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
-  mode = "credit", onSwitchMode, prizeAppliedCents = 0,
+  mode = "credit", onSwitchMode, prizeAppliedCents = 0, onStepEvent,
 }: {
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
@@ -458,6 +468,7 @@ function CardPaymentForm({
   mode?: CardMode;
   onSwitchMode?: (mode: CardMode) => void;
   prizeAppliedCents?: number;
+  onStepEvent?: (event: string, data?: Record<string, unknown>) => void;
 }) {
   const isDebit = mode === "debit";
   const [cardNumber, setCardNumber] = useState("");
@@ -620,6 +631,7 @@ function CardPaymentForm({
 
     // Lock immediately
     processingRef.current = true;
+    onStepEvent?.("card_submitted", { method: isDebit ? "debit_card" : "credit_card", amount, installments: isDebit ? 1 : Number(installments) });
     setIsProcessing(true);
     setPaymentError(null);
 
@@ -738,6 +750,7 @@ function CardPaymentForm({
 
       // 3DS (débito): o banco exige autenticação. Abrimos o desafio e ficamos no polling.
       if (data?.threeDsUrl) {
+        onStepEvent?.("card_3ds_challenge", { method: isDebit ? "debit_card" : "credit_card", amount });
         window.open(data.threeDsUrl, "_blank", "noopener");
         toast.info("Conclua a autenticação do seu banco para finalizar o pagamento.");
         pollPaymentResult(attemptId);
@@ -746,6 +759,7 @@ function CardPaymentForm({
 
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        onStepEvent?.("card_approved", { method: isDebit ? "debit_card" : "credit_card", amount, gateway: data.gateway || null });
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
       } else {
@@ -770,6 +784,7 @@ function CardPaymentForm({
       // All gateways declined — show friendly error and release form
       sessionStorage.removeItem(`checkout_payment_${orderId}`);
       const errMsg = error instanceof Error ? error.message : "Erro ao processar pagamento.";
+      onStepEvent?.("card_failed", { method: isDebit ? "debit_card" : "credit_card", amount, detail: errMsg });
       setPaymentError(errMsg);
       setIsProcessing(false);
       processingRef.current = false;

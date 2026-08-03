@@ -990,6 +990,32 @@ Deno.serve(async (req) => {
       return json(await buildState(session));
     }
 
+    // Auditoria dos passos de pagamento na Área de Membros.
+    // Best-effort e sempre 200: nunca pode atrapalhar o pagamento da cliente.
+    if (action === "track_payment_step") {
+      try {
+        const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+        await supabase.from("order_payment_events").insert({
+          order_id: String(body?.orderId || order?.id || `member-area:${session.phone}`),
+          customer_phone: session.phone,
+          event_type: String(body?.eventType || "unknown").slice(0, 60),
+          method: body?.method ? String(body.method).slice(0, 30) : null,
+          gateway: body?.gateway ? String(body.gateway).slice(0, 40) : null,
+          amount: Number.isFinite(Number(body?.amount)) ? Number(body.amount) : null,
+          detail: body?.detail ? String(body.detail).slice(0, 500) : null,
+          source: "member_area",
+          metadata: {
+            name: session.name || null,
+            ...(body?.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+          },
+        });
+      } catch (e) {
+        console.error("[track_payment_step] ignorado:", e);
+      }
+      return json({ ok: true });
+    }
+
+
     if (action === "confirm_order") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) {
