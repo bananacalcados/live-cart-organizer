@@ -141,13 +141,13 @@ export function POSCheckoutMonitor({ storeId }: Props) {
             <div
               key={attempt.id}
               className={`p-3 rounded-lg border transition-all ${
-                attempt.status === "failed"
+                attempt.status !== "success"
                   ? "border-red-500/30 bg-red-500/5"
                   : "border-green-500/30 bg-green-500/5"
               }`}
             >
               <div className="flex items-start gap-2">
-                {attempt.status === "failed" ? (
+                {attempt.status !== "success" ? (
                   <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
@@ -158,7 +158,11 @@ export function POSCheckoutMonitor({ storeId }: Props) {
                       {attempt.customer_name || "Cliente desconhecido"}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
-                      {attempt.payment_method === "card" ? "💳 Cartão" : "📱 PIX"}
+                      {attempt.payment_method === "card" || attempt.payment_method === "credit_card"
+                        ? "💳 Cartão"
+                        : attempt.payment_method === "member_area"
+                          ? "👤 Área de Membros"
+                          : "📱 PIX"}
                     </Badge>
                     {attempt.gateway && (
                       <Badge variant="secondary" className="text-[10px]">
@@ -173,7 +177,7 @@ export function POSCheckoutMonitor({ storeId }: Props) {
                     </p>
                   )}
 
-                  {attempt.status === "failed" && attempt.error_message && (
+                  {attempt.status !== "success" && attempt.error_message && (
                     <div className="mt-1 p-2 rounded bg-red-500/10 border border-red-500/20">
                       <p className="text-xs text-red-600 dark:text-red-400 font-medium">
                         ❌ {attempt.error_message}

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -39,8 +40,28 @@ serve(async (req) => {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Contexto capturado fora do try: qualquer falha na geração do PIX vira um
+  // registro em pos_checkout_attempts (antes esse erro não deixava rastro).
+  const ctx: {
+    orderId: string;
+    amount: number | null;
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+    stage: string;
+  } = { orderId: "", amount: null, name: null, phone: null, email: null, stage: "start" };
+
   try {
     const { orderId, payer, pixDiscountPercent } = await req.json();
+
+    ctx.orderId = String(orderId || "");
+    ctx.name = (payer?.firstName ? `${payer.firstName} ${payer?.lastName || ""}`.trim() : null) || null;
+    ctx.phone = (payer?.phone as string) || null;
+    ctx.email = (payer?.email as string) || null;
 
     if (!orderId) {
       throw new Error("orderId is required");
@@ -48,9 +69,6 @@ serve(async (req) => {
 
     let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Resolve qual conta MP usar (ativa no banco, ou env como fallback)
     const mpAccount = await getActiveMpAccount(supabase);
@@ -163,6 +181,13 @@ serve(async (req) => {
       totalAmount = Math.round((totalAmount - pixDiscount) * 100) / 100;
       console.log(`[mp-pix] Aplicado desconto PIX ${pixDiscountPct}% (-R$ ${pixDiscount.toFixed(2)}) → total R$ ${totalAmount.toFixed(2)}`);
     }
+
+    ctx.amount = totalAmount;
+    ctx.stage = "mp_request";
+    ctx.name = ctx.name || (customer?.instagram_handle as string) || null;
+    ctx.phone = ctx.phone || (customer?.whatsapp as string) || null;
+
+
 
     // Use payer data from request, or fallback to customer data.
     // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
@@ -305,6 +330,22 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error creating PIX payment:", error);
+
+    // Ponto cego resolvido: toda falha de geração do PIX vira registro no
+    // Monitor de Checkout (antes o cliente travava e não sobrava rastro).
+    await logCheckoutFailure(supabase, {
+      sale_id: ctx.orderId || "pix-sem-pedido",
+      payment_method: "pix",
+      gateway: "mercadopago",
+      status: "failed",
+      error_message: `Falha ao gerar PIX: ${(error as Error)?.message || String(error)}`,
+      amount: ctx.amount,
+      customer_name: ctx.name,
+      customer_phone: ctx.phone,
+      customer_email: ctx.email,
+      metadata: { source: "mercadopago-create-pix", stage: ctx.stage },
+    });
+
     return new Response(
       JSON.stringify({ error: error.message }),
       {
@@ -312,5 +353,6 @@ serve(async (req) => {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
     );
+
   }
 });
