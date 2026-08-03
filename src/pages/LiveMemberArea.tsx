@@ -669,6 +669,34 @@ export default function LiveMemberArea() {
     [state?.token, state?.order?.id],
   );
 
+  // Marca abandono: cliente abriu um meio de pagamento e saiu sem concluir.
+  const lastPayStepRef = useRef<string | null>(null);
+  const trackPaymentStepRef = useRef(trackPaymentStep);
+  trackPaymentStepRef.current = trackPaymentStep;
+  const trackStep = useCallback((eventType: string, data?: Record<string, unknown>) => {
+    lastPayStepRef.current = eventType;
+    trackPaymentStepRef.current(eventType, data);
+  }, []);
+
+  const isPaidRef = useRef(false);
+  isPaidRef.current = !!state?.order?.is_paid;
+  useEffect(() => {
+    const onLeave = () => {
+      const last = lastPayStepRef.current;
+      if (!last || isPaidRef.current) return;
+      if (["card_approved", "left_to_checkout_link", "abandoned"].includes(last)) return;
+      lastPayStepRef.current = "abandoned";
+      trackPaymentStepRef.current("abandoned", { detail: `último passo: ${last}` });
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => {
+      window.removeEventListener("pagehide", onLeave);
+      onLeave();
+    };
+  }, []);
+
+
+
   const goCheckout = (method: "pix" | "card" | "debit") => {
     if (!state?.order) return;
     trackPaymentStep("left_to_checkout_link", { method });
