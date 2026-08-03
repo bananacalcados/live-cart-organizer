@@ -3,7 +3,10 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
+import { resolveFbc, resolveFbp } from "./metaAttribution";
+
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
+
 
 /** Inject the fbevents.js SDK and initialise the pixel (idempotent). */
 export function initMetaPixel() {
