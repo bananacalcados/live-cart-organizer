@@ -177,7 +177,7 @@ export function POSCheckoutMonitor({ storeId }: Props) {
                     </p>
                   )}
 
-                  {attempt.status === "failed" && attempt.error_message && (
+                  {attempt.status !== "success" && attempt.error_message && (
                     <div className="mt-1 p-2 rounded bg-red-500/10 border border-red-500/20">
                       <p className="text-xs text-red-600 dark:text-red-400 font-medium">
                         ❌ {attempt.error_message}
