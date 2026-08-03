@@ -137,7 +137,7 @@ export default function LinkPageView() {
           name: leadName.trim(),
           phone: leadPhone,
           // Sinais de clique da Meta (memória de atribuição de 90 dias)
-          fbclid: searchParams.get("fbclid"),
+          fbclid: resolveFbclid(),
           fbp: getFbp(),
           fbc: getFbc(),
           source_url: window.location.href,
@@ -160,7 +160,7 @@ export default function LinkPageView() {
         itemId: item.id,
         sellerId: data.page.seller_id,
         leadId,
-        utm_source: searchParams.get("utm_source"),
+        utm_source: resolveUtm("utm_source"),
         referrer: document.referrer || null,
       },
     }).catch(() => {});
