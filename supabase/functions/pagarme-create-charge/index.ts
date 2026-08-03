@@ -951,7 +951,7 @@ serve(async (req) => {
     }
 
     // Use the totalAmountCents from the frontend (includes interest calculation)
-    const totalCents = params.totalAmountCents;
+    let totalCents = params.totalAmountCents;
 
     // Resolve shippingAmount server-side if not provided
     if (!params.shippingAmount && orderSource === "orders" && order) {
@@ -964,10 +964,59 @@ serve(async (req) => {
       }
     }
 
+    // 🎡 Prêmio da roleta no cartão (crédito/débito) — mesma regra do PIX.
+    // Prêmio físico NUNCA vira desconto (o resolver só considera cupom %, valor fixo e frete grátis).
+    // O abatimento é feito sobre o valor do pedido (antes de juros) e o total cobrado nunca
+    // pode ficar acima do valor que o cliente viu no checkout.
+    let prizeInfo: { label: string; couponCode: string; discountAmount: number; freeShipping: boolean } | null = null;
+    try {
+      const subtotalPrize = products.reduce((s, p) => s + Number(p.price) * Number(p.quantity), 0);
+      let baseDiscount = 0;
+      if (orderSource === "orders" && order?.discount_type && order?.discount_value) {
+        baseDiscount = order.discount_type === "percentage"
+          ? subtotalPrize * (Number(order.discount_value) / 100)
+          : Number(order.discount_value);
+      }
+      const shippingPrize = Number(params.shippingAmount || 0);
+      const prize = await resolveAndReservePrize(supabase, {
+        orderId: params.orderId,
+        phone: params.customer?.phone || null,
+        baseAmount: Math.max(0, subtotalPrize - baseDiscount),
+        shippingAmount: shippingPrize,
+      });
+      if (prize) {
+        prizeInfo = {
+          label: prize.label,
+          couponCode: prize.couponCode,
+          discountAmount: prize.discountAmount,
+          freeShipping: prize.freeShipping,
+        };
+        const prizeCents = Math.round(
+          (prize.discountAmount + (prize.freeShipping ? shippingPrize : 0)) * 100,
+        );
+        const alreadyApplied = Math.max(0, Math.round(Number(params.prizeAppliedCents) || 0));
+        const remaining = Math.max(0, prizeCents - alreadyApplied);
+        if (remaining > 0) {
+          totalCents = Math.max(100, totalCents - remaining);
+          if (params.baseAmountCents) {
+            params.baseAmountCents = Math.max(100, params.baseAmountCents - remaining);
+          }
+          console.log(
+            `[pagarme] Prêmio ${prize.label} aplicado no cartão: -R$ ${(remaining / 100).toFixed(2)} → total R$ ${(totalCents / 100).toFixed(2)}`,
+          );
+        } else {
+          console.log(`[pagarme] Prêmio ${prize.label} já abatido no front (${alreadyApplied} centavos).`);
+        }
+      }
+    } catch (prizeErr) {
+      console.error("[pagarme] Falha ao aplicar prêmio (ignorado):", prizeErr);
+    }
+
     const chargeParams: ChargeRequest = {
       ...params,
       totalAmountCents: totalCents,
     };
+
 
     // ── Resolve store_id from pos_sales if applicable ──
     let resolvedStoreId: string | null = null;
