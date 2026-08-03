@@ -845,6 +845,34 @@ export default function TransparentCheckout() {
     { label: string; couponCode: string; discountAmount: number; freeShipping: boolean } | null
   >(null);
 
+  const shippingForPrize = orderData && !orderData.freeShipping ? Number(orderData.shippingCost || 0) : 0;
+  const prizeDeduction = prizePreview
+    ? Math.round((prizePreview.discountAmount + (prizePreview.freeShipping ? shippingForPrize : 0)) * 100) / 100
+    : 0;
+  const payableAmount = orderData
+    ? Math.max(0, Math.round((orderData.totalAmount - prizeDeduction) * 100) / 100)
+    : 0;
+
+  const prizePhoneDigits = customerForm.whatsapp.replace(/\D/g, "");
+  useEffect(() => {
+    if (!orderData || prizePhoneDigits.length < 10) { setPrizePreview(null); return; }
+    let cancelled = false;
+    supabase.functions
+      .invoke("checkout-prize-preview", {
+        body: {
+          orderId: orderData.id,
+          phone: prizePhoneDigits,
+          baseAmount: Math.max(0, orderData.subtotal - (orderData.discountAmount || 0)),
+          shippingAmount: orderData.freeShipping ? 0 : Number(orderData.shippingCost || 0),
+        },
+      })
+      .then(({ data }) => { if (!cancelled) setPrizePreview(data?.prize || null); })
+      .catch(() => { if (!cancelled) setPrizePreview(null); });
+    return () => { cancelled = true; };
+  }, [orderData?.id, orderData?.totalAmount, orderData?.freeShipping, prizePhoneDigits]);
+
+
+
   // ===== Crossell (Etapa A + B) =====
   const [crossellOffers, setCrossellOffers] = useState<CrossellBlock[]>([]);
   const [crossellCart, setCrossellCart] = useState<{ shopify_variant_id: string }[]>([]);
