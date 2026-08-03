@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 
 const corsHeaders = {
@@ -1014,6 +1015,70 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true });
     }
+
+    /**
+     * Sinais de atribuição da Meta capturados no navegador da cliente
+     * (_fbp, _fbc/fbclid, user-agent, IP, URL de origem).
+     *
+     * Grava em dois lugares:
+     *  1) `customer_registrations` do pedido atual — é de onde a `meta-capi-event`
+     *     reidrata os sinais quando o Purchase é disparado pelo servidor;
+     *  2) memória de atribuição por telefone (90 dias) — serve para conversões
+     *     futuras dela no PDV/loja física.
+     *
+     * Best-effort e sempre 200: nunca pode atrapalhar a área de membros.
+     */
+    if (action === "meta_signals") {
+      try {
+        const fbp = typeof body?.fbp === "string" && body.fbp ? body.fbp.slice(0, 200) : null;
+        const fbc =
+          (typeof body?.fbc === "string" && body.fbc ? body.fbc.slice(0, 300) : null) ||
+          buildFbc(typeof body?.fbclid === "string" ? body.fbclid : null);
+        const ua = typeof body?.user_agent === "string" ? body.user_agent.slice(0, 500) : null;
+        const sourceUrl =
+          typeof body?.event_source_url === "string" ? body.event_source_url.slice(0, 500) : null;
+        const ip =
+          req.headers.get("cf-connecting-ip") ||
+          (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+          null;
+
+        if (fbp || fbc || ua) {
+          const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+          if (order?.id) {
+            const { data: reg } = await supabase
+              .from("customer_registrations")
+              .select("id, fbp, fbc")
+              .eq("order_id", order.id)
+              .maybeSingle();
+            if (reg?.id) {
+              const patch: Record<string, unknown> = {};
+              if (fbp && !reg.fbp) patch.fbp = fbp;
+              if (fbc && !reg.fbc) patch.fbc = fbc;
+              if (ua) patch.client_user_agent = ua;
+              if (ip) patch.client_ip = ip;
+              if (sourceUrl) patch.event_source_url = sourceUrl;
+              if (Object.keys(patch).length) {
+                await supabase.from("customer_registrations").update(patch).eq("id", reg.id);
+              }
+            }
+          }
+
+          await saveMetaAttribution(supabase, {
+            phone: session.phone,
+            fbc,
+            fbp,
+            fbclid: typeof body?.fbclid === "string" ? body.fbclid : null,
+            source_url: sourceUrl,
+            origin: "member_area",
+          });
+        }
+      } catch (e) {
+        console.error("[meta_signals] ignorado:", e);
+      }
+      return json({ ok: true });
+    }
+
+
 
 
     if (action === "confirm_order") {
