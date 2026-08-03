@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { STAGES, OrderStage, Stage } from "@/types/order";
 import { OrderCardDb } from "./OrderCardDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+import { supabase } from "@/integrations/supabase/client";
 
 
 interface KanbanBoardDbProps {
@@ -14,6 +16,8 @@ interface KanbanBoardDbProps {
 
 export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBoardDbProps) {
   const { moveOrder, deleteOrder } = useDbOrderStore();
+  // order_id -> cadastro completo (nome + cpf + whatsapp + endereço)
+  const [completeRegs, setCompleteRegs] = useState<Record<string, boolean>>({});
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -24,32 +28,68 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
     moveOrder(orderId, newStage);
   };
 
-  // Pedido pago SEMPRE aparece na coluna PAGO, mesmo que a etapa atual não exista
-  // nas colunas configuradas (ex.: modo Área de Membros com etapa "no_response").
   const knownStageIds = new Set(stages.map((s) => s.id));
   const hasPaidColumn = knownStageIds.has("paid" as OrderStage);
+  const hasAwaitingPayment = knownStageIds.has("awaiting_payment" as OrderStage);
+  const hasNew = knownStageIds.has("new" as OrderStage);
 
+  // Pedidos cuja etapa gravada não existe nas colunas configuradas do evento.
+  const unknownOrderIds = orders
+    .filter((o) => !knownStageIds.has(o.stage as OrderStage) && !isOrderMarkedPaid(o))
+    .map((o) => o.id);
+  const unknownKey = unknownOrderIds.slice().sort().join(",");
+
+  useEffect(() => {
+    const ids = unknownKey ? unknownKey.split(",") : [];
+    const missing = ids.filter((id) => completeRegs[id] === undefined);
+    if (!missing.length) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("customer_registrations")
+        .select("order_id,full_name,cpf,whatsapp,cep,address,city,state")
+        .in("order_id", missing.slice(0, 500));
+      if (cancelled) return;
+      const notPlaceholder = (v?: string | null, ph?: string) =>
+        !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
+      const next: Record<string, boolean> = {};
+      missing.forEach((id) => { next[id] = false; });
+      (data || []).forEach((reg: any) => {
+        const ok = notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp)
+          && notPlaceholder(reg.cep) && reg.cep?.replace(/\D/g, "") !== "00000000"
+          && notPlaceholder(reg.address, "Pendente")
+          && notPlaceholder(reg.city, "Pendente")
+          && notPlaceholder(reg.state);
+        if (reg.order_id) next[reg.order_id] = !!ok;
+      });
+      setCompleteRegs((prev) => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [unknownKey]);
+
+  // Regra: pago -> PAGO. Cadastro completo mas não pago -> AGUARDANDO PAGAMENTO.
+  // Confirmou pedido mas cadastro incompleto -> NOVO PEDIDO. Nunca cai em "Outras etapas".
   const resolveStage = (order: DbOrder): string => {
-    if (knownStageIds.has(order.stage as OrderStage)) return order.stage;
     if (hasPaidColumn && isOrderMarkedPaid(order)) return "paid";
-    return "__others__";
+    if (knownStageIds.has(order.stage as OrderStage)) return order.stage;
+    if (hasAwaitingPayment && completeRegs[order.id]) return "awaiting_payment";
+    if (hasNew) return "new";
+    if (hasAwaitingPayment) return "awaiting_payment";
+    return stages[0]?.id as string;
   };
 
   const getOrdersByStage = (stage: OrderStage) =>
     orders.filter((order) => resolveStage(order) === stage);
 
-  const orphanOrders = orders.filter((o) => resolveStage(o) === "__others__");
-  const columns: Stage[] = orphanOrders.length
-    ? [...stages, { id: "__others__" as OrderStage, title: "Outras etapas", color: "bg-muted-foreground" }]
-    : stages;
+  const columns: Stage[] = stages;
 
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4 px-1">
         {columns.map((stage) => {
-          const stageOrders =
-            (stage.id as string) === "__others__" ? orphanOrders : getOrdersByStage(stage.id);
+          const stageOrders = getOrdersByStage(stage.id);
+
 
           return (
             <div key={stage.id} className="flex-shrink-0 w-80 flex flex-col max-h-[calc(100vh-320px)]">
