@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
+import { captureAttribution, resolveFbclid, resolveUtm } from "@/lib/metaAttribution";
+
 import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
   Users, Video, Star, Music2, Youtube, Facebook, Loader2, ChevronRight, Sparkles
