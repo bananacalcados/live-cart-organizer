@@ -31,7 +31,14 @@ interface Props {
 interface Person {
   id: string; name: string; is_active: boolean; receives_all_lives: boolean; manual_goal_value: number | null;
   base_salary: number | null; role_bonus_percent: number | null;
+  role_title: string | null; is_employee_only: boolean | null;
+  provision_13: boolean | null; provision_vacation: boolean | null; provision_notice: boolean | null;
+  provision_charges_percent: number | null;
 }
+interface PeriodEntry {
+  person_id: string; overtime_hours: number | null; overtime_value: number | null; benefits_bonus: number | null;
+}
+
 interface Seller { id: string; name: string; store_id: string | null; }
 interface Store { id: string; name: string; }
 
@@ -60,6 +67,10 @@ export function POSPayrollTab({ periodRange }: Props) {
   const [eventOptOuts, setEventOptOuts] = useState<{ person_id: string; event_id: string }[]>([]);
   const [eventInfo, setEventInfo] = useState<Record<string, LiveEventInfo>>({});
   const [liveDialogPerson, setLiveDialogPerson] = useState<string | null>(null);
+  const [periodEntries, setPeriodEntries] = useState<PeriodEntry[]>([]);
+  const [newEmployeeName, setNewEmployeeName] = useState("");
+  const [newEmployeeRole, setNewEmployeeRole] = useState("");
+
 
   const startDate = format(periodRange.start, "yyyy-MM-dd");
   const endDate = format(periodRange.end, "yyyy-MM-dd");
@@ -69,10 +80,10 @@ export function POSPayrollTab({ periodRange }: Props) {
     try {
       const startIso = periodRange.start.toISOString();
       const endIso = periodRange.end.toISOString();
-      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes] = await Promise.all([
+      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes, entriesRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
-        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value, base_salary, role_bonus_percent"),
+        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value, base_salary, role_bonus_percent, role_title, is_employee_only, provision_13, provision_vacation, provision_notice, provision_charges_percent"),
         supabase.from("pos_commission_people_sellers").select("person_id, seller_id"),
         supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
         supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
@@ -85,7 +96,13 @@ export function POSPayrollTab({ periodRange }: Props) {
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
         supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
+        supabase.from("pos_payroll_period_entries")
+          .select("person_id, overtime_hours, overtime_value, benefits_bonus")
+          .eq("period_start", format(periodRange.start, "yyyy-MM-dd"))
+          .eq("period_end", format(periodRange.end, "yyyy-MM-dd")),
       ]);
+      setPeriodEntries((entriesRes.data || []) as PeriodEntry[]);
+
 
       setStores(storesRes.data || []);
       setSellers((sellersRes.data || []) as Seller[]);
@@ -127,8 +144,8 @@ export function POSPayrollTab({ periodRange }: Props) {
   useEffect(() => { if (unlocked) load(); }, [unlocked, load]);
 
   const result = useMemo(() => computePayroll({
-    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
-  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
+    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries,
+  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries]);
 
   const totals = useMemo(() => result.people.reduce(
     (acc, p) => ({
@@ -136,9 +153,20 @@ export function POSPayrollTab({ periodRange }: Props) {
       salary: acc.salary + p.baseSalary,
       bonus: acc.bonus + p.roleBonusValue,
       payout: acc.payout + p.totalPayout,
+      overtime: acc.overtime + p.overtimeValue,
+      gross: acc.gross + p.grossSalary,
+      salCom: acc.salCom + p.salaryPlusCommission,
+      provision: acc.provision + p.provisionTotal,
+      withProvision: acc.withProvision + p.withProvision,
+      benefits: acc.benefits + p.benefitsBonus,
+      totalCost: acc.totalCost + p.totalCost,
     }),
-    { commission: 0, salary: 0, bonus: 0, payout: 0 },
+    {
+      commission: 0, salary: 0, bonus: 0, payout: 0, overtime: 0, gross: 0,
+      salCom: 0, provision: 0, withProvision: 0, benefits: 0, totalCost: 0,
+    },
   ), [result.people]);
+
 
   const dialogPerson = useMemo(
     () => result.people.find((p) => p.personId === liveDialogPerson) || null,
@@ -214,6 +242,69 @@ export function POSPayrollTab({ periodRange }: Props) {
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 
+  /** Cria funcionário administrativo (sem vínculo com vendedora). */
+  const createEmployee = async () => {
+    const name = newEmployeeName.trim();
+    if (!name) { toast.error("Informe o nome do funcionário"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .insert({ name, role_title: newEmployeeRole.trim() || null, is_employee_only: true } as any);
+      if (error) throw error;
+      setNewEmployeeName(""); setNewEmployeeRole("");
+      toast.success(`Funcionário "${name}" criado`);
+      await load();
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+  /** Campos permanentes da ficha (cargo, provisionamentos, encargos). */
+  const setPersonField = async (personId: string, field: string, value: any) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .update({ [field]: value } as any).eq("id", personId);
+      if (error) throw error;
+      setPeople((prev) => prev.map((p) => (p.id === personId ? { ...p, [field]: value } as Person : p)));
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+  /** Lançamentos do período: horas extras e bônus de benefícios. */
+  const setPeriodField = async (
+    personId: string,
+    field: "overtime_hours" | "overtime_value" | "benefits_bonus",
+    value: number,
+  ) => {
+    setSaving(true);
+    try {
+      const current = periodEntries.find((e) => e.person_id === personId);
+      const payload = {
+        person_id: personId,
+        period_start: startDate,
+        period_end: endDate,
+        overtime_hours: current?.overtime_hours ?? 0,
+        overtime_value: current?.overtime_value ?? 0,
+        benefits_bonus: current?.benefits_bonus ?? 0,
+        [field]: value,
+      };
+      const { error } = await supabase.from("pos_payroll_period_entries")
+        .upsert(payload as any, { onConflict: "person_id,period_start,period_end" });
+      if (error) throw error;
+      setPeriodEntries((prev) => {
+        const exists = prev.some((e) => e.person_id === personId);
+        if (exists) return prev.map((e) => (e.person_id === personId ? { ...e, [field]: value } : e));
+        return [...prev, {
+          person_id: personId,
+          overtime_hours: payload.overtime_hours,
+          overtime_value: payload.overtime_value,
+          benefits_bonus: payload.benefits_bonus,
+        } as PeriodEntry];
+      });
+      toast.success("Lançamento salvo");
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+
+
 
   const toggleLiveParticipant = async (personId: string, storeId: string, checked: boolean) => {
     setSaving(true);
@@ -242,13 +333,27 @@ export function POSPayrollTab({ periodRange }: Props) {
   };
 
   const exportCsv = () => {
-    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$", "Salário fixo", "% Cargo", "Gratificação R$", "Total a pagar"];
+    const header = [
+      "Pessoa", "Cargo", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]),
+      "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$",
+      "Salário fixo", "% Cargo", "Gratificação R$",
+      "Horas extras (qtd)", "Horas extras R$", "Salário bruto",
+      "Salário + Comissão",
+      "Provisão 13º", "Provisão Férias", "Provisão 1/3", "Provisão Aviso prévio", "Encargos provisão", "Provisão total",
+      "Com provisionamento", "Bônus benefícios", "Custo total",
+    ];
     const lines = result.people.map((p) => [
-      p.name,
+      p.name, p.roleTitle,
       ...CHANNEL_KEYS.map((k) => p.channels[k].toFixed(2)),
       p.total.toFixed(2), p.goal.toFixed(2), p.achievementPct.toFixed(1), p.commissionPct.toFixed(2), p.commissionValue.toFixed(2),
-      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2), p.totalPayout.toFixed(2),
+      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2),
+      p.overtimeHours.toFixed(2), p.overtimeValue.toFixed(2), p.grossSalary.toFixed(2),
+      p.salaryPlusCommission.toFixed(2),
+      p.provision13.toFixed(2), p.provisionVacation.toFixed(2), p.provisionVacationBonus.toFixed(2),
+      p.provisionNotice.toFixed(2), p.provisionCharges.toFixed(2), p.provisionTotal.toFixed(2),
+      p.withProvision.toFixed(2), p.benefitsBonus.toFixed(2), p.totalCost.toFixed(2),
     ].join(";"));
+
     const csv = [header.join(";"), ...lines].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -405,6 +510,34 @@ export function POSPayrollTab({ periodRange }: Props) {
                 )}
               </div>
 
+              {/* Novo funcionário (não vendedor) */}
+              <div className="border-t border-zinc-800 pt-3">
+                <h4 className="text-sm font-semibold text-zinc-200 mb-2">Novo funcionário (não vendedor)</h4>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div>
+                    <Label className="text-[11px] text-zinc-400">Nome</Label>
+                    <Input value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)}
+                      placeholder="Ex.: Maria (financeiro)"
+                      className="w-56 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-zinc-400">Cargo</Label>
+                    <Input value={newEmployeeRole} onChange={(e) => setNewEmployeeRole(e.target.value)}
+                      placeholder="Ex.: Auxiliar administrativo"
+                      className="w-56 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs" />
+                  </div>
+                  <Button size="sm" onClick={createEmployee} disabled={saving}
+                    className="h-8 gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                    <Plus className="h-3 w-3" /> Adicionar funcionário
+                  </Button>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Entra na folha com salário, gratificação, provisionamento, horas extras e bônus — sem comissão.
+                </p>
+              </div>
+
+
+
 
               {/* People config */}
               {people.length > 0 && (
@@ -462,6 +595,98 @@ export function POSPayrollTab({ periodRange }: Props) {
                               </span>
                             </div>
                           </div>
+                          {/* Provisionamento CLT (1/12 por mês) */}
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <span className="text-[10px] uppercase text-zinc-500">Provisionamento CLT:</span>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_13 !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_13", !!v)} />
+                              13º
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_vacation !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_vacation", !!v)} />
+                              Férias + 1/3
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_notice !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_notice", !!v)} />
+                              Aviso prévio
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Encargos %</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.provision_charges_percent ?? ""} placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.provision_charges_percent || 0)) setPersonField(p.id, "provision_charges_percent", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Cargo</Label>
+                              <Input
+                                defaultValue={p.role_title ?? ""} placeholder="ex.: Gerente"
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim() || null;
+                                  if (v !== (p.role_title ?? null)) setPersonField(p.id, "role_title", v);
+                                }}
+                                className="w-32 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                          </div>
+                          {/* Lançamentos do período */}
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <span className="text-[10px] uppercase text-zinc-500">Período {periodRange.label}:</span>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Horas extras (qtd)</Label>
+                              <Input
+                                key={`oh-${p.id}-${startDate}`}
+                                type="number" step="0.5"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.overtime_hours ?? ""}
+                                placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.overtime_hours || 0);
+                                  if (v !== cur) setPeriodField(p.id, "overtime_hours", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Horas extras R$</Label>
+                              <Input
+                                key={`ov-${p.id}-${startDate}`}
+                                type="number" step="0.01"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.overtime_value ?? ""}
+                                placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.overtime_value || 0);
+                                  if (v !== cur) setPeriodField(p.id, "overtime_value", v);
+                                }}
+                                className="w-24 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Bônus cartão benefícios R$</Label>
+                              <Input
+                                key={`bb-${p.id}-${startDate}`}
+                                type="number" step="0.01"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.benefits_bonus ?? ""}
+                                placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.benefits_bonus || 0);
+                                  if (v !== cur) setPeriodField(p.id, "benefits_bonus", v);
+                                }}
+                                className="w-24 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                              <span className="text-[10px] text-zinc-500">não tributável</span>
+                            </div>
+                          </div>
+
                           <div className="flex items-center gap-4 flex-wrap pl-1">
                             <span className="text-[10px] uppercase text-zinc-500">Divide live:</span>
                             {(["perola", "centro"] as StoreKey[]).map((k) => {
@@ -509,7 +734,7 @@ export function POSPayrollTab({ periodRange }: Props) {
               <table className="w-full text-[12px]">
                 <thead className="bg-zinc-800 text-zinc-300">
                   <tr>
-                    <th className="text-left p-2 font-semibold sticky left-0 bg-zinc-800">Vendedora</th>
+                    <th className="text-left p-2 font-semibold sticky left-0 bg-zinc-800">Pessoa</th>
                     {CHANNEL_KEYS.map((k) => (
                       <th key={k} className="text-right p-2 font-medium whitespace-nowrap">{CHANNEL_LABELS[k]}</th>
                     ))}
@@ -520,7 +745,13 @@ export function POSPayrollTab({ periodRange }: Props) {
                     <th className="text-right p-2 font-semibold">Comissão</th>
                     <th className="text-right p-2 font-semibold">Salário</th>
                     <th className="text-right p-2 font-semibold whitespace-nowrap">Gratificação</th>
-                    <th className="text-right p-2 font-semibold text-sky-300">Total a pagar</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">H. extras</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Bruto s/ provisão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Salário + Comissão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Provisão</th>
+                    <th className="text-right p-2 font-semibold text-sky-300 whitespace-nowrap">Com provisão</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Bônus benefícios</th>
+                    <th className="text-right p-2 font-semibold text-emerald-300 whitespace-nowrap">Custo total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -542,6 +773,12 @@ export function POSPayrollTab({ periodRange }: Props) {
                         </span>
                         {p.stores.length > 1 && (
                           <Badge variant="outline" className="ml-1 text-[9px] border-amber-600 text-amber-400">2 lojas</Badge>
+                        )}
+                        {p.isEmployeeOnly && (
+                          <Badge variant="outline" className="ml-1 text-[9px] border-sky-700 text-sky-300">Administrativo</Badge>
+                        )}
+                        {p.roleTitle && (
+                          <span className="block text-[9px] text-zinc-500">{p.roleTitle}</span>
                         )}
                       </td>
                       {CHANNEL_KEYS.map((k) => {
@@ -579,11 +816,29 @@ export function POSPayrollTab({ periodRange }: Props) {
                           </>
                         ) : "—"}
                       </td>
-                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.totalPayout)}</td>
+                      <td className="p-2 text-right text-zinc-300">
+                        {p.overtimeValue || p.overtimeHours ? (
+                          <>
+                            {BRL(p.overtimeValue)}
+                            <span className="block text-[9px] text-zinc-500">{p.overtimeHours.toLocaleString("pt-BR")}h</span>
+                          </>
+                        ) : "—"}
+                      </td>
+                      <td className="p-2 text-right text-zinc-200">{BRL(p.grossSalary)}</td>
+                      <td className="p-2 text-right text-zinc-100 font-semibold">{BRL(p.salaryPlusCommission)}</td>
+                      <td
+                        className="p-2 text-right text-amber-300"
+                        title={`13º ${BRL(p.provision13)} · Férias ${BRL(p.provisionVacation)} · 1/3 ${BRL(p.provisionVacationBonus)} · Aviso prévio ${BRL(p.provisionNotice)}${p.provisionCharges ? ` · Encargos ${BRL(p.provisionCharges)}` : ""}`}
+                      >
+                        {p.provisionTotal ? BRL(p.provisionTotal) : "—"}
+                      </td>
+                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.withProvision)}</td>
+                      <td className="p-2 text-right text-zinc-300">{p.benefitsBonus ? BRL(p.benefitsBonus) : "—"}</td>
+                      <td className="p-2 text-right font-bold text-emerald-300">{BRL(p.totalCost)}</td>
                     </tr>
                     {isOpen && p.goal > 0 && (
                       <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
-                        <td colSpan={CHANNEL_KEYS.length + 9} className="p-3">
+                        <td colSpan={CHANNEL_KEYS.length + 15} className="p-3">
                           <div className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold mb-1.5">
                             Metas escalonadas — {p.name}
                           </div>
@@ -595,7 +850,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                     );
                   })}
                   {result.people.length === 0 && (
-                    <tr><td colSpan={CHANNEL_KEYS.length + 9} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
+                    <tr><td colSpan={CHANNEL_KEYS.length + 15} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
                   )}
                 </tbody>
                 {result.people.length > 0 && (
@@ -606,10 +861,17 @@ export function POSPayrollTab({ periodRange }: Props) {
                       <td className="p-2 text-right text-orange-400">{BRL(totals.commission)}</td>
                       <td className="p-2 text-right">{BRL(totals.salary)}</td>
                       <td className="p-2 text-right">{BRL(totals.bonus)}</td>
-                      <td className="p-2 text-right text-sky-300">{BRL(totals.payout)}</td>
+                      <td className="p-2 text-right">{BRL(totals.overtime)}</td>
+                      <td className="p-2 text-right">{BRL(totals.gross)}</td>
+                      <td className="p-2 text-right">{BRL(totals.salCom)}</td>
+                      <td className="p-2 text-right text-amber-300">{BRL(totals.provision)}</td>
+                      <td className="p-2 text-right text-sky-300">{BRL(totals.withProvision)}</td>
+                      <td className="p-2 text-right">{BRL(totals.benefits)}</td>
+                      <td className="p-2 text-right text-emerald-300">{BRL(totals.totalCost)}</td>
                     </tr>
                   </tfoot>
                 )}
+
               </table>
             </ScrollArea>
           </div>

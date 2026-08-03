@@ -37,7 +37,26 @@ export interface PayrollPerson {
   base_salary?: number | null;
   /** Gratificação de cargo de confiança em % sobre o salário fixo. */
   role_bonus_percent?: number | null;
+  /** Cargo/função (livre). */
+  role_title?: string | null;
+  /** Funcionário administrativo (não vendedor). */
+  is_employee_only?: boolean | null;
+  /** Provisionamentos CLT ativos (1/12 ao mês). */
+  provision_13?: boolean | null;
+  provision_vacation?: boolean | null;
+  provision_notice?: boolean | null;
+  /** % de encargos aplicado sobre o provisionamento total. */
+  provision_charges_percent?: number | null;
 }
+
+/** Lançamento manual do período (horas extras e bônus de benefícios). */
+export interface PayrollPeriodEntry {
+  person_id: string;
+  overtime_hours?: number | null;
+  overtime_value?: number | null;
+  benefits_bonus?: number | null;
+}
+
 
 export interface PayrollScaleRow {
   achievement_percent: number;
@@ -132,7 +151,23 @@ export interface PersonRow {
   baseSalary: number;        // salário fixo cadastrado
   roleBonusPercent: number;  // % de gratificação de cargo
   roleBonusValue: number;    // salário fixo * %
-  totalPayout: number;       // salário + gratificação + comissão
+  totalPayout: number;       // salário + gratificação + comissão (compatibilidade)
+  roleTitle: string;         // cargo/função
+  isEmployeeOnly: boolean;   // funcionário administrativo (sem vendas)
+  overtimeHours: number;     // qtd. de horas extras lançadas no período
+  overtimeValue: number;     // R$ pago em horas extras no período
+  benefitsBonus: number;     // bônus de cartão de benefícios (não tributável)
+  provision13: number;           // 13º = base/12
+  provisionVacation: number;     // férias = base/12
+  provisionVacationBonus: number;// 1/3 constitucional = (base/12)/3
+  provisionNotice: number;       // aviso prévio = base/12
+  provisionCharges: number;      // encargos % sobre o provisionamento
+  provisionTotal: number;        // soma dos provisionamentos ativos + encargos
+  grossSalary: number;           // salário + gratificação + horas extras
+  salaryPlusCommission: number;  // bruto + comissão
+  withProvision: number;         // bruto + comissão + provisionamento
+  totalCost: number;             // + bônus de benefícios
+
   tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
   liveEvents: LiveEventBreakdown[]; // eventos que incidem no rateio de live da pessoa
@@ -197,10 +232,12 @@ interface ComputeInput {
   goals: PayrollGoal[];
   /** Eventos em que a pessoa NÃO participou (opt-out). Sem registro = participa. */
   eventOptOuts?: { person_id: string; event_id: string }[];
+  /** Lançamentos manuais do período (horas extras, bônus de benefícios). */
+  periodEntries?: PayrollPeriodEntry[];
 }
 
 export function computePayroll(input: ComputeInput): PayrollResult {
-  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts } = input;
+  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries } = input;
 
   const storeKeyById = new Map<string, StoreKey>();
   for (const s of stores) storeKeyById.set(s.id, storeKeyFromName(s.name));
@@ -210,6 +247,9 @@ export function computePayroll(input: ComputeInput): PayrollResult {
 
   const personBySeller = new Map<string, string>();
   for (const ps of peopleSellers) personBySeller.set(ps.seller_id, ps.person_id);
+
+  const entryByPerson = new Map<string, PayrollPeriodEntry>();
+  for (const e of periodEntries || []) entryByPerson.set(e.person_id, e);
 
   // Metas por seller_id → soma por pessoa
   const goalBySeller = new Map<string, number>();
@@ -235,11 +275,27 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       roleBonusPercent: 0,
       roleBonusValue: 0,
       totalPayout: 0,
+      roleTitle: p.role_title || "",
+      isEmployeeOnly: !!p.is_employee_only,
+      overtimeHours: 0,
+      overtimeValue: 0,
+      benefitsBonus: 0,
+      provision13: 0,
+      provisionVacation: 0,
+      provisionVacationBonus: 0,
+      provisionNotice: 0,
+      provisionCharges: 0,
+      provisionTotal: 0,
+      grossSalary: 0,
+      salaryPlusCommission: 0,
+      withProvision: 0,
+      totalCost: 0,
       tiers: [],
       stores: [],
       liveEvents: [],
     });
   }
+
 
   // Pool de live agrupado por loja + evento
   const livePool = new Map<string, { storeKey: StoreKey; eventId: string | null; net: number; storeId: string }>();
@@ -393,7 +449,33 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.roleBonusPercent = Math.max(0, Number(p.role_bonus_percent || 0));
     row.roleBonusValue = row.baseSalary * (row.roleBonusPercent / 100);
     row.totalPayout = row.baseSalary + row.roleBonusValue + row.commissionValue;
+
+    // Lançamentos do período
+    const entry = entryByPerson.get(p.id);
+    row.overtimeHours = Math.max(0, Number(entry?.overtime_hours || 0));
+    row.overtimeValue = Math.max(0, Number(entry?.overtime_value || 0));
+    row.benefitsBonus = Math.max(0, Number(entry?.benefits_bonus || 0));
+
+    // Provisionamento CLT (1/12 ao mês sobre a base salarial)
+    const base = row.baseSalary + row.roleBonusValue;
+    const twelfth = base / 12;
+    row.provision13 = p.provision_13 === false ? 0 : twelfth;
+    row.provisionVacation = p.provision_vacation === false ? 0 : twelfth;
+    row.provisionVacationBonus = p.provision_vacation === false ? 0 : twelfth / 3;
+    row.provisionNotice = p.provision_notice === false ? 0 : twelfth;
+    const provisionSubtotal =
+      row.provision13 + row.provisionVacation + row.provisionVacationBonus + row.provisionNotice;
+    row.provisionCharges = provisionSubtotal * (Math.max(0, Number(p.provision_charges_percent || 0)) / 100);
+    row.provisionTotal = provisionSubtotal + row.provisionCharges;
+
+    // Camadas de custo
+    row.grossSalary = row.baseSalary + row.roleBonusValue + row.overtimeValue;
+    row.salaryPlusCommission = row.grossSalary + row.commissionValue;
+    row.withProvision = row.salaryPlusCommission + row.provisionTotal;
+    row.totalCost = row.withProvision + row.benefitsBonus;
+
     row.tiers = buildGoalTiers(row.goal, row.total, scale);
+
   }
 
   return {

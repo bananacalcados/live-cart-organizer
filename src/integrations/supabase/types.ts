@@ -12024,10 +12024,16 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_employee_only: boolean
           manual_goal_value: number | null
           name: string
+          provision_13: boolean
+          provision_charges_percent: number
+          provision_notice: boolean
+          provision_vacation: boolean
           receives_all_lives: boolean
           role_bonus_percent: number
+          role_title: string | null
           updated_at: string
         }
         Insert: {
@@ -12035,10 +12041,16 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_employee_only?: boolean
           manual_goal_value?: number | null
           name: string
+          provision_13?: boolean
+          provision_charges_percent?: number
+          provision_notice?: boolean
+          provision_vacation?: boolean
           receives_all_lives?: boolean
           role_bonus_percent?: number
+          role_title?: string | null
           updated_at?: string
         }
         Update: {
@@ -12046,10 +12058,16 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_employee_only?: boolean
           manual_goal_value?: number | null
           name?: string
+          provision_13?: boolean
+          provision_charges_percent?: number
+          provision_notice?: boolean
+          provision_vacation?: boolean
           receives_all_lives?: boolean
           role_bonus_percent?: number
+          role_title?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -12840,6 +12858,50 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_payroll_period_entries: {
+        Row: {
+          benefits_bonus: number
+          created_at: string
+          id: string
+          overtime_hours: number
+          overtime_value: number
+          period_end: string
+          period_start: string
+          person_id: string
+          updated_at: string
+        }
+        Insert: {
+          benefits_bonus?: number
+          created_at?: string
+          id?: string
+          overtime_hours?: number
+          overtime_value?: number
+          period_end: string
+          period_start: string
+          person_id: string
+          updated_at?: string
+        }
+        Update: {
+          benefits_bonus?: number
+          created_at?: string
+          id?: string
+          overtime_hours?: number
+          overtime_value?: number
+          period_end?: string
+          period_start?: string
+          person_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_payroll_period_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "pos_commission_people"
             referencedColumns: ["id"]
           },
         ]
