@@ -151,7 +151,23 @@ export interface PersonRow {
   baseSalary: number;        // salário fixo cadastrado
   roleBonusPercent: number;  // % de gratificação de cargo
   roleBonusValue: number;    // salário fixo * %
-  totalPayout: number;       // salário + gratificação + comissão
+  totalPayout: number;       // salário + gratificação + comissão (compatibilidade)
+  roleTitle: string;         // cargo/função
+  isEmployeeOnly: boolean;   // funcionário administrativo (sem vendas)
+  overtimeHours: number;     // qtd. de horas extras lançadas no período
+  overtimeValue: number;     // R$ pago em horas extras no período
+  benefitsBonus: number;     // bônus de cartão de benefícios (não tributável)
+  provision13: number;           // 13º = base/12
+  provisionVacation: number;     // férias = base/12
+  provisionVacationBonus: number;// 1/3 constitucional = (base/12)/3
+  provisionNotice: number;       // aviso prévio = base/12
+  provisionCharges: number;      // encargos % sobre o provisionamento
+  provisionTotal: number;        // soma dos provisionamentos ativos + encargos
+  grossSalary: number;           // salário + gratificação + horas extras
+  salaryPlusCommission: number;  // bruto + comissão
+  withProvision: number;         // bruto + comissão + provisionamento
+  totalCost: number;             // + bônus de benefícios
+
   tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
   liveEvents: LiveEventBreakdown[]; // eventos que incidem no rateio de live da pessoa
