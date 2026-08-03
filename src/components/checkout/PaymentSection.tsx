@@ -631,6 +631,7 @@ function CardPaymentForm({
 
     // Lock immediately
     processingRef.current = true;
+    onStepEvent?.("card_submitted", { method: isDebit ? "debit_card" : "credit_card", amount, installments: isDebit ? 1 : Number(installments) });
     setIsProcessing(true);
     setPaymentError(null);
 
@@ -749,6 +750,7 @@ function CardPaymentForm({
 
       // 3DS (débito): o banco exige autenticação. Abrimos o desafio e ficamos no polling.
       if (data?.threeDsUrl) {
+        onStepEvent?.("card_3ds_challenge", { method: isDebit ? "debit_card" : "credit_card", amount });
         window.open(data.threeDsUrl, "_blank", "noopener");
         toast.info("Conclua a autenticação do seu banco para finalizar o pagamento.");
         pollPaymentResult(attemptId);
@@ -757,6 +759,7 @@ function CardPaymentForm({
 
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        onStepEvent?.("card_approved", { method: isDebit ? "debit_card" : "credit_card", amount, gateway: data.gateway || null });
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
       } else {
@@ -781,6 +784,7 @@ function CardPaymentForm({
       // All gateways declined — show friendly error and release form
       sessionStorage.removeItem(`checkout_payment_${orderId}`);
       const errMsg = error instanceof Error ? error.message : "Erro ao processar pagamento.";
+      onStepEvent?.("card_failed", { method: isDebit ? "debit_card" : "credit_card", amount, detail: errMsg });
       setPaymentError(errMsg);
       setIsProcessing(false);
       processingRef.current = false;
