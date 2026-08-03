@@ -237,6 +237,17 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       .maybeSingle();
     console.log(`[mercadopago] boleto ${boletoId} -> ${newStatus} (row=${!!bol})`);
 
+    // 🎡 Baixa o prêmio da roleta reservado para este boleto.
+    if (newStatus === "paid") {
+      try {
+        const { redeemPrizesForOrder } = await import("../_shared/prize-discount.ts");
+        await redeemPrizesForOrder(supabase, boletoId);
+      } catch (e) {
+        console.error("[mercadopago] falha ao baixar prêmio do boleto:", e);
+      }
+    }
+
+
     if (newStatus === "paid" && bol?.customer_phone) {
       try {
         await supabase.functions.invoke("blocked-buyer-sale-alert", {

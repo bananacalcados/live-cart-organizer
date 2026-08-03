@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import QRCode from "https://esm.sh/qrcode@1.5.3";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
@@ -193,6 +194,32 @@ serve(async (req) => {
     const boletoId = boleto.id as string;
     const externalRef = `boleto:${boletoId}`;
 
+    // 🎡 Prêmio da roleta no boleto — mesma regra do PIX.
+    // Prêmio físico nunca entra como desconto (o resolver só considera cupom %, valor fixo e frete grátis).
+    let chargeAmount = amountNum;
+    let prizeInfo: { label: string; couponCode: string; discountAmount: number; freeShipping: boolean } | null = null;
+    try {
+      const prize = await resolveAndReservePrize(supabase, {
+        orderId: boletoId,
+        phone: customer_phone || null,
+        baseAmount: amountNum,
+        shippingAmount: 0,
+      });
+      if (prize && prize.discountAmount > 0) {
+        chargeAmount = Math.max(1, Math.round((amountNum - prize.discountAmount) * 100) / 100);
+        prizeInfo = {
+          label: prize.label,
+          couponCode: prize.couponCode,
+          discountAmount: prize.discountAmount,
+          freeShipping: prize.freeShipping,
+        };
+        await supabase.from("pos_boletos").update({ amount: chargeAmount }).eq("id", boletoId);
+        console.log(`[mp-boleto] Prêmio ${prize.label} aplicado: -R$ ${prize.discountAmount.toFixed(2)} → R$ ${chargeAmount.toFixed(2)}`);
+      }
+    } catch (prizeErr) {
+      console.error("[mp-boleto] Falha ao aplicar prêmio (ignorado):", prizeErr);
+    }
+
     // 2) Cria pagamento boleto no MP
     const payerAddress = {
       zip_code: zip,
@@ -204,7 +231,8 @@ serve(async (req) => {
     };
 
     const boletoBody = {
-      transaction_amount: Math.round(amountNum * 100) / 100,
+      transaction_amount: Math.round(chargeAmount * 100) / 100,
+
       description: description || `Boleto Banana Calçados — ${customer_name}`,
       payment_method_id: "bolbradesco",
       date_of_expiration: formatMpDate(dueDate),
@@ -248,7 +276,7 @@ serve(async (req) => {
     if (include_pix) {
       try {
         const pixBody = {
-          transaction_amount: Math.round(amountNum * 100) / 100,
+          transaction_amount: Math.round(chargeAmount * 100) / 100,
           description: description || `PIX — ${customer_name}`,
           payment_method_id: "pix",
           date_of_expiration: formatMpDate(dueDate),
@@ -318,7 +346,7 @@ serve(async (req) => {
     drawText("VALOR", { size: 9, bold: true, color: [0.4, 0.4, 0.4] });
     drawText("VENCIMENTO", { size: 9, bold: true, color: [0.4, 0.4, 0.4], x: 300 });
     y -= 14;
-    drawText(`R$ ${amountNum.toFixed(2).replace(".", ",")}`, { size: 14, bold: true });
+    drawText(`R$ ${chargeAmount.toFixed(2).replace(".", ",")}`, { size: 14, bold: true });
     drawText(dueDate.toLocaleDateString("pt-BR"), { size: 14, bold: true, x: 300 });
     y -= 24;
 
@@ -421,7 +449,9 @@ serve(async (req) => {
         pdfUrl: signed?.signedUrl || null,
         pixQrCode,
         pixQrBase64,
-        amount: amountNum,
+        amount: chargeAmount,
+        originalAmount: amountNum,
+        prize: prizeInfo,
         dueDate: due_date,
       }),
       { headers, status: 200 },

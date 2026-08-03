@@ -93,6 +93,7 @@ export function StepPayment({
   onProcessingChange,
   backLabel,
   stepBadge = "3 de 3",
+  prizeAppliedCents = 0,
 }: {
   orderId: string;
   amount: number;
@@ -104,6 +105,8 @@ export function StepPayment({
   onProcessingChange?: (processing: boolean) => void;
   backLabel?: string;
   stepBadge?: string | null;
+  /** Prêmio da roleta (em centavos) já abatido no total exibido — evita abater 2x no servidor. */
+  prizeAppliedCents?: number;
 }) {
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(null);
    const [showAllMethods, setShowAllMethods] = useState(true);
@@ -156,6 +159,7 @@ export function StepPayment({
                 <CardPaymentForm
                     orderId={orderId}
                     amount={amount}
+                    prizeAppliedCents={prizeAppliedCents}
                     products={products}
                     form={form}
                     installmentConfig={installmentConfig}
@@ -196,6 +200,7 @@ export function StepPayment({
                  <CardPaymentForm
                    orderId={orderId}
                    amount={amount}
+                   prizeAppliedCents={prizeAppliedCents}
                    products={products}
                    form={form}
                    installmentConfig={installmentConfig}
@@ -445,13 +450,14 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
 // ── Card Payment Form (step 3) — crédito e débito ───────────────
 function CardPaymentForm({
   orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
-  mode = "credit", onSwitchMode,
+  mode = "credit", onSwitchMode, prizeAppliedCents = 0,
 }: {
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onProcessingChange?: (processing: boolean) => void;
   mode?: CardMode;
   onSwitchMode?: (mode: CardMode) => void;
+  prizeAppliedCents?: number;
 }) {
   const isDebit = mode === "debit";
   const [cardNumber, setCardNumber] = useState("");
@@ -685,6 +691,7 @@ function CardPaymentForm({
           },
           totalAmountCents: totalCents,
           baseAmountCents: baseCents,
+          prizeAppliedCents,
 
         },
       });

@@ -270,7 +270,8 @@ function StepBanner({ currentStep }: { currentStep: number }) {
   );
 }
 // ── Order Summary Sidebar ───────────────────────────────────────
-function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void }) {
+function OrderSummary({ orderData, collapsed, onToggle, prizeDeduction = 0, prizeLabel }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void; prizeDeduction?: number; prizeLabel?: string | null }) {
+  const finalTotal = Math.max(0, Math.round((orderData.totalAmount - prizeDeduction) * 100) / 100);
   const totalItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
@@ -279,7 +280,7 @@ function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData
           <ShoppingBag className="h-4 w-4" />
           Resumo ({totalItems} {totalItems === 1 ? 'item' : 'itens'})
         </div>
-        <span className="font-bold text-primary">R$ {orderData.totalAmount.toFixed(2)}</span>
+        <span className="font-bold text-primary">R$ {finalTotal.toFixed(2)}</span>
       </div>
       {!collapsed && (
         <>
@@ -315,9 +316,15 @@ function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData
                 <span className="text-stage-paid font-medium">GRÁTIS 🎉</span>
               </div>
             )}
+            {prizeDeduction > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">🎡 Prêmio{prizeLabel ? ` (${prizeLabel})` : ""}</span>
+                <span className="text-stage-paid font-medium">-R$ {prizeDeduction.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-sm pt-1">
               <span>Total</span>
-              <span className="text-primary">R$ {orderData.totalAmount.toFixed(2)}</span>
+              <span className="text-primary">R$ {finalTotal.toFixed(2)}</span>
             </div>
           </div>
         </>
@@ -832,6 +839,39 @@ export default function TransparentCheckout() {
     neighborhood: "", city: "", state: "",
   });
   const [registrationId, setRegistrationId] = useState<string | null>(null);
+
+  // 🎡 Prévia do prêmio da roleta (só cupom %, valor fixo ou frete grátis — prêmio físico nunca é desconto).
+  const [prizePreview, setPrizePreview] = useState<
+    { label: string; couponCode: string; discountAmount: number; freeShipping: boolean } | null
+  >(null);
+
+  const shippingForPrize = orderData && !orderData.freeShipping ? Number(orderData.shippingCost || 0) : 0;
+  const prizeDeduction = prizePreview
+    ? Math.round((prizePreview.discountAmount + (prizePreview.freeShipping ? shippingForPrize : 0)) * 100) / 100
+    : 0;
+  const payableAmount = orderData
+    ? Math.max(0, Math.round((orderData.totalAmount - prizeDeduction) * 100) / 100)
+    : 0;
+
+  const prizePhoneDigits = customerForm.whatsapp.replace(/\D/g, "");
+  useEffect(() => {
+    if (!orderData || prizePhoneDigits.length < 10) { setPrizePreview(null); return; }
+    let cancelled = false;
+    supabase.functions
+      .invoke("checkout-prize-preview", {
+        body: {
+          orderId: orderData.id,
+          phone: prizePhoneDigits,
+          baseAmount: Math.max(0, orderData.subtotal - (orderData.discountAmount || 0)),
+          shippingAmount: orderData.freeShipping ? 0 : Number(orderData.shippingCost || 0),
+        },
+      })
+      .then(({ data }) => { if (!cancelled) setPrizePreview(data?.prize || null); })
+      .catch(() => { if (!cancelled) setPrizePreview(null); });
+    return () => { cancelled = true; };
+  }, [orderData?.id, orderData?.totalAmount, orderData?.freeShipping, prizePhoneDigits]);
+
+
 
   // ===== Crossell (Etapa A + B) =====
   const [crossellOffers, setCrossellOffers] = useState<CrossellBlock[]>([]);
@@ -1552,7 +1592,8 @@ export default function TransparentCheckout() {
                   {currentStep === 3 && (
                     <StepPayment
                       orderId={orderData.id}
-                      amount={orderData.totalAmount}
+                      amount={payableAmount}
+                      prizeAppliedCents={Math.round(prizeDeduction * 100)}
                       products={orderData.products}
                       form={customerForm}
                       installmentConfig={installmentConfig}
@@ -1570,10 +1611,10 @@ export default function TransparentCheckout() {
           <div className="lg:col-span-1">
             {/* Mobile: collapsible, Desktop: always visible */}
             <div className="lg:hidden">
-              <OrderSummary orderData={orderData} collapsed={summaryCollapsed} onToggle={() => setSummaryCollapsed(!summaryCollapsed)} />
+              <OrderSummary orderData={orderData} collapsed={summaryCollapsed} onToggle={() => setSummaryCollapsed(!summaryCollapsed)} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} />
             </div>
             <div className="hidden lg:block sticky top-4">
-              <OrderSummary orderData={orderData} />
+              <OrderSummary orderData={orderData} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} />
             </div>
           </div>
         </div>

@@ -308,5 +308,8 @@ verify_jwt = false
 [functions.live-member-area]
 verify_jwt = false
 
+[functions.checkout-prize-preview]
+verify_jwt = false
+
 [functions.event-prize-wheel]
 verify_jwt = false
