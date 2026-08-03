@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
+import { captureAttribution, resolveFbclid } from "@/lib/metaAttribution";
 import { cpGetSale, cpCreateOrder, cpUpdateOrder } from "@/lib/checkoutPublic";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
@@ -315,7 +316,7 @@ export default function CatalogLeadPage() {
       try {
         const fbp = getFbp();
         const fbc = getFbc();
-        const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+        const fbclid = resolveFbclid();
         if (fbp || fbc || fbclid) {
           supabase.functions.invoke("meta-attribution-capture", {
             body: {

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getFbp, getFbc } from '@/lib/metaPixel';
+import { captureAttribution, resolveFbclid, resolveUtm } from '@/lib/metaAttribution';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -135,11 +136,11 @@ export default function EventTypebotView() {
           name: updated.name,
           phone: updated.phone,
           ref_token: refToken || undefined,
-          utm_source: search.get('utm_source'),
-          utm_medium: search.get('utm_medium'),
-          utm_campaign: search.get('utm_campaign'),
+          utm_source: resolveUtm('utm_source'),
+          utm_medium: resolveUtm('utm_medium'),
+          utm_campaign: resolveUtm('utm_campaign'),
           // Sinais de clique da Meta (memória de atribuição de 90 dias)
-          fbclid: search.get('fbclid'),
+          fbclid: resolveFbclid(),
           fbp: getFbp(),
           fbc: getFbc(),
           source_url: window.location.href,
