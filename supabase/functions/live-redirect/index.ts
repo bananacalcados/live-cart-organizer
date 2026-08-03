@@ -52,6 +52,24 @@ serve(async (req) => {
     const slug = (url.searchParams.get("slug") || "").trim().toLowerCase();
     const phone = url.searchParams.get("lead") || url.searchParams.get("phone") || null;
     const utmSource = url.searchParams.get("utm_source") || null;
+    const fbclid = url.searchParams.get("fbclid") || null;
+    const fbcParam = url.searchParams.get("fbc") || null;
+    const fbpParam = url.searchParams.get("fbp") || null;
+
+    // Etapa E — se o link veio de um disparo (com telefone), guarda os sinais
+    // de clique na memória de atribuição de 90 dias.
+    if (phone && (fbclid || fbcParam || fbpParam)) {
+      saveMetaAttribution(supabase as never, {
+        phone,
+        fbc: fbcParam || buildFbc(fbclid),
+        fbp: fbpParam,
+        fbclid,
+        source_url: req.headers.get("referer"),
+        origin: "live_redirect",
+      }).catch(() => {});
+    }
+
+
 
     if (!slug) return json({ error: "slug is required" }, 400);
 
