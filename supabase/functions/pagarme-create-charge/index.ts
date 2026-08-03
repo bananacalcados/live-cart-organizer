@@ -234,7 +234,10 @@ interface ChargeRequest {
   /** Função escolhida pelo cliente no checkout. "debit" força Mercado Pago 1x, sem cascata. */
   paymentMode?: "credit" | "debit";
   paymentAttemptId?: string;
+  /** Quanto de prêmio (em centavos) o front JÁ abateu do total exibido. Evita abater 2x. */
+  prizeAppliedCents?: number;
 }
+
 
 // ── Mercado Pago charge (gateway #1) ─────────────────────────────
 // Usa token gerado no frontend (MercadoPago.JS V2). binary_mode:true garante
