@@ -330,6 +330,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
   }, [pixPaymentId, pixPaid, orderId]);
 
   const handleGeneratePix = async () => {
+    onStepEvent?.("pix_requested", { method: "pix", amount });
     setIsGenerating(true);
     trackPixelEvent("AddPaymentInfo", { content_category: "pix" });
 
@@ -394,9 +395,11 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
       }
       if (!data?.qrCode) throw new Error("QR Code não retornado");
       setPixData(data);
+      onStepEvent?.("pix_generated", { method: "pix", gateway: "mercadopago", amount, paymentId: data?.paymentId ?? null });
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro desconhecido";
+      onStepEvent?.("pix_error", { method: "pix", gateway: "mercadopago", amount, detail: msg });
       if (msg.toLowerCase().includes("estoque") || msg.toLowerCase().includes("sem estoque")) {
         toast.error(msg, { duration: 8000 });
       } else if (msg.includes("CPF")) {
