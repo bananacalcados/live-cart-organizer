@@ -125,6 +125,8 @@ serve(async (req) => {
 
       discountType = sale.discount ? "fixed" : null;
       discountValue = sale.discount ? Number(sale.discount) : null;
+      recordPhone = (sale as any).customer_phone || ((sale.payment_details as any)?.customer_phone ?? null);
+
       
       // Extract shipping from payment_details
       const pd = sale.payment_details as Record<string, unknown> | null;
