@@ -778,10 +778,10 @@ Deno.serve(async (req) => {
       const ph = normalizePhone(body.phone);
       if (!ph) return json({ ok: false, error: "Telefone inválido" }, 400);
       if (!(await allow(`otp:${ph}`, 3, 600))) {
-        return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
+        return await blocked("rate_limit_otp", "Você já pediu vários códigos. Aguarde alguns minutos.");
       }
       if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
-        return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
+        return await blocked("rate_limit_otp_ip", "Muitas solicitações de código. Tente mais tarde.");
       }
       const r = await sendAccessCode(supabase, ph);
       if (!r.ok) return json({ ok: false, error: r.error || "Falha ao enviar código" }, 500);
@@ -792,11 +792,11 @@ Deno.serve(async (req) => {
 
       // Anti-abuso: 10 entradas por IP a cada 10 min e 6 por telefone/hora.
       if (!(await allow(`enter-ip:${ip}`, 10, 600))) {
-        return json({ ok: false, error: "Muitas tentativas de acesso. Aguarde alguns minutos." }, 429);
+        return await blocked("rate_limit_enter_ip", "Muitas tentativas de acesso. Aguarde alguns minutos.");
       }
       const phoneKey = normalizePhone(body.phone);
       if (phoneKey && !(await allow(`enter:${phoneKey}`, 6, 3600))) {
-        return json({ ok: false, error: "Muitas tentativas com este número. Tente mais tarde." }, 429);
+        return await blocked("rate_limit_enter_phone", "Muitas tentativas com este número. Tente mais tarde.");
       }
 
       const event = await resolveCurrentEvent();
@@ -817,7 +817,7 @@ Deno.serve(async (req) => {
         const code = String(body.otp || "").replace(/\D/g, "");
         if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
         if (!(await allow(`otpv:${phone}`, 8, 600))) {
-          return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+          return await blocked("rate_limit_otp_verify", "Muitas tentativas. Aguarde alguns minutos.");
         }
         if (!(await verifyAccessCode(supabase, phone, code))) {
           return json({ ok: false, error: "Código incorreto.", needsOtp: true });
@@ -910,7 +910,10 @@ Deno.serve(async (req) => {
 
     if (action === "confirm_order") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
-      if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
+      if (!order) {
+        await logFriction("pedido_nao_localizado", "Cliente na área de membros sem pedido vinculado ao telefone informado");
+        return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
+      }
       if (order.is_paid) return json(await buildState(session));
 
       const expires = new Date(Date.now() + PAYMENT_WINDOW_MIN * 60_000).toISOString();
@@ -941,7 +944,10 @@ Deno.serve(async (req) => {
 
     if (action === "reject_item") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
-      if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
+      if (!order) {
+        await logFriction("pedido_nao_localizado", "Cliente na área de membros sem pedido vinculado ao telefone informado");
+        return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
+      }
       if (order.is_paid) return json({ ok: false, error: "Pedido já pago" }, 400);
 
       const idx = Number(body.index);
@@ -966,10 +972,10 @@ Deno.serve(async (req) => {
     if (action === "send_otp") {
       // Anti-spam de OTP: 3 envios por telefone a cada 10 min e 10 por IP/hora.
       if (!(await allow(`otp:${session.phone}`, 3, 600))) {
-        return json({ ok: false, error: "Você já pediu vários códigos. Aguarde alguns minutos." }, 429);
+        return await blocked("rate_limit_otp", "Você já pediu vários códigos. Aguarde alguns minutos.");
       }
       if (!(await allow(`otp-ip:${ip}`, 10, 3600))) {
-        return json({ ok: false, error: "Muitas solicitações de código. Tente mais tarde." }, 429);
+        return await blocked("rate_limit_otp_ip", "Muitas solicitações de código. Tente mais tarde.");
       }
       const r = await sendAccessCode(supabase, session.phone);
       if (!r.ok) return json({ ok: false, error: r.error || "Falha ao enviar código" }, 500);
@@ -979,7 +985,7 @@ Deno.serve(async (req) => {
     if (action === "verify_otp") {
       // Anti-força bruta: 8 tentativas por telefone a cada 10 min.
       if (!(await allow(`otpv:${session.phone}`, 8, 600))) {
-        return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+        return await blocked("rate_limit_otp_verify", "Muitas tentativas. Aguarde alguns minutos.");
       }
       const code = String(body.code || "").replace(/\D/g, "");
       const ok = await verifyAccessCode(supabase, session.phone, code);
@@ -999,7 +1005,10 @@ Deno.serve(async (req) => {
 
     if (action === "save_details") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
-      if (!order) return json({ ok: false, error: "Nenhum pedido para vincular os dados" }, 400);
+      if (!order) {
+        await logFriction("pedido_nao_localizado", "Cliente tentou salvar dados sem pedido vinculado ao telefone informado");
+        return json({ ok: false, error: "Nenhum pedido para vincular os dados" }, 400);
+      }
 
       const { data: reg } = await supabase
         .from("customer_registrations")
@@ -1238,7 +1247,10 @@ Deno.serve(async (req) => {
     if (action === "set_shipping") {
       const event = await resolveCurrentEvent();
       const { order } = await loadOrder(event?.id || null, session.phone);
-      if (!order) return json({ ok: false, error: "Nenhum pedido encontrado" });
+      if (!order) {
+        await logFriction("pedido_nao_localizado", "Cliente tentou escolher o envio sem pedido vinculado ao telefone informado");
+        return json({ ok: false, error: "Nenhum pedido encontrado" });
+      }
       if (order.is_paid) return json({ ok: false, error: "Pedido já pago" });
 
       const cepDigits = String(body.cep || "").replace(/\D/g, "").slice(0, 8);
@@ -1286,6 +1298,7 @@ Deno.serve(async (req) => {
 
   } catch (e) {
     console.error("[live-member-area]", e);
+    await logFriction("erro_inesperado", String((e as Error)?.message || e));
     return json({ ok: false, error: String((e as Error).message || e) }, 500);
   }
 });
