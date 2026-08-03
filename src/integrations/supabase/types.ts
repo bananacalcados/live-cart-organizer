@@ -20949,6 +20949,7 @@ export type Database = {
           id: string
           is_customer: boolean
           last_purchase_at: string
+          last_seen_at: string
           name: string
           phone: string
           prize_count: number
@@ -20956,6 +20957,7 @@ export type Database = {
           source: string
           total_orders: number
           total_spent: number
+          visits: number
           was_existing_lead: boolean
         }[]
       }
