@@ -192,6 +192,129 @@ export default function LiveMemberArea() {
   }, []);
 
 
+  // ─────────────────────────────────────────────────────────────
+  // Meta Pixel + CAPI na Área de Membros
+  // Mesmo padrão do checkout transparente: evento no navegador + CAPI com o
+  // mesmo event_id (dedupe). Sem isso a compra chegava na Meta sem fbp/fbc,
+  // com correspondência fraca e sem sinal de anúncio.
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+  }, []);
+
+  /** Guarda de disparo único por (evento + pedido). */
+  const metaFiredRef = useRef<Record<string, boolean>>({});
+  const fireOnce = (key: string, fn: () => void) => {
+    if (!key || metaFiredRef.current[key]) return;
+    metaFiredRef.current[key] = true;
+    try {
+      fn();
+    } catch {
+      /* rastreamento nunca quebra o fluxo */
+    }
+  };
+
+  /** Base do evento Meta (valor, itens e PII já conhecida da cliente). */
+  const metaBase = useCallback((): CheckoutEventBase => {
+    const o = state?.order;
+    const d = state?.payDetails || state?.details || {};
+    const masked = !!d.masked;
+    return {
+      orderId: o?.id,
+      value: typeof o?.total === "number" ? o.total : undefined,
+      numItems: o?.products?.length,
+      contentIds: (o?.products || [])
+        .map((p: any) => String(p.id ?? p.sku ?? p.title ?? ""))
+        .filter(Boolean),
+      customer: {
+        fullName: (masked ? undefined : d.full_name) || state?.name || undefined,
+        email: masked ? undefined : d.email || undefined,
+        phone: state?.phone || undefined,
+        cpf: masked ? undefined : d.cpf || undefined,
+        city: masked ? undefined : d.city || undefined,
+        state: masked ? undefined : d.state || undefined,
+        zip: masked ? undefined : d.cep || undefined,
+      },
+    };
+  }, [state]);
+
+  /**
+   * Persiste os sinais de clique (_fbp/_fbc/fbclid/UA/IP) no cadastro do pedido
+   * e na memória de atribuição por telefone (90 dias). É o que permite à CAPI
+   * enviar o `fbc` mesmo em conversões futuras no PDV ou na loja física.
+   */
+  const signalsSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const tk = state?.token;
+    const ph = state?.phone;
+    if (!tk || !ph) return;
+    const t = window.setTimeout(() => {
+      const fbp = getFbp();
+      const fbc = getFbc();
+      const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+      if (!fbp && !fbc && !fbclid) return;
+      const key = `${ph}:${state?.order?.id || "-"}:${fbp || ""}:${fbc || ""}`;
+      if (signalsSentRef.current === key) return;
+      signalsSentRef.current = key;
+
+      callApi({
+        action: "meta_signals",
+        token: tk,
+        fbp,
+        fbc,
+        fbclid,
+        user_agent: navigator.userAgent,
+        event_source_url: window.location.href,
+      }).catch(() => {});
+
+      supabase.functions
+        .invoke("meta-attribution-capture", {
+          body: {
+            phone: ph,
+            fbp,
+            fbc,
+            fbclid,
+            source_url: window.location.href,
+            origin: "member_area",
+          },
+        })
+        .catch(() => {});
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [state?.token, state?.phone, state?.order?.id]);
+
+  /** InitiateCheckout assim que a cliente vê o pedido com itens. */
+  useEffect(() => {
+    const o = state?.order;
+    if (!o?.id || !o.products?.length || o.is_paid) return;
+    fireOnce(`ic:${o.id}`, () => void fireInitiateCheckout(metaBase()));
+  }, [state?.order?.id, state?.order?.products?.length, state?.order?.is_paid, metaBase]);
+
+  /** AddShippingInfo quando o envio já está definido. */
+  useEffect(() => {
+    const o = state?.order;
+    if (!o?.id || o.is_paid) return;
+    if (!o.shipping_method && !o.free_shipping) return;
+    fireOnce(`asi:${o.id}`, () => void fireAddShippingInfo(metaBase()));
+  }, [state?.order?.id, state?.order?.shipping_method, state?.order?.free_shipping, state?.order?.is_paid, metaBase]);
+
+  /** Purchase de navegador com event_id determinístico (dedupe com a CAPI do servidor). */
+  useEffect(() => {
+    const o = state?.order;
+    if (!o?.id || !o.is_paid) return;
+    const storeKey = `ma_purchase_sent_${o.id}`;
+    if (localStorage.getItem(storeKey)) return;
+    fireOnce(`purchase:${o.id}`, () => {
+      firePurchaseBrowser(metaBase());
+      localStorage.setItem(storeKey, "1");
+    });
+  }, [state?.order?.id, state?.order?.is_paid, metaBase]);
+
+
+
+
+
   /** Volta para a página anterior (a live / link de origem). */
   const backToLive = () => {
     if (window.history.length > 1) window.history.back();
