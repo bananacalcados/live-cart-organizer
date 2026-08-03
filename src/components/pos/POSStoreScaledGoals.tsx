@@ -3,6 +3,7 @@ import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ScaledGoalTiers } from "./ScaledGoalTiers";
+import { PayrollLiveEventsDialog, type LiveEventInfo } from "./PayrollLiveEventsDialog";
 import { countBusinessDays, getBrazilianHolidays } from "@/lib/businessDays";
 import {
   computePayroll, buildGoalTiers, commissionPctForAchievement,
@@ -44,6 +45,9 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
   const [goals, setGoals] = useState<{ seller_id: string | null; goal_value: number | null }[]>([]);
   const [sales, setSales] = useState<PayrollSale[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [eventOptOuts, setEventOptOuts] = useState<{ person_id: string; event_id: string }[]>([]);
+  const [eventInfo, setEventInfo] = useState<Record<string, LiveEventInfo>>({});
+  const [liveDialogPerson, setLiveDialogPerson] = useState<string | null>(null);
 
   // Faixa efetiva de acordo com o filtro interno do painel.
   const { effStart, effEnd, effLabel } = useMemo(() => {
@@ -77,7 +81,7 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
     try {
       const startIso = effStart.toISOString();
       const endIso = effEnd.toISOString();
-      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes] = await Promise.all([
+      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
         supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value"),
@@ -87,12 +91,12 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
         supabase.from("pos_goals").select("seller_id, goal_value, period, period_start, period_end")
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
         supabase.from("pos_sales")
-          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details")
-          .eq("expedition_stage", "concluido")
+          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
           .in("status", REVENUE_STATUSES)
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
+        supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
       ]);
       setStores((storesRes.data || []) as PayrollStore[]);
       setSellers((sellersRes.data || []) as PayrollSeller[]);
@@ -109,7 +113,18 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
         return false;
       }).map((r: any) => ({ seller_id: r.seller_id, goal_value: r.goal_value }));
       setGoals(g);
-      setSales((salesRes.data || []) as PayrollSale[]);
+      const salesRows = (salesRes.data || []) as PayrollSale[];
+      setSales(salesRows);
+      setEventOptOuts((optOutRes.data || []) as any);
+      const eventIds = Array.from(new Set(salesRows.map((r: any) => r.event_id).filter(Boolean)));
+      if (eventIds.length > 0) {
+        const { data: evs } = await supabase.from("events").select("id, name, start_date").in("id", eventIds as string[]);
+        const map: Record<string, LiveEventInfo> = {};
+        for (const ev of evs || []) map[(ev as any).id] = { name: (ev as any).name, date: (ev as any).start_date };
+        setEventInfo(map);
+      } else {
+        setEventInfo({});
+      }
     } finally {
       setLoading(false);
     }
@@ -118,8 +133,8 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
   useEffect(() => { load(); }, [load]);
 
   const result = useMemo(() => computePayroll({
-    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals,
-  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals]);
+    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
+  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
 
   // Pessoas que possuem algum registro de vendedora nesta loja, já ajustadas ao
   // filtro interno: no modo DIA a meta (e degraus) usam a meta diária.
@@ -241,12 +256,20 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
                       <p className="text-[11px] text-black/40">Sem vendas no período.</p>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                        {activeChannels.map((k) => (
-                          <div key={k} className="rounded-lg bg-black/[0.03] px-2.5 py-1.5">
-                            <span className="block text-[9px] uppercase text-black/40">{CHANNEL_LABELS[k as ChannelKey]}</span>
-                            <span className="text-xs font-semibold text-black/70">{BRL(p.channels[k])}</span>
-                          </div>
-                        ))}
+                        {activeChannels.map((k) => {
+                          const clickable = (k === "live_perola" || k === "live_centro") && p.liveEvents.length > 0;
+                          return (
+                            <div
+                              key={k}
+                              onClick={clickable ? () => setLiveDialogPerson(p.personId) : undefined}
+                              className={`rounded-lg bg-black/[0.03] px-2.5 py-1.5 ${clickable ? "cursor-pointer hover:bg-fuchsia-500/10" : ""}`}
+                              title={clickable ? "Ver eventos que incidiram nesse valor" : undefined}
+                            >
+                              <span className="block text-[9px] uppercase text-black/40">{CHANNEL_LABELS[k as ChannelKey]}</span>
+                              <span className={`text-xs font-semibold ${clickable ? "text-fuchsia-700 underline decoration-dotted" : "text-black/70"}`}>{BRL(p.channels[k])}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -258,6 +281,22 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
           );
         })
       )}
+
+      {liveDialogPerson && (() => {
+        const person = result.people.find((x) => x.personId === liveDialogPerson);
+        if (!person) return null;
+        return (
+          <PayrollLiveEventsDialog
+            open
+            onOpenChange={(v) => !v && setLiveDialogPerson(null)}
+            personId={person.personId}
+            personName={person.name}
+            events={person.liveEvents}
+            eventInfo={eventInfo}
+            onChanged={load}
+          />
+        );
+      })()}
     </div>
   );
 }

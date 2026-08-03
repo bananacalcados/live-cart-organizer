@@ -13,6 +13,7 @@ export interface PayrollSale {
   total: number | null;
   shipping_cost: number | null;
   payment_details: any;
+  event_id?: string | null;
 }
 
 export interface PayrollSeller {
@@ -103,6 +104,18 @@ export interface GoalTier {
   commissionValue: number;    // comissão projetada AO atingir exatamente esse degrau
 }
 
+/** Detalhe de um evento/live que incidiu (ou não) no faturamento de live de uma pessoa. */
+export interface LiveEventBreakdown {
+  eventId: string | null;     // null = vendas de live sem evento vinculado
+  storeKey: StoreKey;
+  storeId: string;
+  net: number;                // faturamento líquido do evento naquela loja
+  participants: number;       // nº de participantes considerados no rateio
+  quota: number;              // cota por participante
+  included: boolean;          // a pessoa participou (true) ou foi desmarcada (false)
+  credited: number;           // valor efetivamente creditado à pessoa (0 se desmarcada)
+}
+
 export interface PersonRow {
   personId: string;
   name: string;
@@ -114,6 +127,7 @@ export interface PersonRow {
   commissionValue: number;
   tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
+  liveEvents: LiveEventBreakdown[]; // eventos que incidem no rateio de live da pessoa
 }
 
 export interface LiveStoreSummary {
@@ -130,6 +144,7 @@ export interface PayrollResult {
   liveTotalNet: number;
   unmappedSellers: { id: string; name: string; net: number }[];
 }
+
 
 /** Comissão % pela escala: maior degrau cujo achievement_percent <= atingimento. */
 export function commissionPctForAchievement(achievementPct: number, scale: PayrollScaleRow[]): number {
@@ -172,10 +187,12 @@ interface ComputeInput {
   liveParticipants: { person_id: string; store_id: string }[];
   scale: PayrollScaleRow[];
   goals: PayrollGoal[];
+  /** Eventos em que a pessoa NÃO participou (opt-out). Sem registro = participa. */
+  eventOptOuts?: { person_id: string; event_id: string }[];
 }
 
 export function computePayroll(input: ComputeInput): PayrollResult {
-  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals } = input;
+  const { sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts } = input;
 
   const storeKeyById = new Map<string, StoreKey>();
   for (const s of stores) storeKeyById.set(s.id, storeKeyFromName(s.name));
@@ -208,11 +225,16 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       commissionValue: 0,
       tiers: [],
       stores: [],
+      liveEvents: [],
     });
   }
 
-  const liveNetByStoreKey = new Map<StoreKey, { net: number; storeId: string }>();
+  // Pool de live agrupado por loja + evento
+  const livePool = new Map<string, { storeKey: StoreKey; eventId: string | null; net: number; storeId: string }>();
+  const optOutSet = new Set<string>();
+  for (const o of eventOptOuts || []) optOutSet.add(`${o.person_id}::${o.event_id}`);
   const unmappedMap = new Map<string, { id: string; name: string; net: number }>();
+
 
   // 1) Vendas diretas (não-live) + acúmulo do pool de lives
   for (const sale of sales) {
@@ -240,12 +262,15 @@ export function computePayroll(input: ComputeInput): PayrollResult {
         unmappedMap.set(liveSeller.id, cur);
         continue;
       }
-      // Live sem vendedora real (virtual) → mantém o rateio por participantes.
-      const prev = liveNetByStoreKey.get(sKey) || { net: 0, storeId: sale.store_id || "" };
+      // Live sem vendedora real (virtual) → rateio por participantes, agrupado por evento.
+      const evId = sale.event_id || null;
+      const poolKey = `${sKey}::${evId || "sem-evento"}`;
+      const prev = livePool.get(poolKey) || { storeKey: sKey, eventId: evId, net: 0, storeId: sale.store_id || "" };
       prev.net += net;
       if (sale.store_id) prev.storeId = sale.store_id;
-      liveNetByStoreKey.set(sKey, prev);
+      livePool.set(poolKey, prev);
       continue;
+
     }
 
     const seller = sale.seller_id ? sellerById.get(sale.seller_id) : undefined;
@@ -264,7 +289,7 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     if (sKey !== "other" && !row.stores.includes(sKey)) row.stores.push(sKey);
   }
 
-  const liveTotalNet = Array.from(liveNetByStoreKey.values()).reduce((a, b) => a + b.net, 0);
+  const liveTotalNet = Array.from(livePool.values()).reduce((a, b) => a + b.net, 0);
 
   // 2) Participantes da divisão por loja
   const participantsByStore = new Map<StoreKey, string[]>();
@@ -277,20 +302,57 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     participantsByStore.set(sKey, list);
   }
 
+  // Rateio POR EVENTO: cada live tem seu próprio conjunto de participantes,
+  // descontando quem foi desmarcada (opt-out) daquele evento.
   const liveByStore: LiveStoreSummary[] = [];
-  for (const [sKey, info] of liveNetByStoreKey) {
+  const netByStore = new Map<StoreKey, { net: number; storeId: string }>();
+
+  for (const [key, info] of livePool) {
+    const sKey = info.storeKey;
     if (sKey === "other") continue;
-    const participants = participantsByStore.get(sKey) || [];
-    const quota = participants.length > 0 ? info.net / participants.length : 0;
-    liveByStore.push({ storeKey: sKey, storeId: info.storeId, net: info.net, participants: participants.length, quota });
-    if (quota > 0) {
-      const chan = (`live_${sKey}`) as ChannelKey;
-      for (const personId of participants) {
-        const row = rows.get(personId);
-        if (row && CHANNEL_KEYS.includes(chan)) row.channels[chan] += quota;
-      }
+    const acc = netByStore.get(sKey) || { net: 0, storeId: info.storeId };
+    acc.net += info.net;
+    if (info.storeId) acc.storeId = info.storeId;
+    netByStore.set(sKey, acc);
+
+    const all = participantsByStore.get(sKey) || [];
+    const eligible = info.eventId
+      ? all.filter((pid) => !optOutSet.has(`${pid}::${info.eventId}`))
+      : all;
+    const quota = eligible.length > 0 ? info.net / eligible.length : 0;
+    const chan = (`live_${sKey}`) as ChannelKey;
+
+    for (const personId of all) {
+      const row = rows.get(personId);
+      if (!row) continue;
+      const included = eligible.includes(personId);
+      const credited = included ? quota : 0;
+      if (credited > 0 && CHANNEL_KEYS.includes(chan)) row.channels[chan] += credited;
+      row.liveEvents.push({
+        eventId: info.eventId,
+        storeKey: sKey,
+        storeId: info.storeId,
+        net: info.net,
+        participants: eligible.length,
+        quota,
+        included,
+        credited,
+      });
     }
+    void key;
   }
+
+  for (const [sKey, acc] of netByStore) {
+    const participants = participantsByStore.get(sKey) || [];
+    liveByStore.push({
+      storeKey: sKey,
+      storeId: acc.storeId,
+      net: acc.net,
+      participants: participants.length,
+      quota: participants.length > 0 ? acc.net / participants.length : 0,
+    });
+  }
+
 
   // 3) Híbridas: total de todas as lives
   for (const p of people) {
