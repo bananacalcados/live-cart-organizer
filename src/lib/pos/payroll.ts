@@ -389,6 +389,10 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.achievementPct = row.goal > 0 ? (row.total / row.goal) * 100 : 0;
     row.commissionPct = row.goal > 0 ? commissionPctForAchievement(row.achievementPct, scale) : 0;
     row.commissionValue = row.total * (row.commissionPct / 100);
+    row.baseSalary = Math.max(0, Number(p.base_salary || 0));
+    row.roleBonusPercent = Math.max(0, Number(p.role_bonus_percent || 0));
+    row.roleBonusValue = row.baseSalary * (row.roleBonusPercent / 100);
+    row.totalPayout = row.baseSalary + row.roleBonusValue + row.commissionValue;
     row.tiers = buildGoalTiers(row.goal, row.total, scale);
   }
 
