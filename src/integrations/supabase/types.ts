@@ -11945,6 +11945,44 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_commission_live_event_optouts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_id: string
+          id: string
+          person_id: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          id?: string
+          person_id: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          id?: string
+          person_id?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_commission_live_event_optouts_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "pos_commission_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_commission_live_participants: {
         Row: {
           created_at: string

@@ -150,3 +150,60 @@ describe("buildGoalTiers — metas escalonadas", () => {
     expect(buildGoalTiers(0, 5000, scale)).toEqual([]);
   });
 });
+
+describe("computePayroll — rateio por evento e opt-out", () => {
+  const stores = [{ id: "st-centro", name: "Loja Centro" }];
+  const sellers = [
+    { id: "sl-valeria", name: "Valéria físico", store_id: "st-centro" },
+    { id: "sl-ana", name: "Ana", store_id: "st-centro" },
+    { id: "sl-live", name: "Live Shopping", store_id: "st-centro" },
+  ];
+  const people = [
+    { id: "p-valeria", name: "Valéria", is_active: true, receives_all_lives: false, manual_goal_value: null },
+    { id: "p-ana", name: "Ana", is_active: true, receives_all_lives: false, manual_goal_value: null },
+  ];
+  const peopleSellers = [
+    { person_id: "p-valeria", seller_id: "sl-valeria" },
+    { person_id: "p-ana", seller_id: "sl-ana" },
+  ];
+  const liveParticipants = [
+    { person_id: "p-valeria", store_id: "st-centro" },
+    { person_id: "p-ana", store_id: "st-centro" },
+  ];
+  const sales = [
+    { id: "E1", store_id: "st-centro", seller_id: "sl-live", sale_type: "live", total: 1000, shipping_cost: 0, payment_details: null, event_id: "ev-1" },
+    { id: "E2", store_id: "st-centro", seller_id: "sl-live", sale_type: "live", total: 600, shipping_cost: 0, payment_details: null, event_id: "ev-2" },
+  ];
+
+  it("sem opt-out mantém o rateio igual entre participantes", () => {
+    const res = computePayroll({ sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals: [] });
+    const valeria = res.people.find((p) => p.personId === "p-valeria")!;
+    expect(valeria.channels.live_centro).toBe(800); // 500 + 300
+    expect(valeria.liveEvents).toHaveLength(2);
+    expect(res.liveTotalNet).toBe(1600);
+  });
+
+  it("opt-out remove o evento da pessoa e redistribui a cota", () => {
+    const res = computePayroll({
+      sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals: [],
+      eventOptOuts: [{ person_id: "p-valeria", event_id: "ev-2" }],
+    });
+    const valeria = res.people.find((p) => p.personId === "p-valeria")!;
+    const ana = res.people.find((p) => p.personId === "p-ana")!;
+    expect(valeria.channels.live_centro).toBe(500);
+    expect(ana.channels.live_centro).toBe(1100); // 500 + 600 inteiro
+    const ev2 = valeria.liveEvents.find((e) => e.eventId === "ev-2")!;
+    expect(ev2.included).toBe(false);
+    expect(ev2.credited).toBe(0);
+  });
+
+  it("live sem event_id continua rateada normalmente", () => {
+    const res = computePayroll({
+      sales: [{ id: "X", store_id: "st-centro", seller_id: "sl-live", sale_type: "live", total: 400, shipping_cost: 0, payment_details: null, event_id: null }],
+      sellers, stores, people, peopleSellers, liveParticipants, scale, goals: [],
+      eventOptOuts: [{ person_id: "p-valeria", event_id: "ev-2" }],
+    });
+    const valeria = res.people.find((p) => p.personId === "p-valeria")!;
+    expect(valeria.channels.live_centro).toBe(200);
+  });
+});

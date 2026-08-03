@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScaledGoalTiers } from "./ScaledGoalTiers";
+import { PayrollLiveEventsDialog, type LiveEventInfo } from "./PayrollLiveEventsDialog";
 import {
   computePayroll, CHANNEL_KEYS, CHANNEL_LABELS, storeKeyFromName,
   type PayrollScaleRow, type StoreKey,
@@ -55,6 +56,9 @@ export function POSPayrollTab({ periodRange }: Props) {
   const [scale, setScale] = useState<PayrollScaleRow[]>([]);
   const [goals, setGoals] = useState<{ seller_id: string | null; goal_value: number | null }[]>([]);
   const [sales, setSales] = useState<any[]>([]);
+  const [eventOptOuts, setEventOptOuts] = useState<{ person_id: string; event_id: string }[]>([]);
+  const [eventInfo, setEventInfo] = useState<Record<string, LiveEventInfo>>({});
+  const [liveDialogPerson, setLiveDialogPerson] = useState<string | null>(null);
 
   const startDate = format(periodRange.start, "yyyy-MM-dd");
   const endDate = format(periodRange.end, "yyyy-MM-dd");
@@ -64,7 +68,7 @@ export function POSPayrollTab({ periodRange }: Props) {
     try {
       const startIso = periodRange.start.toISOString();
       const endIso = periodRange.end.toISOString();
-      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes] = await Promise.all([
+      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
         supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value"),
@@ -74,11 +78,12 @@ export function POSPayrollTab({ periodRange }: Props) {
         supabase.from("pos_goals").select("seller_id, goal_value, period, period_start, period_end")
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
         supabase.from("pos_sales")
-          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details")
+          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
           .in("status", REVENUE_STATUSES)
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
+        supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
       ]);
 
       setStores(storesRes.data || []);
@@ -98,7 +103,19 @@ export function POSPayrollTab({ periodRange }: Props) {
         return false;
       }).map((r: any) => ({ seller_id: r.seller_id, goal_value: r.goal_value }));
       setGoals(g);
-      setSales(salesRes.data || []);
+      const salesRows = salesRes.data || [];
+      setSales(salesRows);
+      setEventOptOuts((optOutRes.data || []) as any);
+
+      const eventIds = Array.from(new Set(salesRows.map((r: any) => r.event_id).filter(Boolean)));
+      if (eventIds.length > 0) {
+        const { data: evs } = await supabase.from("events").select("id, name, start_date").in("id", eventIds as string[]);
+        const map: Record<string, LiveEventInfo> = {};
+        for (const ev of evs || []) map[(ev as any).id] = { name: (ev as any).name, date: (ev as any).start_date };
+        setEventInfo(map);
+      } else {
+        setEventInfo({});
+      }
     } catch (e: any) {
       toast.error("Erro ao carregar folha: " + e.message);
     } finally {
@@ -109,8 +126,13 @@ export function POSPayrollTab({ periodRange }: Props) {
   useEffect(() => { if (unlocked) load(); }, [unlocked, load]);
 
   const result = useMemo(() => computePayroll({
-    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals,
-  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals]);
+    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
+  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
+
+  const dialogPerson = useMemo(
+    () => result.people.find((p) => p.personId === liveDialogPerson) || null,
+    [result.people, liveDialogPerson],
+  );
 
   const storesByKey = useMemo(() => {
     const m = new Map<StoreKey, Store>();
@@ -463,9 +485,20 @@ export function POSPayrollTab({ periodRange }: Props) {
                           <Badge variant="outline" className="ml-1 text-[9px] border-amber-600 text-amber-400">2 lojas</Badge>
                         )}
                       </td>
-                      {CHANNEL_KEYS.map((k) => (
-                        <td key={k} className="p-2 text-right text-zinc-400">{p.channels[k] ? BRL(p.channels[k]) : "—"}</td>
-                      ))}
+                      {CHANNEL_KEYS.map((k) => {
+                        const isLiveQuota = k === "live_perola" || k === "live_centro";
+                        const clickable = isLiveQuota && p.liveEvents.length > 0;
+                        return (
+                          <td
+                            key={k}
+                            className={`p-2 text-right ${clickable ? "text-fuchsia-300 underline decoration-dotted cursor-pointer hover:text-fuchsia-200" : "text-zinc-400"}`}
+                            title={clickable ? "Ver eventos que incidiram nesse valor" : undefined}
+                            onClick={clickable ? (e) => { e.stopPropagation(); setLiveDialogPerson(p.personId); } : undefined}
+                          >
+                            {p.channels[k] ? BRL(p.channels[k]) : "—"}
+                          </td>
+                        );
+                      })}
                       <td className="p-2 text-right font-bold text-emerald-400">{BRL(p.total)}</td>
                       <td className="p-2 text-right text-zinc-300">{p.goal > 0 ? BRL(p.goal) : "—"}</td>
                       <td className="p-2 text-right text-zinc-300">{p.goal > 0 ? `${p.achievementPct.toFixed(0)}%` : "s/ meta"}</td>
@@ -507,6 +540,18 @@ export function POSPayrollTab({ periodRange }: Props) {
             </p>
           )}
         </>
+      )}
+
+      {dialogPerson && (
+        <PayrollLiveEventsDialog
+          open={!!liveDialogPerson}
+          onOpenChange={(v) => !v && setLiveDialogPerson(null)}
+          personId={dialogPerson.personId}
+          personName={dialogPerson.name}
+          events={dialogPerson.liveEvents}
+          eventInfo={eventInfo}
+          onChanged={load}
+        />
       )}
     </div>
   );

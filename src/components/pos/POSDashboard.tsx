@@ -24,8 +24,74 @@ import { POSStoreGoalCards } from "./POSStoreGoalCards";
 import { DeliveryCostsCard } from "./DeliveryCostsCard";
 
 import { POSChannelSalesModal, type ChannelSale } from "./POSChannelSalesModal";
+import { computePayroll, type PayrollSale } from "@/lib/pos/payroll";
 
 import type { DateRange } from "react-day-picker";
+
+const PAYROLL_REVENUE_STATUSES = ["completed", "pending_sync", "paid"];
+
+/**
+ * Faturamento por pessoa usando o MESMO cálculo da aba FOLHA (computePayroll),
+ * já com o rateio de live por evento e os opt-outs aplicados.
+ * Restrito às pessoas com vínculo de vendedora na loja informada.
+ */
+async function loadPayrollTotals(start: Date, end: Date, storeId: string) {
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+  const startDate = format(start, "yyyy-MM-dd");
+  const endDate = format(end, "yyyy-MM-dd");
+
+  const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, salesRes, optOutRes] = await Promise.all([
+    supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false),
+    supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
+    supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value"),
+    supabase.from("pos_commission_people_sellers").select("person_id, seller_id"),
+    supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
+    supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
+    supabase.from("pos_sales")
+      .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
+      .in("status", PAYROLL_REVENUE_STATUSES)
+      .neq("revenue_attribution", "site_pickup_only")
+      .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
+      .limit(20000),
+    supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
+  ]);
+
+  const sellers = (sellersRes.data || []) as any[];
+  const peopleSellers = (psRes.data || []) as { person_id: string; seller_id: string }[];
+  if (peopleSellers.length === 0) return null;
+
+  const result = computePayroll({
+    sales: (salesRes.data || []) as PayrollSale[],
+    sellers: sellers as any,
+    stores: (storesRes.data || []) as any,
+    people: (peopleRes.data || []) as any,
+    peopleSellers,
+    liveParticipants: (lpRes.data || [])
+      .filter((r: any) => r.period_start <= endDate && r.period_end >= startDate)
+      .map((r: any) => ({ person_id: r.person_id, store_id: r.store_id })),
+    scale: (scaleRes.data || []) as any,
+    goals: [],
+    eventOptOuts: (optOutRes.data || []) as any,
+  });
+
+  const storeSellerIds = new Set(sellers.filter((s) => s.store_id === storeId).map((s) => s.id));
+  const personIdsOfStore = new Set(
+    peopleSellers.filter((ps) => storeSellerIds.has(ps.seller_id)).map((ps) => ps.person_id),
+  );
+
+  const totalByPerson = new Map<string, number>();
+  const personName = new Map<string, string>();
+  for (const p of result.people) {
+    if (!personIdsOfStore.has(p.personId)) continue;
+    totalByPerson.set(p.personId, p.total);
+    personName.set(p.personId, p.name);
+  }
+  const personBySeller = new Map<string, string>();
+  for (const ps of peopleSellers) personBySeller.set(ps.seller_id, ps.person_id);
+
+  return { totalByPerson, personBySeller, personName };
+}
 
 interface Props {
   storeId: string;
@@ -206,7 +272,42 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           existing.totalItems += saleItemsMap.get(sale.id) || 0;
           metricsMap.set(key, existing);
         }
-        setSellerMetrics(Array.from(metricsMap.values()).sort((a, b) => b.totalSales - a.totalSales));
+        // Faturamento por vendedora = MESMA fonte da aba FOLHA (computePayroll):
+        // inclui a cota das lives rateada por evento, já descontando os opt-outs.
+        const baseMetrics = Array.from(metricsMap.values());
+        try {
+          const payrollTotals = await loadPayrollTotals(start, end, storeId);
+          if (payrollTotals) {
+            const { totalByPerson, personBySeller, personName } = payrollTotals;
+            const merged = new Map<string, SellerMetric>();
+            for (const m of baseMetrics) {
+              const personId = m.sellerId ? personBySeller.get(m.sellerId) : undefined;
+              if (!personId) { merged.set(`s:${m.sellerId ?? m.name}`, m); continue; }
+              const cur = merged.get(`p:${personId}`) || {
+                name: personName.get(personId) || m.name,
+                totalSales: totalByPerson.get(personId) || 0,
+                salesCount: 0, totalItems: 0, sellerId: m.sellerId,
+              };
+              cur.salesCount += m.salesCount;
+              cur.totalItems += m.totalItems;
+              merged.set(`p:${personId}`, cur);
+            }
+            // pessoas da loja que só têm faturamento de live (sem venda direta)
+            for (const [personId, total] of totalByPerson) {
+              if (merged.has(`p:${personId}`) || total <= 0) continue;
+              merged.set(`p:${personId}`, {
+                name: personName.get(personId) || "—",
+                totalSales: total, salesCount: 0, totalItems: 0,
+              });
+            }
+            setSellerMetrics(Array.from(merged.values()).sort((a, b) => b.totalSales - a.totalSales));
+          } else {
+            setSellerMetrics(baseMetrics.sort((a, b) => b.totalSales - a.totalSales));
+          }
+        } catch (err) {
+          console.error("Ranking (folha) load error:", err);
+          setSellerMetrics(baseMetrics.sort((a, b) => b.totalSales - a.totalSales));
+        }
       } else {
         setAvgItemsPerSale(0);
         setSellerMetrics([]);
