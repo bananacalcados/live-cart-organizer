@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
+
 
 /**
  * Redirecionador universal para a live do Instagram.
