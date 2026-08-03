@@ -37,7 +37,26 @@ export interface PayrollPerson {
   base_salary?: number | null;
   /** Gratificação de cargo de confiança em % sobre o salário fixo. */
   role_bonus_percent?: number | null;
+  /** Cargo/função (livre). */
+  role_title?: string | null;
+  /** Funcionário administrativo (não vendedor). */
+  is_employee_only?: boolean | null;
+  /** Provisionamentos CLT ativos (1/12 ao mês). */
+  provision_13?: boolean | null;
+  provision_vacation?: boolean | null;
+  provision_notice?: boolean | null;
+  /** % de encargos aplicado sobre o provisionamento total. */
+  provision_charges_percent?: number | null;
 }
+
+/** Lançamento manual do período (horas extras e bônus de benefícios). */
+export interface PayrollPeriodEntry {
+  person_id: string;
+  overtime_hours?: number | null;
+  overtime_value?: number | null;
+  benefits_bonus?: number | null;
+}
+
 
 export interface PayrollScaleRow {
   achievement_percent: number;
