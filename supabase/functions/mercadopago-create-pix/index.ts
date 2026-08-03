@@ -182,6 +182,13 @@ serve(async (req) => {
       console.log(`[mp-pix] Aplicado desconto PIX ${pixDiscountPct}% (-R$ ${pixDiscount.toFixed(2)}) → total R$ ${totalAmount.toFixed(2)}`);
     }
 
+    ctx.amount = totalAmount;
+    ctx.stage = "mp_request";
+    ctx.name = ctx.name || (customer?.instagram_handle as string) || null;
+    ctx.phone = ctx.phone || (customer?.whatsapp as string) || null;
+
+
+
     // Use payer data from request, or fallback to customer data.
     // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
     const emailResolution = resolvePayerEmail({
@@ -323,6 +330,22 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error creating PIX payment:", error);
+
+    // Ponto cego resolvido: toda falha de geração do PIX vira registro no
+    // Monitor de Checkout (antes o cliente travava e não sobrava rastro).
+    await logCheckoutFailure(supabase, {
+      sale_id: ctx.orderId || "pix-sem-pedido",
+      payment_method: "pix",
+      gateway: "mercadopago",
+      status: "failed",
+      error_message: `Falha ao gerar PIX: ${(error as Error)?.message || String(error)}`,
+      amount: ctx.amount,
+      customer_name: ctx.name,
+      customer_phone: ctx.phone,
+      customer_email: ctx.email,
+      metadata: { source: "mercadopago-create-pix", stage: ctx.stage },
+    });
+
     return new Response(
       JSON.stringify({ error: error.message }),
       {
@@ -330,5 +353,6 @@ serve(async (req) => {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
     );
+
   }
 });
