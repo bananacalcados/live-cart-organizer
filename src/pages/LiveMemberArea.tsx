@@ -809,7 +809,13 @@ export default function LiveMemberArea() {
   const trackStep = useCallback((eventType: string, data?: Record<string, unknown>) => {
     lastPayStepRef.current = eventType;
     trackPaymentStepRef.current(eventType, data);
-  }, []);
+    // AddPaymentInfo: a cliente abriu/enviou um meio de pagamento.
+    if (/^(pix|card|debit)_/.test(eventType)) {
+      const oid = state?.order?.id;
+      if (oid) fireOnce(`api:${oid}`, () => void fireAddPaymentInfo(metaBase()));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.order?.id, metaBase]);
 
   const isPaidRef = useRef(false);
   isPaidRef.current = !!state?.order?.is_paid;
