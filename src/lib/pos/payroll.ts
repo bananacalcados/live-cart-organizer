@@ -33,6 +33,10 @@ export interface PayrollPerson {
   is_active: boolean;
   receives_all_lives: boolean;
   manual_goal_value: number | null;
+  /** Salário fixo mensal (permanente, cadastrado na pessoa). */
+  base_salary?: number | null;
+  /** Gratificação de cargo de confiança em % sobre o salário fixo. */
+  role_bonus_percent?: number | null;
 }
 
 export interface PayrollScaleRow {
@@ -125,6 +129,10 @@ export interface PersonRow {
   achievementPct: number; // 0-100+
   commissionPct: number; // % aplicado
   commissionValue: number;
+  baseSalary: number;        // salário fixo cadastrado
+  roleBonusPercent: number;  // % de gratificação de cargo
+  roleBonusValue: number;    // salário fixo * %
+  totalPayout: number;       // salário + gratificação + comissão
   tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
   liveEvents: LiveEventBreakdown[]; // eventos que incidem no rateio de live da pessoa
@@ -223,6 +231,10 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       achievementPct: 0,
       commissionPct: 0,
       commissionValue: 0,
+      baseSalary: 0,
+      roleBonusPercent: 0,
+      roleBonusValue: 0,
+      totalPayout: 0,
       tiers: [],
       stores: [],
       liveEvents: [],
@@ -377,6 +389,10 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.achievementPct = row.goal > 0 ? (row.total / row.goal) * 100 : 0;
     row.commissionPct = row.goal > 0 ? commissionPctForAchievement(row.achievementPct, scale) : 0;
     row.commissionValue = row.total * (row.commissionPct / 100);
+    row.baseSalary = Math.max(0, Number(p.base_salary || 0));
+    row.roleBonusPercent = Math.max(0, Number(p.role_bonus_percent || 0));
+    row.roleBonusValue = row.baseSalary * (row.roleBonusPercent / 100);
+    row.totalPayout = row.baseSalary + row.roleBonusValue + row.commissionValue;
     row.tiers = buildGoalTiers(row.goal, row.total, scale);
   }
 

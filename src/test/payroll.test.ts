@@ -207,3 +207,37 @@ describe("computePayroll — rateio por evento e opt-out", () => {
     expect(valeria.channels.live_centro).toBe(200);
   });
 });
+
+describe("computePayroll — salário fixo e gratificação de cargo", () => {
+  const stores = [{ id: "st-perola", name: "Loja Perola" }];
+  const sellers = [{ id: "sl-viviane", name: "Viviane físico", store_id: "st-perola" }];
+  const peopleSellers = [{ person_id: "p-viviane", seller_id: "sl-viviane" }];
+  const sales = [
+    { id: "F1", store_id: "st-perola", seller_id: "sl-viviane", sale_type: "physical", total: 10000, shipping_cost: 0, payment_details: null },
+  ];
+
+  it("soma salário + gratificação (40%) + comissão no total a pagar", () => {
+    const res = computePayroll({
+      sales, sellers, stores,
+      people: [{ id: "p-viviane", name: "Viviane", is_active: true, receives_all_lives: false, manual_goal_value: 10000, base_salary: 2000, role_bonus_percent: 40 }],
+      peopleSellers, liveParticipants: [], scale, goals: [],
+    });
+    const v = res.people[0];
+    expect(v.baseSalary).toBe(2000);
+    expect(v.roleBonusValue).toBe(800);
+    expect(v.commissionValue).toBe(100); // 10000 * 1% (100% da meta)
+    expect(v.totalPayout).toBe(2900);
+  });
+
+  it("sem salário cadastrado o total a pagar é só a comissão", () => {
+    const res = computePayroll({
+      sales, sellers, stores,
+      people: [{ id: "p-viviane", name: "Viviane", is_active: true, receives_all_lives: false, manual_goal_value: 10000 }],
+      peopleSellers, liveParticipants: [], scale, goals: [],
+    });
+    const v = res.people[0];
+    expect(v.baseSalary).toBe(0);
+    expect(v.roleBonusValue).toBe(0);
+    expect(v.totalPayout).toBe(100);
+  });
+});

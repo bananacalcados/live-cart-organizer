@@ -30,6 +30,7 @@ interface Props {
 
 interface Person {
   id: string; name: string; is_active: boolean; receives_all_lives: boolean; manual_goal_value: number | null;
+  base_salary: number | null; role_bonus_percent: number | null;
 }
 interface Seller { id: string; name: string; store_id: string | null; }
 interface Store { id: string; name: string; }
@@ -71,7 +72,7 @@ export function POSPayrollTab({ periodRange }: Props) {
       const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
-        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value"),
+        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value, base_salary, role_bonus_percent"),
         supabase.from("pos_commission_people_sellers").select("person_id, seller_id"),
         supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
         supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
@@ -128,6 +129,16 @@ export function POSPayrollTab({ periodRange }: Props) {
   const result = useMemo(() => computePayroll({
     sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
   }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
+
+  const totals = useMemo(() => result.people.reduce(
+    (acc, p) => ({
+      commission: acc.commission + p.commissionValue,
+      salary: acc.salary + p.baseSalary,
+      bonus: acc.bonus + p.roleBonusValue,
+      payout: acc.payout + p.totalPayout,
+    }),
+    { commission: 0, salary: 0, bonus: 0, payout: 0 },
+  ), [result.people]);
 
   const dialogPerson = useMemo(
     () => result.people.find((p) => p.personId === liveDialogPerson) || null,
@@ -187,6 +198,23 @@ export function POSPayrollTab({ periodRange }: Props) {
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 
+  /** Salário fixo / gratificação de cargo — permanentes na ficha da vendedora. */
+  const setSalaryField = async (
+    personId: string,
+    field: "base_salary" | "role_bonus_percent",
+    value: number,
+  ) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .update({ [field]: value } as any).eq("id", personId);
+      if (error) throw error;
+      setPeople((prev) => prev.map((p) => (p.id === personId ? { ...p, [field]: value } : p)));
+      toast.success("Salário atualizado");
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+
   const toggleLiveParticipant = async (personId: string, storeId: string, checked: boolean) => {
     setSaving(true);
     try {
@@ -214,11 +242,12 @@ export function POSPayrollTab({ periodRange }: Props) {
   };
 
   const exportCsv = () => {
-    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$"];
+    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$", "Salário fixo", "% Cargo", "Gratificação R$", "Total a pagar"];
     const lines = result.people.map((p) => [
       p.name,
       ...CHANNEL_KEYS.map((k) => p.channels[k].toFixed(2)),
       p.total.toFixed(2), p.goal.toFixed(2), p.achievementPct.toFixed(1), p.commissionPct.toFixed(2), p.commissionValue.toFixed(2),
+      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2), p.totalPayout.toFixed(2),
     ].join(";"));
     const csv = [header.join(";"), ...lines].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -380,7 +409,7 @@ export function POSPayrollTab({ periodRange }: Props) {
               {/* People config */}
               {people.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Pessoas · híbrida (todas as lives) · meta manual · divisão de live</h4>
+                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Pessoas · salário fixo · gratificação de cargo · híbrida · meta manual · divisão de live</h4>
                   <div className="space-y-2">
                     {people.filter((p) => p.is_active).map((p) => {
                       const linked = peopleSellers.filter((ps) => ps.person_id === p.id)
@@ -404,6 +433,33 @@ export function POSPayrollTab({ periodRange }: Props) {
                                 }}
                                 className="w-24 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
                               />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Salário fixo R$</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.base_salary ?? ""} placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.base_salary || 0)) setSalaryField(p.id, "base_salary", v);
+                                }}
+                                className="w-28 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Gratificação cargo %</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.role_bonus_percent ?? ""} placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.role_bonus_percent || 0)) setSalaryField(p.id, "role_bonus_percent", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                              <span className="text-[10px] text-zinc-500">
+                                = {BRL(Number(p.base_salary || 0) * (Number(p.role_bonus_percent || 0) / 100))}
+                              </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-4 flex-wrap pl-1">
@@ -462,6 +518,9 @@ export function POSPayrollTab({ periodRange }: Props) {
                     <th className="text-right p-2 font-semibold">% Meta</th>
                     <th className="text-right p-2 font-semibold">% Com.</th>
                     <th className="text-right p-2 font-semibold">Comissão</th>
+                    <th className="text-right p-2 font-semibold">Salário</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Gratificação</th>
+                    <th className="text-right p-2 font-semibold text-sky-300">Total a pagar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,10 +570,20 @@ export function POSPayrollTab({ periodRange }: Props) {
                         ) : "—"}
                       </td>
                       <td className="p-2 text-right font-bold text-orange-400">{BRL(p.commissionValue)}</td>
+                      <td className="p-2 text-right text-zinc-300">{p.baseSalary ? BRL(p.baseSalary) : "—"}</td>
+                      <td className="p-2 text-right text-zinc-300">
+                        {p.roleBonusValue ? (
+                          <>
+                            {BRL(p.roleBonusValue)}
+                            <span className="block text-[9px] text-zinc-500">{p.roleBonusPercent.toLocaleString("pt-BR")}%</span>
+                          </>
+                        ) : "—"}
+                      </td>
+                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.totalPayout)}</td>
                     </tr>
                     {isOpen && p.goal > 0 && (
                       <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
-                        <td colSpan={CHANNEL_KEYS.length + 6} className="p-3">
+                        <td colSpan={CHANNEL_KEYS.length + 9} className="p-3">
                           <div className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold mb-1.5">
                             Metas escalonadas — {p.name}
                           </div>
@@ -526,9 +595,21 @@ export function POSPayrollTab({ periodRange }: Props) {
                     );
                   })}
                   {result.people.length === 0 && (
-                    <tr><td colSpan={CHANNEL_KEYS.length + 6} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
+                    <tr><td colSpan={CHANNEL_KEYS.length + 9} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
                   )}
                 </tbody>
+                {result.people.length > 0 && (
+                  <tfoot className="bg-zinc-800/80 text-zinc-200 font-semibold">
+                    <tr>
+                      <td className="p-2 sticky left-0 bg-zinc-800/80">TOTAL</td>
+                      <td colSpan={CHANNEL_KEYS.length + 4} />
+                      <td className="p-2 text-right text-orange-400">{BRL(totals.commission)}</td>
+                      <td className="p-2 text-right">{BRL(totals.salary)}</td>
+                      <td className="p-2 text-right">{BRL(totals.bonus)}</td>
+                      <td className="p-2 text-right text-sky-300">{BRL(totals.payout)}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </ScrollArea>
           </div>
