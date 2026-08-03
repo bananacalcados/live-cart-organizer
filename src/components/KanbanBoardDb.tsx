@@ -3,6 +3,8 @@ import { STAGES, OrderStage, Stage } from "@/types/order";
 import { OrderCardDb } from "./OrderCardDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+
 
 interface KanbanBoardDbProps {
   orders: DbOrder[];
@@ -22,16 +24,25 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
     moveOrder(orderId, newStage);
   };
 
-  const getOrdersByStage = (stage: OrderStage) =>
-    orders.filter((order) => order.stage === stage);
-
-  // Nenhum pedido pode ficar invisível: etapas fora das colunas configuradas
-  // (ex.: modo Área de Membros) aparecem numa coluna extra "Outras etapas".
+  // Pedido pago SEMPRE aparece na coluna PAGO, mesmo que a etapa atual não exista
+  // nas colunas configuradas (ex.: modo Área de Membros com etapa "no_response").
   const knownStageIds = new Set(stages.map((s) => s.id));
-  const orphanOrders = orders.filter((o) => !knownStageIds.has(o.stage as OrderStage));
+  const hasPaidColumn = knownStageIds.has("paid" as OrderStage);
+
+  const resolveStage = (order: DbOrder): string => {
+    if (knownStageIds.has(order.stage as OrderStage)) return order.stage;
+    if (hasPaidColumn && isOrderMarkedPaid(order)) return "paid";
+    return "__others__";
+  };
+
+  const getOrdersByStage = (stage: OrderStage) =>
+    orders.filter((order) => resolveStage(order) === stage);
+
+  const orphanOrders = orders.filter((o) => resolveStage(o) === "__others__");
   const columns: Stage[] = orphanOrders.length
     ? [...stages, { id: "__others__" as OrderStage, title: "Outras etapas", color: "bg-muted-foreground" }]
     : stages;
+
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
