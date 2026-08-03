@@ -243,7 +243,12 @@ const Index = () => {
                   <Instagram className="h-3 w-3" />
                   Comentários IG
                 </TabsTrigger>
+                <TabsTrigger value="member-leads" className="gap-1">
+                  <UserPlus className="h-3 w-3" />
+                  Leads Área de Membros
+                </TabsTrigger>
               </TabsList>
+
 
             </div>
 
