@@ -652,8 +652,26 @@ export default function LiveMemberArea() {
     );
 
 
+  // Auditoria dos passos de pagamento (abriu PIX/cartão, enviou, recusado...).
+  // Best-effort: nunca pode quebrar ou travar o fluxo de pagamento.
+  const trackPaymentStep = useCallback(
+    (eventType: string, data?: Record<string, unknown>) => {
+      const tk = state?.token;
+      if (!tk) return;
+      callApi({
+        action: "track_payment_step",
+        token: tk,
+        orderId: state?.order?.id,
+        eventType,
+        ...(data || {}),
+      }).catch(() => {});
+    },
+    [state?.token, state?.order?.id],
+  );
+
   const goCheckout = (method: "pix" | "card" | "debit") => {
     if (!state?.order) return;
+    trackPaymentStep("left_to_checkout_link", { method });
     window.location.href = `${state.order.checkout_url}?method=${method}`;
   };
 
