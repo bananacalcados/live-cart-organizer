@@ -559,6 +559,16 @@ export function POSPayrollTab({ periodRange }: Props) {
                         ) : "—"}
                       </td>
                       <td className="p-2 text-right font-bold text-orange-400">{BRL(p.commissionValue)}</td>
+                      <td className="p-2 text-right text-zinc-300">{p.baseSalary ? BRL(p.baseSalary) : "—"}</td>
+                      <td className="p-2 text-right text-zinc-300">
+                        {p.roleBonusValue ? (
+                          <>
+                            {BRL(p.roleBonusValue)}
+                            <span className="block text-[9px] text-zinc-500">{p.roleBonusPercent.toLocaleString("pt-BR")}%</span>
+                          </>
+                        ) : "—"}
+                      </td>
+                      <td className="p-2 text-right font-bold text-sky-300">{BRL(p.totalPayout)}</td>
                     </tr>
                     {isOpen && p.goal > 0 && (
                       <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
