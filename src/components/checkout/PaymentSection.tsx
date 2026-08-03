@@ -294,7 +294,7 @@ export function StepPayment({
 }
 
 // ── PIX Payment Form (step 3) ───────────────────────────────────
-function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPaymentConfirmed }: { orderId: string; amount: number; pixDiscountPercent?: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
+function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPaymentConfirmed, onStepEvent }: { orderId: string; amount: number; pixDiscountPercent?: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void; onStepEvent?: (event: string, data?: Record<string, unknown>) => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
@@ -457,7 +457,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
 // ── Card Payment Form (step 3) — crédito e débito ───────────────
 function CardPaymentForm({
   orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
-  mode = "credit", onSwitchMode, prizeAppliedCents = 0,
+  mode = "credit", onSwitchMode, prizeAppliedCents = 0, onStepEvent,
 }: {
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
@@ -465,6 +465,7 @@ function CardPaymentForm({
   mode?: CardMode;
   onSwitchMode?: (mode: CardMode) => void;
   prizeAppliedCents?: number;
+  onStepEvent?: (event: string, data?: Record<string, unknown>) => void;
 }) {
   const isDebit = mode === "debit";
   const [cardNumber, setCardNumber] = useState("");
