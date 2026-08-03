@@ -922,6 +922,30 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Lead da área de membros também aparece em Marketing > Leads com a origem
+      background((async () => {
+        try {
+          const last8 = suffix8(phone);
+          const { data: existing } = await supabase
+            .from("lp_leads")
+            .select("id")
+            .eq("source", "area_membros")
+            .ilike("phone", `%${last8}`)
+            .limit(1);
+          if (!existing?.length) {
+            await supabase.from("lp_leads").insert({
+              name,
+              phone,
+              source: "area_membros",
+              campaign_tag: event?.name || "Área de Membros",
+              metadata: { event_id: event?.id || null, origin: "minha-area" },
+            });
+          }
+        } catch (e) {
+          console.error("[member-area] falha ao registrar lead no Marketing:", e);
+        }
+      })());
+
       // Ponto 5 — lead entra no CRM unificado (RFM/disparos)
       background(upsertUnified({ phone, name }));
 
