@@ -129,6 +129,10 @@ export interface PersonRow {
   achievementPct: number; // 0-100+
   commissionPct: number; // % aplicado
   commissionValue: number;
+  baseSalary: number;        // salário fixo cadastrado
+  roleBonusPercent: number;  // % de gratificação de cargo
+  roleBonusValue: number;    // salário fixo * %
+  totalPayout: number;       // salário + gratificação + comissão
   tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
   liveEvents: LiveEventBreakdown[]; // eventos que incidem no rateio de live da pessoa
