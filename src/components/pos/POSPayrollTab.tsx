@@ -80,10 +80,10 @@ export function POSPayrollTab({ periodRange }: Props) {
     try {
       const startIso = periodRange.start.toISOString();
       const endIso = periodRange.end.toISOString();
-      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes] = await Promise.all([
+      const [storesRes, sellersRes, peopleRes, psRes, lpRes, scaleRes, goalsRes, salesRes, optOutRes, entriesRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
-        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value, base_salary, role_bonus_percent"),
+        supabase.from("pos_commission_people").select("id, name, is_active, receives_all_lives, manual_goal_value, base_salary, role_bonus_percent, role_title, is_employee_only, provision_13, provision_vacation, provision_notice, provision_charges_percent"),
         supabase.from("pos_commission_people_sellers").select("person_id, seller_id"),
         supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
         supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
@@ -96,7 +96,13 @@ export function POSPayrollTab({ periodRange }: Props) {
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
         supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
+        supabase.from("pos_payroll_period_entries")
+          .select("person_id, overtime_hours, overtime_value, benefits_bonus")
+          .eq("period_start", format(periodRange.start, "yyyy-MM-dd"))
+          .eq("period_end", format(periodRange.end, "yyyy-MM-dd")),
       ]);
+      setPeriodEntries((entriesRes.data || []) as PeriodEntry[]);
+
 
       setStores(storesRes.data || []);
       setSellers((sellersRes.data || []) as Seller[]);
