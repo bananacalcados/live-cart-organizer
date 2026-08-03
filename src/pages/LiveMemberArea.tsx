@@ -30,6 +30,7 @@ import {
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
 import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
+import { captureAttribution } from "@/lib/metaAttribution";
 import {
   fireInitiateCheckout,
   fireAddShippingInfo,
@@ -199,6 +200,7 @@ export default function LiveMemberArea() {
   // com correspondência fraca e sem sinal de anúncio.
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
+    captureAttribution();
     initMetaPixel();
     trackPageView();
   }, []);
