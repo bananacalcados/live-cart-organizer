@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
+import { captureAttribution, resolveFbclid, resolveUtm } from "@/lib/metaAttribution";
+
 import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
   Users, Video, Star, Music2, Youtube, Facebook, Loader2, ChevronRight, Sparkles
@@ -77,15 +79,18 @@ export default function LinkPageView() {
 
   useEffect(() => {
     if (!slug) return;
+    // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+    captureAttribution();
     (async () => {
       try {
         const { data: res, error } = await supabase.functions.invoke("link-page-public", {
           body: {
             slug,
             track: {
-              utm_source: searchParams.get("utm_source"),
-              utm_medium: searchParams.get("utm_medium"),
-              utm_campaign: searchParams.get("utm_campaign"),
+              utm_source: resolveUtm("utm_source"),
+              utm_medium: resolveUtm("utm_medium"),
+              utm_campaign: resolveUtm("utm_campaign"),
+
               referrer: document.referrer || null,
               user_agent: navigator.userAgent,
             },
@@ -132,7 +137,7 @@ export default function LinkPageView() {
           name: leadName.trim(),
           phone: leadPhone,
           // Sinais de clique da Meta (memória de atribuição de 90 dias)
-          fbclid: searchParams.get("fbclid"),
+          fbclid: resolveFbclid(),
           fbp: getFbp(),
           fbc: getFbc(),
           source_url: window.location.href,
@@ -155,7 +160,7 @@ export default function LinkPageView() {
         itemId: item.id,
         sellerId: data.page.seller_id,
         leadId,
-        utm_source: searchParams.get("utm_source"),
+        utm_source: resolveUtm("utm_source"),
         referrer: document.referrer || null,
       },
     }).catch(() => {});

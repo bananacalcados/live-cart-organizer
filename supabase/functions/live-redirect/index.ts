@@ -4,6 +4,8 @@
 // Also runs a lightweight HEAD validation on the IG url (cached ~30s in memory).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +52,24 @@ serve(async (req) => {
     const slug = (url.searchParams.get("slug") || "").trim().toLowerCase();
     const phone = url.searchParams.get("lead") || url.searchParams.get("phone") || null;
     const utmSource = url.searchParams.get("utm_source") || null;
+    const fbclid = url.searchParams.get("fbclid") || null;
+    const fbcParam = url.searchParams.get("fbc") || null;
+    const fbpParam = url.searchParams.get("fbp") || null;
+
+    // Etapa E — se o link veio de um disparo (com telefone), guarda os sinais
+    // de clique na memória de atribuição de 90 dias.
+    if (phone && (fbclid || fbcParam || fbpParam)) {
+      saveMetaAttribution(supabase as never, {
+        phone,
+        fbc: fbcParam || buildFbc(fbclid),
+        fbp: fbpParam,
+        fbclid,
+        source_url: req.headers.get("referer"),
+        origin: "live_redirect",
+      }).catch(() => {});
+    }
+
+
 
     if (!slug) return json({ error: "slug is required" }, 400);
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
+
 
 /**
  * Redirecionador universal para a live do Instagram.
@@ -27,16 +29,26 @@ export default function LiveRedirectPage() {
       return;
     }
 
+    // Etapa E — captura os sinais de clique ANTES de mandar a cliente embora.
+    captureAttribution();
+    const attr = attributionPayload();
+
     const qs = new URLSearchParams({ slug });
     const lead = params.get("lead") || params.get("phone");
-    const utm = params.get("utm_source");
+    const utm = attr.utm_source || params.get("utm_source");
     if (lead) qs.set("lead", lead);
     if (utm) qs.set("utm_source", utm);
+    if (attr.utm_medium) qs.set("utm_medium", attr.utm_medium);
+    if (attr.utm_campaign) qs.set("utm_campaign", attr.utm_campaign);
+    if (attr.fbclid) qs.set("fbclid", attr.fbclid);
+    if (attr.fbc) qs.set("fbc", attr.fbc);
+    if (attr.fbp) qs.set("fbp", attr.fbp);
 
     fetch(`${supabaseUrl}/functions/v1/live-redirect?${qs.toString()}`, {
       headers: { apikey: anon, "Content-Type": "application/json" },
     })
       .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+
       .then(({ ok, d }) => {
         if (!ok && d?.error === "not_found") {
           setStatus("error");

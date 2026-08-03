@@ -3,7 +3,10 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
+import { resolveFbc, resolveFbp } from "./metaAttribution";
+
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
+
 
 /** Inject the fbevents.js SDK and initialise the pixel (idempotent). */
 export function initMetaPixel() {
@@ -47,24 +50,19 @@ export function readCookie(name: string): string | null {
   }
 }
 
-/** Get the Meta `_fbp` browser cookie (1st-party). */
+/** Get the Meta `_fbp` browser cookie (1st-party), falling back to the 90-day memory. */
 export function getFbp(): string | null {
-  return readCookie("_fbp");
+  return resolveFbp();
 }
 
 /**
- * Get the Meta `_fbc` cookie. If missing but the URL has `?fbclid=...`,
- * synthesize a valid `_fbc` value (`fb.1.<timestamp>.<fbclid>`).
+ * Get the Meta `_fbc` cookie. If missing, falls back to `?fbclid=...` in the URL
+ * and then to the 90-day browser attribution memory (captured at the entry page).
  */
 export function getFbc(): string | null {
-  const cookie = readCookie("_fbc");
-  if (cookie) return cookie;
-  try {
-    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
-    if (fbclid) return `fb.1.${Date.now()}.${fbclid}`;
-  } catch {}
-  return null;
+  return resolveFbc();
 }
+
 
 /** Browser-side options for tracked events (incl. dedupe via eventID). */
 export interface TrackOptions {

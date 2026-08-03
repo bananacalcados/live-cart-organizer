@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
+import { captureAttribution, resolveFbclid } from "@/lib/metaAttribution";
 import { cpGetSale, cpCreateOrder, cpUpdateOrder } from "@/lib/checkoutPublic";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
@@ -115,6 +116,8 @@ const CHECKOUT_BASE_URL = "https://checkout.bananacalcados.com.br";
 // ─── Component ───
 export default function CatalogLeadPage() {
   const { slug } = useParams<{ slug: string }>();
+  // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+  useEffect(() => { captureAttribution(); }, []);
   const [config, setConfig] = useState<PageConfig | null>(null);
   const [productMap, setProductMap] = useState<Map<string, CatalogProduct>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -315,7 +318,7 @@ export default function CatalogLeadPage() {
       try {
         const fbp = getFbp();
         const fbc = getFbc();
-        const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+        const fbclid = resolveFbclid();
         if (fbp || fbc || fbclid) {
           supabase.functions.invoke("meta-attribution-capture", {
             body: {
