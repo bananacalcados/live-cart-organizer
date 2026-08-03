@@ -1304,10 +1304,16 @@ export default function LiveMemberArea() {
               ) : order.confirmed_at ? (
                 <div className="space-y-3">
                   {mm && (
-                    <div className="flex items-center justify-center gap-2 rounded-xl bg-destructive/10 text-destructive font-bold py-3">
-                      <Timer className="h-5 w-5" /> Pague em {mm}:{ss}
+                    <div className="rounded-xl bg-destructive/10 text-destructive py-3 px-3 text-center space-y-0.5">
+                      <div className="flex items-center justify-center gap-2 font-bold">
+                        <Timer className="h-5 w-5" /> Pague em {mm}:{ss}
+                      </div>
+                      <div className="text-xs font-semibold">
+                        👜 e concorra a uma bolsa!
+                      </div>
                     </div>
                   )}
+
                   {!state?.onboardingComplete ? (
                     <Button
                       className="w-full h-16 text-base font-bold"
