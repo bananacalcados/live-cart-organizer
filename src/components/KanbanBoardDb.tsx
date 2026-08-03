@@ -65,7 +65,7 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
       setCompleteRegs((prev) => ({ ...prev, ...next }));
     })();
     return () => { cancelled = true; };
-  }, [unknownKey]);
+  }, [unknownKey, completeRegs]);
 
   /**
    * Tempo real: quando a cliente preenche/atualiza o cadastro na área de
