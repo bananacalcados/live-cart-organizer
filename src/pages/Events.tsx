@@ -1,8 +1,9 @@
 import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
+import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target, Trophy, Images } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target, Trophy, Images, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -818,7 +819,15 @@ const Events = () => {
             <TabsTrigger value="carousel-templates" className="gap-1">
               <Images className="h-4 w-4" /> Templates API
             </TabsTrigger>
+            <TabsTrigger value="member-leads" className="gap-1">
+              <UserPlus className="h-4 w-4" /> Leads Área de Membros
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="member-leads">
+            <MemberAreaLeadsPanel />
+          </TabsContent>
+
 
 
           <TabsContent value="events">
