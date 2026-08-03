@@ -1446,6 +1446,7 @@ export default function LiveMemberArea() {
                         installmentConfig={installmentConfig}
                         stepBadge={null}
                         onPaymentConfirmed={handlePaymentConfirmed}
+                        onStepEvent={trackPaymentStep}
                       />
                       <button
                         type="button"
