@@ -29,6 +29,16 @@ import {
   type CustomerFormData,
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
+import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
+import {
+  fireInitiateCheckout,
+  fireAddShippingInfo,
+  fireAddPaymentInfo,
+  firePurchaseBrowser,
+  type CheckoutEventBase,
+} from "@/lib/checkoutMetaEvents";
+
+
 
 
 type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
