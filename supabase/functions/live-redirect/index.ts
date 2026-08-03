@@ -4,6 +4,8 @@
 // Also runs a lightweight HEAD validation on the IG url (cached ~30s in memory).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
