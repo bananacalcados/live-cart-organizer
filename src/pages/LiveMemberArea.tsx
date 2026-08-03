@@ -1198,6 +1198,28 @@ export default function LiveMemberArea() {
         )}
 
 
+        {/* Meus prêmios */}
+        {Array.isArray((state as any)?.prizes) && (state as any).prizes.length > 0 && (
+          <section className="mb-6 rounded-2xl border-2 border-orange-400/60 bg-orange-500/10 p-4 space-y-2">
+            <h2 className="font-bold text-base flex items-center gap-2">🎁 Meus prêmios</h2>
+            {(state as any).prizes.map((p: any) => (
+              <div key={p.id} className="rounded-xl bg-background/70 px-3 py-2">
+                <p className="text-sm font-bold">{p.label}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {p.is_physical ? "Prêmio físico — enviado junto com seu pedido" : `Cupom ${p.coupon_code}`}
+                  {" · "}
+                  {p.days_left <= 0
+                    ? "expira hoje"
+                    : p.days_left === 1
+                    ? "expira em 1 dia"
+                    : `expira em ${p.days_left} dias`}
+                </p>
+              </div>
+            ))}
+          </section>
+        )}
+
+
         {/* Meu pedido */}
         <section className="rounded-2xl border-2 border-border p-4 space-y-3">
           <h2 className="font-bold text-base flex items-center gap-2">

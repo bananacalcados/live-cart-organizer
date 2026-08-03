@@ -531,6 +531,26 @@ Deno.serve(async (req) => {
 
 
       const history = opts.skipHistory ? null : await loadHistory(session.phone, order?.id || null);
+
+      // ── Prêmios ativos da roleta (não usados e dentro da validade).
+      let prizes: any[] = [];
+      try {
+        const { data: prizeRows } = await supabase.rpc("get_customer_active_prizes", {
+          p_phone: String(session.phone || "").replace(/\D/g, ""),
+        });
+        prizes = (prizeRows || []).map((p: any) => ({
+          id: p.id,
+          label: p.prize_label,
+          type: p.prize_type,
+          value: Number(p.prize_value || 0),
+          coupon_code: p.coupon_code,
+          expires_at: p.expires_at,
+          days_left: Number(p.days_left || 0),
+          is_physical: p.prize_type === "product",
+        }));
+      } catch (_e) {
+        prizes = [];
+      }
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
 
 
@@ -721,6 +741,7 @@ Deno.serve(async (req) => {
           : null,
 
 
+        prizes,
         history: history ?? undefined,
       };
     }
