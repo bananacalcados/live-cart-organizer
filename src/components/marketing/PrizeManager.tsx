@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Gift, Search, Plus, Trash2, CheckCircle, Clock, Phone,
-  Mail, Tag, Filter, X, Loader2
+  Mail, Tag, Filter, X, Loader2, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
