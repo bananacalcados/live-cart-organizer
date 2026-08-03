@@ -1,3 +1,6 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { redeemPrizesForOrder } from "./prize-discount.ts";
+
 export type PaymentConfirmedPayload = {
   pedido_id: string;
   loja?: string;
@@ -24,6 +27,9 @@ async function triggerLiveteConfirmation(orderId: string) {
 }
 
 export async function notifyPaymentConfirmed(payload: PaymentConfirmedPayload) {
+  // 🎡 Baixa os prêmios da roleta reservados para este pedido (Fase 3).
+  await redeemPrizesOnConfirmation(payload.pedido_id);
+
   const webhookUrl = Deno.env.get("AGENTE2_PAGAMENTO_CONFIRMADO") || "https://api.bananacalcados.com.br/webhook/pagamento-confirmado";
 
   const body = {
@@ -69,5 +75,16 @@ export async function notifyPaymentConfirmed(payload: PaymentConfirmedPayload) {
     };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function redeemPrizesOnConfirmation(orderId: string) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key || !orderId) return;
+    await redeemPrizesForOrder(createClient(url, key), orderId);
+  } catch (err) {
+    console.error("[payment-confirmed] redeem prizes error:", err);
   }
 }

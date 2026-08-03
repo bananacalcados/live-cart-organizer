@@ -4,6 +4,7 @@ import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
+import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -84,6 +85,7 @@ serve(async (req) => {
     let discountValue: number | null = null;
     let customer: Record<string, unknown> | null = null;
     let shippingAmount = 0;
+    let recordPhone: string | null = null;
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -97,6 +99,7 @@ serve(async (req) => {
       discountValue = order.discount_value;
       customer = order.customer as Record<string, unknown> | null;
       shippingAmount = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
+      recordPhone = (order.customer as any)?.whatsapp || null;
     } else {
       // Fallback: try pos_sales
       const { data: sale, error: saleError } = await supabase
@@ -123,6 +126,8 @@ serve(async (req) => {
 
       discountType = sale.discount ? "fixed" : null;
       discountValue = sale.discount ? Number(sale.discount) : null;
+      recordPhone = (sale as any).customer_phone || ((sale.payment_details as any)?.customer_phone ?? null);
+
       
       // Extract shipping from payment_details
       const pd = sale.payment_details as Record<string, unknown> | null;
@@ -153,6 +158,21 @@ serve(async (req) => {
         ? subtotal * (discountValue / 100)
         : discountValue;
     }
+    // 🎡 Prêmio da roleta: abatimento automático (server-side).
+    // Aplica o melhor cupom ativo da cliente (%, valor fixo ou frete grátis)
+    // e reserva o prêmio para este pedido. Nunca bloqueia a cobrança.
+    const prizePhone = (payer?.phone as string) || recordPhone;
+    const prize = await resolveAndReservePrize(supabase, {
+      orderId: String(orderId),
+      phone: prizePhone,
+      baseAmount: Math.max(0, subtotal - discountAmount),
+      shippingAmount,
+    });
+    if (prize) {
+      discountAmount += prize.discountAmount;
+      if (prize.freeShipping) shippingAmount = 0;
+    }
+
     let totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
 
     // Fallback: se o chamador não informou o percentual (chat, módulo Eventos, links antigos),
@@ -323,6 +343,14 @@ serve(async (req) => {
         expirationDate: mpPayment.date_of_expiration || null,
         amount: totalAmount.toFixed(2),
         pixDiscountPercent: pixDiscountPct,
+        prize: prize
+          ? {
+              label: prize.label,
+              couponCode: prize.couponCode,
+              discountAmount: prize.discountAmount,
+              freeShipping: prize.freeShipping,
+            }
+          : null,
       }),
       {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
