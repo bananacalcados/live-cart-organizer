@@ -31,7 +31,14 @@ interface Props {
 interface Person {
   id: string; name: string; is_active: boolean; receives_all_lives: boolean; manual_goal_value: number | null;
   base_salary: number | null; role_bonus_percent: number | null;
+  role_title: string | null; is_employee_only: boolean | null;
+  provision_13: boolean | null; provision_vacation: boolean | null; provision_notice: boolean | null;
+  provision_charges_percent: number | null;
 }
+interface PeriodEntry {
+  person_id: string; overtime_hours: number | null; overtime_value: number | null; benefits_bonus: number | null;
+}
+
 interface Seller { id: string; name: string; store_id: string | null; }
 interface Store { id: string; name: string; }
 
