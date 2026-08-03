@@ -242,11 +242,12 @@ export function POSPayrollTab({ periodRange }: Props) {
   };
 
   const exportCsv = () => {
-    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$"];
+    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$", "Salário fixo", "% Cargo", "Gratificação R$", "Total a pagar"];
     const lines = result.people.map((p) => [
       p.name,
       ...CHANNEL_KEYS.map((k) => p.channels[k].toFixed(2)),
       p.total.toFixed(2), p.goal.toFixed(2), p.achievementPct.toFixed(1), p.commissionPct.toFixed(2), p.commissionValue.toFixed(2),
+      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2), p.totalPayout.toFixed(2),
     ].join(";"));
     const csv = [header.join(";"), ...lines].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
