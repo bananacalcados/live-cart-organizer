@@ -33,6 +33,10 @@ export interface PayrollPerson {
   is_active: boolean;
   receives_all_lives: boolean;
   manual_goal_value: number | null;
+  /** Salário fixo mensal (permanente, cadastrado na pessoa). */
+  base_salary?: number | null;
+  /** Gratificação de cargo de confiança em % sobre o salário fixo. */
+  role_bonus_percent?: number | null;
 }
 
 export interface PayrollScaleRow {
