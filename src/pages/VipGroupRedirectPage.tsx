@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
+
 
 export default function VipGroupRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
