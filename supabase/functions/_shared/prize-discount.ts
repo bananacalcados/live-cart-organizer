@@ -117,9 +117,12 @@ export async function redeemPrizesForOrder(supabase: any, orderId: string) {
     if (!orderId) return;
     const { data, error } = await supabase
       .from("customer_prizes")
-      .update({ is_redeemed: true, redeemed_at: new Date().toISOString() })
+      .update({ is_redeemed: true, redeemed_at: new Date().toISOString(), fulfillment_status: "shipped" })
       .eq("applied_order_id", orderId)
       .eq("is_redeemed", false)
+      // ⚠️ Prêmio FÍSICO tem ciclo próprio (disponível → reservado → enviado/perdido).
+      // Ele vem da roleta de PAGADORES, então confirmação de pagamento NÃO significa entrega.
+      .neq("prize_type", "product")
       .select("id, coupon_code");
     if (error) {
       console.error("[prize-discount] erro ao baixar prêmios:", error.message);
