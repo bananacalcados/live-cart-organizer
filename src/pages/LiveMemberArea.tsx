@@ -588,6 +588,43 @@ export default function LiveMemberArea() {
       () => loadShippingOptions(addr.cep),
     );
 
+  /**
+   * Salvamento em tempo real do endereço: cada campo preenchido (inclusive o
+   * CEP sozinho, já com rua/bairro/cidade do ViaCEP) é gravado no cadastro em
+   * segundo plano, ANTES de a cliente clicar em "Continuar". Assim a equipe vê
+   * o endereço no card/pedido no momento em que ela digita.
+   */
+  const lastAddrSaveRef = useRef<string>("");
+  useEffect(() => {
+    if (step !== "onboarding" || onboardStep !== "address") return;
+    if (!state?.token) return;
+    const details = {
+      cep: String(addr.cep || "").replace(/\D/g, ""),
+      address: addr.address || "",
+      address_number: addr.address_number || "",
+      complement: addr.complement || "",
+      neighborhood: addr.neighborhood || "",
+      city: addr.city || "",
+      state: addr.state || "",
+    };
+    if (details.cep.length !== 8) return;
+    const sig = JSON.stringify(details);
+    if (sig === lastAddrSaveRef.current) return;
+    const t = window.setTimeout(() => {
+      lastAddrSaveRef.current = sig;
+      // Envia só o que está preenchido: campos vazios não sobrescrevem dados já salvos.
+      const partial = Object.fromEntries(
+        Object.entries(details).filter(([, v]) => String(v || "").trim() !== ""),
+      );
+      // Rascunho: falhas (ex.: otp_required) são silenciosas — a etapa final avisa.
+      act({ action: "save_details", details: partial }, { quiet: true });
+    }, 700);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, onboardStep, addr, state?.token]);
+
+
+
   /** Pula etapas cujos dados já estão salvos no cadastro da cliente. */
   const nextAfter = (current: OnboardStep): OnboardStep | "area" => {
     const ob: any = state?.onboarding || {};
