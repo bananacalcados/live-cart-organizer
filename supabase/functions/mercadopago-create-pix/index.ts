@@ -40,8 +40,28 @@ serve(async (req) => {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Contexto capturado fora do try: qualquer falha na geração do PIX vira um
+  // registro em pos_checkout_attempts (antes esse erro não deixava rastro).
+  const ctx: {
+    orderId: string;
+    amount: number | null;
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+    stage: string;
+  } = { orderId: "", amount: null, name: null, phone: null, email: null, stage: "start" };
+
   try {
     const { orderId, payer, pixDiscountPercent } = await req.json();
+
+    ctx.orderId = String(orderId || "");
+    ctx.name = (payer?.firstName ? `${payer.firstName} ${payer?.lastName || ""}`.trim() : null) || null;
+    ctx.phone = (payer?.phone as string) || null;
+    ctx.email = (payer?.email as string) || null;
 
     if (!orderId) {
       throw new Error("orderId is required");
@@ -49,9 +69,6 @@ serve(async (req) => {
 
     let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Resolve qual conta MP usar (ativa no banco, ou env como fallback)
     const mpAccount = await getActiveMpAccount(supabase);
