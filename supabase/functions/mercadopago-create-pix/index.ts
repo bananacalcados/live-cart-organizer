@@ -98,6 +98,7 @@ serve(async (req) => {
       discountValue = order.discount_value;
       customer = order.customer as Record<string, unknown> | null;
       shippingAmount = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
+      recordPhone = (order.customer as any)?.whatsapp || null;
     } else {
       // Fallback: try pos_sales
       const { data: sale, error: saleError } = await supabase
