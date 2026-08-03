@@ -15,6 +15,7 @@ import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
 import { OrderFullViewDialog } from "./OrderFullViewDialog";
 import { MarkOrderPaidDialog } from "./MarkOrderPaidDialog";
+import { CustomerPrizeBadges } from "./prizes/CustomerPrizes";
 import { PayOnDeliveryDialog } from "./PayOnDeliveryDialog";
 
 
@@ -701,6 +702,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Brinde{order.gift_description ? `: ${order.gift_description}` : ""}
           </Badge>
         )}
+        <CustomerPrizeBadges phone={order.customer?.whatsapp} />
         {order.free_shipping && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <Truck className="h-3 w-3 mr-1" />

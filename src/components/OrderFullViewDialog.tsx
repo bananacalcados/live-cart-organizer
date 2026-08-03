@@ -21,6 +21,7 @@ import {
   Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { CustomerPrizeList } from "./prizes/CustomerPrizes";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
 
@@ -270,6 +271,16 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
               />
               <Field icon={IdCard} label="CPF" value={fmtCpf(reg?.cpf)} copyable={reg?.cpf} />
               <Field icon={Mail} label="E-mail" value={reg?.email} copyable={reg?.email} />
+            </Section>
+
+            {/* Prêmios da roleta */}
+            <Section title="Prêmios da roleta" icon={Gift} className="lg:col-span-2">
+              <CustomerPrizeList phone={reg?.whatsapp || order.customer?.whatsapp} />
+              {data.has_gift && data.gift_description && (
+                <p className="mt-2 text-sm font-semibold text-accent">
+                  🎁 Brinde no pedido: {data.gift_description}
+                </p>
+              )}
             </Section>
 
             {/* Endereço + entrega */}
