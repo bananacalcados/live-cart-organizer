@@ -291,6 +291,10 @@ const Index = () => {
             <TabsContent value="ig-comments">
               {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
             </TabsContent>
+
+            <TabsContent value="member-leads">
+              <MemberAreaLeadsPanel eventId={currentEventId} />
+            </TabsContent>
           </Tabs>
 
         </main>
