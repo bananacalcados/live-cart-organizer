@@ -201,6 +201,36 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
   }, [open, order?.id, load]);
 
 
+  // ── Histórico de tentativas de pagamento (auditoria) ──
+  const [payEvents, setPayEvents] = useState<any[]>([]);
+  const loadPayEvents = useCallback(async () => {
+    if (!order?.id) return;
+    const { data } = await (supabase as any)
+      .from("order_payment_events")
+      .select("*")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setPayEvents(Array.isArray(data) ? data : []);
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (!open || !order?.id) return;
+    loadPayEvents();
+    const ch = supabase
+      .channel(`order-pay-events-${order.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_payment_events", filter: `order_id=eq.${order.id}` },
+        () => loadPayEvents(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [open, order?.id, loadPayEvents]);
+
+
   const data = { ...(order as any), ...(row || {}) };
   const products: any[] = Array.isArray(data.products) ? data.products : [];
 
