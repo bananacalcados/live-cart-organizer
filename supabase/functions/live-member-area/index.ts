@@ -3,6 +3,7 @@
 // OTP funciona como "cofre": só libera leitura/edição dos dados pessoais.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
+import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 
 
 const corsHeaders = {
