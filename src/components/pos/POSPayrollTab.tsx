@@ -572,7 +572,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                     </tr>
                     {isOpen && p.goal > 0 && (
                       <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
-                        <td colSpan={CHANNEL_KEYS.length + 6} className="p-3">
+                        <td colSpan={CHANNEL_KEYS.length + 9} className="p-3">
                           <div className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold mb-1.5">
                             Metas escalonadas — {p.name}
                           </div>
@@ -584,9 +584,21 @@ export function POSPayrollTab({ periodRange }: Props) {
                     );
                   })}
                   {result.people.length === 0 && (
-                    <tr><td colSpan={CHANNEL_KEYS.length + 6} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
+                    <tr><td colSpan={CHANNEL_KEYS.length + 9} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
                   )}
                 </tbody>
+                {result.people.length > 0 && (
+                  <tfoot className="bg-zinc-800/80 text-zinc-200 font-semibold">
+                    <tr>
+                      <td className="p-2 sticky left-0 bg-zinc-800/80">TOTAL</td>
+                      <td colSpan={CHANNEL_KEYS.length + 4} />
+                      <td className="p-2 text-right text-orange-400">{BRL(totals.commission)}</td>
+                      <td className="p-2 text-right">{BRL(totals.salary)}</td>
+                      <td className="p-2 text-right">{BRL(totals.bonus)}</td>
+                      <td className="p-2 text-right text-sky-300">{BRL(totals.payout)}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </ScrollArea>
           </div>
