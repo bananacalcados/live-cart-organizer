@@ -157,6 +157,21 @@ serve(async (req) => {
         ? subtotal * (discountValue / 100)
         : discountValue;
     }
+    // 🎡 Prêmio da roleta: abatimento automático (server-side).
+    // Aplica o melhor cupom ativo da cliente (%, valor fixo ou frete grátis)
+    // e reserva o prêmio para este pedido. Nunca bloqueia a cobrança.
+    const prizePhone = (payer?.phone as string) || recordPhone;
+    const prize = await resolveAndReservePrize(supabase, {
+      orderId: String(orderId),
+      phone: prizePhone,
+      baseAmount: Math.max(0, subtotal - discountAmount),
+      shippingAmount,
+    });
+    if (prize) {
+      discountAmount += prize.discountAmount;
+      if (prize.freeShipping) shippingAmount = 0;
+    }
+
     let totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
 
     // Fallback: se o chamador não informou o percentual (chat, módulo Eventos, links antigos),
