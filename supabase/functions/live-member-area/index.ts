@@ -894,11 +894,29 @@ Deno.serve(async (req) => {
         .select()
         .single();
 
-      return json(await buildState(session));
+      const state = await buildState(session);
+
+      // Rastro do caso mais comum de "não consegui pagar": a cliente entra na
+      // área de membros e nenhum pedido do evento casa com o telefone dela
+      // (telefone anotado errado na live, número diferente do usado no login).
+      if (!(state as any)?.order) {
+        flow.phone = phone;
+        flow.name = name;
+        await logFriction(
+          "entrou_sem_pedido",
+          "Cliente entrou na área de membros e nenhum pedido do evento foi localizado pelo telefone",
+          { event_id: event?.id || null, event_name: event?.name || null },
+        );
+      }
+
+      return json(state);
     }
 
     const session = await loadSession(String(body.token || ""));
     if (!session) return json({ ok: false, error: "session_expired" }, 401);
+    flow.phone = session.phone || flow.phone;
+    flow.name = session.name || flow.name;
+
 
     if (action === "state") {
       await supabase
