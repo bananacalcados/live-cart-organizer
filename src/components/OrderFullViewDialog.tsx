@@ -33,6 +33,30 @@ interface OrderFullViewDialogProps {
 
 const fmtMoney = (v: number) => `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
 
+const PAY_EVENT_LABELS: Record<string, string> = {
+  opened_pix: "Abriu PIX",
+  pix_requested: "Solicitou PIX",
+  pix_generated: "PIX gerado",
+  pix_error: "Erro ao gerar PIX",
+  opened_card: "Abriu cartão de crédito",
+  opened_debit: "Abriu cartão de débito",
+  card_submitted: "Enviou cartão",
+  card_3ds_challenge: "Autenticação 3DS aberta",
+  card_approved: "Cartão aprovado",
+  card_failed: "Cartão recusado",
+  abandoned: "Abandonou o pagamento",
+  left_to_checkout_link: "Foi para o link do checkout",
+  entrou_sem_pedido: "Entrou sem pedido",
+};
+
+const PAY_EVENT_TONE: Record<string, string> = {
+  pix_generated: "secondary",
+  card_approved: "default",
+  card_failed: "destructive",
+  pix_error: "destructive",
+  abandoned: "destructive",
+};
+
 const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
 
