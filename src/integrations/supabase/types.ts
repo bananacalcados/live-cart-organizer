@@ -12020,30 +12020,36 @@ export type Database = {
       }
       pos_commission_people: {
         Row: {
+          base_salary: number
           created_at: string
           id: string
           is_active: boolean
           manual_goal_value: number | null
           name: string
           receives_all_lives: boolean
+          role_bonus_percent: number
           updated_at: string
         }
         Insert: {
+          base_salary?: number
           created_at?: string
           id?: string
           is_active?: boolean
           manual_goal_value?: number | null
           name: string
           receives_all_lives?: boolean
+          role_bonus_percent?: number
           updated_at?: string
         }
         Update: {
+          base_salary?: number
           created_at?: string
           id?: string
           is_active?: boolean
           manual_goal_value?: number | null
           name?: string
           receives_all_lives?: boolean
+          role_bonus_percent?: number
           updated_at?: string
         }
         Relationships: []
