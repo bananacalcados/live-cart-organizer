@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { useNavigate, Link } from "react-router-dom";
 import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
 import { Header } from "@/components/Header";
@@ -31,7 +32,7 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, UserPlus } from "lucide-react";
 
 
 import { Button } from "@/components/ui/button";
