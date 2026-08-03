@@ -69,10 +69,37 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Contexto fora do try: qualquer atrito da Área de Membros (cliente sem
+  // pedido localizado, bloqueio por cota, erro inesperado) precisa deixar
+  // rastro no Monitor de Checkout — antes esses casos sumiam sem registro.
+  const flow: { action: string; phone: string | null; name: string | null; orderId: string | null } = {
+    action: "",
+    phone: null,
+    name: null,
+    orderId: null,
+  };
+
+  /** Registra atrito da área de membros. Best-effort, nunca lança. */
+  async function logFriction(kind: string, message: string, extra?: Record<string, unknown>) {
+    await logCheckoutFailure(supabase, {
+      sale_id: flow.orderId || `member-area:${flow.phone || "anon"}`,
+      payment_method: "member_area",
+      gateway: "member_area",
+      status: "error",
+      error_message: `[${kind}] ${message}`,
+      customer_name: flow.name,
+      customer_phone: flow.phone,
+      metadata: { source: "live-member-area", action: flow.action, kind, ...(extra || {}) },
+    });
+  }
+
   try {
     const body = await req.json();
     const action = String(body?.action || "");
     const ip = clientIp(req);
+    flow.action = action;
+    flow.phone = normalizePhone(body?.phone || "") || null;
+    flow.name = String(body?.name || "").trim() || null;
 
     /**
      * Ponto 7 — anti-abuso. Retorna true quando ainda está dentro da cota.
@@ -91,10 +118,17 @@ Deno.serve(async (req) => {
       return data !== false;
     }
 
+    /** Bloqueio por cota: responde 429 e deixa rastro do motivo. */
+    async function blocked(kind: string, message: string) {
+      await logFriction(kind, message, { ip_hash: suffix8(ip) });
+      return json({ ok: false, error: message }, 429);
+    }
+
     // Cota global por IP para qualquer ação (protege o endpoint público inteiro)
     if (!(await allow(`ip:${ip}`, 120, 60))) {
-      return json({ ok: false, error: "Muitas requisições. Tente novamente em instantes." }, 429);
+      return await blocked("rate_limit_ip", "Muitas requisições. Tente novamente em instantes.");
     }
+
 
 
 
