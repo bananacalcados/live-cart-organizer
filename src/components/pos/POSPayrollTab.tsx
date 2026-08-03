@@ -67,6 +67,10 @@ export function POSPayrollTab({ periodRange }: Props) {
   const [eventOptOuts, setEventOptOuts] = useState<{ person_id: string; event_id: string }[]>([]);
   const [eventInfo, setEventInfo] = useState<Record<string, LiveEventInfo>>({});
   const [liveDialogPerson, setLiveDialogPerson] = useState<string | null>(null);
+  const [periodEntries, setPeriodEntries] = useState<PeriodEntry[]>([]);
+  const [newEmployeeName, setNewEmployeeName] = useState("");
+  const [newEmployeeRole, setNewEmployeeRole] = useState("");
+
 
   const startDate = format(periodRange.start, "yyyy-MM-dd");
   const endDate = format(periodRange.end, "yyyy-MM-dd");
