@@ -3673,6 +3673,9 @@ export type Database = {
           event_id: string | null
           event_segment_id: string | null
           expires_at: string
+          forfeit_reason: string | null
+          forfeited_at: string | null
+          fulfillment_status: string
           id: string
           is_redeemed: boolean
           live_session_id: string | null
@@ -3682,7 +3685,9 @@ export type Database = {
           prize_value: number
           redeemed_at: string | null
           redeemed_sale_id: string | null
+          reserved_at: string | null
           segment_id: string | null
+          shipped_at: string | null
           source: string
           store_id: string | null
           unified_customer_id: string | null
@@ -3700,6 +3705,9 @@ export type Database = {
           event_id?: string | null
           event_segment_id?: string | null
           expires_at: string
+          forfeit_reason?: string | null
+          forfeited_at?: string | null
+          fulfillment_status?: string
           id?: string
           is_redeemed?: boolean
           live_session_id?: string | null
@@ -3709,7 +3717,9 @@ export type Database = {
           prize_value?: number
           redeemed_at?: string | null
           redeemed_sale_id?: string | null
+          reserved_at?: string | null
           segment_id?: string | null
+          shipped_at?: string | null
           source?: string
           store_id?: string | null
           unified_customer_id?: string | null
@@ -3727,6 +3737,9 @@ export type Database = {
           event_id?: string | null
           event_segment_id?: string | null
           expires_at?: string
+          forfeit_reason?: string | null
+          forfeited_at?: string | null
+          fulfillment_status?: string
           id?: string
           is_redeemed?: boolean
           live_session_id?: string | null
@@ -3736,7 +3749,9 @@ export type Database = {
           prize_value?: number
           redeemed_at?: string | null
           redeemed_sale_id?: string | null
+          reserved_at?: string | null
           segment_id?: string | null
+          shipped_at?: string | null
           source?: string
           store_id?: string | null
           unified_customer_id?: string | null
@@ -20609,6 +20624,10 @@ export type Database = {
         }
         Returns: string
       }
+      forfeit_physical_prize: {
+        Args: { p_order_id: string; p_reason?: string }
+        Returns: Json
+      }
       format_customer_code: { Args: { seq_val: number }; Returns: string }
       gen_unique_ean13: { Args: never; Returns: string }
       gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
@@ -20712,19 +20731,24 @@ export type Database = {
         }[]
       }
       get_customer_active_prizes: {
-        Args: { p_phone: string }
+        Args: { p_include_history?: boolean; p_phone: string }
         Returns: {
           applied_order_id: string
           coupon_code: string
           created_at: string
           days_left: number
           expires_at: string
+          forfeit_reason: string
+          forfeited_at: string
+          fulfillment_status: string
           id: string
           is_redeemed: boolean
           prize_label: string
           prize_type: string
           prize_value: number
           redeemed_at: string
+          reserved_at: string
+          shipped_at: string
         }[]
       }
       get_customer_chat_history: {
@@ -21236,6 +21260,10 @@ export type Database = {
         Returns: undefined
       }
       mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
+      mark_physical_prize_shipped: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       match_event_leads: {
         Args: { p_event_id: string; p_phones: string[] }
         Returns: {
@@ -21387,6 +21415,10 @@ export type Database = {
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
+      }
+      reopen_physical_prize: {
+        Args: { p_prize_id: string; p_reason?: string }
+        Returns: Json
       }
       resolve_campaign_template: {
         Args: { p_campanha_id: string }

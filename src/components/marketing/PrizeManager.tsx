@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Gift, Search, Plus, Trash2, CheckCircle, Clock, Phone,
-  Mail, Tag, Filter, X, Loader2
+  Mail, Tag, Filter, X, Loader2, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,11 @@ interface Prize {
   coupon_code: string;
   is_redeemed: boolean;
   redeemed_at: string | null;
+  fulfillment_status?: string | null;
+  applied_order_id?: string | null;
+  shipped_at?: string | null;
+  forfeited_at?: string | null;
+  forfeit_reason?: string | null;
   expires_at: string;
   source: string;
   notes: string | null;
@@ -138,6 +143,20 @@ export function PrizeManager() {
     } catch { toast.error("Erro ao remover"); }
   };
 
+  const reopenPrize = async (id: string) => {
+    try {
+      const { error } = await supabase.rpc("reopen_physical_prize" as any, {
+        p_prize_id: id,
+        p_reason: "Reaberto manualmente no painel de prêmios",
+      });
+      if (error) throw error;
+      setPrizes(prev => prev.map(p => p.id === id
+        ? { ...p, fulfillment_status: "available", applied_order_id: null, forfeited_at: null, forfeit_reason: null, is_redeemed: false }
+        : p));
+      toast.success("Prêmio reaberto para a cliente");
+    } catch { toast.error("Erro ao reabrir prêmio"); }
+  };
+
   const markRedeemed = async (id: string) => {
     try {
       const { error } = await supabase
@@ -239,7 +258,16 @@ export function PrizeManager() {
                      `R$ ${p.prize_value.toFixed(2)}`}
                   </TableCell>
                   <TableCell>
-                    {p.is_redeemed ? (
+                    {p.prize_type === "product" || p.prize_type === "gift" ? (
+                      (() => {
+                        const st = p.fulfillment_status || "available";
+                        if (st === "reserved") return <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">Reservado{p.applied_order_id ? ` #${p.applied_order_id.slice(0, 8)}` : ""}</Badge>;
+                        if (st === "shipped") return <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">Enviado</Badge>;
+                        if (st === "forfeited") return <Badge variant="secondary" className="text-[10px]" title={p.forfeit_reason || ""}>Perdido</Badge>;
+                        if (st === "expired" || isExpired) return <Badge variant="secondary" className="text-[10px]">Expirado</Badge>;
+                        return <Badge className="bg-orange-500/15 text-orange-700 border-orange-500/30 text-[10px]">Disponível</Badge>;
+                      })()
+                    ) : p.is_redeemed ? (
                       <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30 text-[10px]">Resgatado</Badge>
                     ) : isExpired ? (
                       <Badge variant="secondary" className="text-[10px]">Expirado</Badge>
@@ -255,7 +283,13 @@ export function PrizeManager() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {!p.is_redeemed && !isExpired && (
+                      {(p.prize_type === "product" || p.prize_type === "gift") &&
+                        ["forfeited", "expired"].includes(p.fulfillment_status || "") && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => reopenPrize(p.id)} title="Reabrir prêmio para a cliente">
+                          <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
+                        </Button>
+                      )}
+                      {!p.is_redeemed && !isExpired && p.prize_type !== "product" && p.prize_type !== "gift" && (
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => markRedeemed(p.id)} title="Marcar como resgatado">
                           <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                         </Button>

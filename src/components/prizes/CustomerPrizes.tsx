@@ -3,6 +3,8 @@ import { Gift, Ticket, Truck, Percent, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 
+export type PrizeFulfillment = "available" | "reserved" | "shipped" | "forfeited" | "expired";
+
 export interface ActivePrize {
   id: string;
   prize_label: string;
@@ -12,11 +14,20 @@ export interface ActivePrize {
   expires_at: string;
   created_at: string;
   applied_order_id: string | null;
+  fulfillment_status: PrizeFulfillment;
+  reserved_at: string | null;
+  shipped_at: string | null;
+  forfeited_at: string | null;
+  forfeit_reason: string | null;
   days_left: number;
 }
 
-/** Prêmios ativos (não usados e dentro da validade) da cliente, pelo telefone. */
-export function useCustomerPrizes(phone?: string | null, enabled = true) {
+/**
+ * Prêmios da cliente pelo telefone.
+ * Por padrão só os ativos (monetário no prazo / físico disponível ou reservado).
+ * `includeHistory` traz também enviados, perdidos e expirados.
+ */
+export function useCustomerPrizes(phone?: string | null, enabled = true, includeHistory = false) {
   const [prizes, setPrizes] = useState<ActivePrize[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +43,8 @@ export function useCustomerPrizes(phone?: string | null, enabled = true) {
       try {
         const { data, error } = await supabase.rpc("get_customer_active_prizes", {
           p_phone: digits,
-        });
+          p_include_history: includeHistory,
+        } as any);
         if (error) throw error;
         if (alive) setPrizes((data as any[]) || []);
       } catch (e) {
@@ -45,7 +57,7 @@ export function useCustomerPrizes(phone?: string | null, enabled = true) {
     return () => {
       alive = false;
     };
-  }, [phone, enabled]);
+  }, [phone, enabled, includeHistory]);
 
   return { prizes, loading };
 }
@@ -64,6 +76,41 @@ export function prizeExpiryText(daysLeft: number) {
   return `expira em ${daysLeft} dias`;
 }
 
+const fmtDate = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+
+/** Rótulo do estado de entrega de um prêmio físico. Monetário retorna null. */
+export function physicalPrizeStatus(p: ActivePrize):
+  | { label: string; tone: "available" | "reserved" | "shipped" | "dead" }
+  | null {
+  if (p.prize_type !== "product") return null;
+  switch (p.fulfillment_status) {
+    case "reserved":
+      return {
+        label: `RESERVADO no pedido #${(p.applied_order_id || "").slice(0, 8)}`,
+        tone: "reserved",
+      };
+    case "shipped":
+      return { label: `ENVIADO${p.shipped_at ? ` em ${fmtDate(p.shipped_at)}` : ""}`, tone: "shipped" };
+    case "forfeited":
+      return {
+        label: `CANCELADO — ${p.forfeit_reason || "pedido cancelado/estornado"}`,
+        tone: "dead",
+      };
+    case "expired":
+      return { label: "EXPIRADO", tone: "dead" };
+    default:
+      return { label: `DISPONÍVEL — ${prizeExpiryText(p.days_left)}`, tone: "available" };
+  }
+}
+
+const TONE_CLASS: Record<string, string> = {
+  available: "bg-accent/20 text-accent border-accent/40",
+  reserved: "bg-amber-500/15 text-amber-600 border-amber-500/40",
+  shipped: "bg-emerald-500/15 text-emerald-600 border-emerald-500/40",
+  dead: "bg-muted text-muted-foreground border-border",
+};
+
 /** Badges compactas para o card do pedido. */
 export function CustomerPrizeBadges({ phone }: { phone?: string | null }) {
   const { prizes } = useCustomerPrizes(phone);
@@ -73,15 +120,16 @@ export function CustomerPrizeBadges({ phone }: { phone?: string | null }) {
     <>
       {prizes.map((p) => {
         const Icon = prizeIcon(p.prize_type);
+        const st = physicalPrizeStatus(p);
         return (
           <Badge
             key={p.id}
             variant="secondary"
-            className="text-[10px] bg-accent/20 text-accent border-accent/30"
-            title={`${p.prize_label} — cupom ${p.coupon_code} (${prizeExpiryText(p.days_left)})`}
+            className={`text-[10px] ${st ? TONE_CLASS[st.tone] : TONE_CLASS.available}`}
+            title={`${p.prize_label} — ${st ? st.label : `cupom ${p.coupon_code} (${prizeExpiryText(p.days_left)})`}`}
           >
             <Icon className="h-3 w-3 mr-1" />
-            🎡 {p.prize_label} · {prizeExpiryText(p.days_left)}
+            🎡 {p.prize_label} · {st ? st.label : prizeExpiryText(p.days_left)}
           </Badge>
         );
       })}
@@ -102,6 +150,7 @@ export function CustomerPrizeList({ phone }: { phone?: string | null }) {
       {prizes.map((p) => {
         const Icon = prizeIcon(p.prize_type);
         const physical = p.prize_type === "product";
+        const st = physicalPrizeStatus(p);
         return (
           <div
             key={p.id}
@@ -114,9 +163,14 @@ export function CustomerPrizeList({ phone }: { phone?: string | null }) {
               <p className="text-sm font-medium truncate">{p.prize_label}</p>
               <p className="text-xs text-muted-foreground">
                 {physical ? "Prêmio físico (expedir junto)" : `Cupom ${p.coupon_code}`} ·{" "}
-                {prizeExpiryText(p.days_left)}
+                {st ? st.label : prizeExpiryText(p.days_left)}
               </p>
             </div>
+            {st && (
+              <Badge variant="outline" className={`text-[10px] shrink-0 ${TONE_CLASS[st.tone]}`}>
+                {st.tone === "shipped" ? "ENVIADO" : st.tone === "reserved" ? "RESERVADO" : st.tone === "dead" ? "INATIVO" : "DISPONÍVEL"}
+              </Badge>
+            )}
           </div>
         );
       })}
