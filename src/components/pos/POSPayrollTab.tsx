@@ -398,7 +398,7 @@ export function POSPayrollTab({ periodRange }: Props) {
               {/* People config */}
               {people.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Pessoas · híbrida (todas as lives) · meta manual · divisão de live</h4>
+                  <h4 className="text-sm font-semibold text-zinc-200 mb-2">Pessoas · salário fixo · gratificação de cargo · híbrida · meta manual · divisão de live</h4>
                   <div className="space-y-2">
                     {people.filter((p) => p.is_active).map((p) => {
                       const linked = peopleSellers.filter((ps) => ps.person_id === p.id)
