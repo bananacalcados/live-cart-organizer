@@ -425,6 +425,33 @@ export function POSPayrollTab({ periodRange }: Props) {
                             </div>
                           </div>
                           <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Salário fixo R$</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.base_salary ?? ""} placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.base_salary || 0)) setSalaryField(p.id, "base_salary", v);
+                                }}
+                                className="w-28 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Gratificação cargo %</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.role_bonus_percent ?? ""} placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.role_bonus_percent || 0)) setSalaryField(p.id, "role_bonus_percent", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                              <span className="text-[10px] text-zinc-500">
+                                = {BRL(Number(p.base_salary || 0) * (Number(p.role_bonus_percent || 0) / 100))}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
                             <span className="text-[10px] uppercase text-zinc-500">Divide live:</span>
                             {(["perola", "centro"] as StoreKey[]).map((k) => {
                               const store = storesByKey.get(k);
