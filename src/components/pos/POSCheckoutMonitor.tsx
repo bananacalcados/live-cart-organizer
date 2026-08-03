@@ -141,13 +141,13 @@ export function POSCheckoutMonitor({ storeId }: Props) {
             <div
               key={attempt.id}
               className={`p-3 rounded-lg border transition-all ${
-                attempt.status === "failed"
+                attempt.status !== "success"
                   ? "border-red-500/30 bg-red-500/5"
                   : "border-green-500/30 bg-green-500/5"
               }`}
             >
               <div className="flex items-start gap-2">
-                {attempt.status === "failed" ? (
+                {attempt.status !== "success" ? (
                   <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
