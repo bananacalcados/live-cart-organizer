@@ -20268,6 +20268,10 @@ export type Database = {
           moved_count: number
         }[]
       }
+      attach_physical_prize_to_order: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       audience_filter_options: { Args: never; Returns: Json }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
@@ -20705,6 +20709,22 @@ export type Database = {
           status: string
           unread_count: number
           whatsapp_number_id: string
+        }[]
+      }
+      get_customer_active_prizes: {
+        Args: { p_phone: string }
+        Returns: {
+          applied_order_id: string
+          coupon_code: string
+          created_at: string
+          days_left: number
+          expires_at: string
+          id: string
+          is_redeemed: boolean
+          prize_label: string
+          prize_type: string
+          prize_value: number
+          redeemed_at: string
         }[]
       }
       get_customer_chat_history: {
