@@ -333,13 +333,27 @@ export function POSPayrollTab({ periodRange }: Props) {
   };
 
   const exportCsv = () => {
-    const header = ["Vendedora", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]), "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$", "Salário fixo", "% Cargo", "Gratificação R$", "Total a pagar"];
+    const header = [
+      "Pessoa", "Cargo", ...CHANNEL_KEYS.map((k) => CHANNEL_LABELS[k]),
+      "Faturamento", "Meta", "% Atingido", "% Comissão", "Comissão R$",
+      "Salário fixo", "% Cargo", "Gratificação R$",
+      "Horas extras (qtd)", "Horas extras R$", "Salário bruto",
+      "Salário + Comissão",
+      "Provisão 13º", "Provisão Férias", "Provisão 1/3", "Provisão Aviso prévio", "Encargos provisão", "Provisão total",
+      "Com provisionamento", "Bônus benefícios", "Custo total",
+    ];
     const lines = result.people.map((p) => [
-      p.name,
+      p.name, p.roleTitle,
       ...CHANNEL_KEYS.map((k) => p.channels[k].toFixed(2)),
       p.total.toFixed(2), p.goal.toFixed(2), p.achievementPct.toFixed(1), p.commissionPct.toFixed(2), p.commissionValue.toFixed(2),
-      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2), p.totalPayout.toFixed(2),
+      p.baseSalary.toFixed(2), p.roleBonusPercent.toFixed(2), p.roleBonusValue.toFixed(2),
+      p.overtimeHours.toFixed(2), p.overtimeValue.toFixed(2), p.grossSalary.toFixed(2),
+      p.salaryPlusCommission.toFixed(2),
+      p.provision13.toFixed(2), p.provisionVacation.toFixed(2), p.provisionVacationBonus.toFixed(2),
+      p.provisionNotice.toFixed(2), p.provisionCharges.toFixed(2), p.provisionTotal.toFixed(2),
+      p.withProvision.toFixed(2), p.benefitsBonus.toFixed(2), p.totalCost.toFixed(2),
     ].join(";"));
+
     const csv = [header.join(";"), ...lines].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
