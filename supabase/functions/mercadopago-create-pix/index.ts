@@ -84,6 +84,7 @@ serve(async (req) => {
     let discountValue: number | null = null;
     let customer: Record<string, unknown> | null = null;
     let shippingAmount = 0;
+    let recordPhone: string | null = null;
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
