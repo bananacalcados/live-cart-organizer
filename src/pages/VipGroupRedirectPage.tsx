@@ -14,18 +14,31 @@ export default function VipGroupRedirectPage() {
   useEffect(() => {
     if (!slug) { setStatus('error'); setErrorDetail('slug is undefined'); return; }
 
+    // Etapa E — captura os sinais de clique antes do redirect para o WhatsApp.
+    captureAttribution();
+    const attr = attributionPayload();
+
     const ua = navigator.userAgent || '';
     const isInstagram = /Instagram/i.test(ua);
     const isFacebook = /FBAN|FBAV/i.test(ua);
     const isAndroid = /Android/i.test(ua);
     const isInApp = isInstagram || isFacebook;
 
-    fetch(`${supabaseUrl}/functions/v1/group-redirect-link?slug=${slug}&mode=api`, {
+    const rq = new URLSearchParams({ slug, mode: 'api' });
+    if (attr.fbclid) rq.set('fbclid', attr.fbclid);
+    if (attr.fbc) rq.set('fbc', attr.fbc);
+    if (attr.fbp) rq.set('fbp', attr.fbp);
+    if (attr.utm_source) rq.set('utm_source', attr.utm_source);
+    if (attr.utm_medium) rq.set('utm_medium', attr.utm_medium);
+    if (attr.utm_campaign) rq.set('utm_campaign', attr.utm_campaign);
+
+    fetch(`${supabaseUrl}/functions/v1/group-redirect-link?${rq.toString()}`, {
       headers: {
         'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json',
       }
     })
+
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
