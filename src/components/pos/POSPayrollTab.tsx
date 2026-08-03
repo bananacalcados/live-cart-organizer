@@ -507,6 +507,9 @@ export function POSPayrollTab({ periodRange }: Props) {
                     <th className="text-right p-2 font-semibold">% Meta</th>
                     <th className="text-right p-2 font-semibold">% Com.</th>
                     <th className="text-right p-2 font-semibold">Comissão</th>
+                    <th className="text-right p-2 font-semibold">Salário</th>
+                    <th className="text-right p-2 font-semibold whitespace-nowrap">Gratificação</th>
+                    <th className="text-right p-2 font-semibold text-sky-300">Total a pagar</th>
                   </tr>
                 </thead>
                 <tbody>
