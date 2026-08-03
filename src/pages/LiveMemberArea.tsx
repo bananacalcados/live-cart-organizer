@@ -520,6 +520,29 @@ export default function LiveMemberArea() {
   };
 
   /**
+   * Ao voltar direto para a etapa de envio (cliente que já salvou o endereço em
+   * uma sessão anterior), as opções de frete não tinham sido cotadas — a tela
+   * ficava vazia, sem botão de continuar. Aqui cotamos com o CEP já cadastrado.
+   * Se realmente não houver CEP salvo, aí sim voltamos para o endereço.
+   */
+  useEffect(() => {
+    if (step !== "onboarding" || onboardStep !== "shipping") return;
+    if (shipLoading || shipOptions.length) return;
+    const savedCep = String(
+      addr.cep || state?.payDetails?.cep || state?.details?.cep || "",
+    ).replace(/\D/g, "");
+    if (savedCep.length === 8) {
+      if (!addr.cep) setAddr((a: any) => ({ ...a, cep: savedCep }));
+      loadShippingOptions(savedCep);
+    } else {
+      setOnboardStep("address");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, onboardStep, shipOptions.length, shipLoading, addr.cep, state?.payDetails?.cep]);
+
+
+
+  /**
    * As etapas avançam NA HORA e o salvamento acontece em segundo plano.
    * Se o servidor recusar, voltamos para a etapa anterior com o aviso.
    */
