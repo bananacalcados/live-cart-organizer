@@ -567,6 +567,98 @@ export function POSPayrollTab({ periodRange }: Props) {
                               </span>
                             </div>
                           </div>
+                          {/* Provisionamento CLT (1/12 por mês) */}
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <span className="text-[10px] uppercase text-zinc-500">Provisionamento CLT:</span>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_13 !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_13", !!v)} />
+                              13º
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_vacation !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_vacation", !!v)} />
+                              Férias + 1/3
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                              <Checkbox checked={p.provision_notice !== false}
+                                onCheckedChange={(v) => setPersonField(p.id, "provision_notice", !!v)} />
+                              Aviso prévio
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Encargos %</Label>
+                              <Input
+                                type="number" step="0.01" defaultValue={p.provision_charges_percent ?? ""} placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  if (v !== Number(p.provision_charges_percent || 0)) setPersonField(p.id, "provision_charges_percent", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Cargo</Label>
+                              <Input
+                                defaultValue={p.role_title ?? ""} placeholder="ex.: Gerente"
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim() || null;
+                                  if (v !== (p.role_title ?? null)) setPersonField(p.id, "role_title", v);
+                                }}
+                                className="w-32 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                          </div>
+                          {/* Lançamentos do período */}
+                          <div className="flex items-center gap-4 flex-wrap pl-1">
+                            <span className="text-[10px] uppercase text-zinc-500">Período {periodRange.label}:</span>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Horas extras (qtd)</Label>
+                              <Input
+                                key={`oh-${p.id}-${startDate}`}
+                                type="number" step="0.5"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.overtime_hours ?? ""}
+                                placeholder="0"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.overtime_hours || 0);
+                                  if (v !== cur) setPeriodField(p.id, "overtime_hours", v);
+                                }}
+                                className="w-20 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Horas extras R$</Label>
+                              <Input
+                                key={`ov-${p.id}-${startDate}`}
+                                type="number" step="0.01"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.overtime_value ?? ""}
+                                placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.overtime_value || 0);
+                                  if (v !== cur) setPeriodField(p.id, "overtime_value", v);
+                                }}
+                                className="w-24 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Label className="text-[11px] text-zinc-400">Bônus cartão benefícios R$</Label>
+                              <Input
+                                key={`bb-${p.id}-${startDate}`}
+                                type="number" step="0.01"
+                                defaultValue={periodEntries.find((e) => e.person_id === p.id)?.benefits_bonus ?? ""}
+                                placeholder="0,00"
+                                onBlur={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  const cur = Number(periodEntries.find((x) => x.person_id === p.id)?.benefits_bonus || 0);
+                                  if (v !== cur) setPeriodField(p.id, "benefits_bonus", v);
+                                }}
+                                className="w-24 h-7 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs"
+                              />
+                              <span className="text-[10px] text-zinc-500">não tributável</span>
+                            </div>
+                          </div>
+
                           <div className="flex items-center gap-4 flex-wrap pl-1">
                             <span className="text-[10px] uppercase text-zinc-500">Divide live:</span>
                             {(["perola", "centro"] as StoreKey[]).map((k) => {
