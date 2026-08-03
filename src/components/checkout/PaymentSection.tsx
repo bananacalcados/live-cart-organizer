@@ -94,6 +94,7 @@ export function StepPayment({
   backLabel,
   stepBadge = "3 de 3",
   prizeAppliedCents = 0,
+  onStepEvent,
 }: {
   orderId: string;
   amount: number;
@@ -107,7 +108,10 @@ export function StepPayment({
   stepBadge?: string | null;
   /** Prêmio da roleta (em centavos) já abatido no total exibido — evita abater 2x no servidor. */
   prizeAppliedCents?: number;
+  /** Auditoria opcional dos passos de pagamento (abriu PIX, enviou cartão, recusado...). */
+  onStepEvent?: (event: string, data?: Record<string, unknown>) => void;
 }) {
+
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(null);
    const [showAllMethods, setShowAllMethods] = useState(true);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
