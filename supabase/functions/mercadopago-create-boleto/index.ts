@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import QRCode from "https://esm.sh/qrcode@1.5.3";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
@@ -275,7 +276,7 @@ serve(async (req) => {
     if (include_pix) {
       try {
         const pixBody = {
-          transaction_amount: Math.round(amountNum * 100) / 100,
+          transaction_amount: Math.round(chargeAmount * 100) / 100,
           description: description || `PIX — ${customer_name}`,
           payment_method_id: "pix",
           date_of_expiration: formatMpDate(dueDate),
@@ -345,7 +346,7 @@ serve(async (req) => {
     drawText("VALOR", { size: 9, bold: true, color: [0.4, 0.4, 0.4] });
     drawText("VENCIMENTO", { size: 9, bold: true, color: [0.4, 0.4, 0.4], x: 300 });
     y -= 14;
-    drawText(`R$ ${amountNum.toFixed(2).replace(".", ",")}`, { size: 14, bold: true });
+    drawText(`R$ ${chargeAmount.toFixed(2).replace(".", ",")}`, { size: 14, bold: true });
     drawText(dueDate.toLocaleDateString("pt-BR"), { size: 14, bold: true, x: 300 });
     y -= 24;
 
@@ -448,7 +449,9 @@ serve(async (req) => {
         pdfUrl: signed?.signedUrl || null,
         pixQrCode,
         pixQrBase64,
-        amount: amountNum,
+        amount: chargeAmount,
+        originalAmount: amountNum,
+        prize: prizeInfo,
         dueDate: due_date,
       }),
       { headers, status: 200 },
