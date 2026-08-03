@@ -188,6 +188,23 @@ export function POSPayrollTab({ periodRange }: Props) {
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 
+  /** Salário fixo / gratificação de cargo — permanentes na ficha da vendedora. */
+  const setSalaryField = async (
+    personId: string,
+    field: "base_salary" | "role_bonus_percent",
+    value: number,
+  ) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("pos_commission_people")
+        .update({ [field]: value } as any).eq("id", personId);
+      if (error) throw error;
+      setPeople((prev) => prev.map((p) => (p.id === personId ? { ...p, [field]: value } : p)));
+      toast.success("Salário atualizado");
+    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+
   const toggleLiveParticipant = async (personId: string, storeId: string, checked: boolean) => {
     setSaving(true);
     try {
