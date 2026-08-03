@@ -79,15 +79,18 @@ export default function LinkPageView() {
 
   useEffect(() => {
     if (!slug) return;
+    // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+    captureAttribution();
     (async () => {
       try {
         const { data: res, error } = await supabase.functions.invoke("link-page-public", {
           body: {
             slug,
             track: {
-              utm_source: searchParams.get("utm_source"),
-              utm_medium: searchParams.get("utm_medium"),
-              utm_campaign: searchParams.get("utm_campaign"),
+              utm_source: resolveUtm("utm_source"),
+              utm_medium: resolveUtm("utm_medium"),
+              utm_campaign: resolveUtm("utm_campaign"),
+
               referrer: document.referrer || null,
               user_agent: navigator.userAgent,
             },
