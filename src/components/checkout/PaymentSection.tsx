@@ -159,7 +159,6 @@ export function StepPayment({
                 <CardPaymentForm
                     orderId={orderId}
                     amount={amount}
-                   prizeAppliedCents={prizeAppliedCents}
                     prizeAppliedCents={prizeAppliedCents}
                     products={products}
                     form={form}
