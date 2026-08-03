@@ -345,7 +345,31 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (prizeErr) console.error("[event-prize-wheel] prize insert", prizeErr.message);
         prizeId = prize?.id || null;
+
+        // Prêmio FÍSICO: já anexa como brinde no pedido aberto do evento (expedição enxerga).
+        if (winner.prize_type === "product") {
+          try {
+            const { data: openOrder } = await supabase
+              .from("orders")
+              .select("id")
+              .eq("event_id", wheel.event_id)
+              .eq("is_paid", false)
+              .filter("customer_id", "not.is", null)
+              .order("created_at", { ascending: false })
+              .limit(20);
+            // Deixa o banco resolver o vínculo por telefone (RPC valida cliente do pedido).
+            for (const o of openOrder || []) {
+              const { data: res } = await supabase.rpc("attach_physical_prize_to_order", {
+                p_order_id: o.id,
+              });
+              if ((res as any)?.attached) break;
+            }
+          } catch (e) {
+            console.error("[event-prize-wheel] attach physical prize", (e as Error).message);
+          }
+        }
       }
+
 
       await supabase.from("event_prize_spins").insert({
         wheel_id: wheel.id,
