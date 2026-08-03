@@ -30,6 +30,7 @@ interface Props {
 
 interface Person {
   id: string; name: string; is_active: boolean; receives_all_lives: boolean; manual_goal_value: number | null;
+  base_salary: number | null; role_bonus_percent: number | null;
 }
 interface Seller { id: string; name: string; store_id: string | null; }
 interface Store { id: string; name: string; }
