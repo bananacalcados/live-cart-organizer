@@ -116,6 +116,8 @@ const CHECKOUT_BASE_URL = "https://checkout.bananacalcados.com.br";
 // ─── Component ───
 export default function CatalogLeadPage() {
   const { slug } = useParams<{ slug: string }>();
+  // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+  useEffect(() => { captureAttribution(); }, []);
   const [config, setConfig] = useState<PageConfig | null>(null);
   const [productMap, setProductMap] = useState<Map<string, CatalogProduct>>(new Map());
   const [loading, setLoading] = useState(true);

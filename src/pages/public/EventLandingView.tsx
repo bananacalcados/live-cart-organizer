@@ -65,6 +65,8 @@ function Countdown({ target }: { target: string }) {
 
 export default function EventLandingView() {
   const { slug } = useParams<{ slug: string }>();
+  // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+  useEffect(() => { captureAttribution(); }, []);
   const [search] = useSearchParams();
   const refToken = search.get('ref');
   const [lp, setLp] = useState<LPData | null>(null);

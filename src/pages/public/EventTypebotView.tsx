@@ -46,6 +46,8 @@ type ChatMsg = { from: 'bot' | 'user'; text: string };
 
 export default function EventTypebotView() {
   const { slug } = useParams<{ slug: string }>();
+  // Etapa E — captura sinais de clique/UTM na entrada (memória de 90 dias).
+  useEffect(() => { captureAttribution(); }, []);
   const [search] = useSearchParams();
   const refToken = search.get('ref');
   const [tb, setTb] = useState<TypebotData | null>(null);
