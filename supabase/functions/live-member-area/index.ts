@@ -537,6 +537,7 @@ Deno.serve(async (req) => {
       try {
         const { data: prizeRows } = await supabase.rpc("get_customer_active_prizes", {
           p_phone: String(session.phone || "").replace(/\D/g, ""),
+          p_include_history: true,
         });
         prizes = (prizeRows || []).map((p: any) => ({
           id: p.id,
@@ -547,6 +548,12 @@ Deno.serve(async (req) => {
           expires_at: p.expires_at,
           days_left: Number(p.days_left || 0),
           is_physical: p.prize_type === "product",
+          // ciclo de vida do prêmio físico: available | reserved | shipped | forfeited | expired
+          fulfillment_status: p.fulfillment_status || "available",
+          reserved_order_id: p.applied_order_id,
+          shipped_at: p.shipped_at,
+          forfeited_at: p.forfeited_at,
+          forfeit_reason: p.forfeit_reason,
         }));
       } catch (_e) {
         prizes = [];
