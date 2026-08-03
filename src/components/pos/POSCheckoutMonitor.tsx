@@ -158,7 +158,11 @@ export function POSCheckoutMonitor({ storeId }: Props) {
                       {attempt.customer_name || "Cliente desconhecido"}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
-                      {attempt.payment_method === "card" ? "💳 Cartão" : "📱 PIX"}
+                      {attempt.payment_method === "card" || attempt.payment_method === "credit_card"
+                        ? "💳 Cartão"
+                        : attempt.payment_method === "member_area"
+                          ? "👤 Área de Membros"
+                          : "📱 PIX"}
                     </Badge>
                     {attempt.gateway && (
                       <Badge variant="secondary" className="text-[10px]">

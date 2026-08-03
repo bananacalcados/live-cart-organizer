@@ -132,7 +132,8 @@ export const EventCheckoutMonitor = ({ events }: EventCheckoutMonitorProps) => {
 
   const getMethodLabel = (method: string) => {
     if (method === "pix") return "PIX";
-    if (method === "credit_card") return "Cartão";
+    if (method === "credit_card" || method === "card") return "Cartão";
+    if (method === "member_area") return "Área de Membros";
     return method;
   };
 
