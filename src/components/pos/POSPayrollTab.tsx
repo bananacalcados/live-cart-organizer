@@ -144,8 +144,8 @@ export function POSPayrollTab({ periodRange }: Props) {
   useEffect(() => { if (unlocked) load(); }, [unlocked, load]);
 
   const result = useMemo(() => computePayroll({
-    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts,
-  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts]);
+    sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries,
+  }), [sales, sellers, stores, people, peopleSellers, liveParticipants, scale, goals, eventOptOuts, periodEntries]);
 
   const totals = useMemo(() => result.people.reduce(
     (acc, p) => ({
@@ -153,9 +153,20 @@ export function POSPayrollTab({ periodRange }: Props) {
       salary: acc.salary + p.baseSalary,
       bonus: acc.bonus + p.roleBonusValue,
       payout: acc.payout + p.totalPayout,
+      overtime: acc.overtime + p.overtimeValue,
+      gross: acc.gross + p.grossSalary,
+      salCom: acc.salCom + p.salaryPlusCommission,
+      provision: acc.provision + p.provisionTotal,
+      withProvision: acc.withProvision + p.withProvision,
+      benefits: acc.benefits + p.benefitsBonus,
+      totalCost: acc.totalCost + p.totalCost,
     }),
-    { commission: 0, salary: 0, bonus: 0, payout: 0 },
+    {
+      commission: 0, salary: 0, bonus: 0, payout: 0, overtime: 0, gross: 0,
+      salCom: 0, provision: 0, withProvision: 0, benefits: 0, totalCost: 0,
+    },
   ), [result.people]);
+
 
   const dialogPerson = useMemo(
     () => result.people.find((p) => p.personId === liveDialogPerson) || null,
