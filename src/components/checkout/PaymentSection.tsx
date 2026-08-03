@@ -143,7 +143,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "card") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("card"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("card"); setShowAllMethods(false); onStepEvent?.("opened_card", { method: "credit_card" }); }}
                className={`w-full flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "card"
                    ? "border-foreground bg-card shadow-sm"
@@ -168,6 +168,7 @@ export function StepPayment({
                     form={form}
                     installmentConfig={installmentConfig}
                     onPaymentConfirmed={onPaymentConfirmed}
+                    onStepEvent={onStepEvent}
                     onProcessingChange={onProcessingChange}
                     mode="credit"
                     onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
@@ -181,7 +182,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "debit") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("debit"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("debit"); setShowAllMethods(false); onStepEvent?.("opened_debit", { method: "debit_card" }); }}
                className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "debit"
                    ? "border-foreground bg-card shadow-sm"
@@ -209,6 +210,7 @@ export function StepPayment({
                    form={form}
                    installmentConfig={installmentConfig}
                    onPaymentConfirmed={onPaymentConfirmed}
+                   onStepEvent={onStepEvent}
                    onProcessingChange={onProcessingChange}
                    mode="debit"
                    onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
@@ -222,7 +224,7 @@ export function StepPayment({
          {(showAllMethods || selectedMethod === "pix") && (
            <>
              <button
-               onClick={() => { setSelectedMethod("pix"); setShowAllMethods(false); }}
+               onClick={() => { setSelectedMethod("pix"); setShowAllMethods(false); onStepEvent?.("opened_pix", { method: "pix" }); }}
                className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
                  selectedMethod === "pix"
                    ? "border-foreground bg-card shadow-sm"
@@ -263,6 +265,7 @@ export function StepPayment({
                    pixDiscountPercent={pixDiscountPercent}
                    form={form}
                    onPaymentConfirmed={onPaymentConfirmed}
+                   onStepEvent={onStepEvent}
                  />
                </div>
              )}
