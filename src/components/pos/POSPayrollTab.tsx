@@ -510,6 +510,34 @@ export function POSPayrollTab({ periodRange }: Props) {
                 )}
               </div>
 
+              {/* Novo funcionário (não vendedor) */}
+              <div className="border-t border-zinc-800 pt-3">
+                <h4 className="text-sm font-semibold text-zinc-200 mb-2">Novo funcionário (não vendedor)</h4>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div>
+                    <Label className="text-[11px] text-zinc-400">Nome</Label>
+                    <Input value={newEmployeeName} onChange={(e) => setNewEmployeeName(e.target.value)}
+                      placeholder="Ex.: Maria (financeiro)"
+                      className="w-56 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-zinc-400">Cargo</Label>
+                    <Input value={newEmployeeRole} onChange={(e) => setNewEmployeeRole(e.target.value)}
+                      placeholder="Ex.: Auxiliar administrativo"
+                      className="w-56 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-xs" />
+                  </div>
+                  <Button size="sm" onClick={createEmployee} disabled={saving}
+                    className="h-8 gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs">
+                    <Plus className="h-3 w-3" /> Adicionar funcionário
+                  </Button>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Entra na folha com salário, gratificação, provisionamento, horas extras e bônus — sem comissão.
+                </p>
+              </div>
+
+
+
 
               {/* People config */}
               {people.length > 0 && (
