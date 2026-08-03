@@ -449,7 +449,33 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.roleBonusPercent = Math.max(0, Number(p.role_bonus_percent || 0));
     row.roleBonusValue = row.baseSalary * (row.roleBonusPercent / 100);
     row.totalPayout = row.baseSalary + row.roleBonusValue + row.commissionValue;
+
+    // Lançamentos do período
+    const entry = entryByPerson.get(p.id);
+    row.overtimeHours = Math.max(0, Number(entry?.overtime_hours || 0));
+    row.overtimeValue = Math.max(0, Number(entry?.overtime_value || 0));
+    row.benefitsBonus = Math.max(0, Number(entry?.benefits_bonus || 0));
+
+    // Provisionamento CLT (1/12 ao mês sobre a base salarial)
+    const base = row.baseSalary + row.roleBonusValue;
+    const twelfth = base / 12;
+    row.provision13 = p.provision_13 === false ? 0 : twelfth;
+    row.provisionVacation = p.provision_vacation === false ? 0 : twelfth;
+    row.provisionVacationBonus = p.provision_vacation === false ? 0 : twelfth / 3;
+    row.provisionNotice = p.provision_notice === false ? 0 : twelfth;
+    const provisionSubtotal =
+      row.provision13 + row.provisionVacation + row.provisionVacationBonus + row.provisionNotice;
+    row.provisionCharges = provisionSubtotal * (Math.max(0, Number(p.provision_charges_percent || 0)) / 100);
+    row.provisionTotal = provisionSubtotal + row.provisionCharges;
+
+    // Camadas de custo
+    row.grossSalary = row.baseSalary + row.roleBonusValue + row.overtimeValue;
+    row.salaryPlusCommission = row.grossSalary + row.commissionValue;
+    row.withProvision = row.salaryPlusCommission + row.provisionTotal;
+    row.totalCost = row.withProvision + row.benefitsBonus;
+
     row.tiers = buildGoalTiers(row.goal, row.total, scale);
+
   }
 
   return {
