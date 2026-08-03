@@ -11142,6 +11142,48 @@ export type Database = {
           },
         ]
       }
+      order_payment_events: {
+        Row: {
+          amount: number | null
+          created_at: string
+          customer_phone: string | null
+          detail: string | null
+          event_type: string
+          gateway: string | null
+          id: string
+          metadata: Json
+          method: string | null
+          order_id: string
+          source: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          customer_phone?: string | null
+          detail?: string | null
+          event_type: string
+          gateway?: string | null
+          id?: string
+          metadata?: Json
+          method?: string | null
+          order_id: string
+          source?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          customer_phone?: string | null
+          detail?: string | null
+          event_type?: string
+          gateway?: string | null
+          id?: string
+          metadata?: Json
+          method?: string | null
+          order_id?: string
+          source?: string
+        }
+        Relationships: []
+      }
       order_shopify_history: {
         Row: {
           action: string
