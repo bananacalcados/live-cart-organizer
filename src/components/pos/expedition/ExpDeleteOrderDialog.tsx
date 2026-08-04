@@ -37,13 +37,19 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
 
   const ids = order.group_order_ids?.length ? order.group_order_ids : [order.id];
 
+  const reasonValid = reason.trim().length >= 3;
+
   const run = async () => {
+    if (!reasonValid) {
+      toast.error("Informe o motivo da exclusão (mínimo 3 caracteres)");
+      return;
+    }
     setBusy(true);
     try {
       for (const id of ids) {
         const { error } = await supabase.rpc("expedition_cancel_sale" as any, {
           p_sale_id: id,
-          p_reason: reason.trim() || null,
+          p_reason: reason.trim(),
           p_restore_stock: restoreStock,
         });
         if (error) throw error;
