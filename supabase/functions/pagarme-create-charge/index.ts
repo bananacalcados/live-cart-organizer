@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { buildMpHeaders } from "../_shared/mp-http.ts";
+
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
