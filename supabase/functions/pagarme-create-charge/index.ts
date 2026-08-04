@@ -247,7 +247,8 @@ interface ChargeRequest {
 async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  supabase: any
+  supabase: any,
+  clientIp?: string | null
 ): Promise<ChargeResult> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
@@ -280,16 +281,25 @@ async function chargeMercadoPago(
     : undefined;
 
   const addr = params.billingAddress;
-  const addrObj = addr?.zipCode
+  // Nunca enviar placeholders ao MP (piora a qualidade da integração).
+  const clean = (v: unknown, max: number) => {
+    const s = String(v ?? "").trim();
+    if (!s || /^n(ã|a)o informado$/i.test(s) || s === "N/A") return undefined;
+    return s.substring(0, max);
+  };
+  const zipClean = String(addr?.zipCode || "").replace(/\D/g, "");
+  const zipValid = zipClean.length === 8 && zipClean !== "00000000";
+  const addrObj: Record<string, string> | undefined = zipValid
     ? {
-      zip_code: String(addr.zipCode).replace(/\D/g, ""),
-      street_name: String(addr.street || "").substring(0, 120),
-      street_number: String(addr.number || "S/N").substring(0, 20),
-      neighborhood: String(addr.neighborhood || "").substring(0, 120),
-      city: String(addr.city || "").substring(0, 120),
-      federal_unit: String(addr.state || "").substring(0, 2),
+      zip_code: zipClean,
+      ...(clean(addr?.street, 120) ? { street_name: clean(addr?.street, 120)! } : {}),
+      ...(clean(addr?.number, 20) ? { street_number: clean(addr?.number, 20)! } : {}),
+      ...(clean(addr?.neighborhood, 120) ? { neighborhood: clean(addr?.neighborhood, 120)! } : {}),
+      ...(clean(addr?.city, 120) ? { city: clean(addr?.city, 120)! } : {}),
+      ...(clean(addr?.state, 2) ? { federal_unit: clean(addr?.state, 2)! } : {}),
     }
     : undefined;
+
 
   const payer = {
     email,
@@ -297,18 +307,8 @@ async function chargeMercadoPago(
     last_name: lastName,
     ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
     ...(phoneObj ? { phone: phoneObj } : {}),
-    ...(addrObj
-      ? {
-        address: {
-          zip_code: addrObj.zip_code,
-          street_name: addrObj.street_name,
-          street_number: addrObj.street_number,
-          neighborhood: addrObj.neighborhood,
-          city: addrObj.city,
-          federal_unit: addrObj.federal_unit,
-        },
-      }
-      : {}),
+    ...(addrObj ? { address: addrObj } : {}),
+
   };
 
   const body: Record<string, unknown> = {
@@ -326,6 +326,7 @@ async function chargeMercadoPago(
     body.notification_url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`;
     body.statement_descriptor = "BANANACALCAD";
     body.additional_info = {
+      ...(clientIp ? { ip_address: clientIp } : {}),
       items: products.map((p, i) => ({
         id: `item_${i}`,
         title: String(p.title || "Produto").substring(0, 256),
@@ -362,6 +363,7 @@ async function chargeMercadoPago(
         }
         : {}),
     };
+
     if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
   }
 
@@ -1284,7 +1286,7 @@ serve(async (req) => {
 
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
-      result = await chargeMercadoPago(chargeParams, products, supabase);
+      result = await chargeMercadoPago(chargeParams, products, supabase, clientIp);
       if (result.success) {
         mpAccountIdForOrder = result.mpAccountId || null;
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
