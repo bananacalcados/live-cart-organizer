@@ -201,7 +201,7 @@ export async function tokenizeCardMP(card: MpCardInput, mode: CardMode = "credit
       mpPaymentMethodId: paymentMethodId,
       mpPaymentTypeId: paymentTypeId,
       mpIssuerId: issuerId,
-      mpDeviceId: window.MP_DEVICE_SESSION_ID,
+      mpDeviceId: window.MP_DEVICE_SESSION_ID || (await waitForDeviceId(1500)),
     };
   } catch (e) {
     console.warn("[MP] tokenizeCardMP falhou:", e);
