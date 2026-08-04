@@ -13799,6 +13799,9 @@ export type Database = {
           discount: number
           event_id: string | null
           expected_payment_method: string | null
+          expedition_deleted_at: string | null
+          expedition_deleted_by: string | null
+          expedition_deleted_by_email: string | null
           expedition_finished_at: string | null
           expedition_group_id: string | null
           expedition_stage: string | null
@@ -13884,6 +13887,9 @@ export type Database = {
           discount?: number
           event_id?: string | null
           expected_payment_method?: string | null
+          expedition_deleted_at?: string | null
+          expedition_deleted_by?: string | null
+          expedition_deleted_by_email?: string | null
           expedition_finished_at?: string | null
           expedition_group_id?: string | null
           expedition_stage?: string | null
@@ -13969,6 +13975,9 @@ export type Database = {
           discount?: number
           event_id?: string | null
           expected_payment_method?: string | null
+          expedition_deleted_at?: string | null
+          expedition_deleted_by?: string | null
+          expedition_deleted_by_email?: string | null
           expedition_finished_at?: string | null
           expedition_group_id?: string | null
           expedition_stage?: string | null
