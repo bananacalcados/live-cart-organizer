@@ -289,7 +289,7 @@ async function chargeMercadoPago(
   };
   const zipClean = String(addr?.zipCode || "").replace(/\D/g, "");
   const zipValid = zipClean.length === 8 && zipClean !== "00000000";
-  const addrObj = zipValid
+  const addrObj: Record<string, string> | undefined = zipValid
     ? {
       zip_code: zipClean,
       ...(clean(addr?.street, 120) ? { street_name: clean(addr?.street, 120)! } : {}),
