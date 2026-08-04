@@ -393,13 +393,12 @@ async function chargeMercadoPago(
   try {
 
     const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${mpAccount.access_token}`,
-      "X-Idempotency-Key": idemKey,
-    };
-    // device_id (fingerprint do navegador) — pontua na qualidade e reduz fraude
-    if (!mpAccount.is_sandbox && params.mpDeviceId) headers["X-meli-session-id"] = params.mpDeviceId;
+    const headers = buildMpHeaders({
+      accessToken: mpAccount.access_token,
+      idempotencyKey: idemKey,
+      deviceId: mpAccount.is_sandbox ? undefined : params.mpDeviceId,
+    });
+
 
     console.log("[mercadopago] payload", JSON.stringify({
       isSandbox: mpAccount.is_sandbox,
