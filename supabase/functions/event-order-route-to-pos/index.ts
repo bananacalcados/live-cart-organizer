@@ -186,7 +186,28 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (saleErr) throw saleErr;
+    if (saleErr) {
+      // Violação do índice único parcial (uq_pos_sales_source_order_active):
+      // outra execução já criou a venda deste pedido → não é erro, é corrida.
+      if ((saleErr as any).code === "23505") {
+        const { data: existing } = await supabase
+          .from("pos_sales")
+          .select("id")
+          .eq("source_order_id", order.id)
+          .neq("status", "cancelled")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (existing?.id) {
+          await supabase.from("orders").update({ pos_sale_id: existing.id }).eq("id", order.id);
+          return new Response(JSON.stringify({ skipped: "already routed (race)", sale_id: existing.id }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      await releaseClaim();
+      throw saleErr;
+    }
 
     const items = products.map((p: any) => ({
       sale_id: sale.id,
@@ -210,6 +231,11 @@ Deno.serve(async (req) => {
     });
   } catch (e: any) {
     console.error(e);
+    // Libera o claim para não travar pedidos legítimos numa próxima tentativa.
+    try {
+      if (releaseFn) await releaseFn();
+    } catch (_) { /* noop */ }
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
+
 });
