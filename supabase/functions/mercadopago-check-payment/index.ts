@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { getMpAccountByPaymentId, getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
+import { mpGetPayment } from "../_shared/mp-http.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -139,9 +140,7 @@ serve(async (req) => {
     console.log(`[mercadopago-check-payment] using account: ${mpAccount.account_name} (source=${mpAccount.source}, sandbox=${mpAccount.is_sandbox})`);
 
     // Check payment status at Mercado Pago
-    const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const mpResponse = await mpGetPayment(accessToken, paymentId);
 
     if (!mpResponse.ok) {
       throw new Error(`Mercado Pago API error: ${mpResponse.status}`);

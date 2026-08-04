@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { listAllMpAccountsForPolling } from "../_shared/mp-account.ts";
+import { mpGetPayment } from "../_shared/mp-http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +62,7 @@ serve(async (req) => {
 
     for (const acc of ordered) {
       try {
-        const r = await fetch(`https://api.mercadopago.com/v1/payments/${mpId}`, {
-          headers: { Authorization: `Bearer ${acc.access_token}` },
-        });
+        const r = await mpGetPayment(acc.access_token, mpId);
         if (r.ok) {
           const j = await r.json();
           return j.status || null;

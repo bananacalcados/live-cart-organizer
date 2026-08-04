@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
+import { mpGetPayment } from "../_shared/mp-http.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -202,9 +203,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   const accessToken = mpAccount.access_token;
   console.log(`[mercadopago] webhook using account: ${mpAccount.account_name} (${mpAccount.source})`);
 
-  const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const mpRes = await mpGetPayment(accessToken, paymentId);
 
   if (!mpRes.ok) {
     console.error(`MercadoPago API error ${mpRes.status} for payment ${paymentId}`);

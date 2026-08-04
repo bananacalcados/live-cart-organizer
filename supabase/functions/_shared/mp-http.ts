@@ -26,3 +26,10 @@ export function buildMpHeaders(opts: MpHeaderOptions): Record<string, string> {
 
   return headers;
 }
+
+/** GET de pagamento no Mercado Pago usando os headers padrão da integração. */
+export function mpGetPayment(accessToken: string, paymentId: string | number): Promise<Response> {
+  return fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    headers: buildMpHeaders({ accessToken }),
+  });
+}
