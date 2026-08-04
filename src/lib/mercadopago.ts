@@ -35,9 +35,20 @@ function loadScript(src: string, attrs?: Record<string, string>): Promise<boolea
   });
 }
 
+/** Espera o device_id (MP_DEVICE_SESSION_ID) aparecer, com timeout curto. Nunca lança. */
+export async function waitForDeviceId(timeoutMs = 2500): Promise<string | undefined> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (typeof window !== "undefined" && window.MP_DEVICE_SESSION_ID) return window.MP_DEVICE_SESSION_ID;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return typeof window !== "undefined" ? window.MP_DEVICE_SESSION_ID : undefined;
+}
+
 /** Carrega o SDK + script de segurança (device_id) e inicializa o MP. Idempotente. */
 export function initMercadoPago(): Promise<boolean> {
   if (sdkPromise) return sdkPromise;
+
   sdkPromise = (async () => {
     try {
       // Busca a chave pública da conta MP ativa
