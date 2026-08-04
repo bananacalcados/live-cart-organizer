@@ -909,9 +909,11 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
           ...(mpToken ? {
             mpCardToken: mpToken.mpCardToken,
             mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpPaymentTypeId: mpToken.mpPaymentTypeId,
             mpIssuerId: mpToken.mpIssuerId,
             mpDeviceId: mpToken.mpDeviceId,
           } : {}),
+
           installments: selectedInstallments,
 
           billingAddress: {

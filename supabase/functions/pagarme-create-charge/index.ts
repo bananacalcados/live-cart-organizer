@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { buildMpHeaders } from "../_shared/mp-http.ts";
+
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
@@ -270,24 +272,57 @@ async function chargeMercadoPago(
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || ".";
 
+  // ── Dados extras (antifraude + qualidade de integração) ──
+  const phoneDigits = String(params.customer.phone || "").replace(/\D/g, "");
+  const phoneNat = phoneDigits.startsWith("55") && phoneDigits.length > 11 ? phoneDigits.slice(2) : phoneDigits;
+  const phoneObj = phoneNat.length >= 10
+    ? { area_code: phoneNat.slice(0, 2), number: phoneNat.slice(2) }
+    : undefined;
+
+  const addr = params.billingAddress;
+  const addrObj = addr?.zipCode
+    ? {
+      zip_code: String(addr.zipCode).replace(/\D/g, ""),
+      street_name: String(addr.street || "").substring(0, 120),
+      street_number: String(addr.number || "S/N").substring(0, 20),
+      neighborhood: String(addr.neighborhood || "").substring(0, 120),
+      city: String(addr.city || "").substring(0, 120),
+      federal_unit: String(addr.state || "").substring(0, 2),
+    }
+    : undefined;
+
   const payer = {
     email,
     first_name: firstName,
     last_name: lastName,
     ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
+    ...(phoneObj ? { phone: phoneObj } : {}),
+    ...(addrObj
+      ? {
+        address: {
+          zip_code: addrObj.zip_code,
+          street_name: addrObj.street_name,
+          street_number: addrObj.street_number,
+          neighborhood: addrObj.neighborhood,
+          city: addrObj.city,
+          federal_unit: addrObj.federal_unit,
+        },
+      }
+      : {}),
   };
 
   const body: Record<string, unknown> = {
     transaction_amount: Number(amount.toFixed(2)),
     token: params.mpCardToken,
-    description: `Pedido #${String(params.orderId).substring(0, 8)}`,
+    description: `Banana Calçados — Pedido #${String(params.orderId).substring(0, 8)}`,
     installments: isDebit ? 1 : (params.installments || 1),
     payment_method_id: params.mpPaymentMethodId,
     payer,
   };
+  // external_reference sempre presente (rastreabilidade e conciliação)
+  body.external_reference = String(params.orderId);
   if (!mpAccount.is_sandbox) {
     body.binary_mode = true;
-    body.external_reference = String(params.orderId);
     body.notification_url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`;
     body.statement_descriptor = "BANANACALCAD";
     body.additional_info = {
@@ -295,13 +330,41 @@ async function chargeMercadoPago(
         id: `item_${i}`,
         title: String(p.title || "Produto").substring(0, 256),
         description: String(p.title || "Produto").substring(0, 256),
+        category_id: "fashion",
         quantity: Number(p.quantity) || 1,
         unit_price: Math.round(Number(p.price) * 100) / 100,
       })),
-      payer: { first_name: firstName, last_name: lastName },
+      payer: {
+        first_name: firstName,
+        last_name: lastName,
+        ...(phoneObj ? { phone: phoneObj } : {}),
+        ...(addrObj
+          ? {
+            address: {
+              zip_code: addrObj.zip_code,
+              street_name: addrObj.street_name,
+              street_number: addrObj.street_number,
+            },
+          }
+          : {}),
+      },
+      ...(addrObj
+        ? {
+          shipments: {
+            receiver_address: {
+              zip_code: addrObj.zip_code,
+              street_name: addrObj.street_name,
+              street_number: addrObj.street_number,
+              city_name: addrObj.city,
+              state_name: addrObj.federal_unit,
+            },
+          },
+        }
+        : {}),
     };
     if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
   }
+
 
   // Diagnóstico: registra se a conta MP realmente cobre "sem juros" nessa quantidade
   // de parcelas. Se não cobrir, o cliente será cobrado com juros pelo próprio MP.
@@ -332,13 +395,12 @@ async function chargeMercadoPago(
   try {
 
     const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${mpAccount.access_token}`,
-      "X-Idempotency-Key": idemKey,
-    };
-    // device_id (fingerprint do navegador) — pontua na qualidade e reduz fraude
-    if (!mpAccount.is_sandbox && params.mpDeviceId) headers["X-meli-session-id"] = params.mpDeviceId;
+    const headers = buildMpHeaders({
+      accessToken: mpAccount.access_token,
+      idempotencyKey: idemKey,
+      deviceId: mpAccount.is_sandbox ? undefined : params.mpDeviceId,
+    });
+
 
     console.log("[mercadopago] payload", JSON.stringify({
       isSandbox: mpAccount.is_sandbox,
