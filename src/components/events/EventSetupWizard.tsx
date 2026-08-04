@@ -908,17 +908,30 @@ function LiveActivationStep({ event }: { event: any }) {
       return;
     }
     setSavingUrl(true);
-    const { error } = await supabase
-      .from("events")
-      .update({
-        instagram_live_url: trimmed || null,
-        live_url_updated_at: trimmed ? new Date().toISOString() : null,
-      })
-      .eq("id", event.id);
+    const nowIso = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      instagram_live_url: trimmed || null,
+      live_url_updated_at: trimmed ? nowIso : null,
+    };
+    // Salvar link válido já ativa "AO VIVO agora" automaticamente
+    if (trimmed) {
+      patch.is_live_broadcasting = true;
+      patch.live_broadcast_started_at = nowIso;
+    }
+    const { error } = await supabase.from("events").update(patch).eq("id", event.id);
     setSavingUrl(false);
-    if (error) toast.error(error.message);
-    else toast.success("Link da live salvo. TTL de 3h reiniciado.");
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (trimmed) {
+      setBroadcasting(true);
+      toast.success("Link salvo e AO VIVO ativado — expira em 3h.");
+    } else {
+      toast.success("Link da live removido.");
+    }
   };
+
 
   const toggleBroadcasting = async (next: boolean) => {
     if (next) {
