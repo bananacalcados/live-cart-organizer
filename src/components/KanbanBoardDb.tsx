@@ -4,7 +4,7 @@ import { STAGES, OrderStage, Stage } from "@/types/order";
 import { OrderCardDb } from "./OrderCardDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
-import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+import { isOrderMarkedPaid, isPaidOrderStage } from "@/lib/orderPaymentStages";
 import { supabase } from "@/integrations/supabase/client";
 
 
@@ -102,6 +102,8 @@ export function KanbanBoardDb({ orders, onEditOrder, stages = STAGES }: KanbanBo
   // Regra: pago -> PAGO. Cadastro completo mas não pago -> AGUARDANDO PAGAMENTO.
   // Confirmou pedido mas cadastro incompleto -> NOVO PEDIDO. Nunca cai em "Outras etapas".
   const resolveStage = (order: DbOrder): string => {
+    // Etapas pós-pagamento (Expedição/Concluído) têm prioridade sobre a coluna PAGO.
+    if (knownStageIds.has(order.stage as OrderStage) && isPaidOrderStage(order.stage)) return order.stage;
     if (hasPaidColumn && isOrderMarkedPaid(order)) return "paid";
     if (knownStageIds.has(order.stage as OrderStage)) return order.stage;
     if (hasAwaitingPayment && completeRegs[order.id]) return "awaiting_payment";
