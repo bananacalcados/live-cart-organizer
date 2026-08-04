@@ -16,6 +16,7 @@ const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  let releaseFn: (() => Promise<void>) | null = null;
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -33,6 +34,27 @@ Deno.serve(async (req) => {
     if (!order) return new Response(JSON.stringify({ error: "order not found" }), { status: 404, headers: corsHeaders });
     if (order.pos_sale_id) return new Response(JSON.stringify({ skipped: "already routed" }), { headers: corsHeaders });
 
+    // ---- CLAIM ATÔMICO: evita corrida entre webhook, polling e frontend ----
+    // Claims mais antigos que 5 min são considerados travados e podem ser retomados.
+    const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: claimed } = await supabase
+      .from("orders")
+      .update({ pos_routing_claimed_at: new Date().toISOString() })
+      .eq("id", order.id)
+      .is("pos_sale_id", null)
+      .or(`pos_routing_claimed_at.is.null,pos_routing_claimed_at.lt.${staleCutoff}`)
+      .select("id");
+
+    if (!claimed || claimed.length === 0) {
+      return new Response(JSON.stringify({ skipped: "already claimed" }), { headers: corsHeaders });
+    }
+
+    const releaseClaim = async () => {
+      await supabase.from("orders").update({ pos_routing_claimed_at: null }).eq("id", order.id).is("pos_sale_id", null);
+    };
+    releaseFn = releaseClaim;
+
+
     const { data: event } = await supabase
       .from("events")
       .select("channel, default_store_id")
@@ -45,8 +67,10 @@ Deno.serve(async (req) => {
     const resolvedStoreId = event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
 
     if (!resolvedStoreId) {
+      await releaseClaim();
       return new Response(JSON.stringify({ skipped: "no store to route" }), { headers: corsHeaders });
     }
+
 
     const storeId = resolvedStoreId as string;
     const sellerId = LIVE_SELLER_BY_STORE[storeId] || null;
@@ -164,7 +188,28 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (saleErr) throw saleErr;
+    if (saleErr) {
+      // Violação do índice único parcial (uq_pos_sales_source_order_active):
+      // outra execução já criou a venda deste pedido → não é erro, é corrida.
+      if ((saleErr as any).code === "23505") {
+        const { data: existing } = await supabase
+          .from("pos_sales")
+          .select("id")
+          .eq("source_order_id", order.id)
+          .neq("status", "cancelled")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (existing?.id) {
+          await supabase.from("orders").update({ pos_sale_id: existing.id }).eq("id", order.id);
+          return new Response(JSON.stringify({ skipped: "already routed (race)", sale_id: existing.id }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      await releaseClaim();
+      throw saleErr;
+    }
 
     const items = products.map((p: any) => ({
       sale_id: sale.id,
@@ -188,6 +233,11 @@ Deno.serve(async (req) => {
     });
   } catch (e: any) {
     console.error(e);
+    // Libera o claim para não travar pedidos legítimos numa próxima tentativa.
+    try {
+      if (releaseFn) await releaseFn();
+    } catch (_) { /* noop */ }
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
+
 });

@@ -11279,6 +11279,7 @@ export type Database = {
           payment_on_delivery: boolean
           payment_window_expires_at: string | null
           pickup_store_id: string | null
+          pos_routing_claimed_at: string | null
           pos_sale_id: string | null
           products: Json
           release_to_expedition: boolean
@@ -11338,6 +11339,7 @@ export type Database = {
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
           pickup_store_id?: string | null
+          pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
           products?: Json
           release_to_expedition?: boolean
@@ -11397,6 +11399,7 @@ export type Database = {
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
           pickup_store_id?: string | null
+          pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
           products?: Json
           release_to_expedition?: boolean
