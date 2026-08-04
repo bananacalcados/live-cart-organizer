@@ -33,6 +33,26 @@ Deno.serve(async (req) => {
     if (!order) return new Response(JSON.stringify({ error: "order not found" }), { status: 404, headers: corsHeaders });
     if (order.pos_sale_id) return new Response(JSON.stringify({ skipped: "already routed" }), { headers: corsHeaders });
 
+    // ---- CLAIM ATÔMICO: evita corrida entre webhook, polling e frontend ----
+    // Claims mais antigos que 5 min são considerados travados e podem ser retomados.
+    const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: claimed } = await supabase
+      .from("orders")
+      .update({ pos_routing_claimed_at: new Date().toISOString() })
+      .eq("id", order.id)
+      .is("pos_sale_id", null)
+      .or(`pos_routing_claimed_at.is.null,pos_routing_claimed_at.lt.${staleCutoff}`)
+      .select("id");
+
+    if (!claimed || claimed.length === 0) {
+      return new Response(JSON.stringify({ skipped: "already claimed" }), { headers: corsHeaders });
+    }
+
+    const releaseClaim = async () => {
+      await supabase.from("orders").update({ pos_routing_claimed_at: null }).eq("id", order.id).is("pos_sale_id", null);
+    };
+
+
     const { data: event } = await supabase
       .from("events")
       .select("channel, default_store_id")
