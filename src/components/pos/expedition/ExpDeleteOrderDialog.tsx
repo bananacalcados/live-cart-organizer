@@ -91,12 +91,18 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
           </label>
 
           <div className="space-y-1">
-            <Label className="text-base font-bold">Motivo (opcional)</Label>
+            <Label className="text-base font-bold">
+              Motivo <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ex.: cliente desistiu / venda estornada"
+              aria-invalid={!reasonValid}
             />
+            <p className="text-xs font-semibold text-muted-foreground">
+              Obrigatório. O motivo e o usuário que excluiu ficam registrados no histórico.
+            </p>
           </div>
         </div>
 
@@ -104,11 +110,17 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancelar
           </Button>
-          <Button variant="destructive" className="font-black" onClick={run} disabled={busy}>
+          <Button
+            variant="destructive"
+            className="font-black"
+            onClick={run}
+            disabled={busy || !reasonValid}
+          >
             {busy ? <Loader2 className="h-5 w-5 animate-spin mr-1" /> : <Trash2 className="h-5 w-5 mr-1" />}
             EXCLUIR PEDIDO
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
