@@ -65,8 +65,10 @@ Deno.serve(async (req) => {
     const resolvedStoreId = event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
 
     if (!resolvedStoreId) {
+      await releaseClaim();
       return new Response(JSON.stringify({ skipped: "no store to route" }), { headers: corsHeaders });
     }
+
 
     const storeId = resolvedStoreId as string;
     const sellerId = LIVE_SELLER_BY_STORE[storeId] || null;
