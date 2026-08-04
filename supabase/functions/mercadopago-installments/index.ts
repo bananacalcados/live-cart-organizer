@@ -39,7 +39,7 @@ serve(async (req) => {
 
     const res = await fetch(
       `https://api.mercadopago.com/v1/payment_methods/installments?${qs.toString()}`,
-      { headers: { Authorization: `Bearer ${account.access_token}` } },
+      { headers: buildMpHeaders({ accessToken: account.access_token }) },
     );
     const raw = await res.text();
     if (!res.ok) {
