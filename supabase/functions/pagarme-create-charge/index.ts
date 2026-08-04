@@ -1286,7 +1286,7 @@ serve(async (req) => {
 
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
-      result = await chargeMercadoPago(chargeParams, products, supabase);
+      result = await chargeMercadoPago(chargeParams, products, supabase, clientIp);
       if (result.success) {
         mpAccountIdForOrder = result.mpAccountId || null;
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
