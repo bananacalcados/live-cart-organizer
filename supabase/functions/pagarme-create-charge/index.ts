@@ -307,18 +307,8 @@ async function chargeMercadoPago(
     last_name: lastName,
     ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
     ...(phoneObj ? { phone: phoneObj } : {}),
-    ...(addrObj
-      ? {
-        address: {
-          zip_code: addrObj.zip_code,
-          street_name: addrObj.street_name,
-          street_number: addrObj.street_number,
-          neighborhood: addrObj.neighborhood,
-          city: addrObj.city,
-          federal_unit: addrObj.federal_unit,
-        },
-      }
-      : {}),
+    ...(addrObj ? { address: addrObj } : {}),
+
   };
 
   const body: Record<string, unknown> = {
