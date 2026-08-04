@@ -281,16 +281,25 @@ async function chargeMercadoPago(
     : undefined;
 
   const addr = params.billingAddress;
-  const addrObj = addr?.zipCode
+  // Nunca enviar placeholders ao MP (piora a qualidade da integração).
+  const clean = (v: unknown, max: number) => {
+    const s = String(v ?? "").trim();
+    if (!s || /^n(ã|a)o informado$/i.test(s) || s === "N/A") return undefined;
+    return s.substring(0, max);
+  };
+  const zipClean = String(addr?.zipCode || "").replace(/\D/g, "");
+  const zipValid = zipClean.length === 8 && zipClean !== "00000000";
+  const addrObj = zipValid
     ? {
-      zip_code: String(addr.zipCode).replace(/\D/g, ""),
-      street_name: String(addr.street || "").substring(0, 120),
-      street_number: String(addr.number || "S/N").substring(0, 20),
-      neighborhood: String(addr.neighborhood || "").substring(0, 120),
-      city: String(addr.city || "").substring(0, 120),
-      federal_unit: String(addr.state || "").substring(0, 2),
+      zip_code: zipClean,
+      ...(clean(addr?.street, 120) ? { street_name: clean(addr?.street, 120)! } : {}),
+      ...(clean(addr?.number, 20) ? { street_number: clean(addr?.number, 20)! } : {}),
+      ...(clean(addr?.neighborhood, 120) ? { neighborhood: clean(addr?.neighborhood, 120)! } : {}),
+      ...(clean(addr?.city, 120) ? { city: clean(addr?.city, 120)! } : {}),
+      ...(clean(addr?.state, 2) ? { federal_unit: clean(addr?.state, 2)! } : {}),
     }
     : undefined;
+
 
   const payer = {
     email,
