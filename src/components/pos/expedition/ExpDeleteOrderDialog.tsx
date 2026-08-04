@@ -37,13 +37,19 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
 
   const ids = order.group_order_ids?.length ? order.group_order_ids : [order.id];
 
+  const reasonValid = reason.trim().length >= 3;
+
   const run = async () => {
+    if (!reasonValid) {
+      toast.error("Informe o motivo da exclusão (mínimo 3 caracteres)");
+      return;
+    }
     setBusy(true);
     try {
       for (const id of ids) {
         const { error } = await supabase.rpc("expedition_cancel_sale" as any, {
           p_sale_id: id,
-          p_reason: reason.trim() || null,
+          p_reason: reason.trim(),
           p_restore_stock: restoreStock,
         });
         if (error) throw error;
@@ -85,12 +91,18 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
           </label>
 
           <div className="space-y-1">
-            <Label className="text-base font-bold">Motivo (opcional)</Label>
+            <Label className="text-base font-bold">
+              Motivo <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ex.: cliente desistiu / venda estornada"
+              aria-invalid={!reasonValid}
             />
+            <p className="text-xs font-semibold text-muted-foreground">
+              Obrigatório. O motivo e o usuário que excluiu ficam registrados no histórico.
+            </p>
           </div>
         </div>
 
@@ -98,11 +110,17 @@ export function ExpDeleteOrderDialog({ order, open, onOpenChange, onDeleted }: P
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancelar
           </Button>
-          <Button variant="destructive" className="font-black" onClick={run} disabled={busy}>
+          <Button
+            variant="destructive"
+            className="font-black"
+            onClick={run}
+            disabled={busy || !reasonValid}
+          >
             {busy ? <Loader2 className="h-5 w-5 animate-spin mr-1" /> : <Trash2 className="h-5 w-5 mr-1" />}
             EXCLUIR PEDIDO
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
