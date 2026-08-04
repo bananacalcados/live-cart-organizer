@@ -379,7 +379,7 @@ async function chargeMercadoPago(
       });
       const insRes = await fetch(
         `https://api.mercadopago.com/v1/payment_methods/installments?${q.toString()}`,
-        { headers: { Authorization: `Bearer ${mpAccount.access_token}` } },
+        { headers: buildMpHeaders({ accessToken: mpAccount.access_token }) },
       );
       if (insRes.ok) {
         const insData = await insRes.json();

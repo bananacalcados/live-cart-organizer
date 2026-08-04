@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { buildMpHeaders } from "../_shared/mp-http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +39,7 @@ serve(async (req) => {
 
     const res = await fetch(
       `https://api.mercadopago.com/v1/payment_methods/installments?${qs.toString()}`,
-      { headers: { Authorization: `Bearer ${account.access_token}` } },
+      { headers: buildMpHeaders({ accessToken: account.access_token }) },
     );
     const raw = await res.text();
     if (!res.ok) {
