@@ -184,6 +184,11 @@ export async function tokenizeCardMP(card: MpCardInput, mode: CardMode = "credit
       } catch { /* issuer é opcional */ }
     }
 
+    // Device ID precisa existir ANTES de tokenizar (recomendação MP: a sessão
+    // de segurança deve cobrir a criação do token). Timeout curto, nunca lança.
+    const deviceId = window.MP_DEVICE_SESSION_ID || (await waitForDeviceId(1500));
+    if (!deviceId) console.warn("[MP] device_id ausente após espera — seguindo sem ele.");
+
     const tokenResp = await mpInstance.createCardToken({
       cardNumber: card.number.replace(/\D/g, ""),
       cardholderName: card.holderName,
@@ -201,8 +206,10 @@ export async function tokenizeCardMP(card: MpCardInput, mode: CardMode = "credit
       mpPaymentMethodId: paymentMethodId,
       mpPaymentTypeId: paymentTypeId,
       mpIssuerId: issuerId,
-      mpDeviceId: window.MP_DEVICE_SESSION_ID || (await waitForDeviceId(1500)),
+      // revalida: pode ter chegado durante a tokenização
+      mpDeviceId: deviceId || window.MP_DEVICE_SESSION_ID,
     };
+
   } catch (e) {
     console.warn("[MP] tokenizeCardMP falhou:", e);
     return null;
