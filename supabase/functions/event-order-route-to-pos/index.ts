@@ -16,6 +16,7 @@ const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  let releaseFn: (() => Promise<void>) | null = null;
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
     const releaseClaim = async () => {
       await supabase.from("orders").update({ pos_routing_claimed_at: null }).eq("id", order.id).is("pos_sale_id", null);
     };
+    releaseFn = releaseClaim;
 
 
     const { data: event } = await supabase
