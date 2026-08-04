@@ -74,6 +74,7 @@ export const MEMBER_AREA_STAGE_IDS: OrderStage[] = [
   'awaiting_payment',
   'paid',
   'completed',
+  'shipped',
   'cancelled',
 ];
 
@@ -83,7 +84,9 @@ const MEMBER_AREA_TITLES: Partial<Record<OrderStage, string>> = {
   awaiting_confirmation: 'Aguardando Confirmação da Cliente',
   new: 'Novo Pedido (confirmado)',
   completed: 'Expedição',
+  shipped: 'Concluído',
 };
+
 
 
 export const getStagesForMode = (operationMode?: string | null): Stage[] => {
