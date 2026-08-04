@@ -247,7 +247,8 @@ interface ChargeRequest {
 async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  supabase: any
+  supabase: any,
+  clientIp?: string | null
 ): Promise<ChargeResult> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
