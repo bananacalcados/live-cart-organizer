@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMpAccountByPaymentId, getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { normalizeGatewayPaymentLabel } from "../_shared/payment-method-sync.ts";
+import { mpGetPayment } from "../_shared/mp-http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,9 +71,7 @@ serve(async (req) => {
           continue;
         }
 
-        const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-          headers: { Authorization: `Bearer ${account.access_token}` },
-        });
+        const res = await mpGetPayment(account.access_token, paymentId);
         if (!res.ok) {
           result.mercadopago.failed++;
           continue;

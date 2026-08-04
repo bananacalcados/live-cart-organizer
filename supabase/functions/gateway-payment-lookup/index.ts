@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMpAccountForOrder } from "../_shared/mp-account.ts";
+import { mpGetPayment } from "../_shared/mp-http.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -69,9 +70,7 @@ serve(async (req) => {
         entry.error = "Nenhum token Mercado Pago disponível para consulta.";
       } else {
         try {
-          const res = await fetch(`https://api.mercadopago.com/v1/payments/${mpId}`, {
-            headers: { Authorization: `Bearer ${account.access_token}` },
-          });
+          const res = await mpGetPayment(account.access_token, mpId);
           if (res.status === 404) {
             entry.status = "not_found";
             entry.error = "Pagamento não localizado no Mercado Pago (ID órfão).";
