@@ -326,6 +326,7 @@ async function chargeMercadoPago(
     body.notification_url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`;
     body.statement_descriptor = "BANANACALCAD";
     body.additional_info = {
+      ...(clientIp ? { ip_address: clientIp } : {}),
       items: products.map((p, i) => ({
         id: `item_${i}`,
         title: String(p.title || "Produto").substring(0, 256),
@@ -362,6 +363,7 @@ async function chargeMercadoPago(
         }
         : {}),
     };
+
     if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
   }
 
