@@ -233,9 +233,11 @@ Deno.serve(async (req) => {
       components.push({ type: "body", parameters: textParams(cc.topTokens, baseCtx) });
     }
     const carouselCards = cc.okCards.map((card, i) => {
+      const mid = card.imagem_url ? cc.mediaIds.get(card.imagem_url) : null;
       const comps: any[] = [
-        { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+        { type: "header", parameters: [{ type: "image", image: mid ? { id: mid } : { link: card.imagem_url } }] },
       ];
+
       if (cc.cardTokens.length) {
         comps.push({
           type: "body",
