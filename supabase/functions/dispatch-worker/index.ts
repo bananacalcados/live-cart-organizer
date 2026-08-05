@@ -406,7 +406,7 @@ serve(async (req) => {
       if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
       const testRcp: any = { phone: formatted, recipient_name: 'Teste', first_name: 'Teste' };
-      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId);
+      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId, mediaIds);
 
       const body: any = {
         messaging_product: 'whatsapp',
