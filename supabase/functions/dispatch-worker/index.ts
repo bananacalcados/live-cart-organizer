@@ -512,9 +512,9 @@ serve(async (req) => {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
-        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
+        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
-        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components);
+        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components, variablesConfig);
         const body: any = {
           messaging_product: 'whatsapp',
           to: formatted,
@@ -533,11 +533,15 @@ serve(async (req) => {
           if (res.ok) {
             return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered, carouselPayload };
           }
-          return { ok: false, id: rcp.id, error: data.error?.message || JSON.stringify(data).slice(0, 200) };
+          const errMsg = data.error?.message || JSON.stringify(data).slice(0, 200);
+          const code = extractMetaErrorCode(data);
+          return { ok: false, id: rcp.id, error: errMsg, code, phone: formatted, rendered, cls: classifySendError(code, errMsg) };
         } catch (e) {
-          return { ok: false, id: rcp.id, error: String(e).slice(0, 200) };
+          const errMsg = String(e).slice(0, 200);
+          return { ok: false, id: rcp.id, error: errMsg, code: null, phone: formatted, rendered, cls: classifySendError(null, errMsg) };
         }
       }
+
 
 
       // Send in parallel chunks
