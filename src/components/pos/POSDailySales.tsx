@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
   Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
   CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers,
-  Clock, AlertTriangle
+  Clock, AlertTriangle, Truck
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
