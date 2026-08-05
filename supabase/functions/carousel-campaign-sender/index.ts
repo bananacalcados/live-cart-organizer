@@ -151,17 +151,46 @@ Deno.serve(async (req) => {
       .order("ordem", { ascending: true });
     const okCards = (cards || []).slice(0, 10);
 
+    // ETAPA 1: sobe cada imagem de card UMA vez e reaproveita o media_id. Sem isso
+    // a Meta rebaixa a mesma URL a cada mensagem e devolve 131053 quando o nosso
+    // storage oscila, derrubando o disparo inteiro.
+    const mediaIds = new Map<string, string>();
+    try {
+      let q = sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("provider", "meta").limit(1);
+      q = campaign?.whatsapp_number_id
+        ? sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("id", campaign.whatsapp_number_id).limit(1)
+        : q;
+      const { data: numRows } = await q;
+      const num = (numRows || [])[0];
+      if (num?.meta_phone_number_id && num?.meta_access_token) {
+        for (const card of okCards) {
+          if (!card.imagem_url) continue;
+          const id = await resolveMetaMediaId(sb, {
+            url: card.imagem_url,
+            kind: "image",
+            phoneNumberId: num.meta_phone_number_id,
+            accessToken: num.meta_access_token,
+          });
+          if (id) mediaIds.set(card.imagem_url, id);
+        }
+      }
+    } catch (e) {
+      console.warn("[carousel-sender] media cache falhou:", (e as Error).message);
+    }
+
     const ctx = {
       campaign,
       templateName,
       language,
       okCards,
+      mediaIds,
       topTokens: tokensInOrder(campaign?.top_body),
       cardTokens: tokensInOrder(campaign?.card_body),
     };
     campCache.set(campanhaId, ctx);
     return ctx;
   }
+
 
   let sent = 0;
   let failed = 0;
