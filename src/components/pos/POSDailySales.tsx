@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
   Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
   CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers,
-  Clock, AlertTriangle
+  Clock, AlertTriangle, Truck
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -51,6 +51,8 @@ interface SaleSummary {
   external_source?: string | null;
   tracking_code?: string | null;
   external_order_id?: string | null;
+  sale_released_at?: string | null;
+  expedition_stage?: string | null;
 }
 
 interface TinyOnlyOrder {
@@ -218,18 +220,17 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id";
-      
-      // Query 1: Sales created in date range that NÃO foram pagas (pending/online_pending/failed/pending_pickup)
-      //   - pending_pickup = aguardando pagamento na retirada (paid_at sempre null) → entra aqui pela data de criação
-      // Query 2: Sales PAGAS no período (paid/completed/pending_sync) — aparecem pela data de pagamento
-      //   - PAGO É PAGO: status de fulfillment ficam em db_orders.stage, não removem a venda daqui
-      const [createdRes, paidRes, sellersRes, goalsRes] = await Promise.all([
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id, sale_released_at, expedition_stage";
+
+      // Query 1: Vendas criadas no período que NÃO foram pagas
+      // Query 2: Vendas PAGAS e já LIBERADAS (expedição concluída ou venda de balcão)
+      // Query 3: Vendas PAGAS aguardando a expedição (ainda não liberadas como venda)
+      const [createdRes, paidRes, inExpRes, sellersRes, goalsRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
-          .eq("expedition_stage", "concluido")
+          .not("sale_released_at", "is", null)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
           .not("status", "in", '("paid","completed","pending_sync")')
@@ -238,7 +239,15 @@ export function POSDailySales({ storeId }: Props) {
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
-          .eq("expedition_stage", "concluido")
+          .not("sale_released_at", "is", null)
+          .in("status", ["paid", "completed", "pending_sync"])
+          .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pos_sales")
+          .select(selectFields)
+          .eq("store_id", storeId)
+          .is("sale_released_at", null)
           .in("status", ["paid", "completed", "pending_sync"])
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
@@ -253,10 +262,11 @@ export function POSDailySales({ storeId }: Props) {
           .eq("is_active", true),
       ]);
 
-      // Merge both queries, dedup by id
+      // Merge queries, dedup by id
       const mergedMap = new Map<string, SaleSummary>();
       for (const s of (createdRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
       for (const s of (paidRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
+      for (const s of (inExpRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
       const salesData = Array.from(mergedMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSales(salesData);
       setSellers(sellersRes.data || []);
@@ -526,14 +536,18 @@ export function POSDailySales({ storeId }: Props) {
 
   // Calculations
   // Status filter for tabs
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'in_expedition' | 'awaiting_payment' | 'not_approved'>('all');
   const [sellerFilter, setSellerFilter] = useState<string>('all');
 
-  // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
-  // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid");
+  const isPaidStatus = (s: SaleSummary) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid";
+  // Venda efetivada = paga E liberada (expedição concluída ou venda fora do fluxo de expedição)
+  const completedSales = sales.filter((s) => isPaidStatus(s) && !!s.sale_released_at);
+  // Paga, mas ainda na fila da Expedição — não conta como venda efetivada
+  const inExpeditionSales = sales.filter((s) => isPaidStatus(s) && !s.sale_released_at);
   const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending" || s.status === "pending_pickup");
   const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
+  const allSales = sales.filter((s) => !inExpeditionSales.some((e) => e.id === s.id));
+  const inExpeditionTotal = inExpeditionSales.reduce((sum, s) => sum + (s.total || 0), 0);
 
   // KPI data source based on active filter
   const kpiSales = statusFilter === 'awaiting_payment'
@@ -542,7 +556,9 @@ export function POSDailySales({ storeId }: Props) {
       ? notApprovedSales
       : statusFilter === 'completed'
         ? completedSales
-        : sales; // 'all'
+        : statusFilter === 'in_expedition'
+          ? inExpeditionSales
+          : allSales; // 'all' — faturamento não inclui o que ainda está em expedição
 
   const kpiSaleIds = new Set(kpiSales.map(s => s.id));
   const kpiItems = saleItems.filter(i => kpiSaleIds.has(i.sale_id));
@@ -657,7 +673,9 @@ export function POSDailySales({ storeId }: Props) {
       ? notApprovedSales
       : statusFilter === 'completed'
         ? completedSales
-        : sales; // 'all' shows everything
+        : statusFilter === 'in_expedition'
+          ? inExpeditionSales
+          : sales; // 'all' shows everything
 
   const sellerFilteredSales = sellerFilter === 'all'
     ? salesForStatusFilter
@@ -734,6 +752,12 @@ export function POSDailySales({ storeId }: Props) {
               {(sale.status === 'conditional' || (sale.payment_details as any)?.conditional) && (
                 <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px] px-1.5 py-0">
                   📦 Condicional{sale.status === 'conditional' ? ' (enviado)' : ''}
+                </Badge>
+              )}
+              {(sale.status === 'paid' || sale.status === 'completed' || sale.status === 'pending_sync') && !sale.sale_released_at && (
+                <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] px-1.5 py-0">
+                  <Truck className="h-2.5 w-2.5 mr-0.5" />Aguardando expedição
+                  {sale.expedition_stage ? ` • ${sale.expedition_stage}` : ''}
                 </Badge>
               )}
               {sale.status === 'online_pending' && (
@@ -906,6 +930,7 @@ export function POSDailySales({ storeId }: Props) {
             {([
               { key: 'all' as const, label: 'Todas', count: sales.length, color: 'bg-pos-white/10 text-pos-white border-pos-white/30' },
               { key: 'completed' as const, label: 'Concluídas', count: completedSales.length, color: 'bg-green-500/15 text-green-500 border-green-500/30' },
+              { key: 'in_expedition' as const, label: 'Em expedição', count: inExpeditionSales.length, color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
               { key: 'awaiting_payment' as const, label: 'Aguardando Pgto', count: awaitingPaymentSales.length, color: 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30' },
               { key: 'not_approved' as const, label: 'Não Aprovadas', count: notApprovedSales.length, color: 'bg-red-500/15 text-red-500 border-red-500/30' },
             ]).map(tab => (
@@ -918,11 +943,13 @@ export function POSDailySales({ storeId }: Props) {
                     ? tab.key === 'awaiting_payment' ? 'bg-yellow-500 text-black border-yellow-500'
                     : tab.key === 'not_approved' ? 'bg-red-500 text-white border-red-500'
                     : tab.key === 'completed' ? 'bg-green-500 text-black border-green-500'
+                    : tab.key === 'in_expedition' ? 'bg-blue-500 text-white border-blue-500'
                     : 'bg-pos-orange text-pos-black border-pos-orange'
                     : tab.color
                 )}
               >
                 {tab.key === 'awaiting_payment' && <Clock className="h-3 w-3" />}
+                {tab.key === 'in_expedition' && <Truck className="h-3 w-3" />}
                 {tab.key === 'not_approved' && <AlertTriangle className="h-3 w-3" />}
                 {tab.label}
                 <span className={cn(
@@ -950,6 +977,22 @@ export function POSDailySales({ storeId }: Props) {
             <KPICard icon={Package} label="Itens Vendidos" value={String(totalItemsSold)} color="text-purple-500" />
             <KPICard icon={Tag} label="Preço Médio/Item" value={`R$ ${avgPricePerItem.toFixed(2)}`} color="text-yellow-500" />
           </div>
+
+          {inExpeditionSales.length > 0 && statusFilter !== 'in_expedition' && (
+            <button
+              onClick={() => setStatusFilter('in_expedition')}
+              className="w-full flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/25 text-left hover:bg-blue-500/15 transition-colors"
+            >
+              <Truck className="h-4 w-4 text-blue-400 shrink-0" />
+              <span className="text-sm text-blue-200">
+                Pago aguardando expedição: <strong>{inExpeditionSales.length}</strong>{" "}
+                {inExpeditionSales.length === 1 ? "pedido" : "pedidos"} •{" "}
+                <strong>R$ {inExpeditionTotal.toFixed(2)}</strong> — vira venda efetivada quando a expedição for concluída
+              </span>
+            </button>
+          )}
+
+
 
           {totalDiscount > 0 && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">

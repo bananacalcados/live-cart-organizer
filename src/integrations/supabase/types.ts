@@ -13835,6 +13835,7 @@ export type Database = {
           payment_on_delivery: boolean
           pickup_store_id: string | null
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
+          sale_released_at: string | null
           sale_type: string
           seller_id: string | null
           shipped_at: string | null
@@ -13923,6 +13924,7 @@ export type Database = {
           payment_on_delivery?: boolean
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
+          sale_released_at?: string | null
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null
@@ -14011,6 +14013,7 @@ export type Database = {
           payment_on_delivery?: boolean
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
+          sale_released_at?: string | null
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null

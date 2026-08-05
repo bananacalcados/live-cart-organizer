@@ -187,7 +187,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
         .from("pos_sales")
         .select("total, seller_id")
         .eq("store_id", storeId)
-        .eq("expedition_stage", "concluido")
+        .not("sale_released_at", "is", null)
         .in("status", ["completed", "pending_sync", "paid"])
         .neq("revenue_attribution", "site_pickup_only")
         .or(`and(paid_at.gte.${startStr},paid_at.lte.${endStr}),and(paid_at.is.null,created_at.gte.${startStr},created_at.lte.${endStr})`);
