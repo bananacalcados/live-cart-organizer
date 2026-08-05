@@ -70,12 +70,14 @@ function buildCarouselComponent(
   carouselComp: any,
   variablesConfig: Record<string, VariableConfig>,
   dispatchId?: string,
+  mediaIds: Map<string, string> = new Map(),
 ): any {
   const tplCards = carouselComp?.cards || [];
   const cards = tplCards.map((tplCard: any, i: number) => {
     const cardComps: any[] = [];
     const imageUrl = variablesConfig[`card_${i}_image`]?.staticValue || '';
-    cardComps.push({ type: 'header', parameters: [{ type: 'image', image: { link: imageUrl } }] });
+    cardComps.push({ type: 'header', parameters: [mediaParam('image', imageUrl, mediaIds)] });
+
 
     const cardBody = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
     const bodyVars = extractVarNumbers(cardBody?.text);
