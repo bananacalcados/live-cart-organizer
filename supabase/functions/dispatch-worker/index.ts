@@ -115,7 +115,9 @@ function paramText(p: any): string {
 function buildCarouselPayloadForChat(
   templateComponents: any[],
   sentComponents: any[],
+  variablesConfig: Record<string, VariableConfig> = {},
 ): any | null {
+
   const carouselDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
   if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
   const sentCarousel = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
