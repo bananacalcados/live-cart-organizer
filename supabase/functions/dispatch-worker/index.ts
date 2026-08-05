@@ -9,6 +9,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
+import { resolveMetaMediaId } from "../_shared/meta-media-cache.ts";
+import { sendTextFallback } from "../_shared/meta-fallback.ts";
+
+/**
+ * Header de mídia: usa o media_id da Meta quando o upload deu certo (evita que a
+ * Meta baixe a mesma URL a cada mensagem → erro 131053) e cai para `link` quando
+ * o upload não foi possível.
+ */
+function mediaParam(kind: string, url: string, mediaIds: Map<string, string>) {
+  const id = url ? mediaIds.get(url) : null;
+  return id ? { type: kind, [kind]: { id } } : { type: kind, [kind]: { link: url } };
+}
+
 
 
 const corsHeaders = {
@@ -56,12 +70,14 @@ function buildCarouselComponent(
   carouselComp: any,
   variablesConfig: Record<string, VariableConfig>,
   dispatchId?: string,
+  mediaIds: Map<string, string> = new Map(),
 ): any {
   const tplCards = carouselComp?.cards || [];
   const cards = tplCards.map((tplCard: any, i: number) => {
     const cardComps: any[] = [];
     const imageUrl = variablesConfig[`card_${i}_image`]?.staticValue || '';
-    cardComps.push({ type: 'header', parameters: [{ type: 'image', image: { link: imageUrl } }] });
+    cardComps.push({ type: 'header', parameters: [mediaParam('image', imageUrl, mediaIds)] });
+
 
     const cardBody = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
     const bodyVars = extractVarNumbers(cardBody?.text);
@@ -99,7 +115,9 @@ function paramText(p: any): string {
 function buildCarouselPayloadForChat(
   templateComponents: any[],
   sentComponents: any[],
+  variablesConfig: Record<string, VariableConfig> = {},
 ): any | null {
+
   const carouselDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
   if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
   const sentCarousel = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
@@ -129,7 +147,11 @@ function buildCarouselPayloadForChat(
       }
       return { type, text: b.text || '', url, phone_number: b.phone_number };
     });
-    return { image_url: hp.image?.link || null, video_url: hp.video?.link || null, body, buttons };
+    // Quando enviamos por media_id (sem link), o chat ainda precisa da URL original
+    // para renderizar a imagem do card — pegamos de variablesConfig.
+    const cardImageUrl = variablesConfig[`card_${i}_image`]?.staticValue || null;
+    return { image_url: hp.image?.link || (hp.image?.id ? cardImageUrl : null), video_url: hp.video?.link || null, body, buttons };
+
   });
 
   return { type: 'carousel', body: bubbleBody, cards };
@@ -142,7 +164,9 @@ function buildComponentsForRecipient(
   recipient: any | null,
   hasDynamicVars: boolean,
   dispatchId?: string,
+  mediaIds: Map<string, string> = new Map(),
 ) {
+
   const components: any[] = [];
 
   // ── Carousel templates take a dedicated path ──
@@ -161,7 +185,7 @@ function buildComponentsForRecipient(
       };
       components.push({ type: 'body', parameters: bubbleVars.map((n) => ({ type: 'text', text: resolveBubble(n) })) });
     }
-    components.push(buildCarouselComponent(carouselComp, variablesConfig, dispatchId));
+    components.push(buildCarouselComponent(carouselComp, variablesConfig, dispatchId, mediaIds));
     return components;
   }
 
@@ -195,8 +219,9 @@ function buildComponentsForRecipient(
     const mediaType = headerComp.format.toLowerCase();
     components.push({
       type: 'header',
-      parameters: [{ type: mediaType, [mediaType]: { link: headerMediaUrl } }],
+      parameters: [mediaParam(mediaType, headerMediaUrl, mediaIds)],
     });
+
   } else if (headerVars.length > 0) {
     components.push({
       type: 'header',
@@ -340,6 +365,29 @@ serve(async (req) => {
     const chatMediaType = isMediaHeader ? headerFormat.toLowerCase() : 'text';
     const chatMediaUrl = isMediaHeader ? headerMediaUrl : null;
 
+    // ── ETAPA 1: subir a mídia UMA vez e usar media_id em todos os envios ──────
+    // Antes cada mensagem carregava `image.link`, e a Meta rebaixava a URL a cada
+    // envio → em picos o storage devolvia 500 e a Meta respondia 131053, matando
+    // centenas de disparos. Agora resolvemos o media_id (cacheado em
+    // meta_media_cache) antes do loop; se falhar, seguimos com o link.
+    const mediaIds = new Map<string, string>();
+    {
+      const urls = new Set<string>();
+      if (isMediaHeader && headerMediaUrl) urls.add(headerMediaUrl);
+      for (const [key, vc] of Object.entries(variablesConfig as Record<string, any>)) {
+        if (/^card_\d+_image$/.test(key) && vc?.staticValue) urls.add(vc.staticValue);
+      }
+      for (const u of urls) {
+        const kind = u === headerMediaUrl && headerFormat !== 'IMAGE'
+          ? (headerFormat.toLowerCase() as any)
+          : 'image';
+        const id = await resolveMetaMediaId(supabase, { url: u, kind, phoneNumberId, accessToken });
+        if (id) mediaIds.set(u, id);
+      }
+      console.log(`[${workerId}] media_ids resolvidos: ${mediaIds.size}/${urls.size}`);
+    }
+
+
     // ── TEST MODE ─────────────────────────────────────────────────────────────
     // Send a single test message to `testPhone` using the SAVED dispatch config
     // (same component builder as the real send), without touching dispatch_recipients
@@ -358,7 +406,7 @@ serve(async (req) => {
       if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
       const testRcp: any = { phone: formatted, recipient_name: 'Teste', first_name: 'Teste' };
-      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId);
+      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId, mediaIds);
 
       const body: any = {
         messaging_product: 'whatsapp',
@@ -464,9 +512,9 @@ serve(async (req) => {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
-        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
+        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
-        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components);
+        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components, variablesConfig);
         const body: any = {
           messaging_product: 'whatsapp',
           to: formatted,
@@ -485,11 +533,15 @@ serve(async (req) => {
           if (res.ok) {
             return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered, carouselPayload };
           }
-          return { ok: false, id: rcp.id, error: data.error?.message || JSON.stringify(data).slice(0, 200) };
+          const errMsg = data.error?.message || JSON.stringify(data).slice(0, 200);
+          const code = extractMetaErrorCode(data);
+          return { ok: false, id: rcp.id, error: errMsg, code, phone: formatted, rendered, cls: classifySendError(code, errMsg) };
         } catch (e) {
-          return { ok: false, id: rcp.id, error: String(e).slice(0, 200) };
+          const errMsg = String(e).slice(0, 200);
+          return { ok: false, id: rcp.id, error: errMsg, code: null, phone: formatted, rendered, cls: classifySendError(null, errMsg) };
         }
       }
+
 
 
       // Send in parallel chunks
@@ -533,23 +585,103 @@ serve(async (req) => {
         persistOps.push(supabase.from('whatsapp_messages').insert(messageRows));
       }
 
-      // 2. Failed rows: exhausted attempts -> 'failed', otherwise back to 'pending'.
-      const exhaustedIds = failedRows.map((f) => f.id);
-      if (exhaustedIds.length > 0) {
+      // 2. Falhas: agora classificadas (ETAPA 2). Inentregável = terminal; mídia,
+      //    rate limit e cobrança NÃO consomem tentativa (voltam para 'pending').
+      if (failedRows.length > 0) {
+        const terminal = failedRows.filter((f) => f.cls?.kind === 'undeliverable');
+        const retryable = failedRows.filter((f) => f.cls?.kind !== 'undeliverable');
+        const noAttempt = retryable.filter((f) => f.cls && !f.cls.countsAttempt);
+        const withAttempt = retryable.filter((f) => !f.cls || f.cls.countsAttempt);
         const firstErr = failedRows[0]?.error || 'unknown';
-        persistOps.push(
-          supabase.from('dispatch_recipients').update({
-            status: 'failed', last_error: firstErr, lease_until: null,
-          }).in('id', exhaustedIds).gte('attempts', 3),
-        );
-        persistOps.push(
-          supabase.from('dispatch_recipients').update({
-            status: 'pending', last_error: firstErr, lease_until: null,
-          }).in('id', exhaustedIds).lt('attempts', 3),
-        );
+        const firstCode = failedRows[0]?.code ?? null;
+
+        if (terminal.length > 0) {
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'failed', last_error: terminal[0].error, error_code: terminal[0].code ?? null, lease_until: null,
+            }).in('id', terminal.map((f) => f.id)),
+          );
+        }
+        if (noAttempt.length > 0) {
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'pending', last_error: noAttempt[0].error, error_code: noAttempt[0].code ?? null, lease_until: null,
+            }).in('id', noAttempt.map((f) => f.id)),
+          );
+        }
+        if (withAttempt.length > 0) {
+          const ids = withAttempt.map((f) => f.id);
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'failed', last_error: firstErr, error_code: firstCode, lease_until: null,
+            }).in('id', ids).gte('attempts', 3),
+          );
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'pending', last_error: firstErr, error_code: firstCode, lease_until: null,
+            }).in('id', ids).lt('attempts', 3),
+          );
+        }
+
+        // ── ETAPA 3: fallback multicanal ──────────────────────────────────────
+        // Falhas não terminais elegíveis (mídia 131053 / cobrança 131042) ganham
+        // uma segunda via em TEXTO por uma instância uazapi/wasender, para o
+        // cliente não ficar sem receber nada.
+        const fallbackTargets = retryable.filter((f) => f.cls?.fallbackEligible && f.rendered);
+        if (fallbackTargets.length > 0) {
+          const done = await Promise.allSettled(
+            fallbackTargets.map((f) =>
+              sendTextFallback(supabase, {
+                phone: f.phone,
+                text: f.rendered,
+                supabaseUrl,
+                serviceKey,
+                reason: `meta_${f.code ?? 'erro'}`,
+              }).then((r) => ({ f, r })),
+            ),
+          );
+          const okIds: string[] = [];
+          let provider = '';
+          for (const d of done) {
+            if (d.status === 'fulfilled' && d.value.r.ok) {
+              okIds.push(d.value.f.id);
+              provider = d.value.r.provider || provider;
+            }
+          }
+          if (okIds.length > 0) {
+            persistOps.push(
+              supabase.from('dispatch_recipients').update({
+                status: 'sent',
+                fallback_provider: provider,
+                fallback_at: new Date().toISOString(),
+                sent_at: new Date().toISOString(),
+                lease_until: null,
+              }).in('id', okIds),
+            );
+            console.log(`[${workerId}] fallback entregou ${okIds.length} via ${provider}`);
+          }
+        }
+
+        // Cobrança pendente na Meta (131042): nada mais passa. Pausa o disparo e
+        // registra o motivo para o operador resolver o pagamento.
+        const billing = failedRows.find((f) => f.cls?.pauseBatch);
+        if (billing) {
+          console.error(`[${workerId}] PAUSANDO disparo — erro de cobrança Meta: ${billing.error}`);
+          await supabase.from('dispatch_history').update({
+            status: 'paused',
+            error_message: `Meta 131042 (cobrança pendente): ${String(billing.error).slice(0, 300)}`,
+          }).eq('id', dispatchId);
+          await Promise.all(persistOps);
+          await supabase.rpc('refresh_dispatch_counts', { p_dispatch_id: dispatchId });
+          return new Response(JSON.stringify({
+            workerId, paused: true, reason: 'meta_billing_131042',
+            sent: totalSent, failed: totalFailed + failedRows.length,
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
       }
 
       await Promise.all(persistOps);
+
 
       totalSent += sentRows.length;
       totalFailed += failedRows.length;

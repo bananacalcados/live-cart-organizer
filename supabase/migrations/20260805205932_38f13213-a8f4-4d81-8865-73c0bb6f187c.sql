@@ -1,0 +1,1 @@
+ALTER TABLE public.campanha_envios ADD COLUMN IF NOT EXISTS error_code integer;

@@ -1,40 +1,54 @@
-// Classificação de erros de envio da Cloud API da Meta para as campanhas de
-// carrossel (campanha_envios). Centraliza a decisão de "o que fazer" diante de
-// uma falha de envio:
+// Classificação de erros de envio da Cloud API da Meta. Centraliza a decisão de
+// "o que fazer" diante de uma falha de envio:
 //
 //   - rate_limit      → a Meta limitou temporariamente. NÃO conta tentativa e
-//                       reagenda em poucos minutos (a janela é liberada rápido).
+//                       reagenda em poucos minutos.
+//   - media           → a Meta não conseguiu baixar a mídia do header (131053).
+//                       É TRANSITÓRIO (pico no nosso storage/CDN): reagenda em
+//                       ~2min, não consome tentativa e é elegível a fallback.
+//   - billing         → cobrança pendente na conta WABA (131042). NENHUM envio
+//                       passa até resolver: o lote deve ser PAUSADO e o operador
+//                       avisado. Não consome tentativa.
 //   - undeliverable   → a Meta NÃO consegue entregar para aquele número
-//                       (não é WhatsApp, número inválido, recusado). É terminal:
-//                       marca como `nao_entregavel` e NÃO tenta de novo por dias.
+//                       (não é WhatsApp, número inválido, recusado). Terminal.
 //   - transient       → erro desconhecido/temporário. Reagenda em ~30min até o
 //                       limite de tentativas, depois vira `falhou`.
 //
-// O erro 131026 ("Message undeliverable") é o caso mais comum: significa que a
-// Meta não conseguiu entregar a mensagem ao destinatário — normalmente porque o
-// número não tem WhatsApp ativo, é inválido, ou o aparelho não aceitou a
-// mensagem. NÃO é erro do nosso sistema; é o número que não recebe.
+// `fallbackEligible` marca as falhas NÃO terminais que valem uma segunda via por
+// outro provider (uazapi/wasender) em texto — ver `_shared/meta-fallback.ts`.
 
-export type SendErrorKind = "rate_limit" | "undeliverable" | "transient";
+export type SendErrorKind = "rate_limit" | "media" | "billing" | "undeliverable" | "transient";
 
 export interface ClassifiedSendError {
   kind: SendErrorKind;
   code: number | null;
   /** Status final que a linha de campanha_envios deve assumir nesta falha. */
   status: "pendente" | "nao_entregavel" | "falhou";
-  /** Se esta falha consome uma tentativa (rate limit não consome). */
+  /** Se esta falha consome uma tentativa (rate limit/mídia/cobrança não consomem). */
   countsAttempt: boolean;
   /** Em quantos ms reagendar a próxima tentativa (null = não reagenda). */
   retryMs: number | null;
+  /** Vale tentar entregar por outro provider (texto) enquanto isso. */
+  fallbackEligible: boolean;
+  /** Exige pausar o lote inteiro e alertar o operador. */
+  pauseBatch: boolean;
 }
 
 // Rate limit / throughput — liberado em minutos.
 const RATE_LIMIT_CODES = new Set<number>([130429, 131056, 80007, 133016, 131048]);
 
+// Falha ao baixar a mídia do header (link público). Transitório.
+const MEDIA_CODES = new Set<number>([131053]);
+
+// Cobrança pendente / conta bloqueada por pagamento.
+const BILLING_CODES = new Set<number>([131042]);
+
 // Entrega impossível (terminal): número sem WhatsApp, inválido, recusado.
 const UNDELIVERABLE_CODES = new Set<number>([131026, 131021, 131051, 131008, 131047, 470, 131000]);
 
 const RATE_RETRY_MS = 5 * 60 * 1000; // 5 minutos
+const MEDIA_RETRY_MS = 2 * 60 * 1000; // 2 minutos
+const BILLING_RETRY_MS = 30 * 60 * 1000; // 30 minutos
 const TRANSIENT_RETRY_MS = 30 * 60 * 1000; // 30 minutos
 
 /** Extrai o código de erro numérico da Meta de um objeto, número ou string. */
@@ -46,7 +60,6 @@ export function extractMetaErrorCode(raw: unknown): number | null {
     const c = o?.error?.code ?? o?.code;
     if (typeof c === "number") return c;
     if (typeof c === "string" && /^\d+$/.test(c)) return Number(c);
-    // tenta serializar e cair no regex abaixo
     try { return extractMetaErrorCode(JSON.stringify(o)); } catch { return null; }
   }
   const s = String(raw);
@@ -67,6 +80,18 @@ export function classifySendError(code: number | null, message?: string): Classi
     msg.includes("too many") ||
     msg.includes("throughput");
 
+  const isMedia =
+    (code != null && MEDIA_CODES.has(code)) ||
+    msg.includes("failed to download media") ||
+    msg.includes("error downloading media") ||
+    msg.includes("media download");
+
+  const isBilling =
+    (code != null && BILLING_CODES.has(code)) ||
+    msg.includes("unsettled") ||
+    msg.includes("payment") ||
+    msg.includes("billing");
+
   const isUndeliverable =
     (code != null && UNDELIVERABLE_CODES.has(code)) ||
     msg.includes("undeliverable") ||
@@ -74,11 +99,32 @@ export function classifySendError(code: number | null, message?: string): Classi
     msg.includes("invalid wa_id") ||
     msg.includes("recipient");
 
+  if (isBilling) {
+    return {
+      kind: "billing", code, status: "pendente", countsAttempt: false,
+      retryMs: BILLING_RETRY_MS, fallbackEligible: true, pauseBatch: true,
+    };
+  }
+  if (isMedia) {
+    return {
+      kind: "media", code, status: "pendente", countsAttempt: false,
+      retryMs: MEDIA_RETRY_MS, fallbackEligible: true, pauseBatch: false,
+    };
+  }
   if (isRate) {
-    return { kind: "rate_limit", code, status: "pendente", countsAttempt: false, retryMs: RATE_RETRY_MS };
+    return {
+      kind: "rate_limit", code, status: "pendente", countsAttempt: false,
+      retryMs: RATE_RETRY_MS, fallbackEligible: false, pauseBatch: false,
+    };
   }
   if (isUndeliverable) {
-    return { kind: "undeliverable", code, status: "nao_entregavel", countsAttempt: true, retryMs: null };
+    return {
+      kind: "undeliverable", code, status: "nao_entregavel", countsAttempt: true,
+      retryMs: null, fallbackEligible: false, pauseBatch: false,
+    };
   }
-  return { kind: "transient", code, status: "pendente", countsAttempt: true, retryMs: TRANSIENT_RETRY_MS };
+  return {
+    kind: "transient", code, status: "pendente", countsAttempt: true,
+    retryMs: TRANSIENT_RETRY_MS, fallbackEligible: false, pauseBatch: false,
+  };
 }

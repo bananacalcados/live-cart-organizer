@@ -19,6 +19,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
+import { resolveMetaMediaId } from "../_shared/meta-media-cache.ts";
+import { sendTextFallback } from "../_shared/meta-fallback.ts";
+
 
 const MAX_ATTEMPTS = 3;
 const BATCH = 80;
@@ -148,17 +151,46 @@ Deno.serve(async (req) => {
       .order("ordem", { ascending: true });
     const okCards = (cards || []).slice(0, 10);
 
+    // ETAPA 1: sobe cada imagem de card UMA vez e reaproveita o media_id. Sem isso
+    // a Meta rebaixa a mesma URL a cada mensagem e devolve 131053 quando o nosso
+    // storage oscila, derrubando o disparo inteiro.
+    const mediaIds = new Map<string, string>();
+    try {
+      let q = sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("provider", "meta").limit(1);
+      q = campaign?.whatsapp_number_id
+        ? sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("id", campaign.whatsapp_number_id).limit(1)
+        : q;
+      const { data: numRows } = await q;
+      const num = (numRows || [])[0];
+      if (num?.meta_phone_number_id && num?.meta_access_token) {
+        for (const card of okCards) {
+          if (!card.imagem_url) continue;
+          const id = await resolveMetaMediaId(sb, {
+            url: card.imagem_url,
+            kind: "image",
+            phoneNumberId: num.meta_phone_number_id,
+            accessToken: num.meta_access_token,
+          });
+          if (id) mediaIds.set(card.imagem_url, id);
+        }
+      }
+    } catch (e) {
+      console.warn("[carousel-sender] media cache falhou:", (e as Error).message);
+    }
+
     const ctx = {
       campaign,
       templateName,
       language,
       okCards,
+      mediaIds,
       topTokens: tokensInOrder(campaign?.top_body),
       cardTokens: tokensInOrder(campaign?.card_body),
     };
     campCache.set(campanhaId, ctx);
     return ctx;
   }
+
 
   let sent = 0;
   let failed = 0;
@@ -201,9 +233,11 @@ Deno.serve(async (req) => {
       components.push({ type: "body", parameters: textParams(cc.topTokens, baseCtx) });
     }
     const carouselCards = cc.okCards.map((card, i) => {
+      const mid = card.imagem_url ? cc.mediaIds.get(card.imagem_url) : null;
       const comps: any[] = [
-        { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+        { type: "header", parameters: [{ type: "image", image: mid ? { id: mid } : { link: card.imagem_url } }] },
       ];
+
       if (cc.cardTokens.length) {
         comps.push({
           type: "body",
@@ -262,31 +296,77 @@ Deno.serve(async (req) => {
     } else {
       const cls = classifySendError(errCode, errMsg);
       const attempts = (env.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
-      // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
-      // estourou o limite de tentativas de erros temporários.
-      let status: string;
-      let proxima: string | null;
-      if (cls.status === "nao_entregavel") {
-        status = "nao_entregavel";
-        proxima = null;
-      } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
-        status = "falhou";
-        proxima = null;
-      } else {
-        status = "pendente";
-        proxima = new Date(Date.now() + (cls.retryMs ?? TRANSIENT_FALLBACK_MS)).toISOString();
+
+      // ETAPA 3: falhas não terminais elegíveis (mídia/cobrança) ganham uma
+      // segunda via em TEXTO por uazapi/wasender — o cliente não fica sem nada.
+      let fbProvider: string | null = null;
+      if (cls.fallbackEligible) {
+        const fbText = [cc.campaign.top_body, cc.okCards[0]?.legenda]
+          .filter(Boolean)
+          .map((t: string) => t.replace(TOKEN_RE, (_m, tk) => resolveToken(tk, { ...baseCtx, legenda: cc.okCards[0]?.legenda })))
+          .join("\n\n");
+        if (fbText.trim()) {
+          const fb = await sendTextFallback(sb, {
+            phone: env.phone,
+            text: fbText,
+            supabaseUrl: url,
+            serviceKey,
+            reason: `meta_${errCode ?? "erro"}`,
+          });
+          if (fb.ok) fbProvider = fb.provider || "fallback";
+        }
       }
-      await sb
-        .from("campanha_envios")
-        .update({
-          tentativas: attempts,
-          erro: errMsg.slice(0, 500),
-          status,
-          proxima_tentativa: proxima,
-        })
-        .eq("id", env.id);
-      failed++;
+
+      if (fbProvider) {
+        await sb
+          .from("campanha_envios")
+          .update({
+            status: "enviado",
+            enviado_em: new Date().toISOString(),
+            erro: `entregue por fallback (${fbProvider}) após erro Meta: ${errMsg.slice(0, 300)}`,
+            error_code: errCode,
+            fallback_provider: fbProvider,
+            fallback_at: new Date().toISOString(),
+            proxima_tentativa: null,
+          })
+          .eq("id", env.id);
+        sent++;
+      } else {
+        // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
+        // estourou o limite de tentativas de erros temporários.
+        let status: string;
+        let proxima: string | null;
+        if (cls.status === "nao_entregavel") {
+          status = "nao_entregavel";
+          proxima = null;
+        } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
+          status = "falhou";
+          proxima = null;
+        } else {
+          status = "pendente";
+          proxima = new Date(Date.now() + (cls.retryMs ?? TRANSIENT_FALLBACK_MS)).toISOString();
+        }
+        await sb
+          .from("campanha_envios")
+          .update({
+            tentativas: attempts,
+            erro: errMsg.slice(0, 500),
+            error_code: errCode,
+            status,
+            proxima_tentativa: proxima,
+          })
+          .eq("id", env.id);
+        failed++;
+      }
+
+      // Cobrança pendente na Meta: nenhum envio vai passar até resolver o
+      // pagamento — interrompe o ciclo em vez de queimar a fila inteira.
+      if (cls.pauseBatch) {
+        console.error("[carousel-sender] PAUSANDO ciclo — cobrança Meta (131042):", errMsg.slice(0, 200));
+        return json({ paused: true, reason: "meta_billing_131042", sent, failed, skipped });
+      }
     }
+
 
 
     // Throttle leve para respeitar o rate limit da Meta.
