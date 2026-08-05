@@ -972,6 +972,22 @@ export function POSDailySales({ storeId }: Props) {
             <KPICard icon={Tag} label="Preço Médio/Item" value={`R$ ${avgPricePerItem.toFixed(2)}`} color="text-yellow-500" />
           </div>
 
+          {inExpeditionSales.length > 0 && statusFilter !== 'in_expedition' && (
+            <button
+              onClick={() => setStatusFilter('in_expedition')}
+              className="w-full flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/25 text-left hover:bg-blue-500/15 transition-colors"
+            >
+              <Truck className="h-4 w-4 text-blue-400 shrink-0" />
+              <span className="text-sm text-blue-200">
+                Pago aguardando expedição: <strong>{inExpeditionSales.length}</strong>{" "}
+                {inExpeditionSales.length === 1 ? "pedido" : "pedidos"} •{" "}
+                <strong>R$ {inExpeditionTotal.toFixed(2)}</strong> — vira venda efetivada quando a expedição for concluída
+              </span>
+            </button>
+          )}
+
+
+
           {totalDiscount > 0 && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
               <Tag className="h-4 w-4 text-red-400" />
