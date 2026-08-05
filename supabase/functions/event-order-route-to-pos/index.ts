@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     // ---- CLAIM ATÔMICO: evita corrida entre webhook, polling e frontend ----
     // Claims mais antigos que 5 min são considerados travados e podem ser retomados.
     const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: claimed } = await supabase
+    const { data: claimed, error: claimErr } = await supabase
       .from("orders")
       .update({ pos_routing_claimed_at: new Date().toISOString() })
       .eq("id", order.id)
@@ -45,8 +45,10 @@ Deno.serve(async (req) => {
       .or(`pos_routing_claimed_at.is.null,pos_routing_claimed_at.lt.${staleCutoff}`)
       .select("id");
 
+    if (claimErr) console.error("[route-to-pos] claim error", order.id, claimErr);
+
     if (!claimed || claimed.length === 0) {
-      return new Response(JSON.stringify({ skipped: "already claimed" }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ skipped: "already claimed", claimErr: claimErr?.message || null }), { headers: corsHeaders });
     }
 
     const releaseClaim = async () => {
