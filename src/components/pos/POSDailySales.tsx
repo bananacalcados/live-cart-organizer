@@ -754,6 +754,12 @@ export function POSDailySales({ storeId }: Props) {
                   📦 Condicional{sale.status === 'conditional' ? ' (enviado)' : ''}
                 </Badge>
               )}
+              {(sale.status === 'paid' || sale.status === 'completed' || sale.status === 'pending_sync') && !sale.sale_released_at && (
+                <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] px-1.5 py-0">
+                  <Truck className="h-2.5 w-2.5 mr-0.5" />Aguardando expedição
+                  {sale.expedition_stage ? ` • ${sale.expedition_stage}` : ''}
+                </Badge>
+              )}
               {sale.status === 'online_pending' && (
                 <>
                   <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0 animate-pulse">
