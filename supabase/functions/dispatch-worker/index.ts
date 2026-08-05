@@ -164,7 +164,9 @@ function buildComponentsForRecipient(
   recipient: any | null,
   hasDynamicVars: boolean,
   dispatchId?: string,
+  mediaIds: Map<string, string> = new Map(),
 ) {
+
   const components: any[] = [];
 
   // ── Carousel templates take a dedicated path ──
