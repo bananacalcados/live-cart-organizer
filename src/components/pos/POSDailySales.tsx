@@ -673,7 +673,9 @@ export function POSDailySales({ storeId }: Props) {
       ? notApprovedSales
       : statusFilter === 'completed'
         ? completedSales
-        : sales; // 'all' shows everything
+        : statusFilter === 'in_expedition'
+          ? inExpeditionSales
+          : sales; // 'all' shows everything
 
   const sellerFilteredSales = sellerFilter === 'all'
     ? salesForStatusFilter
