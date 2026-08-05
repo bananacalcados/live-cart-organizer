@@ -9,6 +9,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
+import { resolveMetaMediaId } from "../_shared/meta-media-cache.ts";
+import { sendTextFallback } from "../_shared/meta-fallback.ts";
+
+/**
+ * Header de mídia: usa o media_id da Meta quando o upload deu certo (evita que a
+ * Meta baixe a mesma URL a cada mensagem → erro 131053) e cai para `link` quando
+ * o upload não foi possível.
+ */
+function mediaParam(kind: string, url: string, mediaIds: Map<string, string>) {
+  const id = url ? mediaIds.get(url) : null;
+  return id ? { type: kind, [kind]: { id } } : { type: kind, [kind]: { link: url } };
+}
+
 
 
 const corsHeaders = {
