@@ -73,11 +73,18 @@ Deno.serve(async (req) => {
       return latest?.[0] || null;
     }
 
+    /** Fim do dia (23:59:59) em São Paulo para uma data YYYY-MM-DD. */
+    function endOfDaySP(dateStr: string): number {
+      const s = String(dateStr);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T23:59:59-03:00`).getTime();
+      return new Date(s).getTime();
+    }
+
     /** Evento encerrado? (inativo ou data final no passado) */
     function eventClosed(ev: any) {
       if (!ev) return true;
       if (ev.is_active === false) return true;
-      if (ev.end_date && new Date(ev.end_date) < new Date()) return true;
+      if (ev.end_date && endOfDaySP(ev.end_date) < Date.now()) return true;
       return false;
     }
 
