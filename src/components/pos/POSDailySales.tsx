@@ -51,6 +51,8 @@ interface SaleSummary {
   external_source?: string | null;
   tracking_code?: string | null;
   external_order_id?: string | null;
+  sale_released_at?: string | null;
+  expedition_stage?: string | null;
 }
 
 interface TinyOnlyOrder {
