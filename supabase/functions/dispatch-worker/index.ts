@@ -147,7 +147,11 @@ function buildCarouselPayloadForChat(
       }
       return { type, text: b.text || '', url, phone_number: b.phone_number };
     });
-    return { image_url: hp.image?.link || null, video_url: hp.video?.link || null, body, buttons };
+    // Quando enviamos por media_id (sem link), o chat ainda precisa da URL original
+    // para renderizar a imagem do card — pegamos de variablesConfig.
+    const cardImageUrl = variablesConfig[`card_${i}_image`]?.staticValue || null;
+    return { image_url: hp.image?.link || (hp.image?.id ? cardImageUrl : null), video_url: hp.video?.link || null, body, buttons };
+
   });
 
   return { type: 'carousel', body: bubbleBody, cards };
