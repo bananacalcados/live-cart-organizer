@@ -75,7 +75,10 @@ export interface FallbackResult {
   error?: string;
 }
 
-/** Envia `text` para `phone` por um provider secundário. Retorna ok=false se não houver rota. */
+/**
+ * Envia `text` para `phone` por um provider secundário.
+ * Retorna ok=false quando desligado, acima do teto diário ou sem rota.
+ */
 export async function sendTextFallback(
   supabase: any,
   opts: { phone: string; text: string; supabaseUrl: string; serviceKey: string; reason?: string },
@@ -83,8 +86,17 @@ export async function sendTextFallback(
   const { phone, text, supabaseUrl, serviceKey, reason } = opts;
   if (!phone || !text || !text.trim()) return { ok: false, error: "sem conteúdo" };
 
+  if (!(await isFallbackEnabled(supabase))) {
+    return { ok: false, error: "fallback desligado (anti-ban)" };
+  }
+  if (!(await underDailyCap(supabase))) {
+    console.warn("[meta-fallback] teto diário atingido — fallback suspenso (anti-ban)");
+    return { ok: false, error: "teto diário de fallback atingido" };
+  }
+
   const inst = await pickFallbackInstance(supabase);
   if (!inst) return { ok: false, error: "sem instância de fallback" };
+
 
   const fn = inst.provider === "uazapi" ? "uazapi-send-message" : "wasender-send-message";
   try {
