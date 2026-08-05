@@ -924,6 +924,7 @@ export function POSDailySales({ storeId }: Props) {
             {([
               { key: 'all' as const, label: 'Todas', count: sales.length, color: 'bg-pos-white/10 text-pos-white border-pos-white/30' },
               { key: 'completed' as const, label: 'Concluídas', count: completedSales.length, color: 'bg-green-500/15 text-green-500 border-green-500/30' },
+              { key: 'in_expedition' as const, label: 'Em expedição', count: inExpeditionSales.length, color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
               { key: 'awaiting_payment' as const, label: 'Aguardando Pgto', count: awaitingPaymentSales.length, color: 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30' },
               { key: 'not_approved' as const, label: 'Não Aprovadas', count: notApprovedSales.length, color: 'bg-red-500/15 text-red-500 border-red-500/30' },
             ]).map(tab => (
@@ -936,11 +937,13 @@ export function POSDailySales({ storeId }: Props) {
                     ? tab.key === 'awaiting_payment' ? 'bg-yellow-500 text-black border-yellow-500'
                     : tab.key === 'not_approved' ? 'bg-red-500 text-white border-red-500'
                     : tab.key === 'completed' ? 'bg-green-500 text-black border-green-500'
+                    : tab.key === 'in_expedition' ? 'bg-blue-500 text-white border-blue-500'
                     : 'bg-pos-orange text-pos-black border-pos-orange'
                     : tab.color
                 )}
               >
                 {tab.key === 'awaiting_payment' && <Clock className="h-3 w-3" />}
+                {tab.key === 'in_expedition' && <Truck className="h-3 w-3" />}
                 {tab.key === 'not_approved' && <AlertTriangle className="h-3 w-3" />}
                 {tab.label}
                 <span className={cn(
