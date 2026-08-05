@@ -219,8 +219,9 @@ function buildComponentsForRecipient(
     const mediaType = headerComp.format.toLowerCase();
     components.push({
       type: 'header',
-      parameters: [{ type: mediaType, [mediaType]: { link: headerMediaUrl } }],
+      parameters: [mediaParam(mediaType, headerMediaUrl, mediaIds)],
     });
+
   } else if (headerVars.length > 0) {
     components.push({
       type: 'header',
