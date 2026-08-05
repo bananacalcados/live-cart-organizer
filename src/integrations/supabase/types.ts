@@ -20471,6 +20471,10 @@ export type Database = {
           recipient_name: string
         }[]
       }
+      claim_event_order_routing: {
+        Args: { p_order_id: string }
+        Returns: boolean
+      }
       claim_group_dispatch_job: {
         Args: { p_number_id: string }
         Returns: {
@@ -21492,6 +21496,10 @@ export type Database = {
           p_template_name: string
           p_whatsapp_number_id: string
         }
+        Returns: undefined
+      }
+      release_event_order_routing: {
+        Args: { p_order_id: string }
         Returns: undefined
       }
       reopen_finished_conversation: {
