@@ -296,31 +296,77 @@ Deno.serve(async (req) => {
     } else {
       const cls = classifySendError(errCode, errMsg);
       const attempts = (env.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
-      // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
-      // estourou o limite de tentativas de erros temporários.
-      let status: string;
-      let proxima: string | null;
-      if (cls.status === "nao_entregavel") {
-        status = "nao_entregavel";
-        proxima = null;
-      } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
-        status = "falhou";
-        proxima = null;
-      } else {
-        status = "pendente";
-        proxima = new Date(Date.now() + (cls.retryMs ?? TRANSIENT_FALLBACK_MS)).toISOString();
+
+      // ETAPA 3: falhas não terminais elegíveis (mídia/cobrança) ganham uma
+      // segunda via em TEXTO por uazapi/wasender — o cliente não fica sem nada.
+      let fbProvider: string | null = null;
+      if (cls.fallbackEligible) {
+        const fbText = [cc.campaign.top_body, cc.okCards[0]?.legenda]
+          .filter(Boolean)
+          .map((t: string) => t.replace(TOKEN_RE, (_m, tk) => resolveToken(tk, { ...baseCtx, legenda: cc.okCards[0]?.legenda })))
+          .join("\n\n");
+        if (fbText.trim()) {
+          const fb = await sendTextFallback(sb, {
+            phone: env.phone,
+            text: fbText,
+            supabaseUrl: url,
+            serviceKey,
+            reason: `meta_${errCode ?? "erro"}`,
+          });
+          if (fb.ok) fbProvider = fb.provider || "fallback";
+        }
       }
-      await sb
-        .from("campanha_envios")
-        .update({
-          tentativas: attempts,
-          erro: errMsg.slice(0, 500),
-          status,
-          proxima_tentativa: proxima,
-        })
-        .eq("id", env.id);
-      failed++;
+
+      if (fbProvider) {
+        await sb
+          .from("campanha_envios")
+          .update({
+            status: "enviado",
+            enviado_em: new Date().toISOString(),
+            erro: `entregue por fallback (${fbProvider}) após erro Meta: ${errMsg.slice(0, 300)}`,
+            error_code: errCode,
+            fallback_provider: fbProvider,
+            fallback_at: new Date().toISOString(),
+            proxima_tentativa: null,
+          })
+          .eq("id", env.id);
+        sent++;
+      } else {
+        // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
+        // estourou o limite de tentativas de erros temporários.
+        let status: string;
+        let proxima: string | null;
+        if (cls.status === "nao_entregavel") {
+          status = "nao_entregavel";
+          proxima = null;
+        } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
+          status = "falhou";
+          proxima = null;
+        } else {
+          status = "pendente";
+          proxima = new Date(Date.now() + (cls.retryMs ?? TRANSIENT_FALLBACK_MS)).toISOString();
+        }
+        await sb
+          .from("campanha_envios")
+          .update({
+            tentativas: attempts,
+            erro: errMsg.slice(0, 500),
+            error_code: errCode,
+            status,
+            proxima_tentativa: proxima,
+          })
+          .eq("id", env.id);
+        failed++;
+      }
+
+      // Cobrança pendente na Meta: nenhum envio vai passar até resolver o
+      // pagamento — interrompe o ciclo em vez de queimar a fila inteira.
+      if (cls.pauseBatch) {
+        console.error("[carousel-sender] PAUSANDO ciclo — cobrança Meta (131042):", errMsg.slice(0, 200));
+        return json({ paused: true, reason: "meta_billing_131042", sent, failed, skipped });
+      }
     }
+
 
 
     // Throttle leve para respeitar o rate limit da Meta.
