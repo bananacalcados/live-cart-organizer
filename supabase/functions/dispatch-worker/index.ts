@@ -585,23 +585,103 @@ serve(async (req) => {
         persistOps.push(supabase.from('whatsapp_messages').insert(messageRows));
       }
 
-      // 2. Failed rows: exhausted attempts -> 'failed', otherwise back to 'pending'.
-      const exhaustedIds = failedRows.map((f) => f.id);
-      if (exhaustedIds.length > 0) {
+      // 2. Falhas: agora classificadas (ETAPA 2). Inentregável = terminal; mídia,
+      //    rate limit e cobrança NÃO consomem tentativa (voltam para 'pending').
+      if (failedRows.length > 0) {
+        const terminal = failedRows.filter((f) => f.cls?.kind === 'undeliverable');
+        const retryable = failedRows.filter((f) => f.cls?.kind !== 'undeliverable');
+        const noAttempt = retryable.filter((f) => f.cls && !f.cls.countsAttempt);
+        const withAttempt = retryable.filter((f) => !f.cls || f.cls.countsAttempt);
         const firstErr = failedRows[0]?.error || 'unknown';
-        persistOps.push(
-          supabase.from('dispatch_recipients').update({
-            status: 'failed', last_error: firstErr, lease_until: null,
-          }).in('id', exhaustedIds).gte('attempts', 3),
-        );
-        persistOps.push(
-          supabase.from('dispatch_recipients').update({
-            status: 'pending', last_error: firstErr, lease_until: null,
-          }).in('id', exhaustedIds).lt('attempts', 3),
-        );
+        const firstCode = failedRows[0]?.code ?? null;
+
+        if (terminal.length > 0) {
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'failed', last_error: terminal[0].error, error_code: terminal[0].code ?? null, lease_until: null,
+            }).in('id', terminal.map((f) => f.id)),
+          );
+        }
+        if (noAttempt.length > 0) {
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'pending', last_error: noAttempt[0].error, error_code: noAttempt[0].code ?? null, lease_until: null,
+            }).in('id', noAttempt.map((f) => f.id)),
+          );
+        }
+        if (withAttempt.length > 0) {
+          const ids = withAttempt.map((f) => f.id);
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'failed', last_error: firstErr, error_code: firstCode, lease_until: null,
+            }).in('id', ids).gte('attempts', 3),
+          );
+          persistOps.push(
+            supabase.from('dispatch_recipients').update({
+              status: 'pending', last_error: firstErr, error_code: firstCode, lease_until: null,
+            }).in('id', ids).lt('attempts', 3),
+          );
+        }
+
+        // ── ETAPA 3: fallback multicanal ──────────────────────────────────────
+        // Falhas não terminais elegíveis (mídia 131053 / cobrança 131042) ganham
+        // uma segunda via em TEXTO por uma instância uazapi/wasender, para o
+        // cliente não ficar sem receber nada.
+        const fallbackTargets = retryable.filter((f) => f.cls?.fallbackEligible && f.rendered);
+        if (fallbackTargets.length > 0) {
+          const done = await Promise.allSettled(
+            fallbackTargets.map((f) =>
+              sendTextFallback(supabase, {
+                phone: f.phone,
+                text: f.rendered,
+                supabaseUrl,
+                serviceKey,
+                reason: `meta_${f.code ?? 'erro'}`,
+              }).then((r) => ({ f, r })),
+            ),
+          );
+          const okIds: string[] = [];
+          let provider = '';
+          for (const d of done) {
+            if (d.status === 'fulfilled' && d.value.r.ok) {
+              okIds.push(d.value.f.id);
+              provider = d.value.r.provider || provider;
+            }
+          }
+          if (okIds.length > 0) {
+            persistOps.push(
+              supabase.from('dispatch_recipients').update({
+                status: 'sent',
+                fallback_provider: provider,
+                fallback_at: new Date().toISOString(),
+                sent_at: new Date().toISOString(),
+                lease_until: null,
+              }).in('id', okIds),
+            );
+            console.log(`[${workerId}] fallback entregou ${okIds.length} via ${provider}`);
+          }
+        }
+
+        // Cobrança pendente na Meta (131042): nada mais passa. Pausa o disparo e
+        // registra o motivo para o operador resolver o pagamento.
+        const billing = failedRows.find((f) => f.cls?.pauseBatch);
+        if (billing) {
+          console.error(`[${workerId}] PAUSANDO disparo — erro de cobrança Meta: ${billing.error}`);
+          await supabase.from('dispatch_history').update({
+            status: 'paused',
+            error_message: `Meta 131042 (cobrança pendente): ${String(billing.error).slice(0, 300)}`,
+          }).eq('id', dispatchId);
+          await Promise.all(persistOps);
+          await supabase.rpc('refresh_dispatch_counts', { p_dispatch_id: dispatchId });
+          return new Response(JSON.stringify({
+            workerId, paused: true, reason: 'meta_billing_131042',
+            sent: totalSent, failed: totalFailed + failedRows.length,
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
       }
 
       await Promise.all(persistOps);
+
 
       totalSent += sentRows.length;
       totalFailed += failedRows.length;
