@@ -221,8 +221,12 @@ serve(async (req) => {
     const status = (data.status || "").toLowerCase();
     const telephone = data.telephone || data.phone || data.customer?.telephone || data.customer?.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
+    const gatewayTotal = Number(
+      data.total ?? data.total_paid ?? data.amount ?? data.value ?? data.order?.total ?? NaN,
+    );
+    const gatewayTotalSafe = Number.isFinite(gatewayTotal) && gatewayTotal > 0 ? gatewayTotal : null;
 
-    console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}`);
+    console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}, Total: ${gatewayTotalSafe}`);
 
     // Ignorar eventos que não devem acionar pagamento
     if (IGNORED_EVENTS.includes(event)) {
@@ -252,14 +256,35 @@ serve(async (req) => {
     }
 
     // Buscar pedido usando múltiplas estratégias
-    const found = await findOrder(supabase, appmaxOrderId, telephone);
+    const found = await findOrder(supabase, appmaxOrderId, telephone, gatewayTotalSafe);
 
     if (!found) {
       console.error("AppMax: pedido não encontrado para o evento", JSON.stringify(payload));
+      // Webhook órfão → registra para revisão manual (nunca marca pedido "parecido").
+      await logCheckoutFailure(supabase, {
+        sale_id: `orphan-webhook:appmax:${appmaxOrderId ?? "sem-id"}`,
+        payment_method: "credit_card",
+        gateway: "appmax",
+        status: "error",
+        error_message: `Webhook AppMax órfão (${event || "sem evento"} / ${status || "sem status"}): nenhum pedido casou por ID nem por telefone+valor.`,
+        amount: gatewayTotalSafe,
+        customer_phone: telephone,
+        transaction_id: transactionId ? String(transactionId) : null,
+        metadata: {
+          source: "appmax-webhook",
+          reason: "orphan_webhook",
+          event,
+          appmax_status: status,
+          appmax_order_id: appmaxOrderId ? String(appmaxOrderId) : null,
+          gateway_total: gatewayTotalSafe,
+          payload: payload,
+        },
+      });
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "order_not_found" }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
 
     const { source, record } = found;
     const ourOrderId = record.id;
