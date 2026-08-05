@@ -719,6 +719,9 @@ async function chargeVindi(
   console.log("VINDI/Yapay HTTP status:", res.status);
   console.log("VINDI/Yapay full response:", JSON.stringify(data).substring(0, 2000));
 
+  const vindiTxToken = data?.data_response?.transaction?.token_transaction;
+  if (vindiTxToken && linkGatewayId) await linkGatewayId("vindi", String(vindiTxToken));
+
   if (data?.message_response?.message === "success") {
     const tx = data?.data_response?.transaction;
     const statusId = tx?.status_id;
@@ -1364,7 +1367,7 @@ serve(async (req) => {
 
       const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
       if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp);
+        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
         if (vindiResult.success) {
           console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
           result = vindiResult;
