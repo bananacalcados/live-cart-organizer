@@ -1,0 +1,2 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS pos_routing_claimed_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_orders_pos_routing_claimed_at ON public.orders (pos_routing_claimed_at) WHERE pos_sale_id IS NULL;
