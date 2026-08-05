@@ -536,14 +536,18 @@ export function POSDailySales({ storeId }: Props) {
 
   // Calculations
   // Status filter for tabs
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'in_expedition' | 'awaiting_payment' | 'not_approved'>('all');
   const [sellerFilter, setSellerFilter] = useState<string>('all');
 
-  // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
-  // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid");
+  const isPaidStatus = (s: SaleSummary) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid";
+  // Venda efetivada = paga E liberada (expedição concluída ou venda fora do fluxo de expedição)
+  const completedSales = sales.filter((s) => isPaidStatus(s) && !!s.sale_released_at);
+  // Paga, mas ainda na fila da Expedição — não conta como venda efetivada
+  const inExpeditionSales = sales.filter((s) => isPaidStatus(s) && !s.sale_released_at);
   const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending" || s.status === "pending_pickup");
   const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
+  const allSales = sales.filter((s) => !inExpeditionSales.some((e) => e.id === s.id));
+  const inExpeditionTotal = inExpeditionSales.reduce((sum, s) => sum + (s.total || 0), 0);
 
   // KPI data source based on active filter
   const kpiSales = statusFilter === 'awaiting_payment'
@@ -552,7 +556,9 @@ export function POSDailySales({ storeId }: Props) {
       ? notApprovedSales
       : statusFilter === 'completed'
         ? completedSales
-        : sales; // 'all'
+        : statusFilter === 'in_expedition'
+          ? inExpeditionSales
+          : allSales; // 'all' — faturamento não inclui o que ainda está em expedição
 
   const kpiSaleIds = new Set(kpiSales.map(s => s.id));
   const kpiItems = saleItems.filter(i => kpiSaleIds.has(i.sale_id));
