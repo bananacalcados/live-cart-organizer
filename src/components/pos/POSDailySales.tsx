@@ -220,18 +220,17 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id";
-      
-      // Query 1: Sales created in date range that NÃO foram pagas (pending/online_pending/failed/pending_pickup)
-      //   - pending_pickup = aguardando pagamento na retirada (paid_at sempre null) → entra aqui pela data de criação
-      // Query 2: Sales PAGAS no período (paid/completed/pending_sync) — aparecem pela data de pagamento
-      //   - PAGO É PAGO: status de fulfillment ficam em db_orders.stage, não removem a venda daqui
-      const [createdRes, paidRes, sellersRes, goalsRes] = await Promise.all([
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id, sale_released_at, expedition_stage";
+
+      // Query 1: Vendas criadas no período que NÃO foram pagas
+      // Query 2: Vendas PAGAS e já LIBERADAS (expedição concluída ou venda de balcão)
+      // Query 3: Vendas PAGAS aguardando a expedição (ainda não liberadas como venda)
+      const [createdRes, paidRes, inExpRes, sellersRes, goalsRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
-          .eq("expedition_stage", "concluido")
+          .not("sale_released_at", "is", null)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
           .not("status", "in", '("paid","completed","pending_sync")')
@@ -240,7 +239,15 @@ export function POSDailySales({ storeId }: Props) {
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
-          .eq("expedition_stage", "concluido")
+          .not("sale_released_at", "is", null)
+          .in("status", ["paid", "completed", "pending_sync"])
+          .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pos_sales")
+          .select(selectFields)
+          .eq("store_id", storeId)
+          .is("sale_released_at", null)
           .in("status", ["paid", "completed", "pending_sync"])
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
@@ -255,10 +262,11 @@ export function POSDailySales({ storeId }: Props) {
           .eq("is_active", true),
       ]);
 
-      // Merge both queries, dedup by id
+      // Merge queries, dedup by id
       const mergedMap = new Map<string, SaleSummary>();
       for (const s of (createdRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
       for (const s of (paidRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
+      for (const s of (inExpRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
       const salesData = Array.from(mergedMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSales(salesData);
       setSellers(sellersRes.data || []);
