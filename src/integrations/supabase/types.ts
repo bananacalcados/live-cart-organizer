@@ -1948,6 +1948,7 @@ export type Database = {
           enviado_em: string
           erro: string | null
           erro_code: number | null
+          error_code: number | null
           fallback_at: string | null
           fallback_provider: string | null
           id: string
@@ -1972,6 +1973,7 @@ export type Database = {
           enviado_em?: string
           erro?: string | null
           erro_code?: number | null
+          error_code?: number | null
           fallback_at?: string | null
           fallback_provider?: string | null
           id?: string
@@ -1996,6 +1998,7 @@ export type Database = {
           enviado_em?: string
           erro?: string | null
           erro_code?: number | null
+          error_code?: number | null
           fallback_at?: string | null
           fallback_provider?: string | null
           id?: string
