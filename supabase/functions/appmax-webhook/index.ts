@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
+import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -54,13 +55,47 @@ async function autoCreateTinyOrder(_supabase: any, _saleId: string, _supabaseUrl
 }
 
 /**
+ * Calcula o valor final de um pedido de `orders` (produtos - desconto + frete).
+ */
+function computeOrderTotal(order: any): number {
+  const items = Array.isArray(order?.products) ? order.products : [];
+  const subtotal = items.reduce(
+    (sum: number, p: any) => sum + (Number(p?.price) || 0) * (Number(p?.quantity) || 0),
+    0,
+  );
+  const discount = order?.discount_type && order?.discount_value
+    ? order.discount_type === "percentage"
+      ? subtotal * (Number(order.discount_value) / 100)
+      : Number(order.discount_value)
+    : 0;
+  const shipping = order?.free_shipping ? 0 : Number(order?.shipping_cost || 0);
+  return Math.max(0, subtotal - discount + shipping);
+}
+
+// Tolerância de centavos no match de valor.
+const AMOUNT_TOLERANCE = 0.05;
+// Janela curta para aceitar match por telefone.
+const PHONE_MATCH_WINDOW_MIN = 30;
+
+function amountsMatch(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  if (!(a > 0) || !(b > 0)) return false;
+  return Math.abs(Number(a) - Number(b)) <= AMOUNT_TOLERANCE;
+}
+
+/**
  * Busca o pedido interno usando múltiplas estratégias:
  * 1. Por appmax_order_id (campo de vínculo direto)
  * 2. Por notes contendo o appmax ID (legado)
- * 3. Por telefone do cliente (via tabela customers) — pedidos não pagos mais recentes
- * 4. Por pos_sales com telefone
+ * 3. Por telefone — SOMENTE com valor batendo (tolerância de centavos) e
+ *    criado nos últimos 30 min. Sem match exato → nenhum pedido é marcado.
  */
-async function findOrder(supabase: any, appmaxId: string | number, telephone: string | null) {
+async function findOrder(
+  supabase: any,
+  appmaxId: string | number,
+  telephone: string | null,
+  gatewayTotal: number | null,
+) {
   // Strategy 1: Search by appmax_order_id (gateway link field)
   if (appmaxId) {
     const { data: orderByGateway } = await supabase
@@ -71,7 +106,7 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
 
     if (orderByGateway) {
       console.log(`[appmax] Found order ${orderByGateway.id} via appmax_order_id`);
-      return { source: "orders", record: orderByGateway };
+      return { source: "orders", record: orderByGateway, strategy: "gateway_id" };
     }
 
     const { data: saleByGateway } = await supabase
@@ -82,7 +117,7 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
 
     if (saleByGateway) {
       console.log(`[appmax] Found pos_sale ${saleByGateway.id} via appmax_order_id`);
-      return { source: "pos_sales", record: saleByGateway };
+      return { source: "pos_sales", record: saleByGateway, strategy: "gateway_id" };
     }
   }
 
@@ -97,7 +132,7 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
       .limit(1);
 
     if (orders?.length) {
-      return { source: "orders", record: orders[0] };
+      return { source: "orders", record: orders[0], strategy: "notes" };
     }
 
     const { data: sales } = await supabase
@@ -108,14 +143,21 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
       .limit(1);
 
     if (sales?.length) {
-      return { source: "pos_sales", record: sales[0] };
+      return { source: "pos_sales", record: sales[0], strategy: "notes" };
     }
   }
 
-  // Strategy 3: Search by customer phone (orders table via customers.whatsapp)
+  // Strategy 3 (ENDURECIDA): telefone + valor exato + janela de 30 min.
   if (telephone) {
+    if (!gatewayTotal || !(gatewayTotal > 0)) {
+      console.warn("[appmax] Strategy 3 abortada: webhook sem valor total confiável.");
+      return null;
+    }
+
     const phoneSuffix = telephone.replace(/\D/g, "").slice(-8);
     if (phoneSuffix.length >= 8) {
+      const windowStart = new Date(Date.now() - PHONE_MATCH_WINDOW_MIN * 60_000).toISOString();
+
       const { data: customers } = await supabase
         .from("customers")
         .select("id")
@@ -126,33 +168,40 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
         const customerIds = customers.map((c: any) => c.id);
         const { data: orders } = await supabase
           .from("orders")
-          .select("id, is_paid, notes")
+          .select("id, is_paid, notes, products, discount_type, discount_value, shipping_cost, free_shipping, created_at")
           .in("customer_id", customerIds)
           .eq("is_paid", false)
+          .gte("created_at", windowStart)
           .order("created_at", { ascending: false })
-          .limit(1);
+          .limit(10);
 
-        if (orders?.length) {
-          return { source: "orders", record: orders[0] };
+        const matched = (orders || []).find((o: any) => amountsMatch(computeOrderTotal(o), gatewayTotal));
+        if (matched) {
+          console.log(`[appmax] Strategy 3: order ${matched.id} casou por telefone + valor ${gatewayTotal}`);
+          return { source: "orders", record: matched, strategy: "phone_amount" };
         }
       }
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, status, notes")
+        .select("id, status, notes, total, created_at")
         .ilike("customer_phone", `%${phoneSuffix}`)
         .not("status", "in", '("paid","completed")')
+        .gte("created_at", windowStart)
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(10);
 
-      if (sales?.length) {
-        return { source: "pos_sales", record: sales[0] };
+      const matchedSale = (sales || []).find((s: any) => amountsMatch(Number(s.total), gatewayTotal));
+      if (matchedSale) {
+        console.log(`[appmax] Strategy 3: pos_sale ${matchedSale.id} casou por telefone + valor ${gatewayTotal}`);
+        return { source: "pos_sales", record: matchedSale, strategy: "phone_amount" };
       }
     }
   }
 
   return null;
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -173,8 +222,12 @@ serve(async (req) => {
     const status = (data.status || "").toLowerCase();
     const telephone = data.telephone || data.phone || data.customer?.telephone || data.customer?.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
+    const gatewayTotal = Number(
+      data.total ?? data.total_paid ?? data.amount ?? data.value ?? data.order?.total ?? NaN,
+    );
+    const gatewayTotalSafe = Number.isFinite(gatewayTotal) && gatewayTotal > 0 ? gatewayTotal : null;
 
-    console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}`);
+    console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}, Total: ${gatewayTotalSafe}`);
 
     // Ignorar eventos que não devem acionar pagamento
     if (IGNORED_EVENTS.includes(event)) {
@@ -204,14 +257,35 @@ serve(async (req) => {
     }
 
     // Buscar pedido usando múltiplas estratégias
-    const found = await findOrder(supabase, appmaxOrderId, telephone);
+    const found = await findOrder(supabase, appmaxOrderId, telephone, gatewayTotalSafe);
 
     if (!found) {
       console.error("AppMax: pedido não encontrado para o evento", JSON.stringify(payload));
+      // Webhook órfão → registra para revisão manual (nunca marca pedido "parecido").
+      await logCheckoutFailure(supabase, {
+        sale_id: `orphan-webhook:appmax:${appmaxOrderId ?? "sem-id"}`,
+        payment_method: "credit_card",
+        gateway: "appmax",
+        status: "error",
+        error_message: `Webhook AppMax órfão (${event || "sem evento"} / ${status || "sem status"}): nenhum pedido casou por ID nem por telefone+valor.`,
+        amount: gatewayTotalSafe,
+        customer_phone: telephone,
+        transaction_id: transactionId ? String(transactionId) : null,
+        metadata: {
+          source: "appmax-webhook",
+          reason: "orphan_webhook",
+          event,
+          appmax_status: status,
+          appmax_order_id: appmaxOrderId ? String(appmaxOrderId) : null,
+          gateway_total: gatewayTotalSafe,
+          payload: payload,
+        },
+      });
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "order_not_found" }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
 
     const { source, record } = found;
     const ourOrderId = record.id;
