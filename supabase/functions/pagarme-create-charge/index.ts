@@ -244,11 +244,18 @@ interface ChargeRequest {
 // ── Mercado Pago charge (gateway #1) ─────────────────────────────
 // Usa token gerado no frontend (MercadoPago.JS V2). binary_mode:true garante
 // status definitivo (approved/rejected) sem ficar "in_process" pendente.
+// Vincula o ID gerado pelo gateway ao pedido/venda ASSIM QUE ele existe,
+// antes de saber o resultado do cartão. Sem isso, um pagamento aprovado/estornado
+// depois só chega por webhook e cai no fallback por telefone — que pode marcar
+// o pedido ERRADO como pago.
+type LinkGatewayIdFn = (gateway: string, gatewayId: string) => Promise<void>;
+
 async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   supabase: any,
-  clientIp?: string | null
+  clientIp?: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
 ): Promise<ChargeResult> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
@@ -431,6 +438,8 @@ async function chargeMercadoPago(
     }
     console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail || data.error || data.message} id=${data.id} request_id=${requestId || "n/a"}`);
 
+    if (data?.id && linkGatewayId) await linkGatewayId("mercadopago", String(data.id));
+
     if (data.status === "approved") {
       return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, isSandbox: mpAccount.is_sandbox };
     }
@@ -479,7 +488,8 @@ async function chargePagarme(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   secretKey: string,
-  clientIp: string | null
+  clientIp: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
 ): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const auth = btoa(`${secretKey}:`);
@@ -604,6 +614,8 @@ async function chargePagarme(
   console.log("Pagar.me charge response HTTP status:", chargeRes.status);
   console.log("Pagar.me charge full response:", JSON.stringify(chargeData).substring(0, 2000));
 
+  if (chargeData?.id && linkGatewayId) await linkGatewayId("pagarme", String(chargeData.id));
+
   if (chargeData.status === "paid") {
     return { success: true, gateway: "pagarme", transactionId: chargeData.id };
   }
@@ -643,7 +655,8 @@ async function chargeVindi(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   tokenAccount: string,
-  clientIp: string | null
+  clientIp: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
 ): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const cpf = params.customer.cpf.replace(/\D/g, "");
@@ -707,6 +720,9 @@ async function chargeVindi(
   console.log("VINDI/Yapay HTTP status:", res.status);
   console.log("VINDI/Yapay full response:", JSON.stringify(data).substring(0, 2000));
 
+  const vindiTxToken = data?.data_response?.transaction?.token_transaction;
+  if (vindiTxToken && linkGatewayId) await linkGatewayId("vindi", String(vindiTxToken));
+
   if (data?.message_response?.message === "success") {
     const tx = data?.data_response?.transaction;
     const statusId = tx?.status_id;
@@ -726,7 +742,8 @@ async function chargeAppmax(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   accessToken: string,
-  clientIp: string | null
+  clientIp: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
 ): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const base = "https://admin.appmax.com.br/api/v3";
@@ -792,6 +809,9 @@ async function chargeAppmax(
       return { success: false, gateway: "appmax", error: `AppMax order error: ${orderData.text || orderData.message || JSON.stringify(orderData.data).substring(0, 200)}` };
     }
     const appmaxOrderId = orderData.data.id;
+
+    // Vincula IMEDIATAMENTE, antes de processar o cartão.
+    if (linkGatewayId) await linkGatewayId("appmax", String(appmaxOrderId));
 
     // 3. Process payment
     const month = String(params.card.expMonth ?? "").replace(/\D/g, "").slice(-2).padStart(2, "0");
@@ -1265,6 +1285,36 @@ serve(async (req) => {
       console.log(`[DUPLICATE-GUARD] Pré-autorização pendente do pedido ${params.orderId} expirou (${Math.round(pendingAgeMs / 1000)}s > janela). Permitindo nova tentativa.`);
     }
 
+    // ── Vínculo precoce do ID do gateway ao pedido/venda ──
+    // Grava assim que o gateway cria a ordem/pagamento, ANTES do resultado do cartão.
+    // Garante que qualquer webhook posterior (aprovação, estorno, análise) ache o
+    // pedido certo por ID e nunca caia no fallback por telefone.
+    const GATEWAY_ID_COLUMN: Record<string, string> = {
+      appmax: "appmax_order_id",
+      pagarme: "pagarme_order_id",
+      vindi: "vindi_transaction_id",
+      mercadopago: "mercadopago_payment_id",
+    };
+    const linkedGatewayIds = new Set<string>();
+    const linkGatewayId: LinkGatewayIdFn = async (gateway, gatewayId) => {
+      try {
+        const column = GATEWAY_ID_COLUMN[gateway];
+        if (!column || !gatewayId) return;
+        const key = `${column}:${gatewayId}`;
+        if (linkedGatewayIds.has(key)) return;
+        linkedGatewayIds.add(key);
+        const table = orderSource === "orders" ? "orders" : "pos_sales";
+        const { error: linkErr } = await supabase
+          .from(table)
+          .update({ [column]: String(gatewayId) } as any)
+          .eq("id", params.orderId);
+        if (linkErr) console.error(`[GATEWAY-LINK] Falha ao gravar ${column}=${gatewayId} em ${table} ${params.orderId}:`, linkErr);
+        else console.log(`[GATEWAY-LINK] ${column}=${gatewayId} gravado em ${table} ${params.orderId} (pré-resultado).`);
+      } catch (e) {
+        console.error("[GATEWAY-LINK] exceção (não bloqueia cobrança):", e);
+      }
+    };
+
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
     let mpAccountIdForOrder: string | null = null;
@@ -1286,7 +1336,7 @@ serve(async (req) => {
 
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
-      result = await chargeMercadoPago(chargeParams, products, supabase, clientIp);
+      result = await chargeMercadoPago(chargeParams, products, supabase, clientIp, linkGatewayId);
       if (result.success) {
         mpAccountIdForOrder = result.mpAccountId || null;
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
@@ -1307,7 +1357,7 @@ serve(async (req) => {
     // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
     if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
-      result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp);
+      result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp, linkGatewayId);
     }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
@@ -1318,7 +1368,7 @@ serve(async (req) => {
 
       const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
       if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp);
+        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
         if (vindiResult.success) {
           console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
           result = vindiResult;
@@ -1336,7 +1386,7 @@ serve(async (req) => {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
-        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp);
+        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
         if (appmaxResult.success) {
           console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
           result = appmaxResult;
