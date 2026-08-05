@@ -1947,6 +1947,9 @@ export type Database = {
           created_at: string
           enviado_em: string
           erro: string | null
+          erro_code: number | null
+          fallback_at: string | null
+          fallback_provider: string | null
           id: string
           message_wamid: string | null
           phone: string | null
@@ -1968,6 +1971,9 @@ export type Database = {
           created_at?: string
           enviado_em?: string
           erro?: string | null
+          erro_code?: number | null
+          fallback_at?: string | null
+          fallback_provider?: string | null
           id?: string
           message_wamid?: string | null
           phone?: string | null
@@ -1989,6 +1995,9 @@ export type Database = {
           created_at?: string
           enviado_em?: string
           erro?: string | null
+          erro_code?: number | null
+          fallback_at?: string | null
+          fallback_provider?: string | null
           id?: string
           message_wamid?: string | null
           phone?: string | null
@@ -4346,6 +4355,9 @@ export type Database = {
           attempts: number
           created_at: string
           dispatch_id: string
+          error_code: number | null
+          fallback_at: string | null
+          fallback_provider: string | null
           id: string
           last_error: string | null
           lease_until: string | null
@@ -4366,6 +4378,9 @@ export type Database = {
           attempts?: number
           created_at?: string
           dispatch_id: string
+          error_code?: number | null
+          fallback_at?: string | null
+          fallback_provider?: string | null
           id?: string
           last_error?: string | null
           lease_until?: string | null
@@ -4386,6 +4401,9 @@ export type Database = {
           attempts?: number
           created_at?: string
           dispatch_id?: string
+          error_code?: number | null
+          fallback_at?: string | null
+          fallback_provider?: string | null
           id?: string
           last_error?: string | null
           lease_until?: string | null
@@ -10626,6 +10644,39 @@ export type Database = {
           sent_at?: string | null
           status?: string
           test_event_code?: string | null
+        }
+        Relationships: []
+      }
+      meta_media_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          media_id: string
+          media_url: string
+          mime_type: string | null
+          phone_number_id: string
+          uploaded_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          media_id: string
+          media_url: string
+          mime_type?: string | null
+          phone_number_id: string
+          uploaded_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_id?: string
+          media_url?: string
+          mime_type?: string | null
+          phone_number_id?: string
+          uploaded_at?: string
         }
         Relationships: []
       }
