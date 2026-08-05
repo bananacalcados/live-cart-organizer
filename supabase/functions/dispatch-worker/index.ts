@@ -365,6 +365,29 @@ serve(async (req) => {
     const chatMediaType = isMediaHeader ? headerFormat.toLowerCase() : 'text';
     const chatMediaUrl = isMediaHeader ? headerMediaUrl : null;
 
+    // ── ETAPA 1: subir a mídia UMA vez e usar media_id em todos os envios ──────
+    // Antes cada mensagem carregava `image.link`, e a Meta rebaixava a URL a cada
+    // envio → em picos o storage devolvia 500 e a Meta respondia 131053, matando
+    // centenas de disparos. Agora resolvemos o media_id (cacheado em
+    // meta_media_cache) antes do loop; se falhar, seguimos com o link.
+    const mediaIds = new Map<string, string>();
+    {
+      const urls = new Set<string>();
+      if (isMediaHeader && headerMediaUrl) urls.add(headerMediaUrl);
+      for (const [key, vc] of Object.entries(variablesConfig as Record<string, any>)) {
+        if (/^card_\d+_image$/.test(key) && vc?.staticValue) urls.add(vc.staticValue);
+      }
+      for (const u of urls) {
+        const kind = u === headerMediaUrl && headerFormat !== 'IMAGE'
+          ? (headerFormat.toLowerCase() as any)
+          : 'image';
+        const id = await resolveMetaMediaId(supabase, { url: u, kind, phoneNumberId, accessToken });
+        if (id) mediaIds.set(u, id);
+      }
+      console.log(`[${workerId}] media_ids resolvidos: ${mediaIds.size}/${urls.size}`);
+    }
+
+
     // ── TEST MODE ─────────────────────────────────────────────────────────────
     // Send a single test message to `testPhone` using the SAVED dispatch config
     // (same component builder as the real send), without touching dispatch_recipients
