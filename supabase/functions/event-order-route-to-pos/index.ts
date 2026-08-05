@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     if (claimErr) console.error("[route-to-pos] claim error", order.id, claimErr);
 
     if (!claimed || claimed.length === 0) {
-      return new Response(JSON.stringify({ skipped: "already claimed", claimErr: claimErr?.message || null }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ skipped: "already claimed", claimErr: claimErr || null }), { headers: corsHeaders });
     }
 
     const releaseClaim = async () => {
