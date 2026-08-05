@@ -655,7 +655,8 @@ async function chargeVindi(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   tokenAccount: string,
-  clientIp: string | null
+  clientIp: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
 ): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const cpf = params.customer.cpf.replace(/\D/g, "");
