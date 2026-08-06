@@ -212,14 +212,20 @@ export function SimpleTemplatesPanel({ namePrefix = "" }: SimpleTemplatesPanelPr
     if (!/^[a-z][a-z0-9_]*$/.test(finalName))
       return "O nome deve ter apenas letras minúsculas, números e underscore, começando com letra";
     if (!bodyText.trim()) return "Preencha o corpo da mensagem";
-    const positional = buildComponentText(bodyText.trim(), variables).text;
-    if (/^\{\{\d+\}\}/.test(positional) || /\{\{\d+\}\}$/.test(positional))
-      return "A Meta não permite variável no início ou no fim do corpo. Coloque texto antes/depois.";
+    const positional = buildComponentText(bodyText.trim(), variables).text.trim();
+    // A Meta rejeita variável colada no início/fim, mesmo com espaços, quebras
+    // de linha ou pontuação isolada em volta.
+    if (/^[\s\p{P}\p{S}]*\{\{\d+\}\}/u.test(positional) || /\{\{\d+\}\}[\s\p{P}\p{S}]*$/u.test(positional))
+      return "A Meta não permite variável no início ou no fim do corpo. Escreva texto antes e depois da variável.";
     if (kind === "image" && !mediaHandle) return "Envie a imagem de exemplo do cabeçalho";
     if (kind === "text" && headerText.trim()) {
-      const h = buildComponentText(headerText, variables);
+      const h = buildComponentText(headerText.trim(), variables);
       if (h.examples.length > 1) return "O cabeçalho de texto aceita no máximo 1 variável";
+      const ht = h.text.trim();
+      if (/^\{\{\d+\}\}/.test(ht) || /\{\{\d+\}\}$/.test(ht))
+        return "A Meta não permite variável no início ou no fim do cabeçalho. Escreva texto antes e depois.";
     }
+
     for (const b of buttons) {
       if (!b.text.trim()) return "Preencha o texto de todos os botões";
       if (b.type === "URL" && !(b.url || "").trim()) return "Preencha a URL dos botões de link";
