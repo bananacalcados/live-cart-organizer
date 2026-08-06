@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Save, Play, Users, Pause, Send } from "lucide-react";
-import { CampaignCardsEditor, CampaignCard, emptyCard } from "./CampaignCardsEditor";
+import { CampaignCardsEditor, CampaignCard, emptyCard, uploadCardImage } from "./CampaignCardsEditor";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import {
   applyTokens, mappingToken, namedTokensOf, tokenToMapping, previewMappingValue,
