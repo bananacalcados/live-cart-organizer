@@ -180,8 +180,20 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
                 <CampaignList />
               </TabsContent>
               <TabsContent value="templates">
-                <CarouselTemplatesLadder />
+                <Tabs defaultValue="carrossel">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="carrossel">Carrossel</TabsTrigger>
+                    <TabsTrigger value="simples">Simples (texto / imagem)</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="carrossel">
+                    <CarouselTemplatesLadder />
+                  </TabsContent>
+                  <TabsContent value="simples">
+                    <SimpleTemplatesPanel />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
+
               <TabsContent value="publicos">
                 <CampaignAudienceManager />
               </TabsContent>
