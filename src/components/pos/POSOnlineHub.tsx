@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { POSOnlineSales } from "./POSOnlineSales";
 import { POSCustomLinkDialog } from "./POSCustomLinkDialog";
 import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
+import { SimpleTemplatesPanel } from "@/components/admin/SimpleTemplatesPanel";
+
 import { CampaignAudienceManager } from "./audience/CampaignAudienceManager";
 import { CampaignList } from "./automation/CampaignList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -180,8 +182,20 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
                 <CampaignList />
               </TabsContent>
               <TabsContent value="templates">
-                <CarouselTemplatesLadder />
+                <Tabs defaultValue="carrossel">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="carrossel">Carrossel</TabsTrigger>
+                    <TabsTrigger value="simples">Simples (texto / imagem)</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="carrossel">
+                    <CarouselTemplatesLadder />
+                  </TabsContent>
+                  <TabsContent value="simples">
+                    <SimpleTemplatesPanel />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
+
               <TabsContent value="publicos">
                 <CampaignAudienceManager />
               </TabsContent>
