@@ -52,6 +52,38 @@ interface Publico { id: string; nome: string; filtro_json: unknown; }
 interface Seller { id: string; name: string }
 interface TplEntry { qtd: number; templateId: string; language: string }
 
+/** Approved NON-carousel template (text-only or image + text) read live from Meta. */
+interface SimpleTpl {
+  name: string;
+  language: string;
+  bodyText: string;
+  varCount: number;
+  headerFormat: "IMAGE" | "TEXT" | "NONE";
+}
+
+const SIMPLE_PREFIX = "simples::";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function parseSimpleTemplate(tpl: any): SimpleTpl | null {
+  if (!tpl || !Array.isArray(tpl.components)) return null;
+  const comps = tpl.components as any[];
+  if (comps.some((c) => String(c?.type).toUpperCase() === "CAROUSEL")) return null;
+  const body = comps.find((c) => String(c?.type).toUpperCase() === "BODY");
+  const bodyText: string = body?.text || "";
+  if (!bodyText) return null;
+  const header = comps.find((c) => String(c?.type).toUpperCase() === "HEADER");
+  const fmt = String(header?.format || "").toUpperCase();
+  return {
+    name: tpl.name || "",
+    language: tpl.language || "pt_BR",
+    bodyText,
+    varCount: (bodyText.match(/\{\{\s*\d+\s*\}\}/g) || []).length,
+    headerFormat: fmt === "IMAGE" ? "IMAGE" : fmt === "TEXT" ? "TEXT" : "NONE",
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+
 interface Props {
   editingId: string | null;
   onClose: () => void;
