@@ -401,7 +401,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       }
     })();
     return () => { active = false; };
-  }, [numberId, modelo, selectedQtd, tplByModel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [numberId, modelo, selectedQtd, tplByModel, tipoTpl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showCardLegenda = cardVars.some((m) => m.kind === "legenda");
 
