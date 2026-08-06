@@ -638,7 +638,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Instância Meta</Label>
-            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); setSelectedQtd(null); setTplStruct(null); }}>
+            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); setTipoTpl("carrossel"); setSelectedQtd(null); setTplStruct(null); }}>
               <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a instância" /></SelectTrigger>
               <SelectContent>
                 {numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.label || n.phone_display || n.id}</SelectItem>)}
@@ -647,35 +647,64 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Modelo de template</Label>
-            <Select value={modelo} onValueChange={(v) => { setModelo(v); setSelectedQtd(null); setTplStruct(null); }} disabled={!numberId}>
+            <Select
+              value={tipoTpl === "simples" && modelo ? `${SIMPLE_PREFIX}${modelo}` : modelo}
+              onValueChange={(v) => {
+                setSelectedQtd(null);
+                setTplStruct(null);
+                if (v.startsWith(SIMPLE_PREFIX)) {
+                  setTipoTpl("simples");
+                  setModelo(v.slice(SIMPLE_PREFIX.length));
+                } else {
+                  setTipoTpl("carrossel");
+                  setModelo(v);
+                }
+              }}
+              disabled={!numberId}
+            >
               <SelectTrigger className="bg-white">
                 <SelectValue placeholder={numberId ? "Selecione o modelo" : "Escolha a instância primeiro"} />
               </SelectTrigger>
               <SelectContent>
-                {models.length === 0
-                  ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhum template aprovado nesta instância</div>
-                  : models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {models.length === 0 && simpleTpls.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhum template aprovado nesta instância</div>
+                )}
+                {models.length > 0 && (
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Carrossel</div>
+                )}
+                {models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {simpleTpls.length > 0 && (
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Texto / Imagem + texto</div>
+                )}
+                {simpleTpls.map((t) => (
+                  <SelectItem key={t.name} value={`${SIMPLE_PREFIX}${t.name}`}>
+                    {t.name} {t.headerFormat === "IMAGE" ? "· imagem" : "· texto"}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label>Quantidade de cards</Label>
-            <Select
-              value={selectedQtd ? String(selectedQtd) : ""}
-              onValueChange={(v) => setSelectedQtd(Number(v))}
-              disabled={!modelo}
-            >
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder={modelo ? "Escolha a qtd" : "Escolha o modelo"} />
-              </SelectTrigger>
-              <SelectContent>
-                {qtdOptions.length === 0
-                  ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhuma quantidade aprovada</div>
-                  : qtdOptions.map((q) => <SelectItem key={q} value={String(q)}>{q} cards</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {tipoTpl === "carrossel" && (
+            <div className="space-y-1.5">
+              <Label>Quantidade de cards</Label>
+              <Select
+                value={selectedQtd ? String(selectedQtd) : ""}
+                onValueChange={(v) => setSelectedQtd(Number(v))}
+                disabled={!modelo}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder={modelo ? "Escolha a qtd" : "Escolha o modelo"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {qtdOptions.length === 0
+                    ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhuma quantidade aprovada</div>
+                    : qtdOptions.map((q) => <SelectItem key={q} value={String(q)}>{q} cards</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
+
         {loadingTpl && (
           <p className="text-[11px] text-neutral-500 flex items-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" /> Carregando estrutura do template aprovado...
