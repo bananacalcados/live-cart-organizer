@@ -552,6 +552,9 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         nome: nome.trim(),
         whatsapp_number_id: numberId || null,
         template_modelo: modelo || null,
+        template_tipo: tipoTpl,
+        template_language: tipoTpl === "simples" ? (simpleSel?.language || "pt_BR") : null,
+
         ...textFields,
         publico_id: publicoId || null,
         qtd_por_dia: qtdPorDia,
