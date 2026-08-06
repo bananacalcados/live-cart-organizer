@@ -327,10 +327,41 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     [modelo, tplByModel],
   );
 
+  const simpleSel = useMemo<SimpleTpl | null>(
+    () => (tipoTpl === "simples" ? simpleTpls.find((t) => t.name === modelo) || null : null),
+    [tipoTpl, simpleTpls, modelo],
+  );
+
+  // Template SIMPLES: a estrutura já vem da listagem da Meta, sem cards.
+  useEffect(() => {
+    if (tipoTpl !== "simples") return;
+    if (!simpleSel) { setTplStruct(null); return; }
+    const parsed: ParsedCarouselTemplate = {
+      topBodyText: simpleSel.bodyText,
+      topVarCount: simpleSel.varCount,
+      cardBodyText: "",
+      cardVarCount: 0,
+      cards: [],
+      qtdCards: 0,
+    };
+    setTplStruct(parsed);
+    const stored = editStored.current;
+    const topTokens = stored ? namedTokensOf(stored.topBody) : [];
+    setBodyVars(Array.from({ length: parsed.topVarCount }, (_, i) =>
+      topTokens[i] ? tokenToMapping(topTokens[i], stored!.vars) : { kind: "nome" as VarKind }));
+    setCardVars([]);
+    editStored.current = null;
+    setCards((prev) => (simpleSel.headerFormat === "IMAGE"
+      ? (prev.length ? [{ ...prev[0], ordem: 0, legenda: "" }] : [emptyCard(0)])
+      : []));
+  }, [tipoTpl, simpleSel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch the approved template structure from Meta when instance/model/qtd ready.
   useEffect(() => {
+    if (tipoTpl === "simples") return;
     const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
     if (!numberId || !modelo || !selectedQtd || !entry) { setTplStruct(null); return; }
+
     let active = true;
     setLoadingTpl(true);
     (async () => {
