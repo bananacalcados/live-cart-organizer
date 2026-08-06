@@ -272,6 +272,8 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     setNome(c.nome || "");
     setNumberId(c.whatsapp_number_id || "");
     setModelo(c.template_modelo || "");
+    setTipoTpl((c as { template_tipo?: string }).template_tipo === "simples" ? "simples" : "carrossel");
+
     setPublicoId(c.publico_id || "");
     setQtdPorDia(c.qtd_por_dia ?? 50);
     setDiasSemana(Array.isArray(c.dias_semana) ? c.dias_semana : [1, 2, 3, 4, 5]);
