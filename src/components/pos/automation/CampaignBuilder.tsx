@@ -130,6 +130,10 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [numberId, setNumberId] = useState("");
   const [modelo, setModelo] = useState("");
   const [selectedQtd, setSelectedQtd] = useState<number | null>(null);
+  const [tipoTpl, setTipoTpl] = useState<"carrossel" | "simples">("carrossel");
+  const [simpleTpls, setSimpleTpls] = useState<SimpleTpl[]>([]);
+  const [headerUploading, setHeaderUploading] = useState(false);
+
 
   const [cards, setCards] = useState<CampaignCard[]>([]);
 
