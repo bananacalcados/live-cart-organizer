@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Save, Play, Users, Pause, Send } from "lucide-react";
-import { CampaignCardsEditor, CampaignCard, emptyCard } from "./CampaignCardsEditor";
+import { CampaignCardsEditor, CampaignCard, emptyCard, uploadCardImage } from "./CampaignCardsEditor";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import {
   applyTokens, mappingToken, namedTokensOf, tokenToMapping, previewMappingValue,
@@ -51,6 +51,38 @@ interface MetaNumber { id: string; label: string | null; phone_display: string |
 interface Publico { id: string; nome: string; filtro_json: unknown; }
 interface Seller { id: string; name: string }
 interface TplEntry { qtd: number; templateId: string; language: string }
+
+/** Approved NON-carousel template (text-only or image + text) read live from Meta. */
+interface SimpleTpl {
+  name: string;
+  language: string;
+  bodyText: string;
+  varCount: number;
+  headerFormat: "IMAGE" | "TEXT" | "NONE";
+}
+
+const SIMPLE_PREFIX = "simples::";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function parseSimpleTemplate(tpl: any): SimpleTpl | null {
+  if (!tpl || !Array.isArray(tpl.components)) return null;
+  const comps = tpl.components as any[];
+  if (comps.some((c) => String(c?.type).toUpperCase() === "CAROUSEL")) return null;
+  const body = comps.find((c) => String(c?.type).toUpperCase() === "BODY");
+  const bodyText: string = body?.text || "";
+  if (!bodyText) return null;
+  const header = comps.find((c) => String(c?.type).toUpperCase() === "HEADER");
+  const fmt = String(header?.format || "").toUpperCase();
+  return {
+    name: tpl.name || "",
+    language: tpl.language || "pt_BR",
+    bodyText,
+    varCount: (bodyText.match(/\{\{\s*\d+\s*\}\}/g) || []).length,
+    headerFormat: fmt === "IMAGE" ? "IMAGE" : fmt === "TEXT" ? "TEXT" : "NONE",
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 
 interface Props {
   editingId: string | null;
@@ -98,6 +130,10 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [numberId, setNumberId] = useState("");
   const [modelo, setModelo] = useState("");
   const [selectedQtd, setSelectedQtd] = useState<number | null>(null);
+  const [tipoTpl, setTipoTpl] = useState<"carrossel" | "simples">("carrossel");
+  const [simpleTpls, setSimpleTpls] = useState<SimpleTpl[]>([]);
+  const [headerUploading, setHeaderUploading] = useState(false);
+
 
   const [cards, setCards] = useState<CampaignCard[]>([]);
 
@@ -142,7 +178,29 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   };
 
   const loadApproved = async (instanceId: string) => {
-    if (!instanceId) { setTplByModel({}); return; }
+    if (!instanceId) { setTplByModel({}); setSimpleTpls([]); return; }
+
+    // Live Meta list: used both for carousel approval status and to expose the
+    // SIMPLE (text / image + text) approved templates of this instance.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let metaTemplates: any[] | null = null;
+    try {
+      const { data: meta, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: instanceId },
+      });
+      if (!error && Array.isArray(meta?.templates)) metaTemplates = meta.templates;
+    } catch {
+      metaTemplates = null;
+    }
+
+    setSimpleTpls(
+      (metaTemplates || [])
+        .filter((t) => String(t?.status).toUpperCase() === "APPROVED")
+        .map(parseSimpleTemplate)
+        .filter((t): t is SimpleTpl => !!t && !!t.name)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+
     // Load ALL locally-known carousel templates for this instance (not just the
     // ones flagged aprovado). The local `aprovado` flag is only refreshed when
     // someone clicks "Sincronizar status" in the admin panel, so freshly
@@ -158,22 +216,14 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     }[];
     if (rows.length === 0) { setTplByModel({}); return; }
 
-    // Fetch live status from Meta; fall back to the local flag if it fails.
-    let approvedByName: Map<string, boolean> | null = null;
-    try {
-      const { data: meta, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
-        body: { whatsappNumberId: instanceId },
-      });
-      if (!error && meta?.templates) {
-        approvedByName = new Map(
-          (meta.templates as { name?: string; status?: string }[]).map(
-            (t) => [t.name || "", String(t.status).toUpperCase() === "APPROVED"],
-          ),
-        );
-      }
-    } catch {
-      approvedByName = null;
-    }
+    const approvedByName: Map<string, boolean> | null = metaTemplates
+      ? new Map(
+        (metaTemplates as { name?: string; status?: string }[]).map(
+          (t) => [t.name || "", String(t.status).toUpperCase() === "APPROVED"],
+        ),
+      )
+      : null;
+
 
     const isApproved = (r: { template_id: string; aprovado: boolean | null }) =>
       approvedByName ? (approvedByName.get(r.template_id) ?? false) : !!r.aprovado;
@@ -222,6 +272,8 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     setNome(c.nome || "");
     setNumberId(c.whatsapp_number_id || "");
     setModelo(c.template_modelo || "");
+    setTipoTpl((c as { template_tipo?: string }).template_tipo === "simples" ? "simples" : "carrossel");
+
     setPublicoId(c.publico_id || "");
     setQtdPorDia(c.qtd_por_dia ?? 50);
     setDiasSemana(Array.isArray(c.dias_semana) ? c.dias_semana : [1, 2, 3, 4, 5]);
@@ -275,10 +327,41 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     [modelo, tplByModel],
   );
 
+  const simpleSel = useMemo<SimpleTpl | null>(
+    () => (tipoTpl === "simples" ? simpleTpls.find((t) => t.name === modelo) || null : null),
+    [tipoTpl, simpleTpls, modelo],
+  );
+
+  // Template SIMPLES: a estrutura já vem da listagem da Meta, sem cards.
+  useEffect(() => {
+    if (tipoTpl !== "simples") return;
+    if (!simpleSel) { setTplStruct(null); return; }
+    const parsed: ParsedCarouselTemplate = {
+      topBodyText: simpleSel.bodyText,
+      topVarCount: simpleSel.varCount,
+      cardBodyText: "",
+      cardVarCount: 0,
+      cards: [],
+      qtdCards: 0,
+    };
+    setTplStruct(parsed);
+    const stored = editStored.current;
+    const topTokens = stored ? namedTokensOf(stored.topBody) : [];
+    setBodyVars(Array.from({ length: parsed.topVarCount }, (_, i) =>
+      topTokens[i] ? tokenToMapping(topTokens[i], stored!.vars) : { kind: "nome" as VarKind }));
+    setCardVars([]);
+    editStored.current = null;
+    setCards((prev) => (simpleSel.headerFormat === "IMAGE"
+      ? (prev.length ? [{ ...prev[0], ordem: 0, legenda: "" }] : [emptyCard(0)])
+      : []));
+  }, [tipoTpl, simpleSel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch the approved template structure from Meta when instance/model/qtd ready.
   useEffect(() => {
+    if (tipoTpl === "simples") return;
     const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
     if (!numberId || !modelo || !selectedQtd || !entry) { setTplStruct(null); return; }
+
     let active = true;
     setLoadingTpl(true);
     (async () => {
@@ -318,7 +401,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       }
     })();
     return () => { active = false; };
-  }, [numberId, modelo, selectedQtd, tplByModel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [numberId, modelo, selectedQtd, tplByModel, tipoTpl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showCardLegenda = cardVars.some((m) => m.kind === "legenda");
 
@@ -340,10 +423,23 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     const phone = normalizeTestPhone(testPhone);
     if (phone.length < 12) { toast.error("Informe um telefone válido com DDD"); return; }
     if (!tplStruct) { toast.error("Aguarde o carregamento do template aprovado"); return; }
-    const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
-    if (!entry) { toast.error("Selecione instância, modelo e quantidade de cards"); return; }
-    const okCards = cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
-    if (okCards.length < (selectedQtd || 0)) { toast.error(`Adicione imagem em todos os ${selectedQtd} cards`); return; }
+
+    const isSimple = tipoTpl === "simples";
+    const entry = isSimple
+      ? (simpleSel ? { templateId: simpleSel.name, language: simpleSel.language, qtd: 0 } : null)
+      : (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
+    if (!entry) { toast.error("Selecione instância e template"); return; }
+
+    const headerUrl = cards[0]?.imagem_url || null;
+    if (isSimple && simpleSel?.headerFormat === "IMAGE" && !headerUrl) {
+      toast.error("Envie a imagem do cabeçalho do template");
+      return;
+    }
+    const okCards = isSimple ? [] : cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
+    if (!isSimple && okCards.length < (selectedQtd || 0)) {
+      toast.error(`Adicione imagem em todos os ${selectedQtd} cards`);
+      return;
+    }
 
     setTestSending(true);
     try {
@@ -354,26 +450,38 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const components: any[] = [];
-      if (topTokens.length) {
-        components.push({
-          type: "body",
-          parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
-        });
-      }
-      const carouselCards = okCards.map((card, i) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const comps: any[] = [
-          { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
-        ];
-        if (cardTokens.length) {
-          comps.push({
+      if (isSimple) {
+        if (headerUrl) {
+          components.push({ type: "header", parameters: [{ type: "image", image: { link: headerUrl } }] });
+        }
+        if (topTokens.length) {
+          components.push({
             type: "body",
-            parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+            parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
           });
         }
-        return { card_index: i, components: comps };
-      });
-      components.push({ type: "carousel", cards: carouselCards });
+      } else {
+        if (topTokens.length) {
+          components.push({
+            type: "body",
+            parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
+          });
+        }
+        const carouselCards = okCards.map((card, i) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const comps: any[] = [
+            { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+          ];
+          if (cardTokens.length) {
+            comps.push({
+              type: "body",
+              parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+            });
+          }
+          return { card_index: i, components: comps };
+        });
+        components.push({ type: "carousel", cards: carouselCards });
+      }
 
       const { data, error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
         body: {
@@ -398,15 +506,22 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     if (!nome.trim()) return "Dê um nome à automação";
     if (!numberId) return "Selecione a instância Meta";
     if (!modelo) return "Selecione o modelo de template";
-    if (!selectedQtd) return "Selecione a quantidade de cards";
+    if (tipoTpl === "carrossel" && !selectedQtd) return "Selecione a quantidade de cards";
     if (!tplStruct) return "Aguarde o carregamento do template aprovado";
     if (!publicoId) return "Selecione o público";
     if (diasSemana.length === 0) return "Escolha ao menos um dia da semana";
     if (qtdPorDia < 1) return "O limite diário precisa ser ≥ 1";
+    if (tipoTpl === "simples") {
+      if (simpleSel?.headerFormat === "IMAGE" && !cards[0]?.imagem_url) {
+        return "Envie a imagem do cabeçalho do template";
+      }
+      return null;
+    }
     const okCards = cards.filter((c) => c.imagem_url).length;
-    if (okCards < selectedQtd) return `Adicione imagem em todos os ${selectedQtd} cards`;
+    if (okCards < (selectedQtd || 0)) return `Adicione imagem em todos os ${selectedQtd} cards`;
     return null;
   };
+
 
   const persist = async (startNow: boolean): Promise<boolean> => {
     if (startNow) {
@@ -437,6 +552,9 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         nome: nome.trim(),
         whatsapp_number_id: numberId || null,
         template_modelo: modelo || null,
+        template_tipo: tipoTpl,
+        template_language: tipoTpl === "simples" ? (simpleSel?.language || "pt_BR") : null,
+
         ...textFields,
         publico_id: publicoId || null,
         qtd_por_dia: qtdPorDia,
@@ -520,7 +638,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Instância Meta</Label>
-            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); setSelectedQtd(null); setTplStruct(null); }}>
+            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); setTipoTpl("carrossel"); setSelectedQtd(null); setTplStruct(null); }}>
               <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a instância" /></SelectTrigger>
               <SelectContent>
                 {numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.label || n.phone_display || n.id}</SelectItem>)}
@@ -529,35 +647,64 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Modelo de template</Label>
-            <Select value={modelo} onValueChange={(v) => { setModelo(v); setSelectedQtd(null); setTplStruct(null); }} disabled={!numberId}>
+            <Select
+              value={tipoTpl === "simples" && modelo ? `${SIMPLE_PREFIX}${modelo}` : modelo}
+              onValueChange={(v) => {
+                setSelectedQtd(null);
+                setTplStruct(null);
+                if (v.startsWith(SIMPLE_PREFIX)) {
+                  setTipoTpl("simples");
+                  setModelo(v.slice(SIMPLE_PREFIX.length));
+                } else {
+                  setTipoTpl("carrossel");
+                  setModelo(v);
+                }
+              }}
+              disabled={!numberId}
+            >
               <SelectTrigger className="bg-white">
                 <SelectValue placeholder={numberId ? "Selecione o modelo" : "Escolha a instância primeiro"} />
               </SelectTrigger>
               <SelectContent>
-                {models.length === 0
-                  ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhum template aprovado nesta instância</div>
-                  : models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {models.length === 0 && simpleTpls.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhum template aprovado nesta instância</div>
+                )}
+                {models.length > 0 && (
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Carrossel</div>
+                )}
+                {models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {simpleTpls.length > 0 && (
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Texto / Imagem + texto</div>
+                )}
+                {simpleTpls.map((t) => (
+                  <SelectItem key={t.name} value={`${SIMPLE_PREFIX}${t.name}`}>
+                    {t.name} {t.headerFormat === "IMAGE" ? "· imagem" : "· texto"}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label>Quantidade de cards</Label>
-            <Select
-              value={selectedQtd ? String(selectedQtd) : ""}
-              onValueChange={(v) => setSelectedQtd(Number(v))}
-              disabled={!modelo}
-            >
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder={modelo ? "Escolha a qtd" : "Escolha o modelo"} />
-              </SelectTrigger>
-              <SelectContent>
-                {qtdOptions.length === 0
-                  ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhuma quantidade aprovada</div>
-                  : qtdOptions.map((q) => <SelectItem key={q} value={String(q)}>{q} cards</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {tipoTpl === "carrossel" && (
+            <div className="space-y-1.5">
+              <Label>Quantidade de cards</Label>
+              <Select
+                value={selectedQtd ? String(selectedQtd) : ""}
+                onValueChange={(v) => setSelectedQtd(Number(v))}
+                disabled={!modelo}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder={modelo ? "Escolha a qtd" : "Escolha o modelo"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {qtdOptions.length === 0
+                    ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhuma quantidade aprovada</div>
+                    : qtdOptions.map((q) => <SelectItem key={q} value={String(q)}>{q} cards</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
+
         {loadingTpl && (
           <p className="text-[11px] text-neutral-500 flex items-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" /> Carregando estrutura do template aprovado...
@@ -598,34 +745,54 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         )}
       </Card>
 
-      {/* 3. Cards (abaixo da mensagem) */}
-      <Card className="p-4 space-y-3">
-        <h4 className="text-sm font-bold text-neutral-800">3. Imagens e cards do carrossel</h4>
-        {tplStruct && tplStruct.cardVarCount > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Como preencher as variáveis do texto de cada card</Label>
-            {cardVars.map((m, i) => (
-              <VarMappingRow
-                key={i} index={i} mapping={m} options={CARD_VAR_OPTIONS}
-                onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
-              />
-            ))}
-            <p className="rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
-              Para colocar <strong>nome e preço diferentes em cada card</strong>, escolha
-              {" "}<strong>"Texto diferente em cada card"</strong>. Aí aparecerá um campo de texto
-              próprio em cada card abaixo. Use "Texto fixo" só quando a legenda for igual em todos.
+      {/* 3. Cards / imagem de cabeçalho */}
+      {tipoTpl === "simples" ? (
+        simpleSel?.headerFormat === "IMAGE" ? (
+          <Card className="p-4 space-y-3">
+            <h4 className="text-sm font-bold text-neutral-800">3. Imagem do cabeçalho</h4>
+            <p className="text-[11px] text-neutral-500">
+              Este template envia uma imagem no topo da mensagem. Envie a imagem que será usada nos disparos.
             </p>
-          </div>
-        )}
-        <CampaignCardsEditor
-          cards={cards}
-          onChange={setCards}
-          cardBodyText={tplStruct?.cardBodyText || null}
-          buttonsPerCard={tplStruct?.cards.map((c) => c.buttons) || []}
-          showLegenda={showCardLegenda}
-          templateLoaded={!!tplStruct}
-        />
-      </Card>
+            <CampaignCardsEditor
+              cards={cards.length ? [cards[0]] : []}
+              onChange={(c) => setCards(c.slice(0, 1))}
+              cardBodyText={null}
+              buttonsPerCard={[]}
+              showLegenda={false}
+              templateLoaded={!!tplStruct}
+            />
+          </Card>
+        ) : null
+      ) : (
+        <Card className="p-4 space-y-3">
+          <h4 className="text-sm font-bold text-neutral-800">3. Imagens e cards do carrossel</h4>
+          {tplStruct && tplStruct.cardVarCount > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Como preencher as variáveis do texto de cada card</Label>
+              {cardVars.map((m, i) => (
+                <VarMappingRow
+                  key={i} index={i} mapping={m} options={CARD_VAR_OPTIONS}
+                  onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
+                />
+              ))}
+              <p className="rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
+                Para colocar <strong>nome e preço diferentes em cada card</strong>, escolha
+                {" "}<strong>"Texto diferente em cada card"</strong>. Aí aparecerá um campo de texto
+                próprio em cada card abaixo. Use "Texto fixo" só quando a legenda for igual em todos.
+              </p>
+            </div>
+          )}
+          <CampaignCardsEditor
+            cards={cards}
+            onChange={setCards}
+            cardBodyText={tplStruct?.cardBodyText || null}
+            buttonsPerCard={tplStruct?.cards.map((c) => c.buttons) || []}
+            showLegenda={showCardLegenda}
+            templateLoaded={!!tplStruct}
+          />
+        </Card>
+      )}
+
 
       {/* 4. Público */}
       <Card className="p-4 space-y-3">
