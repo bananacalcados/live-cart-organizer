@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { POSOnlineSales } from "./POSOnlineSales";
 import { POSCustomLinkDialog } from "./POSCustomLinkDialog";
 import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
+import { SimpleTemplatesPanel } from "@/components/admin/SimpleTemplatesPanel";
+
 import { CampaignAudienceManager } from "./audience/CampaignAudienceManager";
 import { CampaignList } from "./automation/CampaignList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
