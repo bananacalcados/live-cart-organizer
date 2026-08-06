@@ -423,10 +423,23 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     const phone = normalizeTestPhone(testPhone);
     if (phone.length < 12) { toast.error("Informe um telefone válido com DDD"); return; }
     if (!tplStruct) { toast.error("Aguarde o carregamento do template aprovado"); return; }
-    const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
-    if (!entry) { toast.error("Selecione instância, modelo e quantidade de cards"); return; }
-    const okCards = cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
-    if (okCards.length < (selectedQtd || 0)) { toast.error(`Adicione imagem em todos os ${selectedQtd} cards`); return; }
+
+    const isSimple = tipoTpl === "simples";
+    const entry = isSimple
+      ? (simpleSel ? { templateId: simpleSel.name, language: simpleSel.language, qtd: 0 } : null)
+      : (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
+    if (!entry) { toast.error("Selecione instância e template"); return; }
+
+    const headerUrl = cards[0]?.imagem_url || null;
+    if (isSimple && simpleSel?.headerFormat === "IMAGE" && !headerUrl) {
+      toast.error("Envie a imagem do cabeçalho do template");
+      return;
+    }
+    const okCards = isSimple ? [] : cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
+    if (!isSimple && okCards.length < (selectedQtd || 0)) {
+      toast.error(`Adicione imagem em todos os ${selectedQtd} cards`);
+      return;
+    }
 
     setTestSending(true);
     try {
@@ -437,26 +450,38 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const components: any[] = [];
-      if (topTokens.length) {
-        components.push({
-          type: "body",
-          parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
-        });
-      }
-      const carouselCards = okCards.map((card, i) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const comps: any[] = [
-          { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
-        ];
-        if (cardTokens.length) {
-          comps.push({
+      if (isSimple) {
+        if (headerUrl) {
+          components.push({ type: "header", parameters: [{ type: "image", image: { link: headerUrl } }] });
+        }
+        if (topTokens.length) {
+          components.push({
             type: "body",
-            parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+            parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
           });
         }
-        return { card_index: i, components: comps };
-      });
-      components.push({ type: "carousel", cards: carouselCards });
+      } else {
+        if (topTokens.length) {
+          components.push({
+            type: "body",
+            parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
+          });
+        }
+        const carouselCards = okCards.map((card, i) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const comps: any[] = [
+            { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+          ];
+          if (cardTokens.length) {
+            comps.push({
+              type: "body",
+              parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+            });
+          }
+          return { card_index: i, components: comps };
+        });
+        components.push({ type: "carousel", cards: carouselCards });
+      }
 
       const { data, error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
         body: {
@@ -481,15 +506,22 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     if (!nome.trim()) return "Dê um nome à automação";
     if (!numberId) return "Selecione a instância Meta";
     if (!modelo) return "Selecione o modelo de template";
-    if (!selectedQtd) return "Selecione a quantidade de cards";
+    if (tipoTpl === "carrossel" && !selectedQtd) return "Selecione a quantidade de cards";
     if (!tplStruct) return "Aguarde o carregamento do template aprovado";
     if (!publicoId) return "Selecione o público";
     if (diasSemana.length === 0) return "Escolha ao menos um dia da semana";
     if (qtdPorDia < 1) return "O limite diário precisa ser ≥ 1";
+    if (tipoTpl === "simples") {
+      if (simpleSel?.headerFormat === "IMAGE" && !cards[0]?.imagem_url) {
+        return "Envie a imagem do cabeçalho do template";
+      }
+      return null;
+    }
     const okCards = cards.filter((c) => c.imagem_url).length;
-    if (okCards < selectedQtd) return `Adicione imagem em todos os ${selectedQtd} cards`;
+    if (okCards < (selectedQtd || 0)) return `Adicione imagem em todos os ${selectedQtd} cards`;
     return null;
   };
+
 
   const persist = async (startNow: boolean): Promise<boolean> => {
     if (startNow) {
