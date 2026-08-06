@@ -206,7 +206,8 @@ Deno.serve(async (req) => {
       skipped++;
       continue;
     }
-    if (!cc.templateName || cc.okCards.length < 2) {
+    const isSimple = String(cc.campaign.template_tipo || "carrossel") === "simples";
+    if (!cc.templateName || (!isSimple && cc.okCards.length < 2)) {
       // Sem template aprovado / cards insuficientes — deixa pendente para o próximo ciclo.
       skipped++;
       continue;
@@ -227,26 +228,41 @@ Deno.serve(async (req) => {
       vars: (cc.campaign.variaveis as Record<string, unknown>) || null,
     };
 
-    // Componentes do carrossel.
+    // Componentes (carrossel ou template simples texto / imagem+texto).
     const components: any[] = [];
-    if (cc.topTokens.length) {
-      components.push({ type: "body", parameters: textParams(cc.topTokens, baseCtx) });
-    }
-    const carouselCards = cc.okCards.map((card, i) => {
-      const mid = card.imagem_url ? cc.mediaIds.get(card.imagem_url) : null;
-      const comps: any[] = [
-        { type: "header", parameters: [{ type: "image", image: mid ? { id: mid } : { link: card.imagem_url } }] },
-      ];
-
-      if (cc.cardTokens.length) {
-        comps.push({
-          type: "body",
-          parameters: textParams(cc.cardTokens, { ...baseCtx, legenda: card.legenda }),
+    if (isSimple) {
+      const headerUrl = cc.okCards[0]?.imagem_url || null;
+      if (headerUrl) {
+        const mid = cc.mediaIds.get(headerUrl);
+        components.push({
+          type: "header",
+          parameters: [{ type: "image", image: mid ? { id: mid } : { link: headerUrl } }],
         });
       }
-      return { card_index: i, components: comps };
-    });
-    components.push({ type: "carousel", cards: carouselCards });
+      if (cc.topTokens.length) {
+        components.push({ type: "body", parameters: textParams(cc.topTokens, baseCtx) });
+      }
+    } else {
+      if (cc.topTokens.length) {
+        components.push({ type: "body", parameters: textParams(cc.topTokens, baseCtx) });
+      }
+      const carouselCards = cc.okCards.map((card, i) => {
+        const mid = card.imagem_url ? cc.mediaIds.get(card.imagem_url) : null;
+        const comps: any[] = [
+          { type: "header", parameters: [{ type: "image", image: mid ? { id: mid } : { link: card.imagem_url } }] },
+        ];
+
+        if (cc.cardTokens.length) {
+          comps.push({
+            type: "body",
+            parameters: textParams(cc.cardTokens, { ...baseCtx, legenda: card.legenda }),
+          });
+        }
+        return { card_index: i, components: comps };
+      });
+      components.push({ type: "carousel", cards: carouselCards });
+    }
+
 
     // Envia via meta-whatsapp-send-template.
     let ok = false;
