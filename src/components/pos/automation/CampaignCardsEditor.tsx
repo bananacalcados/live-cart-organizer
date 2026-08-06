@@ -38,7 +38,7 @@ interface Props {
   templateLoaded: boolean;
 }
 
-async function uploadCardImage(blob: Blob): Promise<string> {
+export async function uploadCardImage(blob: Blob): Promise<string> {
   const path = `carousel-campaigns/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
   const { error } = await supabase.storage
     .from("marketing-attachments")
