@@ -178,7 +178,29 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   };
 
   const loadApproved = async (instanceId: string) => {
-    if (!instanceId) { setTplByModel({}); return; }
+    if (!instanceId) { setTplByModel({}); setSimpleTpls([]); return; }
+
+    // Live Meta list: used both for carousel approval status and to expose the
+    // SIMPLE (text / image + text) approved templates of this instance.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let metaTemplates: any[] | null = null;
+    try {
+      const { data: meta, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: instanceId },
+      });
+      if (!error && Array.isArray(meta?.templates)) metaTemplates = meta.templates;
+    } catch {
+      metaTemplates = null;
+    }
+
+    setSimpleTpls(
+      (metaTemplates || [])
+        .filter((t) => String(t?.status).toUpperCase() === "APPROVED")
+        .map(parseSimpleTemplate)
+        .filter((t): t is SimpleTpl => !!t && !!t.name)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+
     // Load ALL locally-known carousel templates for this instance (not just the
     // ones flagged aprovado). The local `aprovado` flag is only refreshed when
     // someone clicks "Sincronizar status" in the admin panel, so freshly
@@ -194,22 +216,14 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     }[];
     if (rows.length === 0) { setTplByModel({}); return; }
 
-    // Fetch live status from Meta; fall back to the local flag if it fails.
-    let approvedByName: Map<string, boolean> | null = null;
-    try {
-      const { data: meta, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
-        body: { whatsappNumberId: instanceId },
-      });
-      if (!error && meta?.templates) {
-        approvedByName = new Map(
-          (meta.templates as { name?: string; status?: string }[]).map(
-            (t) => [t.name || "", String(t.status).toUpperCase() === "APPROVED"],
-          ),
-        );
-      }
-    } catch {
-      approvedByName = null;
-    }
+    const approvedByName: Map<string, boolean> | null = metaTemplates
+      ? new Map(
+        (metaTemplates as { name?: string; status?: string }[]).map(
+          (t) => [t.name || "", String(t.status).toUpperCase() === "APPROVED"],
+        ),
+      )
+      : null;
+
 
     const isApproved = (r: { template_id: string; aprovado: boolean | null }) =>
       approvedByName ? (approvedByName.get(r.template_id) ?? false) : !!r.aprovado;
