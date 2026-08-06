@@ -2067,7 +2067,9 @@ export type Database = {
           rodizio_vendedora: boolean
           shadow_mode: boolean
           template_categoria: string | null
+          template_language: string | null
           template_modelo: string | null
+          template_tipo: string
           tipo: string
           tipo_comunicacao: string
           top_body: string
@@ -2092,7 +2094,9 @@ export type Database = {
           rodizio_vendedora?: boolean
           shadow_mode?: boolean
           template_categoria?: string | null
+          template_language?: string | null
           template_modelo?: string | null
+          template_tipo?: string
           tipo?: string
           tipo_comunicacao: string
           top_body?: string
@@ -2117,7 +2121,9 @@ export type Database = {
           rodizio_vendedora?: boolean
           shadow_mode?: boolean
           template_categoria?: string | null
+          template_language?: string | null
           template_modelo?: string | null
+          template_tipo?: string
           tipo?: string
           tipo_comunicacao?: string
           top_body?: string
