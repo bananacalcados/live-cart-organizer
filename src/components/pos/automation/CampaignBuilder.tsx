@@ -745,34 +745,54 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         )}
       </Card>
 
-      {/* 3. Cards (abaixo da mensagem) */}
-      <Card className="p-4 space-y-3">
-        <h4 className="text-sm font-bold text-neutral-800">3. Imagens e cards do carrossel</h4>
-        {tplStruct && tplStruct.cardVarCount > 0 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Como preencher as variáveis do texto de cada card</Label>
-            {cardVars.map((m, i) => (
-              <VarMappingRow
-                key={i} index={i} mapping={m} options={CARD_VAR_OPTIONS}
-                onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
-              />
-            ))}
-            <p className="rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
-              Para colocar <strong>nome e preço diferentes em cada card</strong>, escolha
-              {" "}<strong>"Texto diferente em cada card"</strong>. Aí aparecerá um campo de texto
-              próprio em cada card abaixo. Use "Texto fixo" só quando a legenda for igual em todos.
+      {/* 3. Cards / imagem de cabeçalho */}
+      {tipoTpl === "simples" ? (
+        simpleSel?.headerFormat === "IMAGE" ? (
+          <Card className="p-4 space-y-3">
+            <h4 className="text-sm font-bold text-neutral-800">3. Imagem do cabeçalho</h4>
+            <p className="text-[11px] text-neutral-500">
+              Este template envia uma imagem no topo da mensagem. Envie a imagem que será usada nos disparos.
             </p>
-          </div>
-        )}
-        <CampaignCardsEditor
-          cards={cards}
-          onChange={setCards}
-          cardBodyText={tplStruct?.cardBodyText || null}
-          buttonsPerCard={tplStruct?.cards.map((c) => c.buttons) || []}
-          showLegenda={showCardLegenda}
-          templateLoaded={!!tplStruct}
-        />
-      </Card>
+            <CampaignCardsEditor
+              cards={cards.length ? [cards[0]] : []}
+              onChange={(c) => setCards(c.slice(0, 1))}
+              cardBodyText={null}
+              buttonsPerCard={[]}
+              showLegenda={false}
+              templateLoaded={!!tplStruct}
+            />
+          </Card>
+        ) : null
+      ) : (
+        <Card className="p-4 space-y-3">
+          <h4 className="text-sm font-bold text-neutral-800">3. Imagens e cards do carrossel</h4>
+          {tplStruct && tplStruct.cardVarCount > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Como preencher as variáveis do texto de cada card</Label>
+              {cardVars.map((m, i) => (
+                <VarMappingRow
+                  key={i} index={i} mapping={m} options={CARD_VAR_OPTIONS}
+                  onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
+                />
+              ))}
+              <p className="rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
+                Para colocar <strong>nome e preço diferentes em cada card</strong>, escolha
+                {" "}<strong>"Texto diferente em cada card"</strong>. Aí aparecerá um campo de texto
+                próprio em cada card abaixo. Use "Texto fixo" só quando a legenda for igual em todos.
+              </p>
+            </div>
+          )}
+          <CampaignCardsEditor
+            cards={cards}
+            onChange={setCards}
+            cardBodyText={tplStruct?.cardBodyText || null}
+            buttonsPerCard={tplStruct?.cards.map((c) => c.buttons) || []}
+            showLegenda={showCardLegenda}
+            templateLoaded={!!tplStruct}
+          />
+        </Card>
+      )}
+
 
       {/* 4. Público */}
       <Card className="p-4 space-y-3">
