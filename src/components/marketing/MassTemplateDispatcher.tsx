@@ -814,10 +814,24 @@ export function MassTemplateDispatcher() {
     return parts.join('\n\n');
   }, [selectedTemplate, variables, templateButtons]);
 
+  // Mapa sufixo(8) → temperatura vinda do CRM unificado. Usado para aplicar o
+  // filtro de temperatura também aos Leads Captados (lp_leads não têm a coluna).
+  const tempBySuffix = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const c of crmCustomers) {
+      const p = (c.phone || '').replace(/\D/g, '');
+      if (p.length < 8) continue;
+      const k = p.slice(-8);
+      if (!m.has(k) || (!m.get(k) && c.lead_temperature)) m.set(k, c.lead_temperature ?? null);
+    }
+    return m;
+  }, [crmCustomers]);
+
   // Base recipients (all filters EXCEPT cooldown)
   const baseRecipients = useMemo((): Recipient[] => {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
+
 
     // Shared filters (temperature + VIP membership) work across CRM/Ravena/leads
     const passesTemperature = (temp: string | null | undefined) => {
