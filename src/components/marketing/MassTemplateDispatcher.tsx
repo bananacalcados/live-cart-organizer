@@ -2396,7 +2396,7 @@ export function MassTemplateDispatcher() {
               <div className="rounded-md border border-border/60 bg-muted/30 p-2">
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Temperatura {audienceSource === 'leads' ? '(não afeta Leads Captados)' : ''}
+                    Temperatura {audienceSource === 'leads' || audienceSource === 'both' ? '(leads são cruzados com o CRM pelo telefone)' : ''}
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {TEMPERATURES.map((t) => {
