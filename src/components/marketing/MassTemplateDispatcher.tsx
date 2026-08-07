@@ -814,10 +814,24 @@ export function MassTemplateDispatcher() {
     return parts.join('\n\n');
   }, [selectedTemplate, variables, templateButtons]);
 
+  // Mapa sufixo(8) → temperatura vinda do CRM unificado. Usado para aplicar o
+  // filtro de temperatura também aos Leads Captados (lp_leads não têm a coluna).
+  const tempBySuffix = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const c of crmCustomers) {
+      const p = (c.phone || '').replace(/\D/g, '');
+      if (p.length < 8) continue;
+      const k = p.slice(-8);
+      if (!m.has(k) || (!m.get(k) && c.lead_temperature)) m.set(k, c.lead_temperature ?? null);
+    }
+    return m;
+  }, [crmCustomers]);
+
   // Base recipients (all filters EXCEPT cooldown)
   const baseRecipients = useMemo((): Recipient[] => {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
+
 
     // Shared filters (temperature + VIP membership) work across CRM/Ravena/leads
     const passesTemperature = (temp: string | null | undefined) => {
@@ -973,7 +987,9 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
-          // lp_leads don't carry lead_temperature; only apply VIP membership filter here.
+          // lp_leads não guardam lead_temperature: resolvemos pelo CRM (sufixo 8 díg.).
+          // Sem correspondência => temperatura nula (mesma semântica do CRM).
+          if (!passesTemperature(tempBySuffix.get(phone.slice(-8)) ?? null)) continue;
           if (!passesVipMembership(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
@@ -995,7 +1011,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -2380,7 +2396,7 @@ export function MassTemplateDispatcher() {
               <div className="rounded-md border border-border/60 bg-muted/30 p-2">
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Temperatura {audienceSource === 'leads' ? '(não afeta Leads Captados)' : ''}
+                    Temperatura {audienceSource === 'leads' || audienceSource === 'both' ? '(leads são cruzados com o CRM pelo telefone)' : ''}
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {TEMPERATURES.map((t) => {
