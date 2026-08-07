@@ -973,7 +973,9 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
-          // lp_leads don't carry lead_temperature; only apply VIP membership filter here.
+          // lp_leads não guardam lead_temperature: resolvemos pelo CRM (sufixo 8 díg.).
+          // Sem correspondência => temperatura nula (mesma semântica do CRM).
+          if (!passesTemperature(tempBySuffix.get(phone.slice(-8)) ?? null)) continue;
           if (!passesVipMembership(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
