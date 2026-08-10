@@ -43,7 +43,7 @@ import {
 
 
 type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
-type OnboardStep = "address" | "shipping" | "cpf" | "email";
+type OnboardStep = "name" | "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
   id: string;
