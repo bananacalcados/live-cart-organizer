@@ -672,14 +672,16 @@ Deno.serve(async (req) => {
       const noAddressNeeded = ["pickup", "local", "motoboy", "delivery_local"].includes(
         String(shippingMethod || ""),
       );
-      /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
+      /** Onboarding pós-confirmação: nome + endereço + envio + CPF + e-mail. */
       const onboarding = {
+        // Nome real é pré-requisito do pagamento (antifraude do gateway).
+        name: isRealFullName(reg?.full_name),
         address: noAddressNeeded
           ? !!reg?.cep
           : !!(reg?.cep && reg?.address && reg?.address_number),
         shipping: !!shippingMethod,
         cpf: !!reg?.cpf,
-        email: !!reg?.email,
+        email: isUsableEmail(reg?.email),
       };
 
 
@@ -689,7 +691,12 @@ Deno.serve(async (req) => {
         event,
         onboarding,
         onboardingComplete:
-          onboarding.address && onboarding.shipping && onboarding.cpf && onboarding.email,
+          onboarding.name &&
+          onboarding.address &&
+          onboarding.shipping &&
+          onboarding.cpf &&
+          onboarding.email,
+
 
         name: session.name || customer?.instagram_handle || null,
         phone: session.phone,
