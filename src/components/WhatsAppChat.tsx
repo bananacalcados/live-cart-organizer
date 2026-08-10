@@ -169,6 +169,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
   const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
   const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
+  /** Instância usada nos disparos de template Meta (config da live) — imune à troca manual do chat. */
+  const apiTemplateNumberId = eventMetaNumberId || hookEffectiveNumberId || selectedNumberId || null;
+
   const [sendingFollowupId, setSendingFollowupId] = useState<string | null>(null);
 
   // Audio recording state
