@@ -36,6 +36,32 @@ function normalizePhone(input: string): string | null {
 
 const suffix8 = (p: string) => p.replace(/\D/g, "").slice(-8);
 
+/**
+ * ⚠️ Antifraude dos gateways: o `payer` precisa ser a pessoa real.
+ * O @ do Instagram (ex.: "@amalia_ferraz10") NUNCA pode virar nome do cliente,
+ * e e-mails de teste ("asd@gmail.com") derrubam a aprovação do cartão.
+ */
+function isRealFullName(raw?: string | null): boolean {
+  const v = String(raw ?? "").trim();
+  if (!v || v.includes("@") || /\d/.test(v) || /[._]/.test(v)) return false;
+  const parts = v.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return false;
+  return parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]{2,}$/.test(p));
+}
+
+const JUNK_EMAIL_LOCALS = new Set([
+  "asd", "asdf", "teste", "test", "aaa", "abc", "123", "xxx", "nao", "email",
+  "qwe", "qwerty", "sememail", "naotenho",
+]);
+
+function isUsableEmail(raw?: string | null): boolean {
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(v)) return false;
+  const local = v.split("@")[0];
+  if (local.length < 4 || JUNK_EMAIL_LOCALS.has(local) || /^(.)\1+$/.test(local)) return false;
+  return true;
+}
+
 function maskCpf(v?: string | null) {
   const d = String(v || "").replace(/\D/g, "");
   if (d.length !== 11) return null;
