@@ -146,7 +146,9 @@ export function POSGenerateBoletoDialog({
         `Valor: R$ ${result.amount.toFixed(2).replace(".", ",")}`,
         `Vencimento: ${new Date(result.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}`,
       ];
-      if (result.barcode) captionLines.push(`\nLinha digitável:\n${result.barcode}`);
+      const line = result.digitableLineFormatted || result.digitableLine || result.barcode;
+      if (line) captionLines.push(`\n*Linha digitável (digite no app do banco):*\n${line}`);
+      if (result.boletoUrl) captionLines.push(`\n2ª via / imprimir:\n${result.boletoUrl}`);
       const caption = captionLines.join("\n");
 
       await posSendMedia({
@@ -158,14 +160,25 @@ export function POSGenerateBoletoDialog({
         numberId: selectedNumberId ?? null,
       });
 
+      // Linha digitável também em mensagem separada (facilita o copiar no celular)
+      if (result.digitableLine) {
+        await posSendText({
+          provider: sendVia,
+          phone,
+          message: result.digitableLine,
+          numberId: selectedNumberId ?? null,
+        });
+      }
+
       if (result.pixQrCode) {
         await posSendText({
           provider: sendVia,
           phone,
-          message: `⚡ *Pagar via PIX (mesmo valor):*\n\n${result.pixQrCode}`,
+          message: `⚡ *Se preferir, pague via PIX (mesmo valor, confirmação na hora):*\n\n${result.pixQrCode}`,
           numberId: selectedNumberId ?? null,
         });
       }
+
       toast.success("Boleto enviado no WhatsApp");
     } catch (e: any) {
       console.error(e);
