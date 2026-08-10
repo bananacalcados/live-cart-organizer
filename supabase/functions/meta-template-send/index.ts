@@ -29,27 +29,29 @@ async function getCredentials(supabase: any, whatsappNumberId?: string) {
   if (whatsappNumberId) {
     const { data } = await supabase
       .from('whatsapp_numbers')
-      .select('phone_number_id, access_token')
+      .select('phone_number_id, access_token, business_account_id')
       .eq('id', whatsappNumberId)
       .eq('is_active', true)
       .maybeSingle();
-    if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+    if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token, businessAccountId: data.business_account_id || '' };
     // Explicit instance requested but inactive/not found → fail instead of using default.
     throw new Error(`Instância ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
 
   const { data } = await supabase
     .from('whatsapp_numbers')
-    .select('phone_number_id, access_token')
+    .select('phone_number_id, access_token, business_account_id')
     .eq('is_default', true)
     .eq('is_active', true)
     .maybeSingle();
-  if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+  if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token, businessAccountId: data.business_account_id || '' };
   return {
     phoneNumberId: Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID') || '',
     accessToken: Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '',
+    businessAccountId: Deno.env.get('META_WHATSAPP_BUSINESS_ACCOUNT_ID') || '',
   };
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
