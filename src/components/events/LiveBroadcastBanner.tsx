@@ -60,11 +60,7 @@ export function LiveBroadcastBanner() {
   useEffect(() => {
     fetchActive();
     const poll = setInterval(fetchActive, 30_000);
-    const tick = setInterval(() => setNow(Date.now()), 15_000);
-    return () => {
-      clearInterval(poll);
-      clearInterval(tick);
-    };
+    return () => clearInterval(poll);
   }, [fetchActive]);
 
   if (loading || !active) return null;
