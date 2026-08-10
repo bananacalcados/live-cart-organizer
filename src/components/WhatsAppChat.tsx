@@ -454,18 +454,20 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   const loadMessages = async () => {
-    // Resolve which instance THIS conversation belongs to (the latest message
-    // that carries an instance). Same rule as the unified chat: a conversation
-    // is (phone + instance), so we must not mix messages from other instances.
-    const { data: instRow } = await supabase
-      .from('whatsapp_messages')
-      .select('whatsapp_number_id')
-      .in('phone', phoneVariations)
-      .not('whatsapp_number_id', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const convNumberId = (instRow as any)?.whatsapp_number_id ?? null;
+    // Quando o operador troca a instância manualmente, o histórico deve ser o
+    // daquela instância. Sem override, resolve pela última mensagem da conversa.
+    let convNumberId: string | null = overrideNumberId;
+    if (!convNumberId) {
+      const { data: instRow } = await supabase
+        .from('whatsapp_messages')
+        .select('whatsapp_number_id')
+        .in('phone', phoneVariations)
+        .not('whatsapp_number_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      convNumberId = (instRow as any)?.whatsapp_number_id ?? null;
+    }
 
     // Load messages scoped to that instance (mirrors pages/Chat.tsx L416-418).
     // When the conversation has no instance history at all, show only the
@@ -492,7 +494,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     loadMessages();
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
-  }, [normalizedPhone, order.id, setHasUnreadMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedPhone, order.id, overrideNumberId, setHasUnreadMessages]);
+
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
   // Payload carries minimal info — we filter by phone, then refetch.
