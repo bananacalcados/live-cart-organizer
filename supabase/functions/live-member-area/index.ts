@@ -1224,9 +1224,14 @@ Deno.serve(async (req) => {
       }
 
       // Sem OTP a cliente só PREENCHE campos vazios (onboarding). Alterar um dado
-      // já existente continua exigindo o código do WhatsApp.
+      // SENSÍVEL já existente (CPF/e-mail) continua exigindo o código do WhatsApp.
+      // Os campos de ENDEREÇO ficam livres: o rascunho automático já grava CEP/rua/
+      // bairro/cidade enquanto ela digita, e bloquear a edição seguinte jogava a
+      // cliente de volta para a etapa de endereço em loop.
+      const OTP_PROTECTED = new Set(["cpf", "email"]);
       if (!otpUnlocked && reg) {
         for (const [key, value] of Object.entries(changes)) {
+          if (!OTP_PROTECTED.has(key)) continue;
           const current = (reg as any)[key];
           if (current && String(current).trim() && String(current) !== String(value ?? "")) {
             return json({ ok: false, error: "otp_required" });
