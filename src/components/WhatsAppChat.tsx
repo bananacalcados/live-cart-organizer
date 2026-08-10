@@ -129,9 +129,18 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   // silently switch to whichever instance is globally selected.
   const {
     boundNumberId,
-    boundNumber,
-    effectiveNumberId,
+    boundNumber: hookBoundNumber,
+    effectiveNumberId: hookEffectiveNumberId,
   } = useConversationInstance(order.whatsapp, { messages });
+
+  // Troca MANUAL da instância desta conversa (ex.: cliente não recebe pela API
+  // Meta e precisamos continuar o atendimento por uma instância não-API).
+  const [overrideNumberId, setOverrideNumberId] = useState<string | null>(null);
+  const effectiveNumberId = overrideNumberId || hookEffectiveNumberId;
+  const boundNumber = overrideNumberId
+    ? (numbers.find((n) => n.id === overrideNumberId) || null)
+    : hookBoundNumber;
+
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
