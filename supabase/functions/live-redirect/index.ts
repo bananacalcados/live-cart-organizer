@@ -94,32 +94,12 @@ serve(async (req) => {
     let targetUrl: string | null = activeEvent?.instagram_live_url || null;
     let reason: string | null = null;
 
+    // O link vale enquanto o evento estiver marcado como AO VIVO — sem expiração por tempo.
     if (activeEvent && targetUrl) {
-      const startedAt = activeEvent.live_broadcast_started_at
-        ? new Date(activeEvent.live_broadcast_started_at).getTime()
-        : 0;
-      const urlAt = activeEvent.live_url_updated_at
-        ? new Date(activeEvent.live_url_updated_at).getTime()
-        : startedAt;
-      const freshestAt = Math.max(startedAt, urlAt);
-      const ageMs = Date.now() - freshestAt;
-      const ttlMs = BROADCAST_TTL_HOURS * 60 * 60 * 1000;
-
-      if (freshestAt > 0 && ageMs > ttlMs) {
-        // Auto-deactivate stale broadcast.
+      const ok = await validateInstagramUrl(targetUrl);
+      if (!ok) {
         targetUrl = null;
-        reason = "ttl_expired";
-        supabase
-          .from("events")
-          .update({ is_live_broadcasting: false })
-          .eq("id", activeEvent.id)
-          .then(() => {});
-      } else {
-        const ok = await validateInstagramUrl(targetUrl);
-        if (!ok) {
-          targetUrl = null;
-          reason = "url_unreachable";
-        }
+        reason = "url_unreachable";
       }
     }
 
