@@ -540,6 +540,34 @@ export default function LiveMemberArea() {
   }, [step, state?.token, refreshState]);
 
 
+  // Auto-atualização de versão: se uma nova build for publicada enquanto a cliente
+  // está com o link aberto, recarrega sozinho (sem depender de refresh manual).
+  useEffect(() => {
+    let current: string | null = null;
+    let stopped = false;
+    const readVersion = async () => {
+      try {
+        const res = await fetch(`/?v=${Date.now()}`, { cache: "no-store" });
+        const html = await res.text();
+        const m = html.match(/src="([^"]*\/assets\/[^"]+\.js)"/) || html.match(/src="(\/src\/main\.tsx[^"]*)"/);
+        return m?.[1] ?? null;
+      } catch {
+        return null;
+      }
+    };
+    const check = async () => {
+      if (stopped || document.visibilityState !== "visible") return;
+      const v = await readVersion();
+      if (!v) return;
+      if (current == null) { current = v; return; }
+      if (v !== current) window.location.reload();
+    };
+    check();
+    const i = window.setInterval(check, 60000);
+    return () => { stopped = true; window.clearInterval(i); };
+  }, []);
+
+
   // Contador da janela de pagamento
   useEffect(() => {
     const exp = state?.order?.payment_window_expires_at;
