@@ -12,8 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const TTL_MS = 3 * 60 * 60 * 1000;
-
 interface ActiveBroadcast {
   id: string;
   name: string;
@@ -22,19 +20,22 @@ interface ActiveBroadcast {
   live_url_updated_at: string | null;
 }
 
-function formatCountdown(ms: number) {
-  if (ms <= 0) return "expirado";
-  const m = Math.floor(ms / 60000);
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  if (h > 0) return `${h}h ${rem}m`;
-  return `${m}m`;
+function formatSince(iso: string | null) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
- * LiveBroadcastBanner — fixed banner shown in the Events module while any event is
- * marked as AO VIVO. Shows TTL countdown and a "Trocar link" quick-action to keep the
- * Instagram live URL fresh without opening the wizard. Also lets the operator encerrar.
+ * LiveBroadcastBanner — banner fixo exibido no módulo Eventos enquanto algum evento
+ * estiver marcado como AO VIVO. O link vale enquanto o AO VIVO estiver ligado; a ação
+ * "Trocar link" atualiza a URL do Instagram sem sair do módulo.
  */
 export function LiveBroadcastBanner() {
   const [active, setActive] = useState<ActiveBroadcast | null>(null);
