@@ -1059,6 +1059,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               </Button>
             </div>
           )}
+
+          {/* Desfazer pagamento manual (nunca disponível para confirmação de gateway) */}
+          {(order.is_paid || order.paid_externally)
+            && (order as any).payment_confirmed_source !== 'gateway_webhook' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs gap-1 mt-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowUndoPaidDialog(true);
+              }}
+            >
+              <RefreshCw className="h-3 w-3" />
+              Desfazer pagamento
+            </Button>
+          )}
         </div>
       )}
 
