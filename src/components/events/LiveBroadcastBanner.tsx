@@ -116,16 +116,10 @@ export function LiveBroadcastBanner() {
     fetchActive();
   };
 
-  const bg = expired
-    ? "bg-orange-600"
-    : expiringSoon
-    ? "bg-amber-500"
-    : "bg-red-600";
-
   return (
     <>
       <div
-        className={`${bg} text-white rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-md`}
+        className="bg-red-600 text-white rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-md"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="relative flex h-3 w-3 shrink-0">
@@ -138,11 +132,7 @@ export function LiveBroadcastBanner() {
               AO VIVO — {active.name}
             </div>
             <div className="text-xs opacity-90 truncate">
-              {expired
-                ? "TTL expirado — troque o link ou encerre."
-                : `Expira em ${formatCountdown(remainingMs)}${
-                    expiringSoon ? " — troque logo!" : ""
-                  }`}
+              {sinceLabel ? `No ar desde ${sinceLabel}` : "No ar"}
               {active.instagram_live_url ? ` · ${active.instagram_live_url}` : ""}
             </div>
           </div>
