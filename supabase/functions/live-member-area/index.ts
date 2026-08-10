@@ -1254,6 +1254,11 @@ Deno.serve(async (req) => {
         changes[key] = fn((d as any)[key]);
       }
 
+      // E-mail entra no `payer` do gateway: recusa lixo antes de gravar.
+      if ("email" in changes && changes.email && !isUsableEmail(String(changes.email))) {
+        return json({ ok: false, error: "E-mail inválido. Use um e-mail real para a cobrança." }, 400);
+      }
+
       // Sem OTP a cliente só PREENCHE campos vazios (onboarding). Alterar um dado
       // SENSÍVEL já existente (CPF/e-mail) continua exigindo o código do WhatsApp.
       // Os campos de ENDEREÇO ficam livres: o rascunho automático já grava CEP/rua/
@@ -1275,8 +1280,17 @@ Deno.serve(async (req) => {
         whatsapp: session.phone,
         ...changes,
       };
-      if (!reg?.full_name || (d.full_name && otpUnlocked)) {
-        payload.full_name = String(d.full_name || session.name || "").slice(0, 120);
+      // Nome do pagador: só nome real (nome + sobrenome). NUNCA o @ do Instagram
+      // da sessão — era o que subia o score de antifraude nos gateways.
+      if ("full_name" in d) {
+        const candidate = String(d.full_name || "").trim().slice(0, 120);
+        if (!isRealFullName(candidate)) {
+          return json(
+            { ok: false, error: "Informe seu nome completo (nome e sobrenome), sem @ e sem números." },
+            400,
+          );
+        }
+        if (!isRealFullName(reg?.full_name) || otpUnlocked) payload.full_name = candidate;
       }
 
 
