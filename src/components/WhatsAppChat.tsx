@@ -1067,6 +1067,58 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
         <ChatPixButton orderId={order.id} variant="icon-light" />
 
+        {/* Trocar a instância usada nesta conversa */}
+        <DropdownMenu onOpenChange={(o) => { if (o && numbers.length === 0) fetchNumbers(); }}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 gap-1.5 text-xs font-medium text-white/80 hover:bg-white/10 max-w-[160px]"
+              title="Trocar instância desta conversa"
+            >
+              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {(boundNumber?.label) || 'Instância'}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="text-xs">Enviar por qual número</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {numbers
+              .filter((n) => n.is_active && (n.provider || 'meta') !== 'instagram')
+              .map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="flex-col items-start gap-0.5 cursor-pointer"
+                  onClick={() => {
+                    setOverrideNumberId(n.id);
+                    toast.success(`Conversa agora envia por ${n.label}`);
+                  }}
+                >
+                  <span className="font-medium text-sm">
+                    {n.label} {effectiveNumberId === n.id ? '✓' : ''}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {n.phone_display} · {n.provider || 'meta'}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            {overrideNumberId && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={() => setOverrideNumberId(null)}
+                >
+                  Voltar para a instância do histórico
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+
         <Button
           variant="ghost"
           size="icon"
