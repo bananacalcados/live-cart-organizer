@@ -264,6 +264,8 @@ serve(async (req) => {
     const mpPaymentId = String(mpBoletoData.id);
     const mpBoletoUrl = mpBoletoData?.transaction_details?.external_resource_url || null;
     const mpBarcode = mpBoletoData?.barcode?.content || null;
+    // Linha digitável real (47 dígitos) — o cliente digita isso no app do banco.
+    const digitableLine = mpBarcode ? barcodeToDigitableLine(mpBarcode) : null;
 
     // 3) Opcional: PIX gêmeo
     let pixPaymentId: string | null = null;
