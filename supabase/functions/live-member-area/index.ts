@@ -103,7 +103,9 @@ Deno.serve(async (req) => {
     // Link mágico: ?ml=TOKEN na Área de Membros entra direto, sem telefone/OTP.
     if (action === "magic_enter") {
       const magicPhone = await redeemMagicLink(supabase, body?.ml || body?.magic);
-      if (!magicPhone) return json({ ok: false, error: "magic_invalid" }, 401);
+      // 200 de propósito: link expirado/inválido não pode derrubar a página,
+      // a cliente cai no fluxo normal de telefone.
+      if (!magicPhone) return json({ ok: false, error: "magic_invalid" }, 200);
       body.phone = magicPhone;
       body.magicVerified = true;
       action = "enter";
