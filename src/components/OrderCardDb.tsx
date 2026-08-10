@@ -91,6 +91,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDeleteOrderDialog, setShowDeleteOrderDialog] = useState(false);
+  const [showUndoPaidDialog, setShowUndoPaidDialog] = useState(false);
+  const [undoingPaid, setUndoingPaid] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showShopifyActionsDialog, setShowShopifyActionsDialog] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("Troca de produto/tamanho");
