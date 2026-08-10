@@ -82,6 +82,15 @@ serve(async (req) => {
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
     const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
 
+    const bodyVarsRaw = ((eventData as any)?.meta_template_body_variables as string[]) || [];
+    const headerVarRaw = (eventData as any)?.meta_template_header_variable || null;
+    const usesMemberLink = [...bodyVarsRaw, headerVarRaw || ''].some((v) =>
+      String(v || '').includes('{member_area_link}'),
+    );
+    const memberAreaLink = usesMemberLink
+      ? await issueMagicLink(supabase, waPhone)
+      : 'https://checkout.bananacalcados.com.br/minha-area';
+
     const resolveToken = (token: string): string => {
       switch (token) {
         case '{customer_name}': return igHandle || displayName || '';
@@ -90,6 +99,7 @@ serve(async (req) => {
         case '{products}': return productLines || '';
         case '{products_short}': return products.map((p: any) => `${p.quantity || 1}x ${p.title}`).join(', ');
         case '{checkout_link}': return checkoutLink || '';
+        case '{member_area_link}': return memberAreaLink;
         case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
         case '{discount}': return `R$${discountAmount.toFixed(2)}`;
         case '{total}': return `R$${total.toFixed(2)}`;
