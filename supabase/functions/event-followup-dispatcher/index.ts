@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         if (!resp.ok) throw new Error(data?.error || `meta send failed (${resp.status})`);
         await supabase.from("event_followup_dispatches").update({
           status: "sent", sent_at: new Date().toISOString(),
-          meta_message_id: data?.messageId || null, attempts: (row.attempts || 0) + 1,
+          meta_message_id: data?.messageId || null,
         }).eq("id", row.id);
         sent++;
       } else if (cfg.channel === "instagram") {
@@ -124,6 +124,14 @@ Deno.serve(async (req) => {
         const igUsername = String(igHandle).replace(/^@/, "").trim();
         const messageText = resolveText(cfg.message_text || "", ctx);
         if (!messageText.trim()) { await markSkipped(supabase, row.id, "no_message_text"); skipped++; continue; }
+
+        // Dedupe por destinatário: se esse mesmo follow-up (mesmo texto do
+        // config) já foi enviado a este @ neste evento, não repete.
+        if (await alreadySentToHandle(supabase, cfg, ord.event_id, igUsername, row.id)) {
+          await markSkipped(supabase, row.id, "already_sent_to_recipient"); skipped++; continue;
+        }
+
+
 
         // Reúne comment_ids recentes para private_reply (janela 24h pode estar fechada)
         const fallbackCommentIds: string[] = [];
