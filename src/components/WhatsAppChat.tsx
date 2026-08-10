@@ -135,12 +135,28 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   // Troca MANUAL da instância desta conversa (ex.: cliente não recebe pela API
   // Meta e precisamos continuar o atendimento por uma instância não-API).
-  const [overrideNumberId, setOverrideNumberId] = useState<string | null>(null);
+  // Persistida por telefone para não "voltar sozinha" quando o modal remonta.
+  const overrideStorageKey = `wa-chat-instance:${(order.whatsapp || '').replace(/\D/g, '')}`;
+  const [overrideNumberId, setOverrideNumberIdState] = useState<string | null>(() => {
+    try { return localStorage.getItem(overrideStorageKey); } catch { return null; }
+  });
+  const setOverrideNumberId = useCallback((id: string | null) => {
+    setOverrideNumberIdState(id);
+    try {
+      if (id) localStorage.setItem(overrideStorageKey, id);
+      else localStorage.removeItem(overrideStorageKey);
+    } catch { /* ignore */ }
+  }, [overrideStorageKey]);
   const effectiveNumberId = overrideNumberId || hookEffectiveNumberId;
   const boundNumber = overrideNumberId
     ? (numbers.find((n) => n.id === overrideNumberId) || null)
     : hookBoundNumber;
 
+
+
+  // Instância dos DISPAROS por API (template Meta): definida pelo evento/live,
+  // nunca pela troca manual de instância do chat.
+  // (eventMetaNumberId é carregado abaixo a partir da configuração do evento)
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -153,6 +169,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
   const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
   const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
+  /** Instância usada nos disparos de template Meta (config da live) — imune à troca manual do chat. */
+  const apiTemplateNumberId = eventMetaNumberId || hookEffectiveNumberId || selectedNumberId || null;
+
   const [sendingFollowupId, setSendingFollowupId] = useState<string | null>(null);
 
   // Audio recording state
@@ -737,7 +756,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       // not whichever instance happens to be globally selected. Sending uses
       // effectiveNumberId, so template listing must match it or the operator
       // sees templates from the wrong WhatsApp Business account.
-      const templateNumberId = effectiveNumberId || eventMetaNumberId || selectedNumberId;
+      // Disparo por API sempre segue a instância configurada na live/evento —
+      // a troca manual do chat NÃO altera o caminho dos templates Meta.
+      const templateNumberId = apiTemplateNumberId;
       const params = templateNumberId ? `?whatsappNumberId=${templateNumberId}` : '';
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates${params}`;
       const res = await fetch(url, {
@@ -807,7 +828,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           phone: normalizedPhone,
           templateName: template.name,
           language: template.language,
-          whatsappNumberId: effectiveNumberId,
+          whatsappNumberId: apiTemplateNumberId,
           components: components.length > 0 ? components : undefined,
         }),
       });
@@ -822,7 +843,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           direction: 'outgoing',
           status: 'sent',
           message_id: result.messageId,
-          whatsapp_number_id: effectiveNumberId || null,
+          whatsapp_number_id: apiTemplateNumberId || null,
           sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
@@ -866,7 +887,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   const handleSendFollowupTemplate = async (tpl: FollowupTemplate) => {
     if (!tpl.templateName) { toast.error('Template não configurado'); return; }
-    const numberId = effectiveNumberId || eventMetaNumberId;
+    const numberId = apiTemplateNumberId;
     if (!numberId) { toast.error('Nenhuma instância Meta vinculada a esta conversa.'); return; }
     const digits = (normalizedPhone || '').replace(/\D/g, '');
     const e164 = digits.startsWith('55') ? digits : `55${digits}`;
