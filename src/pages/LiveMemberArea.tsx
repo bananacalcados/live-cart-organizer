@@ -1456,9 +1456,14 @@ export default function LiveMemberArea() {
                 className="h-14 text-[16px] rounded-xl"
                 autoFocus
               />
+              {!!email.trim() && !isUsableEmail(email) && (
+                <p className="text-xs text-destructive">
+                  Digite um e-mail real — ele é usado na cobrança e na nota fiscal.
+                </p>
+              )}
               <Button
                 className="w-full h-14 text-base font-semibold rounded-xl"
-                disabled={busy || !/^\S+@\S+\.\S+$/.test(email.trim())}
+                disabled={busy || !isUsableEmail(email)}
                 onClick={saveEmailStep}
               >
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Concluir"}
