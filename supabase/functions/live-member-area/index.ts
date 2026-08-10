@@ -96,8 +96,18 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const action = String(body?.action || "");
+    let action = String(body?.action || "");
     const ip = clientIp(req);
+
+    // Link mágico: ?ml=TOKEN na Área de Membros entra direto, sem telefone/OTP.
+    if (action === "magic_enter") {
+      const magicPhone = await redeemMagicLink(supabase, body?.ml || body?.magic);
+      if (!magicPhone) return json({ ok: false, error: "magic_invalid" }, 401);
+      body.phone = magicPhone;
+      body.magicVerified = true;
+      action = "enter";
+    }
+
     flow.action = action;
     flow.phone = normalizePhone(body?.phone || "") || null;
     flow.name = String(body?.name || "").trim() || null;
