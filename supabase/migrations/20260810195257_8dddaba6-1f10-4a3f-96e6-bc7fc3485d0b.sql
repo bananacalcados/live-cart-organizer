@@ -1,0 +1,1 @@
+DELETE FROM public.live_member_rate_limits WHERE key LIKE 'enter%' OR key LIKE 'ip:%';
