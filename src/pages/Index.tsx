@@ -273,9 +273,21 @@ const Index = () => {
 
             <TabsContent value="prizes" className="space-y-6">
               <MemberAreaLinkBanner event={currentEvent} />
-              <EventPrizeWheelsManager eventId={currentEventId} />
-              <PrizeEligibleList eventId={currentEventId} />
+              <Tabs defaultValue="wheel" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="wheel">Roleta</TabsTrigger>
+                  <TabsTrigger value="raffle">Sorteios</TabsTrigger>
+                </TabsList>
+                <TabsContent value="wheel" className="space-y-6">
+                  <EventPrizeWheelsManager eventId={currentEventId} />
+                  <PrizeEligibleList eventId={currentEventId} />
+                </TabsContent>
+                <TabsContent value="raffle">
+                  <EventRafflesManager eventId={currentEventId} />
+                </TabsContent>
+              </Tabs>
             </TabsContent>
+
 
 
             <TabsContent value="meta-templates">
