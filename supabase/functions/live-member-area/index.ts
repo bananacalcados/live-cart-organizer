@@ -861,11 +861,12 @@ Deno.serve(async (req) => {
       let { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
-      if (!name && !providedName) return json({ ok: true, needsName: true });
-      if (!name) name = providedName;
+      if (!name && !providedName && !body.magicVerified) return json({ ok: true, needsName: true });
+      if (!name) name = providedName || "Cliente";
 
       // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
-      if (!(await isKnownCustomer(phone))) {
+      // O link mágico já é fator de posse (chegou no WhatsApp dela): dispensa OTP.
+      if (!body.magicVerified && !(await isKnownCustomer(phone))) {
         const code = String(body.otp || "").replace(/\D/g, "");
         if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
         if (!(await allow(`otpv:${phone}`, 8, 600))) {
