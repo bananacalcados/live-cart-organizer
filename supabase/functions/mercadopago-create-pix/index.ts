@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
