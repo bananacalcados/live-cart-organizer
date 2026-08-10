@@ -815,12 +815,20 @@ export default function LiveMemberArea() {
   /** Pula etapas cujos dados já estão salvos no cadastro da cliente. */
   const nextAfter = (current: OnboardStep): OnboardStep | "area" => {
     const ob: any = state?.onboarding || {};
-    const order: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const order: OnboardStep[] = ["name", "address", "shipping", "cpf", "email"];
     for (const s of order.slice(order.indexOf(current) + 1)) {
       if (!ob[s]) return s;
     }
     return "area";
   };
+
+  const saveNameStep = () =>
+    advance(
+      nextAfter("name"),
+      "name",
+      { action: "save_details", details: { full_name: fullNameInput.trim() } },
+      "Erro ao salvar",
+    );
 
   const chooseShipping = (methodId: string) =>
     advance(
@@ -837,6 +845,8 @@ export default function LiveMemberArea() {
     advance("area", "email", { action: "save_details", details: { email } }, "Erro ao salvar", () =>
       toast.success("Tudo pronto! Agora é só pagar 🎉"),
     );
+
+
 
 
   // Auditoria dos passos de pagamento (abriu PIX/cartão, enviou, recusado...).
