@@ -16,6 +16,7 @@
 // entregue/lido.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { issueMagicLink } from "../_shared/member-magic-link.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
@@ -59,6 +60,7 @@ interface ResolveCtx {
   sizes?: string[] | null;
   vendedora?: string | null;
   legenda?: string | null;
+  member_link?: string | null;
   vars?: Record<string, unknown> | null;
 }
 
@@ -75,6 +77,9 @@ function resolveToken(token: string, ctx: ResolveCtx): string {
       return (ctx.vendedora || "nossa loja").trim();
     case "legenda":
       return (ctx.legenda || "").trim() || "—";
+    case "area_membros":
+    case "link_area_membros":
+      return (ctx.member_link || "https://checkout.bananacalcados.com.br/minha-area").trim();
     default: {
       const v = ctx.vars && ctx.vars[token] != null ? String(ctx.vars[token]) : "";
       return v.trim() || "—";
@@ -227,6 +232,13 @@ Deno.serve(async (req) => {
       vendedora: env.vendedora_nome,
       vars: (cc.campaign.variaveis as Record<string, unknown>) || null,
     };
+
+    // Link autenticado da Área de Membros, só quando o template usa o token.
+    const memberTokens = ["area_membros", "link_area_membros"];
+    const usesMemberLink = [...cc.topTokens, ...cc.cardTokens].some((t: string) =>
+      memberTokens.includes(t),
+    );
+    if (usesMemberLink) baseCtx.member_link = await issueMagicLink(sb, env.phone);
 
     // Componentes (carrossel ou template simples texto / imagem+texto).
     const components: any[] = [];
