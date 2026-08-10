@@ -135,11 +135,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   // Troca MANUAL da instância desta conversa (ex.: cliente não recebe pela API
   // Meta e precisamos continuar o atendimento por uma instância não-API).
-  const [overrideNumberId, setOverrideNumberId] = useState<string | null>(null);
+  // Persistida por telefone para não "voltar sozinha" quando o modal remonta.
+  const overrideStorageKey = `wa-chat-instance:${(order.whatsapp || '').replace(/\D/g, '')}`;
+  const [overrideNumberId, setOverrideNumberIdState] = useState<string | null>(() => {
+    try { return localStorage.getItem(overrideStorageKey); } catch { return null; }
+  });
+  const setOverrideNumberId = useCallback((id: string | null) => {
+    setOverrideNumberIdState(id);
+    try {
+      if (id) localStorage.setItem(overrideStorageKey, id);
+      else localStorage.removeItem(overrideStorageKey);
+    } catch { /* ignore */ }
+  }, [overrideStorageKey]);
   const effectiveNumberId = overrideNumberId || hookEffectiveNumberId;
   const boundNumber = overrideNumberId
     ? (numbers.find((n) => n.id === overrideNumberId) || null)
     : hookBoundNumber;
+
 
 
   // Meta templates state
