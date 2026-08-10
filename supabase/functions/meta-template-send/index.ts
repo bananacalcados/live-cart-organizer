@@ -70,19 +70,40 @@ serve(async (req) => {
       });
     }
 
-    const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
+    const { phoneNumberId, accessToken, businessAccountId } = await getCredentials(supabase, whatsappNumberId);
     if (!phoneNumberId || !accessToken) {
       return new Response(JSON.stringify({ error: 'Meta credentials missing' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    // Definição do template (para renderizar o corpo completo no chat e saber o header)
+    let templateDef: any | null = null;
+    try {
+      templateDef = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+    } catch (_e) { /* non-fatal */ }
+
+    const headerDef = (templateDef?.components || []).find(
+      (c: any) => (c.type || '').toUpperCase() === 'HEADER',
+    );
+    const headerFormat = String(headerDef?.format || 'TEXT').toUpperCase();
+
     const components: any[] = [];
-    if (headerParameter) {
+    if (headerParameter && headerFormat === 'TEXT') {
       components.push({
         type: 'header',
         parameters: [{ type: 'text', text: sanitizeParam(headerParameter) }],
       });
+    } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
+      // Header de mídia: usa o link informado ou o exemplo aprovado do template.
+      const link = headerParameter || headerDef?.example?.header_handle?.[0] || null;
+      if (link) {
+        const key = headerFormat.toLowerCase();
+        components.push({
+          type: 'header',
+          parameters: [{ type: key, [key]: { link } }],
+        });
+      }
     }
     if (bodyParameters.length > 0) {
       components.push({
@@ -123,16 +144,31 @@ serve(async (req) => {
 
     const messageId = data?.messages?.[0]?.id;
 
-    // Log outgoing message — message text = template name + params (para histórico)
-    const logText = `[template:${templateName}] ${bodyParameters.join(' | ')}`.slice(0, 2000);
+    // Log outgoing message — corpo completo do template com variáveis substituídas,
+    // quebras de linha preservadas e imagem do header quando existir.
+    let logText = `[template:${templateName}] ${bodyParameters.join(' | ')}`;
+    let mediaUrl: string | null = null;
+    let mediaType = 'text';
+    try {
+      if (templateDef) {
+        const r = renderTemplateMessage(templateDef, components);
+        if (r.text) logText = r.text;
+        mediaUrl = r.mediaUrl;
+        mediaType = r.mediaType;
+      }
+    } catch (_e) { /* mantém fallback */ }
+
     await supabase.from('whatsapp_messages').insert({
       phone,
-      message: logText,
+      message: logText.slice(0, 4000),
       direction: 'outgoing',
       status: 'sent',
+      media_url: mediaUrl,
+      media_type: mediaType,
       whatsapp_number_id: whatsappNumberId || null,
       message_id: messageId || null,
     });
+
 
     return new Response(JSON.stringify({ success: true, messageId, templateName }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
