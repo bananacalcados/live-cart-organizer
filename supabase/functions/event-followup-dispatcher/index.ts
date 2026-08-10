@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { issueMagicLink } from "../_shared/member-magic-link.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,6 +73,13 @@ Deno.serve(async (req) => {
     }
 
     const ctx = buildTokenContext(ord, customerName, igHandle);
+
+    // Link autenticado da Área de Membros só é gerado quando o template usa o token.
+    const usesMemberLink = JSON.stringify(cfg.template_variables || {}).includes("{member_area_link}")
+      || String(cfg.message_text || "").includes("{member_area_link}");
+    ctx["{member_area_link}"] = usesMemberLink
+      ? await issueMagicLink(supabase, phone)
+      : "https://checkout.bananacalcados.com.br/minha-area";
 
     try {
       if (cfg.channel === "whatsapp") {
