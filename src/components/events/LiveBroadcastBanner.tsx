@@ -40,7 +40,7 @@ function formatSince(iso: string | null) {
 export function LiveBroadcastBanner() {
   const [active, setActive] = useState<ActiveBroadcast | null>(null);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
+  
   const [changeOpen, setChangeOpen] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [saving, setSaving] = useState(false);
