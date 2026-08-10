@@ -21,6 +21,15 @@ Deno.serve(async (req) => {
 
   const nowIso = new Date().toISOString();
 
+  // Recupera envios travados em "processing" (crash/timeout) há mais de 10min
+  await supabase
+    .from("event_followup_dispatches")
+    .update({ status: "pending" })
+    .eq("status", "processing")
+    .lt("scheduled_at", new Date(Date.now() - 10 * 60000).toISOString());
+
+
+
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
     .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
@@ -38,6 +47,17 @@ Deno.serve(async (req) => {
   let sent = 0, skipped = 0, failed = 0;
 
   for (const row of due) {
+    // Claim atômico: evita que duas execuções simultâneas do cron enviem o
+    // mesmo follow-up mais de uma vez.
+    const { data: claimed } = await supabase
+      .from("event_followup_dispatches")
+      .update({ status: "processing", attempts: (row.attempts || 0) + 1 })
+      .eq("id", row.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+    if (!claimed) { skipped++; continue; }
+
     const cfg = row.config;
     const ord = row.order;
     if (!cfg || !ord) {
@@ -46,6 +66,9 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Configuração desativada (ex.: duplicada) → não envia.
+    if (cfg.enabled === false) { await markSkipped(supabase, row.id, "config_disabled"); skipped++; continue; }
+
     // Stop conditions
     if (cfg.stop_on_paid && ord.is_paid) { await markSkipped(supabase, row.id, "order_paid"); skipped++; continue; }
     if (ord.stage === "cancelled") { await markSkipped(supabase, row.id, "order_cancelled"); skipped++; continue; }
@@ -53,6 +76,7 @@ Deno.serve(async (req) => {
       cfg.stop_on_reply && ord.last_customer_message_at &&
       new Date(ord.last_customer_message_at) > new Date(row.created_at)
     ) { await markSkipped(supabase, row.id, "customer_replied"); skipped++; continue; }
+
 
     // Enrich: customer + ig handle
     let customerName = "";
@@ -101,7 +125,7 @@ Deno.serve(async (req) => {
         if (!resp.ok) throw new Error(data?.error || `meta send failed (${resp.status})`);
         await supabase.from("event_followup_dispatches").update({
           status: "sent", sent_at: new Date().toISOString(),
-          meta_message_id: data?.messageId || null, attempts: (row.attempts || 0) + 1,
+          meta_message_id: data?.messageId || null,
         }).eq("id", row.id);
         sent++;
       } else if (cfg.channel === "instagram") {
@@ -109,6 +133,14 @@ Deno.serve(async (req) => {
         const igUsername = String(igHandle).replace(/^@/, "").trim();
         const messageText = resolveText(cfg.message_text || "", ctx);
         if (!messageText.trim()) { await markSkipped(supabase, row.id, "no_message_text"); skipped++; continue; }
+
+        // Dedupe por destinatário: se esse mesmo follow-up (mesmo texto do
+        // config) já foi enviado a este @ neste evento, não repete.
+        if (await alreadySentToHandle(supabase, cfg, ord.event_id, igUsername, row.id)) {
+          await markSkipped(supabase, row.id, "already_sent_to_recipient"); skipped++; continue;
+        }
+
+
 
         // Reúne comment_ids recentes para private_reply (janela 24h pode estar fechada)
         const fallbackCommentIds: string[] = [];
@@ -163,7 +195,6 @@ Deno.serve(async (req) => {
 
         await supabase.from("event_followup_dispatches").update({
           status: "sent", sent_at: new Date().toISOString(),
-          attempts: (row.attempts || 0) + 1,
         }).eq("id", row.id);
         sent++;
 
@@ -176,9 +207,9 @@ Deno.serve(async (req) => {
       await supabase.from("event_followup_dispatches").update({
         status: attempts >= 3 ? "failed" : "pending",
         error_message: String(err?.message || err).slice(0, 500),
-        attempts,
       }).eq("id", row.id);
     }
+
   }
 
   return json({ ok: true, processed: due.length, sent, skipped, failed });
@@ -255,11 +286,70 @@ function buildComponents(vars: any, ctx: TokenContext): any[] {
   return components;
 }
 
+/**
+ * Verifica se este mesmo follow-up (mesma mensagem, mesmo evento) já foi
+ * enviado para o @ do Instagram — mesmo que por outro pedido/config duplicada.
+ */
+async function alreadySentToHandle(
+  supabase: any,
+  cfg: any,
+  eventId: string,
+  igUsername: string,
+  currentDispatchId: string,
+): Promise<boolean> {
+  try {
+    const text = String(cfg.message_text || "").trim();
+    if (!text) return false;
+
+    // Configs equivalentes (mesmo evento + mesmo texto), incluindo duplicadas
+    const { data: cfgs } = await supabase
+      .from("event_followup_configs")
+      .select("id, message_text")
+      .eq("event_id", eventId)
+      .eq("channel", "instagram");
+    const cfgIds = (cfgs || [])
+      .filter((c: any) => String(c.message_text || "").trim() === text)
+      .map((c: any) => c.id);
+    if (!cfgIds.length) return false;
+
+    // Pedidos deste evento pertencentes ao mesmo @
+    const handle = igUsername.replace(/^@/, "");
+    const { data: custs } = await supabase
+      .from("customers")
+      .select("id")
+      .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`);
+    const custIds = (custs || []).map((c: any) => c.id);
+    if (!custIds.length) return false;
+
+    const { data: ords } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("event_id", eventId)
+      .in("customer_id", custIds);
+    const orderIds = (ords || []).map((o: any) => o.id);
+    if (!orderIds.length) return false;
+
+    const { data: prev } = await supabase
+      .from("event_followup_dispatches")
+      .select("id")
+      .in("config_id", cfgIds)
+      .in("order_id", orderIds)
+      .eq("status", "sent")
+      .neq("id", currentDispatchId)
+      .limit(1);
+    return !!(prev && prev.length);
+  } catch (e) {
+    console.warn("[dispatcher] dedupe check failed:", e);
+    return false;
+  }
+}
+
 async function markSkipped(supabase: any, id: string, reason: string) {
   await supabase.from("event_followup_dispatches").update({
     status: "skipped", skip_reason: reason,
   }).eq("id", id);
 }
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
