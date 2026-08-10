@@ -1242,9 +1242,10 @@ export default function LiveMemberArea() {
 
   // ---------- Etapa 4: Dados de envio por etapas ----------
   if (step === "onboarding") {
-    const stepsOrder: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const stepsOrder: OnboardStep[] = ["name", "address", "shipping", "cpf", "email"];
     const idx = stepsOrder.indexOf(onboardStep);
     const titles: Record<OnboardStep, string> = {
+      name: "Seu nome completo",
       address: "Falta pouco pra confirmar",
       shipping: "Como você quer receber?",
       cpf: "Seu CPF",
@@ -1262,10 +1263,40 @@ export default function LiveMemberArea() {
               />
             ))}
           </div>
-          <p className="mt-3 text-sm text-muted-foreground">{idx} de 4 etapas concluídas</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {idx} de {stepsOrder.length} etapas concluídas
+          </p>
           <h2 className="mt-1 text-2xl font-bold leading-tight">{titles[onboardStep]}</h2>
 
+          {onboardStep === "name" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Use o nome que está no seu CPF — é o nome que vai no pagamento e na nota fiscal.
+              </p>
+              <Input
+                value={fullNameInput}
+                onChange={(e) => setFullNameInput(e.target.value.replace(/[0-9@_]/g, ""))}
+                placeholder="Nome e sobrenome"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              {!!fullNameInput.trim() && !isRealFullName(fullNameInput) && (
+                <p className="text-xs text-destructive">
+                  Digite nome e sobrenome reais (sem @ do Instagram e sem números).
+                </p>
+              )}
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || !isRealFullName(fullNameInput)}
+                onClick={saveNameStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+            </div>
+          )}
+
           {onboardStep === "address" && (
+
             <div className="mt-5 space-y-3">
               <Label className="text-sm text-muted-foreground">Endereço de entrega</Label>
               <div className="relative">
