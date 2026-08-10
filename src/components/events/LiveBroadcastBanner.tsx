@@ -12,8 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const TTL_MS = 3 * 60 * 60 * 1000;
-
 interface ActiveBroadcast {
   id: string;
   name: string;
@@ -22,24 +20,27 @@ interface ActiveBroadcast {
   live_url_updated_at: string | null;
 }
 
-function formatCountdown(ms: number) {
-  if (ms <= 0) return "expirado";
-  const m = Math.floor(ms / 60000);
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  if (h > 0) return `${h}h ${rem}m`;
-  return `${m}m`;
+function formatSince(iso: string | null) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
- * LiveBroadcastBanner — fixed banner shown in the Events module while any event is
- * marked as AO VIVO. Shows TTL countdown and a "Trocar link" quick-action to keep the
- * Instagram live URL fresh without opening the wizard. Also lets the operator encerrar.
+ * LiveBroadcastBanner — banner fixo exibido no módulo Eventos enquanto algum evento
+ * estiver marcado como AO VIVO. O link vale enquanto o AO VIVO estiver ligado; a ação
+ * "Trocar link" atualiza a URL do Instagram sem sair do módulo.
  */
 export function LiveBroadcastBanner() {
   const [active, setActive] = useState<ActiveBroadcast | null>(null);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
+  
   const [changeOpen, setChangeOpen] = useState(false);
   const [newUrl, setNewUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -59,25 +60,14 @@ export function LiveBroadcastBanner() {
   useEffect(() => {
     fetchActive();
     const poll = setInterval(fetchActive, 30_000);
-    const tick = setInterval(() => setNow(Date.now()), 15_000);
-    return () => {
-      clearInterval(poll);
-      clearInterval(tick);
-    };
+    return () => clearInterval(poll);
   }, [fetchActive]);
 
   if (loading || !active) return null;
 
-  const startedAt = active.live_broadcast_started_at
-    ? new Date(active.live_broadcast_started_at).getTime()
-    : 0;
-  const urlAt = active.live_url_updated_at
-    ? new Date(active.live_url_updated_at).getTime()
-    : startedAt;
-  const freshestAt = Math.max(startedAt, urlAt);
-  const remainingMs = freshestAt > 0 ? TTL_MS - (now - freshestAt) : TTL_MS;
-  const expiringSoon = remainingMs > 0 && remainingMs < 30 * 60 * 1000;
-  const expired = remainingMs <= 0;
+  const sinceLabel = formatSince(
+    active.live_url_updated_at || active.live_broadcast_started_at,
+  );
 
   const openChange = () => {
     setNewUrl(active.instagram_live_url ?? "");
@@ -103,7 +93,7 @@ export function LiveBroadcastBanner() {
       toast.error(error.message);
       return;
     }
-    toast.success("Link trocado. TTL reiniciado (3h).");
+    toast.success("Link trocado. O novo link já está valendo.");
     setChangeOpen(false);
     fetchActive();
   };
@@ -122,16 +112,10 @@ export function LiveBroadcastBanner() {
     fetchActive();
   };
 
-  const bg = expired
-    ? "bg-orange-600"
-    : expiringSoon
-    ? "bg-amber-500"
-    : "bg-red-600";
-
   return (
     <>
       <div
-        className={`${bg} text-white rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-md`}
+        className="bg-red-600 text-white rounded-lg px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-md"
       >
         <div className="flex items-center gap-3 min-w-0">
           <span className="relative flex h-3 w-3 shrink-0">
@@ -144,11 +128,7 @@ export function LiveBroadcastBanner() {
               AO VIVO — {active.name}
             </div>
             <div className="text-xs opacity-90 truncate">
-              {expired
-                ? "TTL expirado — troque o link ou encerre."
-                : `Expira em ${formatCountdown(remainingMs)}${
-                    expiringSoon ? " — troque logo!" : ""
-                  }`}
+              {sinceLabel ? `No ar desde ${sinceLabel}` : "No ar"}
               {active.instagram_live_url ? ` · ${active.instagram_live_url}` : ""}
             </div>
           </div>
@@ -180,7 +160,7 @@ export function LiveBroadcastBanner() {
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              Cole o novo link do Instagram. Isso reinicia o TTL de 3h.
+              Cole o novo link do Instagram. Ele passa a valer imediatamente.
             </p>
             <Input
               placeholder="https://www.instagram.com/usuario/live/..."

@@ -1,7 +1,7 @@
 // Live IG redirect — resolves the active broadcasting event and returns the target IG url.
-// Enforces a TTL on the broadcast (3h since it was activated OR since the IG url was last
-// refreshed) to prevent an old/stale link from being served. Auto-deactivates on TTL expiry.
-// Also runs a lightweight HEAD validation on the IG url (cached ~30s in memory).
+// O link vale enquanto o evento estiver marcado como AO VIVO (sem TTL). Só muda quando o
+// operador encerra a transmissão ou troca o link manualmente.
+// Também roda uma validação HEAD leve na url do IG (cache ~30s em memória).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
@@ -12,8 +12,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// TTL: how long a broadcast is considered "fresh" after activation OR last URL refresh.
-const BROADCAST_TTL_HOURS = 3;
 const HEAD_CACHE_TTL_MS = 30_000;
 
 // In-memory HEAD cache (per isolate). Small and fine for our traffic.
@@ -94,32 +92,12 @@ serve(async (req) => {
     let targetUrl: string | null = activeEvent?.instagram_live_url || null;
     let reason: string | null = null;
 
+    // O link vale enquanto o evento estiver marcado como AO VIVO — sem expiração por tempo.
     if (activeEvent && targetUrl) {
-      const startedAt = activeEvent.live_broadcast_started_at
-        ? new Date(activeEvent.live_broadcast_started_at).getTime()
-        : 0;
-      const urlAt = activeEvent.live_url_updated_at
-        ? new Date(activeEvent.live_url_updated_at).getTime()
-        : startedAt;
-      const freshestAt = Math.max(startedAt, urlAt);
-      const ageMs = Date.now() - freshestAt;
-      const ttlMs = BROADCAST_TTL_HOURS * 60 * 60 * 1000;
-
-      if (freshestAt > 0 && ageMs > ttlMs) {
-        // Auto-deactivate stale broadcast.
+      const ok = await validateInstagramUrl(targetUrl);
+      if (!ok) {
         targetUrl = null;
-        reason = "ttl_expired";
-        supabase
-          .from("events")
-          .update({ is_live_broadcasting: false })
-          .eq("id", activeEvent.id)
-          .then(() => {});
-      } else {
-        const ok = await validateInstagramUrl(targetUrl);
-        if (!ok) {
-          targetUrl = null;
-          reason = "url_unreachable";
-        }
+        reason = "url_unreachable";
       }
     }
 
