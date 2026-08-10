@@ -232,7 +232,7 @@ export default function LiveMemberArea() {
         .map((p: any) => String(p.id ?? p.sku ?? p.title ?? ""))
         .filter(Boolean),
       customer: {
-        fullName: (masked ? undefined : d.full_name) || state?.name || undefined,
+        fullName: isRealFullName(masked ? null : d.full_name) ? d.full_name : undefined,
         email: masked ? undefined : d.email || undefined,
         phone: state?.phone || undefined,
         cpf: masked ? undefined : d.cpf || undefined,
