@@ -17,6 +17,15 @@ import { OrderFullViewDialog } from "./OrderFullViewDialog";
 import { MarkOrderPaidDialog } from "./MarkOrderPaidDialog";
 import { CustomerPrizeBadges } from "./prizes/CustomerPrizes";
 import { PayOnDeliveryDialog } from "./PayOnDeliveryDialog";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 
 import { Order } from "@/types/order";
@@ -101,6 +110,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [sendingViaInstance, setSendingViaInstance] = useState(false);
+  const { numbers: waNumbers, fetchNumbers: fetchWaNumbers } = useWhatsAppNumberStore();
+  const nonApiNumbers = waNumbers.filter(
+    (n) => n.is_active && ['uazapi', 'wasender', 'zapi'].includes(String(n.provider || '')),
+  );
   // Fallback da forma de pagamento via pos_checkout_attempts (PIX vs Cartão)
   // quando o pedido não tem payment_method_label preenchido.
   const [checkoutMethod, setCheckoutMethod] = useState<string | null>(null);
@@ -782,6 +796,64 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </Button>
         </div>
       )}
+
+      {/* Mesmo template, porém enviado por uma instância NÃO-API (uazapi etc.) —
+          útil para checar se o número informado na live realmente existe. */}
+      {order.customer?.whatsapp && (
+        <div className="mb-3">
+          <DropdownMenu onOpenChange={(o) => { if (o && waNumbers.length === 0) fetchWaNumbers(); }}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs gap-1.5 h-7 border-sky-500/50 text-sky-600 hover:bg-sky-500/10"
+                disabled={sendingViaInstance}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {sendingViaInstance ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessagesSquare className="h-3 w-3" />}
+                ENVIAR MSG SEM API
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuLabel className="text-xs">Enviar pelo número (não-API)</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {nonApiNumbers.length === 0 && (
+                <DropdownMenuItem disabled className="text-xs">
+                  Nenhuma instância não-API ativa
+                </DropdownMenuItem>
+              )}
+              {nonApiNumbers.map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="flex-col items-start gap-0.5 cursor-pointer"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setSendingViaInstance(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('event-order-template-send', {
+                        body: { orderId: order.id, viaNumberId: n.id },
+                      });
+                      if (error) throw error;
+                      if ((data as any)?.error) throw new Error((data as any).error);
+                      toast.success(`Mensagem enviada por ${n.label}`);
+                    } catch (err: any) {
+                      toast.error(err?.message || 'Erro ao enviar pela instância');
+                    } finally {
+                      setSendingViaInstance(false);
+                    }
+                  }}
+                >
+                  <span className="font-medium text-sm">{n.label}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {n.phone_display} · {n.provider}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+
       {order.customer?.whatsapp && (
         <div className="flex items-center gap-2 mb-3">
           <a

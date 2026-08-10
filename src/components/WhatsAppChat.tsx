@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -129,9 +129,18 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   // silently switch to whichever instance is globally selected.
   const {
     boundNumberId,
-    boundNumber,
-    effectiveNumberId,
+    boundNumber: hookBoundNumber,
+    effectiveNumberId: hookEffectiveNumberId,
   } = useConversationInstance(order.whatsapp, { messages });
+
+  // Troca MANUAL da instância desta conversa (ex.: cliente não recebe pela API
+  // Meta e precisamos continuar o atendimento por uma instância não-API).
+  const [overrideNumberId, setOverrideNumberId] = useState<string | null>(null);
+  const effectiveNumberId = overrideNumberId || hookEffectiveNumberId;
+  const boundNumber = overrideNumberId
+    ? (numbers.find((n) => n.id === overrideNumberId) || null)
+    : hookBoundNumber;
+
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -237,6 +246,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(false);
   };
 
+  // Quando o operador troca a instância manualmente, o guard de instância
+  // precisa ser liberado — senão o envio é bloqueado com 409.
+  const forceInstanceHeaders = (): Record<string, string> =>
+    overrideNumberId ? { 'x-force-instance': 'true' } : {};
+
   // ── Detect provider for the instance bound to this conversation ──
   const getProvider = (): 'zapi' | 'meta' | 'wasender' | 'uazapi' => {
     const num = boundNumber
@@ -261,6 +275,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('uazapi-send-media', {
           body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
         if (data?.success) return { success: true, messageId: data?.messageId };
@@ -268,6 +283,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       }
       const { data, error } = await supabase.functions.invoke('uazapi-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.messageId };
@@ -285,6 +301,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
@@ -306,6 +323,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('wasender-send-media', {
           body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
         if (data?.success) return { success: true, messageId: data?.messageId };
@@ -313,6 +331,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       }
       const { data, error } = await supabase.functions.invoke('wasender-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.messageId };
@@ -1057,6 +1076,58 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         </Button>
 
         <ChatPixButton orderId={order.id} variant="icon-light" />
+
+        {/* Trocar a instância usada nesta conversa */}
+        <DropdownMenu onOpenChange={(o) => { if (o && numbers.length === 0) fetchNumbers(); }}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 gap-1.5 text-xs font-medium text-white/80 hover:bg-white/10 max-w-[160px]"
+              title="Trocar instância desta conversa"
+            >
+              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {(boundNumber?.label) || 'Instância'}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="text-xs">Enviar por qual número</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {numbers
+              .filter((n) => n.is_active && (n.provider || 'meta') !== 'instagram')
+              .map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="flex-col items-start gap-0.5 cursor-pointer"
+                  onClick={() => {
+                    setOverrideNumberId(n.id);
+                    toast.success(`Conversa agora envia por ${n.label}`);
+                  }}
+                >
+                  <span className="font-medium text-sm">
+                    {n.label} {effectiveNumberId === n.id ? '✓' : ''}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {n.phone_display} · {n.provider || 'meta'}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            {overrideNumberId && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={() => setOverrideNumberId(null)}
+                >
+                  Voltar para a instância do histórico
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
 
         <Button
           variant="ghost"
