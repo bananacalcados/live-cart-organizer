@@ -393,11 +393,13 @@ export default function LiveMemberArea() {
   /** Primeira etapa do onboarding ainda pendente. */
   const firstPendingOnboard = (data: any): OnboardStep => {
     const ob = data?.onboarding || {};
+    if (!ob.name) return "name";
     if (!ob.address) return "address";
     if (!ob.shipping) return "shipping";
     if (!ob.cpf) return "cpf";
     return "email";
   };
+
 
   const hydrateForms = (data: any) => {
     const d = data?.details || {};
