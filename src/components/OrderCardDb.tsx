@@ -1374,6 +1374,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                 e.preventDefault();
                 setUndoingPaid(true);
                 try {
+                  const saleId = (order as any).pos_sale_id as string | null;
                   const { error } = await supabase
                     .from("orders")
                     .update({
@@ -1382,10 +1383,19 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                       paid_at: null,
                       payment_confirmed_source: null,
                       payment_method_label: null,
+                      pos_sale_id: null,
                       stage: "new",
                     } as any)
                     .eq("id", order.id);
                   if (error) throw error;
+                  if (saleId) {
+                    // Cancela a venda gerada no PDV (o banco devolve os itens ao estoque)
+                    await supabase
+                      .from("pos_sales")
+                      .update({ status: "cancelled" } as any)
+                      .eq("id", saleId)
+                      .neq("status", "cancelled");
+                  }
                   await updateOrder(order.id, {
                     is_paid: false,
                     paid_externally: false,
