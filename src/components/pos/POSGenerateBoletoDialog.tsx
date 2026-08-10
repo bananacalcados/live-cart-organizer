@@ -25,6 +25,8 @@ interface BoletoResult {
   pdfUrl: string | null;
   boletoUrl: string | null;
   barcode: string | null;
+  digitableLine: string | null;
+  digitableLineFormatted: string | null;
   pixQrCode: string | null;
   amount: number;
   dueDate: string;
