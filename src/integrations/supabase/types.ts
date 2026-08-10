@@ -5326,6 +5326,163 @@ export type Database = {
           },
         ]
       }
+      event_raffle_entries: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          entry_value: number
+          id: string
+          order_id: string | null
+          phone: string
+          phone_suffix: string | null
+          raffle_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          entry_value?: number
+          id?: string
+          order_id?: string | null
+          phone: string
+          phone_suffix?: string | null
+          raffle_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          entry_value?: number
+          id?: string
+          order_id?: string | null
+          phone?: string
+          phone_suffix?: string | null
+          raffle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_raffle_entries_raffle_id_fkey"
+            columns: ["raffle_id"]
+            isOneToOne: false
+            referencedRelation: "event_raffles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_raffle_winners: {
+        Row: {
+          created_at: string
+          customer_prize_id: string | null
+          display_name: string | null
+          entry_id: string | null
+          id: string
+          phone: string
+          position: number
+          raffle_id: string
+          voided_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_prize_id?: string | null
+          display_name?: string | null
+          entry_id?: string | null
+          id?: string
+          phone: string
+          position?: number
+          raffle_id: string
+          voided_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_prize_id?: string | null
+          display_name?: string | null
+          entry_id?: string | null
+          id?: string
+          phone?: string
+          position?: number
+          raffle_id?: string
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_raffle_winners_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "event_raffle_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_raffle_winners_raffle_id_fkey"
+            columns: ["raffle_id"]
+            isOneToOne: false
+            referencedRelation: "event_raffles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_raffles: {
+        Row: {
+          audience: string
+          created_at: string
+          drawn_at: string | null
+          drawn_by: string | null
+          event_id: string
+          exclude_previous_winners: boolean
+          expiry_days: number
+          id: string
+          min_purchase_value: number
+          name: string
+          prize_label: string
+          prize_type: string
+          prize_value: number
+          status: string
+          updated_at: string
+          winners_count: number
+        }
+        Insert: {
+          audience?: string
+          created_at?: string
+          drawn_at?: string | null
+          drawn_by?: string | null
+          event_id: string
+          exclude_previous_winners?: boolean
+          expiry_days?: number
+          id?: string
+          min_purchase_value?: number
+          name: string
+          prize_label: string
+          prize_type?: string
+          prize_value?: number
+          status?: string
+          updated_at?: string
+          winners_count?: number
+        }
+        Update: {
+          audience?: string
+          created_at?: string
+          drawn_at?: string | null
+          drawn_by?: string | null
+          event_id?: string
+          exclude_previous_winners?: boolean
+          expiry_days?: number
+          id?: string
+          min_purchase_value?: number
+          name?: string
+          prize_label?: string
+          prize_type?: string
+          prize_value?: number
+          status?: string
+          updated_at?: string
+          winners_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_raffles_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_stock_alerts: {
         Row: {
           created_at: string
@@ -20569,6 +20726,10 @@ export type Database = {
       }
       claim_event_order_routing: {
         Args: { p_order_id: string }
+        Returns: boolean
+      }
+      claim_event_raffle_draw: {
+        Args: { _raffle_id: string }
         Returns: boolean
       }
       claim_group_dispatch_job: {
