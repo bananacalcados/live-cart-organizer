@@ -6,6 +6,7 @@ import { buildMpHeaders } from "../_shared/mp-http.ts";
 
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 function maskCard(card: any) {
