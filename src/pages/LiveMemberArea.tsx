@@ -399,20 +399,25 @@ export default function LiveMemberArea() {
 
   const hydrateForms = (data: any) => {
     const d = data?.details || {};
+    // Endereço não é dado sensível: mesmo com os dados mascarados (sem OTP),
+    // repreenchemos o formulário com o rascunho salvo para a cliente retomar
+    // exatamente de onde parou, sem redigitar tudo.
+    const a = data?.payDetails || (!d.masked ? d : {}) || {};
+    setAddr((prev: any) => ({
+      cep: a.cep || prev.cep || "",
+      address: a.address || prev.address || "",
+      address_number: a.address_number || prev.address_number || "",
+      complement: a.complement || prev.complement || "",
+      neighborhood: a.neighborhood || prev.neighborhood || "",
+      city: a.city || prev.city || "",
+      state: a.state || prev.state || "",
+    }));
     if (!d.masked) {
-      setAddr({
-        cep: d.cep || "",
-        address: d.address || "",
-        address_number: d.address_number || "",
-        complement: d.complement || "",
-        neighborhood: d.neighborhood || "",
-        city: d.city || "",
-        state: d.state || "",
-      });
       setCpf(d.cpf || "");
       setEmail(d.email || "");
     }
   };
+
 
   const applyState = useCallback(
     (data: any) => {
