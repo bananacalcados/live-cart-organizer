@@ -277,7 +277,7 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
