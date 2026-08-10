@@ -45,12 +45,9 @@ export async function issueMagicLink(
     const tokenHash = await sha256Hex(token);
     const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 
-    // 1 token ativo por telefone
-    await supabase
-      .from("member_area_magic_links")
-      .update({ revoked_at: new Date().toISOString() })
-      .eq("phone", normalized)
-      .is("revoked_at", null);
+    // Não revogamos tokens antigos: a cliente pode clicar num link de um disparo
+    // anterior (WhatsApp guarda o histórico) e ele precisa continuar funcionando
+    // até expirar.
 
     const { error } = await supabase.from("member_area_magic_links").insert({
       phone: normalized,
