@@ -844,14 +844,17 @@ Deno.serve(async (req) => {
 
     if (action === "enter") {
 
-      // Anti-abuso: 10 entradas por IP a cada 10 min e 6 por telefone/hora.
-      if (!(await allow(`enter-ip:${ip}`, 10, 600))) {
+      // Anti-abuso brando: operadoras móveis compartilham o mesmo IP (CGNAT) e a
+      // cliente costuma recarregar a página várias vezes, então a cota precisa ser
+      // alta o bastante para não bloquear gente real.
+      if (!(await allow(`enter-ip:${ip}`, 120, 600))) {
         return await blocked("rate_limit_enter_ip", "Muitas tentativas de acesso. Aguarde alguns minutos.");
       }
       const phoneKey = normalizePhone(body.phone);
-      if (phoneKey && !(await allow(`enter:${phoneKey}`, 6, 3600))) {
+      if (phoneKey && !(await allow(`enter:${phoneKey}`, 60, 3600))) {
         return await blocked("rate_limit_enter_phone", "Muitas tentativas com este número. Tente mais tarde.");
       }
+
 
       const event = await resolveCurrentEvent();
 
