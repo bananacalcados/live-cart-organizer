@@ -91,6 +91,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDeleteOrderDialog, setShowDeleteOrderDialog] = useState(false);
+  const [showUndoPaidDialog, setShowUndoPaidDialog] = useState(false);
+  const [undoingPaid, setUndoingPaid] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showShopifyActionsDialog, setShowShopifyActionsDialog] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("Troca de produto/tamanho");
@@ -1057,6 +1059,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               </Button>
             </div>
           )}
+
+          {/* Desfazer pagamento manual (nunca disponível para confirmação de gateway) */}
+          {(order.is_paid || order.paid_externally)
+            && (order as any).payment_confirmed_source !== 'gateway_webhook' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs gap-1 mt-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowUndoPaidDialog(true);
+              }}
+            >
+              <RefreshCw className="h-3 w-3" />
+              Desfazer pagamento
+            </Button>
+          )}
         </div>
       )}
 
@@ -1336,6 +1355,68 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={showUndoPaidDialog} onOpenChange={setShowUndoPaidDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer pagamento deste pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido volta para <strong>NOVO PEDIDO</strong> e deixa de contar como pago.
+              Use apenas quando a marcação de "Pago" foi feita por engano.
+              Pagamentos confirmados pelo gateway não podem ser revertidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={undoingPaid}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                setUndoingPaid(true);
+                try {
+                  const saleId = (order as any).pos_sale_id as string | null;
+                  const { error } = await supabase
+                    .from("orders")
+                    .update({
+                      is_paid: false,
+                      paid_externally: false,
+                      paid_at: null,
+                      payment_confirmed_source: null,
+                      payment_method_label: null,
+                      pos_sale_id: null,
+                      stage: "new",
+                    } as any)
+                    .eq("id", order.id);
+                  if (error) throw error;
+                  if (saleId) {
+                    // Cancela a venda gerada no PDV (o banco devolve os itens ao estoque)
+                    await supabase
+                      .from("pos_sales")
+                      .update({ status: "cancelled" } as any)
+                      .eq("id", saleId)
+                      .neq("status", "cancelled");
+                  }
+                  await updateOrder(order.id, {
+                    is_paid: false,
+                    paid_externally: false,
+                    paid_at: null,
+                    stage: "new",
+                  } as any);
+                  toast.success("Pagamento desfeito. Pedido voltou para Novo Pedido.");
+                  setShowUndoPaidDialog(false);
+                } catch (err: any) {
+                  toast.error(err?.message || "Não foi possível desfazer o pagamento.");
+                } finally {
+                  setUndoingPaid(false);
+                }
+              }}
+            >
+              {undoingPaid ? "Desfazendo..." : "Desfazer pagamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
