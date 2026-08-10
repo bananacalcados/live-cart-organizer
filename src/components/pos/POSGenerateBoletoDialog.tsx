@@ -302,10 +302,26 @@ export function POSGenerateBoletoDialog({
               <div className="text-2xl font-bold mt-1">R$ {result.amount.toFixed(2).replace(".", ",")}</div>
               <div className="text-sm mt-1">Vencimento: {new Date(result.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}</div>
               <div className="mt-2 text-xs">Status atual: <span className="font-semibold">{status}</span></div>
-              {result.barcode && (
+              {(result.digitableLine || result.barcode) && (
                 <div className="mt-3">
-                  <div className="text-xs text-muted-foreground mb-1">Linha digitável</div>
-                  <div className="font-mono text-xs break-all bg-background p-2 rounded border">{result.barcode}</div>
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {result.digitableLine ? "Linha digitável (47 dígitos)" : "Código de barras"}
+                  </div>
+                  <div className="font-mono text-xs break-all bg-background p-2 rounded border">
+                    {result.digitableLineFormatted || result.digitableLine || result.barcode}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 h-7 px-2 text-xs"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.digitableLine || result.barcode || "");
+                      toast.success("Linha digitável copiada");
+                    }}
+                  >
+                    Copiar
+                  </Button>
+
                 </div>
               )}
             </div>
