@@ -119,6 +119,8 @@ export function POSGenerateBoletoDialog({
         pdfUrl: data.pdfUrl,
         boletoUrl: data.boletoUrl,
         barcode: data.barcode,
+        digitableLine: data.digitableLine ?? null,
+        digitableLineFormatted: data.digitableLineFormatted ?? null,
         pixQrCode: data.pixQrCode,
         amount: data.amount,
         dueDate: data.dueDate,
