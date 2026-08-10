@@ -447,7 +447,7 @@ export default function LiveMemberArea() {
         // Link mágico (?ml=TOKEN) enviado por WhatsApp: entra já autenticada.
         const ml = new URLSearchParams(window.location.search).get("ml");
         if (ml) {
-          const mg = await callApi({ action: "magic_enter", ml });
+          const mg = await callApi({ action: "magic_enter", ml }).catch(() => null);
           const url = new URL(window.location.href);
           url.searchParams.delete("ml");
           window.history.replaceState({}, "", url.pathname + url.search + url.hash);
