@@ -21,6 +21,15 @@ Deno.serve(async (req) => {
 
   const nowIso = new Date().toISOString();
 
+  // Recupera envios travados em "processing" (crash/timeout) há mais de 10min
+  await supabase
+    .from("event_followup_dispatches")
+    .update({ status: "pending" })
+    .eq("status", "processing")
+    .lt("scheduled_at", new Date(Date.now() - 10 * 60000).toISOString());
+
+
+
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
     .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
