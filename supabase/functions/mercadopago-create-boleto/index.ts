@@ -471,6 +471,8 @@ serve(async (req) => {
         mpPaymentId,
         boletoUrl: mpBoletoUrl,
         barcode: mpBarcode,
+        digitableLine,
+        digitableLineFormatted: digitableLine ? formatDigitableLine(digitableLine) : null,
         pdfUrl: signed?.signedUrl || null,
         pixQrCode,
         pixQrBase64,
