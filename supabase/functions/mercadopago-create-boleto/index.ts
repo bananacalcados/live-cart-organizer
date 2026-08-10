@@ -66,13 +66,8 @@ function formatMpDate(d: Date): string {
   return `${yyyy}-${mm}-${dd}T23:59:59.000-03:00`;
 }
 
-// Formata linha digitável do boleto (44/47 dígitos) em blocos legíveis
-function formatBarcode(raw: string): string {
-  const digits = cleanDigits(raw);
-  if (digits.length !== 47 && digits.length !== 48) return raw;
-  // Boleto de arrecadação (48) ou boleto bancário (47) — formatação simplificada
-  return digits.match(/.{1,4}/g)?.join(" ") ?? digits;
-}
+// Formatação da linha digitável agora vive em _shared/boleto-barcode.ts
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
