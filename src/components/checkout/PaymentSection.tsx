@@ -609,6 +609,10 @@ function CardPaymentForm({
   // senão o cliente pagaria juros em cima de juros).
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
   const chargeAmount = isDebit ? amount : (selectedMp ? amount : totalWithInterest);
+  // Valor EXIBIDO no botão = o que o cliente realmente paga. Quando o Mercado Pago
+  // devolve as condições reais (ex.: 10x sem juros), o total é o do MP — nunca o
+  // total inflado pela tabela de juros local, senão o botão mostra valor errado.
+  const displayTotal = isDebit ? amount : (selectedMp ? selectedMp.totalAmount : totalWithInterest);
 
 
   const handleSubmit = async () => {
