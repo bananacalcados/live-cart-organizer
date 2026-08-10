@@ -38,6 +38,7 @@ import {
   firePurchaseBrowser,
   type CheckoutEventBase,
 } from "@/lib/checkoutMetaEvents";
+import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 
 
 
