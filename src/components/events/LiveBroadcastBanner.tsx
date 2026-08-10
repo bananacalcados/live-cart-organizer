@@ -97,7 +97,7 @@ export function LiveBroadcastBanner() {
       toast.error(error.message);
       return;
     }
-    toast.success("Link trocado. TTL reiniciado (3h).");
+    toast.success("Link trocado. O novo link já está valendo.");
     setChangeOpen(false);
     fetchActive();
   };
