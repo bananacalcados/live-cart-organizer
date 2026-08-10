@@ -160,7 +160,7 @@ export function LiveBroadcastBanner() {
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              Cole o novo link do Instagram. Isso reinicia o TTL de 3h.
+              Cole o novo link do Instagram. Ele passa a valer imediatamente.
             </p>
             <Input
               placeholder="https://www.instagram.com/usuario/live/..."
