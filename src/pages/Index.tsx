@@ -12,6 +12,8 @@ import { OrderReportDialog } from "@/components/OrderReportDialog";
 
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPrizeWheelsManager } from "@/components/events/EventPrizeWheelsManager";
+import { EventRafflesManager } from "@/components/events/EventRafflesManager";
+
 import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 
 import { EventPromotionManager } from "@/components/EventPromotionManager";
