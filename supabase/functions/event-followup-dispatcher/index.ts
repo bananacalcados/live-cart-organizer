@@ -186,7 +186,6 @@ Deno.serve(async (req) => {
 
         await supabase.from("event_followup_dispatches").update({
           status: "sent", sent_at: new Date().toISOString(),
-          attempts: (row.attempts || 0) + 1,
         }).eq("id", row.id);
         sent++;
 
@@ -199,9 +198,9 @@ Deno.serve(async (req) => {
       await supabase.from("event_followup_dispatches").update({
         status: attempts >= 3 ? "failed" : "pending",
         error_message: String(err?.message || err).slice(0, 500),
-        attempts,
       }).eq("id", row.id);
     }
+
   }
 
   return json({ ok: true, processed: due.length, sent, skipped, failed });
