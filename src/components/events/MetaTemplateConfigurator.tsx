@@ -18,6 +18,7 @@ export const AVAILABLE_TOKENS = [
   { value: "{products}", label: "Lista de produtos (1 linha)" },
   { value: "{products_short}", label: "Produtos (vírgula)" },
   { value: "{checkout_link}", label: "Link de pagamento (checkout)" },
+  { value: "{member_area_link}", label: "Link da Área de Membros (já autenticado)" },
   { value: "{subtotal}", label: "Subtotal (R$)" },
   { value: "{discount}", label: "Desconto (R$)" },
   { value: "{total}", label: "Total (R$)" },

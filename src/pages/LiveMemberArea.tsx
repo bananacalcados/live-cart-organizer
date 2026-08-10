@@ -438,6 +438,21 @@ export default function LiveMemberArea() {
           return;
         }
         setEvent(boot.event);
+
+        // Link mágico (?ml=TOKEN) enviado por WhatsApp: entra já autenticada.
+        const ml = new URLSearchParams(window.location.search).get("ml");
+        if (ml) {
+          const mg = await callApi({ action: "magic_enter", ml });
+          const url = new URL(window.location.href);
+          url.searchParams.delete("ml");
+          window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+          if (mg?.ok && mg?.token) {
+            localStorage.setItem(TOKEN_KEY, mg.token);
+            applyState(mg);
+            return;
+          }
+        }
+
         const token = localStorage.getItem(TOKEN_KEY);
         if (token) {
           const st = await callApi({ action: "state", token });

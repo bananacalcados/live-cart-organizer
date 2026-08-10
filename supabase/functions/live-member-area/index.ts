@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode } from "../_shared/access-code.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
+import { redeemMagicLink } from "../_shared/member-magic-link.ts";
 import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
 
 
@@ -96,8 +97,18 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const action = String(body?.action || "");
+    let action = String(body?.action || "");
     const ip = clientIp(req);
+
+    // Link mágico: ?ml=TOKEN na Área de Membros entra direto, sem telefone/OTP.
+    if (action === "magic_enter") {
+      const magicPhone = await redeemMagicLink(supabase, body?.ml || body?.magic);
+      if (!magicPhone) return json({ ok: false, error: "magic_invalid" }, 401);
+      body.phone = magicPhone;
+      body.magicVerified = true;
+      action = "enter";
+    }
+
     flow.action = action;
     flow.phone = normalizePhone(body?.phone || "") || null;
     flow.name = String(body?.name || "").trim() || null;
@@ -850,11 +861,12 @@ Deno.serve(async (req) => {
       let { customer } = await loadOrder(event?.id || null, phone);
       let name = customer?.instagram_handle || null;
 
-      if (!name && !providedName) return json({ ok: true, needsName: true });
-      if (!name) name = providedName;
+      if (!name && !providedName && !body.magicVerified) return json({ ok: true, needsName: true });
+      if (!name) name = providedName || "Cliente";
 
       // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
-      if (!(await isKnownCustomer(phone))) {
+      // O link mágico já é fator de posse (chegou no WhatsApp dela): dispensa OTP.
+      if (!body.magicVerified && !(await isKnownCustomer(phone))) {
         const code = String(body.otp || "").replace(/\D/g, "");
         if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
         if (!(await allow(`otpv:${phone}`, 8, 600))) {

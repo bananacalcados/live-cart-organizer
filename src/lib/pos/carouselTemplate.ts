@@ -19,6 +19,11 @@ export const STANDARD_VARS: VarDef[] = [
   { token: "primeiro_nome", label: "Primeiro nome", example: "Maria" },
   { token: "tamanho", label: "Tamanho que calça", example: "37" },
   {
+    token: "area_membros",
+    label: "Link da Área de Membros (já autenticado)",
+    example: "https://checkout.bananacalcados.com.br/minha-area",
+  },
+  {
     token: SELLER_VAR_TOKEN,
     label: "Nome da vendedora (rodízio)",
     example: "Jéssica",
@@ -149,6 +154,7 @@ export type VarKind =
   | "tamanho"
   | "vendedora"
   | "legenda"
+  | "area_membros"
   | "livre";
 
 export interface VarMapping {
@@ -161,6 +167,7 @@ export const BODY_VAR_OPTIONS: { kind: VarKind; label: string }[] = [
   { kind: "primeiro_nome", label: "Primeiro nome" },
   { kind: "tamanho", label: "Tamanho que calça" },
   { kind: "vendedora", label: "Nome da vendedora (rodízio)" },
+  { kind: "area_membros", label: "Link da Área de Membros (já autenticado)" },
   { kind: "livre", label: "Texto livre" },
 ];
 
@@ -203,7 +210,7 @@ export function tokenToMapping(
   token: string,
   vars: Record<string, unknown> | null,
 ): VarMapping {
-  if (["nome", "primeiro_nome", "tamanho", "vendedora", "legenda"].includes(token)) {
+  if (["nome", "primeiro_nome", "tamanho", "vendedora", "legenda", "area_membros"].includes(token)) {
     return { kind: token as VarKind };
   }
   return { kind: "livre", value: vars && vars[token] != null ? String(vars[token]) : "" };
@@ -217,6 +224,7 @@ export function previewMappingValue(m: VarMapping): string {
     case "tamanho": return "37";
     case "vendedora": return "Jéssica";
     case "legenda": return "texto do card";
+    case "area_membros": return "https://checkout.bananacalcados.com.br/minha-area";
     case "livre": return m.value || "texto livre";
   }
 }
