@@ -180,7 +180,7 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
       </CardHeader>
 
       <CardContent className="p-0">
-        <ScrollArea className="max-h-[520px]">
+        <div className="max-h-[520px] overflow-y-auto overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -277,7 +277,7 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
               ))}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
