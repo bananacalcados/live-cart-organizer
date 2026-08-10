@@ -223,7 +223,8 @@ serve(async (req) => {
     }
 
 
-    const payerFirstName = payer?.firstName || (customer?.instagram_handle as string) || "Cliente";
+    // Antifraude: nunca usar o @ do Instagram como nome do pagador.
+    const payerFirstName = payer?.firstName || "Cliente";
     const payerLastName = payer?.lastName || "";
     const payerCpf = payer?.cpf?.replace(/\D/g, "") || undefined;
 
