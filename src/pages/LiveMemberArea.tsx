@@ -38,12 +38,13 @@ import {
   firePurchaseBrowser,
   type CheckoutEventBase,
 } from "@/lib/checkoutMetaEvents";
+import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 
 
 
 
 type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
-type OnboardStep = "address" | "shipping" | "cpf" | "email";
+type OnboardStep = "name" | "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
   id: string;
@@ -142,12 +143,13 @@ export default function LiveMemberArea() {
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  /** Onboarding pós-confirmação (endereço → envio → CPF → e-mail). */
-  const [onboardStep, setOnboardStep] = useState<OnboardStep>("address");
+  /** Onboarding pós-confirmação (nome → endereço → envio → CPF → e-mail). */
+  const [onboardStep, setOnboardStep] = useState<OnboardStep>("name");
   const [addr, setAddr] = useState<any>({});
   const [cepLoading, setCepLoading] = useState(false);
   const [shipOptions, setShipOptions] = useState<ShippingOption[]>([]);
   const [shipLoading, setShipLoading] = useState(false);
+  const [fullNameInput, setFullNameInput] = useState("");
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
 
@@ -230,7 +232,7 @@ export default function LiveMemberArea() {
         .map((p: any) => String(p.id ?? p.sku ?? p.title ?? ""))
         .filter(Boolean),
       customer: {
-        fullName: (masked ? undefined : d.full_name) || state?.name || undefined,
+        fullName: isRealFullName(masked ? null : d.full_name) ? d.full_name : undefined,
         email: masked ? undefined : d.email || undefined,
         phone: state?.phone || undefined,
         cpf: masked ? undefined : d.cpf || undefined,
@@ -391,11 +393,13 @@ export default function LiveMemberArea() {
   /** Primeira etapa do onboarding ainda pendente. */
   const firstPendingOnboard = (data: any): OnboardStep => {
     const ob = data?.onboarding || {};
+    if (!ob.name) return "name";
     if (!ob.address) return "address";
     if (!ob.shipping) return "shipping";
     if (!ob.cpf) return "cpf";
     return "email";
   };
+
 
   const hydrateForms = (data: any) => {
     const d = data?.details || {};
@@ -416,6 +420,9 @@ export default function LiveMemberArea() {
       setCpf(d.cpf || "");
       setEmail(d.email || "");
     }
+    // Nome real (nunca o @ do Instagram) — é o que vai para o gateway.
+    const savedName = (data?.payDetails?.full_name || d.full_name || "").trim();
+    if (isRealFullName(savedName)) setFullNameInput(savedName);
   };
 
 
@@ -811,12 +818,20 @@ export default function LiveMemberArea() {
   /** Pula etapas cujos dados já estão salvos no cadastro da cliente. */
   const nextAfter = (current: OnboardStep): OnboardStep | "area" => {
     const ob: any = state?.onboarding || {};
-    const order: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const order: OnboardStep[] = ["name", "address", "shipping", "cpf", "email"];
     for (const s of order.slice(order.indexOf(current) + 1)) {
       if (!ob[s]) return s;
     }
     return "area";
   };
+
+  const saveNameStep = () =>
+    advance(
+      nextAfter("name"),
+      "name",
+      { action: "save_details", details: { full_name: fullNameInput.trim() } },
+      "Erro ao salvar",
+    );
 
   const chooseShipping = (methodId: string) =>
     advance(
@@ -833,6 +848,8 @@ export default function LiveMemberArea() {
     advance("area", "email", { action: "save_details", details: { email } }, "Erro ao salvar", () =>
       toast.success("Tudo pronto! Agora é só pagar 🎉"),
     );
+
+
 
 
   // Auditoria dos passos de pagamento (abriu PIX/cartão, enviou, recusado...).
@@ -926,7 +943,9 @@ export default function LiveMemberArea() {
     // para exibição/edição, não deve bloquear o pagamento.
     const d = state?.payDetails || state?.details || {};
     if (d.masked) return null;
-    const fullName = (d.full_name || state?.name || "").trim();
+    // ⚠️ Antifraude: NUNCA usar o @ do Instagram como nome do pagador.
+    // Só nome real (nome + sobrenome) é aceito para montar o payer do gateway.
+    const fullName = (d.full_name || fullNameInput || "").trim();
     const f: CustomerFormData = {
       fullName,
       email: (d.email || email || "").trim(),
@@ -940,7 +959,15 @@ export default function LiveMemberArea() {
       city: d.city || addr.city || "",
       state: d.state || addr.state || "",
     };
-    const ok = f.fullName && f.email && f.cpf.length === 11 && f.cep.length === 8 && f.address && f.city && f.state;
+    const ok =
+      isRealFullName(f.fullName) &&
+      isUsableEmail(f.email) &&
+      f.cpf.length === 11 &&
+      f.cep.length === 8 &&
+      !!f.address &&
+      !!f.addressNumber &&
+      !!f.city &&
+      !!f.state;
     return ok ? f : null;
   })();
 
@@ -1228,9 +1255,10 @@ export default function LiveMemberArea() {
 
   // ---------- Etapa 4: Dados de envio por etapas ----------
   if (step === "onboarding") {
-    const stepsOrder: OnboardStep[] = ["address", "shipping", "cpf", "email"];
+    const stepsOrder: OnboardStep[] = ["name", "address", "shipping", "cpf", "email"];
     const idx = stepsOrder.indexOf(onboardStep);
     const titles: Record<OnboardStep, string> = {
+      name: "Seu nome completo",
       address: "Falta pouco pra confirmar",
       shipping: "Como você quer receber?",
       cpf: "Seu CPF",
@@ -1248,10 +1276,40 @@ export default function LiveMemberArea() {
               />
             ))}
           </div>
-          <p className="mt-3 text-sm text-muted-foreground">{idx} de 4 etapas concluídas</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {idx} de {stepsOrder.length} etapas concluídas
+          </p>
           <h2 className="mt-1 text-2xl font-bold leading-tight">{titles[onboardStep]}</h2>
 
+          {onboardStep === "name" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Use o nome que está no seu CPF — é o nome que vai no pagamento e na nota fiscal.
+              </p>
+              <Input
+                value={fullNameInput}
+                onChange={(e) => setFullNameInput(e.target.value.replace(/[0-9@_]/g, ""))}
+                placeholder="Nome e sobrenome"
+                className="h-14 text-[16px] rounded-xl"
+                autoFocus
+              />
+              {!!fullNameInput.trim() && !isRealFullName(fullNameInput) && (
+                <p className="text-xs text-destructive">
+                  Digite nome e sobrenome reais (sem @ do Instagram e sem números).
+                </p>
+              )}
+              <Button
+                className="w-full h-14 text-base font-semibold rounded-xl"
+                disabled={busy || !isRealFullName(fullNameInput)}
+                onClick={saveNameStep}
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              </Button>
+            </div>
+          )}
+
           {onboardStep === "address" && (
+
             <div className="mt-5 space-y-3">
               <Label className="text-sm text-muted-foreground">Endereço de entrega</Label>
               <div className="relative">
@@ -1398,9 +1456,14 @@ export default function LiveMemberArea() {
                 className="h-14 text-[16px] rounded-xl"
                 autoFocus
               />
+              {!!email.trim() && !isUsableEmail(email) && (
+                <p className="text-xs text-destructive">
+                  Digite um e-mail real — ele é usado na cobrança e na nota fiscal.
+                </p>
+              )}
               <Button
                 className="w-full h-14 text-base font-semibold rounded-xl"
-                disabled={busy || !/^\S+@\S+\.\S+$/.test(email.trim())}
+                disabled={busy || !isUsableEmail(email)}
                 onClick={saveEmailStep}
               >
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Concluir"}

@@ -36,6 +36,32 @@ function normalizePhone(input: string): string | null {
 
 const suffix8 = (p: string) => p.replace(/\D/g, "").slice(-8);
 
+/**
+ * ⚠️ Antifraude dos gateways: o `payer` precisa ser a pessoa real.
+ * O @ do Instagram (ex.: "@amalia_ferraz10") NUNCA pode virar nome do cliente,
+ * e e-mails de teste ("asd@gmail.com") derrubam a aprovação do cartão.
+ */
+function isRealFullName(raw?: string | null): boolean {
+  const v = String(raw ?? "").trim();
+  if (!v || v.includes("@") || /\d/.test(v) || /[._]/.test(v)) return false;
+  const parts = v.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return false;
+  return parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]{2,}$/.test(p));
+}
+
+const JUNK_EMAIL_LOCALS = new Set([
+  "asd", "asdf", "teste", "test", "aaa", "abc", "123", "xxx", "nao", "email",
+  "qwe", "qwerty", "sememail", "naotenho",
+]);
+
+function isUsableEmail(raw?: string | null): boolean {
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(v)) return false;
+  const local = v.split("@")[0];
+  if (local.length < 4 || JUNK_EMAIL_LOCALS.has(local) || /^(.)\1+$/.test(local)) return false;
+  return true;
+}
+
 function maskCpf(v?: string | null) {
   const d = String(v || "").replace(/\D/g, "");
   if (d.length !== 11) return null;
@@ -646,14 +672,16 @@ Deno.serve(async (req) => {
       const noAddressNeeded = ["pickup", "local", "motoboy", "delivery_local"].includes(
         String(shippingMethod || ""),
       );
-      /** Onboarding pós-confirmação: endereço + envio + CPF + e-mail. */
+      /** Onboarding pós-confirmação: nome + endereço + envio + CPF + e-mail. */
       const onboarding = {
+        // Nome real é pré-requisito do pagamento (antifraude do gateway).
+        name: isRealFullName(reg?.full_name),
         address: noAddressNeeded
           ? !!reg?.cep
           : !!(reg?.cep && reg?.address && reg?.address_number),
         shipping: !!shippingMethod,
         cpf: !!reg?.cpf,
-        email: !!reg?.email,
+        email: isUsableEmail(reg?.email),
       };
 
 
@@ -663,7 +691,12 @@ Deno.serve(async (req) => {
         event,
         onboarding,
         onboardingComplete:
-          onboarding.address && onboarding.shipping && onboarding.cpf && onboarding.email,
+          onboarding.name &&
+          onboarding.address &&
+          onboarding.shipping &&
+          onboarding.cpf &&
+          onboarding.email,
+
 
         name: session.name || customer?.instagram_handle || null,
         phone: session.phone,
@@ -1228,6 +1261,11 @@ Deno.serve(async (req) => {
         changes[key] = fn((d as any)[key]);
       }
 
+      // E-mail entra no `payer` do gateway: recusa lixo antes de gravar.
+      if ("email" in changes && changes.email && !isUsableEmail(String(changes.email))) {
+        return json({ ok: false, error: "E-mail inválido. Use um e-mail real para a cobrança." }, 400);
+      }
+
       // Sem OTP a cliente só PREENCHE campos vazios (onboarding). Alterar um dado
       // SENSÍVEL já existente (CPF/e-mail) continua exigindo o código do WhatsApp.
       // Os campos de ENDEREÇO ficam livres: o rascunho automático já grava CEP/rua/
@@ -1249,8 +1287,17 @@ Deno.serve(async (req) => {
         whatsapp: session.phone,
         ...changes,
       };
-      if (!reg?.full_name || (d.full_name && otpUnlocked)) {
-        payload.full_name = String(d.full_name || session.name || "").slice(0, 120);
+      // Nome do pagador: só nome real (nome + sobrenome). NUNCA o @ do Instagram
+      // da sessão — era o que subia o score de antifraude nos gateways.
+      if ("full_name" in d) {
+        const candidate = String(d.full_name || "").trim().slice(0, 120);
+        if (!isRealFullName(candidate)) {
+          return json(
+            { ok: false, error: "Informe seu nome completo (nome e sobrenome), sem @ e sem números." },
+            400,
+          );
+        }
+        if (!isRealFullName(reg?.full_name) || otpUnlocked) payload.full_name = candidate;
       }
 
 
