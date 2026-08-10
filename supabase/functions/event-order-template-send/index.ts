@@ -25,7 +25,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { orderId } = await req.json();
+    // `viaNumberId`: quando informado, o MESMO conteúdo do template é enviado
+    // como mensagem comum por uma instância NÃO-API (uazapi/wasender/zapi).
+    // Serve para validar se o número que a cliente passou na live existe de fato
+    // (a Cloud API devolve 131026 "Message undeliverable" nesses casos).
+    const { orderId, viaNumberId } = await req.json();
     if (!orderId) return json({ error: 'orderId required' }, 400);
 
     const { data: order } = await supabase
