@@ -943,7 +943,9 @@ export default function LiveMemberArea() {
     // para exibição/edição, não deve bloquear o pagamento.
     const d = state?.payDetails || state?.details || {};
     if (d.masked) return null;
-    const fullName = (d.full_name || state?.name || "").trim();
+    // ⚠️ Antifraude: NUNCA usar o @ do Instagram como nome do pagador.
+    // Só nome real (nome + sobrenome) é aceito para montar o payer do gateway.
+    const fullName = (d.full_name || fullNameInput || "").trim();
     const f: CustomerFormData = {
       fullName,
       email: (d.email || email || "").trim(),
@@ -957,7 +959,15 @@ export default function LiveMemberArea() {
       city: d.city || addr.city || "",
       state: d.state || addr.state || "",
     };
-    const ok = f.fullName && f.email && f.cpf.length === 11 && f.cep.length === 8 && f.address && f.city && f.state;
+    const ok =
+      isRealFullName(f.fullName) &&
+      isUsableEmail(f.email) &&
+      f.cpf.length === 11 &&
+      f.cep.length === 8 &&
+      !!f.address &&
+      !!f.addressNumber &&
+      !!f.city &&
+      !!f.state;
     return ok ? f : null;
   })();
 
