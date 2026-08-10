@@ -885,7 +885,7 @@ function CardPaymentForm({
       )}
 
       <Button onClick={handleSubmit} disabled={isProcessing || !!mismatch} className="w-full h-14 text-lg font-semibold" size="lg">
-        <Lock className="h-5 w-5 mr-2" />Pagar R$ {(isDebit ? amount : totalWithInterest).toFixed(2)}
+        <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
       </Button>
     </div>
   );
