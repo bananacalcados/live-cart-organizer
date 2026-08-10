@@ -5,6 +5,7 @@ import QRCode from "https://esm.sh/qrcode@1.5.3";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
+import { barcodeToDigitableLine, formatDigitableLine, itfBars, onlyDigits } from "../_shared/boleto-barcode.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
@@ -66,13 +67,8 @@ function formatMpDate(d: Date): string {
   return `${yyyy}-${mm}-${dd}T23:59:59.000-03:00`;
 }
 
-// Formata linha digitável do boleto (44/47 dígitos) em blocos legíveis
-function formatBarcode(raw: string): string {
-  const digits = cleanDigits(raw);
-  if (digits.length !== 47 && digits.length !== 48) return raw;
-  // Boleto de arrecadação (48) ou boleto bancário (47) — formatação simplificada
-  return digits.match(/.{1,4}/g)?.join(" ") ?? digits;
-}
+// Formatação da linha digitável agora vive em _shared/boleto-barcode.ts
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
@@ -268,6 +264,8 @@ serve(async (req) => {
     const mpPaymentId = String(mpBoletoData.id);
     const mpBoletoUrl = mpBoletoData?.transaction_details?.external_resource_url || null;
     const mpBarcode = mpBoletoData?.barcode?.content || null;
+    // Linha digitável real (47 dígitos) — o cliente digita isso no app do banco.
+    const digitableLine = mpBarcode ? barcodeToDigitableLine(mpBarcode) : null;
 
     // 3) Opcional: PIX gêmeo
     let pixPaymentId: string | null = null;
@@ -355,19 +353,46 @@ serve(async (req) => {
       drawText(String(description)); y -= 18;
     }
 
-    // Linha digitável
-    drawText("LINHA DIGITÁVEL", { size: 9, bold: true, color: [0.4, 0.4, 0.4] }); y -= 14;
-    if (mpBarcode) {
-      drawText(formatBarcode(mpBarcode), { size: 11, bold: true }); y -= 16;
+    // Linha digitável (47 dígitos) — calculada a partir do código de barras (44)
+    drawText("LINHA DIGITÁVEL", { size: 9, bold: true, color: [0.4, 0.4, 0.4] }); y -= 15;
+    if (digitableLine) {
+      drawText(formatDigitableLine(digitableLine), { size: 12, bold: true }); y -= 18;
+    } else if (mpBarcode) {
+      drawText(onlyDigits(mpBarcode), { size: 11, bold: true }); y -= 18;
     } else {
-      drawText("(gerada pelo Mercado Pago — use o link abaixo)"); y -= 14;
+      drawText("(gerada pelo Mercado Pago — use o link abaixo)"); y -= 16;
+    }
+
+    // Código de barras impresso (ITF 2 de 5) a partir dos 44 dígitos
+    const barcodeDigits = onlyDigits(mpBarcode || "");
+    if (barcodeDigits.length === 44) {
+      try {
+        const { bars, totalModules } = itfBars(barcodeDigits);
+        const barcodeWidth = width - 80;
+        const module = barcodeWidth / totalModules;
+        const barHeight = 46;
+        y -= barHeight + 4;
+        for (const b of bars) {
+          page.drawRectangle({
+            x: 40 + b.offset * module,
+            y,
+            width: Math.max(b.width * module, 0.4),
+            height: barHeight,
+            color: rgb(0, 0, 0),
+          });
+        }
+        y -= 16;
+      } catch (e) {
+        console.warn("[boleto] falha ao desenhar código de barras:", e);
+      }
     }
     y -= 8;
 
     if (mpBoletoUrl) {
-      drawText("Boleto oficial (com código de barras impresso):", { size: 9, color: [0.4, 0.4, 0.4] }); y -= 12;
+      drawText("Boleto oficial do banco (2ª via / impressão):", { size: 9, color: [0.4, 0.4, 0.4] }); y -= 12;
       drawText(mpBoletoUrl, { size: 8, color: [0.1, 0.3, 0.7] }); y -= 20;
     }
+
 
     // PIX (se houver)
     if (pixQrCode) {
@@ -446,6 +471,8 @@ serve(async (req) => {
         mpPaymentId,
         boletoUrl: mpBoletoUrl,
         barcode: mpBarcode,
+        digitableLine,
+        digitableLineFormatted: digitableLine ? formatDigitableLine(digitableLine) : null,
         pdfUrl: signed?.signedUrl || null,
         pixQrCode,
         pixQrBase64,
