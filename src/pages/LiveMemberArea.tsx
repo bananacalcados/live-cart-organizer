@@ -420,6 +420,9 @@ export default function LiveMemberArea() {
       setCpf(d.cpf || "");
       setEmail(d.email || "");
     }
+    // Nome real (nunca o @ do Instagram) — é o que vai para o gateway.
+    const savedName = (data?.payDetails?.full_name || d.full_name || "").trim();
+    if (isRealFullName(savedName)) setFullNameInput(savedName);
   };
 
 
