@@ -143,12 +143,13 @@ export default function LiveMemberArea() {
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
 
-  /** Onboarding pós-confirmação (endereço → envio → CPF → e-mail). */
-  const [onboardStep, setOnboardStep] = useState<OnboardStep>("address");
+  /** Onboarding pós-confirmação (nome → endereço → envio → CPF → e-mail). */
+  const [onboardStep, setOnboardStep] = useState<OnboardStep>("name");
   const [addr, setAddr] = useState<any>({});
   const [cepLoading, setCepLoading] = useState(false);
   const [shipOptions, setShipOptions] = useState<ShippingOption[]>([]);
   const [shipLoading, setShipLoading] = useState(false);
+  const [fullNameInput, setFullNameInput] = useState("");
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
 
