@@ -209,20 +209,6 @@ serve(async (req) => {
 
 
 
-    // Use payer data from request, or fallback to customer data.
-    // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
-    const emailResolution = resolvePayerEmail({
-      email: (payer?.email as string) || null,
-      phone: (payer?.phone as string) || (customer?.whatsapp as string) || null,
-      cpf: (payer?.cpf as string) || null,
-      orderId: String(orderId),
-    });
-    const payerEmail = emailResolution.email;
-    if (emailResolution.fallbackUsed) {
-      console.warn(`[mp-pix] E-mail do pagador ajustado/substituído (original inválido) → ${payerEmail}`);
-    }
-
-
     // Antifraude: nunca usar o @ do Instagram como nome do pagador.
     // Se o nome/CPF/e-mail não vierem completos, busca o cadastro real já salvo
     // (ficha do pedido → cadastro pelo telefone → CRM unificado).
@@ -235,6 +221,20 @@ serve(async (req) => {
         email: (payer?.email as string) || null,
       },
     });
+
+    // Use payer data from request, or fallback to customer data.
+    // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
+    const emailResolution = resolvePayerEmail({
+      email: (payer?.email as string) || identity.email || null,
+      phone: (payer?.phone as string) || (customer?.whatsapp as string) || null,
+      cpf: identity.cpf || (payer?.cpf as string) || null,
+      orderId: String(orderId),
+    });
+    const payerEmail = emailResolution.email;
+    if (emailResolution.fallbackUsed) {
+      console.warn(`[mp-pix] E-mail do pagador ajustado/substituído (original inválido) → ${payerEmail}`);
+    }
+
     const resolvedName = isRealFullName(identity.name) ? String(identity.name).trim() : "";
     const payerFirstName = resolvedName ? resolvedName.split(/\s+/)[0] : (payer?.firstName || "Cliente");
     const payerLastName = resolvedName ? resolvedName.split(/\s+/).slice(1).join(" ") : (payer?.lastName || "");
