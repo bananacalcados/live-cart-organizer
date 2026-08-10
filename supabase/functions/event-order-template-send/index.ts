@@ -117,6 +117,132 @@ serve(async (req) => {
     const bodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
     const headerVar = (eventData as any)?.meta_template_header_variable || null;
 
+    // ─────────── Envio por instância NÃO-API (uazapi / wasender / zapi) ───────────
+    if (viaNumberId) {
+      const { data: viaNum } = await supabase
+        .from('whatsapp_numbers')
+        .select('id, provider, is_active, label')
+        .eq('id', viaNumberId)
+        .maybeSingle();
+      if (!viaNum || !viaNum.is_active) {
+        return json({ error: 'Instância selecionada não encontrada ou inativa.' }, 400);
+      }
+      const provider = String(viaNum.provider || '');
+      if (!['uazapi', 'wasender', 'zapi'].includes(provider)) {
+        return json({ error: 'Selecione uma instância não-API (uazapi/wasender/zapi).' }, 400);
+      }
+
+      // Renderiza o corpo completo do template Meta (mesmo texto do disparo oficial)
+      const { data: metaNum } = await supabase
+        .from('whatsapp_numbers')
+        .select('access_token, business_account_id')
+        .eq('id', whatsappNumberId)
+        .maybeSingle();
+
+      const components: any[] = [];
+      const def = await fetchTemplateDef(
+        (metaNum as any)?.access_token || '',
+        (metaNum as any)?.business_account_id || '',
+        templateName,
+        (eventData as any)?.meta_template_language || 'pt_BR',
+      ).catch(() => null);
+
+      const headerDef = (def?.components || []).find(
+        (c: any) => (c.type || '').toUpperCase() === 'HEADER',
+      );
+      const headerFormat = String(headerDef?.format || 'TEXT').toUpperCase();
+      if (headerVar && headerFormat === 'TEXT') {
+        components.push({ type: 'header', parameters: [{ type: 'text', text: resolveToken(headerVar) }] });
+      } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
+        const link = (headerVar ? resolveToken(headerVar) : '') || headerDef?.example?.header_handle?.[0] || null;
+        if (link) {
+          const key = headerFormat.toLowerCase();
+          components.push({ type: 'header', parameters: [{ type: key, [key]: { link } }] });
+        }
+      }
+      if (bodyVars.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: bodyVars.map((t) => ({ type: 'text', text: resolveToken(t) })),
+        });
+      }
+
+      let text = '';
+      let mediaUrl: string | null = null;
+      let mediaType = 'text';
+      if (def) {
+        const r = renderTemplateMessage(def, components);
+        text = r.text;
+        mediaUrl = r.mediaUrl;
+        mediaType = r.mediaType;
+      }
+      if (!text) {
+        // Fallback: sem acesso à definição do template, envia o resumo do pedido.
+        text = `Oi ${displayName}! Aqui está seu pedido:\n\n${productLines}\n\nTotal: R$${total.toFixed(2)}\n\n${checkoutLink}`;
+      }
+
+      const fnBase = provider === 'uazapi' ? 'uazapi' : provider === 'wasender' ? 'wasender' : 'zapi';
+      const headers = {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        'x-force-instance': 'true',
+      };
+
+      let sendResp: Response;
+      if (mediaUrl && mediaType !== 'text') {
+        sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-media`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            phone: waPhone,
+            mediaUrl,
+            mediaType,
+            caption: text,
+            whatsapp_number_id: viaNumberId,
+          }),
+        });
+      } else {
+        sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: viaNumberId }),
+        });
+      }
+
+      const sendResult = await sendResp.json().catch(() => ({}));
+      if (!sendResp.ok || (sendResult as any)?.error) {
+        console.error('[event-order-template-send] via instância falhou:', sendResp.status, sendResult);
+        return json(
+          {
+            error: (sendResult as any)?.message || (sendResult as any)?.error || 'Falha ao enviar pela instância',
+            details: sendResult,
+          },
+          502,
+        );
+      }
+
+      // Registra a mensagem para o chat mostrar o conteúdo e a conversa passar a
+      // ficar vinculada a esta instância.
+      await supabase.from('whatsapp_messages').insert({
+        phone: waPhone,
+        message: text.slice(0, 4000),
+        direction: 'outgoing',
+        status: 'sent',
+        media_url: mediaUrl,
+        media_type: mediaType,
+        whatsapp_number_id: viaNumberId,
+        message_id: (sendResult as any)?.messageId || null,
+      });
+
+      await supabase
+        .from('orders')
+        .update({ last_sent_message_at: new Date().toISOString() })
+        .eq('id', orderId);
+
+      return json({ success: true, via: viaNum.label || provider, phone: waPhone });
+    }
+
+
     const resp = await fetch(`${supabaseUrl}/functions/v1/meta-template-send`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
