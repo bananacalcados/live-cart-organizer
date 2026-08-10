@@ -351,19 +351,46 @@ serve(async (req) => {
       drawText(String(description)); y -= 18;
     }
 
-    // Linha digitável
-    drawText("LINHA DIGITÁVEL", { size: 9, bold: true, color: [0.4, 0.4, 0.4] }); y -= 14;
-    if (mpBarcode) {
-      drawText(formatBarcode(mpBarcode), { size: 11, bold: true }); y -= 16;
+    // Linha digitável (47 dígitos) — calculada a partir do código de barras (44)
+    drawText("LINHA DIGITÁVEL", { size: 9, bold: true, color: [0.4, 0.4, 0.4] }); y -= 15;
+    if (digitableLine) {
+      drawText(formatDigitableLine(digitableLine), { size: 12, bold: true }); y -= 18;
+    } else if (mpBarcode) {
+      drawText(onlyDigits(mpBarcode), { size: 11, bold: true }); y -= 18;
     } else {
-      drawText("(gerada pelo Mercado Pago — use o link abaixo)"); y -= 14;
+      drawText("(gerada pelo Mercado Pago — use o link abaixo)"); y -= 16;
+    }
+
+    // Código de barras impresso (ITF 2 de 5) a partir dos 44 dígitos
+    const barcodeDigits = onlyDigits(mpBarcode || "");
+    if (barcodeDigits.length === 44) {
+      try {
+        const { bars, totalModules } = itfBars(barcodeDigits);
+        const barcodeWidth = width - 80;
+        const module = barcodeWidth / totalModules;
+        const barHeight = 46;
+        y -= barHeight + 4;
+        for (const b of bars) {
+          page.drawRectangle({
+            x: 40 + b.offset * module,
+            y,
+            width: Math.max(b.width * module, 0.4),
+            height: barHeight,
+            color: rgb(0, 0, 0),
+          });
+        }
+        y -= 16;
+      } catch (e) {
+        console.warn("[boleto] falha ao desenhar código de barras:", e);
+      }
     }
     y -= 8;
 
     if (mpBoletoUrl) {
-      drawText("Boleto oficial (com código de barras impresso):", { size: 9, color: [0.4, 0.4, 0.4] }); y -= 12;
+      drawText("Boleto oficial do banco (2ª via / impressão):", { size: 9, color: [0.4, 0.4, 0.4] }); y -= 12;
       drawText(mpBoletoUrl, { size: 8, color: [0.1, 0.3, 0.7] }); y -= 20;
     }
+
 
     // PIX (se houver)
     if (pixQrCode) {
