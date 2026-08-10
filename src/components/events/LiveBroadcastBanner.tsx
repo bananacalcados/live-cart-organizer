@@ -69,16 +69,9 @@ export function LiveBroadcastBanner() {
 
   if (loading || !active) return null;
 
-  const startedAt = active.live_broadcast_started_at
-    ? new Date(active.live_broadcast_started_at).getTime()
-    : 0;
-  const urlAt = active.live_url_updated_at
-    ? new Date(active.live_url_updated_at).getTime()
-    : startedAt;
-  const freshestAt = Math.max(startedAt, urlAt);
-  const remainingMs = freshestAt > 0 ? TTL_MS - (now - freshestAt) : TTL_MS;
-  const expiringSoon = remainingMs > 0 && remainingMs < 30 * 60 * 1000;
-  const expired = remainingMs <= 0;
+  const sinceLabel = formatSince(
+    active.live_url_updated_at || active.live_broadcast_started_at,
+  );
 
   const openChange = () => {
     setNewUrl(active.instagram_live_url ?? "");
