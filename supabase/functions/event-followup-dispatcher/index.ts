@@ -277,11 +277,70 @@ function buildComponents(vars: any, ctx: TokenContext): any[] {
   return components;
 }
 
+/**
+ * Verifica se este mesmo follow-up (mesma mensagem, mesmo evento) já foi
+ * enviado para o @ do Instagram — mesmo que por outro pedido/config duplicada.
+ */
+async function alreadySentToHandle(
+  supabase: any,
+  cfg: any,
+  eventId: string,
+  igUsername: string,
+  currentDispatchId: string,
+): Promise<boolean> {
+  try {
+    const text = String(cfg.message_text || "").trim();
+    if (!text) return false;
+
+    // Configs equivalentes (mesmo evento + mesmo texto), incluindo duplicadas
+    const { data: cfgs } = await supabase
+      .from("event_followup_configs")
+      .select("id, message_text")
+      .eq("event_id", eventId)
+      .eq("channel", "instagram");
+    const cfgIds = (cfgs || [])
+      .filter((c: any) => String(c.message_text || "").trim() === text)
+      .map((c: any) => c.id);
+    if (!cfgIds.length) return false;
+
+    // Pedidos deste evento pertencentes ao mesmo @
+    const handle = igUsername.replace(/^@/, "");
+    const { data: custs } = await supabase
+      .from("customers")
+      .select("id")
+      .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`);
+    const custIds = (custs || []).map((c: any) => c.id);
+    if (!custIds.length) return false;
+
+    const { data: ords } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("event_id", eventId)
+      .in("customer_id", custIds);
+    const orderIds = (ords || []).map((o: any) => o.id);
+    if (!orderIds.length) return false;
+
+    const { data: prev } = await supabase
+      .from("event_followup_dispatches")
+      .select("id")
+      .in("config_id", cfgIds)
+      .in("order_id", orderIds)
+      .eq("status", "sent")
+      .neq("id", currentDispatchId)
+      .limit(1);
+    return !!(prev && prev.length);
+  } catch (e) {
+    console.warn("[dispatcher] dedupe check failed:", e);
+    return false;
+  }
+}
+
 async function markSkipped(supabase: any, id: string, reason: string) {
   await supabase.from("event_followup_dispatches").update({
     status: "skipped", skip_reason: reason,
   }).eq("id", id);
 }
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
