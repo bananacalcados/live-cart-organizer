@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
@@ -209,12 +210,25 @@ serve(async (req) => {
 
 
 
+    // Antifraude: nunca usar o @ do Instagram como nome do pagador.
+    // Se o nome/CPF/e-mail não vierem completos, busca o cadastro real já salvo
+    // (ficha do pedido → cadastro pelo telefone → CRM unificado).
+    const identity = await enrichPayerIdentity(supabase, {
+      orderId: String(orderId),
+      phone: (payer?.phone as string) || recordPhone,
+      current: {
+        name: (payer?.firstName ? `${payer.firstName} ${payer?.lastName || ""}`.trim() : null),
+        cpf: (payer?.cpf as string) || null,
+        email: (payer?.email as string) || null,
+      },
+    });
+
     // Use payer data from request, or fallback to customer data.
     // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
     const emailResolution = resolvePayerEmail({
-      email: (payer?.email as string) || null,
+      email: (payer?.email as string) || identity.email || null,
       phone: (payer?.phone as string) || (customer?.whatsapp as string) || null,
-      cpf: (payer?.cpf as string) || null,
+      cpf: identity.cpf || (payer?.cpf as string) || null,
       orderId: String(orderId),
     });
     const payerEmail = emailResolution.email;
@@ -222,11 +236,10 @@ serve(async (req) => {
       console.warn(`[mp-pix] E-mail do pagador ajustado/substituído (original inválido) → ${payerEmail}`);
     }
 
-
-    // Antifraude: nunca usar o @ do Instagram como nome do pagador.
-    const payerFirstName = payer?.firstName || "Cliente";
-    const payerLastName = payer?.lastName || "";
-    const payerCpf = payer?.cpf?.replace(/\D/g, "") || undefined;
+    const resolvedName = isRealFullName(identity.name) ? String(identity.name).trim() : "";
+    const payerFirstName = resolvedName ? resolvedName.split(/\s+/)[0] : (payer?.firstName || "Cliente");
+    const payerLastName = resolvedName ? resolvedName.split(/\s+/).slice(1).join(" ") : (payer?.lastName || "");
+    const payerCpf = (identity.cpf || payer?.cpf?.replace(/\D/g, "") || undefined) as string | undefined;
 
     // Validate CPF: must be exactly 11 digits and not all same digit
     const isValidCpf = (cpf: string): boolean => {

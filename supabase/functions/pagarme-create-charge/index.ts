@@ -6,6 +6,7 @@ import { buildMpHeaders } from "../_shared/mp-http.ts";
 
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
+import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 
 function maskCard(card: any) {
@@ -964,6 +965,22 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // 🛡️ Antifraude: se o nome/CPF/e-mail vierem incompletos ou com o @ do Instagram,
+    // usa o cadastro real que o sistema já tem (ficha do pedido / telefone / CRM).
+    if (params.customer) {
+      const enriched = await enrichPayerIdentity(supabase, {
+        orderId: params.orderId,
+        phone: params.customer.phone,
+        current: { name: params.customer.name, cpf: params.customer.cpf, email: params.customer.email },
+      });
+      if (enriched.name && isRealFullName(enriched.name)) params.customer.name = enriched.name;
+      if ((enriched.cpf || "").length === 11) params.customer.cpf = enriched.cpf!;
+      if (enriched.email && params.customer.email?.endsWith("@cliente.bananacalcados.com.br")) {
+        const fixed = resolvePayerEmail({ email: enriched.email, phone: params.customer.phone, cpf: params.customer.cpf, orderId: params.orderId });
+        if (!fixed.fallbackUsed) params.customer.email = fixed.email;
+      }
+    }
 
     // Fetch order — try CRM orders first, then pos_sales
     let products: Array<{ title: string; price: number; quantity: number }> = [];
