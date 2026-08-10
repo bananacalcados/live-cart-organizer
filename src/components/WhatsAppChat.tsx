@@ -246,6 +246,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(false);
   };
 
+  // Quando o operador troca a instância manualmente, o guard de instância
+  // precisa ser liberado — senão o envio é bloqueado com 409.
+  const forceInstanceHeaders = (): Record<string, string> =>
+    overrideNumberId ? { 'x-force-instance': 'true' } : {};
+
   // ── Detect provider for the instance bound to this conversation ──
   const getProvider = (): 'zapi' | 'meta' | 'wasender' | 'uazapi' => {
     const num = boundNumber
@@ -270,6 +275,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('uazapi-send-media', {
           body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
         if (data?.success) return { success: true, messageId: data?.messageId };
@@ -277,6 +283,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       }
       const { data, error } = await supabase.functions.invoke('uazapi-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.messageId };
@@ -294,6 +301,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
@@ -315,6 +323,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('wasender-send-media', {
           body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
         if (data?.success) return { success: true, messageId: data?.messageId };
@@ -322,6 +331,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       }
       const { data, error } = await supabase.functions.invoke('wasender-send-message', {
         body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.messageId };
