@@ -224,9 +224,21 @@ serve(async (req) => {
 
 
     // Antifraude: nunca usar o @ do Instagram como nome do pagador.
-    const payerFirstName = payer?.firstName || "Cliente";
-    const payerLastName = payer?.lastName || "";
-    const payerCpf = payer?.cpf?.replace(/\D/g, "") || undefined;
+    // Se o nome/CPF/e-mail não vierem completos, busca o cadastro real já salvo
+    // (ficha do pedido → cadastro pelo telefone → CRM unificado).
+    const identity = await enrichPayerIdentity(supabase, {
+      orderId: String(orderId),
+      phone: (payer?.phone as string) || recordPhone,
+      current: {
+        name: (payer?.firstName ? `${payer.firstName} ${payer?.lastName || ""}`.trim() : null),
+        cpf: (payer?.cpf as string) || null,
+        email: (payer?.email as string) || null,
+      },
+    });
+    const resolvedName = isRealFullName(identity.name) ? String(identity.name).trim() : "";
+    const payerFirstName = resolvedName ? resolvedName.split(/\s+/)[0] : (payer?.firstName || "Cliente");
+    const payerLastName = resolvedName ? resolvedName.split(/\s+/).slice(1).join(" ") : (payer?.lastName || "");
+    const payerCpf = (identity.cpf || payer?.cpf?.replace(/\D/g, "") || undefined) as string | undefined;
 
     // Validate CPF: must be exactly 11 digits and not all same digit
     const isValidCpf = (cpf: string): boolean => {
