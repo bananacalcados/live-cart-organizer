@@ -38,6 +38,17 @@ Deno.serve(async (req) => {
   let sent = 0, skipped = 0, failed = 0;
 
   for (const row of due) {
+    // Claim atômico: evita que duas execuções simultâneas do cron enviem o
+    // mesmo follow-up mais de uma vez.
+    const { data: claimed } = await supabase
+      .from("event_followup_dispatches")
+      .update({ status: "processing", attempts: (row.attempts || 0) + 1 })
+      .eq("id", row.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+    if (!claimed) { skipped++; continue; }
+
     const cfg = row.config;
     const ord = row.order;
     if (!cfg || !ord) {
@@ -46,6 +57,9 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Configuração desativada (ex.: duplicada) → não envia.
+    if (cfg.enabled === false) { await markSkipped(supabase, row.id, "config_disabled"); skipped++; continue; }
+
     // Stop conditions
     if (cfg.stop_on_paid && ord.is_paid) { await markSkipped(supabase, row.id, "order_paid"); skipped++; continue; }
     if (ord.stage === "cancelled") { await markSkipped(supabase, row.id, "order_cancelled"); skipped++; continue; }
@@ -53,6 +67,7 @@ Deno.serve(async (req) => {
       cfg.stop_on_reply && ord.last_customer_message_at &&
       new Date(ord.last_customer_message_at) > new Date(row.created_at)
     ) { await markSkipped(supabase, row.id, "customer_replied"); skipped++; continue; }
+
 
     // Enrich: customer + ig handle
     let customerName = "";
