@@ -265,7 +265,7 @@ export default function ConfortoLP() {
         <div className="cf-stores">
           {STORES.map((s, i) => (
             <Reveal key={s.name} delay={i * 90}>
-              <article className="cf-store">
+              <article className={`cf-store cf-store-${i + 1}`}>
                 <h3><Pin /> {s.name}</h3>
                 <p>{s.address}</p>
                 <p className="cf-city">Governador Valadares – MG</p>
@@ -310,14 +310,14 @@ const CSS = `
 @keyframes cf-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 
 .cf-hero{position:relative;z-index:1;text-align:center;padding:56px 20px 40px;max-width:820px;margin:0 auto}
-.cf-eyebrow{display:inline-block;font-size:clamp(12px,3vw,14px);font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--cf-taupe);border:1px solid rgba(168,150,138,.35);border-radius:999px;padding:6px 14px}
+.cf-eyebrow{display:inline-block;font-size:clamp(1.05rem,3.6vw,1.5rem);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--cf-cacau);background:rgba(201,162,39,.12);border:2px solid rgba(201,162,39,.45);border-radius:999px;padding:14px 28px;line-height:1.3}
 .cf-h1{font-family:Poppins,sans-serif;font-weight:800;font-size:clamp(2.9rem,10vw,5.4rem);line-height:1.03;letter-spacing:-.02em;margin:22px 0 16px;color:var(--cf-cacau)}
 .cf-brand{background:linear-gradient(135deg,#E0A200,var(--cf-gold) 55%,#B37A12);-webkit-background-clip:text;background-clip:text;color:transparent}
 .cf-sub{font-size:clamp(1.18rem,4.2vw,1.55rem);font-weight:400;color:var(--cf-cacau);opacity:.85;max-width:32ch;margin:0 auto;line-height:1.6}
-.cf-count{display:flex;justify-content:center;gap:10px;margin:26px 0 8px}
-.cf-count-box{background:rgba(255,255,255,.7);backdrop-filter:blur(6px);border:1px solid rgba(201,162,39,.25);border-radius:14px;padding:10px 12px;min-width:64px}
-.cf-count-box strong{display:block;font-family:Poppins,sans-serif;font-weight:700;font-size:2rem;color:var(--cf-cacau);font-variant-numeric:tabular-nums}
-.cf-count-box span{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.14em;color:var(--cf-taupe)}
+.cf-count{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin:30px 0 10px}
+.cf-count-box{background:rgba(255,255,255,.78);backdrop-filter:blur(6px);border:2px solid rgba(201,162,39,.35);border-radius:22px;padding:20px 24px;min-width:128px}
+.cf-count-box strong{display:block;font-family:Poppins,sans-serif;font-weight:800;font-size:clamp(3rem,10vw,4rem);line-height:1;color:var(--cf-cacau);font-variant-numeric:tabular-nums}
+.cf-count-box span{display:block;margin-top:6px;font-size:clamp(.9rem,2.6vw,1.15rem);font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--cf-taupe)}
 .cf-hero-img{position:relative;margin:18px auto 6px;max-width:560px}
 .cf-hero-img img{width:100%;height:auto;border-radius:24px;display:block}
 .cf-bob{animation:cf-bob 7s ease-in-out infinite}
@@ -326,10 +326,10 @@ const CSS = `
 .cf-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px -14px rgba(91,68,54,.7)}
 .cf-cta-block{width:100%;margin-top:14px;padding:34px 40px}
 
-.cf-section{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:56px 20px}
+.cf-section{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:26px 20px}
 .cf-h2{font-family:Poppins,sans-serif;font-weight:700;letter-spacing:-.01em;font-size:clamp(2.1rem,7vw,3.3rem);color:var(--cf-cacau);text-align:center;margin:0 0 12px;line-height:1.2}
 .cf-h2-sm{font-size:clamp(2.4rem,7vw,3.4rem)}
-.cf-lead{text-align:center;color:var(--cf-cacau);opacity:.82;max-width:50ch;margin:0 auto;line-height:1.65;font-size:clamp(1.08rem,3.6vw,1.3rem)}
+.cf-lead{text-align:center;color:var(--cf-cacau);opacity:.9;max-width:34ch;margin:0 auto;line-height:1.5;font-size:clamp(1.5rem,5vw,2.1rem);font-weight:500}
 .cf-cards{display:grid;gap:18px;margin-top:36px}
 .cf-card{background:var(--cf-offwhite);border:2px solid var(--cf-nude);border-radius:26px;padding:40px 30px;box-shadow:0 14px 34px -26px rgba(91,68,54,.5);transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;height:100%}
 .cf-card:hover{transform:translateY(-6px);border-color:rgba(201,162,39,.5);box-shadow:0 18px 40px -22px rgba(91,68,54,.5)}
@@ -344,7 +344,7 @@ const CSS = `
 .cf-card p{color:var(--cf-cacau);opacity:.8;font-size:clamp(1.02rem,3.4vw,1.15rem);line-height:1.6;margin:0}
 .cf-figure{margin:34px 0 0;text-align:center}
 .cf-figure img{width:100%;max-width:720px;height:auto;border-radius:26px;display:block;margin:0 auto}
-.cf-figure figcaption{margin-top:14px;font-size:1rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--cf-taupe)}
+.cf-figure figcaption{margin-top:18px;font-size:clamp(1.25rem,4vw,1.7rem);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--cf-cacau)}
 
 .cf-offer-card{text-align:center;background:linear-gradient(160deg,#FFFDF8,#F3E9DC);border:1px solid rgba(201,162,39,.35);border-radius:28px;padding:44px 24px}
 .cf-badge{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:#FFF8E9;background:var(--cf-gold);border-radius:999px;padding:6px 14px}
@@ -354,19 +354,24 @@ const CSS = `
 
 .cf-form{background:var(--cf-offwhite);border:2px solid var(--cf-nude);border-radius:32px;padding:56px 44px;max-width:900px;margin:0 auto;box-shadow:0 24px 50px -34px rgba(91,68,54,.55)}
 .cf-field{display:block;margin-bottom:26px}
-.cf-field span{display:block;font-size:1rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--cf-taupe);margin-bottom:10px}
-.cf-field input{width:100%;height:76px;border-radius:18px;border:1px solid var(--cf-nude);background:#fff;padding:0 22px;font-family:Poppins,sans-serif;font-size:1.35rem;color:var(--cf-ink);outline:none;transition:border-color .2s ease,box-shadow .2s ease}
+.cf-field span{display:block;font-size:clamp(1.7rem,5.5vw,2.4rem);font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--cf-cacau);margin-bottom:14px;line-height:1.2}
+.cf-field input{width:100%;height:96px;border-radius:20px;border:2px solid var(--cf-nude);background:#fff;padding:0 26px;font-family:Poppins,sans-serif;font-size:clamp(1.5rem,4.6vw,2rem);font-weight:500;color:var(--cf-ink);outline:none;transition:border-color .2s ease,box-shadow .2s ease}
+.cf-field input::placeholder{font-size:clamp(1.25rem,3.8vw,1.6rem);color:rgba(168,150,138,.85)}
 .cf-field input:focus{border-color:var(--cf-gold);box-shadow:0 0 0 3px rgba(201,162,39,.16)}
 .cf-fineprint{text-align:center;font-size:1.05rem;color:var(--cf-taupe);margin:12px 0 0}
 
 .cf-date{font-family:Poppins,sans-serif;font-weight:800;letter-spacing:-.02em;font-size:clamp(3rem,12vw,5rem);text-align:center;color:var(--cf-gold);margin:6px 0 22px;font-weight:700}
-.cf-stores{display:grid;gap:14px}
-.cf-store{background:var(--cf-offwhite);border:1px solid var(--cf-nude);border-radius:20px;padding:24px;height:100%}
-.cf-store h3{display:flex;align-items:center;gap:10px;font-family:Poppins,sans-serif;font-size:clamp(1.4rem,4.5vw,1.7rem);color:var(--cf-cacau);margin:0 0 8px;font-weight:600}
-.cf-store p{margin:0;color:var(--cf-cacau);opacity:.82;font-size:1.1rem;line-height:1.6}
-.cf-city{font-size:1rem !important;opacity:.8}
-.cf-map-btn{display:inline-block;margin-top:14px;border:1px solid var(--cf-cacau);color:var(--cf-cacau);text-decoration:none;border-radius:999px;padding:13px 26px;font-size:1rem;font-weight:600;transition:background .25s ease,color .25s ease}
-.cf-map-btn:hover{background:var(--cf-cacau);color:#FFF8E9}
+.cf-stores{display:grid;gap:20px}
+.cf-store{position:relative;background:var(--cf-offwhite);border:3px solid var(--cf-nude);border-radius:28px;padding:38px 30px;height:100%;box-shadow:0 18px 40px -26px rgba(91,68,54,.55);transition:transform .3s ease,box-shadow .3s ease}
+.cf-store:hover{transform:translateY(-6px);box-shadow:0 24px 46px -22px rgba(91,68,54,.55)}
+.cf-store-1{background:linear-gradient(160deg,#FFF6DF,#F7DFA8);border-color:rgba(201,162,39,.6)}
+.cf-store-2{background:linear-gradient(160deg,#FDEDE4,#F4CDB4);border-color:rgba(197,124,84,.6)}
+.cf-store h3{display:flex;align-items:center;gap:12px;font-family:Poppins,sans-serif;font-size:clamp(1.9rem,6vw,2.5rem);color:var(--cf-cacau);margin:0 0 12px;font-weight:800;letter-spacing:-.01em}
+.cf-store h3 svg{width:28px;height:28px;flex:none}
+.cf-store p{margin:0;color:var(--cf-cacau);opacity:.92;font-size:clamp(1.25rem,4vw,1.5rem);line-height:1.5;font-weight:500}
+.cf-city{font-size:clamp(1.05rem,3.4vw,1.25rem) !important;opacity:.75}
+.cf-map-btn{display:inline-block;margin-top:20px;border:0;background:var(--cf-cacau);color:#FFF8E9;text-decoration:none;border-radius:999px;padding:18px 36px;font-size:clamp(1.1rem,3.4vw,1.3rem);font-weight:700;transition:transform .25s ease,box-shadow .25s ease}
+.cf-map-btn:hover{transform:translateY(-2px);box-shadow:0 14px 28px -14px rgba(91,68,54,.7)}
 
 .cf-footer{position:relative;z-index:1;text-align:center;padding:48px 20px 60px;border-top:1px solid var(--cf-nude);margin-top:20px}
 .cf-logo{font-family:Poppins,sans-serif;font-weight:700;font-size:1.8rem;color:var(--cf-cacau);margin:0}
@@ -380,8 +385,8 @@ const CSS = `
 .cf-reveal.is-visible{opacity:1;transform:none}
 
 @media (min-width:768px){
-  .cf-hero{padding:80px 24px 56px}
-  .cf-section{padding:80px 24px}
+  .cf-hero{padding:70px 24px 30px}
+  .cf-section{padding:36px 24px}
   .cf-cards{grid-template-columns:repeat(3,1fr);gap:18px}
   .cf-stores{grid-template-columns:repeat(2,1fr);gap:18px}
   .cf-count-box{min-width:82px;padding:14px 16px}
