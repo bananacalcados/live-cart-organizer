@@ -19,7 +19,14 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   sales: SaleRef[];
+  /** itens já calculados pelo Dashboard Geral (mesma fonte de dados) */
+  items: SoldItem[];
+  unattributedRevenue: number;
+  /** KPIs do dashboard, exibidos para conferência 1:1 */
+  dashboardRevenue: number;
+  dashboardCost: number;
   periodLabel: string;
+
 }
 
 interface RawItem {
