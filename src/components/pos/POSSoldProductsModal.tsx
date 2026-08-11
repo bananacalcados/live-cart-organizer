@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { fetchSoldProductsData, fetchParentNames } from "@/lib/pos/soldProductsData";
+import { fetchParentNames, type SoldItem } from "@/lib/pos/soldProductsData";
 import { Loader2, Package, Search, Download } from "lucide-react";
 
 
@@ -19,7 +19,14 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   sales: SaleRef[];
+  /** itens já calculados pelo Dashboard Geral (mesma fonte de dados) */
+  items: SoldItem[];
+  unattributedRevenue: number;
+  /** KPIs do dashboard, exibidos para conferência 1:1 */
+  dashboardRevenue: number;
+  dashboardCost: number;
   periodLabel: string;
+
 }
 
 interface RawItem {
@@ -56,7 +63,7 @@ function stripVariantSuffix(name: string, color?: string | null, size?: string |
   return out || name;
 }
 
-export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }: Props) {
+export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [raw, setRaw] = useState<RawItem[]>([]);
   const [groupBy, setGroupBy] = useState<"variant" | "parent">("variant");
@@ -66,19 +73,15 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
 
   const shippingTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0), [sales]);
   const salesTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.total || 0), 0), [sales]);
-
-  const [unattributed, setUnattributed] = useState(0);
+  const unattributed = unattributedRevenue;
 
   useEffect(() => {
     if (!open) return;
-    if (sales.length === 0) { setRaw([]); setUnattributed(0); return; }
+    if (items.length === 0) { setRaw([]); return; }
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        // FONTE ÚNICA — mesma função usada pelo Dashboard Geral
-        const { items, unattributedRevenue } = await fetchSoldProductsData(sales);
-
         const parentSkus = Array.from(new Set(
           items.map((i) => i.product?.parent_sku).filter(Boolean)
         )) as string[];
@@ -106,7 +109,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
             cost: it.cost,
           };
         });
-        if (!cancelled) { setRaw(mapped); setUnattributed(unattributedRevenue); }
+        if (!cancelled) setRaw(mapped);
       } catch (e: any) {
         toast.error("Erro ao carregar produtos vendidos: " + e.message);
       } finally {
@@ -114,7 +117,9 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
       }
     })();
     return () => { cancelled = true; };
-  }, [open, sales]);
+  }, [open, items]);
+
+
 
 
 
@@ -252,13 +257,26 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
             </div>
           ))}
         </div>
-        <div className="px-5 pb-2 text-[11px] text-zinc-500">
-          Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
-          Faturamento do período: <span className="text-zinc-300 font-medium">{BRL(salesTotal)}</span> (produtos + frete)
-          {unattributed > 0.01 && (
-            <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
-          )}. Mesma fonte de dados do Dashboard Geral.
+        <div className="px-5 pb-2 space-y-1 text-[11px] text-zinc-500">
+          <div>
+            Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
+            {unattributed > 0.01 && (
+              <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
+            )}
+          </div>
+          <div className="text-zinc-400">
+            Conferência com o Dashboard Geral (mesma fonte):{" "}
+            <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
+            {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
+            {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
+            {" · "}
+            <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
+              Custo de produto {BRL(dashboardCost)}
+            </span>
+            {" · "}Total das vendas do período {BRL(salesTotal)}
+          </div>
         </div>
+
 
 
 
