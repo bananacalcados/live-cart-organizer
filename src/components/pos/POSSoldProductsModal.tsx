@@ -110,6 +110,9 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
             qty: it.quantity,
             revenue: it.revenue,
             cost: it.cost,
+            storeId: it.store_id ?? null,
+            channel: it.channel,
+            shipping: it.shipping_share || 0,
           };
         });
         if (!cancelled) setRaw(mapped);
