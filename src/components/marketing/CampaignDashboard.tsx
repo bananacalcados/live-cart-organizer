@@ -74,6 +74,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
   const [movement, setMovement] = useState<{ entered: number; exited: number } | null>(null);
+  const [clickLog, setClickLog] = useState<{ clicks: number; redirects: number } | null>(null);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 
