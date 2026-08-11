@@ -41,6 +41,7 @@ const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
 const LiveRedirectPage = lazy(() => import("./pages/LiveRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
+const ConfortoLP = lazy(() => import("./pages/ConfortoLP"));
 
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
@@ -87,7 +88,9 @@ const App = () => (
               <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
               <Route path="/checkout-loja/:storeId/:saleId" element={<StoreCheckout />} />
               <Route path="/register/:orderId" element={<CustomerRegister />} />
+              <Route path="/lp/conforto" element={<ConfortoLP />} />
               <Route path="/lp/:slug" element={<LandingPage />} />
+
               <Route path="/banana-verao" element={<BananaLanding />} />
               <Route path="/banana-verao-gv" element={<BananaLandingGV />} />
               <Route path="/live" element={<LiveCommerce />} />
