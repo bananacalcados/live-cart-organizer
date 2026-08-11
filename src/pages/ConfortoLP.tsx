@@ -437,6 +437,8 @@ const CSS = `
 .cf-field input::placeholder{font-size:clamp(1.25rem,3.8vw,1.6rem);color:rgba(168,150,138,.85)}
 .cf-field input:focus{border-color:var(--cf-gold);box-shadow:0 0 0 3px rgba(201,162,39,.16)}
 .cf-fineprint{text-align:center;font-size:1.05rem;color:var(--cf-taupe);margin:12px 0 0}
+.cf-error{display:block;margin-top:10px;font-style:normal;font-size:1.1rem;font-weight:600;color:#B3261E}
+.cf-cta:disabled{opacity:.65;cursor:not-allowed;transform:none}
 
 .cf-date{font-family:Poppins,sans-serif;font-weight:800;letter-spacing:-.02em;font-size:clamp(3rem,12vw,5rem);text-align:center;color:var(--cf-gold);margin:6px 0 22px;font-weight:700}
 .cf-stores{display:grid;gap:20px}
