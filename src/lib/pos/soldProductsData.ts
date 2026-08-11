@@ -157,11 +157,13 @@ export async function fetchSoldProductsData(sales: SoldSaleRef[]): Promise<SoldP
     qtyBySale.set(it.sale_id, (qtyBySale.get(it.sale_id) || 0) + q);
   }
 
+  // IMPORTANTE: em pos_sales o campo `total` NÃO inclui o frete (shipping_cost é cobrado à parte).
+  // Portanto o faturamento de produtos é o próprio `total` rateado — não se subtrai frete.
   const netBySale = new Map<string, number>();
   const saleById = new Map<string, SoldSaleRef>();
   let unattributedRevenue = 0;
   for (const s of sales) {
-    const net = Number(s.total || 0) - Number(s.shipping_cost || 0);
+    const net = Number(s.total || 0);
     netBySale.set(s.id, net);
     saleById.set(s.id, s);
     const hasItems = (qtyBySale.get(s.id) || 0) > 0;
