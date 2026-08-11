@@ -434,20 +434,24 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
         <KpiCard
           icon={<BarChart3 className="h-5 w-5" />}
           value={totalClicks.toLocaleString('pt-BR')}
-          label="Clicks no link"
-          tooltip="Total de vezes que o link de redirecionamento foi acessado"
+          label={usingClickLog ? `Clicks no link (${periodLabel})` : 'Clicks no link (acumulado)'}
+          tooltip={usingClickLog
+            ? 'Cliques registrados dentro do período selecionado'
+            : 'Total acumulado desde a criação do link — o histórico por período começou a ser gravado agora, então ainda não dá para comparar com as entradas do período'}
         />
         <KpiCard
           icon={<ArrowRightLeft className="h-5 w-5" />}
           value={totalRedirects.toLocaleString('pt-BR')}
-          label="Redirecionados"
-          tooltip="Usuários que foram redirecionados com sucesso para o WhatsApp"
+          label={usingClickLog ? `Redirecionados (${periodLabel})` : 'Redirecionados (acumulado)'}
+          tooltip={usingClickLog
+            ? 'Redirecionamentos com sucesso para o WhatsApp dentro do período'
+            : 'Total acumulado desde a criação do link'}
         />
         <KpiCard
           icon={<UserPlus className="h-5 w-5" />}
           value={entered.toLocaleString('pt-BR')}
-          label="Entraram no grupo"
-          tooltip="Participantes que de fato entraram no grupo"
+          label={`Entraram no grupo (${periodLabel})`}
+          tooltip="Entradas confirmadas pelo rastreio de membros no período selecionado"
         />
         <KpiCard
           icon={<Link2 className="h-5 w-5" />}
