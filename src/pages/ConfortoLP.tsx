@@ -332,8 +332,7 @@ export default function ConfortoLP() {
         </Reveal>
       </section>
 
-        </Reveal>
-      </section>
+
 
       {/* LOJAS */}
       <section className="cf-section">
