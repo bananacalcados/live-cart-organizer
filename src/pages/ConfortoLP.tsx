@@ -144,6 +144,18 @@ export default function ConfortoLP() {
     const fbp = getCookie("_fbp");
     const fbc = getCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null);
 
+    // event_id único: mesmo valor no Pixel (navegador) e na CAPI (servidor) => dedupe
+    const eventId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `lead-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    try {
+      (window as any).fbq?.("track", "Lead", {}, { eventID: eventId });
+    } catch (err) {
+      console.warn("[conforto-lp] pixel Lead falhou", err);
+    }
+
     try {
       await supabase.functions.invoke("lp-capture-lead", {
         body: {
@@ -157,11 +169,13 @@ export default function ConfortoLP() {
           event_source_url: window.location.href,
           user_agent: navigator.userAgent,
           campaign_tag: "lp-conforto",
+          event_id: eventId,
         },
       });
     } catch (err) {
       console.error("[conforto-lp] falha ao gravar lead", err);
     }
+
     window.location.href = VIP_REDIRECT;
   };
 
