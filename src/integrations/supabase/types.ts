@@ -9865,6 +9865,7 @@ export type Database = {
           converted_at: string | null
           created_at: string
           email: string | null
+          event_id: string | null
           fbc: string | null
           fbclid: string | null
           fbp: string | null
@@ -9890,6 +9891,7 @@ export type Database = {
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          event_id?: string | null
           fbc?: string | null
           fbclid?: string | null
           fbp?: string | null
@@ -9915,6 +9917,7 @@ export type Database = {
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          event_id?: string | null
           fbc?: string | null
           fbclid?: string | null
           fbp?: string | null
