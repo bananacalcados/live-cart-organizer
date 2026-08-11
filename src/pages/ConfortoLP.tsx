@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { initMetaPixel, trackPageView } from "@/lib/metaPixel";
+import { captureAttribution } from "@/lib/metaAttribution";
 import tenisAsset from "@/assets/conforto-tenis.webp.asset.json";
 import sandaliaAsset from "@/assets/conforto-sandalia.webp.asset.json";
 
@@ -89,9 +92,78 @@ const Pin = () => (
   </svg>
 );
 
+const VIP_REDIRECT = "https://checkout.bananacalcados.com.br/vip/metaads";
+
+function getCookie(name: string): string | null {
+  const v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
+  return v ? v.pop() || null : null;
+}
+
 export default function ConfortoLP() {
   const c = useCountdown(LAUNCH_MS);
   const [form, setForm] = useState({ name: "", phone: "" });
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
+  const [sending, setSending] = useState(false);
+  const trackingRef = useRef<{ fbclid: string | null; utms: Record<string, string> }>({
+    fbclid: null,
+    utms: {},
+  });
+
+  // Pixel base + captura de fbclid/UTMs na entrada da página.
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const utms: Record<string, string> = {};
+      ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "campaign.name", "adset.id"].forEach((k) => {
+        const v = p.get(k);
+        if (v) utms[k] = v;
+      });
+      trackingRef.current = { fbclid: p.get("fbclid"), utms };
+      captureAttribution();
+    } catch (e) {
+      console.warn("[conforto-lp] attribution capture failed", e);
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sending) return;
+
+    const name = form.name.trim();
+    const digits = form.phone.replace(/\D/g, "");
+    const next: { name?: string; phone?: string } = {};
+    if (name.length < 3) next.name = "Digite seu nome";
+    if (digits.length !== 11) next.phone = "Digite um celular válido com DDD";
+    setErrors(next);
+    if (next.name || next.phone) return;
+
+    setSending(true);
+    const { fbclid, utms } = trackingRef.current;
+    const fbp = getCookie("_fbp");
+    const fbc = getCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null);
+
+    try {
+      await supabase.functions.invoke("lp-capture-lead", {
+        body: {
+          nome: name,
+          telefone_raw: form.phone,
+          fbc,
+          fbp,
+          fbclid,
+          utms,
+          canal_captacao: "LP",
+          event_source_url: window.location.href,
+          user_agent: navigator.userAgent,
+          campaign_tag: "lp-conforto",
+        },
+      });
+    } catch (err) {
+      console.error("[conforto-lp] falha ao gravar lead", err);
+    }
+    window.location.href = VIP_REDIRECT;
+  };
 
   useEffect(() => {
     document.title = "Coleção Conforto | Banana Calçados";
@@ -226,10 +298,10 @@ export default function ConfortoLP() {
         </Reveal>
       </section>
 
-      {/* FORMULÁRIO (visual) */}
+      {/* FORMULÁRIO */}
       <section className="cf-section" id="cadastro">
         <Reveal>
-          <form className="cf-form" onSubmit={(e) => e.preventDefault()}>
+          <form className="cf-form" onSubmit={handleSubmit} noValidate>
             <h2 className="cf-h2 cf-h2-sm">Lista VIP</h2>
             <label className="cf-field">
               <span>Nome</span>
@@ -239,6 +311,7 @@ export default function ConfortoLP() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
+              {errors.name && <em className="cf-error">{errors.name}</em>}
             </label>
             <label className="cf-field">
               <span>Telefone</span>
@@ -249,12 +322,17 @@ export default function ConfortoLP() {
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: maskPhone(e.target.value) }))}
               />
+              {errors.phone && <em className="cf-error">{errors.phone}</em>}
             </label>
-            <button type="submit" className="cf-cta cf-cta-block">Garantir minha vaga VIP</button>
+            <button type="submit" className="cf-cta cf-cta-block" disabled={sending}>
+              {sending ? "Enviando..." : "Garantir minha vaga VIP"}
+            </button>
             <p className="cf-fineprint">Seus dados são usados apenas para avisar sobre o lançamento.</p>
           </form>
         </Reveal>
       </section>
+
+
 
       {/* LOJAS */}
       <section className="cf-section">
@@ -359,6 +437,8 @@ const CSS = `
 .cf-field input::placeholder{font-size:clamp(1.25rem,3.8vw,1.6rem);color:rgba(168,150,138,.85)}
 .cf-field input:focus{border-color:var(--cf-gold);box-shadow:0 0 0 3px rgba(201,162,39,.16)}
 .cf-fineprint{text-align:center;font-size:1.05rem;color:var(--cf-taupe);margin:12px 0 0}
+.cf-error{display:block;margin-top:10px;font-style:normal;font-size:1.1rem;font-weight:600;color:#B3261E}
+.cf-cta:disabled{opacity:.65;cursor:not-allowed;transform:none}
 
 .cf-date{font-family:Poppins,sans-serif;font-weight:800;letter-spacing:-.02em;font-size:clamp(3rem,12vw,5rem);text-align:center;color:var(--cf-gold);margin:6px 0 22px;font-weight:700}
 .cf-stores{display:grid;gap:20px}

@@ -9860,10 +9860,14 @@ export type Database = {
       lp_leads: {
         Row: {
           campaign_tag: string
+          canal_captacao: string | null
           converted: boolean | null
           converted_at: string | null
           created_at: string
           email: string | null
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
           id: string
           instagram: string | null
           metadata: Json | null
@@ -9873,13 +9877,22 @@ export type Database = {
           recovery_session_id: string | null
           recovery_ultimo_disparo_at: string | null
           source: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
           campaign_tag: string
+          canal_captacao?: string | null
           converted?: boolean | null
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
           id?: string
           instagram?: string | null
           metadata?: Json | null
@@ -9889,13 +9902,22 @@ export type Database = {
           recovery_session_id?: string | null
           recovery_ultimo_disparo_at?: string | null
           source?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
           campaign_tag?: string
+          canal_captacao?: string | null
           converted?: boolean | null
           converted_at?: string | null
           created_at?: string
           email?: string | null
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
           id?: string
           instagram?: string | null
           metadata?: Json | null
@@ -9905,6 +9927,11 @@ export type Database = {
           recovery_session_id?: string | null
           recovery_ultimo_disparo_at?: string | null
           source?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: []
       }
