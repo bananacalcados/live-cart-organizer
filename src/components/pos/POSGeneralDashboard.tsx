@@ -617,14 +617,16 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
           {/* COSTS & MARGIN */}
           <Panel title="Custos e margem bruta" icon={TrendingDown}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <SilverKpi label="Custo de produto" value={BRL(totals.cost)} icon={Package} accent="rose" />
               <SilverKpi label="Custo de envio" value={BRL(totals.shippingCost)} icon={Receipt} accent="amber" />
               <SilverKpi label="Margem bruta" value={BRL(totals.grossMargin)} icon={TrendingUp} accent="emerald" />
               <SilverKpi label="% Margem" value={`${totals.marginPct.toFixed(1)}%`} icon={TrendingUp} accent="cyan" />
+              <SilverKpi label="Markup médio" value={`${totals.markup.toFixed(2)}x`} icon={TrendingUp} accent="violet" />
+              <SilverKpi label="Margem de contribuição" value={`${totals.contributionPct.toFixed(1)}%`} icon={TrendingUp} accent="amber" />
             </div>
             <p className="text-[10px] text-zinc-500 mt-2">
-              Custo de produto: somatório de cost_price (pos_products) × quantidade vendida. Outros custos (operacionais, taxas, marketing) serão adicionados sob demanda.
+              Custo de produto: somatório de cost_price (pos_products) × quantidade vendida. Markup médio = faturamento ÷ custo de produto. Margem de contribuição = 100% − % margem bruta. Outros custos (operacionais, taxas, marketing) serão adicionados sob demanda.
             </p>
           </Panel>
 
