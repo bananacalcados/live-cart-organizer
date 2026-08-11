@@ -795,6 +795,14 @@ export function POSGeneralDashboard({ onBack }: Props) {
         storesById={storesById}
         onUpdated={load}
       />
+
+      <POSSoldProductsModal
+        open={soldProductsOpen}
+        onOpenChange={setSoldProductsOpen}
+        saleIds={salesRows.map((s: any) => s.id)}
+        periodLabel={periodRange.label}
+      />
+
     </div>
   );
 }
