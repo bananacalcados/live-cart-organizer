@@ -394,7 +394,30 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
                     </tr>
                   ))}
                 </tbody>
+                {block.list.length > 0 && (() => {
+                  const tQty = block.list.reduce((a, b) => a + b.qty, 0);
+                  const tCost = block.list.reduce((a, b) => a + b.cost, 0);
+                  const tRev = block.list.reduce((a, b) => a + b.revenue, 0);
+                  const tMk = tCost > 0 ? tRev / tCost : 0;
+                  const tMg = tRev > 0 ? ((tRev - tCost) / tRev) * 100 : 0;
+                  return (
+                    <tfoot>
+                      <tr className="border-t border-zinc-700 bg-zinc-900/70 font-medium">
+                        <td className="px-3 py-1.5 text-zinc-200">
+                          TOTAL
+                          <span className="ml-2 text-[10px] font-normal text-zinc-500">soma ponderada (venda ÷ custo)</span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-zinc-200">{tQty}</td>
+                        <td className="px-2 py-1.5 text-right text-rose-300">{BRL(tCost)}</td>
+                        <td className="px-2 py-1.5 text-right text-emerald-300">{BRL(tRev)}</td>
+                        <td className="px-2 py-1.5 text-right text-fuchsia-300">{tMk > 0 ? `${tMk.toFixed(2)}x` : "—"}</td>
+                        <td className="px-3 py-1.5 text-right text-cyan-300">{tMg.toFixed(1)}%</td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
               </table>
+
             </div>
           ))}
         </div>
