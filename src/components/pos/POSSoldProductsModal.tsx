@@ -175,7 +175,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
 
   const rows: GroupRow[] = useMemo(() => {
     const map = new Map<string, { label: string; sub: string; qty: number; revenue: number; cost: number }>();
-    for (const it of raw) {
+    for (const it of scoped) {
       const key = groupBy === "parent"
         ? it.parentKey
         : `${it.sku || it.name}|${it.size || ""}|${it.color || ""}`;
