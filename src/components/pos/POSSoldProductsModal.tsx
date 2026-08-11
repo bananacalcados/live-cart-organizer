@@ -254,8 +254,12 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
         </div>
         <div className="px-5 pb-2 text-[11px] text-zinc-500">
           Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
-          Faturamento do período: <span className="text-zinc-300 font-medium">{BRL(salesTotal)}</span> (produtos + frete).
+          Faturamento do período: <span className="text-zinc-300 font-medium">{BRL(salesTotal)}</span> (produtos + frete)
+          {unattributed > 0.01 && (
+            <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
+          )}. Mesma fonte de dados do Dashboard Geral.
         </div>
+
 
 
         <ScrollArea className="flex-1">
