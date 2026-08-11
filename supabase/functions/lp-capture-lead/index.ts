@@ -23,6 +23,60 @@ function normalizePhoneBR(raw: string): string | null {
   return d.length === 11 ? d : null;
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sendCapiLead(args: {
+  phone11: string;
+  eventId: string | null;
+  eventSourceUrl: string | null;
+  clientIp: string | null;
+  clientUa: string | null;
+  fbc: string | null;
+  fbp: string | null;
+}) {
+  const PIXEL_ID = Deno.env.get("VITE_META_PIXEL_ID");
+  const TOKEN =
+    Deno.env.get("META_CAPI_TOKEN") ??
+    Deno.env.get("META_CAPI_ACCESS_TOKEN") ??
+    Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  if (!PIXEL_ID || !TOKEN) {
+    console.warn("[lp-capture-lead] capi skipped: missing pixel id or token");
+    return;
+  }
+
+  const user_data: Record<string, unknown> = {
+    ph: [await sha256Hex("55" + args.phone11)],
+  };
+  if (args.clientIp) user_data.client_ip_address = args.clientIp;
+  if (args.clientUa) user_data.client_user_agent = args.clientUa;
+  if (args.fbc) user_data.fbc = args.fbc;
+  if (args.fbp) user_data.fbp = args.fbp;
+
+  const payload: Record<string, unknown> = {
+    data: [{
+      event_name: "Lead",
+      event_time: Math.floor(Date.now() / 1000),
+      ...(args.eventId ? { event_id: args.eventId } : {}),
+      action_source: "website",
+      event_source_url: args.eventSourceUrl || "https://checkout.bananacalcados.com.br/lp/conforto",
+      user_data,
+    }],
+  };
+  const testCode = Deno.env.get("META_CAPI_TEST_EVENT_CODE");
+  if (testCode) payload.test_event_code = testCode;
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${PIXEL_ID}/events?access_token=${encodeURIComponent(TOKEN)}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+  );
+  const out = await res.text();
+  if (!res.ok) console.error("[lp-capture-lead] capi failed:", res.status, out);
+  else console.log("[lp-capture-lead] capi ok:", out);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method not allowed" }, 405);
@@ -40,6 +94,7 @@ Deno.serve(async (req) => {
       event_source_url,
       user_agent,
       campaign_tag,
+      event_id,
     } = body || {};
 
     const name = String(nome ?? "").trim().slice(0, 120);
@@ -47,6 +102,17 @@ Deno.serve(async (req) => {
 
     const phone11 = normalizePhoneBR(String(telefone_raw ?? ""));
     if (!phone11) return json({ success: false, error: "telefone inválido" }, 400);
+
+    const eventId = typeof event_id === "string" && event_id.trim() ? event_id.trim().slice(0, 100) : null;
+
+    // IP REAL do usuário (Cloudflare primeiro, depois x-forwarded-for)
+    const clientIp =
+      req.headers.get("cf-connecting-ip") ||
+      (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+      req.headers.get("x-real-ip") ||
+      null;
+    const clientUa =
+      (typeof user_agent === "string" && user_agent.trim() ? user_agent : req.headers.get("user-agent")) || null;
 
     const u = (utms && typeof utms === "object" && !Array.isArray(utms)) ? utms : {};
     const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 300) : null);
@@ -70,6 +136,7 @@ Deno.serve(async (req) => {
       utm_campaign: str(u.utm_campaign),
       utm_content: str(u.utm_content),
       utm_term: str(u.utm_term),
+      event_id: eventId,
       metadata: {
         event_source_url: str(event_source_url),
         user_agent: typeof user_agent === "string" ? user_agent.slice(0, 400) : null,
@@ -83,7 +150,22 @@ Deno.serve(async (req) => {
       return json({ success: false, error: error.message }, 500);
     }
 
-    return json({ success: true });
+    // CAPI (best-effort: nunca falha o lead)
+    try {
+      await sendCapiLead({
+        phone11,
+        eventId,
+        eventSourceUrl: str(event_source_url),
+        clientIp,
+        clientUa,
+        fbc: str(fbc),
+        fbp: str(fbp),
+      });
+    } catch (e) {
+      console.error("[lp-capture-lead] capi error:", e);
+    }
+
+    return json({ success: true, event_id: eventId });
   } catch (e) {
     console.error("[lp-capture-lead]", e);
     return json({ success: false, error: String(e) }, 500);
