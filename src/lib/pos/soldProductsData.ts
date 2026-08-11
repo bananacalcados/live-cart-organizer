@@ -35,6 +35,11 @@ export function toChannel(saleType?: string | null): SoldChannel {
 
 export interface SoldItem {
   sale_id: string;
+  /** loja e canal da venda de origem (para filtros no modal) */
+  store_id: string | null;
+  channel: SoldChannel;
+  /** frete cobrado do cliente na venda de origem, rateado por item */
+  shipping_share: number;
   sku: string | null;
   product_name: string | null;
   variant_name: string | null;
