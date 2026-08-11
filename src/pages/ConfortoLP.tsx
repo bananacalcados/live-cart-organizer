@@ -322,13 +322,13 @@ const CSS = `
 .cf-hero-img img{width:100%;height:auto;border-radius:24px;display:block}
 .cf-bob{animation:cf-bob 7s ease-in-out infinite}
 .cf-shadow{position:absolute;bottom:6px;left:12%;right:12%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(91,68,54,.22),transparent 70%);filter:blur(3px)}
-.cf-cta{margin-top:22px;display:inline-block;border:0;cursor:pointer;background:linear-gradient(135deg,var(--cf-cacau),#3E2E24);color:#FFF8E9;font-family:Poppins,sans-serif;font-weight:600;font-size:1.15rem;letter-spacing:.02em;padding:19px 42px;border-radius:999px;box-shadow:0 12px 28px -12px rgba(91,68,54,.6);transition:transform .25s ease,box-shadow .25s ease}
+.cf-cta{margin-top:26px;display:inline-block;border:0;cursor:pointer;background:linear-gradient(135deg,var(--cf-cacau),#3E2E24);color:#FFF8E9;font-family:Poppins,sans-serif;font-weight:700;font-size:clamp(1.5rem,4.4vw,2.1rem);letter-spacing:.02em;padding:32px 74px;border-radius:999px;box-shadow:0 12px 28px -12px rgba(91,68,54,.6);transition:transform .25s ease,box-shadow .25s ease}
 .cf-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px -14px rgba(91,68,54,.7)}
-.cf-cta-block{width:100%;margin-top:8px}
+.cf-cta-block{width:100%;margin-top:14px;padding:34px 40px}
 
 .cf-section{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:56px 20px}
 .cf-h2{font-family:Poppins,sans-serif;font-weight:700;letter-spacing:-.01em;font-size:clamp(2.1rem,7vw,3.3rem);color:var(--cf-cacau);text-align:center;margin:0 0 12px;line-height:1.2}
-.cf-h2-sm{font-size:clamp(1.75rem,6vw,2.5rem)}
+.cf-h2-sm{font-size:clamp(2.4rem,7vw,3.4rem)}
 .cf-lead{text-align:center;color:var(--cf-cacau);opacity:.82;max-width:50ch;margin:0 auto;line-height:1.65;font-size:clamp(1.08rem,3.6vw,1.3rem)}
 .cf-cards{display:grid;gap:18px;margin-top:36px}
 .cf-card{background:var(--cf-offwhite);border:2px solid var(--cf-nude);border-radius:26px;padding:40px 30px;box-shadow:0 14px 34px -26px rgba(91,68,54,.5);transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;height:100%}
@@ -352,12 +352,12 @@ const CSS = `
 .cf-offer-big strong{color:var(--cf-gold)}
 .cf-raffle{background:var(--cf-offwhite);border:1px dashed rgba(201,162,39,.55);border-radius:24px;padding:40px 22px}
 
-.cf-form{background:var(--cf-offwhite);border:1px solid var(--cf-nude);border-radius:24px;padding:30px 22px;max-width:480px;margin:0 auto;box-shadow:0 24px 50px -34px rgba(91,68,54,.55)}
-.cf-field{display:block;margin-bottom:14px}
-.cf-field span{display:block;font-size:13px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--cf-taupe);margin-bottom:6px}
-.cf-field input{width:100%;height:56px;border-radius:14px;border:1px solid var(--cf-nude);background:#fff;padding:0 16px;font-family:Poppins,sans-serif;font-size:1.05rem;color:var(--cf-ink);outline:none;transition:border-color .2s ease,box-shadow .2s ease}
+.cf-form{background:var(--cf-offwhite);border:2px solid var(--cf-nude);border-radius:32px;padding:56px 44px;max-width:900px;margin:0 auto;box-shadow:0 24px 50px -34px rgba(91,68,54,.55)}
+.cf-field{display:block;margin-bottom:26px}
+.cf-field span{display:block;font-size:1rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--cf-taupe);margin-bottom:10px}
+.cf-field input{width:100%;height:76px;border-radius:18px;border:1px solid var(--cf-nude);background:#fff;padding:0 22px;font-family:Poppins,sans-serif;font-size:1.35rem;color:var(--cf-ink);outline:none;transition:border-color .2s ease,box-shadow .2s ease}
 .cf-field input:focus{border-color:var(--cf-gold);box-shadow:0 0 0 3px rgba(201,162,39,.16)}
-.cf-fineprint{text-align:center;font-size:.9rem;color:var(--cf-taupe);margin:12px 0 0}
+.cf-fineprint{text-align:center;font-size:1.05rem;color:var(--cf-taupe);margin:12px 0 0}
 
 .cf-date{font-family:Poppins,sans-serif;font-weight:800;letter-spacing:-.02em;font-size:clamp(3rem,12vw,5rem);text-align:center;color:var(--cf-gold);margin:6px 0 22px;font-weight:700}
 .cf-stores{display:grid;gap:14px}
