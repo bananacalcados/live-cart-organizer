@@ -328,7 +328,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
         </div>
         <div className="px-5 pb-2 space-y-1 text-[11px] text-zinc-500">
           <div>
-            Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
+            Venda de produtos = total pago das vendas (já com descontos), rateado por item. O frete é cobrado à parte e não entra nesse valor.
             {unattributed > 0.01 && (
               <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
             )}
@@ -342,8 +342,9 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
             <div className="text-zinc-400">
               Conferência com o Dashboard Geral (mesma fonte):{" "}
               <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
-              {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
+              {" = "}produtos {BRL(totals.revenue)}
               {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
+              {" · frete cobrado à parte "}{BRL(shippingTotal)}
               {" · "}
               <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
                 Custo de produto {BRL(dashboardCost)}
