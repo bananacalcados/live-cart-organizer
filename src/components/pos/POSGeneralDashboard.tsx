@@ -170,40 +170,11 @@ export function POSGeneralDashboard({ onBack }: Props) {
       const sales = salesRes.data || [];
       const saleIds = sales.map((s: any) => s.id);
 
-      // Fetch items + product costs in chunks
-      const itemsBySale = new Map<string, number>();
-      const costBySale = new Map<string, number>();
-      if (saleIds.length > 0) {
-        const chunk = 500;
-        for (let i = 0; i < saleIds.length; i += chunk) {
-          const slice = saleIds.slice(i, i + chunk);
-          const { data: itemsData } = await supabase
-            .from("pos_sale_items")
-            .select("sale_id, sku, quantity")
-            .in("sale_id", slice);
-          const skus = Array.from(new Set((itemsData || []).map(it => it.sku).filter(Boolean))) as string[];
-          let costBySku = new Map<string, number>();
-          if (skus.length > 0) {
-            // chunk SKU lookups too
-            for (let j = 0; j < skus.length; j += 500) {
-              const skuSlice = skus.slice(j, j + 500);
-              const { data: prods } = await supabase
-                .from("pos_products")
-                .select("sku, cost_price")
-                .in("sku", skuSlice);
-              for (const p of (prods || [])) {
-                if (p.sku) costBySku.set(p.sku, Number(p.cost_price || 0));
-              }
-            }
-          }
-          for (const it of (itemsData || [])) {
-            const q = Number(it.quantity || 0);
-            itemsBySale.set(it.sale_id, (itemsBySale.get(it.sale_id) || 0) + q);
-            const c = it.sku ? (costBySku.get(it.sku) || 0) : 0;
-            costBySale.set(it.sale_id, (costBySale.get(it.sale_id) || 0) + c * q);
-          }
-        }
-      }
+      // Itens + custo: FONTE ÚNICA compartilhada com o modal de Produtos Vendidos
+      const { costBySale, qtyBySale: itemsBySale } = await fetchSoldProductsData(
+        sales.map((s: any) => ({ id: s.id, total: Number(s.total || 0), shipping_cost: Number(s.shipping_cost || 0) }))
+      );
+
 
       // Enrich missing customer_name via pos_customers lookup
       const missingCustIds = Array.from(new Set(
