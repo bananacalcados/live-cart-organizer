@@ -45,7 +45,21 @@ export interface SoldProductsData {
   unattributedRevenue: number;
 }
 
-const CHUNK = 500;
+const CHUNK = 150;
+const PAGE = 1000;
+
+/** Busca TODAS as linhas (pagina de 1000 em 1000) — evita perder cadastros por causa do teto do PostgREST. */
+async function fetchAllPages(build: () => any) {
+  const out: any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = data || [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
 
 function chunked<T>(arr: T[], size = CHUNK): T[][] {
   const out: T[][] = [];
