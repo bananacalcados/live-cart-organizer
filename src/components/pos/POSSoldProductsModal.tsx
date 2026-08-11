@@ -66,17 +66,61 @@ function stripVariantSuffix(name: string, color?: string | null, size?: string |
   return out || name;
 }
 
-export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel }: Props) {
+export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel, stores }: Props) {
   const [loading, setLoading] = useState(false);
   const [raw, setRaw] = useState<RawItem[]>([]);
   const [groupBy, setGroupBy] = useState<"variant" | "parent">("variant");
   const [curve, setCurve] = useState<"all" | "A" | "B" | "C">("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"revenue" | "qty" | "markup" | "margin">("revenue");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | SoldChannel>("all");
 
-  const shippingTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0), [sales]);
+  const storeName = (id: string | null) => (id ? (stores.find((s) => s.id === id)?.name || "Loja desconhecida") : "Sem loja");
+
+  const scoped = useMemo(
+    () => raw.filter((r) =>
+      (storeFilter === "all" || r.storeId === storeFilter) &&
+      (channelFilter === "all" || r.channel === channelFilter)
+    ),
+    [raw, storeFilter, channelFilter]
+  );
+
+  const hasScope = storeFilter !== "all" || channelFilter !== "all";
+
+  const shippingTotal = useMemo(
+    () => (hasScope
+      ? scoped.reduce((a, r) => a + r.shipping, 0)
+      : sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0)),
+    [hasScope, scoped, sales]
+  );
   const salesTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.total || 0), 0), [sales]);
-  const unattributed = unattributedRevenue;
+  const unattributed = hasScope ? 0 : unattributedRevenue;
+
+  /** Comparativo de margem por canal e por loja (sempre sobre o período inteiro). */
+  const breakdown = useMemo(() => {
+    const agg = (keyOf: (r: RawItem) => string, labelOf: (r: RawItem) => string) => {
+      const m = new Map<string, { label: string; qty: number; revenue: number; cost: number }>();
+      for (const r of raw) {
+        const k = keyOf(r);
+        const cur = m.get(k) || { label: labelOf(r), qty: 0, revenue: 0, cost: 0 };
+        cur.qty += r.qty; cur.revenue += r.revenue; cur.cost += r.cost;
+        m.set(k, cur);
+      }
+      return Array.from(m.entries())
+        .map(([key, v]) => ({
+          key, ...v,
+          markup: v.cost > 0 ? v.revenue / v.cost : 0,
+          marginPct: v.revenue > 0 ? ((v.revenue - v.cost) / v.revenue) * 100 : 0,
+        }))
+        .sort((a, b) => b.marginPct - a.marginPct);
+    };
+    return {
+      byChannel: agg((r) => r.channel, (r) => CHANNEL_LABEL[r.channel]),
+      byStore: agg((r) => r.storeId || "none", (r) => storeName(r.storeId)),
+    };
+  }, [raw, stores]);
+
 
   useEffect(() => {
     if (!open) return;
