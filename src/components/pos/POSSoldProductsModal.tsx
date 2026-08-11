@@ -65,85 +65,32 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
   const shippingTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0), [sales]);
   const salesTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.total || 0), 0), [sales]);
 
+  const [unattributed, setUnattributed] = useState(0);
+
   useEffect(() => {
     if (!open) return;
-    const saleIds = sales.map(s => s.id);
-    if (saleIds.length === 0) { setRaw([]); return; }
+    if (sales.length === 0) { setRaw([]); setUnattributed(0); return; }
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const items: any[] = [];
-        for (let i = 0; i < saleIds.length; i += 500) {
-          const slice = saleIds.slice(i, i + 500);
-          const { data, error } = await supabase
-            .from("pos_sale_items")
-            .select("sale_id, sku, product_name, variant_name, size, quantity, unit_price")
-            .in("sale_id", slice);
-          if (error) throw error;
-          items.push(...(data || []));
-        }
-        const skus = Array.from(new Set(items.map(i => i.sku).filter(Boolean))) as string[];
-        const prodBySku = new Map<string, { cost: number; parent_sku: string | null; color: string | null; size: string | null; name: string }>();
-        for (let i = 0; i < skus.length; i += 500) {
-          const slice = skus.slice(i, i + 500);
-          const { data: prods } = await supabase
-            .from("pos_products")
-            .select("sku, cost_price, parent_sku, color, size, name")
-            .in("sku", slice);
-          for (const p of prods || []) {
-            if (!p.sku) continue;
-            const prev = prodBySku.get(p.sku);
-            if (!prev || (!prev.cost && Number(p.cost_price || 0))) {
-              prodBySku.set(p.sku, {
-                cost: Number(p.cost_price || 0),
-                parent_sku: p.parent_sku,
-                color: p.color,
-                size: p.size,
-                name: p.name,
-              });
-            }
-          }
-        }
+        // FONTE ÚNICA — mesma função usada pelo Dashboard Geral
+        const { items, unattributedRevenue } = await fetchSoldProductsData(sales);
 
-        // Nome real do produto pai (quando existir cadastro do pai)
         const parentSkus = Array.from(new Set(
-          Array.from(prodBySku.values()).map(p => p.parent_sku).filter(Boolean)
+          items.map((i) => i.product?.parent_sku).filter(Boolean)
         )) as string[];
-        const parentNameBySku = new Map<string, string>();
-        for (let i = 0; i < parentSkus.length; i += 500) {
-          const slice = parentSkus.slice(i, i + 500);
-          const { data: parents } = await supabase
-            .from("pos_products")
-            .select("sku, name, color, size")
-            .in("sku", slice);
-          for (const p of parents || []) {
-            if (p.sku && p.name) parentNameBySku.set(p.sku, stripVariantSuffix(p.name, p.color, p.size));
-          }
-        }
-
-        // Rateio proporcional: faturamento real da venda (total − frete) distribuído entre os itens
-        const grossBySale = new Map<string, number>();
-        for (const it of items) {
-          grossBySale.set(it.sale_id, (grossBySale.get(it.sale_id) || 0) + Number(it.unit_price || 0) * Number(it.quantity || 0));
-        }
-        const factorBySale = new Map<string, number>();
-        for (const s of sales) {
-          const net = Number(s.total || 0) - Number(s.shipping_cost || 0);
-          const gross = grossBySale.get(s.id) || 0;
-          factorBySale.set(s.id, gross > 0 ? net / gross : 0);
-        }
+        const parentNames = await fetchParentNames(parentSkus);
 
         const mapped: RawItem[] = items.map((it) => {
-          const p = it.sku ? prodBySku.get(it.sku) : undefined;
-          const qty = Number(it.quantity || 0);
-          const gross = Number(it.unit_price || 0) * qty;
-          const revenue = gross * (factorBySale.get(it.sale_id) ?? 1);
+          const p = it.product;
           const childName = (p?.name || it.product_name || "Sem nome").trim();
           const size = (it.size || p?.size || null);
           const color = (p?.color || it.variant_name || null);
-          const parentName = (p?.parent_sku ? parentNameBySku.get(p.parent_sku) : null)
-            || stripVariantSuffix(childName, color, size);
+          const parentRaw = p?.parent_sku ? parentNames.get(p.parent_sku) : undefined;
+          const parentName = parentRaw
+            ? stripVariantSuffix(parentRaw.name, parentRaw.color, parentRaw.size)
+            : stripVariantSuffix(childName, color, size);
           const parentKey = (p?.parent_sku || parentName).toString().trim().toUpperCase();
           return {
             sku: it.sku,
@@ -152,12 +99,12 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
             color,
             parentKey,
             parentName,
-            qty,
-            revenue,
-            cost: Number(p?.cost || 0) * qty,
+            qty: it.quantity,
+            revenue: it.revenue,
+            cost: it.cost,
           };
         });
-        if (!cancelled) setRaw(mapped);
+        if (!cancelled) { setRaw(mapped); setUnattributed(unattributedRevenue); }
       } catch (e: any) {
         toast.error("Erro ao carregar produtos vendidos: " + e.message);
       } finally {
@@ -166,6 +113,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
     })();
     return () => { cancelled = true; };
   }, [open, sales]);
+
 
 
   const rows: GroupRow[] = useMemo(() => {
