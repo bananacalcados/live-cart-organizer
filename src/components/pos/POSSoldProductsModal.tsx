@@ -7,13 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { fetchParentNames, type SoldItem } from "@/lib/pos/soldProductsData";
+import { fetchParentNames, CHANNEL_LABEL, type SoldChannel, type SoldItem } from "@/lib/pos/soldProductsData";
 import { Loader2, Package, Search, Download } from "lucide-react";
 
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-interface SaleRef { id: string; total: number; shipping_cost: number }
+interface SaleRef { id: string; total: number; shipping_cost: number; store_id?: string | null; sale_type?: string | null }
 
 interface Props {
   open: boolean;
@@ -26,7 +26,7 @@ interface Props {
   dashboardRevenue: number;
   dashboardCost: number;
   periodLabel: string;
-
+  stores: { id: string; name: string }[];
 }
 
 interface RawItem {
@@ -39,6 +39,9 @@ interface RawItem {
   qty: number;
   revenue: number;
   cost: number;
+  storeId: string | null;
+  channel: SoldChannel;
+  shipping: number;
 }
 
 interface GroupRow {
