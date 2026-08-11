@@ -63,7 +63,7 @@ function stripVariantSuffix(name: string, color?: string | null, size?: string |
   return out || name;
 }
 
-export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }: Props) {
+export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [raw, setRaw] = useState<RawItem[]>([]);
   const [groupBy, setGroupBy] = useState<"variant" | "parent">("variant");
@@ -73,19 +73,15 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
 
   const shippingTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0), [sales]);
   const salesTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.total || 0), 0), [sales]);
-
-  const [unattributed, setUnattributed] = useState(0);
+  const unattributed = unattributedRevenue;
 
   useEffect(() => {
     if (!open) return;
-    if (sales.length === 0) { setRaw([]); setUnattributed(0); return; }
+    if (items.length === 0) { setRaw([]); return; }
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        // FONTE ÚNICA — mesma função usada pelo Dashboard Geral
-        const { items, unattributedRevenue } = await fetchSoldProductsData(sales);
-
         const parentSkus = Array.from(new Set(
           items.map((i) => i.product?.parent_sku).filter(Boolean)
         )) as string[];
@@ -113,7 +109,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
             cost: it.cost,
           };
         });
-        if (!cancelled) { setRaw(mapped); setUnattributed(unattributedRevenue); }
+        if (!cancelled) setRaw(mapped);
       } catch (e: any) {
         toast.error("Erro ao carregar produtos vendidos: " + e.message);
       } finally {
@@ -121,7 +117,9 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
       }
     })();
     return () => { cancelled = true; };
-  }, [open, sales]);
+  }, [open, items]);
+
+
 
 
 
