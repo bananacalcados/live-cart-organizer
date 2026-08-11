@@ -169,14 +169,17 @@ export function POSGeneralDashboard({ onBack }: Props) {
         supabase.from("pos_goals").select("id, store_id, goal_value, period, period_start, period_end, goal_type, created_at")
           .eq("is_active", true).is("seller_id", null),
       ]);
-      const sales = salesRes.data || [];
-      const saleIds = sales.map((s: any) => s.id);
+      const storeList = storesRes.data || [];
+      const storeIdSet = new Set(storeList.map((s: any) => s.id));
+      // O dashboard só contabiliza vendas das lojas ativas (não-simulação).
+      // O modal precisa do MESMO recorte, senão os totais divergem.
+      const sales = (salesRes.data || []).filter((s: any) => storeIdSet.has(s.store_id));
 
       // Itens + custo: FONTE ÚNICA compartilhada com o modal de Produtos Vendidos
-      const { costBySale, qtyBySale: itemsBySale } = await fetchSoldProductsData(
+      const soldData = await fetchSoldProductsData(
         sales.map((s: any) => ({ id: s.id, total: Number(s.total || 0), shipping_cost: Number(s.shipping_cost || 0) }))
       );
-
+      const { costBySale, qtyBySale: itemsBySale } = soldData;
 
       // Enrich missing customer_name via pos_customers lookup
       const missingCustIds = Array.from(new Set(
@@ -192,13 +195,16 @@ export function POSGeneralDashboard({ onBack }: Props) {
         }
       }
 
-      setStores(storesRes.data || []);
+      setStores(storeList);
+      setSoldItems(soldData.items);
+      setUnattributedRevenue(soldData.unattributedRevenue);
       setSalesRows(sales.map((s: any) => ({
         ...s,
         customer_name: s.customer_name || (s.customer_id ? nameById.get(s.customer_id) : null) || null,
         items: itemsBySale.get(s.id) || 0,
         productCost: costBySale.get(s.id) || 0,
       })));
+
       setGoals((goalsRes.data || []) as any);
     } catch (e: any) {
       toast.error("Erro ao carregar: " + e.message);
