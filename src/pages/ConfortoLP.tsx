@@ -89,9 +89,78 @@ const Pin = () => (
   </svg>
 );
 
+const VIP_REDIRECT = "https://checkout.bananacalcados.com.br/vip/metaads";
+
+function getCookie(name: string): string | null {
+  const v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
+  return v ? v.pop() || null : null;
+}
+
 export default function ConfortoLP() {
   const c = useCountdown(LAUNCH_MS);
   const [form, setForm] = useState({ name: "", phone: "" });
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
+  const [sending, setSending] = useState(false);
+  const trackingRef = useRef<{ fbclid: string | null; utms: Record<string, string> }>({
+    fbclid: null,
+    utms: {},
+  });
+
+  // Pixel base + captura de fbclid/UTMs na entrada da página.
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const utms: Record<string, string> = {};
+      ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "campaign.name", "adset.id"].forEach((k) => {
+        const v = p.get(k);
+        if (v) utms[k] = v;
+      });
+      trackingRef.current = { fbclid: p.get("fbclid"), utms };
+      captureAttribution();
+    } catch (e) {
+      console.warn("[conforto-lp] attribution capture failed", e);
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (sending) return;
+
+    const name = form.name.trim();
+    const digits = form.phone.replace(/\D/g, "");
+    const next: { name?: string; phone?: string } = {};
+    if (name.length < 3) next.name = "Digite seu nome";
+    if (digits.length !== 11) next.phone = "Digite um celular válido com DDD";
+    setErrors(next);
+    if (next.name || next.phone) return;
+
+    setSending(true);
+    const { fbclid, utms } = trackingRef.current;
+    const fbp = getCookie("_fbp");
+    const fbc = getCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null);
+
+    try {
+      await supabase.functions.invoke("lp-capture-lead", {
+        body: {
+          nome: name,
+          telefone_raw: form.phone,
+          fbc,
+          fbp,
+          fbclid,
+          utms,
+          canal_captacao: "LP",
+          event_source_url: window.location.href,
+          user_agent: navigator.userAgent,
+          campaign_tag: "lp-conforto",
+        },
+      });
+    } catch (err) {
+      console.error("[conforto-lp] falha ao gravar lead", err);
+    }
+    window.location.href = VIP_REDIRECT;
+  };
 
   useEffect(() => {
     document.title = "Coleção Conforto | Banana Calçados";
