@@ -184,8 +184,8 @@ export async function fetchParentNames(parentSkus: string[]) {
   const map = new Map<string, { name: string; color: string | null; size: string | null }>();
   if (parentSkus.length === 0) return map;
   for (const slice of chunked(parentSkus)) {
-    const { data } = await supabase.from("pos_products").select("sku, name, color, size").in("sku", slice);
-    for (const p of data || []) {
+    const rows = await fetchAllPages(() => supabase.from("pos_products").select("sku, name, color, size").in("sku", slice));
+    for (const p of rows) {
       if (p.sku && p.name) map.set(p.sku, { name: p.name, color: p.color ?? null, size: p.size ?? null });
     }
   }
