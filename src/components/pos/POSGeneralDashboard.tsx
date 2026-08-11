@@ -121,7 +121,13 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [soldItems, setSoldItems] = useState<SoldItem[]>([]);
   const [unattributedRevenue, setUnattributedRevenue] = useState(0);
   const soldModalSales = useMemo(
-    () => salesRows.map((s: any) => ({ id: s.id, total: Number(s.total || 0), shipping_cost: Number(s.shipping_cost || 0) })),
+    () => salesRows.map((s: any) => ({
+      id: s.id,
+      total: Number(s.total || 0),
+      shipping_cost: Number(s.shipping_cost || 0),
+      store_id: s.store_id ?? null,
+      sale_type: s.sale_type ?? null,
+    })),
     [salesRows]
   );
 
