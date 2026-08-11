@@ -197,7 +197,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
       const c: "A" | "B" | "C" = pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C";
       return { ...r, curve: c };
     });
-  }, [raw, groupBy]);
+  }, [scoped, groupBy]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
