@@ -189,6 +189,35 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
 
   useEffect(() => { fetchMovement(); }, [fetchMovement]);
 
+  // Cliques/redirects REAIS do período (log group_redirect_clicks).
+  // Os contadores em group_redirect_links são acumulados desde sempre — não dá
+  // para comparar com entradas do período. O log só existe a partir de agora,
+  // então caímos para o acumulado quando ainda não há registros na janela.
+  const fetchClickLog = useCallback(async () => {
+    if (!campaignId) { setClickLog(null); return; }
+    const fromIso = range.from ? range.from.toISOString() : null;
+    const toIso = range.to ? range.to.toISOString() : null;
+
+    const build = (kind: "click" | "redirect") => {
+      let q = supabase
+        .from("group_redirect_clicks")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .eq("kind", kind);
+      if (fromIso) q = q.gte("created_at", fromIso);
+      if (toIso) q = q.lte("created_at", toIso);
+      return q;
+    };
+
+    const [cRes, rRes] = await Promise.all([build("click"), build("redirect")]);
+    if (cRes.error || rRes.error) { setClickLog(null); return; }
+    setClickLog({ clicks: cRes.count || 0, redirects: rRes.count || 0 });
+  }, [campaignId, range.from, range.to]);
+
+  useEffect(() => { fetchClickLog(); }, [fetchClickLog]);
+
+
+
 
 
   // Initial sync: fetch group participant counts from WhatsApp on mount
