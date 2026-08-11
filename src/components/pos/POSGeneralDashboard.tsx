@@ -789,8 +789,13 @@ export function POSGeneralDashboard({ onBack }: Props) {
         open={soldProductsOpen}
         onOpenChange={setSoldProductsOpen}
         sales={soldModalSales}
+        items={soldItems}
+        unattributedRevenue={unattributedRevenue}
+        dashboardRevenue={totals.revenue}
+        dashboardCost={totals.cost}
         periodLabel={periodRange.label}
       />
+
 
     </div>
   );
