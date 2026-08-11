@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Users, UserPlus, UserMinus, Percent, BarChart3, CheckCircle,
-  RefreshCw, Loader2, ArrowRightLeft, Link2
+  RefreshCw, Loader2, ArrowRightLeft, Link2, History
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CampaignDashboardProps {
@@ -61,12 +63,19 @@ function KpiCard({ icon, value, label, tooltip, variant = 'default' }: KpiCardPr
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
+const digitsOnly = (s: string) => String(s || "").replace(/\D/g, "");
+
 export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, messages, campaignId, onRefreshGroups }: CampaignDashboardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [liveLinks, setLiveLinks] = useState<any[]>(links);
   const [liveGroups, setLiveGroups] = useState<any[]>(propGroups);
+  const [period, setPeriod] = useState<string>("campaign");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+  const [movement, setMovement] = useState<{ entered: number; exited: number } | null>(null);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 
   // Keep liveLinks in sync with prop changes
   useEffect(() => { setLiveLinks(links); }, [links]);
@@ -132,6 +141,56 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     if (data?.created_at) setCampaignStart(new Date(data.created_at).getTime());
   }, [campaignId]);
 
+  // Janela de tempo selecionada
+  const range = useMemo(() => {
+    const now = new Date();
+    const startOf = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    if (period === "custom") {
+      const from = customFrom ? startOf(new Date(customFrom + "T00:00:00")) : null;
+      const to = customTo ? new Date(customTo + "T23:59:59") : null;
+      return { from, to };
+    }
+    if (period === "all") return { from: null as Date | null, to: null as Date | null };
+    if (period === "campaign") return { from: campaignStart ? new Date(campaignStart) : null, to: null as Date | null };
+    if (period === "today") return { from: startOf(now), to: null as Date | null };
+    const days = Number(period);
+    const from = new Date(now.getTime() - days * 86400000);
+    return { from, to: null as Date | null };
+  }, [period, customFrom, customTo, campaignStart]);
+
+  // Entradas/saídas reais no período (whatsapp_group_members)
+  const groupJids = useMemo(
+    () => liveGroups.filter(g => targetGroups.includes(g.id)).map(g => digitsOnly(g.group_id)).filter(Boolean),
+    [liveGroups, targetGroups]
+  );
+  const groupJidsKey = groupJids.join(",");
+
+  const fetchMovement = useCallback(async () => {
+    const jids = groupJidsKey ? groupJidsKey.split(",") : [];
+    if (jids.length === 0) { setMovement(null); return; }
+    const fromIso = range.from ? range.from.toISOString() : null;
+    const toIso = range.to ? range.to.toISOString() : null;
+
+    const build = (col: "joined_at" | "left_at") => {
+      let q = supabase
+        .from("whatsapp_group_members")
+        .select("id", { count: "exact", head: true })
+        .in("group_id", jids)
+        .not(col, "is", null);
+      if (fromIso) q = q.gte(col, fromIso);
+      if (toIso) q = q.lte(col, toIso);
+      return q;
+    };
+
+    const [inRes, outRes] = await Promise.all([build("joined_at"), build("left_at")]);
+    if (inRes.error || outRes.error) { setMovement(null); return; }
+    setMovement({ entered: inRes.count || 0, exited: outRes.count || 0 });
+  }, [groupJidsKey, range.from, range.to]);
+
+  useEffect(() => { fetchMovement(); }, [fetchMovement]);
+
+
+
   // Initial sync: fetch group participant counts from WhatsApp on mount
   const initialSyncDone = useRef(false);
   useEffect(() => {
@@ -195,9 +254,13 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   // entries are never dropped from the totals.
   const getDeltas = () => {
     // Group in-window snapshots by group_id (already ordered ascending by recorded_at)
+    const fromMs = range.from ? range.from.getTime() : null;
+    const toMs = range.to ? range.to.getTime() : null;
     const byGroup = new Map<string, any[]>();
     snapshots.forEach(s => {
-      if (campaignStart != null && new Date(s.recorded_at).getTime() < campaignStart) return;
+      const t = new Date(s.recorded_at).getTime();
+      if (fromMs != null && t < fromMs) return;
+      if (toMs != null && t > toMs) return;
       const arr = byGroup.get(s.group_id) || [];
       arr.push(s);
       byGroup.set(s.group_id, arr);
@@ -224,8 +287,13 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   };
 
 
-  const { entered, exited } = getDeltas();
+  // Prioriza o rastreio real de entradas/saídas por período; cai para snapshots.
+  const { entered, exited } = movement ?? getDeltas();
+  const participantsToday = totalParticipants;
+  const participantsBefore = Math.max(0, participantsToday - entered + exited);
+  const netChange = entered - exited;
   const entryRate = totalParticipants > 0 ? ((entered / (entered + exited || 1)) * 100).toFixed(1) : '0';
+
 
   // Use liveLinks for click/redirect stats
   const totalClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
@@ -249,16 +317,45 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       await res.json();
       await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
-      await Promise.all([fetchSnapshots(), fetchLinkStats()]);
+      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement()]);
     } catch { /* ignore */ }
     finally { setIsRefreshing(false); }
   };
 
+  const periodLabel = period === "all"
+    ? "todo o histórico"
+    : period === "campaign"
+      ? "desde o início da campanha"
+      : period === "today"
+        ? "hoje"
+        : period === "custom"
+          ? `${customFrom || "início"} até ${customTo || "hoje"}`
+          : `últimos ${period} dias`;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground">VISÃO GERAL DA CAMPANHA</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[190px] h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="7">Últimos 7 dias</SelectItem>
+              <SelectItem value="30">Últimos 30 dias</SelectItem>
+              <SelectItem value="90">Últimos 90 dias</SelectItem>
+              <SelectItem value="campaign">Desde o início da campanha</SelectItem>
+              <SelectItem value="all">Todo o histórico</SelectItem>
+              <SelectItem value="custom">Período personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {period === "custom" && (
+            <div className="flex items-center gap-1">
+              <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[145px] text-xs" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[145px] text-xs" />
+            </div>
+          )}
           <span className="text-[10px] text-muted-foreground">Atualização automática a cada 30s</span>
           <Button variant="outline" size="sm" onClick={refreshData} disabled={isRefreshing} className="gap-1">
             {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -266,6 +363,37 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
           </Button>
         </div>
       </div>
+
+      {/* Movimentação do período */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          icon={<History className="h-5 w-5" />}
+          value={participantsBefore.toLocaleString('pt-BR')}
+          label={`Antes do período (${periodLabel})`}
+          tooltip="Estimativa do total de participantes no início do período: total atual − entradas + saídas do período"
+        />
+        <KpiCard
+          icon={<Users className="h-5 w-5" />}
+          value={participantsToday.toLocaleString('pt-BR')}
+          label="Hoje nos grupos"
+        />
+        <KpiCard
+          icon={<UserPlus className="h-5 w-5" />}
+          value={entered.toLocaleString('pt-BR')}
+          label={`Entradas (${periodLabel})`}
+          variant="success"
+        />
+        <KpiCard
+          icon={<UserMinus className="h-5 w-5" />}
+          value={exited.toLocaleString('pt-BR')}
+          label={`Saídas (${periodLabel})`}
+          variant={exited > entered ? 'danger' : 'default'}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Saldo do período: <span className={netChange >= 0 ? 'text-green-500' : 'text-red-500'}>{netChange >= 0 ? '+' : ''}{netChange.toLocaleString('pt-BR')}</span> participantes
+      </p>
+
 
       {/* KPI Row 1 - Conversion funnel */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
