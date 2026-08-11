@@ -158,10 +158,12 @@ export async function fetchSoldProductsData(sales: SoldSaleRef[]): Promise<SoldP
   }
 
   const netBySale = new Map<string, number>();
+  const saleById = new Map<string, SoldSaleRef>();
   let unattributedRevenue = 0;
   for (const s of sales) {
     const net = Number(s.total || 0) - Number(s.shipping_cost || 0);
     netBySale.set(s.id, net);
+    saleById.set(s.id, s);
     const hasItems = (qtyBySale.get(s.id) || 0) > 0;
     if (!hasItems) unattributedRevenue += net;
   }
@@ -174,11 +176,15 @@ export async function fetchSoldProductsData(sales: SoldSaleRef[]): Promise<SoldP
     const gross = grossBySale.get(it.sale_id) || 0;
     const totalQty = qtyBySale.get(it.sale_id) || 0;
     // rateio por valor; se a venda não tem unit_price, rateia por quantidade
-    const revenue = gross > 0
-      ? (unitPrice * qty) * (net / gross)
+    const share = gross > 0
+      ? (unitPrice * qty) / gross
       : totalQty > 0
-        ? net * (qty / totalQty)
+        ? qty / totalQty
         : 0;
+    const revenue = net * share;
+
+    const sale = saleById.get(it.sale_id);
+    const shippingShare = Number(sale?.shipping_cost || 0) * share;
 
     const p = it.sku ? productIndex.get(String(it.sku)) : undefined;
     const unitCost = Number(p?.cost || 0);
@@ -187,6 +193,9 @@ export async function fetchSoldProductsData(sales: SoldSaleRef[]): Promise<SoldP
 
     return {
       sale_id: it.sale_id,
+      store_id: sale?.store_id ?? null,
+      channel: toChannel(sale?.sale_type),
+      shipping_share: shippingShare,
       sku: it.sku ?? null,
       product_name: it.product_name ?? null,
       variant_name: it.variant_name ?? null,
