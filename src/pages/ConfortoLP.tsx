@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { initMetaPixel, trackPageView } from "@/lib/metaPixel";
+import { captureAttribution } from "@/lib/metaAttribution";
 import tenisAsset from "@/assets/conforto-tenis.webp.asset.json";
 import sandaliaAsset from "@/assets/conforto-sandalia.webp.asset.json";
 
