@@ -15,6 +15,8 @@ import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
+import { POSSoldProductsModal } from "./POSSoldProductsModal";
+
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 import { DeliveryCostsCard } from "./DeliveryCostsCard";
