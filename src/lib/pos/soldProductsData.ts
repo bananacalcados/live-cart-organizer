@@ -88,13 +88,14 @@ async function loadProductIndex(keys: string[]) {
     prev.parent_sku = prev.parent_sku || (p.parent_sku ?? null);
   };
 
+  const cols = "sku, barcode, cost_price, parent_sku, color, size, name";
   for (const slice of chunked(keys)) {
-    const [bySkuRes, byBarcodeRes] = await Promise.all([
-      supabase.from("pos_products").select("sku, barcode, cost_price, parent_sku, color, size, name").in("sku", slice),
-      supabase.from("pos_products").select("sku, barcode, cost_price, parent_sku, color, size, name").in("barcode", slice),
+    const [bySkuRows, byBarcodeRows] = await Promise.all([
+      fetchAllPages(() => supabase.from("pos_products").select(cols).in("sku", slice)),
+      fetchAllPages(() => supabase.from("pos_products").select(cols).in("barcode", slice)),
     ]);
-    for (const p of bySkuRes.data || []) upsert(p.sku, p);
-    for (const p of byBarcodeRes.data || []) {
+    for (const p of bySkuRows) upsert(p.sku, p);
+    for (const p of byBarcodeRows) {
       // indexa pelo barcode (a chave usada no item de venda) e também pelo sku
       upsert((p as any).barcode, p);
       upsert(p.sku, p);
