@@ -186,7 +186,13 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
       // Itens + custo: FONTE ÚNICA compartilhada com o modal de Produtos Vendidos
       const soldData = await fetchSoldProductsData(
-        sales.map((s: any) => ({ id: s.id, total: Number(s.total || 0), shipping_cost: Number(s.shipping_cost || 0) }))
+        sales.map((s: any) => ({
+          id: s.id,
+          total: Number(s.total || 0),
+          shipping_cost: Number(s.shipping_cost || 0),
+          store_id: s.store_id ?? null,
+          sale_type: s.sale_type ?? null,
+        }))
       );
       const { costBySale, qtyBySale: itemsBySale } = soldData;
 
