@@ -116,6 +116,11 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string; storeId?: string | null }>({ open: false, bucket: "", storeId: null });
   const [expandedStore, setExpandedStore] = useState<string | null>(null);
   const [soldProductsOpen, setSoldProductsOpen] = useState(false);
+  const soldModalSales = useMemo(
+    () => salesRows.map((s: any) => ({ id: s.id, total: Number(s.total || 0), shipping_cost: Number(s.shipping_cost || 0) })),
+    [salesRows]
+  );
+
 
 
   const periodRange = useMemo(() => {
