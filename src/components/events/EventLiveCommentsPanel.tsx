@@ -32,6 +32,10 @@ interface HandleOrderStats {
   paidDates: string[];
   openPast: number;
   openDates: string[];
+  // Pedidos CANCELADOS (deste evento e de lives anteriores)
+  cancelledThisEvent: number;
+  cancelledPast: number;
+  cancelledDates: string[];
 }
 
 
