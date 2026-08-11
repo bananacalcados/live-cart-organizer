@@ -141,6 +141,56 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     if (data?.created_at) setCampaignStart(new Date(data.created_at).getTime());
   }, [campaignId]);
 
+  // Janela de tempo selecionada
+  const range = useMemo(() => {
+    const now = new Date();
+    const startOf = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    if (period === "custom") {
+      const from = customFrom ? startOf(new Date(customFrom + "T00:00:00")) : null;
+      const to = customTo ? new Date(customTo + "T23:59:59") : null;
+      return { from, to };
+    }
+    if (period === "all") return { from: null as Date | null, to: null as Date | null };
+    if (period === "campaign") return { from: campaignStart ? new Date(campaignStart) : null, to: null as Date | null };
+    if (period === "today") return { from: startOf(now), to: null as Date | null };
+    const days = Number(period);
+    const from = new Date(now.getTime() - days * 86400000);
+    return { from, to: null as Date | null };
+  }, [period, customFrom, customTo, campaignStart]);
+
+  // Entradas/saídas reais no período (whatsapp_group_members)
+  const groupJids = useMemo(
+    () => liveGroups.filter(g => targetGroups.includes(g.id)).map(g => digitsOnly(g.group_id)).filter(Boolean),
+    [liveGroups, targetGroups]
+  );
+  const groupJidsKey = groupJids.join(",");
+
+  const fetchMovement = useCallback(async () => {
+    const jids = groupJidsKey ? groupJidsKey.split(",") : [];
+    if (jids.length === 0) { setMovement(null); return; }
+    const fromIso = range.from ? range.from.toISOString() : null;
+    const toIso = range.to ? range.to.toISOString() : null;
+
+    const build = (col: "joined_at" | "left_at") => {
+      let q = supabase
+        .from("whatsapp_group_members")
+        .select("id", { count: "exact", head: true })
+        .in("group_id", jids)
+        .not(col, "is", null);
+      if (fromIso) q = q.gte(col, fromIso);
+      if (toIso) q = q.lte(col, toIso);
+      return q;
+    };
+
+    const [inRes, outRes] = await Promise.all([build("joined_at"), build("left_at")]);
+    if (inRes.error || outRes.error) { setMovement(null); return; }
+    setMovement({ entered: inRes.count || 0, exited: outRes.count || 0 });
+  }, [groupJidsKey, range.from, range.to]);
+
+  useEffect(() => { fetchMovement(); }, [fetchMovement]);
+
+
+
   // Initial sync: fetch group participant counts from WhatsApp on mount
   const initialSyncDone = useRef(false);
   useEffect(() => {
