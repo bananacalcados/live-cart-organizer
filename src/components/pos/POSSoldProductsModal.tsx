@@ -274,6 +274,25 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
               <SelectItem value="C">Curva C (5%)</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={storeFilter} onValueChange={(v) => setStoreFilter(v)}>
+            <SelectTrigger className="w-[190px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Loja: todas</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={channelFilter} onValueChange={(v: any) => setChannelFilter(v)}>
+            <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Canal: todos</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+              <SelectItem value="physical">Loja física</SelectItem>
+              <SelectItem value="live">Live</SelectItem>
+              <SelectItem value="other">Outros</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
             <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
