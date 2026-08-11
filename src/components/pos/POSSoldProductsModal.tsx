@@ -287,11 +287,12 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
           </Button>
         </div>
 
-        <div className="px-5 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 border-b border-zinc-800">
+        <div className="px-5 py-3 grid grid-cols-2 md:grid-cols-6 gap-3 border-b border-zinc-800">
           {[
             { l: "Itens vendidos", v: totals.qty.toString() },
             { l: "Custo total", v: BRL(totals.cost) },
-            { l: "Venda total", v: BRL(totals.revenue) },
+            { l: "Venda de produtos", v: BRL(totals.revenue) },
+            { l: "Frete cobrado", v: BRL(shippingTotal) },
             { l: "Markup médio", v: `${totals.markup.toFixed(2)}x` },
             { l: "Margem de contribuição", v: `${totals.marginPct.toFixed(1)}%` },
           ].map((k) => (
@@ -301,6 +302,11 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, periodLabel }:
             </div>
           ))}
         </div>
+        <div className="px-5 pb-2 text-[11px] text-zinc-500">
+          Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
+          Faturamento do período: <span className="text-zinc-300 font-medium">{BRL(salesTotal)}</span> (produtos + frete).
+        </div>
+
 
         <ScrollArea className="flex-1">
           {loading ? (
