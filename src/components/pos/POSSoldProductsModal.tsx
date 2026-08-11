@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { fetchSoldProductsData, fetchParentNames } from "@/lib/pos/soldProductsData";
+import { fetchParentNames, type SoldItem } from "@/lib/pos/soldProductsData";
 import { Loader2, Package, Search, Download } from "lucide-react";
 
 
