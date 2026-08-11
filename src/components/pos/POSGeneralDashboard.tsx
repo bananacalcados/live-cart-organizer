@@ -801,7 +801,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       <POSSoldProductsModal
         open={soldProductsOpen}
         onOpenChange={setSoldProductsOpen}
-        saleIds={salesRows.map((s: any) => s.id)}
+        sales={soldModalSales}
         periodLabel={periodRange.label}
       />
 
