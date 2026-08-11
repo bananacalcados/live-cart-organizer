@@ -255,9 +255,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const cost = storeData.reduce((a, s) => a + s.cost, 0);
     const shippingCost = storeData.reduce((a, s) => a + s.shippingCost, 0);
     const grossMargin = revenue - cost - shippingCost;
+    const marginPct = revenue > 0 ? (grossMargin / revenue) * 100 : 0;
     return {
       revenue, sales, items, cost, shippingCost, grossMargin,
-      marginPct: revenue > 0 ? (grossMargin / revenue) * 100 : 0,
+      marginPct,
+      markup: cost > 0 ? revenue / cost : 0,
+      contributionPct: revenue > 0 ? 100 - marginPct : 0,
       ticket: sales > 0 ? revenue / sales : 0,
       itemsPerSale: sales > 0 ? items / sales : 0,
     };
