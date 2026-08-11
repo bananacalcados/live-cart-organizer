@@ -298,10 +298,10 @@ export default function ConfortoLP() {
         </Reveal>
       </section>
 
-      {/* FORMULÁRIO (visual) */}
+      {/* FORMULÁRIO */}
       <section className="cf-section" id="cadastro">
         <Reveal>
-          <form className="cf-form" onSubmit={(e) => e.preventDefault()}>
+          <form className="cf-form" onSubmit={handleSubmit} noValidate>
             <h2 className="cf-h2 cf-h2-sm">Lista VIP</h2>
             <label className="cf-field">
               <span>Nome</span>
@@ -311,6 +311,7 @@ export default function ConfortoLP() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
+              {errors.name && <em className="cf-error">{errors.name}</em>}
             </label>
             <label className="cf-field">
               <span>Telefone</span>
@@ -321,10 +322,16 @@ export default function ConfortoLP() {
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: maskPhone(e.target.value) }))}
               />
+              {errors.phone && <em className="cf-error">{errors.phone}</em>}
             </label>
-            <button type="submit" className="cf-cta cf-cta-block">Garantir minha vaga VIP</button>
+            <button type="submit" className="cf-cta cf-cta-block" disabled={sending}>
+              {sending ? "Enviando..." : "Garantir minha vaga VIP"}
+            </button>
             <p className="cf-fineprint">Seus dados são usados apenas para avisar sobre o lançamento.</p>
           </form>
+        </Reveal>
+      </section>
+
         </Reveal>
       </section>
 
