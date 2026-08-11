@@ -254,9 +254,13 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   // entries are never dropped from the totals.
   const getDeltas = () => {
     // Group in-window snapshots by group_id (already ordered ascending by recorded_at)
+    const fromMs = range.from ? range.from.getTime() : null;
+    const toMs = range.to ? range.to.getTime() : null;
     const byGroup = new Map<string, any[]>();
     snapshots.forEach(s => {
-      if (campaignStart != null && new Date(s.recorded_at).getTime() < campaignStart) return;
+      const t = new Date(s.recorded_at).getTime();
+      if (fromMs != null && t < fromMs) return;
+      if (toMs != null && t > toMs) return;
       const arr = byGroup.get(s.group_id) || [];
       arr.push(s);
       byGroup.set(s.group_id, arr);
@@ -283,8 +287,13 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   };
 
 
-  const { entered, exited } = getDeltas();
+  // Prioriza o rastreio real de entradas/saídas por período; cai para snapshots.
+  const { entered, exited } = movement ?? getDeltas();
+  const participantsToday = totalParticipants;
+  const participantsBefore = Math.max(0, participantsToday - entered + exited);
+  const netChange = entered - exited;
   const entryRate = totalParticipants > 0 ? ((entered / (entered + exited || 1)) * 100).toFixed(1) : '0';
+
 
   // Use liveLinks for click/redirect stats
   const totalClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
