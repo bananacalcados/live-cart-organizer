@@ -257,13 +257,26 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
             </div>
           ))}
         </div>
-        <div className="px-5 pb-2 text-[11px] text-zinc-500">
-          Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
-          Faturamento do período: <span className="text-zinc-300 font-medium">{BRL(salesTotal)}</span> (produtos + frete)
-          {unattributed > 0.01 && (
-            <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
-          )}. Mesma fonte de dados do Dashboard Geral.
+        <div className="px-5 pb-2 space-y-1 text-[11px] text-zinc-500">
+          <div>
+            Venda de produtos = total pago das vendas menos frete, rateado por item (já considera descontos).
+            {unattributed > 0.01 && (
+              <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
+            )}
+          </div>
+          <div className="text-zinc-400">
+            Conferência com o Dashboard Geral (mesma fonte):{" "}
+            <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
+            {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
+            {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
+            {" · "}
+            <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
+              Custo de produto {BRL(dashboardCost)}
+            </span>
+            {" · "}Total das vendas do período {BRL(salesTotal)}
+          </div>
         </div>
+
 
 
 
