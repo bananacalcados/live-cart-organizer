@@ -63,12 +63,19 @@ function KpiCard({ icon, value, label, tooltip, variant = 'default' }: KpiCardPr
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
+const digitsOnly = (s: string) => String(s || "").replace(/\D/g, "");
+
 export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, messages, campaignId, onRefreshGroups }: CampaignDashboardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [liveLinks, setLiveLinks] = useState<any[]>(links);
   const [liveGroups, setLiveGroups] = useState<any[]>(propGroups);
+  const [period, setPeriod] = useState<string>("campaign");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+  const [movement, setMovement] = useState<{ entered: number; exited: number } | null>(null);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 
   // Keep liveLinks in sync with prop changes
   useEffect(() => { setLiveLinks(links); }, [links]);
