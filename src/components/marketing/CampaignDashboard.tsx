@@ -252,6 +252,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     autoRefreshRef.current = setInterval(async () => {
       fetchLinkStats();
       fetchSnapshots();
+      fetchClickLog();
       fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
     }, AUTO_REFRESH_INTERVAL);
@@ -259,7 +260,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
-  }, [fetchLinkStats, fetchSnapshots, fetchGroupsFromDb, onRefreshGroups]);
+  }, [fetchLinkStats, fetchSnapshots, fetchClickLog, fetchGroupsFromDb, onRefreshGroups]);
 
   // Realtime subscription for link stats
   useEffect(() => {
@@ -351,7 +352,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       await res.json();
       await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
-      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement()]);
+      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement(), fetchClickLog()]);
     } catch { /* ignore */ }
     finally { setIsRefreshing(false); }
   };
