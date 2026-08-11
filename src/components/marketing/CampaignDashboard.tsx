@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Users, UserPlus, UserMinus, Percent, BarChart3, CheckCircle,
-  RefreshCw, Loader2, ArrowRightLeft, Link2
+  RefreshCw, Loader2, ArrowRightLeft, Link2, History
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CampaignDashboardProps {
