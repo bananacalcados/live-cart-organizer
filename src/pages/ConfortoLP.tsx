@@ -389,8 +389,7 @@ const CSS = `
   .cf-section{padding:36px 24px}
   .cf-cards{grid-template-columns:repeat(3,1fr);gap:18px}
   .cf-stores{grid-template-columns:repeat(2,1fr);gap:18px}
-  .cf-count-box{min-width:82px;padding:14px 16px}
-  .cf-count-box strong{font-size:2.6rem}
+  .cf-count-box{min-width:150px;padding:24px 28px}
 }
 @media (prefers-reduced-motion: reduce){
   .cf-root *{animation:none !important;transition:none !important}
