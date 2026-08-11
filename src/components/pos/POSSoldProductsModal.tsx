@@ -7,13 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { fetchParentNames, type SoldItem } from "@/lib/pos/soldProductsData";
+import { fetchParentNames, CHANNEL_LABEL, type SoldChannel, type SoldItem } from "@/lib/pos/soldProductsData";
 import { Loader2, Package, Search, Download } from "lucide-react";
 
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-interface SaleRef { id: string; total: number; shipping_cost: number }
+interface SaleRef { id: string; total: number; shipping_cost: number; store_id?: string | null; sale_type?: string | null }
 
 interface Props {
   open: boolean;
@@ -26,7 +26,7 @@ interface Props {
   dashboardRevenue: number;
   dashboardCost: number;
   periodLabel: string;
-
+  stores: { id: string; name: string }[];
 }
 
 interface RawItem {
@@ -39,6 +39,9 @@ interface RawItem {
   qty: number;
   revenue: number;
   cost: number;
+  storeId: string | null;
+  channel: SoldChannel;
+  shipping: number;
 }
 
 interface GroupRow {
@@ -63,17 +66,61 @@ function stripVariantSuffix(name: string, color?: string | null, size?: string |
   return out || name;
 }
 
-export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel }: Props) {
+export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattributedRevenue, dashboardRevenue, dashboardCost, periodLabel, stores }: Props) {
   const [loading, setLoading] = useState(false);
   const [raw, setRaw] = useState<RawItem[]>([]);
   const [groupBy, setGroupBy] = useState<"variant" | "parent">("variant");
   const [curve, setCurve] = useState<"all" | "A" | "B" | "C">("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"revenue" | "qty" | "markup" | "margin">("revenue");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | SoldChannel>("all");
 
-  const shippingTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0), [sales]);
+  const storeName = (id: string | null) => (id ? (stores.find((s) => s.id === id)?.name || "Loja desconhecida") : "Sem loja");
+
+  const scoped = useMemo(
+    () => raw.filter((r) =>
+      (storeFilter === "all" || r.storeId === storeFilter) &&
+      (channelFilter === "all" || r.channel === channelFilter)
+    ),
+    [raw, storeFilter, channelFilter]
+  );
+
+  const hasScope = storeFilter !== "all" || channelFilter !== "all";
+
+  const shippingTotal = useMemo(
+    () => (hasScope
+      ? scoped.reduce((a, r) => a + r.shipping, 0)
+      : sales.reduce((a, s) => a + Number(s.shipping_cost || 0), 0)),
+    [hasScope, scoped, sales]
+  );
   const salesTotal = useMemo(() => sales.reduce((a, s) => a + Number(s.total || 0), 0), [sales]);
-  const unattributed = unattributedRevenue;
+  const unattributed = hasScope ? 0 : unattributedRevenue;
+
+  /** Comparativo de margem por canal e por loja (sempre sobre o período inteiro). */
+  const breakdown = useMemo(() => {
+    const agg = (keyOf: (r: RawItem) => string, labelOf: (r: RawItem) => string) => {
+      const m = new Map<string, { label: string; qty: number; revenue: number; cost: number }>();
+      for (const r of raw) {
+        const k = keyOf(r);
+        const cur = m.get(k) || { label: labelOf(r), qty: 0, revenue: 0, cost: 0 };
+        cur.qty += r.qty; cur.revenue += r.revenue; cur.cost += r.cost;
+        m.set(k, cur);
+      }
+      return Array.from(m.entries())
+        .map(([key, v]) => ({
+          key, ...v,
+          markup: v.cost > 0 ? v.revenue / v.cost : 0,
+          marginPct: v.revenue > 0 ? ((v.revenue - v.cost) / v.revenue) * 100 : 0,
+        }))
+        .sort((a, b) => b.marginPct - a.marginPct);
+    };
+    return {
+      byChannel: agg((r) => r.channel, (r) => CHANNEL_LABEL[r.channel]),
+      byStore: agg((r) => r.storeId || "none", (r) => storeName(r.storeId)),
+    };
+  }, [raw, stores]);
+
 
   useEffect(() => {
     if (!open) return;
@@ -107,6 +154,9 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
             qty: it.quantity,
             revenue: it.revenue,
             cost: it.cost,
+            storeId: it.store_id ?? null,
+            channel: it.channel,
+            shipping: it.shipping_share || 0,
           };
         });
         if (!cancelled) setRaw(mapped);
@@ -125,7 +175,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
 
   const rows: GroupRow[] = useMemo(() => {
     const map = new Map<string, { label: string; sub: string; qty: number; revenue: number; cost: number }>();
-    for (const it of raw) {
+    for (const it of scoped) {
       const key = groupBy === "parent"
         ? it.parentKey
         : `${it.sku || it.name}|${it.size || ""}|${it.color || ""}`;
@@ -147,7 +197,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
       const c: "A" | "B" | "C" = pct <= 0.8 ? "A" : pct <= 0.95 ? "B" : "C";
       return { ...r, curve: c };
     });
-  }, [raw, groupBy]);
+  }, [scoped, groupBy]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -224,6 +274,25 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
               <SelectItem value="C">Curva C (5%)</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={storeFilter} onValueChange={(v) => setStoreFilter(v)}>
+            <SelectTrigger className="w-[190px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Loja: todas</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={channelFilter} onValueChange={(v: any) => setChannelFilter(v)}>
+            <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Canal: todos</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+              <SelectItem value="physical">Loja física</SelectItem>
+              <SelectItem value="live">Live</SelectItem>
+              <SelectItem value="other">Outros</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
             <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -264,17 +333,69 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
               <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
             )}
           </div>
-          <div className="text-zinc-400">
-            Conferência com o Dashboard Geral (mesma fonte):{" "}
-            <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
-            {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
-            {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
-            {" · "}
-            <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
-              Custo de produto {BRL(dashboardCost)}
-            </span>
-            {" · "}Total das vendas do período {BRL(salesTotal)}
-          </div>
+          {hasScope ? (
+            <div className="text-amber-400">
+              Filtro ativo ({channelFilter !== "all" ? CHANNEL_LABEL[channelFilter as SoldChannel] : "todos os canais"}
+              {storeFilter !== "all" ? ` · ${storeName(storeFilter)}` : ""}) — os valores acima são do recorte, não do dashboard inteiro.
+            </div>
+          ) : (
+            <div className="text-zinc-400">
+              Conferência com o Dashboard Geral (mesma fonte):{" "}
+              <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
+              {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
+              {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
+              {" · "}
+              <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
+                Custo de produto {BRL(dashboardCost)}
+              </span>
+              {" · "}Total das vendas do período {BRL(salesTotal)}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {[
+            { title: "Margem por canal", list: breakdown.byChannel, onPick: (k: string) => setChannelFilter(k as any) },
+            { title: "Margem por loja", list: breakdown.byStore, onPick: (k: string) => setStoreFilter(k === "none" ? "all" : k) },
+          ].map((block) => (
+            <div key={block.title} className="rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+              <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-zinc-400 border-b border-zinc-800">{block.title}</div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-zinc-500">
+                    <th className="text-left px-3 py-1 font-medium">Origem</th>
+                    <th className="text-right px-2 py-1 font-medium">Qtd</th>
+                    <th className="text-right px-2 py-1 font-medium">Custo</th>
+                    <th className="text-right px-2 py-1 font-medium">Venda</th>
+                    <th className="text-right px-2 py-1 font-medium">Markup</th>
+                    <th className="text-right px-3 py-1 font-medium">Margem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.list.length === 0 ? (
+                    <tr><td colSpan={6} className="px-3 py-2 text-zinc-600">Sem dados no período.</td></tr>
+                  ) : block.list.map((b, idx) => (
+                    <tr
+                      key={b.key}
+                      onClick={() => block.onPick(b.key)}
+                      className="border-t border-zinc-900 hover:bg-zinc-800/50 cursor-pointer"
+                    >
+                      <td className="px-3 py-1 text-zinc-200">
+                        {b.label}
+                        {idx === 0 && block.list.length > 1 && <span className="ml-2 text-emerald-400">maior margem</span>}
+                        {idx === block.list.length - 1 && block.list.length > 1 && <span className="ml-2 text-rose-400">menor margem</span>}
+                      </td>
+                      <td className="px-2 py-1 text-right text-zinc-300">{b.qty}</td>
+                      <td className="px-2 py-1 text-right text-rose-300">{BRL(b.cost)}</td>
+                      <td className="px-2 py-1 text-right text-emerald-300">{BRL(b.revenue)}</td>
+                      <td className="px-2 py-1 text-right text-fuchsia-300">{b.markup > 0 ? `${b.markup.toFixed(2)}x` : "—"}</td>
+                      <td className="px-3 py-1 text-right text-cyan-300">{b.marginPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
 
 
