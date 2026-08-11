@@ -113,6 +113,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string; storeId?: string | null }>({ open: false, bucket: "", storeId: null });
   const [expandedStore, setExpandedStore] = useState<string | null>(null);
+  const [soldProductsOpen, setSoldProductsOpen] = useState(false);
+
 
   const periodRange = useMemo(() => {
     const now = new Date();
