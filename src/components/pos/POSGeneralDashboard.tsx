@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { startOfMonth, endOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore, subMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
+import { fetchSoldProductsData } from "@/lib/pos/soldProductsData";
+
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSSoldProductsModal } from "./POSSoldProductsModal";
