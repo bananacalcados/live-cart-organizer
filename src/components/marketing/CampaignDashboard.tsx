@@ -74,6 +74,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
   const [movement, setMovement] = useState<{ entered: number; exited: number } | null>(null);
+  const [clickLog, setClickLog] = useState<{ clicks: number; redirects: number } | null>(null);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 
@@ -189,6 +190,35 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
 
   useEffect(() => { fetchMovement(); }, [fetchMovement]);
 
+  // Cliques/redirects REAIS do período (log group_redirect_clicks).
+  // Os contadores em group_redirect_links são acumulados desde sempre — não dá
+  // para comparar com entradas do período. O log só existe a partir de agora,
+  // então caímos para o acumulado quando ainda não há registros na janela.
+  const fetchClickLog = useCallback(async () => {
+    if (!campaignId) { setClickLog(null); return; }
+    const fromIso = range.from ? range.from.toISOString() : null;
+    const toIso = range.to ? range.to.toISOString() : null;
+
+    const build = (kind: "click" | "redirect") => {
+      let q = supabase
+        .from("group_redirect_clicks")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId)
+        .eq("kind", kind);
+      if (fromIso) q = q.gte("created_at", fromIso);
+      if (toIso) q = q.lte("created_at", toIso);
+      return q;
+    };
+
+    const [cRes, rRes] = await Promise.all([build("click"), build("redirect")]);
+    if (cRes.error || rRes.error) { setClickLog(null); return; }
+    setClickLog({ clicks: cRes.count || 0, redirects: rRes.count || 0 });
+  }, [campaignId, range.from, range.to]);
+
+  useEffect(() => { fetchClickLog(); }, [fetchClickLog]);
+
+
+
 
 
   // Initial sync: fetch group participant counts from WhatsApp on mount
@@ -222,6 +252,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     autoRefreshRef.current = setInterval(async () => {
       fetchLinkStats();
       fetchSnapshots();
+      fetchClickLog();
       fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
     }, AUTO_REFRESH_INTERVAL);
@@ -229,7 +260,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
-  }, [fetchLinkStats, fetchSnapshots, fetchGroupsFromDb, onRefreshGroups]);
+  }, [fetchLinkStats, fetchSnapshots, fetchClickLog, fetchGroupsFromDb, onRefreshGroups]);
 
   // Realtime subscription for link stats
   useEffect(() => {
@@ -296,8 +327,12 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
 
 
   // Use liveLinks for click/redirect stats
-  const totalClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
-  const totalRedirects = liveLinks.reduce((sum: number, l: any) => sum + (l.redirect_count || 0), 0);
+  const cumulativeClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
+  const cumulativeRedirects = liveLinks.reduce((sum: number, l: any) => sum + (l.redirect_count || 0), 0);
+  // Só usa o log quando ele tem registros na janela; senão mostra o acumulado.
+  const usingClickLog = !!clickLog && (clickLog.clicks > 0 || clickLog.redirects > 0);
+  const totalClicks = usingClickLog ? clickLog!.clicks : cumulativeClicks;
+  const totalRedirects = usingClickLog ? clickLog!.redirects : cumulativeRedirects;
   const sentMessages = messages.filter((m: any) => m.status === 'sent').length;
   const pendingMessages = messages.filter((m: any) => m.status === 'pending').length;
 
@@ -317,7 +352,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       await res.json();
       await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
-      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement()]);
+      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement(), fetchClickLog()]);
     } catch { /* ignore */ }
     finally { setIsRefreshing(false); }
   };
@@ -400,20 +435,24 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
         <KpiCard
           icon={<BarChart3 className="h-5 w-5" />}
           value={totalClicks.toLocaleString('pt-BR')}
-          label="Clicks no link"
-          tooltip="Total de vezes que o link de redirecionamento foi acessado"
+          label={usingClickLog ? `Clicks no link (${periodLabel})` : 'Clicks no link (acumulado)'}
+          tooltip={usingClickLog
+            ? 'Cliques registrados dentro do período selecionado'
+            : 'Total acumulado desde a criação do link — o histórico por período começou a ser gravado agora, então ainda não dá para comparar com as entradas do período'}
         />
         <KpiCard
           icon={<ArrowRightLeft className="h-5 w-5" />}
           value={totalRedirects.toLocaleString('pt-BR')}
-          label="Redirecionados"
-          tooltip="Usuários que foram redirecionados com sucesso para o WhatsApp"
+          label={usingClickLog ? `Redirecionados (${periodLabel})` : 'Redirecionados (acumulado)'}
+          tooltip={usingClickLog
+            ? 'Redirecionamentos com sucesso para o WhatsApp dentro do período'
+            : 'Total acumulado desde a criação do link'}
         />
         <KpiCard
           icon={<UserPlus className="h-5 w-5" />}
           value={entered.toLocaleString('pt-BR')}
-          label="Entraram no grupo"
-          tooltip="Participantes que de fato entraram no grupo"
+          label={`Entraram no grupo (${periodLabel})`}
+          tooltip="Entradas confirmadas pelo rastreio de membros no período selecionado"
         />
         <KpiCard
           icon={<Link2 className="h-5 w-5" />}

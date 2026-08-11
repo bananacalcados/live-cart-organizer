@@ -56,6 +56,20 @@ serve(async (req) => {
       .eq('id', link.id)
       .then(() => {});
 
+    // Log histórico do clique (permite filtrar por período no dashboard)
+    const uaHeader = req.headers.get('user-agent') || '';
+    const utmSource = url.searchParams.get('utm_source');
+    supabase.from('group_redirect_clicks')
+      .insert({
+        link_id: link.id,
+        campaign_id: link.campaign_id,
+        slug,
+        kind: 'click',
+        user_agent: uaHeader.slice(0, 400),
+        utm_source: utmSource,
+      })
+      .then(() => {});
+
     // ─── FAST PATH: cached URL ───
     let redirectUrl: string | null = null;
     const cachedAt = link.cached_at ? new Date(link.cached_at).getTime() : 0;
@@ -101,6 +115,17 @@ serve(async (req) => {
     supabase.from('group_redirect_links')
       .update({ redirect_count: (link.redirect_count || 0) + 1 })
       .eq('id', link.id)
+      .then(() => {});
+
+    supabase.from('group_redirect_clicks')
+      .insert({
+        link_id: link.id,
+        campaign_id: link.campaign_id,
+        slug,
+        kind: 'redirect',
+        user_agent: uaHeader.slice(0, 400),
+        utm_source: utmSource,
+      })
       .then(() => {});
 
     // ─── API MODE: return JSON ───

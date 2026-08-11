@@ -7830,6 +7830,50 @@ export type Database = {
         }
         Relationships: []
       }
+      group_redirect_clicks: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          group_db_id: string | null
+          id: string
+          kind: string
+          link_id: string
+          slug: string
+          user_agent: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          group_db_id?: string | null
+          id?: string
+          kind?: string
+          link_id: string
+          slug: string
+          user_agent?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          group_db_id?: string | null
+          id?: string
+          kind?: string
+          link_id?: string
+          slug?: string
+          user_agent?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_redirect_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "group_redirect_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_redirect_links: {
         Row: {
           cached_at: string | null
