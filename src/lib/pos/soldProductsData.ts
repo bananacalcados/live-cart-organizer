@@ -10,6 +10,27 @@ export interface SoldSaleRef {
   id: string;
   total: number;
   shipping_cost: number;
+  /** loja da venda (para filtro de loja no modal) */
+  store_id?: string | null;
+  /** tipo da venda (physical | online | live | exchange) — vira canal */
+  sale_type?: string | null;
+}
+
+export type SoldChannel = "physical" | "online" | "live" | "other";
+
+export const CHANNEL_LABEL: Record<SoldChannel, string> = {
+  physical: "Loja física",
+  online: "Online",
+  live: "Live",
+  other: "Outros",
+};
+
+export function toChannel(saleType?: string | null): SoldChannel {
+  const s = (saleType || "").toLowerCase();
+  if (s === "physical" || s === "fisica" || s === "loja") return "physical";
+  if (s === "online" || s === "site") return "online";
+  if (s === "live") return "live";
+  return "other";
 }
 
 export interface SoldItem {
