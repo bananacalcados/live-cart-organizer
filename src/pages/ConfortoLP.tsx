@@ -108,7 +108,7 @@ export default function ConfortoLP() {
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500;600&display=swap";
+    link.href = "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap";
     document.head.appendChild(link);
     return () => { link.remove(); };
   }, []);
@@ -143,7 +143,7 @@ export default function ConfortoLP() {
       {/* HERO */}
       <header className="cf-hero">
         <span className="cf-eyebrow">Banana Confort · Lançamento 14/08</span>
-        <h1 className="cf-h1">Banana veste Conforto</h1>
+        <h1 className="cf-h1"><span className="cf-brand">Banana</span> veste Conforto</h1>
         <p className="cf-sub">A nova Coleção Conforto chegou — leveza que você sente no primeiro passo.</p>
 
         <div className="cf-count" role="timer" aria-label="Contagem regressiva para o lançamento">
@@ -181,7 +181,7 @@ export default function ConfortoLP() {
         <div className="cf-cards">
           {["Tênis", "Sandálias", "Tamancos"].map((t, i) => (
             <Reveal key={t} delay={i * 90}>
-              <article className="cf-card">
+              <article className={`cf-card cf-card-${i + 1}`}>
                 <span className="cf-card-num">0{i + 1}</span>
                 <h3>{t}</h3>
                 <p>{i === 0 ? "Knit respirável que abraça o pé." : i === 1 ? "Tiras suaves e apoio no calcanhar." : "Estabilidade com toque acolchoado."}</p>
