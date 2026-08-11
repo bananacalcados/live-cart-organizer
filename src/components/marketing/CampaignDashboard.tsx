@@ -317,16 +317,45 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       await res.json();
       await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
-      await Promise.all([fetchSnapshots(), fetchLinkStats()]);
+      await Promise.all([fetchSnapshots(), fetchLinkStats(), fetchMovement()]);
     } catch { /* ignore */ }
     finally { setIsRefreshing(false); }
   };
 
+  const periodLabel = period === "all"
+    ? "todo o histórico"
+    : period === "campaign"
+      ? "desde o início da campanha"
+      : period === "today"
+        ? "hoje"
+        : period === "custom"
+          ? `${customFrom || "início"} até ${customTo || "hoje"}`
+          : `últimos ${period} dias`;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground">VISÃO GERAL DA CAMPANHA</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[190px] h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="7">Últimos 7 dias</SelectItem>
+              <SelectItem value="30">Últimos 30 dias</SelectItem>
+              <SelectItem value="90">Últimos 90 dias</SelectItem>
+              <SelectItem value="campaign">Desde o início da campanha</SelectItem>
+              <SelectItem value="all">Todo o histórico</SelectItem>
+              <SelectItem value="custom">Período personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {period === "custom" && (
+            <div className="flex items-center gap-1">
+              <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[145px] text-xs" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[145px] text-xs" />
+            </div>
+          )}
           <span className="text-[10px] text-muted-foreground">Atualização automática a cada 30s</span>
           <Button variant="outline" size="sm" onClick={refreshData} disabled={isRefreshing} className="gap-1">
             {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -334,6 +363,37 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
           </Button>
         </div>
       </div>
+
+      {/* Movimentação do período */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          icon={<History className="h-5 w-5" />}
+          value={participantsBefore.toLocaleString('pt-BR')}
+          label={`Antes do período (${periodLabel})`}
+          tooltip="Estimativa do total de participantes no início do período: total atual − entradas + saídas do período"
+        />
+        <KpiCard
+          icon={<Users className="h-5 w-5" />}
+          value={participantsToday.toLocaleString('pt-BR')}
+          label="Hoje nos grupos"
+        />
+        <KpiCard
+          icon={<UserPlus className="h-5 w-5" />}
+          value={entered.toLocaleString('pt-BR')}
+          label={`Entradas (${periodLabel})`}
+          variant="success"
+        />
+        <KpiCard
+          icon={<UserMinus className="h-5 w-5" />}
+          value={exited.toLocaleString('pt-BR')}
+          label={`Saídas (${periodLabel})`}
+          variant={exited > entered ? 'danger' : 'default'}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Saldo do período: <span className={netChange >= 0 ? 'text-green-500' : 'text-red-500'}>{netChange >= 0 ? '+' : ''}{netChange.toLocaleString('pt-BR')}</span> participantes
+      </p>
+
 
       {/* KPI Row 1 - Conversion funnel */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
