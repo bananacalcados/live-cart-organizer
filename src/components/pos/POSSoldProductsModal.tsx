@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { fetchParentNames, CHANNEL_LABEL, type SoldChannel, type SoldItem } from "@/lib/pos/soldProductsData";
 import { Loader2, Package, Search, Download } from "lucide-react";
+import { POSProductSalesDrilldown, type DrilldownLine } from "./POSProductSalesDrilldown";
 
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -30,6 +31,8 @@ interface Props {
 }
 
 interface RawItem {
+  saleId: string;
+  unitPrice: number;
   sku: string | null;
   name: string;
   size: string | null;
@@ -75,6 +78,7 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
   const [sortBy, setSortBy] = useState<"revenue" | "qty" | "markup" | "margin">("revenue");
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [channelFilter, setChannelFilter] = useState<"all" | SoldChannel>("all");
+  const [drill, setDrill] = useState<{ title: string; lines: DrilldownLine[] } | null>(null);
 
   const storeName = (id: string | null) => (id ? (stores.find((s) => s.id === id)?.name || "Loja desconhecida") : "Sem loja");
 
@@ -145,6 +149,8 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
             : stripVariantSuffix(childName, color, size);
           const parentKey = (p?.parent_sku || parentName).toString().trim().toUpperCase();
           return {
+            saleId: it.sale_id,
+            unitPrice: it.unit_price,
             sku: it.sku,
             name: childName,
             size,
@@ -172,6 +178,28 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
 
 
 
+
+  const groupKeyOf = (it: RawItem) =>
+    groupBy === "parent" ? it.parentKey : `${it.sku || it.name}|${it.size || ""}|${it.color || ""}`;
+
+  const openDrill = (key: string, label: string) => {
+    const lines: DrilldownLine[] = scoped
+      .filter((it) => groupKeyOf(it) === key)
+      .map((it) => ({
+        saleId: it.saleId,
+        sku: it.sku,
+        name: it.name,
+        size: it.size,
+        color: it.color,
+        qty: it.qty,
+        unitPrice: it.unitPrice,
+        revenue: it.revenue,
+        cost: it.cost,
+        storeId: it.storeId,
+        channel: it.channel,
+      }));
+    setDrill({ title: label, lines });
+  };
 
   const rows: GroupRow[] = useMemo(() => {
     const map = new Map<string, { label: string; sub: string; qty: number; revenue: number; cost: number }>();
@@ -450,7 +478,11 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
                   const markup = r.cost > 0 ? r.revenue / r.cost : 0;
                   const margin = r.revenue > 0 ? ((r.revenue - r.cost) / r.revenue) * 100 : 0;
                   return (
-                    <tr key={r.key} className="border-t border-zinc-900 hover:bg-zinc-900/50">
+                    <tr
+                      key={r.key}
+                      onClick={() => openDrill(r.key, r.label)}
+                      className="border-t border-zinc-900 hover:bg-zinc-900/50 cursor-pointer"
+                    >
                       <td className="px-5 py-2">
                         <div className="text-zinc-100 font-medium">{r.label}</div>
                         {r.sub && <div className="text-xs text-zinc-500">{r.sub}</div>}
@@ -471,6 +503,15 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
           )}
         </ScrollArea>
       </DialogContent>
+      {drill && (
+        <POSProductSalesDrilldown
+          open={!!drill}
+          onOpenChange={(v) => !v && setDrill(null)}
+          title={drill.title}
+          lines={drill.lines}
+          stores={stores}
+        />
+      )}
     </Dialog>
   );
 }
