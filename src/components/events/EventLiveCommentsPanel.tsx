@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw } from "lucide-react";
+import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -32,6 +32,10 @@ interface HandleOrderStats {
   paidDates: string[];
   openPast: number;
   openDates: string[];
+  // Pedidos CANCELADOS (deste evento e de lives anteriores)
+  cancelledThisEvent: number;
+  cancelledPast: number;
+  cancelledDates: string[];
 }
 
 
@@ -224,6 +228,23 @@ const CommentRow = memo(function CommentRow({
               <AlertTriangle className="h-2.5 w-2.5" />
               {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
               {stats.openDates.length > 0 && ` (${stats.openDates.slice(0, 3).join(", ")}${stats.openDates.length > 3 ? "…" : ""})`}
+            </span>
+          )}
+          {stats && (stats.cancelledThisEvent > 0 || stats.cancelledPast > 0) && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+              title={
+                stats.cancelledDates.length
+                  ? `Pedidos cancelados em: ${stats.cancelledDates.join(" • ")}`
+                  : "Pedido cancelado no histórico deste cliente"
+              }
+            >
+              <XCircle className="h-2.5 w-2.5" />
+              {stats.cancelledThisEvent > 0
+                ? `Cancelado neste evento${stats.cancelledThisEvent > 1 ? ` (${stats.cancelledThisEvent})` : ""}`
+                : `${stats.cancelledPast} ${stats.cancelledPast === 1 ? "cancelado" : "cancelados"}`}
+              {stats.cancelledThisEvent === 0 && stats.cancelledDates.length > 0 &&
+                ` (${stats.cancelledDates.slice(0, 3).join(", ")}${stats.cancelledDates.length > 3 ? "…" : ""})`}
             </span>
           )}
           <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
@@ -561,7 +582,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const ensure = (h: string): HandleOrderStats => {
         let s = stats.get(h);
         if (!s) {
-          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [] };
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [], cancelledThisEvent: 0, cancelledPast: 0, cancelledDates: [] };
           stats.set(h, s);
         }
         return s;
@@ -571,6 +592,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         const oBatch = 100;
         const paidDatesByHandle = new Map<string, Set<string>>();
         const openDatesByHandle = new Map<string, Set<string>>();
+        const cancelledDatesByHandle = new Map<string, Set<string>>();
         for (let i = 0; i < customerIds.length; i += oBatch) {
           const batch = customerIds.slice(i, i + oBatch);
           const { data } = await supabase
@@ -596,7 +618,16 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   paidDatesByHandle.set(h, set);
                 }
               }
-            } else if (!isThisEvent && o.stage !== "cancelled") {
+            } else if (o.stage === "cancelled") {
+              // Pedido cancelado: sinaliza no histórico do cliente
+              if (isThisEvent) s.cancelledThisEvent += 1;
+              else s.cancelledPast += 1;
+              if (evDate) {
+                const set = cancelledDatesByHandle.get(h) || new Set<string>();
+                set.add(format(new Date(evDate), "dd/MM/yyyy"));
+                cancelledDatesByHandle.set(h, set);
+              }
+            } else if (!isThisEvent) {
               s.openPast += 1;
               if (evDate) {
                 const set = openDatesByHandle.get(h) || new Set<string>();
@@ -618,6 +649,10 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         openDatesByHandle.forEach((set, h) => {
           const s = stats.get(h);
           if (s) s.openDates = sortDates(set);
+        });
+        cancelledDatesByHandle.forEach((set, h) => {
+          const s = stats.get(h);
+          if (s) s.cancelledDates = sortDates(set);
         });
       }
 
