@@ -1,0 +1,387 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import tenisAsset from "@/assets/conforto-tenis.webp.asset.json";
+import sandaliaAsset from "@/assets/conforto-sandalia.webp.asset.json";
+
+const LAUNCH_MS = new Date("2026-08-14T09:00:00-03:00").getTime();
+
+const STORES = [
+  {
+    name: "Loja Centro",
+    address: "Rua Afonso Pena, 3473, Centro",
+    maps: "https://www.google.com/maps/search/?api=1&query=Rua+Afonso+Pena+3473+Centro+Governador+Valadares+MG",
+  },
+  {
+    name: "Loja Pérola",
+    address: "Rua Vale Formoso, 362, Jardim Pérola",
+    maps: "https://www.google.com/maps/search/?api=1&query=Rua+Vale+Formoso+362+Jardim+Perola+Governador+Valadares+MG",
+  },
+];
+
+function useCountdown(target: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, target - now);
+  return {
+    days: Math.floor(diff / 86400000),
+    hours: Math.floor((diff % 86400000) / 3600000),
+    minutes: Math.floor((diff % 3600000) / 60000),
+    seconds: Math.floor((diff % 60000) / 1000),
+    finished: diff === 0,
+  };
+}
+
+function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`cf-reveal ${visible ? "is-visible" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
+function maskPhone(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+const Cloud = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg className={className} style={style} viewBox="0 0 220 80" fill="none" aria-hidden="true">
+    <path
+      d="M40 68c-16 0-28-10-28-23S24 22 40 23c4-13 17-22 32-22 17 0 31 11 34 26 3-2 7-3 11-3 12 0 21 9 21 20 0 1 0 3-1 4 12 1 21 10 21 21H40z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const Feather = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M20.2 3.8c-3-3-9 .3-12.6 3.9-2.9 2.9-3.4 6.8-2.5 9.7L2 20.5l1.4 1.4 3.1-3.1c2.9.9 6.8.4 9.7-2.5 3.6-3.6 6.9-9.6 4-12.5Z" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M14.5 9.5 6.6 17.4" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const Pin = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+    <path d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="12" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+export default function ConfortoLP() {
+  const c = useCountdown(LAUNCH_MS);
+  const [form, setForm] = useState({ name: "", phone: "" });
+
+  useEffect(() => {
+    document.title = "Coleção Conforto | Banana Calçados";
+    const setMeta = (name: string, content: string) => {
+      let el = document.querySelector(`meta[name="${name}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute("name", name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+    setMeta("description", "Banana veste Conforto: a nova Coleção Conforto chega em 14/08. Leveza que você sente no primeiro passo. Cadastre-se e concorra a um tênis.");
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500;600&display=swap";
+    document.head.appendChild(link);
+    return () => { link.remove(); };
+  }, []);
+
+  const countdownBoxes = useMemo(
+    () => [
+      { v: c.days, l: "dias" },
+      { v: c.hours, l: "horas" },
+      { v: c.minutes, l: "min" },
+      { v: c.seconds, l: "seg" },
+    ],
+    [c]
+  );
+
+  const scrollToForm = () => {
+    document.getElementById("cadastro")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="cf-root">
+      <style>{CSS}</style>
+
+      {/* Sky background with drifting clouds */}
+      <div className="cf-sky" aria-hidden="true">
+        <Cloud className="cf-cloud cf-cloud-1" />
+        <Cloud className="cf-cloud cf-cloud-2" />
+        <Cloud className="cf-cloud cf-cloud-3" />
+        <Feather className="cf-feather cf-feather-1" />
+        <Feather className="cf-feather cf-feather-2" />
+      </div>
+
+      {/* HERO */}
+      <header className="cf-hero">
+        <span className="cf-eyebrow">Banana Confort · Lançamento 14/08</span>
+        <h1 className="cf-h1">Banana veste Conforto</h1>
+        <p className="cf-sub">A nova Coleção Conforto chegou — leveza que você sente no primeiro passo.</p>
+
+        <div className="cf-count" role="timer" aria-label="Contagem regressiva para o lançamento">
+          {countdownBoxes.map((b) => (
+            <div className="cf-count-box" key={b.l}>
+              <strong>{String(b.v).padStart(2, "0")}</strong>
+              <span>{b.l}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="cf-hero-img">
+          <div className="cf-shadow" aria-hidden="true" />
+          <img
+            src={tenisAsset.url}
+            alt="Tênis caramelo em tecido knit da Coleção Conforto Banana Calçados"
+            width={720}
+            height={720}
+            loading="eager"
+            decoding="async"
+            className="cf-bob"
+          />
+        </div>
+
+        <button type="button" className="cf-cta" onClick={scrollToForm}>Quero participar</button>
+      </header>
+
+      {/* A COLEÇÃO */}
+      <section className="cf-section">
+        <Reveal>
+          <h2 className="cf-h2">A Coleção</h2>
+          <p className="cf-lead">Três famílias pensadas para o dia inteiro em pé — palmilha macia, solado leve e acabamento delicado.</p>
+        </Reveal>
+
+        <div className="cf-cards">
+          {["Tênis", "Sandálias", "Tamancos"].map((t, i) => (
+            <Reveal key={t} delay={i * 90}>
+              <article className="cf-card">
+                <span className="cf-card-num">0{i + 1}</span>
+                <h3>{t}</h3>
+                <p>{i === 0 ? "Knit respirável que abraça o pé." : i === 1 ? "Tiras suaves e apoio no calcanhar." : "Estabilidade com toque acolchoado."}</p>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+
+        <Reveal delay={80}>
+          <figure className="cf-figure">
+            <img
+              src={sandaliaAsset.url}
+              alt="Detalhe da sandália preta com palmilha nude acolchoada e monograma dourado"
+              width={960}
+              height={960}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption>Palmilha acolchoada · alívio a cada passo</figcaption>
+          </figure>
+        </Reveal>
+      </section>
+
+      {/* OFERTA */}
+      <section className="cf-section cf-offer">
+        <Reveal>
+          <div className="cf-offer-card">
+            <span className="cf-badge">Parcelamento</span>
+            <p className="cf-offer-big">Em até <strong>10x</strong> sem juros</p>
+            <p className="cf-lead">Em todos os modelos da Coleção Conforto, nas duas lojas.</p>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* SORTEIO */}
+      <section className="cf-section">
+        <Reveal>
+          <div className="cf-raffle">
+            <h2 className="cf-h2">Cadastre-se e concorra a um TÊNIS da Coleção Conforto 🎁</h2>
+            <p className="cf-lead">Um par sorteado entre os cadastros VIP no dia do lançamento.</p>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* FORMULÁRIO (visual) */}
+      <section className="cf-section" id="cadastro">
+        <Reveal>
+          <form className="cf-form" onSubmit={(e) => e.preventDefault()}>
+            <h2 className="cf-h2 cf-h2-sm">Lista VIP</h2>
+            <label className="cf-field">
+              <span>Nome</span>
+              <input
+                type="text"
+                placeholder="Seu nome completo"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </label>
+            <label className="cf-field">
+              <span>Telefone</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="(33) 99999-9999"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: maskPhone(e.target.value) }))}
+              />
+            </label>
+            <button type="submit" className="cf-cta cf-cta-block">Garantir minha vaga VIP</button>
+            <p className="cf-fineprint">Seus dados são usados apenas para avisar sobre o lançamento.</p>
+          </form>
+        </Reveal>
+      </section>
+
+      {/* LOJAS */}
+      <section className="cf-section">
+        <Reveal>
+          <h2 className="cf-h2">Lançamento nas lojas</h2>
+          <p className="cf-date">14/08</p>
+        </Reveal>
+        <div className="cf-stores">
+          {STORES.map((s, i) => (
+            <Reveal key={s.name} delay={i * 90}>
+              <article className="cf-store">
+                <h3><Pin /> {s.name}</h3>
+                <p>{s.address}</p>
+                <p className="cf-city">Governador Valadares – MG</p>
+                <a href={s.maps} target="_blank" rel="noopener noreferrer" className="cf-map-btn">Ver no mapa</a>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <footer className="cf-footer">
+        <p className="cf-logo">Banana<span>Calçados</span></p>
+        <nav className="cf-social" aria-label="Redes sociais">
+          <a href="https://www.instagram.com/bananacalcadosgv/" target="_blank" rel="noopener noreferrer">Instagram</a>
+          <a href="https://wa.me/553399999999" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </nav>
+        <p className="cf-copy">© {new Date().getFullYear()} Banana Calçados · Governador Valadares – MG</p>
+      </footer>
+    </div>
+  );
+}
+
+const CSS = `
+.cf-root{
+  --cf-cream:#FBF6EF; --cf-offwhite:#FFFDFA; --cf-nude:#EADFD1;
+  --cf-taupe:#A8968A; --cf-cacau:#5B4436; --cf-ink:#2C231D; --cf-gold:#C9A227;
+  position:relative; min-height:100vh; overflow-x:hidden;
+  background:linear-gradient(180deg,#F2F6FA 0%, var(--cf-cream) 38%, var(--cf-offwhite) 100%);
+  color:var(--cf-ink); font-family:Outfit,ui-sans-serif,system-ui,sans-serif; font-weight:300;
+}
+.cf-root *{box-sizing:border-box}
+.cf-sky{position:absolute;inset:0 0 auto;height:120vh;pointer-events:none;overflow:hidden}
+.cf-cloud{position:absolute;color:#fff;opacity:.75;width:220px}
+.cf-cloud-1{top:6%;left:-25%;animation:cf-drift 70s linear infinite}
+.cf-cloud-2{top:26%;left:-40%;width:150px;opacity:.55;animation:cf-drift 95s linear infinite 6s}
+.cf-cloud-3{top:52%;left:-35%;width:280px;opacity:.45;animation:cf-drift 120s linear infinite 12s}
+.cf-feather{position:absolute;color:var(--cf-gold);opacity:.35;width:26px}
+.cf-feather-1{top:18%;right:8%;animation:cf-float 16s ease-in-out infinite}
+.cf-feather-2{top:44%;left:7%;width:20px;animation:cf-float 22s ease-in-out infinite 3s}
+@keyframes cf-drift{to{transform:translateX(160vw)}}
+@keyframes cf-float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-18px) rotate(8deg)}}
+@keyframes cf-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+.cf-hero{position:relative;z-index:1;text-align:center;padding:56px 20px 40px;max-width:820px;margin:0 auto}
+.cf-eyebrow{display:inline-block;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--cf-taupe);border:1px solid rgba(168,150,138,.35);border-radius:999px;padding:6px 14px}
+.cf-h1{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:clamp(2.4rem,9vw,4.2rem);line-height:1.05;margin:20px 0 14px;color:var(--cf-cacau)}
+.cf-sub{font-size:clamp(.98rem,3.6vw,1.15rem);color:var(--cf-taupe);max-width:34ch;margin:0 auto;line-height:1.6}
+.cf-count{display:flex;justify-content:center;gap:10px;margin:26px 0 8px}
+.cf-count-box{background:rgba(255,255,255,.7);backdrop-filter:blur(6px);border:1px solid rgba(201,162,39,.25);border-radius:14px;padding:10px 12px;min-width:64px}
+.cf-count-box strong{display:block;font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--cf-cacau);font-variant-numeric:tabular-nums}
+.cf-count-box span{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--cf-taupe)}
+.cf-hero-img{position:relative;margin:18px auto 6px;max-width:560px}
+.cf-hero-img img{width:100%;height:auto;border-radius:24px;display:block}
+.cf-bob{animation:cf-bob 7s ease-in-out infinite}
+.cf-shadow{position:absolute;bottom:6px;left:12%;right:12%;height:22px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(91,68,54,.22),transparent 70%);filter:blur(3px)}
+.cf-cta{margin-top:22px;display:inline-block;border:0;cursor:pointer;background:linear-gradient(135deg,var(--cf-cacau),#3E2E24);color:#FFF8E9;font-family:Outfit,sans-serif;font-weight:500;font-size:1rem;letter-spacing:.02em;padding:16px 34px;border-radius:999px;box-shadow:0 12px 28px -12px rgba(91,68,54,.6);transition:transform .25s ease,box-shadow .25s ease}
+.cf-cta:hover{transform:translateY(-2px);box-shadow:0 18px 34px -14px rgba(91,68,54,.7)}
+.cf-cta-block{width:100%;margin-top:8px}
+
+.cf-section{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:56px 20px}
+.cf-h2{font-family:'Playfair Display',serif;font-weight:600;font-size:clamp(1.7rem,6vw,2.6rem);color:var(--cf-cacau);text-align:center;margin:0 0 12px;line-height:1.2}
+.cf-h2-sm{font-size:clamp(1.4rem,5vw,1.9rem)}
+.cf-lead{text-align:center;color:var(--cf-taupe);max-width:52ch;margin:0 auto;line-height:1.7;font-size:.98rem}
+.cf-cards{display:grid;gap:14px;margin-top:28px}
+.cf-card{background:var(--cf-offwhite);border:1px solid var(--cf-nude);border-radius:20px;padding:26px 22px;transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;height:100%}
+.cf-card:hover{transform:translateY(-6px);border-color:rgba(201,162,39,.5);box-shadow:0 18px 40px -22px rgba(91,68,54,.5)}
+.cf-card-num{font-size:11px;letter-spacing:.2em;color:var(--cf-gold)}
+.cf-card h3{font-family:'Playfair Display',serif;font-size:1.35rem;margin:8px 0 6px;color:var(--cf-cacau);font-weight:600}
+.cf-card p{color:var(--cf-taupe);font-size:.92rem;line-height:1.6;margin:0}
+.cf-figure{margin:34px 0 0;text-align:center}
+.cf-figure img{width:100%;max-width:720px;height:auto;border-radius:26px;display:block;margin:0 auto}
+.cf-figure figcaption{margin-top:12px;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cf-taupe)}
+
+.cf-offer-card{text-align:center;background:linear-gradient(160deg,#FFFDF8,#F3E9DC);border:1px solid rgba(201,162,39,.35);border-radius:28px;padding:44px 24px}
+.cf-badge{display:inline-block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#FFF8E9;background:var(--cf-gold);border-radius:999px;padding:6px 14px}
+.cf-offer-big{font-family:'Playfair Display',serif;font-size:clamp(2rem,8vw,3.4rem);color:var(--cf-cacau);margin:16px 0 10px;font-weight:500}
+.cf-offer-big strong{color:var(--cf-gold)}
+.cf-raffle{background:var(--cf-offwhite);border:1px dashed rgba(201,162,39,.55);border-radius:24px;padding:40px 22px}
+
+.cf-form{background:var(--cf-offwhite);border:1px solid var(--cf-nude);border-radius:24px;padding:30px 22px;max-width:480px;margin:0 auto;box-shadow:0 24px 50px -34px rgba(91,68,54,.55)}
+.cf-field{display:block;margin-bottom:14px}
+.cf-field span{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cf-taupe);margin-bottom:6px}
+.cf-field input{width:100%;height:50px;border-radius:14px;border:1px solid var(--cf-nude);background:#fff;padding:0 16px;font-family:Outfit,sans-serif;font-size:1rem;color:var(--cf-ink);outline:none;transition:border-color .2s ease,box-shadow .2s ease}
+.cf-field input:focus{border-color:var(--cf-gold);box-shadow:0 0 0 3px rgba(201,162,39,.16)}
+.cf-fineprint{text-align:center;font-size:.75rem;color:var(--cf-taupe);margin:12px 0 0}
+
+.cf-date{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,11vw,4.4rem);text-align:center;color:var(--cf-gold);margin:6px 0 22px;font-weight:700}
+.cf-stores{display:grid;gap:14px}
+.cf-store{background:var(--cf-offwhite);border:1px solid var(--cf-nude);border-radius:20px;padding:24px;height:100%}
+.cf-store h3{display:flex;align-items:center;gap:8px;font-family:'Playfair Display',serif;font-size:1.25rem;color:var(--cf-cacau);margin:0 0 8px;font-weight:600}
+.cf-store p{margin:0;color:var(--cf-taupe);font-size:.95rem;line-height:1.6}
+.cf-city{font-size:.85rem !important;opacity:.8}
+.cf-map-btn{display:inline-block;margin-top:14px;border:1px solid var(--cf-cacau);color:var(--cf-cacau);text-decoration:none;border-radius:999px;padding:10px 22px;font-size:.9rem;transition:background .25s ease,color .25s ease}
+.cf-map-btn:hover{background:var(--cf-cacau);color:#FFF8E9}
+
+.cf-footer{position:relative;z-index:1;text-align:center;padding:48px 20px 60px;border-top:1px solid var(--cf-nude);margin-top:20px}
+.cf-logo{font-family:'Playfair Display',serif;font-size:1.5rem;color:var(--cf-cacau);margin:0}
+.cf-logo span{color:var(--cf-gold);margin-left:6px}
+.cf-social{display:flex;gap:20px;justify-content:center;margin:14px 0}
+.cf-social a{color:var(--cf-taupe);text-decoration:none;font-size:.9rem;border-bottom:1px solid transparent;transition:color .2s ease,border-color .2s ease}
+.cf-social a:hover{color:var(--cf-cacau);border-color:var(--cf-gold)}
+.cf-copy{font-size:.75rem;color:var(--cf-taupe);margin:8px 0 0}
+
+.cf-reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.cf-reveal.is-visible{opacity:1;transform:none}
+
+@media (min-width:768px){
+  .cf-hero{padding:80px 24px 56px}
+  .cf-section{padding:80px 24px}
+  .cf-cards{grid-template-columns:repeat(3,1fr);gap:18px}
+  .cf-stores{grid-template-columns:repeat(2,1fr);gap:18px}
+  .cf-count-box{min-width:82px;padding:14px 16px}
+  .cf-count-box strong{font-size:2rem}
+}
+@media (prefers-reduced-motion: reduce){
+  .cf-root *{animation:none !important;transition:none !important}
+  .cf-reveal{opacity:1;transform:none}
+}
+`;
