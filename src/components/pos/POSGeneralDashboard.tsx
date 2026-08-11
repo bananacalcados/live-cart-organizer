@@ -15,6 +15,8 @@ import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
+import { POSSoldProductsModal } from "./POSSoldProductsModal";
+
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 import { DeliveryCostsCard } from "./DeliveryCostsCard";
@@ -113,6 +115,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string; storeId?: string | null }>({ open: false, bucket: "", storeId: null });
   const [expandedStore, setExpandedStore] = useState<string | null>(null);
+  const [soldProductsOpen, setSoldProductsOpen] = useState(false);
+
 
   const periodRange = useMemo(() => {
     const now = new Date();
@@ -630,6 +634,39 @@ export function POSGeneralDashboard({ onBack }: Props) {
             </p>
           </Panel>
 
+          {/* SOLD PRODUCTS */}
+          <Panel title="Produtos vendidos" icon={Package}>
+            <button
+              onClick={() => setSoldProductsOpen(true)}
+              className="w-full text-left rounded-xl border border-zinc-800 bg-gradient-to-r from-zinc-900 to-zinc-900/40 hover:border-blue-500/40 transition-colors p-4 grid grid-cols-2 md:grid-cols-4 gap-3"
+            >
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Itens vendidos</div>
+                <div className="text-xl font-bold text-zinc-100">{totals.items}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Custo de produto</div>
+                <div className="text-xl font-bold text-rose-300">{BRL(totals.cost)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-500">Markup médio</div>
+                <div className="text-xl font-bold text-fuchsia-300">{totals.markup.toFixed(2)}x</div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Margem de contribuição</div>
+                  <div className="text-xl font-bold text-amber-300">{totals.contributionPct.toFixed(1)}%</div>
+                </div>
+                <Badge variant="outline" className="border-blue-500/40 text-blue-300">Ver detalhes</Badge>
+              </div>
+            </button>
+            <p className="text-[10px] text-zinc-500 mt-2">
+              Clique para abrir a lista completa com filtros de curva ABC e agrupamento por produto pai ou variação (modelo/tamanho/cor).
+            </p>
+          </Panel>
+
+
+
           {/* GOAL CONSOLIDATED */}
           {goalData.total > 0 && (
             <Panel title={`Meta consolidada — ${periodRange.label}`} icon={Target}>
@@ -760,6 +797,14 @@ export function POSGeneralDashboard({ onBack }: Props) {
         storesById={storesById}
         onUpdated={load}
       />
+
+      <POSSoldProductsModal
+        open={soldProductsOpen}
+        onOpenChange={setSoldProductsOpen}
+        saleIds={salesRows.map((s: any) => s.id)}
+        periodLabel={periodRange.label}
+      />
+
     </div>
   );
 }
