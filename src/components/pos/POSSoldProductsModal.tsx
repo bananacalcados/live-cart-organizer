@@ -333,17 +333,69 @@ export function POSSoldProductsModal({ open, onOpenChange, sales, items, unattri
               <> · <span className="text-amber-400">{BRL(unattributed)} em vendas sem itens cadastrados</span></>
             )}
           </div>
-          <div className="text-zinc-400">
-            Conferência com o Dashboard Geral (mesma fonte):{" "}
-            <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
-            {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
-            {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
-            {" · "}
-            <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
-              Custo de produto {BRL(dashboardCost)}
-            </span>
-            {" · "}Total das vendas do período {BRL(salesTotal)}
-          </div>
+          {hasScope ? (
+            <div className="text-amber-400">
+              Filtro ativo ({channelFilter !== "all" ? CHANNEL_LABEL[channelFilter as SoldChannel] : "todos os canais"}
+              {storeFilter !== "all" ? ` · ${storeName(storeFilter)}` : ""}) — os valores acima são do recorte, não do dashboard inteiro.
+            </div>
+          ) : (
+            <div className="text-zinc-400">
+              Conferência com o Dashboard Geral (mesma fonte):{" "}
+              <span className="text-zinc-200 font-medium">Faturamento {BRL(dashboardRevenue)}</span>
+              {" = "}produtos {BRL(totals.revenue)} + frete {BRL(shippingTotal)}
+              {unattributed > 0.01 ? <> + sem itens {BRL(unattributed)}</> : null}
+              {" · "}
+              <span className={Math.abs(dashboardCost - totals.cost) < 0.01 ? "text-emerald-400" : "text-amber-400"}>
+                Custo de produto {BRL(dashboardCost)}
+              </span>
+              {" · "}Total das vendas do período {BRL(salesTotal)}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {[
+            { title: "Margem por canal", list: breakdown.byChannel, onPick: (k: string) => setChannelFilter(k as any) },
+            { title: "Margem por loja", list: breakdown.byStore, onPick: (k: string) => setStoreFilter(k === "none" ? "all" : k) },
+          ].map((block) => (
+            <div key={block.title} className="rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+              <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-zinc-400 border-b border-zinc-800">{block.title}</div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-zinc-500">
+                    <th className="text-left px-3 py-1 font-medium">Origem</th>
+                    <th className="text-right px-2 py-1 font-medium">Qtd</th>
+                    <th className="text-right px-2 py-1 font-medium">Custo</th>
+                    <th className="text-right px-2 py-1 font-medium">Venda</th>
+                    <th className="text-right px-2 py-1 font-medium">Markup</th>
+                    <th className="text-right px-3 py-1 font-medium">Margem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.list.length === 0 ? (
+                    <tr><td colSpan={6} className="px-3 py-2 text-zinc-600">Sem dados no período.</td></tr>
+                  ) : block.list.map((b, idx) => (
+                    <tr
+                      key={b.key}
+                      onClick={() => block.onPick(b.key)}
+                      className="border-t border-zinc-900 hover:bg-zinc-800/50 cursor-pointer"
+                    >
+                      <td className="px-3 py-1 text-zinc-200">
+                        {b.label}
+                        {idx === 0 && block.list.length > 1 && <span className="ml-2 text-emerald-400">maior margem</span>}
+                        {idx === block.list.length - 1 && block.list.length > 1 && <span className="ml-2 text-rose-400">menor margem</span>}
+                      </td>
+                      <td className="px-2 py-1 text-right text-zinc-300">{b.qty}</td>
+                      <td className="px-2 py-1 text-right text-rose-300">{BRL(b.cost)}</td>
+                      <td className="px-2 py-1 text-right text-emerald-300">{BRL(b.revenue)}</td>
+                      <td className="px-2 py-1 text-right text-fuchsia-300">{b.markup > 0 ? `${b.markup.toFixed(2)}x` : "—"}</td>
+                      <td className="px-3 py-1 text-right text-cyan-300">{b.marginPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
 
 
