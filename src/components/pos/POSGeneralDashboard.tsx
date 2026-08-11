@@ -806,6 +806,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
         dashboardRevenue={totals.revenue}
         dashboardCost={totals.cost}
         periodLabel={periodRange.label}
+        stores={stores}
       />
 
 
