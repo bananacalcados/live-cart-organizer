@@ -326,8 +326,12 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
 
 
   // Use liveLinks for click/redirect stats
-  const totalClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
-  const totalRedirects = liveLinks.reduce((sum: number, l: any) => sum + (l.redirect_count || 0), 0);
+  const cumulativeClicks = liveLinks.reduce((sum: number, l: any) => sum + (l.click_count || 0), 0);
+  const cumulativeRedirects = liveLinks.reduce((sum: number, l: any) => sum + (l.redirect_count || 0), 0);
+  // Só usa o log quando ele tem registros na janela; senão mostra o acumulado.
+  const usingClickLog = !!clickLog && (clickLog.clicks > 0 || clickLog.redirects > 0);
+  const totalClicks = usingClickLog ? clickLog!.clicks : cumulativeClicks;
+  const totalRedirects = usingClickLog ? clickLog!.redirects : cumulativeRedirects;
   const sentMessages = messages.filter((m: any) => m.status === 'sent').length;
   const pendingMessages = messages.filter((m: any) => m.status === 'pending').length;
 
