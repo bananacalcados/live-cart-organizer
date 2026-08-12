@@ -114,35 +114,52 @@ serve(async (req) => {
       });
     }
 
-    const payload = {
+    // O idioma real aprovado pode diferir do configurado (ex.: pt_BR x pt_PT).
+    // Usa o idioma do template retornado pela Meta e, se ainda falhar (132001),
+    // tenta os idiomas alternativos comuns.
+    const primaryLanguage = templateDef?.language || language;
+    const candidates = Array.from(
+      new Set([primaryLanguage, language, 'pt_BR', 'pt_PT', 'pt', 'en_US'].filter(Boolean)),
+    );
+
+    const buildPayload = (lang: string) => ({
       messaging_product: 'whatsapp',
       to: phone,
       type: 'template',
       template: {
         name: templateName,
-        language: { code: language },
+        language: { code: lang },
         ...(components.length > 0 ? { components } : {}),
       },
-    };
-
-    console.log('[meta-template-send] payload:', JSON.stringify(payload));
-
-    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
     });
 
-    const data = await resp.json();
-    if (!resp.ok) {
+    let resp: Response | null = null;
+    let data: any = null;
+    for (const lang of candidates) {
+      const payload = buildPayload(lang);
+      console.log('[meta-template-send] payload:', JSON.stringify(payload));
+      resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      data = await resp.json();
+      if (resp.ok) break;
+      const code = data?.error?.code;
+      if (code !== 132001) break; // outro erro: não adianta trocar idioma
+      console.warn(`[meta-template-send] template ${templateName} não existe em ${lang}, tentando próximo idioma`);
+    }
+
+    if (!resp || !resp.ok) {
       console.error('[meta-template-send] Meta error:', data);
       return new Response(JSON.stringify({ error: 'Meta API error', details: data }), {
-        status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: resp?.status || 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const messageId = data?.messages?.[0]?.id;
 
