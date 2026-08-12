@@ -142,6 +142,9 @@ export default function LiveMemberArea() {
   const [syncing, setSyncing] = useState(false);
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
+  /** Sequência das respostas do servidor (evita resposta antiga sobrescrever a nova). */
+  const reqSeqRef = useRef(0);
+  const appliedSeqRef = useRef(0);
 
   /** Onboarding pós-confirmação (nome → endereço → envio → CPF → e-mail). */
   const [onboardStep, setOnboardStep] = useState<OnboardStep>("name");
@@ -488,8 +491,11 @@ export default function LiveMemberArea() {
     async (token: string, silent = true) => {
       try {
         if (!silent) setSyncing(true);
+        const seq = ++reqSeqRef.current;
         const st = await callApi({ action: "state", token });
         if (!st?.ok) return;
+        if (seq < appliedSeqRef.current) return;
+        appliedSeqRef.current = seq;
         setState(st);
 
         const sig = itemsSignature(st.order);
@@ -632,8 +638,6 @@ export default function LiveMemberArea() {
    * cliente era jogada de volta para confirmar o endereço já preenchido.
    * Aqui só aplicamos respostas mais novas do que a última já aplicada.
    */
-  const reqSeqRef = useRef(0);
-  const appliedSeqRef = useRef(0);
   const applyIfFresh = (res: any, seq: number) => {
     if (seq < appliedSeqRef.current) return false;
     appliedSeqRef.current = seq;
