@@ -624,15 +624,36 @@ export default function LiveMemberArea() {
   const mergeState = (res: any) =>
     setState((prev: any) => ({ ...res, history: res.history ?? prev?.history }));
 
-  const act = async (payload: Record<string, unknown>, opts: { quiet?: boolean } = {}) => {
+  /**
+   * Ordem das respostas do servidor.
+   * O rascunho automático do endereço e as etapas do onboarding disparam
+   * chamadas em paralelo; quando a resposta ANTIGA chegava depois da nova, ela
+   * sobrescrevia o estado (onboarding voltava a "endereço pendente") e a
+   * cliente era jogada de volta para confirmar o endereço já preenchido.
+   * Aqui só aplicamos respostas mais novas do que a última já aplicada.
+   */
+  const reqSeqRef = useRef(0);
+  const appliedSeqRef = useRef(0);
+  const applyIfFresh = (res: any, seq: number) => {
+    if (seq < appliedSeqRef.current) return false;
+    appliedSeqRef.current = seq;
+    mergeState(res);
+    return true;
+  };
+
+  const act = async (
+    payload: Record<string, unknown>,
+    opts: { quiet?: boolean; noMerge?: boolean } = {},
+  ) => {
     if (!state?.token) return null;
     if (!opts.quiet) setBusy(true);
+    const seq = ++reqSeqRef.current;
     try {
       const res = await callApi({ ...payload, token: state.token });
       // Algumas ações (ex.: shipping_options) retornam apenas dados auxiliares.
       // Não substituir o estado completo por essas respostas, pois isso apagava
       // o token da sessão e impedia o clique seguinte em uma forma de envio.
-      if (res?.ok && res?.token) mergeState(res);
+      if (res?.ok && res?.token && !opts.noMerge) applyIfFresh(res, seq);
       return res;
     } catch (e: any) {
       if (!opts.quiet) toast.error(e.message || "Erro");
