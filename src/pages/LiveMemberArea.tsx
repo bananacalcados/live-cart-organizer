@@ -780,7 +780,18 @@ export default function LiveMemberArea() {
       );
       if (next === "area") setStep("onboarding");
       setOnboardStep(back);
+      return;
     }
+    // Reconciliação com o servidor: a etapa seguinte vem do estado RECÉM-salvo,
+    // nunca do estado antigo em memória (era o que pulava a etapa de e-mail e
+    // deixava o pedido "incompleto" mesmo com tudo preenchido).
+    if (res.onboardingComplete) {
+      setStep("area");
+      return;
+    }
+    const pending = firstPendingOnboard(res);
+    setStep("onboarding");
+    setOnboardStep(pending);
   };
 
   const saveAddressStep = () =>
@@ -832,7 +843,7 @@ export default function LiveMemberArea() {
         Object.entries(details).filter(([, v]) => String(v || "").trim() !== ""),
       );
       // Rascunho: falhas (ex.: otp_required) são silenciosas — a etapa final avisa.
-      act({ action: "save_details", details: partial }, { quiet: true });
+      act({ action: "save_details", details: partial }, { quiet: true, noMerge: true });
     }, 700);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
