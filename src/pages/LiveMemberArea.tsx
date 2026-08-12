@@ -142,6 +142,9 @@ export default function LiveMemberArea() {
   const [syncing, setSyncing] = useState(false);
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
+  /** Sequência das respostas do servidor (evita resposta antiga sobrescrever a nova). */
+  const reqSeqRef = useRef(0);
+  const appliedSeqRef = useRef(0);
 
   /** Onboarding pós-confirmação (nome → endereço → envio → CPF → e-mail). */
   const [onboardStep, setOnboardStep] = useState<OnboardStep>("name");
@@ -488,8 +491,11 @@ export default function LiveMemberArea() {
     async (token: string, silent = true) => {
       try {
         if (!silent) setSyncing(true);
+        const seq = ++reqSeqRef.current;
         const st = await callApi({ action: "state", token });
         if (!st?.ok) return;
+        if (seq < appliedSeqRef.current) return;
+        appliedSeqRef.current = seq;
         setState(st);
 
         const sig = itemsSignature(st.order);
@@ -624,15 +630,34 @@ export default function LiveMemberArea() {
   const mergeState = (res: any) =>
     setState((prev: any) => ({ ...res, history: res.history ?? prev?.history }));
 
-  const act = async (payload: Record<string, unknown>, opts: { quiet?: boolean } = {}) => {
+  /**
+   * Ordem das respostas do servidor.
+   * O rascunho automático do endereço e as etapas do onboarding disparam
+   * chamadas em paralelo; quando a resposta ANTIGA chegava depois da nova, ela
+   * sobrescrevia o estado (onboarding voltava a "endereço pendente") e a
+   * cliente era jogada de volta para confirmar o endereço já preenchido.
+   * Aqui só aplicamos respostas mais novas do que a última já aplicada.
+   */
+  const applyIfFresh = (res: any, seq: number) => {
+    if (seq < appliedSeqRef.current) return false;
+    appliedSeqRef.current = seq;
+    mergeState(res);
+    return true;
+  };
+
+  const act = async (
+    payload: Record<string, unknown>,
+    opts: { quiet?: boolean; noMerge?: boolean } = {},
+  ) => {
     if (!state?.token) return null;
     if (!opts.quiet) setBusy(true);
+    const seq = ++reqSeqRef.current;
     try {
       const res = await callApi({ ...payload, token: state.token });
       // Algumas ações (ex.: shipping_options) retornam apenas dados auxiliares.
       // Não substituir o estado completo por essas respostas, pois isso apagava
       // o token da sessão e impedia o clique seguinte em uma forma de envio.
-      if (res?.ok && res?.token) mergeState(res);
+      if (res?.ok && res?.token && !opts.noMerge) applyIfFresh(res, seq);
       return res;
     } catch (e: any) {
       if (!opts.quiet) toast.error(e.message || "Erro");
@@ -755,7 +780,18 @@ export default function LiveMemberArea() {
       );
       if (next === "area") setStep("onboarding");
       setOnboardStep(back);
+      return;
     }
+    // Reconciliação com o servidor: a etapa seguinte vem do estado RECÉM-salvo,
+    // nunca do estado antigo em memória (era o que pulava a etapa de e-mail e
+    // deixava o pedido "incompleto" mesmo com tudo preenchido).
+    if (res.onboardingComplete) {
+      setStep("area");
+      return;
+    }
+    const pending = firstPendingOnboard(res);
+    setStep("onboarding");
+    setOnboardStep(pending);
   };
 
   const saveAddressStep = () =>
@@ -807,7 +843,7 @@ export default function LiveMemberArea() {
         Object.entries(details).filter(([, v]) => String(v || "").trim() !== ""),
       );
       // Rascunho: falhas (ex.: otp_required) são silenciosas — a etapa final avisa.
-      act({ action: "save_details", details: partial }, { quiet: true });
+      act({ action: "save_details", details: partial }, { quiet: true, noMerge: true });
     }, 700);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -824,6 +860,39 @@ export default function LiveMemberArea() {
     }
     return "area";
   };
+
+  /**
+   * Botão "completar meus dados": recarrega o estado ANTES de decidir a etapa.
+   * Sem isso a cliente caía num estado antigo em memória e via de novo a etapa
+   * de endereço mesmo já tendo preenchido tudo.
+   */
+  const openOnboarding = async () => {
+    const fresh = await act({ action: "state" });
+    const data = fresh?.ok ? fresh : state;
+    if (fresh?.ok) hydrateForms(fresh);
+    // Se o servidor considera tudo completo mas ainda falta algum dado do
+    // pagamento (nome real, CPF, e-mail ou endereço), abrimos exatamente a
+    // etapa que falta — nunca a de endereço já preenchido.
+    const d = data?.payDetails || {};
+    const missing: OnboardStep | null = !isRealFullName(d.full_name)
+      ? "name"
+      : !(d.cep && d.address && d.address_number)
+      ? "address"
+      : String(d.cpf || "").replace(/\D/g, "").length !== 11
+      ? "cpf"
+      : !isUsableEmail(d.email)
+      ? "email"
+      : null;
+
+    if (data?.onboardingComplete && !missing) {
+      setStep("area");
+      toast.success("Seus dados já estão completos 🎉");
+      return;
+    }
+    setOnboardStep(data?.onboardingComplete ? (missing as OnboardStep) : firstPendingOnboard(data));
+    setStep("onboarding");
+  };
+
 
   const saveNameStep = () =>
     advance(
@@ -1703,10 +1772,7 @@ export default function LiveMemberArea() {
                   {!state?.onboardingComplete ? (
                     <Button
                       className="w-full h-16 text-base font-bold"
-                      onClick={() => {
-                        setOnboardStep(firstPendingOnboard(state));
-                        setStep("onboarding");
-                      }}
+                      onClick={openOnboarding}
                     >
                       COMPLETAR MEUS DADOS DE ENVIO
                     </Button>
@@ -1739,10 +1805,7 @@ export default function LiveMemberArea() {
                   ) : (
                     <Button
                       className="w-full h-16 text-base font-bold"
-                      onClick={() => {
-                        setOnboardStep(firstPendingOnboard(state));
-                        setStep("onboarding");
-                      }}
+                      onClick={openOnboarding}
                     >
                       COMPLETAR MEUS DADOS PARA PAGAR
                     </Button>
