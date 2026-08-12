@@ -870,14 +870,29 @@ export default function LiveMemberArea() {
     const fresh = await act({ action: "state" });
     const data = fresh?.ok ? fresh : state;
     if (fresh?.ok) hydrateForms(fresh);
-    if (data?.onboardingComplete) {
+    // Se o servidor considera tudo completo mas ainda falta algum dado do
+    // pagamento (nome real, CPF, e-mail ou endereço), abrimos exatamente a
+    // etapa que falta — nunca a de endereço já preenchido.
+    const d = data?.payDetails || {};
+    const missing: OnboardStep | null = !isRealFullName(d.full_name)
+      ? "name"
+      : !(d.cep && d.address && d.address_number)
+      ? "address"
+      : String(d.cpf || "").replace(/\D/g, "").length !== 11
+      ? "cpf"
+      : !isUsableEmail(d.email)
+      ? "email"
+      : null;
+
+    if (data?.onboardingComplete && !missing) {
       setStep("area");
       toast.success("Seus dados já estão completos 🎉");
       return;
     }
-    setOnboardStep(firstPendingOnboard(data));
+    setOnboardStep(data?.onboardingComplete ? (missing as OnboardStep) : firstPendingOnboard(data));
     setStep("onboarding");
   };
+
 
   const saveNameStep = () =>
     advance(
