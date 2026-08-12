@@ -861,6 +861,24 @@ export default function LiveMemberArea() {
     return "area";
   };
 
+  /**
+   * Botão "completar meus dados": recarrega o estado ANTES de decidir a etapa.
+   * Sem isso a cliente caía num estado antigo em memória e via de novo a etapa
+   * de endereço mesmo já tendo preenchido tudo.
+   */
+  const openOnboarding = async () => {
+    const fresh = await act({ action: "state" });
+    const data = fresh?.ok ? fresh : state;
+    if (fresh?.ok) hydrateForms(fresh);
+    if (data?.onboardingComplete) {
+      setStep("area");
+      toast.success("Seus dados já estão completos 🎉");
+      return;
+    }
+    setOnboardStep(firstPendingOnboard(data));
+    setStep("onboarding");
+  };
+
   const saveNameStep = () =>
     advance(
       nextAfter("name"),
@@ -1739,10 +1757,7 @@ export default function LiveMemberArea() {
                   {!state?.onboardingComplete ? (
                     <Button
                       className="w-full h-16 text-base font-bold"
-                      onClick={() => {
-                        setOnboardStep(firstPendingOnboard(state));
-                        setStep("onboarding");
-                      }}
+                      onClick={openOnboarding}
                     >
                       COMPLETAR MEUS DADOS DE ENVIO
                     </Button>
@@ -1775,10 +1790,7 @@ export default function LiveMemberArea() {
                   ) : (
                     <Button
                       className="w-full h-16 text-base font-bold"
-                      onClick={() => {
-                        setOnboardStep(firstPendingOnboard(state));
-                        setStep("onboarding");
-                      }}
+                      onClick={openOnboarding}
                     >
                       COMPLETAR MEUS DADOS PARA PAGAR
                     </Button>
