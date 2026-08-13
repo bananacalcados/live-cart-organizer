@@ -106,11 +106,22 @@ serve(async (req) => {
         });
       }
       job = jobRow;
-      if (job.status === 'paused' || job.status === 'done' || job.status === 'error') {
+      if (job.status === 'paused' || job.status === 'done' || job.status === 'error' || job.status === 'abandoned') {
         return new Response(JSON.stringify({ success: true, jobStopped: true, status: job.status }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      // Trava de segurança: nunca retomar job com mais de 6h (evita disparar campanha antiga)
+      const startedAt = job.started_at ? new Date(job.started_at).getTime() : Date.now();
+      if (Date.now() - startedAt > 6 * 60 * 60_000) {
+        await supabase.from('automation_dispatch_jobs')
+          .update({ status: 'abandoned', error_message: 'Job expirado (>6h) — retomada bloqueada' })
+          .eq('id', jobId);
+        return new Response(JSON.stringify({ success: true, jobStopped: true, status: 'abandoned' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       flowId = job.flow_id;
       offset = job.current_offset;
       batchSize = job.batch_size;
