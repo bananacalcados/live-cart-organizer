@@ -804,8 +804,12 @@ serve(async (req) => {
     }
 
     const processed = sent + failed + skipped;
-    const nextOffset = offset + processed;
-    const done = nextOffset >= totalAudience;
+    const remaining = Math.max(0, totalAudience - processed);
+    const nextOffset = jobId ? 0 : offset + processed;
+    // Em jobs: terminou quando não sobrou ninguém elegível OU quando o lote
+    // não conseguiu enviar nada (evita loop infinito em falhas persistentes).
+    const done = jobId ? (remaining === 0 || sent === 0) : (offset + processed >= totalAudience);
+
 
     // Log only on last batch or periodically
     if (done || offset === 0) {
