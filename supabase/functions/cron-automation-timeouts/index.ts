@@ -19,13 +19,28 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ──── RECOVERY: resume stale automation dispatch jobs (no heartbeat in >90s)
+    // IMPORTANTE: só retoma jobs RECENTES (últimas 6h). Jobs antigos travados em
+    // "running" são abandonados — retomá-los dispara campanhas velhas sem pedido.
     try {
       const staleThreshold = new Date(Date.now() - 90_000).toISOString();
+      const maxAgeThreshold = new Date(Date.now() - 6 * 60 * 60_000).toISOString();
+
+      // 1) Abandona jobs antigos (mais de 6h) presos em running
+      const { data: abandoned } = await supabase
+        .from('automation_dispatch_jobs')
+        .update({ status: 'abandoned', error_message: 'Job expirado (>6h sem conclusão) — não retomado automaticamente' })
+        .eq('status', 'running')
+        .lt('started_at', maxAgeThreshold)
+        .select('id');
+      if (abandoned?.length) console.log('[recovery] abandoned stale old jobs', abandoned.map(a => a.id));
+
+      // 2) Retoma apenas jobs recentes
       const { data: staleJobs } = await supabase
         .from('automation_dispatch_jobs')
         .select('id')
         .eq('status', 'running')
         .lt('heartbeat_at', staleThreshold)
+        .gte('started_at', maxAgeThreshold)
         .limit(10);
       for (const j of (staleJobs || [])) {
         console.log(`[recovery] Resuming stale automation dispatch job ${j.id}`);
@@ -36,6 +51,7 @@ serve(async (req) => {
         }).catch(err => console.error('[recovery] failed to kick job', j.id, err));
       }
     } catch (e) { console.error('[recovery] error scanning stale jobs', e); }
+
 
     // Find all expired pending replies that are still active
     const { data: expired } = await supabase
