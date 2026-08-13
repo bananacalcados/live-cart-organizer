@@ -304,8 +304,14 @@ serve(async (req) => {
       });
     }
 
-    // Slice audience for this batch
-    const batch = fullAudience.slice(offset, offset + batchSize);
+    // Slice audience for this batch.
+    // IMPORTANTE: a audiência é RECALCULADA a cada lote e já exclui quem
+    // recebeu (automation_dispatch_sent). Portanto, em jobs encadeados o
+    // offset NÃO pode ser aplicado de novo — isso pulava a mesma quantidade
+    // de contatos já enviados e encerrava o disparo na metade da lista.
+    const sliceStart = jobId ? 0 : offset;
+    const batch = fullAudience.slice(sliceStart, sliceStart + batchSize);
+
 
     if (batch.length === 0) {
       return new Response(JSON.stringify({
@@ -798,8 +804,12 @@ serve(async (req) => {
     }
 
     const processed = sent + failed + skipped;
-    const nextOffset = offset + processed;
-    const done = nextOffset >= totalAudience;
+    const remaining = Math.max(0, totalAudience - processed);
+    const nextOffset = jobId ? 0 : offset + processed;
+    // Em jobs: terminou quando não sobrou ninguém elegível OU quando o lote
+    // não conseguiu enviar nada (evita loop infinito em falhas persistentes).
+    const done = jobId ? (remaining === 0 || sent === 0) : (offset + processed >= totalAudience);
+
 
     // Log only on last batch or periodically
     if (done || offset === 0) {
@@ -837,7 +847,9 @@ serve(async (req) => {
         sent: newSent,
         failed: newFailed,
         skipped: newSkipped,
-        total_audience: totalAudience,
+        // Total não pode encolher: a audiência recalculada já exclui os enviados.
+        total_audience: Math.max(job?.total_audience || 0, newSent + newFailed + newSkipped + remaining),
+
         heartbeat_at: new Date().toISOString(),
       };
       if (done) {
