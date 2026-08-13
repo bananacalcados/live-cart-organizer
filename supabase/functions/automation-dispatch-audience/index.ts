@@ -847,7 +847,9 @@ serve(async (req) => {
         sent: newSent,
         failed: newFailed,
         skipped: newSkipped,
-        total_audience: totalAudience,
+        // Total não pode encolher: a audiência recalculada já exclui os enviados.
+        total_audience: Math.max(job?.total_audience || 0, newSent + newFailed + newSkipped + remaining),
+
         heartbeat_at: new Date().toISOString(),
       };
       if (done) {
