@@ -131,12 +131,12 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     if (!eventId) return;
     const { data: orders } = await supabase
       .from("orders")
-      .select("id, customer_id, products, stage")
-      .eq("event_id", eventId)
-      .in("stage", ["incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco", "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto"]);
+      .select("id, customer_id, products, stage, is_paid")
+      .eq("event_id", eventId);
 
     if (!orders || orders.length === 0) {
       setCartByHandle(new Map());
+      setStatusByHandle(new Map());
       return;
     }
 
@@ -148,29 +148,50 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
     const customerMap = new Map((customers || []).map((c: any) => [c.id, c]));
     const map = new Map<string, CartCustomerMatch>();
+    const statusMap = new Map<string, HandleOrderStatus>();
+
+    const OPEN_STAGES = [
+      "incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco",
+      "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto",
+    ];
 
     orders.forEach((o: any) => {
       const cust: any = customerMap.get(o.customer_id);
       if (!cust?.instagram_handle) return;
       const key = cleanHandle(cust.instagram_handle);
       if (!key) return;
+
       const products = (o.products as any[]) || [];
       const total = products.reduce((s, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
-      const existing = map.get(key);
-      if (!existing || total > existing.total) {
-        map.set(key, {
-          handle: key,
-          customerId: cust.id,
-          orderId: o.id,
-          productCount: products.length,
-          total,
-          whatsapp: cust.whatsapp || null,
-        });
+      const whatsapp = (cust.whatsapp || "").trim() || null;
+
+      const st = statusMap.get(key) || { open: 0, paid: 0, cancelled: 0, hasWhatsapp: false };
+      if (whatsapp) st.hasWhatsapp = true;
+      if (o.stage === "cancelled") st.cancelled += 1;
+      else if (o.is_paid || o.stage === "paid") st.paid += 1;
+      else if (OPEN_STAGES.includes(o.stage)) st.open += 1;
+      statusMap.set(key, st);
+
+      // Carrinho aberto (mesma regra de antes)
+      if (o.stage !== "cancelled" && !o.is_paid && OPEN_STAGES.includes(o.stage)) {
+        const existing = map.get(key);
+        if (!existing || total > existing.total) {
+          map.set(key, {
+            handle: key,
+            customerId: cust.id,
+            orderId: o.id,
+            productCount: products.length,
+            total,
+            whatsapp,
+          });
+        }
       }
     });
 
     setCartByHandle(map);
+    setStatusByHandle(statusMap);
   }, [eventId]);
+
 
   useEffect(() => {
     loadComments();
