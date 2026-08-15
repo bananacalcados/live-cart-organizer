@@ -167,14 +167,9 @@ Deno.serve(async (req) => {
     // posCustomerPhone:   pos_customer id -> phone      (used for fuzzy dedup lookup)
     const phoneToCustomerIds: Record<string, string[]> = {};
     const posCustomerPhone: Record<string, string> = {};
-    let off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("pos_customers")
-        .select("id, whatsapp")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const c of data) {
+    {
+      const rows = await fetchAllRows<any>(supabase, "pos_customers", "id, whatsapp, created_at");
+      for (const c of rows) {
         if (c.whatsapp) {
           const s = normalizePhone(c.whatsapp);
           if (s) {
@@ -183,32 +178,24 @@ Deno.serve(async (req) => {
           }
         }
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     // ─── 2b. customers (live cards) id -> phone  &  events id -> channel ───
     const cardCustomerPhone: Record<string, string> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("customers")
-        .select("id, whatsapp")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const c of data) {
+    {
+      const rows = await fetchAllRows<any>(supabase, "customers", "id, whatsapp, created_at");
+      for (const c of rows) {
         if (c.whatsapp) {
           const s = normalizePhone(c.whatsapp);
           if (s) cardCustomerPhone[c.id] = s;
         }
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     const eventChannel: Record<string, string> = {};
     {
-      const { data } = await supabase.from("events").select("id, channel");
+      const { data, error } = await supabase.from("events").select("id, channel");
+      if (error) throw new Error(`Falha ao carregar events: ${error.message}`);
       for (const e of data || []) eventChannel[e.id] = e.channel || "";
     }
     const CHANNEL_STORE_LABEL: Record<string, string> = {
@@ -230,16 +217,13 @@ Deno.serve(async (req) => {
       status: string | null;
     };
     const posSalesById: Record<string, PosSaleRow> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const s of data as PosSaleRow[]) posSalesById[s.id] = s;
-      if (data.length < 1000) break;
-      off += 1000;
+    {
+      const rows = await fetchAllRows<PosSaleRow>(
+        supabase,
+        "pos_sales",
+        "id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status",
+      );
+      for (const s of rows) posSalesById[s.id] = s;
     }
 
     // Which pos_sales rows count as "paid" for the non-live source:
