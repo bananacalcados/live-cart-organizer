@@ -93,6 +93,10 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  */
 export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [filter, setFilter] = useState<PayFilter>("awaiting");
+  // Aviso rápido para a apresentadora (aparece como modal no Painel da Apresentadora)
+  const [presenterMsgOpen, setPresenterMsgOpen] = useState(false);
+  const [presenterMsg, setPresenterMsg] = useState("");
+  const [sendingPresenterMsg, setSendingPresenterMsg] = useState(false);
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [igHandle, setIgHandle] = useState<string | null>(null);
