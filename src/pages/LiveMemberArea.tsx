@@ -136,6 +136,10 @@ export default function LiveMemberArea() {
   const [state, setState] = useState<MemberState | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
+  /** Evita reenvio automático em loop do código de cadastro. */
+  const otpAutoSentFor = useRef<string | null>(null);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -593,6 +597,42 @@ export default function LiveMemberArea() {
     const i = window.setInterval(tick, 1000);
     return () => window.clearInterval(i);
   }, [state?.order?.payment_window_expires_at, state?.order?.is_paid]);
+
+  /** Envia o código de cadastro no WhatsApp (com cooldown de 60s). */
+  const sendSignupOtp = async (silent = false) => {
+    if (otpSending || otpCooldown > 0) return;
+    setOtpSending(true);
+    try {
+      const res = await callApi({ action: "send_otp", phone });
+      if (res?.ok) {
+        if (!silent) toast.success("Código enviado no seu WhatsApp");
+        setOtpCooldown(60);
+      } else {
+        toast.error(res?.error || "Falha ao enviar código");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao enviar código");
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  // Ao cair na etapa de confirmação, o código é disparado automaticamente —
+  // antes a tela dizia "enviamos" sem ter enviado nada.
+  useEffect(() => {
+    if (step !== "signup_otp" || !phone) return;
+    if (otpAutoSentFor.current === phone) return;
+    otpAutoSentFor.current = phone;
+    void sendSignupOtp(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, phone]);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = window.setTimeout(() => setOtpCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => window.clearTimeout(t);
+  }, [otpCooldown]);
+
 
   const enter = async (withName?: string, code?: string) => {
     setBusy(true);
@@ -1200,26 +1240,23 @@ export default function LiveMemberArea() {
           </button>
           {Header}
           <p className="text-muted-foreground text-center text-sm mb-6">
-            Confirme seu WhatsApp para criar seu cadastro. Enviamos um código para {phone}.
+            Confirme seu WhatsApp para criar seu cadastro.{" "}
+            {otpSending ? "Enviando o código para" : "Enviamos um código para"} {phone}.
           </p>
           <div className="space-y-4">
             <Button
               variant="outline"
               className="w-full h-14 font-semibold"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  const res = await callApi({ action: "send_otp", phone });
-                  if (res?.ok) toast.success("Código enviado no seu WhatsApp");
-                  else toast.error(res?.error || "Falha ao enviar código");
-                } finally {
-                  setBusy(false);
-                }
-              }}
+              disabled={busy || otpSending || otpCooldown > 0}
+              onClick={() => sendSignupOtp()}
             >
-              RECEBER CÓDIGO NO WHATSAPP
+              {otpSending
+                ? "ENVIANDO..."
+                : otpCooldown > 0
+                  ? `REENVIAR EM ${otpCooldown}s`
+                  : "REENVIAR CÓDIGO NO WHATSAPP"}
             </Button>
+
             <Input
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}

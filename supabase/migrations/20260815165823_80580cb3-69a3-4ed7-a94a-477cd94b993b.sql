@@ -1,0 +1,2 @@
+ALTER TABLE public.event_followup_dispatches DROP CONSTRAINT event_followup_dispatches_status_check;
+ALTER TABLE public.event_followup_dispatches ADD CONSTRAINT event_followup_dispatches_status_check CHECK (status = ANY (ARRAY['pending','processing','sent','skipped','failed','locked']));

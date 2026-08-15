@@ -30,11 +30,21 @@ Deno.serve(async (req) => {
 
 
 
+  // Anti-zumbi: follow-ups agendados há mais de 6h não são mais relevantes.
+  // Marca como pulados para nunca virarem disparo fantasma.
+  const staleIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  await supabase
+    .from("event_followup_dispatches")
+    .update({ status: "skipped", skip_reason: "stale_schedule" })
+    .eq("status", "pending")
+    .lt("scheduled_at", staleIso);
+
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
     .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
     .eq("status", "pending")
     .lte("scheduled_at", nowIso)
+    .gte("scheduled_at", staleIso)
     .order("scheduled_at", { ascending: true })
     .limit(50);
 
@@ -49,14 +59,15 @@ Deno.serve(async (req) => {
   for (const row of due) {
     // Claim atômico: evita que duas execuções simultâneas do cron enviem o
     // mesmo follow-up mais de uma vez.
-    const { data: claimed } = await supabase
+    const { data: claimed, error: claimErr } = await supabase
       .from("event_followup_dispatches")
       .update({ status: "processing", attempts: (row.attempts || 0) + 1 })
       .eq("id", row.id)
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
-    if (!claimed) { skipped++; continue; }
+    if (claimErr) console.error("[dispatcher] claim error:", row.id, claimErr.message, claimErr.details, claimErr.code);
+    if (!claimed) { console.warn("[dispatcher] claim empty:", row.id); skipped++; continue; }
 
     const cfg = row.config;
     const ord = row.order;
