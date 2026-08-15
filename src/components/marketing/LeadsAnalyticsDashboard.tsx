@@ -333,6 +333,45 @@ export function LeadsAnalyticsDashboard() {
               </div>
             </div>
 
+            {/* Funnel events — NOT acquisition channels */}
+            {(data!.funnelEvents?.length ?? 0) > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-1">Eventos de funil (não são canais de aquisição)</h4>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Momentos de fundo de funil registrados como origem. Ficam fora do ranking de captação
+                  para não canibalizar o crédito do canal que realmente trouxe o lead.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b">
+                        <th className="py-1.5 pr-2">Evento</th>
+                        <th className="py-1.5 px-2 text-right">Registros</th>
+                        <th className="py-1.5 px-2 text-right">Convertidos</th>
+                        <th className="py-1.5 px-2 text-right">Taxa</th>
+                        <th className="py-1.5 pl-2 text-right">Receita</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data!.funnelEvents!.map(f => (
+                        <tr key={f.channel} className="border-b last:border-0">
+                          <td className="py-1.5 pr-2 font-medium">{f.channel}</td>
+                          <td className="py-1.5 px-2 text-right">{f.leads}</td>
+                          <td className="py-1.5 px-2 text-right">{f.converted}</td>
+                          <td className="py-1.5 px-2 text-right">
+                            <Badge variant="outline" className="text-[10px]">{f.conversion_rate}%</Badge>
+                          </td>
+                          <td className="py-1.5 pl-2 text-right font-semibold">{fmtBRL(f.revenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+
+
             {/* Sale-channel table (item 1) — mirror of the capture table, by SALE channel */}
             <div>
               <h4 className="text-sm font-semibold mb-1">Conversão por canal de venda</h4>
