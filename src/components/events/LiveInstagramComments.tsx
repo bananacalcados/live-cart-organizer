@@ -476,21 +476,37 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           {config.label}
                         </Badge>
 
-                        {status && status.open > 0 && (
+                        {status && status.openCurrent > 0 && (
                           <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Pedido aberto{status.open > 1 ? ` (${status.open})` : ""}
+                            Pedido aberto · esta live{status.openCurrent > 1 ? ` (${status.openCurrent})` : ""}
                           </span>
                         )}
-                        {status && status.paid > 0 && (
+                        {status && status.openOther > 0 && (
+                          <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Pedido aberto · outros eventos ({status.openOther})
+                          </span>
+                        )}
+                        {status && status.paidCurrent > 0 && (
                           <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Concluído{status.paid > 1 ? ` (${status.paid})` : ""}
+                            Concluído · esta live{status.paidCurrent > 1 ? ` (${status.paidCurrent})` : ""}
                           </span>
                         )}
-                        {status && status.cancelled > 0 && (
+                        {status && status.paidOther > 0 && (
+                          <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Concluído · outros eventos ({status.paidOther})
+                          </span>
+                        )}
+                        {status && status.cancelledCurrent > 0 && (
                           <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Cancelado{status.cancelled > 1 ? ` (${status.cancelled})` : ""}
+                            Cancelado · esta live{status.cancelledCurrent > 1 ? ` (${status.cancelledCurrent})` : ""}
                           </span>
                         )}
+                        {status && status.cancelledOther > 0 && (
+                          <span className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Cancelado · outros eventos ({status.cancelledOther})
+                          </span>
+                        )}
+
                         {missingWhatsapp && (
                           <span
                             className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase text-black"
