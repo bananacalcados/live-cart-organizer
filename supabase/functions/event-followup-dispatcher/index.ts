@@ -30,11 +30,21 @@ Deno.serve(async (req) => {
 
 
 
+  // Anti-zumbi: follow-ups agendados há mais de 6h não são mais relevantes.
+  // Marca como pulados para nunca virarem disparo fantasma.
+  const staleIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  await supabase
+    .from("event_followup_dispatches")
+    .update({ status: "skipped", skip_reason: "stale_schedule" })
+    .eq("status", "pending")
+    .lt("scheduled_at", staleIso);
+
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
     .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
     .eq("status", "pending")
     .lte("scheduled_at", nowIso)
+    .gte("scheduled_at", staleIso)
     .order("scheduled_at", { ascending: true })
     .limit(50);
 
