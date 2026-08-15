@@ -476,16 +476,14 @@ Deno.serve(async (req) => {
     }
 
     const zoppyPhoneSales: Record<string, any[]> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("zoppy_sales")
-        .select("id, customer_phone, total, completed_at")
-        .not("customer_phone", "is", null)
-        .not("completed_at", "is", null)
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const s of data) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "zoppy_sales",
+        "id, customer_phone, total, completed_at, created_at",
+        { apply: (q) => q.not("customer_phone", "is", null).not("completed_at", "is", null) },
+      );
+      for (const s of rows) {
         const p = normalizePhone(s.customer_phone);
         if (!p) continue;
         (zoppyPhoneSales[p] ||= []).push({
@@ -495,8 +493,6 @@ Deno.serve(async (req) => {
           channel: classifyChannel({ isZoppy: true }),
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     // Unified sales getter for a phone: LIVE (orders) + NON-LIVE (pos_sales) + zoppy.
