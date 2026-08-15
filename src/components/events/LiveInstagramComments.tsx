@@ -266,8 +266,20 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
   useEffect(() => {
     loadComments();
+  }, [loadComments]);
+
+  // Recarrega os status sempre que surgirem novos @ nos comentários
+  const handlesKey = useMemo(
+    () => [...new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean))].sort().join(","),
+    [comments]
+  );
+
+  useEffect(() => {
+    commentsRef.current = comments;
     loadCarts();
-  }, [loadComments, loadCarts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handlesKey, loadCarts]);
+
 
   useEffect(() => {
     if (!eventId) return;
