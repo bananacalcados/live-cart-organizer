@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio } from "lucide-react";
 import { toast } from "sonner";
+import { isPaidOrderStage } from "@/lib/orderPaymentStages";
+
 
 interface LiveComment {
   id: string;
@@ -28,11 +30,16 @@ interface CartCustomerMatch {
 }
 
 interface HandleOrderStatus {
-  open: number;
-  paid: number;
-  cancelled: number;
+  openCurrent: number;
+  openOther: number;
+  paidCurrent: number;
+  paidOther: number;
+  cancelledCurrent: number;
+  cancelledOther: number;
   hasWhatsapp: boolean;
+  hasAnyOrder: boolean;
 }
+
 
 
 interface LiveInstagramCommentsProps {
@@ -61,6 +68,8 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [togglingLive, setTogglingLive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
+  const commentsRef = useRef<LiveComment[]>([]);
+
 
   const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
 
@@ -108,6 +117,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     cartByHandleRef.current = cartByHandle;
   }, [cartByHandle]);
 
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+
+
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
     try {
@@ -138,51 +152,97 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
   const loadCarts = useCallback(async () => {
     if (!eventId) return;
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("id, customer_id, products, stage, is_paid")
-      .eq("event_id", eventId);
 
-    if (!orders || orders.length === 0) {
+    // 1) Carrega base de clientes com Instagram (normaliza @ e maiúsculas)
+    const PAGE = 1000;
+    const handleToCustomers = new Map<string, any[]>();
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, instagram_handle, whatsapp")
+        .not("instagram_handle", "is", null)
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      for (const c of data as any[]) {
+        const key = cleanHandle(c.instagram_handle);
+        if (!key) continue;
+        const arr = handleToCustomers.get(key) || [];
+        arr.push(c);
+        handleToCustomers.set(key, arr);
+      }
+      if (data.length < PAGE) break;
+    }
+
+    // 2) Só busca pedidos dos @ que aparecem nos comentários (atual + históricos)
+    const commentHandles = new Set(
+      commentsRef.current.map(c => cleanHandle(c.username)).filter(Boolean)
+    );
+    const customerIds: string[] = [];
+    const customerById = new Map<string, any>();
+    commentHandles.forEach(h => {
+      (handleToCustomers.get(h) || []).forEach(c => {
+        customerIds.push(c.id);
+        customerById.set(c.id, c);
+      });
+    });
+
+    if (customerIds.length === 0) {
       setCartByHandle(new Map());
       setStatusByHandle(new Map());
       return;
     }
 
-    const customerIds = [...new Set(orders.map((o: any) => o.customer_id))];
-    const { data: customers } = await supabase
-      .from("customers")
-      .select("id, instagram_handle, whatsapp")
-      .in("id", customerIds);
+    const orders: any[] = [];
+    const CHUNK = 200;
+    for (let i = 0; i < customerIds.length; i += CHUNK) {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, customer_id, event_id, products, stage, is_paid")
+        .in("customer_id", customerIds.slice(i, i + CHUNK));
+      if (data) orders.push(...data);
+    }
 
-    const customerMap = new Map((customers || []).map((c: any) => [c.id, c]));
     const map = new Map<string, CartCustomerMatch>();
     const statusMap = new Map<string, HandleOrderStatus>();
 
     const OPEN_STAGES = [
+      "new", "contacted", "no_response", "awaiting_confirmation",
       "incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco",
       "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto",
     ];
 
     orders.forEach((o: any) => {
-      const cust: any = customerMap.get(o.customer_id);
+      const cust: any = customerById.get(o.customer_id);
       if (!cust?.instagram_handle) return;
       const key = cleanHandle(cust.instagram_handle);
       if (!key) return;
 
+      const isCurrent = o.event_id === eventId;
       const products = (o.products as any[]) || [];
       const total = products.reduce((s, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
       const whatsapp = (cust.whatsapp || "").trim() || null;
 
-      const st = statusMap.get(key) || { open: 0, paid: 0, cancelled: 0, hasWhatsapp: false };
+      const st: HandleOrderStatus = statusMap.get(key) || {
+        openCurrent: 0, openOther: 0,
+        paidCurrent: 0, paidOther: 0,
+        cancelledCurrent: 0, cancelledOther: 0,
+        hasWhatsapp: false, hasAnyOrder: false,
+      };
       if (whatsapp) st.hasWhatsapp = true;
-      if (o.stage === "cancelled") st.cancelled += 1;
-      else if (o.is_paid || o.stage === "paid") st.paid += 1;
-      else if (OPEN_STAGES.includes(o.stage)) st.open += 1;
+      st.hasAnyOrder = true;
+
+      const isPaid = Boolean(o.is_paid) || isPaidOrderStage(o.stage);
+      if (o.stage === "cancelled") {
+        if (isCurrent) st.cancelledCurrent += 1; else st.cancelledOther += 1;
+      } else if (isPaid) {
+        if (isCurrent) st.paidCurrent += 1; else st.paidOther += 1;
+      } else if (OPEN_STAGES.includes(o.stage)) {
+        if (isCurrent) st.openCurrent += 1; else st.openOther += 1;
+      }
       statusMap.set(key, st);
 
-      // Carrinho aberto (mesma regra de antes)
-      if (o.stage !== "cancelled" && !o.is_paid && OPEN_STAGES.includes(o.stage)) {
+      // Carrinho aberto: apenas do evento atual
+      if (isCurrent && o.stage !== "cancelled" && !isPaid && OPEN_STAGES.includes(o.stage)) {
         const existing = map.get(key);
         if (!existing || total > existing.total) {
           map.set(key, {
@@ -202,10 +262,24 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   }, [eventId]);
 
 
+
+
   useEffect(() => {
     loadComments();
+  }, [loadComments]);
+
+  // Recarrega os status sempre que surgirem novos @ nos comentários
+  const handlesKey = useMemo(
+    () => [...new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean))].sort().join(","),
+    [comments]
+  );
+
+  useEffect(() => {
+    commentsRef.current = comments;
     loadCarts();
-  }, [loadComments, loadCarts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handlesKey, loadCarts]);
+
 
   useEffect(() => {
     if (!eventId) return;
@@ -381,7 +455,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             const classKey = comment.ai_classification || "comment";
             const config = classificationConfig[classKey] || classificationConfig.comment;
             const Icon = config.icon;
-            const hasAnyOrder = !!status && (status.open + status.paid + status.cancelled) > 0;
+            const hasAnyOrder = !!status && status.hasAnyOrder;
             const missingWhatsapp = hasAnyOrder && !status!.hasWhatsapp;
 
             return (
@@ -419,21 +493,37 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           {config.label}
                         </Badge>
 
-                        {status && status.open > 0 && (
+                        {status && status.openCurrent > 0 && (
                           <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Pedido aberto{status.open > 1 ? ` (${status.open})` : ""}
+                            Pedido aberto · esta live{status.openCurrent > 1 ? ` (${status.openCurrent})` : ""}
                           </span>
                         )}
-                        {status && status.paid > 0 && (
+                        {status && status.openOther > 0 && (
+                          <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Pedido aberto · outros eventos ({status.openOther})
+                          </span>
+                        )}
+                        {status && status.paidCurrent > 0 && (
                           <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Concluído{status.paid > 1 ? ` (${status.paid})` : ""}
+                            Concluído · esta live{status.paidCurrent > 1 ? ` (${status.paidCurrent})` : ""}
                           </span>
                         )}
-                        {status && status.cancelled > 0 && (
+                        {status && status.paidOther > 0 && (
+                          <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Concluído · outros eventos ({status.paidOther})
+                          </span>
+                        )}
+                        {status && status.cancelledCurrent > 0 && (
                           <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Cancelado{status.cancelled > 1 ? ` (${status.cancelled})` : ""}
+                            Cancelado · esta live{status.cancelledCurrent > 1 ? ` (${status.cancelledCurrent})` : ""}
                           </span>
                         )}
+                        {status && status.cancelledOther > 0 && (
+                          <span className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Cancelado · outros eventos ({status.cancelledOther})
+                          </span>
+                        )}
+
                         {missingWhatsapp && (
                           <span
                             className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase text-black"
