@@ -28,11 +28,16 @@ interface CartCustomerMatch {
 }
 
 interface HandleOrderStatus {
-  open: number;
-  paid: number;
-  cancelled: number;
+  openCurrent: number;
+  openOther: number;
+  paidCurrent: number;
+  paidOther: number;
+  cancelledCurrent: number;
+  cancelledOther: number;
   hasWhatsapp: boolean;
+  hasAnyOrder: boolean;
 }
+
 
 
 interface LiveInstagramCommentsProps {
