@@ -40,6 +40,8 @@ interface HandleOrderStatus {
   paidOther: number;
   cancelledCurrent: number;
   cancelledOther: number;
+  /** Nomes das lives/eventos anteriores em que a cliente teve pedido cancelado */
+  cancelledOtherEvents: string[];
   hasWhatsapp: boolean;
   hasAnyOrder: boolean;
 }
@@ -212,6 +214,19 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       if (data) orders.push(...data);
     }
 
+    // Nome dos eventos anteriores (para mostrar em QUAL live o pedido foi cancelado)
+    const otherEventIds = Array.from(
+      new Set(orders.filter((o: any) => o.event_id && o.event_id !== eventId).map((o: any) => o.event_id)),
+    );
+    const eventNameById = new Map<string, string>();
+    if (otherEventIds.length > 0) {
+      const { data: evs } = await supabase
+        .from("events")
+        .select("id, name")
+        .in("id", otherEventIds as string[]);
+      (evs || []).forEach((e: any) => eventNameById.set(e.id, e.name || "Evento"));
+    }
+
     const map = new Map<string, CartCustomerMatch>();
     const statusMap = new Map<string, HandleOrderStatus>();
 
@@ -239,6 +254,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         unconfirmedCurrent: 0, unconfirmedOther: 0,
         paidCurrent: 0, paidOther: 0,
         cancelledCurrent: 0, cancelledOther: 0,
+        cancelledOtherEvents: [],
         hasWhatsapp: false, hasAnyOrder: false,
       };
       if (whatsapp) st.hasWhatsapp = true;
@@ -246,7 +262,13 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
       const isPaid = Boolean(o.is_paid) || isPaidOrderStage(o.stage);
       if (o.stage === "cancelled") {
-        if (isCurrent) st.cancelledCurrent += 1; else st.cancelledOther += 1;
+        if (isCurrent) {
+          st.cancelledCurrent += 1;
+        } else {
+          st.cancelledOther += 1;
+          const evName = eventNameById.get(o.event_id) || "Evento anterior";
+          if (!st.cancelledOtherEvents.includes(evName)) st.cancelledOtherEvents.push(evName);
+        }
       } else if (isPaid) {
         if (isCurrent) st.paidCurrent += 1; else st.paidOther += 1;
       } else if (OPEN_STAGES.includes(o.stage)) {
