@@ -231,7 +231,17 @@ export function LeadsAnalyticsDashboard() {
           </Button>
         </div>
 
-        {loading && !data ? (
+        {loadError && !loading ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
+            <p className="font-semibold text-destructive">Não foi possível carregar os dados completos.</p>
+            <p className="text-muted-foreground mt-1">
+              Nenhum número é exibido para evitar leitura parcial (dados truncados). Detalhe: {loadError}
+            </p>
+            <Button size="sm" variant="outline" className="mt-2 gap-1" onClick={load}>
+              <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+            </Button>
+          </div>
+        ) : loading && !data ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
