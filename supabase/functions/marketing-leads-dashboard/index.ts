@@ -690,16 +690,13 @@ Deno.serve(async (req) => {
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
 
-      // Capture source for the channel breakdown depends on the mode.
-      const captureSource = mode === "captured"
-        ? lead.firstInPeriodSource
-        : lead.firstEverSource;
-      const captureTag = mode === "captured"
-        ? lead.firstInPeriodTag
-        : lead.firstEverTag;
-      const captureMeta = mode === "captured"
-        ? lead.firstInPeriodMeta
-        : lead.firstEverMeta;
+      // Ponto 4 — canal de aquisição = PRIMEIRA captação de todos os tempos,
+      // em qualquer modo. Antes, no modo "captured", uma recaptação dentro da
+      // janela (ex.: área de membros no momento do pagamento) sobrescrevia o
+      // canal real quando a captação verdadeira ficou fora do período.
+      const captureSource = lead.firstEverSource;
+      const captureTag = lead.firstEverTag;
+      const captureMeta = lead.firstEverMeta;
 
       // ── Scope membership (the denominator = "Leads captados") ──
       // captured: only leads with a capture record inside the period.
