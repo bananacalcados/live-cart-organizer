@@ -341,11 +341,64 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
       : awaiting.map((o) => ({ rep: o, group: [o] }));
 
 
+  const eventIdForAlerts = orders.find((o) => o.event_id)?.event_id || null;
 
+  const sendPresenterMessage = async () => {
+    const text = presenterMsg.trim();
+    if (!text) return;
+    setSendingPresenterMsg(true);
+    try {
+      const { error } = await supabase.from("livete_presenter_alerts").insert({
+        event_id: eventIdForAlerts,
+        alert_type: "team_message",
+        message: text,
+        phone: "",
+      });
+      if (error) throw error;
+      toast.success("Mensagem enviada para a apresentadora");
+      setPresenterMsg("");
+      setPresenterMsgOpen(false);
+    } catch (e: any) {
+      toast.error("Erro ao enviar: " + (e?.message || "desconhecido"));
+    } finally {
+      setSendingPresenterMsg(false);
+    }
+  };
 
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
       <div className="container py-2">
+        {/* Aviso para a apresentadora */}
+        <Button
+          onClick={() => setPresenterMsgOpen(true)}
+          className="w-full mb-2 h-12 text-base font-bold gap-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+        >
+          <Megaphone className="h-5 w-5" />
+          ENVIAR MENSAGEM PARA A APRESENTADORA
+        </Button>
+
+        <Dialog open={presenterMsgOpen} onOpenChange={setPresenterMsgOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mensagem para a apresentadora</DialogTitle>
+            </DialogHeader>
+            <Textarea
+              value={presenterMsg}
+              onChange={(e) => setPresenterMsg(e.target.value)}
+              placeholder="Digite o aviso que aparecerá no painel da apresentadora..."
+              rows={5}
+              autoFocus
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPresenterMsgOpen(false)}>Cancelar</Button>
+              <Button onClick={sendPresenterMessage} disabled={!presenterMsg.trim() || sendingPresenterMsg}>
+                {sendingPresenterMsg ? "Enviando..." : "Enviar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+
         {/* Toggle Aguardando / Pagos / Erros */}
         <div className="flex gap-2 mb-2">
           <button
