@@ -53,6 +53,7 @@ const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCas
 export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCommentsProps) {
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [cartByHandle, setCartByHandle] = useState<Map<string, CartCustomerMatch>>(new Map());
+  const [statusByHandle, setStatusByHandle] = useState<Map<string, HandleOrderStatus>>(new Map());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
