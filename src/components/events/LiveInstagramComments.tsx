@@ -34,6 +34,8 @@ interface CartCustomerMatch {
 interface HandleOrderStatus {
   openCurrent: number;
   openOther: number;
+  unconfirmedCurrent: number;
+  unconfirmedOther: number;
   paidCurrent: number;
   paidOther: number;
   cancelledCurrent: number;
