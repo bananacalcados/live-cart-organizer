@@ -827,7 +827,10 @@ Deno.serve(async (req) => {
     // Channels (bar chart) and sources (table) are both the capture-channel
     // breakdown now — the user wants "onde o lead foi captado", not where the
     // sale happened. Sorted by number of leads captured.
-    const captureChannels = Object.values(captureMap)
+    // Ponto 3 — eventos de fundo de funil não são canais de aquisição.
+    const FUNNEL_EVENT_CHANNELS = new Set(["Carrinho Abandonado"]);
+
+    const allCaptureRows = Object.values(captureMap)
       .map(c => ({
         channel: c.channel,
         leads: c.leads,
