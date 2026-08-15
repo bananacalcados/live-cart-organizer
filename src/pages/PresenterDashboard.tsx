@@ -58,6 +58,9 @@ export default function PresenterDashboard() {
   const [alerts, setAlerts] = useState<PresenterAlert[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [metrics, setMetrics] = useState({ totalPaid: 0, totalRevenue: 0, avgTicket: 0, pendingCount: 0 });
+  const [teamMessage, setTeamMessage] = useState<PresenterAlert | null>(null);
+  const [confirmPopup, setConfirmPopup] = useState<{ handle: string; orderId: string } | null>(null);
+  const notifiedConfirmRef = useRef<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
@@ -186,6 +189,7 @@ export default function PresenterDashboard() {
         const newAlert = payload.new as PresenterAlert;
         setAlerts(prev => [newAlert, ...prev]);
         playNotificationSound();
+        if (newAlert.alert_type === "team_message") setTeamMessage(newAlert);
       })
       .subscribe();
 
@@ -202,13 +206,31 @@ export default function PresenterDashboard() {
         schema: "public",
         table: "orders",
         filter: `event_id=eq.${eventId}`,
-      }, () => {
+      }, (payload) => {
         loadOrders();
+        void maybeNotifyAwaitingConfirmation(payload.new as any);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [eventId, loadOrders]);
+
+  const maybeNotifyAwaitingConfirmation = useCallback(async (row: any) => {
+    if (!row?.id || row.stage !== "awaiting_confirmation") return;
+    if (notifiedConfirmRef.current.has(row.id)) return;
+    notifiedConfirmRef.current.add(row.id);
+    let handle = "cliente";
+    if (row.customer_id) {
+      const { data } = await supabase
+        .from("customers")
+        .select("instagram_handle")
+        .eq("id", row.customer_id)
+        .maybeSingle();
+      if (data?.instagram_handle) handle = data.instagram_handle.replace(/^@/, "");
+    }
+    setConfirmPopup({ handle, orderId: row.id });
+    playNotificationSound();
+  }, [playNotificationSound]);
 
   const markAsRead = async (alertId: string) => {
     await supabase.from("livete_presenter_alerts").update({ is_read: true }).eq("id", alertId);
@@ -523,6 +545,41 @@ export default function PresenterDashboard() {
       </Tabs>
       </div>
 
+
+      {/* Recado da equipe */}
+      <Dialog open={!!teamMessage} onOpenChange={(open) => !open && setTeamMessage(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">📢 Recado da Equipe</DialogTitle>
+          </DialogHeader>
+          <p className="text-lg whitespace-pre-wrap leading-relaxed">{teamMessage?.message}</p>
+          <Button
+            className="w-full h-12 text-base font-bold"
+            onClick={() => {
+              if (teamMessage?.id) void markAsRead(teamMessage.id);
+              setTeamMessage(null);
+            }}
+          >
+            Entendi
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pedido criado aguardando confirmação da cliente */}
+      <Dialog open={!!confirmPopup} onOpenChange={(open) => !open && setConfirmPopup(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">🛒 Pedido criado!</DialogTitle>
+          </DialogHeader>
+          <p className="text-lg leading-relaxed">
+            Pedido da cliente <strong>@{confirmPopup?.handle}</strong> criado. Solicite a ela que entre no link da live
+            para <strong>confirmar o pedido</strong> e concorrer à bolsa, caso confirme em 5 minutos com todos os dados.
+          </p>
+          <Button className="w-full h-12 text-base font-bold" onClick={() => setConfirmPopup(null)}>
+            Avisei!
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* WhatsApp Chat Dialog */}
       <Dialog open={!!chatOrder} onOpenChange={(open) => !open && setChatOrder(null)}>
