@@ -19,6 +19,37 @@ function normalizePhone(raw: string): string {
   return phone;
 }
 
+/**
+ * Paginated read with STABLE ordering and hard error handling.
+ * Sem ordenação o PostgREST não garante a mesma ordem entre páginas — linhas
+ * eram puladas/repetidas. E sem checar erro uma página que falha virava
+ * "número parcial" silencioso no painel (foi o que gerou o 0,27%).
+ */
+async function fetchAllRows<T = any>(
+  supabase: any,
+  table: string,
+  columns: string,
+  opts: { orderBy?: string; apply?: (q: any) => any } = {},
+): Promise<T[]> {
+  const orderBy = opts.orderBy || "created_at";
+  const out: T[] = [];
+  let off = 0;
+  while (true) {
+    let q = supabase.from(table).select(columns);
+    if (opts.apply) q = opts.apply(q);
+    q = q.order(orderBy, { ascending: true }).order("id", { ascending: true }).range(off, off + 999);
+    const { data, error } = await q;
+    if (error) {
+      throw new Error(`Falha ao carregar ${table} (offset ${off}): ${error.message}`);
+    }
+    if (!data || data.length === 0) break;
+    out.push(...(data as T[]));
+    if (data.length < 1000) break;
+    off += 1000;
+  }
+  return out;
+}
+
 // Real store UUIDs (from pos_stores).
 const STORE_PEROLA = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
 const STORE_CENTRO = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
