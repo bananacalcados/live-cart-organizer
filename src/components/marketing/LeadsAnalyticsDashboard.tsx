@@ -35,6 +35,8 @@ type DashboardData = {
   summary: Summary;
   channels: { channel: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   sources: { source: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
+  /** Eventos de fundo de funil (ex.: Carrinho Abandonado) — não são canais de aquisição. */
+  funnelEvents?: { channel: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   months: { month: string; purchases: number; revenue: number }[];
   conversionChannels: { channel: string; converted: number; valor_convertido: number; ticket_medio_conversao: number }[];
   captureXconversion: { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }[];
