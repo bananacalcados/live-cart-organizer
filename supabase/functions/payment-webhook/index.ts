@@ -467,7 +467,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     // Try pos_sales — same .filter() approach
     const { data: sales, error: saleSearchErr } = await supabase
       .from("pos_sales")
-      .select("id, status, store_id, total, customer_name, customer_phone, payment_details")
+        .select("id, status, store_id, total, customer_name, customer_phone, payment_details, payment_method")
       .filter("mercadopago_payment_id", "eq", mpIdStr)
       .limit(1);
     if (saleSearchErr) console.error("[mercadopago] sale search error:", saleSearchErr);
@@ -482,14 +482,24 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         });
       }
 
+      const mpTypeId = String(mpPayment.payment_type_id || "");
+      const mpMethodId = String(mpPayment.payment_method_id || "");
+      const installments = Number(mpPayment.installments || 1);
+      const paymentLabel = normalizeGatewayPaymentLabel({
+        gateway: "mercadopago",
+        paymentTypeId: mpTypeId,
+        paymentMethodId: mpMethodId,
+        installments,
+      }) || sale.payment_method || "Cartão de Crédito";
+
       const { error } = await supabase
         .from("pos_sales")
         .update({
           status: "paid",
           paid_at: new Date().toISOString(),
           payment_gateway: "mercadopago",
-          payment_method: "PIX",
-          notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
+          payment_method: paymentLabel,
+          notes: `🔔 Webhook MercadoPago: pagamento aprovado (${mpIdStr})`,
         })
         .eq("id", sale.id);
 
@@ -822,19 +832,10 @@ async function updateOrder(
     // await autoCreateShopifyOrder(supabase, orderId, "orders", supabaseUrl, supabaseKey);
     return true;
   }
-  // Reverter pagamento se já estava pago e veio status de falha (ex: antifraude reprovou)
-  if (isFailed && order.is_paid) {
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        is_paid: false,
-        stage: "awaiting_payment",
-        notes: `${order.notes || ""}\n⚠️ Pagamento revertido: reprovado pela Yapay (status ${statusId})`.trim(),
-      })
-      .eq("id", orderId);
-    if (error) { console.error("Error reverting orders:", error); return false; }
-    console.log(`orders ${orderId} payment REVERTED via VINDI webhook (status ${statusId})`);
-    return true;
+  if (isFailed) {
+    // A falha da VINDI/Yapay descreve somente essa tentativa. Nunca revertemos o
+    // pedido agregado, pois outra etapa da cascata pode ter sido aprovada.
+    console.log(`[vindi] Falha ${statusId} registrada sem reverter o pedido ${orderId}.`);
   }
   return false;
 }
@@ -869,18 +870,10 @@ async function updateSale(
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${saleId}`);
     // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
     return true;
-  } else if (isFailed && (sale.status === "online_pending" || sale.status === "paid" || sale.status === "completed")) {
-    const { error } = await supabase
-      .from("pos_sales")
-      .update({
-        status: "payment_failed",
-        payment_gateway: "vindi",
-        notes: `🔔 Webhook VINDI: status ${statusId}`,
-      })
-      .eq("id", saleId);
-    if (error) { console.error("Error updating pos_sales:", error); return false; }
-    console.log(`pos_sales ${saleId} marked as payment_failed via VINDI webhook`);
-    return true;
+  } else if (isFailed) {
+    // O status final da venda é monotônico: webhook negativo de uma tentativa
+    // não pode apagar uma aprovação recebida de qualquer outro gateway.
+    console.log(`[vindi] Falha ${statusId} registrada sem rebaixar a venda ${saleId}.`);
   }
   return false;
 }

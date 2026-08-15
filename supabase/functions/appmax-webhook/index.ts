@@ -342,18 +342,11 @@ serve(async (req) => {
           // Auto-create Shopify order
           await autoCreateShopifyOrder(supabase, ourOrderId, "orders", supabaseUrl, supabaseKey);
         }
-      } else if (isFailed && record.is_paid) {
-        // Reverter pagamento se já estava pago e veio status de falha
-        const { error } = await supabase
-          .from("orders")
-          .update({
-            is_paid: false,
-            stage: "awaiting_payment",
-            notes: `${record.notes || ""}\n⚠️ Pagamento revertido: reprovado pela Appmax (status ${status})`.trim(),
-          })
-          .eq("id", ourOrderId);
-        if (error) console.error("Error reverting orders:", error);
-        else { updated = true; console.log(`orders ${ourOrderId} payment REVERTED via AppMax webhook (status ${status})`); }
+      } else if (isFailed) {
+        // Uma falha da AppMax pertence somente à tentativa AppMax. Ela nunca pode
+        // rebaixar o estado agregado do pedido: outra tentativa da cascata pode já
+        // ter sido aprovada (ou estar sendo aprovada) em outro gateway.
+        console.log(`[appmax] Falha ${status} registrada sem reverter o pedido ${ourOrderId}.`);
       }
     } else if (source === "pos_sales") {
       // Guard: already paid
@@ -388,17 +381,10 @@ serve(async (req) => {
           console.log(`pos_sales ${ourOrderId} marked as paid via AppMax webhook`);
           // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
         }
-      } else if (isFailed && (record.status === "online_pending" || record.status === "paid" || record.status === "completed")) {
-        const { error } = await supabase
-          .from("pos_sales")
-          .update({
-            status: "payment_failed",
-            payment_gateway: "appmax",
-            notes: `🔔 Webhook AppMax: ${status} - ${event || "unknown"}`,
-          })
-          .eq("id", ourOrderId);
-        if (error) console.error("Error updating pos_sales to payment_failed:", error);
-        else { updated = true; console.log(`pos_sales ${ourOrderId} marked as payment_failed via AppMax webhook`); }
+      } else if (isFailed) {
+        // Webhook negativo é histórico da tentativa, não o status final da venda.
+        // A cascata pode ter sido concluída por Mercado Pago/Pagar.me/VINDI.
+        console.log(`[appmax] Falha ${status} registrada sem rebaixar a venda ${ourOrderId}.`);
       }
     }
 
