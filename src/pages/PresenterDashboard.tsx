@@ -337,9 +337,6 @@ export default function PresenterDashboard() {
           <TabsTrigger value="live" className="gap-1 data-[state=active]:bg-primary/20">
             <Bell className="h-4 w-4" /> Alertas & Pedidos
           </TabsTrigger>
-          <TabsTrigger value="instagram" className="gap-1 data-[state=active]:bg-primary/20">
-            <Instagram className="h-4 w-4" /> Comentários IG
-          </TabsTrigger>
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
           </TabsTrigger>
