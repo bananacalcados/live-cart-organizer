@@ -934,6 +934,8 @@ Deno.serve(async (req) => {
       // capture channels (where the lead came in)
       channels: captureChannels,
       sources,
+      // Eventos de fundo de funil (não são canais de aquisição) — exibidos à parte.
+      funnelEvents,
       months,
       // NEW: sale-channel breakdown of conversions + capture×conversion matrix
       conversionChannels,
