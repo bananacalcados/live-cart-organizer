@@ -27,6 +27,8 @@ interface CartCustomerMatch {
   productCount: number;
   total: number;
   whatsapp: string | null;
+  createdAt: string | null;
+  productNames: string[];
 }
 
 interface HandleOrderStatus {
@@ -69,6 +71,12 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const scrollRef = useRef<HTMLDivElement>(null);
   const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
   const commentsRef = useRef<LiveComment[]>([]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
 
   const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
@@ -146,7 +154,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       .select("id, comment_id, username, comment_text, profile_pic_url, is_order, ai_classification, created_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false })
-      .limit(150);
+      .limit(600);
     if (data) setComments(data as LiveComment[]);
   }, [eventId]);
 
@@ -197,7 +205,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     for (let i = 0; i < customerIds.length; i += CHUNK) {
       const { data } = await supabase
         .from("orders")
-        .select("id, customer_id, event_id, products, stage, is_paid")
+        .select("id, customer_id, event_id, products, stage, is_paid, created_at")
         .in("customer_id", customerIds.slice(i, i + CHUNK));
       if (data) orders.push(...data);
     }
@@ -252,6 +260,10 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             productCount: products.length,
             total,
             whatsapp,
+            createdAt: o.created_at || null,
+            productNames: products.map((p: any) =>
+              [p.title, p.variant].filter(Boolean).join(" · ")
+            ).filter(Boolean),
           });
         }
       }
@@ -294,7 +306,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         const newComment = payload.new as LiveComment;
         setComments(prev => {
           if (prev.some(c => c.id === newComment.id || c.comment_id === newComment.comment_id)) return prev;
-          return [newComment, ...prev].slice(0, 150);
+          return [newComment, ...prev].slice(0, 600);
         });
 
         const handle = cleanHandle(newComment.username);
@@ -366,6 +378,16 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const formatCartAge = (iso: string | null) => {
+    if (!iso) return null;
+    const mins = Math.max(0, Math.floor((nowTick - new Date(iso).getTime()) / 60000));
+    if (mins < 1) return "agora";
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}min` : `${h}h`;
   };
 
   return (
@@ -537,22 +559,39 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                       <p className="text-lg leading-snug font-medium text-foreground mb-1 break-words">{comment.comment_text}</p>
 
                       {hasCart && cart && (
-                        <div className="mt-2 flex items-center justify-between gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
-                          <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
-                            <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
-                            <span className="text-white dark:text-orange-200 truncate font-medium">
-                              <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
-                            </span>
+                        <div className="mt-2 gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-sm flex-1 min-w-0 flex-wrap">
+                              <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
+                              <span className="text-white dark:text-orange-200 font-medium">
+                                <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
+                              </span>
+                              {cart.createdAt && (
+                                <span className="rounded-full bg-black/30 dark:bg-orange-500/20 px-2 py-0.5 text-[11px] font-bold text-white dark:text-orange-200">
+                                  ⏱ aberto há {formatCartAge(cart.createdAt)}
+                                </span>
+                              )}
+                            </div>
+                            {onOpenOrder && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold shrink-0"
+                                onClick={() => onOpenOrder(cart.orderId)}
+                              >
+                                Ver pedido <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
-                          {onOpenOrder && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold"
-                              onClick={() => onOpenOrder(cart.orderId)}
-                            >
-                              Ver pedido <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
+                          {cart.productNames.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5 text-[13px] text-white/90 dark:text-orange-100/90">
+                              {cart.productNames.slice(0, 4).map((name, i) => (
+                                <li key={i} className="truncate">• {name}</li>
+                              ))}
+                              {cart.productNames.length > 4 && (
+                                <li className="opacity-80">+{cart.productNames.length - 4} produto(s)</li>
+                              )}
+                            </ul>
                           )}
                         </div>
                       )}
