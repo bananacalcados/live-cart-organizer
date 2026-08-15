@@ -585,8 +585,15 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           </span>
                         )}
                         {status && status.paidOther > 0 && (
-                          <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Concluído · outros eventos ({status.paidOther})
+                          <span
+                            className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
+                            title={status.paidOtherEvents.join(" • ")}
+                          >
+                            Concluído ({status.paidOther}) ·{" "}
+                            {status.paidOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
+                            {status.paidOtherEvents.length > 2
+                              ? ` +${status.paidOtherEvents.length - 2}`
+                              : ""}
                           </span>
                         )}
                         {status && status.cancelledCurrent > 0 && (
