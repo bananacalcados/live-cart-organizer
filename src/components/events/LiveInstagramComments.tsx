@@ -254,6 +254,10 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             productCount: products.length,
             total,
             whatsapp,
+            createdAt: o.created_at || null,
+            productNames: products.map((p: any) =>
+              [p.title, p.variant].filter(Boolean).join(" · ")
+            ).filter(Boolean),
           });
         }
       }
