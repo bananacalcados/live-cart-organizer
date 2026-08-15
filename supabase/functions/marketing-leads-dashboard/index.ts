@@ -846,6 +846,9 @@ Deno.serve(async (req) => {
       }))
       .sort((a, b) => b.leads - a.leads);
 
+    const captureChannels = allCaptureRows.filter(c => !FUNNEL_EVENT_CHANNELS.has(c.channel));
+    const funnelEvents = allCaptureRows.filter(c => FUNNEL_EVENT_CHANNELS.has(c.channel));
+
     const sources = captureChannels.map(c => ({
       source: c.channel,
       leads: c.leads,
