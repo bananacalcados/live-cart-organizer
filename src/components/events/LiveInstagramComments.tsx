@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio } from "lucide-react";
 import { toast } from "sonner";
+import { isPaidOrderStage } from "@/lib/orderPaymentStages";
+
 
 interface LiveComment {
   id: string;
