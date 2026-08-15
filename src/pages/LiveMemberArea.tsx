@@ -1240,26 +1240,23 @@ export default function LiveMemberArea() {
           </button>
           {Header}
           <p className="text-muted-foreground text-center text-sm mb-6">
-            Confirme seu WhatsApp para criar seu cadastro. Enviamos um código para {phone}.
+            Confirme seu WhatsApp para criar seu cadastro.{" "}
+            {otpSending ? "Enviando o código para" : "Enviamos um código para"} {phone}.
           </p>
           <div className="space-y-4">
             <Button
               variant="outline"
               className="w-full h-14 font-semibold"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  const res = await callApi({ action: "send_otp", phone });
-                  if (res?.ok) toast.success("Código enviado no seu WhatsApp");
-                  else toast.error(res?.error || "Falha ao enviar código");
-                } finally {
-                  setBusy(false);
-                }
-              }}
+              disabled={busy || otpSending || otpCooldown > 0}
+              onClick={() => sendSignupOtp()}
             >
-              RECEBER CÓDIGO NO WHATSAPP
+              {otpSending
+                ? "ENVIANDO..."
+                : otpCooldown > 0
+                  ? `REENVIAR EM ${otpCooldown}s`
+                  : "REENVIAR CÓDIGO NO WHATSAPP"}
             </Button>
+
             <Input
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
