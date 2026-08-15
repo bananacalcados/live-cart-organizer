@@ -524,11 +524,25 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           {config.label}
                         </Badge>
 
+                        {status && status.unconfirmedCurrent > 0 && (
+                          <span
+                            className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
+                            title="Carrinho montado, mas a cliente ainda não confirmou o pedido"
+                          >
+                            ⚠️ Pedido não confirmado · esta live{status.unconfirmedCurrent > 1 ? ` (${status.unconfirmedCurrent})` : ""}
+                          </span>
+                        )}
+                        {status && status.unconfirmedOther > 0 && (
+                          <span className="rounded-full bg-orange-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            ⚠️ Pedido não confirmado · outros eventos ({status.unconfirmedOther})
+                          </span>
+                        )}
                         {status && status.openCurrent > 0 && (
                           <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
                             Pedido aberto · esta live{status.openCurrent > 1 ? ` (${status.openCurrent})` : ""}
                           </span>
                         )}
+
                         {status && status.openOther > 0 && (
                           <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
                             Pedido aberto · outros eventos ({status.openOther})
