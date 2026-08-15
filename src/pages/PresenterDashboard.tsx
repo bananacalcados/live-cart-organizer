@@ -317,6 +317,21 @@ export default function PresenterDashboard() {
         </Card>
       </div>
 
+      {/* Comentários da Live — logo abaixo do painel de métricas */}
+      <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
+        <CardContent className="p-4">
+          <LiveInstagramComments
+            eventId={eventId!}
+            onOpenOrder={(orderId) => {
+              const order = orders.find(o => o.id === orderId);
+              if (order) setChatOrder(order);
+            }}
+          />
+        </CardContent>
+      </Card>
+
+
+
       <Tabs defaultValue="live" className="flex-1">
         <TabsList className="mb-4 bg-muted-foreground/10">
           <TabsTrigger value="live" className="gap-1 data-[state=active]:bg-primary/20">
