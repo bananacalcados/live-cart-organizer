@@ -559,22 +559,39 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                       <p className="text-lg leading-snug font-medium text-foreground mb-1 break-words">{comment.comment_text}</p>
 
                       {hasCart && cart && (
-                        <div className="mt-2 flex items-center justify-between gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
-                          <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
-                            <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
-                            <span className="text-white dark:text-orange-200 truncate font-medium">
-                              <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
-                            </span>
+                        <div className="mt-2 gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-sm flex-1 min-w-0 flex-wrap">
+                              <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
+                              <span className="text-white dark:text-orange-200 font-medium">
+                                <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
+                              </span>
+                              {cart.createdAt && (
+                                <span className="rounded-full bg-black/30 dark:bg-orange-500/20 px-2 py-0.5 text-[11px] font-bold text-white dark:text-orange-200">
+                                  ⏱ aberto há {formatCartAge(cart.createdAt)}
+                                </span>
+                              )}
+                            </div>
+                            {onOpenOrder && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold shrink-0"
+                                onClick={() => onOpenOrder(cart.orderId)}
+                              >
+                                Ver pedido <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
-                          {onOpenOrder && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold"
-                              onClick={() => onOpenOrder(cart.orderId)}
-                            >
-                              Ver pedido <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
+                          {cart.productNames.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5 text-[13px] text-white/90 dark:text-orange-100/90">
+                              {cart.productNames.slice(0, 4).map((name, i) => (
+                                <li key={i} className="truncate">• {name}</li>
+                              ))}
+                              {cart.productNames.length > 4 && (
+                                <li className="opacity-80">+{cart.productNames.length - 4} produto(s)</li>
+                              )}
+                            </ul>
                           )}
                         </div>
                       )}
