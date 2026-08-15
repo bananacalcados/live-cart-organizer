@@ -586,10 +586,18 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           </span>
                         )}
                         {status && status.cancelledOther > 0 && (
-                          <span className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Cancelado · outros eventos ({status.cancelledOther})
+                          <span
+                            className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
+                            title={status.cancelledOtherEvents.join(" • ")}
+                          >
+                            Cancelado ({status.cancelledOther}) ·{" "}
+                            {status.cancelledOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
+                            {status.cancelledOtherEvents.length > 2
+                              ? ` +${status.cancelledOtherEvents.length - 2}`
+                              : ""}
                           </span>
                         )}
+
 
                         {missingWhatsapp && (
                           <span
