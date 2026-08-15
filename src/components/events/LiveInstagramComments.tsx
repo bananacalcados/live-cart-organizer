@@ -148,7 +148,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       .select("id, comment_id, username, comment_text, profile_pic_url, is_order, ai_classification, created_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false })
-      .limit(150);
+      .limit(600);
     if (data) setComments(data as LiveComment[]);
   }, [eventId]);
 
@@ -199,7 +199,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     for (let i = 0; i < customerIds.length; i += CHUNK) {
       const { data } = await supabase
         .from("orders")
-        .select("id, customer_id, event_id, products, stage, is_paid")
+        .select("id, customer_id, event_id, products, stage, is_paid, created_at")
         .in("customer_id", customerIds.slice(i, i + CHUNK));
       if (data) orders.push(...data);
     }
@@ -300,7 +300,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         const newComment = payload.new as LiveComment;
         setComments(prev => {
           if (prev.some(c => c.id === newComment.id || c.comment_id === newComment.comment_id)) return prev;
-          return [newComment, ...prev].slice(0, 150);
+          return [newComment, ...prev].slice(0, 600);
         });
 
         const handle = cleanHandle(newComment.username);
