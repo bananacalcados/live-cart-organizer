@@ -535,29 +535,27 @@ Deno.serve(async (req) => {
     // Load ALL raw lead rows first (we need a global view to detect event mirrors).
     type LeadRow = { phone: string; name: string; instagram: string; source: string; campaign_tag: string; metadata: any; created: Date };
     const allLeadRows: LeadRow[] = [];
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("lp_leads")
-        .select("phone, name, instagram, source, campaign_tag, metadata, created_at")
-        .not("phone", "is", null)
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const l of data) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "lp_leads",
+        "id, phone, name, instagram, source, campaign_tag, metadata, created_at",
+        { apply: (q) => q.not("phone", "is", null) },
+      );
+      for (const l of rows) {
         const p = normalizePhone(l.phone);
         if (!p) continue;
         allLeadRows.push({
           phone: p,
-          name: (l as any).name || "",
-          instagram: (l as any).instagram || "",
+          name: l.name || "",
+          instagram: l.instagram || "",
           source: l.source || "",
           campaign_tag: l.campaign_tag || "",
           metadata: l.metadata || null,
           created: new Date(l.created_at),
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
+      (audit as any).leads_rows_loaded = rows.length;
     }
 
 
