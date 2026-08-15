@@ -27,6 +27,14 @@ interface CartCustomerMatch {
   whatsapp: string | null;
 }
 
+interface HandleOrderStatus {
+  open: number;
+  paid: number;
+  cancelled: number;
+  hasWhatsapp: boolean;
+}
+
+
 interface LiveInstagramCommentsProps {
   eventId: string;
   onOpenOrder?: (orderId: string) => void;
@@ -45,6 +53,7 @@ const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCas
 export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCommentsProps) {
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [cartByHandle, setCartByHandle] = useState<Map<string, CartCustomerMatch>>(new Map());
+  const [statusByHandle, setStatusByHandle] = useState<Map<string, HandleOrderStatus>>(new Map());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
@@ -131,12 +140,12 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     if (!eventId) return;
     const { data: orders } = await supabase
       .from("orders")
-      .select("id, customer_id, products, stage")
-      .eq("event_id", eventId)
-      .in("stage", ["incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco", "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto"]);
+      .select("id, customer_id, products, stage, is_paid")
+      .eq("event_id", eventId);
 
     if (!orders || orders.length === 0) {
       setCartByHandle(new Map());
+      setStatusByHandle(new Map());
       return;
     }
 
@@ -148,29 +157,50 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
     const customerMap = new Map((customers || []).map((c: any) => [c.id, c]));
     const map = new Map<string, CartCustomerMatch>();
+    const statusMap = new Map<string, HandleOrderStatus>();
+
+    const OPEN_STAGES = [
+      "incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco",
+      "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto",
+    ];
 
     orders.forEach((o: any) => {
       const cust: any = customerMap.get(o.customer_id);
       if (!cust?.instagram_handle) return;
       const key = cleanHandle(cust.instagram_handle);
       if (!key) return;
+
       const products = (o.products as any[]) || [];
       const total = products.reduce((s, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
-      const existing = map.get(key);
-      if (!existing || total > existing.total) {
-        map.set(key, {
-          handle: key,
-          customerId: cust.id,
-          orderId: o.id,
-          productCount: products.length,
-          total,
-          whatsapp: cust.whatsapp || null,
-        });
+      const whatsapp = (cust.whatsapp || "").trim() || null;
+
+      const st = statusMap.get(key) || { open: 0, paid: 0, cancelled: 0, hasWhatsapp: false };
+      if (whatsapp) st.hasWhatsapp = true;
+      if (o.stage === "cancelled") st.cancelled += 1;
+      else if (o.is_paid || o.stage === "paid") st.paid += 1;
+      else if (OPEN_STAGES.includes(o.stage)) st.open += 1;
+      statusMap.set(key, st);
+
+      // Carrinho aberto (mesma regra de antes)
+      if (o.stage !== "cancelled" && !o.is_paid && OPEN_STAGES.includes(o.stage)) {
+        const existing = map.get(key);
+        if (!existing || total > existing.total) {
+          map.set(key, {
+            handle: key,
+            customerId: cust.id,
+            orderId: o.id,
+            productCount: products.length,
+            total,
+            whatsapp,
+          });
+        }
       }
     });
 
     setCartByHandle(map);
+    setStatusByHandle(statusMap);
   }, [eventId]);
+
 
   useEffect(() => {
     loadComments();
@@ -331,8 +361,8 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 h-[calc(100vh-440px)]" ref={scrollRef as any}>
-        <div className="space-y-2 pr-2">
+      <ScrollArea className="flex-1 min-h-[420px] h-[60vh]" ref={scrollRef as any}>
+        <div className="space-y-3 pr-2">
           {filtered.length === 0 && (
             <Card className="bg-muted-foreground/10 border-muted-foreground/20">
               <CardContent className="p-6 text-center text-muted-foreground text-sm">
@@ -346,10 +376,13 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             const handle = cleanHandle(comment.username);
             const cart = cartByHandle.get(handle);
             const hasCart = !!cart;
+            const status = statusByHandle.get(handle);
             const isHighlighted = recentlyHighlighted.has(comment.id);
             const classKey = comment.ai_classification || "comment";
             const config = classificationConfig[classKey] || classificationConfig.comment;
             const Icon = config.icon;
+            const hasAnyOrder = !!status && (status.open + status.paid + status.cancelled) > 0;
+            const missingWhatsapp = hasAnyOrder && !status!.hasWhatsapp;
 
             return (
               <Card
@@ -362,37 +395,61 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                     : "bg-card border-border"
                 }`}
               >
-                <CardContent className="p-3">
-                  <div className="flex items-start gap-2">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
                     {comment.profile_pic_url ? (
                       <img
                         src={comment.profile_pic_url}
                         alt={comment.username}
-                        className="w-8 h-8 rounded-full object-cover border border-border"
+                        className="w-12 h-12 rounded-full object-cover border border-border"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-base font-bold text-white">
                         {comment.username.charAt(0).toUpperCase()}
                       </div>
                     )}
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-bold text-sm text-pink-500 dark:text-pink-300">@{handle}</span>
-                        <span className="text-[10px] text-muted-foreground">{formatTime(comment.created_at)}</span>
-                        <Badge variant="outline" className={`text-[9px] py-0 ${config.color}`}>
-                          <Icon className="h-2.5 w-2.5 mr-0.5" />
+                        <span className="font-bold text-base text-pink-500 dark:text-pink-300">@{handle}</span>
+                        <span className="text-xs text-muted-foreground">{formatTime(comment.created_at)}</span>
+                        <Badge variant="outline" className={`text-[11px] py-0 ${config.color}`}>
+                          <Icon className="h-3 w-3 mr-1" />
                           {config.label}
                         </Badge>
+
+                        {status && status.open > 0 && (
+                          <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Pedido aberto{status.open > 1 ? ` (${status.open})` : ""}
+                          </span>
+                        )}
+                        {status && status.paid > 0 && (
+                          <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Concluído{status.paid > 1 ? ` (${status.paid})` : ""}
+                          </span>
+                        )}
+                        {status && status.cancelled > 0 && (
+                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            Cancelado{status.cancelled > 1 ? ` (${status.cancelled})` : ""}
+                          </span>
+                        )}
+                        {missingWhatsapp && (
+                          <span
+                            className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase text-black"
+                            title="Cliente com pedido sem WhatsApp cadastrado"
+                          >
+                            📱 Sem WhatsApp
+                          </span>
+                        )}
                       </div>
 
-                      <p className="text-sm text-foreground mb-1 break-words">{comment.comment_text}</p>
+                      <p className="text-lg leading-snug font-medium text-foreground mb-1 break-words">{comment.comment_text}</p>
 
                       {hasCart && cart && (
-                        <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
-                          <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
-                            <ShoppingCart className="h-3.5 w-3.5 text-white dark:text-orange-300 shrink-0" />
+                        <div className="mt-2 flex items-center justify-between gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
+                          <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
+                            <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
                             <span className="text-white dark:text-orange-200 truncate font-medium">
                               <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
                             </span>
@@ -401,10 +458,10 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 text-[10px] text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold"
+                              className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold"
                               onClick={() => onOpenOrder(cart.orderId)}
                             >
-                              Ver pedido <ExternalLink className="h-3 w-3" />
+                              Ver pedido <ExternalLink className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
@@ -417,6 +474,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           })}
         </div>
       </ScrollArea>
+
     </div>
   );
 }

@@ -15,7 +15,6 @@ import {
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
-import { Instagram } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface PresenterAlert {
@@ -317,13 +316,25 @@ export default function PresenterDashboard() {
         </Card>
       </div>
 
+      {/* Comentários da Live — logo abaixo do painel de métricas */}
+      <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
+        <CardContent className="p-4">
+          <LiveInstagramComments
+            eventId={eventId!}
+            onOpenOrder={(orderId) => {
+              const order = orders.find(o => o.id === orderId);
+              if (order) setChatOrder(order);
+            }}
+          />
+        </CardContent>
+      </Card>
+
+
+
       <Tabs defaultValue="live" className="flex-1">
         <TabsList className="mb-4 bg-muted-foreground/10">
           <TabsTrigger value="live" className="gap-1 data-[state=active]:bg-primary/20">
             <Bell className="h-4 w-4" /> Alertas & Pedidos
-          </TabsTrigger>
-          <TabsTrigger value="instagram" className="gap-1 data-[state=active]:bg-primary/20">
-            <Instagram className="h-4 w-4" /> Comentários IG
           </TabsTrigger>
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
@@ -493,19 +504,8 @@ export default function PresenterDashboard() {
           </div>
         </TabsContent>
 
-        <TabsContent value="instagram">
-          <Card className="bg-muted-foreground/5 border-muted-foreground/15">
-            <CardContent className="p-4">
-              <LiveInstagramComments
-                eventId={eventId!}
-                onOpenOrder={(orderId) => {
-                  const order = orders.find(o => o.id === orderId);
-                  if (order) setChatOrder(order);
-                }}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+
+
 
         <TabsContent value="catalog">
           <div className="space-y-4">
@@ -522,18 +522,6 @@ export default function PresenterDashboard() {
       </Tabs>
       </div>
 
-      {/* Live Instagram Comments Sidebar - always visible */}
-      <div className="w-80 lg:w-96 border-l border-border bg-muted/30 flex flex-col h-screen sticky top-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-3">
-          <LiveInstagramComments
-            eventId={eventId!}
-            onOpenOrder={(orderId) => {
-              const order = orders.find(o => o.id === orderId);
-              if (order) setChatOrder(order);
-            }}
-          />
-        </div>
-      </div>
 
       {/* WhatsApp Chat Dialog */}
       <Dialog open={!!chatOrder} onOpenChange={(open) => !open && setChatOrder(null)}>
