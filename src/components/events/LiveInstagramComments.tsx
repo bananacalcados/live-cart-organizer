@@ -27,6 +27,14 @@ interface CartCustomerMatch {
   whatsapp: string | null;
 }
 
+interface HandleOrderStatus {
+  open: number;
+  paid: number;
+  cancelled: number;
+  hasWhatsapp: boolean;
+}
+
+
 interface LiveInstagramCommentsProps {
   eventId: string;
   onOpenOrder?: (orderId: string) => void;
