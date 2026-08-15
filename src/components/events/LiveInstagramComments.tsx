@@ -117,6 +117,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     cartByHandleRef.current = cartByHandle;
   }, [cartByHandle]);
 
+  useEffect(() => {
+    commentsRef.current = comments;
+  }, [comments]);
+
+
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
     try {
