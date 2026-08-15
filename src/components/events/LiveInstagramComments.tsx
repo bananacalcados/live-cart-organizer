@@ -66,6 +66,8 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [togglingLive, setTogglingLive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
+  const commentsRef = useRef<LiveComment[]>([]);
+
 
   const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
 
