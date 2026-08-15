@@ -438,7 +438,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             const classKey = comment.ai_classification || "comment";
             const config = classificationConfig[classKey] || classificationConfig.comment;
             const Icon = config.icon;
-            const hasAnyOrder = !!status && (status.open + status.paid + status.cancelled) > 0;
+            const hasAnyOrder = !!status && status.hasAnyOrder;
             const missingWhatsapp = hasAnyOrder && !status!.hasWhatsapp;
 
             return (
