@@ -136,6 +136,10 @@ export default function LiveMemberArea() {
   const [state, setState] = useState<MemberState | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
+  /** Evita reenvio automático em loop do código de cadastro. */
+  const otpAutoSentFor = useRef<string | null>(null);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
