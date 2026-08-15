@@ -462,7 +462,7 @@ async function chargeMercadoPago(
       };
     }
     if (data.status === "in_process" || data.status === "pending") {
-      return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
+      return { success: false, pending: true, stopCascade: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
     }
     const rawErrMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
     const errMsg = humanizeMpError(rawErrMsg);
@@ -480,7 +480,10 @@ async function chargeMercadoPago(
     return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox, ...failureMeta };
   } catch (e) {
     console.error("[mercadopago] exception:", e);
-    return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}`, isSandbox: mpAccount.is_sandbox };
+    // Resultado ambíguo: a API pode ter recebido a cobrança antes da conexão cair.
+    // Parar a cascata evita cobrar o mesmo cartão em outro gateway enquanto o
+    // webhook/reconciliação do Mercado Pago resolve o estado definitivo.
+    return { success: false, pending: true, stopCascade: true, gateway: "mercadopago", error: `Pagamento em confirmação: ${(e as Error).message}`, isSandbox: mpAccount.is_sandbox };
   }
 }
 
