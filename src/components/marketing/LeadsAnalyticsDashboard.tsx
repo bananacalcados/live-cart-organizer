@@ -95,6 +95,7 @@ export function LeadsAnalyticsDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [drillChannel, setDrillChannel] = useState<string | null>(null);
   const [lastParams, setLastParams] = useState<Record<string, unknown>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
 
 
   const load = useCallback(async () => {
@@ -109,8 +110,12 @@ export function LeadsAnalyticsDashboard() {
 
       if (error) throw error;
       if ((res as any)?.error) throw new Error((res as any).error);
+      setLoadError(null);
       setData(res as DashboardData);
     } catch (e: any) {
+      // Nunca manter números parciais na tela: se a carga falhou, avisamos.
+      setData(null);
+      setLoadError(e?.message || String(e));
       toast.error("Erro ao carregar dashboard: " + (e?.message || e));
     } finally {
       setLoading(false);
