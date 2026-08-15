@@ -261,16 +261,18 @@ Deno.serve(async (req) => {
       products: any; discount_type: string | null; discount_value: number | null;
     };
     const paidCards: OrderRow[] = [];
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("orders")
-        .select("id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, paid_externally, stage, created_at, updated_at")
-        .or(`is_paid.eq.true,paid_externally.eq.true,stage.in.(${PAID_LIKE_STAGES.join(",")})`)
-        .neq("stage", "cancelled")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const o of data as any[]) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "orders",
+        "id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, paid_externally, stage, created_at, updated_at",
+        {
+          apply: (q) => q
+            .or(`is_paid.eq.true,paid_externally.eq.true,stage.in.(${PAID_LIKE_STAGES.join(",")})`)
+            .neq("stage", "cancelled"),
+        },
+      );
+      for (const o of rows) {
         paidCards.push({
           id: o.id, event_id: o.event_id, customer_id: o.customer_id,
           // Data da venda: paid_at quando existe; senão updated_at/created_at,
@@ -280,8 +282,6 @@ Deno.serve(async (req) => {
           products: o.products, discount_type: o.discount_type, discount_value: o.discount_value,
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
 
