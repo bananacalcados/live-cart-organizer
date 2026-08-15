@@ -42,6 +42,8 @@ interface HandleOrderStatus {
   cancelledOther: number;
   /** Nomes das lives/eventos anteriores em que a cliente teve pedido cancelado */
   cancelledOtherEvents: string[];
+  /** Nomes das lives/eventos anteriores em que a cliente teve pedido concluído/pago */
+  paidOtherEvents: string[];
   hasWhatsapp: boolean;
   hasAnyOrder: boolean;
 }
