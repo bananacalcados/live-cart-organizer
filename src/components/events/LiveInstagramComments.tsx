@@ -257,6 +257,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         paidCurrent: 0, paidOther: 0,
         cancelledCurrent: 0, cancelledOther: 0,
         cancelledOtherEvents: [],
+        paidOtherEvents: [],
         hasWhatsapp: false, hasAnyOrder: false,
       };
       if (whatsapp) st.hasWhatsapp = true;
@@ -272,7 +273,13 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           if (!st.cancelledOtherEvents.includes(evName)) st.cancelledOtherEvents.push(evName);
         }
       } else if (isPaid) {
-        if (isCurrent) st.paidCurrent += 1; else st.paidOther += 1;
+        if (isCurrent) {
+          st.paidCurrent += 1;
+        } else {
+          st.paidOther += 1;
+          const evName = eventNameById.get(o.event_id) || "Evento anterior";
+          if (!st.paidOtherEvents.includes(evName)) st.paidOtherEvents.push(evName);
+        }
       } else if (OPEN_STAGES.includes(o.stage)) {
         if (isCurrent) st.openCurrent += 1; else st.openOther += 1;
       }
