@@ -27,6 +27,8 @@ interface CartCustomerMatch {
   productCount: number;
   total: number;
   whatsapp: string | null;
+  createdAt: string | null;
+  productNames: string[];
 }
 
 interface HandleOrderStatus {
