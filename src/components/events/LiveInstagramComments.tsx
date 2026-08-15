@@ -34,6 +34,8 @@ interface CartCustomerMatch {
 interface HandleOrderStatus {
   openCurrent: number;
   openOther: number;
+  unconfirmedCurrent: number;
+  unconfirmedOther: number;
   paidCurrent: number;
   paidOther: number;
   cancelledCurrent: number;
@@ -218,6 +220,8 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       "incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco",
       "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto",
     ];
+    // Carrinho montado, mas a cliente ainda NÃO confirmou o pedido
+    const UNCONFIRMED_STAGES = ["pre_sale", "incomplete_order", "awaiting_confirmation"];
 
     orders.forEach((o: any) => {
       const cust: any = customerById.get(o.customer_id);
@@ -232,6 +236,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
       const st: HandleOrderStatus = statusMap.get(key) || {
         openCurrent: 0, openOther: 0,
+        unconfirmedCurrent: 0, unconfirmedOther: 0,
         paidCurrent: 0, paidOther: 0,
         cancelledCurrent: 0, cancelledOther: 0,
         hasWhatsapp: false, hasAnyOrder: false,
@@ -247,7 +252,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       } else if (OPEN_STAGES.includes(o.stage)) {
         if (isCurrent) st.openCurrent += 1; else st.openOther += 1;
       }
+      if (o.stage !== "cancelled" && !isPaid && UNCONFIRMED_STAGES.includes(o.stage)) {
+        if (isCurrent) st.unconfirmedCurrent += 1; else st.unconfirmedOther += 1;
+      }
       statusMap.set(key, st);
+
 
       // Carrinho aberto: apenas do evento atual
       if (isCurrent && o.stage !== "cancelled" && !isPaid && OPEN_STAGES.includes(o.stage)) {
@@ -515,11 +524,25 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                           {config.label}
                         </Badge>
 
+                        {status && status.unconfirmedCurrent > 0 && (
+                          <span
+                            className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
+                            title="Carrinho montado, mas a cliente ainda não confirmou o pedido"
+                          >
+                            ⚠️ Pedido não confirmado · esta live{status.unconfirmedCurrent > 1 ? ` (${status.unconfirmedCurrent})` : ""}
+                          </span>
+                        )}
+                        {status && status.unconfirmedOther > 0 && (
+                          <span className="rounded-full bg-orange-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                            ⚠️ Pedido não confirmado · outros eventos ({status.unconfirmedOther})
+                          </span>
+                        )}
                         {status && status.openCurrent > 0 && (
                           <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
                             Pedido aberto · esta live{status.openCurrent > 1 ? ` (${status.openCurrent})` : ""}
                           </span>
                         )}
+
                         {status && status.openOther > 0 && (
                           <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
                             Pedido aberto · outros eventos ({status.openOther})
