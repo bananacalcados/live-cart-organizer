@@ -49,14 +49,15 @@ Deno.serve(async (req) => {
   for (const row of due) {
     // Claim atômico: evita que duas execuções simultâneas do cron enviem o
     // mesmo follow-up mais de uma vez.
-    const { data: claimed } = await supabase
+    const { data: claimed, error: claimErr } = await supabase
       .from("event_followup_dispatches")
       .update({ status: "processing", attempts: (row.attempts || 0) + 1 })
       .eq("id", row.id)
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
-    if (!claimed) { skipped++; continue; }
+    if (claimErr) console.error("[dispatcher] claim error:", row.id, claimErr.message, claimErr.details, claimErr.code);
+    if (!claimed) { console.warn("[dispatcher] claim empty:", row.id); skipped++; continue; }
 
     const cfg = row.config;
     const ord = row.order;
