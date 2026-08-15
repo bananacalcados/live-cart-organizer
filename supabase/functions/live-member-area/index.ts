@@ -973,25 +973,59 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Lead da área de membros também aparece em Marketing > Leads com a origem
+      // Lead da área de membros só é criado quando a pessoa é REALMENTE nova.
+      // A área de membros é ponto de confirmação de pedido: se a cliente já era
+      // lead de outro canal (typebot, LP, orgânico…) ou já era cliente com
+      // compra anterior, criar um lead "area_membros" aqui canibalizava o canal
+      // de aquisição real e inflava a conversão do painel Marketing > Leads.
+      // O caso legítimo (sorteio anunciado na live para quem se cadastrar sem
+      // pedido) continua sendo captado normalmente.
       background((async () => {
         try {
           const last8 = suffix8(phone);
-          const { data: existing } = await supabase
+
+          // (a) já existe lead em qualquer origem?
+          const { data: anyLead } = await supabase
             .from("lp_leads")
-            .select("id")
-            .eq("source", "area_membros")
+            .select("id, source")
             .ilike("phone", `%${last8}`)
             .limit(1);
-          if (!existing?.length) {
-            await supabase.from("lp_leads").insert({
-              name,
-              phone,
-              source: "area_membros",
-              campaign_tag: event?.name || "Área de Membros",
-              metadata: { event_id: event?.id || null, origin: "minha-area" },
-            });
+          if (anyLead?.length) {
+            console.log(`[member-area] lead já existe (origem ${anyLead[0].source}) — não cria area_membros`);
+            return;
           }
+
+          // (b) já existe lead de evento por outra origem?
+          const { data: evLead } = await supabase
+            .from("event_leads")
+            .select("id, source")
+            .eq("phone_suffix", last8)
+            .neq("source", "member_area")
+            .limit(1);
+          if (evLead?.length) {
+            console.log(`[member-area] event_lead prévio (origem ${evLead[0].source}) — não cria area_membros`);
+            return;
+          }
+
+          // (c) já é cliente com compra anterior?
+          const { data: cust } = await supabase
+            .from("customers_unified")
+            .select("id, total_orders")
+            .eq("phone_suffix8", last8)
+            .gt("total_orders", 0)
+            .limit(1);
+          if (cust?.length) {
+            console.log("[member-area] já é cliente com compra — não cria lead area_membros");
+            return;
+          }
+
+          await supabase.from("lp_leads").insert({
+            name,
+            phone,
+            source: "area_membros",
+            campaign_tag: event?.name || "Área de Membros",
+            metadata: { event_id: event?.id || null, origin: "minha-area" },
+          });
         } catch (e) {
           console.error("[member-area] falha ao registrar lead no Marketing:", e);
         }

@@ -19,6 +19,37 @@ function normalizePhone(raw: string): string {
   return phone;
 }
 
+/**
+ * Paginated read with STABLE ordering and hard error handling.
+ * Sem ordenação o PostgREST não garante a mesma ordem entre páginas — linhas
+ * eram puladas/repetidas. E sem checar erro uma página que falha virava
+ * "número parcial" silencioso no painel (foi o que gerou o 0,27%).
+ */
+async function fetchAllRows<T = any>(
+  supabase: any,
+  table: string,
+  columns: string,
+  opts: { orderBy?: string; apply?: (q: any) => any } = {},
+): Promise<T[]> {
+  const orderBy = opts.orderBy || "created_at";
+  const out: T[] = [];
+  let off = 0;
+  while (true) {
+    let q = supabase.from(table).select(columns);
+    if (opts.apply) q = opts.apply(q);
+    q = q.order(orderBy, { ascending: true }).order("id", { ascending: true }).range(off, off + 999);
+    const { data, error } = await q;
+    if (error) {
+      throw new Error(`Falha ao carregar ${table} (offset ${off}): ${error.message}`);
+    }
+    if (!data || data.length === 0) break;
+    out.push(...(data as T[]));
+    if (data.length < 1000) break;
+    off += 1000;
+  }
+  return out;
+}
+
 // Real store UUIDs (from pos_stores).
 const STORE_PEROLA = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
 const STORE_CENTRO = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
@@ -136,14 +167,9 @@ Deno.serve(async (req) => {
     // posCustomerPhone:   pos_customer id -> phone      (used for fuzzy dedup lookup)
     const phoneToCustomerIds: Record<string, string[]> = {};
     const posCustomerPhone: Record<string, string> = {};
-    let off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("pos_customers")
-        .select("id, whatsapp")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const c of data) {
+    {
+      const rows = await fetchAllRows<any>(supabase, "pos_customers", "id, whatsapp, created_at");
+      for (const c of rows) {
         if (c.whatsapp) {
           const s = normalizePhone(c.whatsapp);
           if (s) {
@@ -152,32 +178,24 @@ Deno.serve(async (req) => {
           }
         }
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     // ─── 2b. customers (live cards) id -> phone  &  events id -> channel ───
     const cardCustomerPhone: Record<string, string> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("customers")
-        .select("id, whatsapp")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const c of data) {
+    {
+      const rows = await fetchAllRows<any>(supabase, "customers", "id, whatsapp, created_at");
+      for (const c of rows) {
         if (c.whatsapp) {
           const s = normalizePhone(c.whatsapp);
           if (s) cardCustomerPhone[c.id] = s;
         }
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     const eventChannel: Record<string, string> = {};
     {
-      const { data } = await supabase.from("events").select("id, channel");
+      const { data, error } = await supabase.from("events").select("id, channel");
+      if (error) throw new Error(`Falha ao carregar events: ${error.message}`);
       for (const e of data || []) eventChannel[e.id] = e.channel || "";
     }
     const CHANNEL_STORE_LABEL: Record<string, string> = {
@@ -199,16 +217,13 @@ Deno.serve(async (req) => {
       status: string | null;
     };
     const posSalesById: Record<string, PosSaleRow> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const s of data as PosSaleRow[]) posSalesById[s.id] = s;
-      if (data.length < 1000) break;
-      off += 1000;
+    {
+      const rows = await fetchAllRows<PosSaleRow>(
+        supabase,
+        "pos_sales",
+        "id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status",
+      );
+      for (const s of rows) posSalesById[s.id] = s;
     }
 
     // Which pos_sales rows count as "paid" for the non-live source:
@@ -246,16 +261,18 @@ Deno.serve(async (req) => {
       products: any; discount_type: string | null; discount_value: number | null;
     };
     const paidCards: OrderRow[] = [];
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("orders")
-        .select("id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, paid_externally, stage, created_at, updated_at")
-        .or(`is_paid.eq.true,paid_externally.eq.true,stage.in.(${PAID_LIKE_STAGES.join(",")})`)
-        .neq("stage", "cancelled")
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const o of data as any[]) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "orders",
+        "id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, paid_externally, stage, created_at, updated_at",
+        {
+          apply: (q) => q
+            .or(`is_paid.eq.true,paid_externally.eq.true,stage.in.(${PAID_LIKE_STAGES.join(",")})`)
+            .neq("stage", "cancelled"),
+        },
+      );
+      for (const o of rows) {
         paidCards.push({
           id: o.id, event_id: o.event_id, customer_id: o.customer_id,
           // Data da venda: paid_at quando existe; senão updated_at/created_at,
@@ -265,8 +282,6 @@ Deno.serve(async (req) => {
           products: o.products, discount_type: o.discount_type, discount_value: o.discount_value,
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
 
@@ -461,16 +476,14 @@ Deno.serve(async (req) => {
     }
 
     const zoppyPhoneSales: Record<string, any[]> = {};
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("zoppy_sales")
-        .select("id, customer_phone, total, completed_at")
-        .not("customer_phone", "is", null)
-        .not("completed_at", "is", null)
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const s of data) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "zoppy_sales",
+        "id, customer_phone, total, completed_at, created_at",
+        { apply: (q) => q.not("customer_phone", "is", null).not("completed_at", "is", null) },
+      );
+      for (const s of rows) {
         const p = normalizePhone(s.customer_phone);
         if (!p) continue;
         (zoppyPhoneSales[p] ||= []).push({
@@ -480,8 +493,6 @@ Deno.serve(async (req) => {
           channel: classifyChannel({ isZoppy: true }),
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
     }
 
     // Unified sales getter for a phone: LIVE (orders) + NON-LIVE (pos_sales) + zoppy.
@@ -524,29 +535,27 @@ Deno.serve(async (req) => {
     // Load ALL raw lead rows first (we need a global view to detect event mirrors).
     type LeadRow = { phone: string; name: string; instagram: string; source: string; campaign_tag: string; metadata: any; created: Date };
     const allLeadRows: LeadRow[] = [];
-    off = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("lp_leads")
-        .select("phone, name, instagram, source, campaign_tag, metadata, created_at")
-        .not("phone", "is", null)
-        .range(off, off + 999);
-      if (!data || data.length === 0) break;
-      for (const l of data) {
+    {
+      const rows = await fetchAllRows<any>(
+        supabase,
+        "lp_leads",
+        "id, phone, name, instagram, source, campaign_tag, metadata, created_at",
+        { apply: (q) => q.not("phone", "is", null) },
+      );
+      for (const l of rows) {
         const p = normalizePhone(l.phone);
         if (!p) continue;
         allLeadRows.push({
           phone: p,
-          name: (l as any).name || "",
-          instagram: (l as any).instagram || "",
+          name: l.name || "",
+          instagram: l.instagram || "",
           source: l.source || "",
           campaign_tag: l.campaign_tag || "",
           metadata: l.metadata || null,
           created: new Date(l.created_at),
         });
       }
-      if (data.length < 1000) break;
-      off += 1000;
+      (audit as any).leads_rows_loaded = rows.length;
     }
 
 
@@ -681,16 +690,13 @@ Deno.serve(async (req) => {
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
 
-      // Capture source for the channel breakdown depends on the mode.
-      const captureSource = mode === "captured"
-        ? lead.firstInPeriodSource
-        : lead.firstEverSource;
-      const captureTag = mode === "captured"
-        ? lead.firstInPeriodTag
-        : lead.firstEverTag;
-      const captureMeta = mode === "captured"
-        ? lead.firstInPeriodMeta
-        : lead.firstEverMeta;
+      // Ponto 4 — canal de aquisição = PRIMEIRA captação de todos os tempos,
+      // em qualquer modo. Antes, no modo "captured", uma recaptação dentro da
+      // janela (ex.: área de membros no momento do pagamento) sobrescrevia o
+      // canal real quando a captação verdadeira ficou fora do período.
+      const captureSource = lead.firstEverSource;
+      const captureTag = lead.firstEverTag;
+      const captureMeta = lead.firstEverMeta;
 
       // ── Scope membership (the denominator = "Leads captados") ──
       // captured: only leads with a capture record inside the period.
@@ -821,7 +827,10 @@ Deno.serve(async (req) => {
     // Channels (bar chart) and sources (table) are both the capture-channel
     // breakdown now — the user wants "onde o lead foi captado", not where the
     // sale happened. Sorted by number of leads captured.
-    const captureChannels = Object.values(captureMap)
+    // Ponto 3 — eventos de fundo de funil não são canais de aquisição.
+    const FUNNEL_EVENT_CHANNELS = new Set(["Carrinho Abandonado"]);
+
+    const allCaptureRows = Object.values(captureMap)
       .map(c => ({
         channel: c.channel,
         leads: c.leads,
@@ -836,6 +845,9 @@ Deno.serve(async (req) => {
         conversion_rate: c.leads > 0 ? Math.round((c.converted / c.leads) * 10000) / 100 : 0,
       }))
       .sort((a, b) => b.leads - a.leads);
+
+    const captureChannels = allCaptureRows.filter(c => !FUNNEL_EVENT_CHANNELS.has(c.channel));
+    const funnelEvents = allCaptureRows.filter(c => FUNNEL_EVENT_CHANNELS.has(c.channel));
 
     const sources = captureChannels.map(c => ({
       source: c.channel,
@@ -922,6 +934,8 @@ Deno.serve(async (req) => {
       // capture channels (where the lead came in)
       channels: captureChannels,
       sources,
+      // Eventos de fundo de funil (não são canais de aquisição) — exibidos à parte.
+      funnelEvents,
       months,
       // NEW: sale-channel breakdown of conversions + capture×conversion matrix
       conversionChannels,

@@ -35,6 +35,8 @@ type DashboardData = {
   summary: Summary;
   channels: { channel: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   sources: { source: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
+  /** Eventos de fundo de funil (ex.: Carrinho Abandonado) — não são canais de aquisição. */
+  funnelEvents?: { channel: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   months: { month: string; purchases: number; revenue: number }[];
   conversionChannels: { channel: string; converted: number; valor_convertido: number; ticket_medio_conversao: number }[];
   captureXconversion: { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }[];
@@ -93,6 +95,7 @@ export function LeadsAnalyticsDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [drillChannel, setDrillChannel] = useState<string | null>(null);
   const [lastParams, setLastParams] = useState<Record<string, unknown>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
 
 
   const load = useCallback(async () => {
@@ -107,8 +110,12 @@ export function LeadsAnalyticsDashboard() {
 
       if (error) throw error;
       if ((res as any)?.error) throw new Error((res as any).error);
+      setLoadError(null);
       setData(res as DashboardData);
     } catch (e: any) {
+      // Nunca manter números parciais na tela: se a carga falhou, avisamos.
+      setData(null);
+      setLoadError(e?.message || String(e));
       toast.error("Erro ao carregar dashboard: " + (e?.message || e));
     } finally {
       setLoading(false);
@@ -224,7 +231,17 @@ export function LeadsAnalyticsDashboard() {
           </Button>
         </div>
 
-        {loading && !data ? (
+        {loadError && !loading ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
+            <p className="font-semibold text-destructive">Não foi possível carregar os dados completos.</p>
+            <p className="text-muted-foreground mt-1">
+              Nenhum número é exibido para evitar leitura parcial (dados truncados). Detalhe: {loadError}
+            </p>
+            <Button size="sm" variant="outline" className="mt-2 gap-1" onClick={load}>
+              <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
+            </Button>
+          </div>
+        ) : loading && !data ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -325,6 +342,45 @@ export function LeadsAnalyticsDashboard() {
                 </table>
               </div>
             </div>
+
+            {/* Funnel events — NOT acquisition channels */}
+            {(data!.funnelEvents?.length ?? 0) > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold mb-1">Eventos de funil (não são canais de aquisição)</h4>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Momentos de fundo de funil registrados como origem. Ficam fora do ranking de captação
+                  para não canibalizar o crédito do canal que realmente trouxe o lead.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b">
+                        <th className="py-1.5 pr-2">Evento</th>
+                        <th className="py-1.5 px-2 text-right">Registros</th>
+                        <th className="py-1.5 px-2 text-right">Convertidos</th>
+                        <th className="py-1.5 px-2 text-right">Taxa</th>
+                        <th className="py-1.5 pl-2 text-right">Receita</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data!.funnelEvents!.map(f => (
+                        <tr key={f.channel} className="border-b last:border-0">
+                          <td className="py-1.5 pr-2 font-medium">{f.channel}</td>
+                          <td className="py-1.5 px-2 text-right">{f.leads}</td>
+                          <td className="py-1.5 px-2 text-right">{f.converted}</td>
+                          <td className="py-1.5 px-2 text-right">
+                            <Badge variant="outline" className="text-[10px]">{f.conversion_rate}%</Badge>
+                          </td>
+                          <td className="py-1.5 pl-2 text-right font-semibold">{fmtBRL(f.revenue)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+
 
             {/* Sale-channel table (item 1) — mirror of the capture table, by SALE channel */}
             <div>
