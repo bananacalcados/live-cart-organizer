@@ -374,6 +374,16 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   };
 
+  const formatCartAge = (iso: string | null) => {
+    if (!iso) return null;
+    const mins = Math.max(0, Math.floor((nowTick - new Date(iso).getTime()) / 60000));
+    if (mins < 1) return "agora";
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}min` : `${h}h`;
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
