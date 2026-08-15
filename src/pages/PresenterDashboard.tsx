@@ -15,7 +15,6 @@ import {
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
-import { Instagram } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface PresenterAlert {
