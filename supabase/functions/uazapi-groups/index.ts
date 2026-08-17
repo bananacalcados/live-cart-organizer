@@ -186,6 +186,8 @@ serve(async (req) => {
         if (Array.isArray(body.mentions) && body.mentions.length > 0) {
           payload.mentions = body.mentions.map((m: string) => formatUazapiNumber(m));
         }
+        // Opcional: sem miniatura de link quando linkPreview === false.
+        if (body.linkPreview === false) payload.linkPreview = false;
         r = await uazapiInstance("/send/text", token, { method: "POST", body: payload });
         break;
       }
