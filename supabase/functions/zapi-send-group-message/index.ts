@@ -128,6 +128,8 @@ serve(async (req) => {
     if (type === 'text') {
       endpoint = `${baseUrl}/send-text`;
       body = { phone: groupId, message: message || '' };
+      // Opcional: sem miniatura do link (mesmo efeito do "X" no app oficial).
+      if ((reqBody as any).linkPreview === false) body.linkPreview = false;
       if (mentionedPhones.length > 0) {
         body.mentioned = mentionedPhones;
       }
