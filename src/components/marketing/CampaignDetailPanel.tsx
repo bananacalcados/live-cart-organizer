@@ -286,6 +286,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             campaign_id: cid,
             message_type: 'text',
             message_content: block.content,
+            disable_link_preview: !!block.disableLinkPreview,
             scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
@@ -410,6 +411,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             campaign_id: campaignId,
             message_type: 'text',
             message_content: block.content,
+            disable_link_preview: !!block.disableLinkPreview,
             scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
@@ -521,6 +523,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
+      disable_link_preview: !!block?.disableLinkPreview,
       whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
     };
 
