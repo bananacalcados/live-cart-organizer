@@ -39,6 +39,9 @@ serve(async (req) => {
 
     const payload: Record<string, unknown> = { number, text: message };
     if (quotedMessageId) payload.replyid = quotedMessageId;
+    // Opcional: quando linkPreview === false, a uazapi envia o link SEM a miniatura
+    // (mesmo efeito do "X" na prévia do app oficial). Se não vier, mantém o padrão.
+    if (linkPreview === false) payload.linkPreview = false;
 
     const r = await uazapiInstance("/send/text", token, { method: "POST", body: payload });
     if (!r.ok) {
