@@ -122,6 +122,8 @@ serve(async (req) => {
     const isPoll = block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2;
     const isMedia = block.message_type !== "text" && block.media_url;
     const pollSel = block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1;
+    // Sem miniatura de link (opcional, só texto). WaSender não suporta → ignorado.
+    const noPreview = block.disable_link_preview === true;
 
     if (provider === "wasender") {
       if (isPoll) {
@@ -154,9 +156,15 @@ serve(async (req) => {
         });
       }
       if (block.mention_all) {
-        return callFn("uazapi-groups", { action: "sendMessage", groupJid: groupId, message: content, whatsapp_number_id: numberId });
+        return callFn("uazapi-groups", {
+          action: "sendMessage", groupJid: groupId, message: content, whatsapp_number_id: numberId,
+          ...(noPreview ? { linkPreview: false } : {}),
+        });
       }
-      return callFn("uazapi-send-message", { phone: groupId, message: content, whatsapp_number_id: numberId });
+      return callFn("uazapi-send-message", {
+        phone: groupId, message: content, whatsapp_number_id: numberId,
+        ...(noPreview ? { linkPreview: false } : {}),
+      });
     }
 
     // ===== Z-API (default) =====
@@ -176,6 +184,7 @@ serve(async (req) => {
     } else {
       body.type = "text";
       body.message = content;
+      if (noPreview) body.linkPreview = false;
     }
     return callFn("zapi-send-group-message", body);
   }

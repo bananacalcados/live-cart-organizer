@@ -36,6 +36,8 @@ export interface MessageBlock {
   mediaUrl: string;
   pollOptions: string[];
   pollMaxOptions: number;
+  /** Envia o link SEM a miniatura de prévia (só para blocos de texto). */
+  disableLinkPreview?: boolean;
 }
 
 export interface ScheduledMessageData {
@@ -62,6 +64,7 @@ interface EditingMessage {
   poll_options: any;
   scheduled_at: string;
   send_speed: string;
+  disable_link_preview?: boolean | null;
 }
 
 interface MessageTemplate {
@@ -114,6 +117,7 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     mediaUrl: '',
     pollOptions: type === 'poll' ? ['', ''] : [],
     pollMaxOptions: 1,
+    disableLinkPreview: false,
   };
 }
 
@@ -304,6 +308,20 @@ function BlockEditor({
             <Button variant="outline" size="sm" className="gap-1" onClick={() => onOpenShopify(block.id)}>
               <ShoppingBag className="h-3.5 w-3.5" /> Produto Shopify
             </Button>
+            {/(https?:\/\/|www\.)/i.test(block.content) && (
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium">Sem miniatura do link</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Envia o link limpo, sem a prévia com imagem (igual ao "X" do WhatsApp).
+                  </p>
+                </div>
+                <Switch
+                  checked={!!block.disableLinkPreview}
+                  onCheckedChange={v => onChange({ ...block, disableLinkPreview: v })}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -499,6 +517,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
         b.content = ''; // caption is stored in mediaItems
       }
       b.mediaUrl = editingMessage.media_url || '';
+      b.disableLinkPreview = !!editingMessage.disable_link_preview;
       if (editingMessage.poll_options) {
         b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
       }

@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message, whatsapp_number_id, quotedMessageId } = await req.json();
+    const { phone, message, whatsapp_number_id, quotedMessageId, linkPreview } = await req.json();
 
     if (!phone || !message) {
       return new Response(
@@ -54,6 +54,10 @@ serve(async (req) => {
     };
     if (quotedMessageId) {
       zapiPayload.quotedMessageId = quotedMessageId;
+    }
+    // Opcional: sem miniatura do link quando linkPreview === false.
+    if (linkPreview === false) {
+      zapiPayload.linkPreview = false;
     }
 
     const response = await fetch(zapiUrl, {

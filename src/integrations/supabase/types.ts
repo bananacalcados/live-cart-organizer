@@ -7508,6 +7508,7 @@ export type Database = {
           block_order: number | null
           campaign_id: string
           created_at: string
+          disable_link_preview: boolean
           execution_count: number
           failed_count: number
           id: string
@@ -7532,6 +7533,7 @@ export type Database = {
           block_order?: number | null
           campaign_id: string
           created_at?: string
+          disable_link_preview?: boolean
           execution_count?: number
           failed_count?: number
           id?: string
@@ -7556,6 +7558,7 @@ export type Database = {
           block_order?: number | null
           campaign_id?: string
           created_at?: string
+          disable_link_preview?: boolean
           execution_count?: number
           failed_count?: number
           id?: string
