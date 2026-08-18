@@ -3523,7 +3523,7 @@ export function AutomationFlowBuilder() {
     setExecLogLoading(false);
   }, []);
 
-  useEffect(() => { fetchFlows(); fetchExecStats(); }, [fetchFlows, fetchExecStats]);
+  useEffect(() => { fetchFlows(); fetchExecStats(); fetchDispatchStats(); }, [fetchFlows, fetchExecStats, fetchDispatchStats]);
 
   const createFlow = async () => {
     if (!newName.trim()) { toast.error("Nome é obrigatório"); return; }
