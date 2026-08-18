@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
             expires_at: expiresAt,
             source: "event_raffle",
             event_id: raffle.event_id,
-            fulfillment_status: raffle.prize_type === "product" ? "available" : "not_applicable",
+            fulfillment_status: raffle.prize_type === "product" ? "available" : "available",
             notes: `Sorteio: ${raffle.name}`,
           })
           .select("id")
