@@ -138,11 +138,22 @@ const Events = () => {
 
       const eventIds = events.map((e) => e.id);
 
-      // 1) UMA única query traz os pedidos de TODOS os eventos (antes era 1 query por evento).
-      const { data: allOrders } = await supabase
-        .from('orders')
-        .select('id, is_paid, paid_externally, event_id')
-        .in('event_id', eventIds);
+      // 1) Traz os pedidos de TODOS os eventos, paginando (PostgREST corta em 1000 linhas)
+      //    e incluindo `stage` — sem ele os pedidos pagos por etapa não eram contados.
+      const allOrders: any[] = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error } = await supabase
+          .from('orders')
+          .select('id, is_paid, paid_externally, stage, event_id')
+          .in('event_id', eventIds)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error || !page?.length) break;
+        allOrders.push(...page);
+        if (page.length < PAGE) break;
+      }
+
 
       const ordersByEvent = new Map<string, any[]>();
       for (const o of allOrders || []) {
