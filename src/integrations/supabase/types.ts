@@ -21079,6 +21079,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_automation_dispatch_stats: {
+        Args: never
+        Returns: {
+          failed: number
+          flow_id: string
+          last_at: string
+          sent: number
+          skipped: number
+        }[]
+      }
       get_automation_exec_stats: {
         Args: never
         Returns: {
