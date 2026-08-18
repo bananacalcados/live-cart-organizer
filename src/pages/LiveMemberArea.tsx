@@ -172,6 +172,28 @@ export default function LiveMemberArea() {
   );
   const availableWheels = wheels.filter((w) => w.eligible && w.spins_used < w.max_spins);
 
+  /**
+   * Prêmio que depende da cliente confirmar o pedido (roleta ou sorteio ativo).
+   * Usado no cronômetro de urgência das etapas de confirmação/dados.
+   */
+  const urgencyPrizeLabel: string | null = (() => {
+    const raffles: any[] = Array.isArray((state as any)?.raffles) ? (state as any).raffles : [];
+    const raffle = raffles.find(
+      (r) => r?.status !== "drawn" && (r?.audience === "confirmed_orders" || r?.audience === "payers"),
+    );
+    if (raffle) return String(raffle.prize_label || raffle.name || "").trim() || null;
+    const wheel = wheels.find((w) => w.audience === "participants" || w.audience === "payers");
+    if (wheel) return String(wheel.name || "").trim() || null;
+    return null;
+  })();
+
+  const UrgencyTimer = urgencyPrizeLabel ? (
+    <PrizeUrgencyTimer
+      prizeLabel={urgencyPrizeLabel}
+      storageKey={String(state?.order?.id || state?.phone || "anon")}
+    />
+  ) : null;
+
 
 
   /** SEO da página pública (link fica na bio do Instagram). */
