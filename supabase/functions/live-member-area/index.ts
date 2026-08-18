@@ -1344,9 +1344,59 @@ Deno.serve(async (req) => {
     if (action === "save_details") {
       const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
       if (!order) {
-        await logFriction("pedido_nao_localizado", "Cliente tentou salvar dados sem pedido vinculado ao telefone informado");
-        return json({ ok: false, error: "Nenhum pedido para vincular os dados" }, 400);
+        // Cadastro SEM pedido (cliente que entrou só para se cadastrar/sorteio):
+        // `customer_registrations` exige `order_id`, então os dados dela vão
+        // direto para o CRM unificado. Antes isso devolvia erro 400 e a cliente
+        // via "Nenhum pedido para vincular os dados" ao salvar.
+        const d0 = body.details || {};
+        const clean = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max) || null;
+        const fullName = clean(d0.full_name, 120);
+        if ("full_name" in d0 && fullName && !isRealFullName(fullName)) {
+          return json(
+            { ok: false, error: "Informe seu nome completo (nome e sobrenome), sem @ e sem números." },
+            400,
+          );
+        }
+        const emailRaw = clean(d0.email, 160);
+        if (emailRaw && !isUsableEmail(emailRaw)) {
+          return json({ ok: false, error: "E-mail inválido. Use um e-mail real." }, 400);
+        }
+
+        await upsertUnified({
+          phone: session.phone,
+          name: fullName || session.name,
+          cpf: String(d0.cpf ?? "").replace(/\D/g, "").slice(0, 11) || null,
+          email: emailRaw,
+        });
+
+        const addr: Record<string, unknown> = {};
+        const addrMap: [string, number][] = [
+          ["cep", 8],
+          ["address", 200],
+          ["address_number", 20],
+          ["complement", 120],
+          ["neighborhood", 120],
+          ["city", 120],
+          ["state", 2],
+        ];
+        for (const [key, max] of addrMap) {
+          if (!(key in d0)) continue;
+          const v = key === "cep"
+            ? String(d0[key] ?? "").replace(/\D/g, "").slice(0, 8) || null
+            : clean(d0[key], max);
+          if (v) addr[key] = key === "state" ? String(v).toUpperCase() : v;
+        }
+        if (Object.keys(addr).length) {
+          const { error: addrErr } = await supabase
+            .from("customers_unified")
+            .update(addr)
+            .eq("phone_suffix8", suffix8(session.phone));
+          if (addrErr) console.error("[live-member-area] save_details CRM address", addrErr);
+        }
+
+        return json(await buildState(session, { skipHistory: true }));
       }
+
 
       const { data: reg } = await supabase
         .from("customer_registrations")
