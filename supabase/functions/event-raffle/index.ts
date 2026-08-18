@@ -238,24 +238,27 @@ Deno.serve(async (req) => {
           Date.now() + Number(raffle.expiry_days || 30) * 86400_000,
         ).toISOString();
 
-        const { data: prize } = await supabase
+        const { data: prize, error: prizeError } = await supabase
           .from("customer_prizes")
           .insert({
             customer_phone: picked.phone,
             customer_name: picked.display_name,
             prize_label: raffle.prize_label,
             prize_type: raffle.prize_type,
-            prize_value: raffle.prize_value,
-            coupon_code: isCoupon ? couponCode() : null,
-            expires_at: isCoupon ? expiresAt : null,
+            prize_value: raffle.prize_value ?? 0,
+            // colunas NOT NULL: sempre gera código e validade (cupom ou prêmio físico)
+            coupon_code: couponCode(),
+            expires_at: expiresAt,
             source: "event_raffle",
             event_id: raffle.event_id,
-            fulfillment_status: raffle.prize_type === "product" ? "available" : null,
+            fulfillment_status: raffle.prize_type === "product" ? "available" : "not_applicable",
             notes: `Sorteio: ${raffle.name}`,
           })
           .select("id")
           .maybeSingle();
+        if (prizeError) console.error("[event-raffle] customer_prizes insert", prizeError);
         customerPrizeId = prize?.id || null;
+
 
         const { data: winner } = await supabase
           .from("event_raffle_winners")
