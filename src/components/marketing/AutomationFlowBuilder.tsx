@@ -3463,6 +3463,7 @@ export function AutomationFlowBuilder() {
   const [newName, setNewName] = useState("");
   const [newTrigger, setNewTrigger] = useState("new_lead");
   const [execStats, setExecStats] = useState<Record<string, { total: number; success: number; failed: number; lastAt: string | null }>>({});
+  const [dispatchStats, setDispatchStats] = useState<Record<string, { sent: number; failed: number; skipped: number; lastAt: string | null }>>({});
   const [showExecLog, setShowExecLog] = useState(false);
   const [execLog, setExecLog] = useState<any[]>([]);
   const [execLogLoading, setExecLogLoading] = useState(false);
@@ -3492,6 +3493,24 @@ export function AutomationFlowBuilder() {
     setExecStats(stats);
   }, []);
 
+  // Envios REAIS dos disparos em massa (automation_dispatch_sent) + excluídos por cota
+  const fetchDispatchStats = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_automation_dispatch_stats' as any);
+    if (error) { console.error('dispatch stats error:', error); return; }
+    const stats: Record<string, { sent: number; failed: number; skipped: number; lastAt: string | null }> = {};
+    for (const row of (data || []) as any[]) {
+      stats[row.flow_id] = {
+        sent: Number(row.sent) || 0,
+        failed: Number(row.failed) || 0,
+        skipped: Number(row.skipped) || 0,
+        lastAt: row.last_at || null,
+      };
+    }
+    setDispatchStats(stats);
+  }, []);
+
+
+
 
   const fetchExecLog = useCallback(async () => {
     setExecLogLoading(true);
@@ -3504,7 +3523,7 @@ export function AutomationFlowBuilder() {
     setExecLogLoading(false);
   }, []);
 
-  useEffect(() => { fetchFlows(); fetchExecStats(); }, [fetchFlows, fetchExecStats]);
+  useEffect(() => { fetchFlows(); fetchExecStats(); fetchDispatchStats(); }, [fetchFlows, fetchExecStats, fetchDispatchStats]);
 
   const createFlow = async () => {
     if (!newName.trim()) { toast.error("Nome é obrigatório"); return; }
@@ -3625,7 +3644,13 @@ export function AutomationFlowBuilder() {
            {flows.map(flow => {
             const trigger = TRIGGER_TYPES.find(t => t.value === flow.trigger_type);
             const TriggerIcon = trigger?.icon || Zap;
-            const stats = execStats[flow.id];
+            const exec = execStats[flow.id];
+            const disp = dispatchStats[flow.id];
+            const totalSent = (exec?.success || 0) + (disp?.sent || 0);
+            const totalFailed = (exec?.failed || 0) + (disp?.failed || 0);
+            const skipped = disp?.skipped || 0;
+            const lastAtRaw = [exec?.lastAt, disp?.lastAt].filter(Boolean).sort().pop() as string | undefined;
+            const stats = exec || disp;
             return (
               <Card key={flow.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedFlow(flow)}>
                 <CardContent className="flex items-center gap-4 py-4">
@@ -3639,11 +3664,16 @@ export function AutomationFlowBuilder() {
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{trigger?.label} → {flow.description || "Sem descrição"}</p>
                     {stats && (
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[10px] text-muted-foreground">{stats.total} disparos</span>
-                        <span className="text-[10px] text-emerald-600">{stats.success} ✓</span>
-                        {stats.failed > 0 && <span className="text-[10px] text-destructive">{stats.failed} ✗</span>}
-                        {stats.lastAt && <span className="text-[10px] text-muted-foreground">Último: {new Date(stats.lastAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                      <div className="flex flex-wrap items-center gap-3 mt-1">
+                        <span className="text-[10px] text-muted-foreground">{totalSent.toLocaleString('pt-BR')} disparos</span>
+                        {(disp?.sent || 0) > 0 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (massa: {(disp?.sent || 0).toLocaleString('pt-BR')}{(exec?.success || 0) > 0 ? ` + fluxo: ${(exec?.success || 0).toLocaleString('pt-BR')}` : ''})
+                          </span>
+                        )}
+                        {totalFailed > 0 && <span className="text-[10px] text-destructive">{totalFailed} ✗</span>}
+                        {skipped > 0 && <span className="text-[10px] text-amber-600">{skipped.toLocaleString('pt-BR')} excluídos por cota/cooldown</span>}
+                        {lastAtRaw && <span className="text-[10px] text-muted-foreground">Último: {new Date(lastAtRaw).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
                       </div>
                     )}
                   </div>
