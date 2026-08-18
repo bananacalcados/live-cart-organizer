@@ -16,16 +16,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
-const CONFIRMED_STAGES = [
-  "new",
-  "awaiting_payment",
-  "paid",
-  "awaiting_shipping",
-  "awaiting_mototaxi",
-  "awaiting_pickup",
-  "shipped",
-  "completed",
-];
+// "Pedido confirmado" = a cliente fechou o pedido. Só ficam de fora os estágios
+// em que o pedido ainda não existe de fato (montando/incompleto/aguardando a
+// confirmação dela) e o cancelado.
+const EXCLUDED_STAGES = ["pre_sale", "incomplete_order", "awaiting_confirmation", "cancelled"];
+const isConfirmedStage = (stage: string) => !EXCLUDED_STAGES.includes(String(stage || ""));
+
 
 function normalizePhone(input: string): string | null {
   let d = String(input || "").replace(/\D/g, "");
@@ -115,7 +111,7 @@ Deno.serve(async (req) => {
         orderPhones.add(key);
 
         const paid = Boolean(o.is_paid || o.paid_externally);
-        const confirmed = CONFIRMED_STAGES.includes(String(o.stage || ""));
+        const confirmed = isConfirmedStage(String(o.stage || ""));
 
         if (raffle.audience === "confirmed_orders" && !confirmed) continue;
         if (raffle.audience === "payers" && !paid) continue;

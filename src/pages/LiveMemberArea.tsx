@@ -1639,6 +1639,41 @@ export default function LiveMemberArea() {
         )}
 
 
+        {/* Sorteios desta live */}
+        {Array.isArray((state as any)?.raffles) && (state as any).raffles.length > 0 && (
+          <section className="mb-6 rounded-2xl border-2 border-primary/50 bg-primary/5 p-4 space-y-2">
+            <h2 className="font-bold text-base flex items-center gap-2">🎟️ Sorteios desta live</h2>
+            {(state as any).raffles.map((r: any) => (
+              <div
+                key={r.id}
+                className={`rounded-xl bg-background/70 px-3 py-2 ${r.eligible || r.won ? "" : "opacity-70"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold flex-1">{r.prize_label || r.name}</p>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      r.won
+                        ? "bg-emerald-500/20 text-emerald-700"
+                        : r.eligible
+                        ? "bg-primary/20 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {r.won ? "🏆 VOCÊ GANHOU" : r.eligible ? "CONCORRENDO" : "AINDA NÃO"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {r.name}
+                  {r.winners_count > 1 ? ` · ${r.winners_count} ganhadores` : ""}
+                  {r.status === "drawn" ? " · sorteio realizado" : ""}
+                  {!r.won && r.hint ? ` · ${r.hint}` : ""}
+                </p>
+              </div>
+            ))}
+          </section>
+        )}
+
+
         {/* Meus prêmios */}
         {Array.isArray((state as any)?.prizes) && (state as any).prizes.length > 0 && (
           <section className="mb-6 rounded-2xl border-2 border-orange-400/60 bg-orange-500/10 p-4 space-y-2">
