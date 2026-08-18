@@ -600,6 +600,84 @@ Deno.serve(async (req) => {
       }
       const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
 
+      // ── Sorteios do evento: mostra à cliente se ela está concorrendo e o que
+      // precisa fazer para entrar (confirmar pedido / pagar). Só leitura.
+      const raffles: any[] = [];
+      try {
+        if (event?.id) {
+          const { data: rows } = await supabase
+            .from("event_raffles")
+            .select("id, name, prize_label, prize_type, prize_value, audience, min_purchase_value, winners_count, status")
+            .eq("event_id", event.id);
+
+          if (rows?.length) {
+            const last8 = suffix8(session.phone || "");
+            const { data: leadRow } = await supabase
+              .from("event_leads")
+              .select("id")
+              .eq("event_id", event.id)
+              .eq("phone_suffix", last8)
+              .limit(1);
+            const { data: winRows } = await supabase
+              .from("event_raffle_winners")
+              .select("raffle_id, voided_at, phone")
+              .in("raffle_id", rows.map((r: any) => r.id));
+
+            const excluded = ["pre_sale", "incomplete_order", "awaiting_confirmation", "cancelled"];
+            const stage = String(order?.stage || "");
+            const hasConfirmedOrder = !!order && !excluded.includes(stage);
+            const isPayer = !!order && Boolean(order.is_paid || order.paid_externally);
+            const orderValue = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
+            const isLiveLead = !!leadRow?.length && !order;
+
+            for (const r of rows) {
+              const min = Number(r.min_purchase_value || 0);
+              let eligible = false;
+              let hint = "";
+              if (r.audience === "confirmed_orders") {
+                eligible = hasConfirmedOrder && (min <= 0 || orderValue >= min);
+                hint = hasConfirmedOrder
+                  ? min > 0 && orderValue < min
+                    ? `Compre a partir de R$ ${min.toFixed(2)} para concorrer`
+                    : ""
+                  : "Confirme seu pedido para concorrer";
+              } else if (r.audience === "payers") {
+                eligible = isPayer && (min <= 0 || orderValue >= min);
+                hint = isPayer
+                  ? min > 0 && orderValue < min
+                    ? `Pedidos a partir de R$ ${min.toFixed(2)} concorrem`
+                    : ""
+                  : "Finalize o pagamento para concorrer";
+              } else if (r.audience === "live_leads") {
+                eligible = isLiveLead;
+                hint = eligible ? "" : "Sorteio exclusivo para quem se cadastrou nesta live e ainda não fez pedido";
+              }
+
+              const won = (winRows || []).some(
+                (w: any) => !w.voided_at && suffix8(String(w.phone || "")) === last8 && w.raffle_id === r.id,
+              );
+
+              raffles.push({
+                id: r.id,
+                name: r.name,
+                prize_label: r.prize_label,
+                prize_type: r.prize_type,
+                winners_count: Number(r.winners_count || 1),
+                audience: r.audience,
+                status: r.status,
+                eligible,
+                won,
+                hint,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[member-area] falha ao montar sorteios:", e);
+      }
+
+
+
 
 
 
