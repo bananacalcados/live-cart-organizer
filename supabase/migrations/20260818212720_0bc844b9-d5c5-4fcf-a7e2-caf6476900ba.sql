@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.get_automation_dispatch_stats() FROM PUBLIC, anon;
