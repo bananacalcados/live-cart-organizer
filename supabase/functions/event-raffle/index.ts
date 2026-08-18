@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
 
       await supabase.from("event_raffles").update({ drawn_by: userId }).eq("id", raffle.id);
 
-      const { data: entries } = await supabase
+      const { data: entries, error: entriesError } = await supabase
         .from("event_raffle_entries")
         .insert(
           pool.map((p) => ({
@@ -222,9 +222,20 @@ Deno.serve(async (req) => {
         )
         .select("id, phone, display_name");
 
-      const remaining = [...(entries || [])];
+      if (entriesError || !entries?.length) {
+        console.error("[event-raffle] entries insert", entriesError);
+        // devolve o sorteio para rascunho para permitir nova tentativa
+        await supabase
+          .from("event_raffles")
+          .update({ status: "draft", drawn_at: null })
+          .eq("id", raffle.id);
+        return json({ ok: false, error: entriesError?.message || "entries_insert_failed" }, 500);
+      }
+
+      const remaining = [...entries];
       const winnersCount = Math.min(Number(raffle.winners_count || 1), remaining.length);
       const winners: any[] = [];
+
 
       for (let i = 0; i < winnersCount; i++) {
         const idx = randomInt(remaining.length);
