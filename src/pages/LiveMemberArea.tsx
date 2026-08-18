@@ -24,6 +24,7 @@ import {
   PublicWheel,
   useEventPrizeWheels,
 } from "@/components/prize/EventPrizeWheelDialog";
+import { PrizeUrgencyTimer } from "@/components/live/PrizeUrgencyTimer";
 import {
   StepPayment,
   type CustomerFormData,
@@ -170,6 +171,28 @@ export default function LiveMemberArea() {
     state?.event?.id || null,
   );
   const availableWheels = wheels.filter((w) => w.eligible && w.spins_used < w.max_spins);
+
+  /**
+   * Prêmio que depende da cliente confirmar o pedido (roleta ou sorteio ativo).
+   * Usado no cronômetro de urgência das etapas de confirmação/dados.
+   */
+  const urgencyPrizeLabel: string | null = (() => {
+    const raffles: any[] = Array.isArray((state as any)?.raffles) ? (state as any).raffles : [];
+    const raffle = raffles.find(
+      (r) => r?.status !== "drawn" && (r?.audience === "confirmed_orders" || r?.audience === "payers"),
+    );
+    if (raffle) return String(raffle.prize_label || raffle.name || "").trim() || null;
+    const wheel = wheels.find((w) => w.audience === "participants" || w.audience === "payers");
+    if (wheel) return String(wheel.name || "").trim() || null;
+    return null;
+  })();
+
+  const UrgencyTimer = urgencyPrizeLabel ? (
+    <PrizeUrgencyTimer
+      prizeLabel={urgencyPrizeLabel}
+      storageKey={String(state?.order?.id || state?.phone || "anon")}
+    />
+  ) : null;
 
 
 
@@ -1299,6 +1322,7 @@ export default function LiveMemberArea() {
     return (
       <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          {UrgencyTimer}
           <div className="space-y-2">
             {o.products.map((p: any, i: number) => (
               <div key={i} className="flex items-center gap-3 rounded-xl bg-primary/10 p-3">
@@ -1374,6 +1398,7 @@ export default function LiveMemberArea() {
     return (
       <div className="min-h-screen bg-muted/40 text-foreground flex items-start sm:items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          {UrgencyTimer}
           <div className="flex gap-1.5">
             {stepsOrder.map((s, i) => (
               <div
