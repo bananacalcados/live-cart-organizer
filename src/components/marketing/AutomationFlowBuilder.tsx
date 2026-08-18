@@ -3493,6 +3493,24 @@ export function AutomationFlowBuilder() {
     setExecStats(stats);
   }, []);
 
+  // Envios REAIS dos disparos em massa (automation_dispatch_sent) + excluídos por cota
+  const fetchDispatchStats = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_automation_dispatch_stats' as any);
+    if (error) { console.error('dispatch stats error:', error); return; }
+    const stats: Record<string, { sent: number; failed: number; skipped: number; lastAt: string | null }> = {};
+    for (const row of (data || []) as any[]) {
+      stats[row.flow_id] = {
+        sent: Number(row.sent) || 0,
+        failed: Number(row.failed) || 0,
+        skipped: Number(row.skipped) || 0,
+        lastAt: row.last_at || null,
+      };
+    }
+    setDispatchStats(stats);
+  }, []);
+
+
+
 
   const fetchExecLog = useCallback(async () => {
     setExecLogLoading(true);
