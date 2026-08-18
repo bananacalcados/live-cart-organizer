@@ -963,13 +963,16 @@ Deno.serve(async (req) => {
           .eq("phone", phone)
           .maybeSingle();
         if (!existingLead) {
-          await supabase.from("event_leads").insert({
+          // O erro precisa aparecer: já perdemos cadastros do evento por uma
+          // constraint silenciosa em `source`.
+          const { error: leadErr } = await supabase.from("event_leads").insert({
             event_id: event.id,
             name,
             phone,
             phone_suffix: suffix8(phone),
             source: "member_area",
           });
+          if (leadErr) console.error("[member-area] falha ao criar event_lead:", leadErr);
         }
       }
 
