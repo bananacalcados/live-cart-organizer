@@ -3463,6 +3463,7 @@ export function AutomationFlowBuilder() {
   const [newName, setNewName] = useState("");
   const [newTrigger, setNewTrigger] = useState("new_lead");
   const [execStats, setExecStats] = useState<Record<string, { total: number; success: number; failed: number; lastAt: string | null }>>({});
+  const [dispatchStats, setDispatchStats] = useState<Record<string, { sent: number; failed: number; skipped: number; lastAt: string | null }>>({});
   const [showExecLog, setShowExecLog] = useState(false);
   const [execLog, setExecLog] = useState<any[]>([]);
   const [execLogLoading, setExecLogLoading] = useState(false);
