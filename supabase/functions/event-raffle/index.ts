@@ -65,11 +65,28 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: authHeader } } },
   );
-  const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(
-    authHeader.replace("Bearer ", ""),
-  );
-  if (claimsError || !claimsData?.claims) return json({ ok: false, error: "unauthorized" }, 401);
-  const userId = claimsData.claims.sub as string;
+
+  // Validação do JWT tolerante: getClaims pode lançar (JWKS/chaves assimétricas),
+  // então caímos para getUser antes de recusar o acesso.
+  let userId: string | null = null;
+  try {
+    const { data: claimsData } = await authClient.auth.getClaims(
+      authHeader.replace("Bearer ", ""),
+    );
+    userId = (claimsData?.claims?.sub as string) || null;
+  } catch (e) {
+    console.error("[event-raffle] getClaims falhou, tentando getUser", e);
+  }
+  if (!userId) {
+    try {
+      const { data: userData } = await authClient.auth.getUser();
+      userId = userData?.user?.id || null;
+    } catch (e) {
+      console.error("[event-raffle] getUser falhou", e);
+    }
+  }
+  if (!userId) return json({ ok: false, error: "unauthorized" }, 401);
+
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
