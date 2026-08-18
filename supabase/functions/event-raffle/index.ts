@@ -65,11 +65,28 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: authHeader } } },
   );
-  const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(
-    authHeader.replace("Bearer ", ""),
-  );
-  if (claimsError || !claimsData?.claims) return json({ ok: false, error: "unauthorized" }, 401);
-  const userId = claimsData.claims.sub as string;
+
+  // Validação do JWT tolerante: getClaims pode lançar (JWKS/chaves assimétricas),
+  // então caímos para getUser antes de recusar o acesso.
+  let userId: string | null = null;
+  try {
+    const { data: claimsData } = await authClient.auth.getClaims(
+      authHeader.replace("Bearer ", ""),
+    );
+    userId = (claimsData?.claims?.sub as string) || null;
+  } catch (e) {
+    console.error("[event-raffle] getClaims falhou, tentando getUser", e);
+  }
+  if (!userId) {
+    try {
+      const { data: userData } = await authClient.auth.getUser();
+      userId = userData?.user?.id || null;
+    } catch (e) {
+      console.error("[event-raffle] getUser falhou", e);
+    }
+  }
+  if (!userId) return json({ ok: false, error: "unauthorized" }, 401);
+
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -208,7 +225,7 @@ Deno.serve(async (req) => {
 
       await supabase.from("event_raffles").update({ drawn_by: userId }).eq("id", raffle.id);
 
-      const { data: entries } = await supabase
+      const { data: entries, error: entriesError } = await supabase
         .from("event_raffle_entries")
         .insert(
           pool.map((p) => ({
@@ -222,9 +239,20 @@ Deno.serve(async (req) => {
         )
         .select("id, phone, display_name");
 
-      const remaining = [...(entries || [])];
+      if (entriesError || !entries?.length) {
+        console.error("[event-raffle] entries insert", entriesError);
+        // devolve o sorteio para rascunho para permitir nova tentativa
+        await supabase
+          .from("event_raffles")
+          .update({ status: "draft", drawn_at: null })
+          .eq("id", raffle.id);
+        return json({ ok: false, error: entriesError?.message || "entries_insert_failed" }, 500);
+      }
+
+      const remaining = [...entries];
       const winnersCount = Math.min(Number(raffle.winners_count || 1), remaining.length);
       const winners: any[] = [];
+
 
       for (let i = 0; i < winnersCount; i++) {
         const idx = randomInt(remaining.length);
@@ -238,24 +266,27 @@ Deno.serve(async (req) => {
           Date.now() + Number(raffle.expiry_days || 30) * 86400_000,
         ).toISOString();
 
-        const { data: prize } = await supabase
+        const { data: prize, error: prizeError } = await supabase
           .from("customer_prizes")
           .insert({
             customer_phone: picked.phone,
             customer_name: picked.display_name,
             prize_label: raffle.prize_label,
             prize_type: raffle.prize_type,
-            prize_value: raffle.prize_value,
-            coupon_code: isCoupon ? couponCode() : null,
-            expires_at: isCoupon ? expiresAt : null,
+            prize_value: raffle.prize_value ?? 0,
+            // colunas NOT NULL: sempre gera código e validade (cupom ou prêmio físico)
+            coupon_code: couponCode(),
+            expires_at: expiresAt,
             source: "event_raffle",
             event_id: raffle.event_id,
-            fulfillment_status: raffle.prize_type === "product" ? "available" : null,
+            fulfillment_status: "available",
             notes: `Sorteio: ${raffle.name}`,
           })
           .select("id")
           .maybeSingle();
+        if (prizeError) console.error("[event-raffle] customer_prizes insert", prizeError);
         customerPrizeId = prize?.id || null;
+
 
         const { data: winner } = await supabase
           .from("event_raffle_winners")
