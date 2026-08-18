@@ -24,6 +24,7 @@ import {
   PublicWheel,
   useEventPrizeWheels,
 } from "@/components/prize/EventPrizeWheelDialog";
+import { PrizeUrgencyTimer } from "@/components/live/PrizeUrgencyTimer";
 import {
   StepPayment,
   type CustomerFormData,
