@@ -874,6 +874,7 @@ Deno.serve(async (req) => {
 
 
         prizes,
+        raffles,
         history: history ?? undefined,
       };
     }
