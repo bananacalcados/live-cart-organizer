@@ -1322,6 +1322,7 @@ export default function LiveMemberArea() {
     return (
       <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-6">
+          {UrgencyTimer}
           <div className="space-y-2">
             {o.products.map((p: any, i: number) => (
               <div key={i} className="flex items-center gap-3 rounded-xl bg-primary/10 p-3">
