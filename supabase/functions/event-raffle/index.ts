@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         orderPhones.add(key);
 
         const paid = Boolean(o.is_paid || o.paid_externally);
-        const confirmed = CONFIRMED_STAGES.includes(String(o.stage || ""));
+        const confirmed = isConfirmedStage(String(o.stage || ""));
 
         if (raffle.audience === "confirmed_orders" && !confirmed) continue;
         if (raffle.audience === "payers" && !paid) continue;
