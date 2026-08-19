@@ -462,8 +462,9 @@ Deno.serve(async (req) => {
           payload_summary: {
             value: Number(value),
             currency,
-            num_items: typeof num_items === "number" ? num_items : null,
-            content_ids: Array.isArray(content_ids) ? content_ids : null,
+            num_items: typeof _numItems === "number" ? _numItems : null,
+            content_ids: _contentIds ?? null,
+
             enriched: {
               has_phone: !!ph, has_email: !!em, has_name: !!fn,
               has_city: !!ct, has_state: !!st, has_zip: !!zp,
