@@ -425,12 +425,14 @@ Deno.serve(async (req) => {
       currency,
     };
     if (value !== undefined && value !== null) customData.value = Number(value);
-    if (Array.isArray(content_ids) && content_ids.length > 0) {
-      customData.content_ids = content_ids;
+    if (_contentIds && _contentIds.length > 0) {
+      customData.content_ids = _contentIds;
       customData.content_type = content_type || "product";
     }
-    if (typeof num_items === "number") customData.num_items = num_items;
+    if (_contents && _contents.length > 0) customData.contents = _contents;
+    if (typeof _numItems === "number") customData.num_items = _numItems;
     if (order_id) customData.order_id = String(order_id);
+
 
     const eventData: Record<string, unknown> = {
       event_name,
