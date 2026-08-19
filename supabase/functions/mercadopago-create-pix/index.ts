@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { getPaymentAccountsWithFallback } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
