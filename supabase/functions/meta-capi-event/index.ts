@@ -212,8 +212,68 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- Ponto 1: dados dos produtos do pedido (content_ids / contents / num_items) ----
+    // Sem isso a Meta recebe a compra "vazia" e a qualidade do match cai.
+    let _contentIds: string[] | undefined =
+      Array.isArray(content_ids) && content_ids.length > 0 ? content_ids.map(String) : undefined;
+    let _contents: Array<Record<string, unknown>> | undefined;
+    let _numItems: number | undefined = typeof num_items === "number" ? num_items : undefined;
+
+    if (order_id && (!_contentIds || _numItems === undefined)) {
+      try {
+        const { data: ord } = await supabase
+          .from("orders")
+          .select("products")
+          .eq("id", order_id)
+          .maybeSingle();
+        const products = Array.isArray(ord?.products) ? (ord!.products as Array<Record<string, unknown>>) : [];
+        if (products.length > 0) {
+          const items = products.map((p) => {
+            const id = String(p.sku ?? p.shopifyId ?? p.id ?? "").trim() || "sem-sku";
+            const qty = Number(p.quantity ?? 1) || 1;
+            const price = Number(p.price ?? 0) || 0;
+            return { id, quantity: qty, item_price: price, title: String(p.title ?? "") };
+          });
+          if (!_contentIds) _contentIds = items.map((i) => i.id);
+          _contents = items.map((i) => ({
+            id: i.id,
+            quantity: i.quantity,
+            item_price: i.item_price,
+            ...(i.title ? { title: i.title } : {}),
+          }));
+          if (_numItems === undefined) {
+            _numItems = items.reduce((sum, i) => sum + i.quantity, 0);
+          }
+        }
+      } catch (e) {
+        console.warn("[meta-capi-event] product enrichment failed:", e);
+      }
+    }
+
     const phoneDigits = _phone ? normalizePhone(_phone) : "";
     const phoneSuffix = phoneDigits.slice(-8);
+
+    // ---- Ponto 2: IP / User-Agent — fallback pelo telefone quando o pedido não tem cadastro próprio ----
+    if (phoneSuffix && (!_clientIpStored || !_clientUaStored)) {
+      try {
+        const { data: cri } = await supabase
+          .from("customer_registrations")
+          .select("client_ip, client_user_agent, event_source_url")
+          .ilike("whatsapp", `%${phoneSuffix}`)
+          .not("client_ip", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cri) {
+          _clientIpStored = _clientIpStored ?? (cri.client_ip as string | undefined) ?? undefined;
+          _clientUaStored = _clientUaStored ?? (cri.client_user_agent as string | undefined) ?? undefined;
+          _sourceUrlStored = _sourceUrlStored ?? (cri.event_source_url as string | undefined) ?? undefined;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-event] ip/ua fallback failed:", e);
+      }
+    }
+
 
     // Fallback enrichment via phone suffix if still missing
     if (phoneSuffix && (!_email || !_fullName || !_city || !_state)) {
