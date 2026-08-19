@@ -72,13 +72,13 @@ serve(async (req) => {
     let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
 
-    // Resolve qual conta MP usar (ativa no banco, ou env como fallback)
-    const mpAccount = await getActiveMpAccount(supabase);
-    if (!mpAccount) {
+    // Resolve as contas MP candidatas (ativa primeiro; demais como failover em caso de bloqueio)
+    const mpCandidates = await getPaymentAccountsWithFallback(supabase);
+    if (mpCandidates.length === 0) {
       throw new Error("Nenhuma conta Mercado Pago ativa configurada (cadastre em Admin → Mercado Pago)");
     }
-    const accessToken = mpAccount.access_token;
-    console.log(`[mp-pix] Usando conta: ${mpAccount.account_name} (source=${mpAccount.source})`);
+    let mpAccount = mpCandidates[0];
+    console.log(`[mp-pix] Conta preferencial: ${mpAccount.account_name} (source=${mpAccount.source}); ${mpCandidates.length} conta(s) disponível(is)`);
 
     // Fetch order — try CRM orders first, then pos_sales
     let products: Array<{ price: number; quantity: number; title: string }> = [];
