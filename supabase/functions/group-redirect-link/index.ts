@@ -193,19 +193,25 @@ function hasCapacity(group: any): boolean {
   return (group.participant_count || 0) < (max - CAPACITY_MARGIN);
 }
 
-// Busca/gera o invite de um único grupo, salvando para uso futuro.
+// Busca o invite ATUAL do grupo direto no provedor e salva.
+// IMPORTANTE: nunca confiar cegamente no invite_link salvo — se o link for
+// resetado/revogado no WhatsApp, o salvo vira um convite morto e ninguém entra.
+// O cache de 2 min do link (cached_invite_url) evita excesso de chamadas.
 async function inviteForGroup(supabase: any, group: any): Promise<string | null> {
-  if (group.invite_link) return group.invite_link;
-  const inviteLink = await fetchInviteLink(supabase, group);
-  if (inviteLink) {
-    supabase.from('whatsapp_groups')
-      .update({ invite_link: inviteLink })
-      .eq('id', group.id)
-      .then(() => {});
-    return inviteLink;
+  const fresh = await fetchInviteLink(supabase, group);
+  if (fresh) {
+    if (fresh !== group.invite_link) {
+      supabase.from('whatsapp_groups')
+        .update({ invite_link: fresh })
+        .eq('id', group.id)
+        .then(() => {});
+    }
+    return fresh;
   }
-  return null;
+  // Provedor indisponível: usa o último conhecido como último recurso.
+  return group.invite_link || null;
 }
+
 
 async function resolveGroupUrl(
   supabase: any,
