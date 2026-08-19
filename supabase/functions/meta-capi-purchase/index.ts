@@ -309,8 +309,29 @@ Deno.serve(async (req) => {
     const ge = await hashIfPresent(normalizeGender(gender));
     const extId = externalId ? await hashIfPresent(String(externalId).trim().toLowerCase()) : undefined;
 
-    const clientIp = extractClientIp(req);
-    const clientUa = uaFromClient || req.headers.get("user-agent") || undefined;
+    // Ponto 2: IP/UA — usa o da request quando é o navegador; senão recupera o
+    // último sinal conhecido da cliente (checkout / área de membros).
+    let clientIp = extractClientIp(req);
+    let clientUa = uaFromClient || req.headers.get("user-agent") || undefined;
+    if (phoneSuffix && (!clientIp || !clientUa)) {
+      try {
+        const { data: cri } = await supabase
+          .from("customer_registrations")
+          .select("client_ip, client_user_agent")
+          .ilike("whatsapp", `%${phoneSuffix}`)
+          .not("client_ip", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cri) {
+          clientIp = clientIp || ((cri.client_ip as string | undefined) ?? undefined);
+          clientUa = clientUa || ((cri.client_user_agent as string | undefined) ?? undefined);
+        }
+      } catch (e) {
+        console.warn("[meta-capi-purchase] ip/ua fallback failed:", e);
+      }
+    }
+
 
     const userData: Record<string, unknown> = {
       ph: ph ? [ph] : undefined,
