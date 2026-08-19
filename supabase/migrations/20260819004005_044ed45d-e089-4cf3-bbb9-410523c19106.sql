@@ -1,0 +1,3 @@
+UPDATE public.whatsapp_groups SET invite_link='https://chat.whatsapp.com/FDzpFCuozRL46k0MxfGfU8' WHERE id='c2d3c534-c3bf-4df4-9647-98dc7bd3b63b';
+UPDATE public.whatsapp_groups SET invite_link='https://chat.whatsapp.com/GogMFMIHNHULacYN5UCIKl' WHERE id='faae9a17-314a-41f8-9269-1a6349ded25d';
+UPDATE public.group_redirect_links SET cached_invite_url=NULL, cached_at=NULL WHERE campaign_id='6274cae3-ff15-45b4-b1f2-3024e84b204e';

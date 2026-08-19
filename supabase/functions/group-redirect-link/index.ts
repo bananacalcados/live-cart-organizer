@@ -193,19 +193,25 @@ function hasCapacity(group: any): boolean {
   return (group.participant_count || 0) < (max - CAPACITY_MARGIN);
 }
 
-// Busca/gera o invite de um único grupo, salvando para uso futuro.
+// Busca o invite ATUAL do grupo direto no provedor e salva.
+// IMPORTANTE: nunca confiar cegamente no invite_link salvo — se o link for
+// resetado/revogado no WhatsApp, o salvo vira um convite morto e ninguém entra.
+// O cache de 2 min do link (cached_invite_url) evita excesso de chamadas.
 async function inviteForGroup(supabase: any, group: any): Promise<string | null> {
-  if (group.invite_link) return group.invite_link;
-  const inviteLink = await fetchInviteLink(supabase, group);
-  if (inviteLink) {
-    supabase.from('whatsapp_groups')
-      .update({ invite_link: inviteLink })
-      .eq('id', group.id)
-      .then(() => {});
-    return inviteLink;
+  const fresh = await fetchInviteLink(supabase, group);
+  if (fresh) {
+    if (fresh !== group.invite_link) {
+      supabase.from('whatsapp_groups')
+        .update({ invite_link: fresh })
+        .eq('id', group.id)
+        .then(() => {});
+    }
+    return fresh;
   }
-  return null;
+  // Provedor indisponível: usa o último conhecido como último recurso.
+  return group.invite_link || null;
 }
+
 
 async function resolveGroupUrl(
   supabase: any,
@@ -251,23 +257,13 @@ async function resolveGroupUrl(
     return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
   }
 
-  // Try groups with existing invite links first
+  // Sempre valida o invite no provedor (com fallback pro salvo) — evita servir
+  // convite revogado, que era a causa de cliques sem entradas no grupo.
   for (const group of groups) {
-    if (group.invite_link) return group.invite_link;
+    const inviteLink = await inviteForGroup(supabase, group);
+    if (inviteLink) return inviteLink;
   }
 
-  // Generate invite link for first available groups, respecting the real provider.
-  for (const group of groups) {
-    const inviteLink = await fetchInviteLink(supabase, group);
-    if (inviteLink) {
-      // Save for future use (non-blocking)
-      supabase.from('whatsapp_groups')
-        .update({ invite_link: inviteLink })
-        .eq('id', group.id)
-        .then(() => {});
-      return inviteLink;
-    }
-  }
 
   return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
 }
