@@ -129,6 +129,39 @@ export async function getMpAccountByPaymentId(
   }
 }
 
+/**
+ * Contas candidatas para CRIAR cobrança, em ordem de preferência:
+ * conta ativa → demais contas cadastradas → env legado (último recurso).
+ * Usada para failover automático quando o MP bloqueia uma conta (403 PolicyAgent).
+ */
+export async function getPaymentAccountsWithFallback(supabase: any): Promise<MpAccount[]> {
+  const list: MpAccount[] = [];
+  const active = await getActiveMpAccount(supabase);
+  if (active) list.push(active);
+  try {
+    const { data } = await supabase
+      .from("mercadopago_accounts")
+      .select("id, name, access_token, is_sandbox")
+      .order("is_active", { ascending: false });
+    for (const r of data || []) {
+      if (!r.access_token) continue;
+      if (list.some((a) => a.access_token === r.access_token)) continue;
+      list.push({
+        account_id: r.id,
+        access_token: r.access_token,
+        is_sandbox: r.is_sandbox || false,
+        account_name: r.name,
+        source: "active",
+      });
+    }
+  } catch (err: any) {
+    console.warn("[mp-account] getPaymentAccountsWithFallback error:", err.message);
+  }
+  const fb = envFallback();
+  if (fb && !list.some((a) => a.access_token === fb.access_token)) list.push(fb);
+  return list;
+}
+
 /** Lista todas as contas (pra polling iterar). */
 export async function listAllMpAccountsForPolling(
   supabase: any
