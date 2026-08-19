@@ -344,7 +344,7 @@ serve(async (req) => {
     if (!mpResponse) {
       throw new Error(`Mercado Pago error: ${lastStatus} - ${lastErrText}`);
     }
-    const accessToken = mpAccount.access_token;
+    
 
     const mpPayment = await mpResponse.json();
     console.log("Mercado Pago PIX created:", mpPayment.id, "status:", mpPayment.status);
