@@ -257,23 +257,13 @@ async function resolveGroupUrl(
     return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
   }
 
-  // Try groups with existing invite links first
+  // Sempre valida o invite no provedor (com fallback pro salvo) — evita servir
+  // convite revogado, que era a causa de cliques sem entradas no grupo.
   for (const group of groups) {
-    if (group.invite_link) return group.invite_link;
+    const inviteLink = await inviteForGroup(supabase, group);
+    if (inviteLink) return inviteLink;
   }
 
-  // Generate invite link for first available groups, respecting the real provider.
-  for (const group of groups) {
-    const inviteLink = await fetchInviteLink(supabase, group);
-    if (inviteLink) {
-      // Save for future use (non-blocking)
-      supabase.from('whatsapp_groups')
-        .update({ invite_link: inviteLink })
-        .eq('id', group.id)
-        .then(() => {});
-      return inviteLink;
-    }
-  }
 
   return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
 }
