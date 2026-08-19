@@ -289,44 +289,62 @@ serve(async (req) => {
     }
 
     // Create PIX payment via Mercado Pago API
-    const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-        "X-Idempotency-Key": `pix-${orderId}-${Date.now()}`,
-      },
-      body: JSON.stringify({
-        transaction_amount: totalAmount,
-        description: `Pedido #${orderId.substring(0, 8)}`,
-        payment_method_id: "pix",
-        payer: payerObj,
-        // ── Qualidade da integração MP ──
-        // external_reference: casa o payment_id do MP com nosso pedido interno (conciliação + antifraude)
-        external_reference: String(orderId),
-        notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
-        statement_descriptor: "BANANACALCADOS",
-        additional_info: {
-          items: products.map((p, i) => ({
-            id: `item_${i}`,
-            title: String(p.title || "Produto").substring(0, 256),
-            description: String(p.title || "Produto").substring(0, 256),
-            quantity: Number(p.quantity) || 1,
-            unit_price: Math.round(Number(p.price) * 100) / 100,
-          })),
-          payer: {
-            first_name: payerFirstName,
-            last_name: payerLastName,
-          },
+    const mpBody = JSON.stringify({
+      transaction_amount: totalAmount,
+      description: `Pedido #${orderId.substring(0, 8)}`,
+      payment_method_id: "pix",
+      payer: payerObj,
+      // ── Qualidade da integração MP ──
+      // external_reference: casa o payment_id do MP com nosso pedido interno (conciliação + antifraude)
+      external_reference: String(orderId),
+      notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
+      statement_descriptor: "BANANACALCADOS",
+      additional_info: {
+        items: products.map((p, i) => ({
+          id: `item_${i}`,
+          title: String(p.title || "Produto").substring(0, 256),
+          description: String(p.title || "Produto").substring(0, 256),
+          quantity: Number(p.quantity) || 1,
+          unit_price: Math.round(Number(p.price) * 100) / 100,
+        })),
+        payer: {
+          first_name: payerFirstName,
+          last_name: payerLastName,
         },
-      }),
+      },
     });
 
-    if (!mpResponse.ok) {
-      const errorText = await mpResponse.text();
-      console.error("Mercado Pago error:", mpResponse.status, errorText);
-      throw new Error(`Mercado Pago error: ${mpResponse.status} - ${errorText}`);
+    let mpResponse: Response | null = null;
+    let lastErrText = "";
+    let lastStatus = 0;
+    for (const candidate of mpCandidates) {
+      const res = await fetch("https://api.mercadopago.com/v1/payments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${candidate.access_token}`,
+          "X-Idempotency-Key": `pix-${orderId}-${candidate.account_id || "env"}-${Date.now()}`,
+        },
+        body: mpBody,
+      });
+      if (res.ok) {
+        mpAccount = candidate;
+        mpResponse = res;
+        console.log(`[mp-pix] PIX criado pela conta: ${candidate.account_name}`);
+        break;
+      }
+      lastStatus = res.status;
+      lastErrText = await res.text();
+      console.error(`[mp-pix] Conta ${candidate.account_name} falhou: ${res.status} ${lastErrText}`);
+      // Só tenta outra conta em bloqueio de política/credencial. Erros de payload (4xx) são iguais em qualquer conta.
+      const isAccountBlock = res.status === 403 || res.status === 401;
+      if (!isAccountBlock) break;
     }
+
+    if (!mpResponse) {
+      throw new Error(`Mercado Pago error: ${lastStatus} - ${lastErrText}`);
+    }
+    const accessToken = mpAccount.access_token;
 
     const mpPayment = await mpResponse.json();
     console.log("Mercado Pago PIX created:", mpPayment.id, "status:", mpPayment.status);
