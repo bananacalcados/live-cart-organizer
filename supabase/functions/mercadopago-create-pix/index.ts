@@ -37,10 +37,16 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// Cooldown por pedido: cliques repetidos em "gerar PIX" reaproveitam o último
+// PIX gerado em vez de bombardear a API do MP (gatilho do bloqueio PolicyAgent).
+const PIX_COOLDOWN_MS = 20_000;
+const recentPix = new Map<string, { ts: number; payload: unknown }>();
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
+
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
