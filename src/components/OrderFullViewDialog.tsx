@@ -357,6 +357,9 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
               />
               <Field icon={IdCard} label="CPF" value={fmtCpf(reg?.cpf)} copyable={reg?.cpf} />
               <Field icon={Mail} label="E-mail" value={reg?.email} copyable={reg?.email} />
+              <div className="pt-2">
+                <CustomerAccessCodeRow phone={reg?.whatsapp || order.customer?.whatsapp} />
+              </div>
             </Section>
 
             {/* Prêmios da roleta */}
