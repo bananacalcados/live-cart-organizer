@@ -581,7 +581,10 @@ export default function LiveMemberArea() {
 
   useEffect(() => {
     const token = state?.token;
-    if (step !== "area" || !token) return;
+    // Também durante o onboarding: se a equipe corrigir os dados no sistema,
+    // a cliente vê a atualização sem precisar recarregar a página.
+    if ((step !== "area" && step !== "onboarding") || !token) return;
+
 
     const start = () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
