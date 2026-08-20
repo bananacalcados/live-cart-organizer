@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CustomerAccessCodeRow } from "@/components/events/CustomerAccessCodeRow";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -357,6 +358,9 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
               />
               <Field icon={IdCard} label="CPF" value={fmtCpf(reg?.cpf)} copyable={reg?.cpf} />
               <Field icon={Mail} label="E-mail" value={reg?.email} copyable={reg?.email} />
+              <div className="pt-2">
+                <CustomerAccessCodeRow phone={reg?.whatsapp || order.customer?.whatsapp} />
+              </div>
             </Section>
 
             {/* Prêmios da roleta */}
