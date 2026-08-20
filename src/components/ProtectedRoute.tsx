@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthReady } from "@/hooks/useAuthReady";
+import { Button } from "@/components/ui/button";
 
 const permissionCache = new Map<string, { modules: string[]; ts: number }>();
 const CACHE_TTL = 60_000;
@@ -13,6 +14,8 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
   const { session, isReady } = useAuthReady();
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
+  const [permissionError, setPermissionError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!isReady) return;
@@ -21,6 +24,9 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
       if (session && !requiredModule) setHasAccess(true);
       return;
     }
+
+    setHasAccess(undefined);
+    setPermissionError(false);
 
     const userId = session.user.id;
     const modulesToCheck = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
@@ -53,12 +59,13 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
             }, 1500 * attempt);
             return;
           }
-          setHasAccess(false);
+          setPermissionError(true);
           return;
         }
 
         const modules = result.data as string[];
         permissionCache.set(userId, { modules, ts: Date.now() });
+        setPermissionError(false);
         setHasAccess(modulesToCheck.some((m) => modules.includes(m)));
       } catch {
         if (cancelled) return;
@@ -68,7 +75,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
           }, 1500 * attempt);
           return;
         }
-        setHasAccess(false);
+        setPermissionError(true);
       }
     };
 
@@ -77,7 +84,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     return () => {
       cancelled = true;
     };
-  }, [isReady, session, requiredModule]);
+  }, [isReady, session, requiredModule, retryKey]);
 
   if (!isReady) {
     return (
@@ -88,6 +95,22 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
   }
 
   if (!session) return <Navigate to="/login" replace />;
+
+  if (requiredModule && permissionError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="text-center space-y-4 max-w-md">
+          <h2 className="text-2xl font-bold text-foreground">Falha de conexão</h2>
+          <p className="text-muted-foreground">
+            Não foi possível consultar suas permissões. Seu acesso não foi removido.
+          </p>
+          <Button onClick={() => setRetryKey((key) => key + 1)}>
+            Tentar novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (requiredModule && hasAccess === undefined) {
     return (
