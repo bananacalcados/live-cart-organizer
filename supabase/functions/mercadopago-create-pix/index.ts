@@ -381,28 +381,37 @@ serve(async (req) => {
       console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} à venda ${orderId}`);
     }
 
+    const responsePayload = {
+      paymentId: mpPayment.id,
+      status: mpPayment.status,
+      qrCode: pixData?.qr_code || null,
+      qrCodeBase64: pixData?.qr_code_base64 || null,
+      ticketUrl: pixData?.ticket_url || null,
+      expirationDate: mpPayment.date_of_expiration || null,
+      amount: totalAmount.toFixed(2),
+      pixDiscountPercent: pixDiscountPct,
+      prize: prize
+        ? {
+            label: prize.label,
+            couponCode: prize.couponCode,
+            discountAmount: prize.discountAmount,
+            freeShipping: prize.freeShipping,
+          }
+        : null,
+    };
+
+    recentPix.set(String(orderId), { ts: Date.now(), payload: responsePayload });
+    if (recentPix.size > 500) {
+      const cutoff = Date.now() - PIX_COOLDOWN_MS;
+      for (const [k, v] of recentPix) if (v.ts < cutoff) recentPix.delete(k);
+    }
+
     return new Response(
-      JSON.stringify({
-        paymentId: mpPayment.id,
-        status: mpPayment.status,
-        qrCode: pixData?.qr_code || null,
-        qrCodeBase64: pixData?.qr_code_base64 || null,
-        ticketUrl: pixData?.ticket_url || null,
-        expirationDate: mpPayment.date_of_expiration || null,
-        amount: totalAmount.toFixed(2),
-        pixDiscountPercent: pixDiscountPct,
-        prize: prize
-          ? {
-              label: prize.label,
-              couponCode: prize.couponCode,
-              discountAmount: prize.discountAmount,
-              freeShipping: prize.freeShipping,
-            }
-          : null,
-      }),
+      JSON.stringify(responsePayload),
       {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
+
     );
   } catch (error) {
     console.error("Error creating PIX payment:", error);
