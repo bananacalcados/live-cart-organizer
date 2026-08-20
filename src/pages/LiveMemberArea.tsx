@@ -431,12 +431,37 @@ export default function LiveMemberArea() {
   };
 
 
+  /**
+   * Assinatura do cadastro vindo do servidor. Quando a equipe corrige os dados
+   * pelo modal do módulo EVENTOS, o servidor passa a mandar valores diferentes:
+   * nesse caso o SERVIDOR VENCE e os formulários locais são re-hidratados
+   * (antes o rascunho antigo em memória continuava na tela e ainda era
+   * reenviado pelo auto-save, desfazendo a correção manual).
+   */
+  const serverDetailsSigRef = useRef<string>("");
+
   const hydrateForms = (data: any) => {
     const d = data?.details || {};
     // Endereço não é dado sensível: mesmo com os dados mascarados (sem OTP),
     // repreenchemos o formulário com o rascunho salvo para a cliente retomar
     // exatamente de onde parou, sem redigitar tudo.
     const a = data?.payDetails || (!d.masked ? d : {}) || {};
+    const serverSig = JSON.stringify({
+      cep: a.cep || "",
+      address: a.address || "",
+      address_number: a.address_number || "",
+      complement: a.complement || "",
+      neighborhood: a.neighborhood || "",
+      city: a.city || "",
+      state: a.state || "",
+      cpf: d.masked ? "" : d.cpf || "",
+      email: d.masked ? "" : d.email || "",
+      full_name: a.full_name || d.full_name || "",
+    });
+    const serverChanged = serverSig !== serverDetailsSigRef.current;
+    serverDetailsSigRef.current = serverSig;
+    if (!serverChanged) return;
+
     setAddr((prev: any) => ({
       cep: a.cep || prev.cep || "",
       address: a.address || prev.address || "",
@@ -446,14 +471,17 @@ export default function LiveMemberArea() {
       city: a.city || prev.city || "",
       state: a.state || prev.state || "",
     }));
+    // Evita que o rascunho antigo seja regravado por cima da correção manual.
+    lastAddrSaveRef.current = "";
     if (!d.masked) {
-      setCpf(d.cpf || "");
-      setEmail(d.email || "");
+      if (d.cpf) setCpf(d.cpf);
+      if (d.email) setEmail(d.email);
     }
     // Nome real (nunca o @ do Instagram) — é o que vai para o gateway.
     const savedName = (data?.payDetails?.full_name || d.full_name || "").trim();
     if (isRealFullName(savedName)) setFullNameInput(savedName);
   };
+
 
 
   const applyState = useCallback(
@@ -524,6 +552,9 @@ export default function LiveMemberArea() {
         if (seq < appliedSeqRef.current) return;
         appliedSeqRef.current = seq;
         setState(st);
+        // Correções feitas pela equipe (modal do módulo EVENTOS) refletem aqui.
+        hydrateForms(st);
+
 
         const sig = itemsSignature(st.order);
         const had = itemsSigRef.current;
@@ -550,7 +581,10 @@ export default function LiveMemberArea() {
 
   useEffect(() => {
     const token = state?.token;
-    if (step !== "area" || !token) return;
+    // Também durante o onboarding: se a equipe corrigir os dados no sistema,
+    // a cliente vê a atualização sem precisar recarregar a página.
+    if ((step !== "area" && step !== "onboarding") || !token) return;
+
 
     const start = () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
