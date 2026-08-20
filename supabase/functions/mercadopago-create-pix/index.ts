@@ -75,6 +75,16 @@ serve(async (req) => {
       throw new Error("orderId is required");
     }
 
+    // Reaproveita o PIX gerado há menos de 20s para o mesmo pedido.
+    const cached = recentPix.get(String(orderId));
+    if (cached && Date.now() - cached.ts < PIX_COOLDOWN_MS) {
+      console.log(`[mp-pix] Cooldown ativo — reaproveitando PIX do pedido ${orderId}`);
+      return new Response(JSON.stringify(cached.payload), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+
     let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
 
