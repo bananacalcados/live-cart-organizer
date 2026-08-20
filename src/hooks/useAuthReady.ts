@@ -8,32 +8,37 @@ export function useAuthReady() {
 
   useEffect(() => {
     let mounted = true;
-    let readyFallback: number | undefined;
+    let initialSessionReceived = false;
 
-    // onAuthStateChange fires INITIAL_SESSION with the persisted session
-    // almost immediately (no network wait), plus SIGNED_IN / TOKEN_REFRESHED /
-    // SIGNED_OUT afterwards. Do not call getSession() here: auth methods share
-    // the same browser lock, and a slow/stale getSession can block password
-    // login from resolving on production.
+    // INITIAL_SESSION is the source of truth for the persisted browser session.
+    // Never mark auth as ready on a timer with a null session: on slower devices
+    // that race redirected valid users back to /login before hydration finished.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
-      if (readyFallback) window.clearTimeout(readyFallback);
+      initialSessionReceived = true;
       setSession(nextSession);
       setIsReady(true);
     });
 
-    // Safety fallback only marks the hook as ready; it intentionally avoids any
-    // Supabase auth call so login cannot be held behind a pending session read.
-    readyFallback = window.setTimeout(() => {
-      if (!mounted) return;
-      setIsReady(true);
-    }, 4000);
+    // Some browser/privacy combinations do not emit INITIAL_SESSION reliably.
+    // Read local auth state only as a delayed fallback, without declaring the
+    // user signed out until that read has actually completed.
+    const fallback = window.setTimeout(async () => {
+      if (!mounted || initialSessionReceived) return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted || initialSessionReceived) return;
+        setSession(data.session);
+      } finally {
+        if (mounted && !initialSessionReceived) setIsReady(true);
+      }
+    }, 2500);
 
     return () => {
       mounted = false;
-      if (readyFallback) window.clearTimeout(readyFallback);
+      window.clearTimeout(fallback);
       subscription.unsubscribe();
     };
   }, []);

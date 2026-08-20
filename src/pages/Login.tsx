@@ -33,15 +33,17 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (isReady && session) {
-      navigate("/", { replace: true });
-    }
-  }, [isReady, session, navigate]);
+    if (isReady && session && !loading) navigate("/", { replace: true });
+  }, [isReady, session, loading, navigate]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // A previous employee may have left a persisted session in this browser.
+      // Clear it before authenticating so the permission check always uses the
+      // account whose credentials were just entered.
+      if (session) await withTimeout(supabase.auth.signOut({ scope: "local" }), 10000);
       const { error } = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
         25000
