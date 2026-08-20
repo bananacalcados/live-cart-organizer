@@ -552,6 +552,9 @@ export default function LiveMemberArea() {
         if (seq < appliedSeqRef.current) return;
         appliedSeqRef.current = seq;
         setState(st);
+        // Correções feitas pela equipe (modal do módulo EVENTOS) refletem aqui.
+        hydrateForms(st);
+
 
         const sig = itemsSignature(st.order);
         const had = itemsSigRef.current;
