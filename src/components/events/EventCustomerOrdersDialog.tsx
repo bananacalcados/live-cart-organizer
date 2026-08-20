@@ -27,6 +27,7 @@ import { OrderRegLite, addressKey } from "@/lib/customerOrderGrouping";
 import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
+import { CustomerAccessCodeRow } from "@/components/events/CustomerAccessCodeRow";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
