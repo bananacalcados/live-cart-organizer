@@ -61,10 +61,15 @@ export default function Login() {
       }
       navigate("/", { replace: true });
     } catch (err: any) {
+      const isConnectionError =
+        err?.message === "Failed to fetch" ||
+        err?.message === "NetworkError when attempting to fetch resource.";
       toast({
         title: "Erro ao entrar",
         description: err?.message === "timeout"
           ? "O login demorou demais. Recarregue a página e tente novamente."
+          : isConnectionError
+            ? "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente."
           : err?.message || "Erro desconhecido",
         variant: "destructive",
       });
