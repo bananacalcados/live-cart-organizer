@@ -137,7 +137,7 @@ export async function getMpAccountByPaymentId(
 export async function getPaymentAccountsWithFallback(supabase: any): Promise<MpAccount[]> {
   const list: MpAccount[] = [];
   const active = await getActiveMpAccount(supabase);
-  if (active) list.push(active);
+  if (active && active.source !== "env_fallback") list.push(active);
   try {
     const { data } = await supabase
       .from("mercadopago_accounts")
@@ -157,10 +157,15 @@ export async function getPaymentAccountsWithFallback(supabase: any): Promise<MpA
   } catch (err: any) {
     console.warn("[mp-account] getPaymentAccountsWithFallback error:", err.message);
   }
-  const fb = envFallback();
-  if (fb && !list.some((a) => a.access_token === fb.access_token)) list.push(fb);
+  // Token legado do ENV só entra se NÃO houver nenhuma conta cadastrada no banco
+  // (ele está bloqueado por PolicyAgent e derrubava cobranças quando entrava na fila).
+  if (list.length === 0) {
+    const fb = envFallback();
+    if (fb) list.push(fb);
+  }
   return list;
 }
+
 
 /** Lista todas as contas (pra polling iterar). */
 export async function listAllMpAccountsForPolling(

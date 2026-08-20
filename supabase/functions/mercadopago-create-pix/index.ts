@@ -37,10 +37,16 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// Cooldown por pedido: cliques repetidos em "gerar PIX" reaproveitam o último
+// PIX gerado em vez de bombardear a API do MP (gatilho do bloqueio PolicyAgent).
+const PIX_COOLDOWN_MS = 20_000;
+const recentPix = new Map<string, { ts: number; payload: unknown }>();
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
+
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -68,6 +74,16 @@ serve(async (req) => {
     if (!orderId) {
       throw new Error("orderId is required");
     }
+
+    // Reaproveita o PIX gerado há menos de 20s para o mesmo pedido.
+    const cached = recentPix.get(String(orderId));
+    if (cached && Date.now() - cached.ts < PIX_COOLDOWN_MS) {
+      console.log(`[mp-pix] Cooldown ativo — reaproveitando PIX do pedido ${orderId}`);
+      return new Response(JSON.stringify(cached.payload), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
 
     let pixDiscountPct = Number(pixDiscountPercent) || 0;
 
@@ -365,28 +381,37 @@ serve(async (req) => {
       console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} à venda ${orderId}`);
     }
 
+    const responsePayload = {
+      paymentId: mpPayment.id,
+      status: mpPayment.status,
+      qrCode: pixData?.qr_code || null,
+      qrCodeBase64: pixData?.qr_code_base64 || null,
+      ticketUrl: pixData?.ticket_url || null,
+      expirationDate: mpPayment.date_of_expiration || null,
+      amount: totalAmount.toFixed(2),
+      pixDiscountPercent: pixDiscountPct,
+      prize: prize
+        ? {
+            label: prize.label,
+            couponCode: prize.couponCode,
+            discountAmount: prize.discountAmount,
+            freeShipping: prize.freeShipping,
+          }
+        : null,
+    };
+
+    recentPix.set(String(orderId), { ts: Date.now(), payload: responsePayload });
+    if (recentPix.size > 500) {
+      const cutoff = Date.now() - PIX_COOLDOWN_MS;
+      for (const [k, v] of recentPix) if (v.ts < cutoff) recentPix.delete(k);
+    }
+
     return new Response(
-      JSON.stringify({
-        paymentId: mpPayment.id,
-        status: mpPayment.status,
-        qrCode: pixData?.qr_code || null,
-        qrCodeBase64: pixData?.qr_code_base64 || null,
-        ticketUrl: pixData?.ticket_url || null,
-        expirationDate: mpPayment.date_of_expiration || null,
-        amount: totalAmount.toFixed(2),
-        pixDiscountPercent: pixDiscountPct,
-        prize: prize
-          ? {
-              label: prize.label,
-              couponCode: prize.couponCode,
-              discountAmount: prize.discountAmount,
-              freeShipping: prize.freeShipping,
-            }
-          : null,
-      }),
+      JSON.stringify(responsePayload),
       {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
+
     );
   } catch (error) {
     console.error("Error creating PIX payment:", error);
