@@ -620,7 +620,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       toast.success("AGENDAMENTO CONFIRMADO", {
         description: "A mensagem continua aberta para agendar em outra campanha.",
       });
-    } catch { toast.error("Erro ao salvar"); }
+    } catch (e: any) { toast.error("Erro ao salvar: " + (e?.message || "desconhecido")); }
     finally { setIsSaving(false); }
   };
 
@@ -635,7 +635,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       });
       setSelectedOtherCampaignId(null);
       setShowOtherCampaigns(false);
-    } catch { toast.error("Erro ao agendar na outra campanha"); }
+    } catch (e: any) { toast.error("Erro ao agendar na outra campanha: " + (e?.message || "desconhecido")); }
     finally { setIsSchedulingOther(false); }
   };
 
