@@ -331,7 +331,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
-      const { error } = await supabase.from('group_campaign_scheduled_messages').insert(allInserts as any);
+      // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert:
+      // colunas ausentes viram NULL (e não o DEFAULT), quebrando NOT NULL como disable_link_preview.
+      const allKeys = Array.from(new Set(allInserts.flatMap(r => Object.keys(r))));
+      const normalized = allInserts.map(row => {
+        const full: any = {};
+        for (const k of allKeys) full[k] = row[k] ?? null;
+        full.disable_link_preview = !!row.disable_link_preview;
+        full.mention_all = !!row.mention_all;
+        if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
+        return full;
+      });
+      const { error } = await supabase.from('group_campaign_scheduled_messages').insert(normalized as any);
       if (error) throw error;
       toast.success(`${offset} mensagem(ns) agendada(s)!`);
     } else {
