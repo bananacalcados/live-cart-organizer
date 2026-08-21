@@ -36,6 +36,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
       return;
     }
 
+    setHasAccess(undefined);
     let cancelled = false;
 
     const checkAccess = async (attempt = 1) => {
