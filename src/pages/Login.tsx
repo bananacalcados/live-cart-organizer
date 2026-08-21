@@ -14,6 +14,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { session, isReady } = useAuthReady();
+  const userId = session?.user.id;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,8 +34,8 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (isReady && session && !loading) navigate("/", { replace: true });
-  }, [isReady, session, loading, navigate]);
+    if (isReady && userId && !loading) navigate("/", { replace: true });
+  }, [isReady, userId, loading, navigate]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
