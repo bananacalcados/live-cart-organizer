@@ -13,6 +13,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
   const { session, isReady } = useAuthReady();
+  const userId = session?.user.id;
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -20,15 +21,13 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
   useEffect(() => {
     if (!isReady) return;
 
-    if (!session || !requiredModule) {
-      if (session && !requiredModule) setHasAccess(true);
+    if (!userId || !requiredModule) {
+      if (userId && !requiredModule) setHasAccess(true);
       return;
     }
 
-    setHasAccess(undefined);
     setPermissionError(false);
 
-    const userId = session.user.id;
     const modulesToCheck = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
 
     const cached = permissionCache.get(userId);
@@ -84,7 +83,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     return () => {
       cancelled = true;
     };
-  }, [isReady, session, requiredModule, retryKey]);
+  }, [isReady, userId, requiredModule, retryKey]);
 
   if (!isReady) {
     return (
