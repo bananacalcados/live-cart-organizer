@@ -289,7 +289,6 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: block.content,
             disable_link_preview: !!block.disableLinkPreview,
             scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
-            disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
