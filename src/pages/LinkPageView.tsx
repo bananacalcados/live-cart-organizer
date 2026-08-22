@@ -8,7 +8,6 @@ import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
   Users, Video, Star, Music2, Youtube, Facebook, Loader2, ChevronRight, Sparkles, KeyRound
 } from "lucide-react";
-...
 const ITEM_ICONS: Record<string, any> = {
   link: LinkIcon, whatsapp: Phone, address: MapPin, catalog: ShoppingBag,
   website: Globe, instagram: Instagram, email: Mail, vip: Users, live: Video,
