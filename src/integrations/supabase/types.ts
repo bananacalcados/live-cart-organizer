@@ -1946,6 +1946,7 @@ export type Database = {
           cliente_id: string | null
           created_at: string
           enviado_em: string
+          envios_realizados: number
           erro: string | null
           erro_code: number | null
           error_code: number | null
@@ -1971,6 +1972,7 @@ export type Database = {
           cliente_id?: string | null
           created_at?: string
           enviado_em?: string
+          envios_realizados?: number
           erro?: string | null
           erro_code?: number | null
           error_code?: number | null
@@ -1996,6 +1998,7 @@ export type Database = {
           cliente_id?: string | null
           created_at?: string
           enviado_em?: string
+          envios_realizados?: number
           erro?: string | null
           erro_code?: number | null
           error_code?: number | null
