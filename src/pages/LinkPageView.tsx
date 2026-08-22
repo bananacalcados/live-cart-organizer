@@ -242,7 +242,7 @@ export default function LinkPageView() {
           <p className="lp-display text-white font-extrabold text-2xl drop-shadow">{item.label || "Novidades"}</p>
           <span className="text-xs text-white/60">{catalog.length} produtos</span>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-3 overflow-x-auto snap-x snap-mandatory -mx-5 px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {catalog.map((p: any) => {
             const discount = p.compare_at_price && p.compare_at_price > p.price;
             const pct = discount ? Math.round((1 - p.price / p.compare_at_price) * 100) : 0;
@@ -252,7 +252,7 @@ export default function LinkPageView() {
                 href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
                 target="_blank" rel="noopener noreferrer"
                 onClick={() => handleClick(item)}
-                className="block rounded-2xl overflow-hidden bg-white shadow-lg active:scale-95 transition-transform"
+                className="block snap-start rounded-2xl overflow-hidden bg-white shadow-lg active:scale-95 transition-transform"
               >
                 <div className="relative aspect-square overflow-hidden bg-gray-100">
                   {p.image_url && <img src={p.image_url} alt={p.title} className="w-full h-full object-cover" loading="lazy" />}

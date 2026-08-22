@@ -786,8 +786,9 @@ export function LinkPageManager() {
                         if (item.item_type === "header") return <p key={item.id} className="text-xs font-bold text-white/70 uppercase tracking-wider text-center mt-3">{item.label}</p>;
                         if (item.item_type === "catalog") {
                           return (
-                            <div key={item.id} className="grid grid-cols-2 gap-2">
-                              {catalog.filter((c) => c.is_active).slice(0, 4).map((c) => (
+                            <div key={item.id} className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-2 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              {catalog.filter((c) => c.is_active).map((c) => (
+
                                 <div key={c.id} className="rounded-xl overflow-hidden bg-white">
                                   <div className="aspect-square bg-gray-100">{c.image_url && <img src={c.image_url} alt={c.title} className="w-full h-full object-cover" />}</div>
                                   <p className="text-[10px] font-semibold text-gray-800 truncate px-1.5 py-1">{c.title}</p>
