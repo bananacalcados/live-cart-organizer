@@ -25,6 +25,10 @@ import { sendTextFallback } from "../_shared/meta-fallback.ts";
 
 
 const MAX_ATTEMPTS = 3;
+// Teto ABSOLUTO de mensagens efetivamente disparadas para a mesma pessoa na
+// mesma campanha (conta qualquer chamada aceita/recusada pela Meta).
+const MAX_SENDS = 2;
+
 const BATCH = 80;
 const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
@@ -205,12 +209,25 @@ Deno.serve(async (req) => {
   for (const env of pendentes) {
     touchedCampaigns.add(env.campanha_id);
 
+    // TRAVA DURA ANTI-DUPLICADO: independente do motivo do reagendamento
+    // (mídia, rate limit, falha pós-envio no webhook), ninguém recebe a mesma
+    // campanha mais de MAX_SENDS vezes.
+    if ((env.envios_realizados || 0) >= MAX_SENDS) {
+      await sb
+        .from("campanha_envios")
+        .update({ status: "falhou", proxima_tentativa: null, erro: `limite de ${MAX_SENDS} envios atingido` })
+        .eq("id", env.id);
+      skipped++;
+      continue;
+    }
+
     const cc = await getCampaignCtx(env.campanha_id);
 
     if (!cc.campaign || !cc.campaign.ativa) {
       skipped++;
       continue;
     }
+
     const isSimple = String(cc.campaign.template_tipo || "carrossel") === "simples";
     if (!cc.templateName || (!isSimple && cc.okCards.length < 2)) {
       // Sem template aprovado / cards insuficientes — deixa pendente para o próximo ciclo.
@@ -310,6 +327,8 @@ Deno.serve(async (req) => {
       errMsg = (e as Error).message;
     }
 
+    const envios = (env.envios_realizados || 0) + 1;
+
     if (ok) {
       await sb
         .from("campanha_envios")
@@ -318,9 +337,11 @@ Deno.serve(async (req) => {
           message_wamid: wamid,
           enviado_em: new Date().toISOString(),
           erro: null,
+          envios_realizados: envios,
         })
         .eq("id", env.id);
       sent++;
+
     } else {
       const cls = classifySendError(errCode, errMsg);
       const attempts = (env.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
@@ -356,18 +377,19 @@ Deno.serve(async (req) => {
             fallback_provider: fbProvider,
             fallback_at: new Date().toISOString(),
             proxima_tentativa: null,
+            envios_realizados: envios,
           })
           .eq("id", env.id);
         sent++;
       } else {
-        // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
-        // estourou o limite de tentativas de erros temporários.
+        // Terminal quando: a Meta diz que é inentregável (nao_entregavel), OU
+        // estourou o limite de tentativas, OU já usamos o teto de envios.
         let status: string;
         let proxima: string | null;
         if (cls.status === "nao_entregavel") {
           status = "nao_entregavel";
           proxima = null;
-        } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
+        } else if ((cls.countsAttempt && attempts >= MAX_ATTEMPTS) || envios >= MAX_SENDS) {
           status = "falhou";
           proxima = null;
         } else {
@@ -382,9 +404,11 @@ Deno.serve(async (req) => {
             error_code: errCode,
             status,
             proxima_tentativa: proxima,
+            envios_realizados: envios,
           })
           .eq("id", env.id);
         failed++;
+
       }
 
       // Cobrança pendente na Meta: nenhum envio vai passar até resolver o

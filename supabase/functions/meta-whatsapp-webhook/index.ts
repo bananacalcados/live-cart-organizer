@@ -932,7 +932,7 @@ serve(async (req) => {
                   const ceRank: Record<string, number> = { enviado: 1, entregue: 2, lido: 3 };
                   const { data: ce } = await supabase
                     .from('campanha_envios')
-                    .select('id, status, tentativas')
+                    .select('id, status, tentativas, envios_realizados')
                     .eq('message_wamid', messageId)
                     .maybeSingle();
                   if (ce) {
@@ -943,6 +943,11 @@ serve(async (req) => {
                         updateData.error_message as string,
                       );
                       const attempts = (ce.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
+                      // Teto absoluto de reenvios (espelha MAX_SENDS do sender):
+                      // sem isso a falha pós-envio devolvia a linha para a fila
+                      // indefinidamente e o cliente recebia a mesma campanha
+                      // várias vezes no mesmo dia.
+                      const envios = ce.envios_realizados || 1;
                       let ceStatus: string;
                       let proxima: string | null;
                       let keepWamid: boolean;
@@ -950,7 +955,7 @@ serve(async (req) => {
                         ceStatus = 'nao_entregavel';
                         proxima = null;
                         keepWamid = true;
-                      } else if (cls.countsAttempt && attempts >= 3) {
+                      } else if ((cls.countsAttempt && attempts >= 3) || envios >= 2) {
                         ceStatus = 'falhou';
                         proxima = null;
                         keepWamid = true;
@@ -959,6 +964,7 @@ serve(async (req) => {
                         proxima = new Date(Date.now() + (cls.retryMs ?? 30 * 60 * 1000)).toISOString();
                         keepWamid = false;
                       }
+
                       await supabase
                         .from('campanha_envios')
                         .update({

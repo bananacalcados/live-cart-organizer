@@ -37,19 +37,26 @@ export interface ClassifiedSendError {
 // Rate limit / throughput — liberado em minutos.
 const RATE_LIMIT_CODES = new Set<number>([130429, 131056, 80007, 133016, 131048]);
 
-// Falha ao baixar a mídia do header (link público). Transitório.
+// Falha ao baixar a mídia do header (link público). Transitório, MAS conta
+// tentativa: sem isso o envio era reagendado infinitamente a cada 2 min e o
+// mesmo cliente recebia a campanha várias vezes no mesmo dia.
 const MEDIA_CODES = new Set<number>([131053]);
 
 // Cobrança pendente / conta bloqueada por pagamento.
 const BILLING_CODES = new Set<number>([131042]);
 
-// Entrega impossível (terminal): número sem WhatsApp, inválido, recusado.
-const UNDELIVERABLE_CODES = new Set<number>([131026, 131021, 131051, 131008, 131047, 470, 131000]);
+// Entrega impossível (terminal): número sem WhatsApp, inválido, recusado,
+// bloqueio de qualidade do ecossistema (131049) e número em experimento da Meta
+// (130472). Reenviar nesses casos não entrega nada e ainda queima reputação.
+const UNDELIVERABLE_CODES = new Set<number>([
+  131026, 131021, 131051, 131008, 131047, 470, 131000, 131049, 130472,
+]);
 
-const RATE_RETRY_MS = 5 * 60 * 1000; // 5 minutos
-const MEDIA_RETRY_MS = 2 * 60 * 1000; // 2 minutos
+const RATE_RETRY_MS = 15 * 60 * 1000; // 15 minutos
+const MEDIA_RETRY_MS = 30 * 60 * 1000; // 30 minutos
 const BILLING_RETRY_MS = 30 * 60 * 1000; // 30 minutos
 const TRANSIENT_RETRY_MS = 30 * 60 * 1000; // 30 minutos
+
 
 /** Extrai o código de erro numérico da Meta de um objeto, número ou string. */
 export function extractMetaErrorCode(raw: unknown): number | null {
@@ -107,10 +114,11 @@ export function classifySendError(code: number | null, message?: string): Classi
   }
   if (isMedia) {
     return {
-      kind: "media", code, status: "pendente", countsAttempt: false,
+      kind: "media", code, status: "pendente", countsAttempt: true,
       retryMs: MEDIA_RETRY_MS, fallbackEligible: true, pauseBatch: false,
     };
   }
+
   if (isRate) {
     return {
       kind: "rate_limit", code, status: "pendente", countsAttempt: false,
