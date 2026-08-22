@@ -7,7 +7,7 @@ import {
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp, ChevronDown,
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
   Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus,
-  Bold, Italic, Underline as UnderlineIcon, CaseUpper, AlignLeft, AlignCenter, AlignRight
+  Bold, Italic, Underline as UnderlineIcon, CaseUpper, AlignLeft, AlignCenter, AlignRight, KeyRound
 } from "lucide-react";
 import { DebouncedInput, DebouncedTextarea } from "@/components/marketing/DebouncedField";
 import { HEADER_FONTS, HEADER_FONTS_URL, headerCss } from "@/lib/marketing/linkPageHeaderStyle";
