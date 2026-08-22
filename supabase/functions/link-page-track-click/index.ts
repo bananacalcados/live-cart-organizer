@@ -10,7 +10,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { pageId, itemId, sellerId, leadId, utm_source, referrer } = await req.json();
+    const { pageId, itemId, catalogProductId, sellerId, leadId, utm_source, referrer } = await req.json();
     if (!pageId) {
       return new Response(JSON.stringify({ error: "pageId required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     await supabase.from("link_page_visits").insert({
       page_id: pageId,
       item_id: itemId || null,
+      catalog_product_id: catalogProductId || null,
       event_type: "click",
       seller_id: sellerId || null,
       lead_id: leadId || null,
@@ -35,8 +36,13 @@ Deno.serve(async (req) => {
       const { data: item } = await supabase.from("link_page_items").select("clicks").eq("id", itemId).maybeSingle();
       await supabase.from("link_page_items").update({ clicks: (item?.clicks || 0) + 1 }).eq("id", itemId);
     }
+    if (catalogProductId) {
+      const { data: prod } = await supabase.from("link_page_catalog_products").select("clicks").eq("id", catalogProductId).maybeSingle();
+      await supabase.from("link_page_catalog_products").update({ clicks: (prod?.clicks || 0) + 1 }).eq("id", catalogProductId);
+    }
     const { data: page } = await supabase.from("link_pages").select("total_clicks").eq("id", pageId).maybeSingle();
     await supabase.from("link_pages").update({ total_clicks: (page?.total_clicks || 0) + 1 }).eq("id", pageId);
+
 
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {

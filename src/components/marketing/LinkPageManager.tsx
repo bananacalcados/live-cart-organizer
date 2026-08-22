@@ -45,7 +45,9 @@ interface CatalogRow {
   id: string; shopify_product_id: string; handle: string | null; title: string;
   image_url: string | null; price: number | null; compare_at_price: number | null;
   grade_pct: number; grade_available: number; grade_total: number; is_active: boolean;
+  clicks?: number;
 }
+
 
 const ITEM_TYPES = [
   { value: "whatsapp", label: "WhatsApp", icon: Phone },
@@ -335,7 +337,7 @@ export function LinkPageManager() {
 
   const fetchAnalytics = async (pageId: string) => {
     setAnalyticsPageId(pageId);
-    const { data } = await supabase.from("link_page_visits").select("*, link_page_items(label)").eq("page_id", pageId).order("created_at", { ascending: false }).limit(1000);
+    const { data } = await supabase.from("link_page_visits").select("*, link_page_items(label), link_page_catalog_products(title)").eq("page_id", pageId).order("created_at", { ascending: false }).limit(1000);
     setAnalytics((data || []) as any);
   };
 
@@ -388,7 +390,19 @@ export function LinkPageManager() {
     setSyncingCatalog(false);
   };
 
+  // Remove um produto do catálogo direto pela lista do editor.
+  // Necessário porque produtos apagados/despublicados na Shopify não aparecem
+  // mais no seletor e ficariam presos na página (link quebrado).
+  const removeCatalogProduct = async (c: CatalogRow) => {
+    if (!confirm(`Remover "${c.title}" do catálogo desta página?`)) return;
+    const { error } = await supabase.from("link_page_catalog_products").delete().eq("id", c.id);
+    if (error) { toast.error("Erro ao remover produto"); return; }
+    setCatalog((prev) => prev.filter((x) => x.id !== c.id));
+    toast.success("Produto removido do catálogo");
+  };
+
   // ─── Manual catalog picker ───
+
   const openCatalogPicker = async () => {
     setCatalogPickerOpen(true);
     setPickerSelected(new Set(catalog.map((c) => c.shopify_product_id)));
@@ -663,16 +677,31 @@ export function LinkPageManager() {
                 )}
               </div>
               {catalog.length > 0 && (
-                <div className="grid grid-cols-4 gap-1">
-                  {catalog.slice(0, 8).map((c) => (
-                    <div key={c.id} className="aspect-square rounded overflow-hidden bg-muted relative">
-                      {c.image_url && <img src={c.image_url} alt={c.title} className="w-full h-full object-cover" />}
-                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[8px] text-white text-center">{Math.round(c.grade_pct * 100)}%</span>
+                <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                  {catalog.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 rounded border border-border/60 p-1.5">
+                      <div className="h-10 w-10 shrink-0 rounded overflow-hidden bg-muted">
+                        {c.image_url && <img src={c.image_url} alt={c.title} className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-white truncate">{c.title}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          grade {Math.round(c.grade_pct * 100)}% · {c.clicks || 0} cliques
+                        </p>
+                      </div>
+                      <Button
+                        size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0"
+                        title="Remover do catálogo"
+                        onClick={() => removeCatalogProduct(c)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
               <p className="text-[10px] text-muted-foreground">{catalog.filter((c) => c.is_active).length} produtos ativos · adicione um botão "Catálogo" para exibi-los.</p>
+
             </CardContent>
           </Card>
 
@@ -896,10 +925,17 @@ function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pag
   const views = analytics.filter((a) => a.event_type === "page_view");
   const clicks = analytics.filter((a) => a.event_type === "click");
   const byButton: Record<string, number> = {};
+  const byProduct: Record<string, number> = {};
   for (const c of clicks) {
+    if (c.catalog_product_id) {
+      const t = c.link_page_catalog_products?.title || "Produto removido";
+      byProduct[t] = (byProduct[t] || 0) + 1;
+      continue;
+    }
     const label = c.link_page_items?.label || "—";
     byButton[label] = (byButton[label] || 0) + 1;
   }
+
   return (
     <Dialog open={!!pageId} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
@@ -919,6 +955,18 @@ function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pag
             ))}
             {!Object.keys(byButton).length && <p className="text-xs text-muted-foreground">Sem cliques ainda.</p>}
           </CardContent></Card>
+          <Card><CardContent className="p-3">
+            <p className="text-xs font-semibold text-white mb-2">Cliques por produto do catálogo</p>
+            <div className="max-h-56 overflow-y-auto pr-1">
+              {Object.entries(byProduct).sort(([, a], [, b]) => b - a).map(([title, count]) => (
+                <div key={title} className="flex justify-between text-sm py-1 gap-3">
+                  <span className="text-muted-foreground truncate">{title}</span><span className="text-white font-medium shrink-0">{count}</span>
+                </div>
+              ))}
+            </div>
+            {!Object.keys(byProduct).length && <p className="text-xs text-muted-foreground">Sem cliques em produtos ainda.</p>}
+          </CardContent></Card>
+
         </div>
       </DialogContent>
     </Dialog>
