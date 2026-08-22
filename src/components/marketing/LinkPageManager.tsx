@@ -6,9 +6,13 @@ import {
   Plus, Trash2, GripVertical, ExternalLink, Copy, Link as LinkIcon,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp, ChevronDown,
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
-  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus
+  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus,
+  Bold, Italic, Underline as UnderlineIcon, CaseUpper, AlignLeft, AlignCenter, AlignRight
 } from "lucide-react";
+import { DebouncedInput, DebouncedTextarea } from "@/components/marketing/DebouncedField";
+import { HEADER_FONTS, HEADER_FONTS_URL, headerCss } from "@/lib/marketing/linkPageHeaderStyle";
 import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,6 +136,18 @@ export function LinkPageManager() {
   const [newSlug, setNewSlug] = useState("");
   const [newSellerId, setNewSellerId] = useState("");
   const [newRequireCapture, setNewRequireCapture] = useState(false);
+
+  // Carrega as fontes usadas nos cabeçalhos (preview + seletor)
+  useEffect(() => {
+    if (document.getElementById("lp-header-fonts")) return;
+    const l = document.createElement("link");
+    l.id = "lp-header-fonts";
+    l.rel = "stylesheet";
+    l.href = HEADER_FONTS_URL;
+    document.head.appendChild(l);
+  }, []);
+
+
 
   const fetchPages = useCallback(async () => {
     setLoading(true);
@@ -745,14 +761,66 @@ export function LinkPageManager() {
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteItem(item.id)}><Trash2 className="h-3 w-3" /></Button>
                           </div>
                         </div>
-                        <Input value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder="Texto do botão" className="h-8 text-sm" />
+                        <DebouncedInput value={item.label} onCommit={(v) => updateItem(item.id, { label: v })} placeholder="Texto do botão" className="h-8 text-sm" />
+
+                        {item.item_type === "header" && (
+                          <div className="rounded-md border p-2 space-y-2 bg-muted/20">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Select
+                                value={item.style_config?.fontFamily || ""}
+                                onValueChange={(v) => updateItem(item.id, { style_config: { ...(item.style_config || {}), fontFamily: v === "__default" ? "" : v } })}
+                              >
+                                <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue placeholder="Fonte" /></SelectTrigger>
+                                <SelectContent>
+                                  {HEADER_FONTS.map((f) => (
+                                    <SelectItem key={f.value || "__default"} value={f.value || "__default"} style={{ fontFamily: f.css || undefined }}>{f.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Select
+                                value={String(item.style_config?.fontSize || 12)}
+                                onValueChange={(v) => updateItem(item.id, { style_config: { ...(item.style_config || {}), fontSize: Number(v) } })}
+                              >
+                                <SelectTrigger className="h-7 w-[74px] text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {[10, 12, 14, 16, 18, 20, 24, 28, 32, 40].map((s) => <SelectItem key={s} value={String(s)}>{s}px</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Button type="button" variant={item.style_config?.bold === false ? "ghost" : "secondary"} size="icon" className="h-7 w-7" title="Negrito"
+                                onClick={() => updateItem(item.id, { style_config: { ...(item.style_config || {}), bold: item.style_config?.bold === false } })}>
+                                <Bold className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant={item.style_config?.italic ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Itálico"
+                                onClick={() => updateItem(item.id, { style_config: { ...(item.style_config || {}), italic: !item.style_config?.italic } })}>
+                                <Italic className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant={item.style_config?.underline ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title="Sublinhado"
+                                onClick={() => updateItem(item.id, { style_config: { ...(item.style_config || {}), underline: !item.style_config?.underline } })}>
+                                <UnderlineIcon className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant={item.style_config?.uppercase === false ? "ghost" : "secondary"} size="icon" className="h-7 w-7" title="MAIÚSCULAS"
+                                onClick={() => updateItem(item.id, { style_config: { ...(item.style_config || {}), uppercase: item.style_config?.uppercase === false } })}>
+                                <CaseUpper className="h-3.5 w-3.5" />
+                              </Button>
+                              {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(([a, Ico]) => (
+                                <Button key={a} type="button" variant={(item.style_config?.align || "center") === a ? "secondary" : "ghost"} size="icon" className="h-7 w-7" title={`Alinhar ${a}`}
+                                  onClick={() => updateItem(item.id, { style_config: { ...(item.style_config || {}), align: a } })}>
+                                  <Ico className="h-3.5 w-3.5" />
+                                </Button>
+                              ))}
+                              <input type="color" title="Cor do texto" value={item.style_config?.color || "#ffffff"}
+                                onChange={(e) => updateItem(item.id, { style_config: { ...(item.style_config || {}), color: e.target.value } })}
+                                className="h-7 w-9 rounded cursor-pointer bg-transparent border" />
+                            </div>
+                          </div>
+                        )}
 
                         {item.item_type === "whatsapp" ? (
                           <>
                             <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                               {inst ? <>{inst.is_online !== false ? <Wifi className="h-3 w-3 text-green-500" /> : <WifiOff className="h-3 w-3 text-destructive" />}{inst.label} ({inst.provider})</> : "Instância não vinculada"}
                             </div>
-                            <Textarea value={item.prefill_message || ""} onChange={(e) => updateItem(item.id, { prefill_message: e.target.value })} placeholder="Mensagem que o cliente envia automaticamente..." className="text-sm min-h-[60px]" />
+                            <DebouncedTextarea value={item.prefill_message || ""} onCommit={(v) => updateItem(item.id, { prefill_message: v })} placeholder="Mensagem que o cliente envia automaticamente..." className="text-sm min-h-[60px]" />
                           </>
                         ) : item.item_type === "social" ? (
                           <>
@@ -760,14 +828,14 @@ export function LinkPageManager() {
                               <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                               <SelectContent>{SOCIAL_NETWORKS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                             </Select>
-                            <Input value={item.url || ""} onChange={(e) => updateItem(item.id, { url: e.target.value })} placeholder="https://..." className="h-8 text-sm" />
+                            <DebouncedInput value={item.url || ""} onCommit={(v) => updateItem(item.id, { url: v })} placeholder="https://..." className="h-8 text-sm" />
                           </>
                         ) : item.item_type !== "header" && item.item_type !== "divider" && item.item_type !== "catalog" ? (
-                          <Input value={item.url || ""} onChange={(e) => updateItem(item.id, { url: e.target.value })} placeholder="URL" className="h-8 text-sm" />
+                          <DebouncedInput value={item.url || ""} onCommit={(v) => updateItem(item.id, { url: v })} placeholder="URL" className="h-8 text-sm" />
                         ) : null}
 
                         {item.item_type !== "header" && item.item_type !== "divider" && (
-                          <Input value={item.description || ""} onChange={(e) => updateItem(item.id, { description: e.target.value })} placeholder="Descrição (opcional)" className="h-8 text-sm" />
+                          <DebouncedInput value={item.description || ""} onCommit={(v) => updateItem(item.id, { description: v })} placeholder="Descrição (opcional)" className="h-8 text-sm" />
                         )}
 
                         {item.item_type !== "header" && item.item_type !== "divider" && item.item_type !== "catalog" && (
@@ -777,10 +845,11 @@ export function LinkPageManager() {
                               <span className="text-xs text-muted-foreground">Botão grande (card)</span>
                             </div>
                             {item.card_style === "card" && (
-                              <Input value={item.style_config?.coverImage || ""} onChange={(e) => updateItem(item.id, { style_config: { ...(item.style_config || {}), coverImage: e.target.value } })} placeholder="URL imagem de fundo (opcional)" className="h-8 text-sm" />
+                              <DebouncedInput value={item.style_config?.coverImage || ""} onCommit={(v) => updateItem(item.id, { style_config: { ...(item.style_config || {}), coverImage: v } })} placeholder="URL imagem de fundo (opcional)" className="h-8 text-sm" />
                             )}
                           </>
                         )}
+
 
                         <div className="flex items-center gap-2">
                           <Switch checked={item.is_active} onCheckedChange={(v) => updateItem(item.id, { is_active: v })} />
@@ -812,7 +881,7 @@ export function LinkPageManager() {
                     <div className="w-full mt-6 space-y-3">
                       {items.filter((i) => i.is_active).map((item) => {
                         if (item.item_type === "divider") return <hr key={item.id} className="border-white/20" />;
-                        if (item.item_type === "header") return <p key={item.id} className="text-xs font-bold text-white/70 uppercase tracking-wider text-center mt-3">{item.label}</p>;
+                        if (item.item_type === "header") return <p key={item.id} className="text-white/70 tracking-wider mt-3" style={{ fontSize: 12, ...headerCss(item.style_config) }}>{item.label}</p>;
                         if (item.item_type === "catalog") {
                           return (
                             <div key={item.id} className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-2 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

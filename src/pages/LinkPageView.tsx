@@ -28,13 +28,15 @@ interface PageData {
   seller: { id: string; name: string } | null;
 }
 
+import { headerCss } from "@/lib/marketing/linkPageHeaderStyle";
+
 function formatPrice(v: number | null): string {
   if (!v) return "";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
 const LP_STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;600;700;800&family=Montserrat:wght@400;600;700;800&family=Bebas+Neue&family=Playfair+Display:wght@400;600;700;800&display=swap');
 .lp-display{font-family:'Unbounded',system-ui,-apple-system,sans-serif;}
 .lp-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;}
 @keyframes lpFadeUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
@@ -337,7 +339,7 @@ export default function LinkPageView() {
           {items.map((item: any, itemIdx: number) => {
             if (item.item_type === "divider") return <hr key={item.id} className="border-white/15 my-2" />;
             if (item.item_type === "header") return (
-              <p key={item.id} className="text-xs font-bold text-white/60 uppercase tracking-widest text-center mt-6 mb-1">{item.label}</p>
+              <p key={item.id} className="text-white/60 tracking-widest mt-6 mb-1" style={{ fontSize: 12, ...headerCss(item.style_config) }}>{item.label}</p>
             );
             if (item.item_type === "catalog") return renderCatalog(item);
 
