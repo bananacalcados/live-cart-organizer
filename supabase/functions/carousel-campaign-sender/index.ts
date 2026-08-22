@@ -165,27 +165,39 @@ Deno.serve(async (req) => {
     // storage oscila, derrubando o disparo inteiro.
     const mediaIds = new Map<string, string>();
     try {
-      let q = sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("provider", "meta").limit(1);
-      q = campaign?.whatsapp_number_id
-        ? sb.from("whatsapp_numbers").select("meta_phone_number_id, meta_access_token").eq("id", campaign.whatsapp_number_id).limit(1)
-        : q;
-      const { data: numRows } = await q;
+      // ATENÇÃO: as colunas corretas são `phone_number_id` / `access_token`.
+      // Antes o select pedia `meta_phone_number_id`/`meta_access_token`, que NÃO
+      // existem — o PostgREST devolvia erro, o cache nunca era preenchido e todo
+      // envio ia com `image.link`, fazendo a Meta rebaixar as 7 imagens a cada
+      // mensagem (→ 500 no storage → erro 131053 → reenvios duplicados).
+      const numQ = sb
+        .from("whatsapp_numbers")
+        .select("phone_number_id, access_token")
+        .limit(1);
+      const { data: numRows, error: numErr } = campaign?.whatsapp_number_id
+        ? await numQ.eq("id", campaign.whatsapp_number_id)
+        : await numQ.eq("provider", "meta").eq("is_active", true);
+      if (numErr) console.warn("[carousel-sender] numero meta:", numErr.message);
       const num = (numRows || [])[0];
-      if (num?.meta_phone_number_id && num?.meta_access_token) {
+      if (num?.phone_number_id && num?.access_token) {
         for (const card of okCards) {
           if (!card.imagem_url) continue;
           const id = await resolveMetaMediaId(sb, {
             url: card.imagem_url,
             kind: "image",
-            phoneNumberId: num.meta_phone_number_id,
-            accessToken: num.meta_access_token,
+            phoneNumberId: num.phone_number_id,
+            accessToken: num.access_token,
           });
           if (id) mediaIds.set(card.imagem_url, id);
         }
+        console.log(`[carousel-sender] media cache: ${mediaIds.size}/${okCards.length} cards com media_id`);
+      } else {
+        console.warn("[carousel-sender] sem credenciais Meta para cachear mídia");
       }
     } catch (e) {
       console.warn("[carousel-sender] media cache falhou:", (e as Error).message);
     }
+
 
     const ctx = {
       campaign,
