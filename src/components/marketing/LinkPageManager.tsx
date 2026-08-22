@@ -58,6 +58,7 @@ const ITEM_TYPES = [
   { value: "catalog", label: "Catálogo", icon: ShoppingBag },
   { value: "vip", label: "Grupo VIP", icon: Users },
   { value: "live", label: "Live", icon: Video },
+  { value: "member_area", label: "Área de Membros", icon: KeyRound },
   { value: "review", label: "Avaliação", icon: Star },
   { value: "website", label: "Site", icon: Globe },
   { value: "instagram", label: "Instagram", icon: Instagram },
