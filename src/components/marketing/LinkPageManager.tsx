@@ -500,11 +500,12 @@ export function LinkPageManager() {
                       <span className="flex items-center gap-1"><MousePointer className="h-3 w-3" />{page.total_clicks}</span>
                     </div>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" onClick={() => copyLink(page.slug)}><Copy className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => window.open(`/l/${page.slug}`, "_blank")}><ExternalLink className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => setQrPageId(page.id)}><QrCode className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => fetchAnalytics(page.id)}><BarChart3 className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePage(page.id)}><Trash2 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => copyLink(page.slug)} title="Copiar link"><Copy className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => window.open(`/l/${page.slug}`, "_blank")} title="Abrir"><ExternalLink className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => setQrPageId(page.id)} title="QR Code"><QrCode className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => fetchAnalytics(page.id)} title="Analytics"><BarChart3 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => duplicatePage(page)} title="Duplicar"><CopyPlus className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePage(page.id)} title="Excluir"><Trash2 className="h-3 w-3" /></Button>
                     </div>
                   </CardContent>
                 </Card>
