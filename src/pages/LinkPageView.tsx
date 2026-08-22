@@ -151,22 +151,29 @@ export default function LinkPageView() {
     setSubmittingLead(false);
   };
 
-  const handleClick = useCallback((item: any) => {
+  const handleClick = useCallback((item: any, product?: any) => {
     if (!data) return;
     // tracking server-side (fire-and-forget)
     supabase.functions.invoke("link-page-track-click", {
       body: {
         pageId: data.page.id,
         itemId: item.id,
+        catalogProductId: product?.id || null,
         sellerId: data.page.seller_id,
         leadId,
         utm_source: resolveUtm("utm_source"),
         referrer: document.referrer || null,
       },
     }).catch(() => {});
-    if ((window as any).fbq) (window as any).fbq("trackCustom", "LinkClick", { label: item.label, type: item.item_type });
-    if (item.url) window.open(item.url, "_blank");
+    if ((window as any).fbq) {
+      (window as any).fbq("trackCustom", "LinkClick", {
+        label: product?.title || item.label,
+        type: product ? "catalog_product" : item.item_type,
+      });
+    }
+    if (!product && item.url) window.open(item.url, "_blank");
   }, [data, leadId, searchParams]);
+
 
   if (loading) {
     return (
