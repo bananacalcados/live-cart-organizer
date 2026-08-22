@@ -6,7 +6,7 @@ import {
   Plus, Trash2, GripVertical, ExternalLink, Copy, Link as LinkIcon,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp, ChevronDown,
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
-  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff
+  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus
 } from "lucide-react";
 import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
 import { Button } from "@/components/ui/button";
@@ -249,6 +249,90 @@ export function LinkPageManager() {
     if (selectedPage?.id === id) setSelectedPage(null);
   };
 
+  const duplicatePage = async (page: LinkPage) => {
+    try {
+      // Gera slug único: adiciona -copia, -copia-2, -copia-3...
+      const baseSlug = page.slug.replace(/-copia(-\d+)?$/, "");
+      let candidate = `${baseSlug}-copia`;
+      let counter = 2;
+      const existing = new Set(pages.map((p) => p.slug));
+      while (existing.has(candidate)) {
+        candidate = `${baseSlug}-copia-${counter}`;
+        counter++;
+      }
+
+      const { data: newPage, error } = await supabase.from("link_pages").insert({
+        title: `${page.title} (Cópia)`,
+        slug: candidate,
+        subtitle: page.subtitle,
+        avatar_url: page.avatar_url,
+        logo_url: page.logo_url,
+        background_type: page.background_type,
+        background_value: page.background_value,
+        theme_config: page.theme_config,
+        meta_pixel_id: page.meta_pixel_id,
+        is_active: false,
+        seller_id: page.seller_id,
+        require_lead_capture: page.require_lead_capture,
+        catalog_mode: page.catalog_mode,
+        catalog_auto_sync: page.catalog_auto_sync,
+      }).select().single();
+
+      if (error || !newPage) throw error || new Error("Erro ao duplicar página");
+
+      // Copia itens
+      const { data: sourceItems } = await supabase.from("link_page_items").select("*").eq("page_id", page.id).order("sort_order");
+      if (sourceItems?.length) {
+        const itemInserts = sourceItems.map((it) => ({
+          page_id: newPage.id,
+          item_type: it.item_type,
+          label: it.label,
+          url: it.url,
+          icon: it.icon,
+          description: it.description,
+          thumbnail_url: it.thumbnail_url,
+          style_config: it.style_config,
+          sort_order: it.sort_order,
+          is_active: it.is_active,
+          whatsapp_number_id: it.whatsapp_number_id,
+          prefill_message: it.prefill_message,
+          card_style: it.card_style,
+          social_network: it.social_network,
+        }));
+        await supabase.from("link_page_items").insert(itemInserts as any);
+      }
+
+      // Copia produtos do catálogo
+      const { data: sourceCatalog } = await supabase.from("link_page_catalog_products").select("*").eq("page_id", page.id).order("sort_order");
+      if (sourceCatalog?.length) {
+        const catalogInserts = sourceCatalog.map((c) => ({
+          page_id: newPage.id,
+          shopify_product_id: c.shopify_product_id,
+          handle: c.handle,
+          title: c.title,
+          image_url: c.image_url,
+          price: c.price,
+          compare_at_price: c.compare_at_price,
+          product_type: c.product_type,
+          grade_total: c.grade_total,
+          grade_available: c.grade_available,
+          grade_pct: c.grade_pct,
+          is_active: c.is_active,
+          is_new_arrival: c.is_new_arrival,
+          is_bestseller: c.is_bestseller,
+          sort_order: c.sort_order,
+        }));
+        await supabase.from("link_page_catalog_products").insert(catalogInserts as any);
+      }
+
+      toast.success("Página duplicada!");
+      fetchPages();
+      setSelectedPage(newPage as any);
+    } catch (e: any) {
+      toast.error("Erro ao duplicar: " + (e?.message || e));
+    }
+  };
+
   const fetchAnalytics = async (pageId: string) => {
     setAnalyticsPageId(pageId);
     const { data } = await supabase.from("link_page_visits").select("*, link_page_items(label)").eq("page_id", pageId).order("created_at", { ascending: false }).limit(1000);
@@ -416,11 +500,12 @@ export function LinkPageManager() {
                       <span className="flex items-center gap-1"><MousePointer className="h-3 w-3" />{page.total_clicks}</span>
                     </div>
                     <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" onClick={() => copyLink(page.slug)}><Copy className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => window.open(`/l/${page.slug}`, "_blank")}><ExternalLink className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => setQrPageId(page.id)}><QrCode className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" onClick={() => fetchAnalytics(page.id)}><BarChart3 className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePage(page.id)}><Trash2 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => copyLink(page.slug)} title="Copiar link"><Copy className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => window.open(`/l/${page.slug}`, "_blank")} title="Abrir"><ExternalLink className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => setQrPageId(page.id)} title="QR Code"><QrCode className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => fetchAnalytics(page.id)} title="Analytics"><BarChart3 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => duplicatePage(page)} title="Duplicar"><CopyPlus className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePage(page.id)} title="Excluir"><Trash2 className="h-3 w-3" /></Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -452,6 +537,7 @@ export function LinkPageManager() {
           <Button variant="outline" size="sm" onClick={() => copyLink(selectedPage.slug)} className="gap-1"><Copy className="h-3.5 w-3.5" />Link</Button>
           <Button variant="outline" size="sm" onClick={() => setQrPageId(selectedPage.id)} className="gap-1"><QrCode className="h-3.5 w-3.5" />QR Code</Button>
           <Button variant="outline" size="sm" onClick={() => window.open(`/l/${selectedPage.slug}`, "_blank")} className="gap-1"><ExternalLink className="h-3.5 w-3.5" />Preview</Button>
+          <Button variant="outline" size="sm" onClick={() => duplicatePage(selectedPage)} className="gap-1"><CopyPlus className="h-3.5 w-3.5" />Duplicar</Button>
         </div>
       </div>
 
