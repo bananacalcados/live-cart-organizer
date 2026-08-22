@@ -108,6 +108,7 @@ function computeGradeClient(node: ShopifyProduct["node"]): { total: number; avai
 }
 
 const SITE_URL = "https://bananacalcados.com.br/";
+const MEMBER_AREA_URL = "https://checkout.bananacalcados.com.br/minha-area";
 
 export function LinkPageManager() {
   const [pages, setPages] = useState<LinkPage[]>([]);
