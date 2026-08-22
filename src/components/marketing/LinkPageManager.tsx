@@ -665,16 +665,31 @@ export function LinkPageManager() {
                 )}
               </div>
               {catalog.length > 0 && (
-                <div className="grid grid-cols-4 gap-1">
-                  {catalog.slice(0, 8).map((c) => (
-                    <div key={c.id} className="aspect-square rounded overflow-hidden bg-muted relative">
-                      {c.image_url && <img src={c.image_url} alt={c.title} className="w-full h-full object-cover" />}
-                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[8px] text-white text-center">{Math.round(c.grade_pct * 100)}%</span>
+                <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                  {catalog.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 rounded border border-border/60 p-1.5">
+                      <div className="h-10 w-10 shrink-0 rounded overflow-hidden bg-muted">
+                        {c.image_url && <img src={c.image_url} alt={c.title} className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-white truncate">{c.title}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          grade {Math.round(c.grade_pct * 100)}% · {c.clicks || 0} cliques
+                        </p>
+                      </div>
+                      <Button
+                        size="icon" variant="ghost" className="h-7 w-7 text-destructive shrink-0"
+                        title="Remover do catálogo"
+                        onClick={() => removeCatalogProduct(c)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
               <p className="text-[10px] text-muted-foreground">{catalog.filter((c) => c.is_active).length} produtos ativos · adicione um botão "Catálogo" para exibi-los.</p>
+
             </CardContent>
           </Card>
 
