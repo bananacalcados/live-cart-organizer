@@ -45,7 +45,9 @@ interface CatalogRow {
   id: string; shopify_product_id: string; handle: string | null; title: string;
   image_url: string | null; price: number | null; compare_at_price: number | null;
   grade_pct: number; grade_available: number; grade_total: number; is_active: boolean;
+  clicks?: number;
 }
+
 
 const ITEM_TYPES = [
   { value: "whatsapp", label: "WhatsApp", icon: Phone },
