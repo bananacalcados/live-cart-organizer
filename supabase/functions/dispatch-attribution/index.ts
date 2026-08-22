@@ -317,8 +317,28 @@ Deno.serve(async (req) => {
       .lte("paid_at", windowEnd);
 
     if (orders && orders.length > 0) {
+      // DEDUP CRÍTICO: pedidos de live roteados para uma loja física viram uma
+      // venda em pos_sales (pos_sales.source_order_id = orders.id). Sem isso a
+      // MESMA compra era contada 2x — uma como "PDV" (nome real) e outra como
+      // "WhatsApp" (@ do Instagram), inflando compradores/pedidos/faturamento.
+      const routedOrderIds = new Set<string>();
+      {
+        const allOrderIds = orders.map((o) => o.id);
+        for (let i = 0; i < allOrderIds.length; i += 100) {
+          const batch = allOrderIds.slice(i, i + 100);
+          const { data: linked } = await supabase
+            .from("pos_sales")
+            .select("source_order_id")
+            .in("source_order_id", batch);
+          if (linked) for (const l of linked) {
+            if (l.source_order_id) routedOrderIds.add(l.source_order_id);
+          }
+        }
+      }
+
       const orderCustomerIds = [...new Set(orders.filter(o => o.customer_id).map(o => o.customer_id))];
       const orderCustomerMap = new Map<string, { whatsapp: string; instagram: string }>();
+
       for (let i = 0; i < orderCustomerIds.length; i += 100) {
         const batch = orderCustomerIds.slice(i, i + 100);
         const { data: customers } = await supabase
