@@ -252,7 +252,7 @@ export default function LinkPageView() {
                 href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
                 target="_blank" rel="noopener noreferrer"
                 onClick={() => handleClick(item)}
-                className="block rounded-2xl overflow-hidden bg-white shadow-lg active:scale-95 transition-transform"
+                className="block snap-start rounded-2xl overflow-hidden bg-white shadow-lg active:scale-95 transition-transform"
               >
                 <div className="relative aspect-square overflow-hidden bg-gray-100">
                   {p.image_url && <img src={p.image_url} alt={p.title} className="w-full h-full object-cover" loading="lazy" />}
