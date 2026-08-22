@@ -205,12 +205,25 @@ Deno.serve(async (req) => {
   for (const env of pendentes) {
     touchedCampaigns.add(env.campanha_id);
 
+    // TRAVA DURA ANTI-DUPLICADO: independente do motivo do reagendamento
+    // (mídia, rate limit, falha pós-envio no webhook), ninguém recebe a mesma
+    // campanha mais de MAX_SENDS vezes.
+    if ((env.envios_realizados || 0) >= MAX_SENDS) {
+      await sb
+        .from("campanha_envios")
+        .update({ status: "falhou", proxima_tentativa: null, erro: `limite de ${MAX_SENDS} envios atingido` })
+        .eq("id", env.id);
+      skipped++;
+      continue;
+    }
+
     const cc = await getCampaignCtx(env.campanha_id);
 
     if (!cc.campaign || !cc.campaign.ativa) {
       skipped++;
       continue;
     }
+
     const isSimple = String(cc.campaign.template_tipo || "carrossel") === "simples";
     if (!cc.templateName || (!isSimple && cc.okCards.length < 2)) {
       // Sem template aprovado / cards insuficientes — deixa pendente para o próximo ciclo.
