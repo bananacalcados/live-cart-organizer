@@ -390,7 +390,19 @@ export function LinkPageManager() {
     setSyncingCatalog(false);
   };
 
+  // Remove um produto do catálogo direto pela lista do editor.
+  // Necessário porque produtos apagados/despublicados na Shopify não aparecem
+  // mais no seletor e ficariam presos na página (link quebrado).
+  const removeCatalogProduct = async (c: CatalogRow) => {
+    if (!confirm(`Remover "${c.title}" do catálogo desta página?`)) return;
+    const { error } = await supabase.from("link_page_catalog_products").delete().eq("id", c.id);
+    if (error) { toast.error("Erro ao remover produto"); return; }
+    setCatalog((prev) => prev.filter((x) => x.id !== c.id));
+    toast.success("Produto removido do catálogo");
+  };
+
   // ─── Manual catalog picker ───
+
   const openCatalogPicker = async () => {
     setCatalogPickerOpen(true);
     setPickerSelected(new Set(catalog.map((c) => c.shopify_product_id)));
