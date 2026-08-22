@@ -7,7 +7,7 @@ import {
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp, ChevronDown,
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
   Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus,
-  Bold, Italic, Underline as UnderlineIcon, CaseUpper, AlignLeft, AlignCenter, AlignRight
+  Bold, Italic, Underline as UnderlineIcon, CaseUpper, AlignLeft, AlignCenter, AlignRight, KeyRound
 } from "lucide-react";
 import { DebouncedInput, DebouncedTextarea } from "@/components/marketing/DebouncedField";
 import { HEADER_FONTS, HEADER_FONTS_URL, headerCss } from "@/lib/marketing/linkPageHeaderStyle";
@@ -58,6 +58,7 @@ const ITEM_TYPES = [
   { value: "catalog", label: "Catálogo", icon: ShoppingBag },
   { value: "vip", label: "Grupo VIP", icon: Users },
   { value: "live", label: "Live", icon: Video },
+  { value: "member_area", label: "Área de Membros", icon: KeyRound },
   { value: "review", label: "Avaliação", icon: Star },
   { value: "website", label: "Site", icon: Globe },
   { value: "instagram", label: "Instagram", icon: Instagram },
@@ -107,6 +108,7 @@ function computeGradeClient(node: ShopifyProduct["node"]): { total: number; avai
 }
 
 const SITE_URL = "https://bananacalcados.com.br/";
+const MEMBER_AREA_URL = "https://checkout.bananacalcados.com.br/minha-area";
 
 export function LinkPageManager() {
   const [pages, setPages] = useState<LinkPage[]>([]);
@@ -213,6 +215,7 @@ export function LinkPageManager() {
       catalog: { label: "Nossos Produtos", card_style: "card", url: null },
       vip: { label: "Grupo VIP", card_style: "card", url: "https://" },
       live: { label: "Nossa Live", card_style: "card", url: "https://" },
+      member_area: { label: "Área de Membros da Live", card_style: "card", url: MEMBER_AREA_URL },
       review: { label: "Avalie a loja", card_style: "compact", url: "https://" },
       website: { label: "Loja Online", card_style: "card", url: SITE_URL },
       instagram: { label: "Instagram", card_style: "compact", url: "https://instagram.com/" },
