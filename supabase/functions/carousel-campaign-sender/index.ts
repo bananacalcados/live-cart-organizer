@@ -25,6 +25,10 @@ import { sendTextFallback } from "../_shared/meta-fallback.ts";
 
 
 const MAX_ATTEMPTS = 3;
+// Teto ABSOLUTO de mensagens efetivamente disparadas para a mesma pessoa na
+// mesma campanha (conta qualquer chamada aceita/recusada pela Meta).
+const MAX_SENDS = 2;
+
 const BATCH = 80;
 const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
