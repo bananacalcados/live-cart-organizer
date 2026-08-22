@@ -323,6 +323,8 @@ Deno.serve(async (req) => {
       errMsg = (e as Error).message;
     }
 
+    const envios = (env.envios_realizados || 0) + 1;
+
     if (ok) {
       await sb
         .from("campanha_envios")
@@ -331,9 +333,11 @@ Deno.serve(async (req) => {
           message_wamid: wamid,
           enviado_em: new Date().toISOString(),
           erro: null,
+          envios_realizados: envios,
         })
         .eq("id", env.id);
       sent++;
+
     } else {
       const cls = classifySendError(errCode, errMsg);
       const attempts = (env.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
