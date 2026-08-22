@@ -137,6 +137,18 @@ export function LinkPageManager() {
   const [newSellerId, setNewSellerId] = useState("");
   const [newRequireCapture, setNewRequireCapture] = useState(false);
 
+  // Carrega as fontes usadas nos cabeçalhos (preview + seletor)
+  useEffect(() => {
+    if (document.getElementById("lp-header-fonts")) return;
+    const l = document.createElement("link");
+    l.id = "lp-header-fonts";
+    l.rel = "stylesheet";
+    l.href = HEADER_FONTS_URL;
+    document.head.appendChild(l);
+  }, []);
+
+
+
   const fetchPages = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from("link_pages").select("*").order("created_at", { ascending: false });
