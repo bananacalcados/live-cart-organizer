@@ -337,7 +337,7 @@ export function LinkPageManager() {
 
   const fetchAnalytics = async (pageId: string) => {
     setAnalyticsPageId(pageId);
-    const { data } = await supabase.from("link_page_visits").select("*, link_page_items(label)").eq("page_id", pageId).order("created_at", { ascending: false }).limit(1000);
+    const { data } = await supabase.from("link_page_visits").select("*, link_page_items(label), link_page_catalog_products(title)").eq("page_id", pageId).order("created_at", { ascending: false }).limit(1000);
     setAnalytics((data || []) as any);
   };
 
