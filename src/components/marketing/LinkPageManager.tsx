@@ -869,7 +869,7 @@ export function LinkPageManager() {
                     <div className="w-full mt-6 space-y-3">
                       {items.filter((i) => i.is_active).map((item) => {
                         if (item.item_type === "divider") return <hr key={item.id} className="border-white/20" />;
-                        if (item.item_type === "header") return <p key={item.id} className="text-xs font-bold text-white/70 uppercase tracking-wider text-center mt-3">{item.label}</p>;
+                        if (item.item_type === "header") return <p key={item.id} className="text-white/70 tracking-wider mt-3" style={{ fontSize: 12, ...headerCss(item.style_config) }}>{item.label}</p>;
                         if (item.item_type === "catalog") {
                           return (
                             <div key={item.id} className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-2 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
