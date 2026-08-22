@@ -786,7 +786,7 @@ export function LinkPageManager() {
                         if (item.item_type === "header") return <p key={item.id} className="text-xs font-bold text-white/70 uppercase tracking-wider text-center mt-3">{item.label}</p>;
                         if (item.item_type === "catalog") {
                           return (
-                            <div className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-2 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                            <div key={item.id} className="grid grid-flow-col auto-cols-[45%] grid-rows-2 gap-2 overflow-x-auto snap-x pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                               {catalog.filter((c) => c.is_active).map((c) => (
 
                                 <div key={c.id} className="rounded-xl overflow-hidden bg-white">
