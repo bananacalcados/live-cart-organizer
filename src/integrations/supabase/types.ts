@@ -8685,6 +8685,7 @@ export type Database = {
       }
       link_page_catalog_products: {
         Row: {
+          clicks: number
           compare_at_price: number | null
           created_at: string
           grade_available: number
@@ -8706,6 +8707,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          clicks?: number
           compare_at_price?: number | null
           created_at?: string
           grade_available?: number
@@ -8727,6 +8729,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          clicks?: number
           compare_at_price?: number | null
           created_at?: string
           grade_available?: number
@@ -8895,6 +8898,7 @@ export type Database = {
       }
       link_page_visits: {
         Row: {
+          catalog_product_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -8913,6 +8917,7 @@ export type Database = {
           utm_term: string | null
         }
         Insert: {
+          catalog_product_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -8931,6 +8936,7 @@ export type Database = {
           utm_term?: string | null
         }
         Update: {
+          catalog_product_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -8949,6 +8955,13 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "link_page_visits_catalog_product_id_fkey"
+            columns: ["catalog_product_id"]
+            isOneToOne: false
+            referencedRelation: "link_page_catalog_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "link_page_visits_item_id_fkey"
             columns: ["item_id"]
