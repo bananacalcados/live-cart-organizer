@@ -537,6 +537,7 @@ export function LinkPageManager() {
           <Button variant="outline" size="sm" onClick={() => copyLink(selectedPage.slug)} className="gap-1"><Copy className="h-3.5 w-3.5" />Link</Button>
           <Button variant="outline" size="sm" onClick={() => setQrPageId(selectedPage.id)} className="gap-1"><QrCode className="h-3.5 w-3.5" />QR Code</Button>
           <Button variant="outline" size="sm" onClick={() => window.open(`/l/${selectedPage.slug}`, "_blank")} className="gap-1"><ExternalLink className="h-3.5 w-3.5" />Preview</Button>
+          <Button variant="outline" size="sm" onClick={() => duplicatePage(selectedPage)} className="gap-1"><CopyPlus className="h-3.5 w-3.5" />Duplicar</Button>
         </div>
       </div>
 
