@@ -100,6 +100,12 @@ function prettySource(source?: string, campaignTag?: string, metadata?: any): st
   const importFile = String(metadata?.import_file_name || "").toLowerCase();
   if (!s) return "Não informado";
   if (s.includes("organic_whatsapp")) return "WhatsApp Orgânico";
+  // Área de Membros da Live: histórico grava `area_membros` em lp_leads; a partir
+  // de 18/08 o registro nasce em event_leads (`member_area`) e é espelhado como
+  // `event_member_area`. É o MESMO canal — rótulo único.
+  if (s === "area_membros" || s === "member_area" || s === "event_member_area") {
+    return "Área de Membros (Live)";
+  }
   if (s.includes("event_typebot")) return "Evento / Live (Typebot)";
   if (s.includes("landing_page")) return "Landing Page (site)";
   if (s.includes("catalog_lead_page")) return "Catálogo / Link";
