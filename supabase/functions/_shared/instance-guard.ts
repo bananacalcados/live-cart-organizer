@@ -24,11 +24,24 @@ export async function checkInstanceGuard(params: {
   const supabaseKey = params.supabaseKey || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // A trava existe por causa da REGRA DA META (janela de 24h / template
+  // obrigatório para iniciar conversa). Instâncias NÃO OFICIAIS
+  // (uazapi / wasender / zapi) não têm essa limitação: podem iniciar
+  // conversa com qualquer número, mesmo sem histórico de entrada.
+  const { data: reqInstance } = await supabase
+    .from('whatsapp_numbers')
+    .select('provider')
+    .eq('id', whatsappNumberId)
+    .maybeSingle();
+  const provider = (reqInstance as any)?.provider || 'meta';
+  if (provider !== 'meta' && provider !== 'instagram') return { ok: true };
+
   const phoneDigits = (phone || '').replace(/\D/g, '');
   if (!phoneDigits) return { ok: true };
   const variants = new Set<string>([phoneDigits]);
   if (phoneDigits.startsWith('55') && phoneDigits.length >= 12) variants.add(phoneDigits.slice(2));
   else variants.add('55' + phoneDigits);
+
 
   // Conversations are independent per (phone + instance). If the REQUESTED
   // instance already has incoming history with this phone, it's a legitimate
