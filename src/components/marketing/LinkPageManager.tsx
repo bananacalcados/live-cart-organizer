@@ -955,6 +955,18 @@ function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pag
             ))}
             {!Object.keys(byButton).length && <p className="text-xs text-muted-foreground">Sem cliques ainda.</p>}
           </CardContent></Card>
+          <Card><CardContent className="p-3">
+            <p className="text-xs font-semibold text-white mb-2">Cliques por produto do catálogo</p>
+            <div className="max-h-56 overflow-y-auto pr-1">
+              {Object.entries(byProduct).sort(([, a], [, b]) => b - a).map(([title, count]) => (
+                <div key={title} className="flex justify-between text-sm py-1 gap-3">
+                  <span className="text-muted-foreground truncate">{title}</span><span className="text-white font-medium shrink-0">{count}</span>
+                </div>
+              ))}
+            </div>
+            {!Object.keys(byProduct).length && <p className="text-xs text-muted-foreground">Sem cliques em produtos ainda.</p>}
+          </CardContent></Card>
+
         </div>
       </DialogContent>
     </Dialog>
