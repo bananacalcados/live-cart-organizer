@@ -355,7 +355,9 @@ Deno.serve(async (req) => {
       }
 
       for (const order of orders) {
+        if (routedOrderIds.has(order.id)) continue; // já contado como venda PDV
         if (!order.customer_id) continue;
+
         const customer = orderCustomerMap.get(order.customer_id);
         if (!customer) continue;
         const suffix = extractPhoneKey(customer.whatsapp);
