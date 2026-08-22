@@ -6,7 +6,7 @@ import {
   Plus, Trash2, GripVertical, ExternalLink, Copy, Link as LinkIcon,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp, ChevronDown,
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
-  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff
+  Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff, CopyPlus
 } from "lucide-react";
 import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
 import { Button } from "@/components/ui/button";
