@@ -214,6 +214,7 @@ export function LinkPageManager() {
       catalog: { label: "Nossos Produtos", card_style: "card", url: null },
       vip: { label: "Grupo VIP", card_style: "card", url: "https://" },
       live: { label: "Nossa Live", card_style: "card", url: "https://" },
+      member_area: { label: "Área de Membros da Live", card_style: "card", url: MEMBER_AREA_URL },
       review: { label: "Avalie a loja", card_style: "compact", url: "https://" },
       website: { label: "Loja Online", card_style: "card", url: SITE_URL },
       instagram: { label: "Instagram", card_style: "compact", url: "https://instagram.com/" },
