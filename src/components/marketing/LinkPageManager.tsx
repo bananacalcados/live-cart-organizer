@@ -925,10 +925,17 @@ function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pag
   const views = analytics.filter((a) => a.event_type === "page_view");
   const clicks = analytics.filter((a) => a.event_type === "click");
   const byButton: Record<string, number> = {};
+  const byProduct: Record<string, number> = {};
   for (const c of clicks) {
+    if (c.catalog_product_id) {
+      const t = c.link_page_catalog_products?.title || "Produto removido";
+      byProduct[t] = (byProduct[t] || 0) + 1;
+      continue;
+    }
     const label = c.link_page_items?.label || "—";
     byButton[label] = (byButton[label] || 0) + 1;
   }
+
   return (
     <Dialog open={!!pageId} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
