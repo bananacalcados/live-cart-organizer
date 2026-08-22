@@ -114,10 +114,11 @@ export function classifySendError(code: number | null, message?: string): Classi
   }
   if (isMedia) {
     return {
-      kind: "media", code, status: "pendente", countsAttempt: false,
+      kind: "media", code, status: "pendente", countsAttempt: true,
       retryMs: MEDIA_RETRY_MS, fallbackEligible: true, pauseBatch: false,
     };
   }
+
   if (isRate) {
     return {
       kind: "rate_limit", code, status: "pendente", countsAttempt: false,
