@@ -94,6 +94,8 @@ export function LeadsAnalyticsDashboard() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [drillChannel, setDrillChannel] = useState<string | null>(null);
+  const [breakdownChannel, setBreakdownChannel] = useState<string | null>(null);
+
   const [lastParams, setLastParams] = useState<Record<string, unknown>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
