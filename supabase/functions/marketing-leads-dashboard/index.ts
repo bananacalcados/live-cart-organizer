@@ -871,6 +871,29 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Sub-camada: ranking por link / campanha / conjunto / anúncio dentro do canal.
+    if (breakdownChannel) {
+      const rows = Object.values(breakdownMap).map((b) => ({
+        key: b.key,
+        leads: b.leads,
+        new_leads: b.new_leads,
+        converted: b.converted,
+        converted_new: b.converted_new,
+        conversion_rate: b.leads > 0 ? Math.round((b.converted / b.leads) * 10000) / 100 : 0,
+        valor_convertido: Math.round(b.convertedRevenue * 100) / 100,
+        receita_total_com_recompras: Math.round(b.revenue * 100) / 100,
+        ticket_medio_conversao: b.converted > 0 ? Math.round((b.convertedRevenue / b.converted) * 100) / 100 : 0,
+      })).sort((a, b) => b.valor_convertido - a.valor_convertido || b.leads - a.leads);
+      return new Response(JSON.stringify({
+        mode,
+        breakdown_channel: breakdownChannel,
+        breakdown_dim: breakdownDim,
+        rows,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+
+
 
     // Channels (bar chart) and sources (table) are both the capture-channel
     // breakdown now — the user wants "onde o lead foi captado", not where the
