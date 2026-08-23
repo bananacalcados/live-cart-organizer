@@ -153,8 +153,29 @@ export default function LinkPageView() {
     setSubmittingLead(false);
   };
 
-  const handleClick = useCallback((item: any, product?: any) => {
+  /** URL de destino já com UTMs da Link Page + id do clique. */
+  const buildOutbound = useCallback((item: any, product: any | undefined, clickId: string) => {
+    if (!data) return "";
+    const baseUrl = product
+      ? `https://${SHOPIFY_STORE_DOMAIN}/products/${product.handle}`
+      : item.url || "";
+    return decorateOutboundUrl({
+      url: baseUrl,
+      pageSlug: data.page.slug,
+      itemType: item.item_type,
+      itemLabel: item.label,
+      itemId: item.id,
+      productHandle: product?.handle,
+      productTitle: product?.title,
+      productId: product?.id,
+      sellerName: data.seller?.name,
+      clickId,
+    });
+  }, [data]);
+
+  const handleClick = useCallback((item: any, product?: any, clickId?: string) => {
     if (!data) return;
+    const cid = clickId || newClickId();
     // tracking server-side (fire-and-forget)
     supabase.functions.invoke("link-page-track-click", {
       body: {
@@ -163,6 +184,7 @@ export default function LinkPageView() {
         catalogProductId: product?.id || null,
         sellerId: data.page.seller_id,
         leadId,
+        clickId: cid,
         utm_source: resolveUtm("utm_source"),
         referrer: document.referrer || null,
       },
@@ -173,8 +195,9 @@ export default function LinkPageView() {
         type: product ? "catalog_product" : item.item_type,
       });
     }
-    if (!product && item.url) window.open(item.url, "_blank");
-  }, [data, leadId, searchParams]);
+    if (!product && item.url) window.open(buildOutbound(item, undefined, cid), "_blank");
+  }, [data, leadId, searchParams, buildOutbound]);
+
 
 
   if (loading) {
