@@ -4989,6 +4989,8 @@ export type Database = {
           id: string
           instagram: string | null
           landing_page_id: string | null
+          link_slug: string | null
+          link_tag: string | null
           metadata: Json
           name: string
           phone: string
@@ -5001,8 +5003,10 @@ export type Database = {
           typebot_id: string | null
           updated_at: string
           utm_campaign: string | null
+          utm_content: string | null
           utm_medium: string | null
           utm_source: string | null
+          utm_term: string | null
           vip_group_sent_at: string | null
         }
         Insert: {
@@ -5013,6 +5017,8 @@ export type Database = {
           id?: string
           instagram?: string | null
           landing_page_id?: string | null
+          link_slug?: string | null
+          link_tag?: string | null
           metadata?: Json
           name: string
           phone: string
@@ -5025,8 +5031,10 @@ export type Database = {
           typebot_id?: string | null
           updated_at?: string
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
           vip_group_sent_at?: string | null
         }
         Update: {
@@ -5037,6 +5045,8 @@ export type Database = {
           id?: string
           instagram?: string | null
           landing_page_id?: string | null
+          link_slug?: string | null
+          link_tag?: string | null
           metadata?: Json
           name?: string
           phone?: string
@@ -5049,8 +5059,10 @@ export type Database = {
           typebot_id?: string | null
           updated_at?: string
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
           vip_group_sent_at?: string | null
         }
         Relationships: [

@@ -691,6 +691,31 @@ Deno.serve(async (req) => {
       : null;
     const convertedList: any[] = [];
 
+    // NEW — sub-camada: origem do lead por link / campanha / conjunto / anúncio.
+    // Não altera nenhum cálculo dos canais; só agrega uma dimensão extra quando pedido.
+    const breakdownChannel: string | null = typeof body.breakdown_channel === "string" && body.breakdown_channel.trim()
+      ? String(body.breakdown_channel).trim()
+      : null;
+    const breakdownDim: string = ["link", "campaign", "adset", "ad", "tag"].includes(String(body.breakdown_dim || ""))
+      ? String(body.breakdown_dim)
+      : "link";
+    const breakdownMap: Record<string, {
+      key: string; leads: number; new_leads: number; converted: number;
+      converted_new: number; convertedRevenue: number; revenue: number;
+    }> = {};
+    const dimValue = (meta: any): string => {
+      const m = meta || {};
+      const pick = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : "");
+      switch (breakdownDim) {
+        case "campaign": return pick(m.utm_campaign) || "(sem campanha)";
+        case "adset": return pick(m.utm_content) || "(sem conjunto)";
+        case "ad": return pick(m.utm_term) || "(sem anúncio)";
+        case "tag": return pick(m.link_tag) || "(sem etiqueta)";
+        default: return pick(m.link_slug) || pick(m.typebot_slug) || "(link não identificado)";
+      }
+    };
+
+
 
 
     for (const lead of Object.values(leadByPhone)) {
@@ -756,10 +781,27 @@ Deno.serve(async (req) => {
       const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
+      // Sub-camada (link / campanha / conjunto / anúncio) do canal pedido.
+      let bd: (typeof breakdownMap)[string] | null = null;
+      if (breakdownChannel && chKey === breakdownChannel) {
+        const k = dimValue(captureMeta);
+        bd = (breakdownMap[k] ||= { key: k, leads: 0, new_leads: 0, converted: 0, converted_new: 0, convertedRevenue: 0, revenue: 0 });
+        bd.leads++;
+        if (!hadPriorSales) bd.new_leads++;
+      }
+
       // A lead is "converted" if it has >= 1 qualifying purchase. Subsequent
       // purchases of the same lead do NOT create new conversions.
       const converted = !!conversionSale;
       if (!converted) continue;
+
+      if (bd) {
+        bd.converted++;
+        if (!hadPriorSales) bd.converted_new++;
+        bd.convertedRevenue += conversionSale.total;
+        bd.revenue += qualifying.reduce((a, s) => a + s.total, 0);
+      }
+
 
       leadsConverted++;
       cap.converted++;
@@ -828,6 +870,29 @@ Deno.serve(async (req) => {
         leads: convertedList,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // Sub-camada: ranking por link / campanha / conjunto / anúncio dentro do canal.
+    if (breakdownChannel) {
+      const rows = Object.values(breakdownMap).map((b) => ({
+        key: b.key,
+        leads: b.leads,
+        new_leads: b.new_leads,
+        converted: b.converted,
+        converted_new: b.converted_new,
+        conversion_rate: b.leads > 0 ? Math.round((b.converted / b.leads) * 10000) / 100 : 0,
+        valor_convertido: Math.round(b.convertedRevenue * 100) / 100,
+        receita_total_com_recompras: Math.round(b.revenue * 100) / 100,
+        ticket_medio_conversao: b.converted > 0 ? Math.round((b.convertedRevenue / b.converted) * 100) / 100 : 0,
+      })).sort((a, b) => b.valor_convertido - a.valor_convertido || b.leads - a.leads);
+      return new Response(JSON.stringify({
+        mode,
+        breakdown_channel: breakdownChannel,
+        breakdown_dim: breakdownDim,
+        rows,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+
 
 
     // Channels (bar chart) and sources (table) are both the capture-channel

@@ -43,6 +43,9 @@ serve(async (req) => {
       utm_source,
       utm_medium,
       utm_campaign,
+      utm_content,
+      utm_term,
+      link_tag,
       metadata,
       custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
       disqualified,     // true quando o lead não atendeu a condição da pergunta
@@ -121,6 +124,10 @@ serve(async (req) => {
           utm_source: utm_source || null,
           utm_medium: utm_medium || null,
           utm_campaign: utm_campaign || null,
+          utm_content: utm_content || null,
+          utm_term: utm_term || null,
+          link_tag: (typeof link_tag === 'string' && link_tag.trim()) ? link_tag.trim().slice(0, 120) : null,
+          link_slug: (typeof slug === 'string' && slug.trim()) ? slug.trim().slice(0, 120) : null,
           metadata: metadata || {},
           custom_fields: cf,
           disqualified: isDisq,
@@ -191,6 +198,13 @@ serve(async (req) => {
         public_slug = tb.slug;
       }
     }
+
+    // Garante o link de origem gravado no lead quando o front não mandou o slug.
+    if (!existing && !slug && public_slug) {
+      await supabase.from('event_leads').update({ link_slug: public_slug }).eq('id', lead.id);
+    }
+
+
 
     const base = 'https://checkout.bananacalcados.com.br';
     const referral_link = public_slug
