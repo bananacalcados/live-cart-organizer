@@ -527,6 +527,15 @@ export function LeadsAnalyticsDashboard() {
       </CardContent>
     </Card>
 
+    <div className="mt-4">
+      <MemberAreaOriginPanel
+        dateFrom={lastParams.date_from as string | undefined}
+        dateTo={lastParams.date_to as string | undefined}
+      />
+    </div>
+
+
+
     <ConvertedLeadsDialog
       open={!!drillChannel}
       onOpenChange={(o) => !o && setDrillChannel(null)}
