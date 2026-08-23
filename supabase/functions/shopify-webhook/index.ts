@@ -2,6 +2,12 @@
 // HMAC validation with SHOPIFY_CLIENT_SECRET (used for Shopify custom app webhooks).
 // Idempotent upsert via (external_source='shopify', external_order_id).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  extractShopifyAttribution,
+  resolveLinkPageAttribution,
+  markLinkPageConversion,
+} from "../_shared/shopify-attribution.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
