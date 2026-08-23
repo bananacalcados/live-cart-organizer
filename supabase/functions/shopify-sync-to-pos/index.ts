@@ -2,6 +2,12 @@
 // Imports Shopify orders as pos_sales rows for the "Tiny Shopify" store.
 // Idempotent via pos_sales.external_source='shopify' + external_order_id=<order.id>.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  extractShopifyAttribution,
+  resolveLinkPageAttribution,
+  markLinkPageConversion,
+} from "../_shared/shopify-attribution.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
