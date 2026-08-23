@@ -10,7 +10,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { pageId, itemId, catalogProductId, sellerId, leadId, utm_source, referrer } = await req.json();
+    const { pageId, itemId, catalogProductId, sellerId, leadId, clickId, utm_source, referrer } = await req.json();
     if (!pageId) {
       return new Response(JSON.stringify({ error: "pageId required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -28,9 +28,11 @@ Deno.serve(async (req) => {
       event_type: "click",
       seller_id: sellerId || null,
       lead_id: leadId || null,
+      click_id: clickId ? String(clickId).slice(0, 40) : null,
       utm_source: utm_source || null,
       referrer: referrer || null,
     });
+
 
     if (itemId) {
       const { data: item } = await supabase.from("link_page_items").select("clicks").eq("id", itemId).maybeSingle();
