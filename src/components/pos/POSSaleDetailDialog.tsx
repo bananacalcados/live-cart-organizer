@@ -72,7 +72,16 @@ interface Sale {
   external_source?: string | null;
   tracking_code?: string | null;
   external_order_id?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
+  lp_click_id?: string | null;
+  attribution_source?: string | null;
+  link_page_id?: string | null;
 }
+
 
 const GATEWAY_LABELS: Record<string, string> = {
   mercadopago: "Mercado Pago",
