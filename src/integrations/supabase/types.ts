@@ -21391,6 +21391,15 @@ export type Database = {
           was_existing_lead: boolean
         }[]
       }
+      get_member_area_origin_breakdown: {
+        Args: {
+          p_end: string
+          p_event_id?: string
+          p_lookback_days?: number
+          p_start: string
+        }
+        Returns: Json
+      }
       get_meta_capi_vault_state: {
         Args: never
         Returns: {
