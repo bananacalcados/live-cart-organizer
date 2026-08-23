@@ -313,7 +313,8 @@ export function LeadsAnalyticsDashboard() {
                       <th className="py-1.5 px-2 text-right">Convertidos</th>
                       <th className="py-1.5 px-2 text-right">Taxa</th>
                       <th className="py-1.5 px-2 text-right">Compras</th>
-                      <th className="py-1.5 pl-2 text-right">Receita</th>
+                      <th className="py-1.5 px-2 text-right">Receita</th>
+                      <th className="py-1.5 pl-2 text-right">Detalhe</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -331,9 +332,20 @@ export function LeadsAnalyticsDashboard() {
                           <Badge variant="outline" className="text-[10px]">{src.conversion_rate}%</Badge>
                         </td>
                         <td className="py-1.5 px-2 text-right">{src.purchases}</td>
-                        <td className="py-1.5 pl-2 text-right font-semibold">{fmtBRL(src.revenue)}</td>
+                        <td className="py-1.5 px-2 text-right font-semibold">{fmtBRL(src.revenue)}</td>
+                        <td className="py-1.5 pl-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[10px]"
+                            onClick={(e) => { e.stopPropagation(); setBreakdownChannel(src.source); }}
+                          >
+                            Por link/anúncio
+                          </Button>
+                        </td>
                       </tr>
                     ))}
+
 
                     {data!.sources.length === 0 && (
                       <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Sem dados no período.</td></tr>
