@@ -531,8 +531,8 @@ export function LeadsAnalyticsDashboard() {
 
     <div className="mt-4">
       <MemberAreaOriginPanel
-        dateFrom={lastParams.date_from as string | undefined}
-        dateTo={lastParams.date_to as string | undefined}
+        dateFrom={lastParams.date_from as string | Date | undefined}
+        dateTo={lastParams.date_to as string | Date | undefined}
       />
     </div>
 

@@ -59,7 +59,7 @@ const EMPTY: GroupRow = { origem: "sem_pedido", pessoas: 0, compraram: 0, pedido
  *  - pedido_primeiro: o cadastro só existe porque a equipe montou o pedido;
  *  - sem_pedido: se cadastrou e nunca teve pedido (base quente para remarketing).
  */
-export function MemberAreaOriginPanel({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }) {
+export function MemberAreaOriginPanel({ dateFrom, dateTo }: { dateFrom?: string | Date; dateTo?: string | Date }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(false);
   const [showList, setShowList] = useState(false);
@@ -69,8 +69,8 @@ export function MemberAreaOriginPanel({ dateFrom, dateTo }: { dateFrom?: string;
     setLoading(true);
     try {
       const { data: res, error } = await supabase.rpc("get_member_area_origin_breakdown" as any, {
-        p_start: new Date(dateFrom).toISOString(),
-        p_end: new Date(dateTo).toISOString(),
+        p_start: new Date(dateFrom as any).toISOString(),
+        p_end: new Date(dateTo as any).toISOString(),
         p_lookback_days: 7,
       });
       if (error) throw error;
