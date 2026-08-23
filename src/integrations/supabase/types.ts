@@ -8911,6 +8911,7 @@ export type Database = {
       link_page_visits: {
         Row: {
           catalog_product_id: string | null
+          click_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -8930,6 +8931,7 @@ export type Database = {
         }
         Insert: {
           catalog_product_id?: string | null
+          click_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -8949,6 +8951,7 @@ export type Database = {
         }
         Update: {
           catalog_product_id?: string | null
+          click_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
