@@ -119,6 +119,9 @@ export default function EventLandingView() {
           utm_source: resolveUtm('utm_source'),
           utm_medium: resolveUtm('utm_medium'),
           utm_campaign: resolveUtm('utm_campaign'),
+          utm_content: resolveUtm('utm_content'),
+          utm_term: resolveUtm('utm_term'),
+          link_tag: search.get('tag') || search.get('src') || null,
           // Sinais de clique da Meta (memória de atribuição de 90 dias)
           fbclid: resolveFbclid(),
           fbp: getFbp(),
