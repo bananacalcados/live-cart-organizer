@@ -348,7 +348,7 @@ export function LeadsAnalyticsDashboard() {
 
 
                     {data!.sources.length === 0 && (
-                      <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">Sem dados no período.</td></tr>
+                      <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">Sem dados no período.</td></tr>
                     )}
                   </tbody>
                 </table>
