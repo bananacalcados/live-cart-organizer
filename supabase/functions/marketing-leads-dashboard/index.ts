@@ -691,6 +691,31 @@ Deno.serve(async (req) => {
       : null;
     const convertedList: any[] = [];
 
+    // NEW — sub-camada: origem do lead por link / campanha / conjunto / anúncio.
+    // Não altera nenhum cálculo dos canais; só agrega uma dimensão extra quando pedido.
+    const breakdownChannel: string | null = typeof body.breakdown_channel === "string" && body.breakdown_channel.trim()
+      ? String(body.breakdown_channel).trim()
+      : null;
+    const breakdownDim: string = ["link", "campaign", "adset", "ad", "tag"].includes(String(body.breakdown_dim || ""))
+      ? String(body.breakdown_dim)
+      : "link";
+    const breakdownMap: Record<string, {
+      key: string; leads: number; new_leads: number; converted: number;
+      converted_new: number; convertedRevenue: number; revenue: number;
+    }> = {};
+    const dimValue = (meta: any): string => {
+      const m = meta || {};
+      const pick = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : "");
+      switch (breakdownDim) {
+        case "campaign": return pick(m.utm_campaign) || "(sem campanha)";
+        case "adset": return pick(m.utm_content) || "(sem conjunto)";
+        case "ad": return pick(m.utm_term) || "(sem anúncio)";
+        case "tag": return pick(m.link_tag) || "(sem etiqueta)";
+        default: return pick(m.link_slug) || pick(m.typebot_slug) || "(link não identificado)";
+      }
+    };
+
+
 
 
     for (const lead of Object.values(leadByPhone)) {
