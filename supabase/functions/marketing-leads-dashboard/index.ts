@@ -781,10 +781,27 @@ Deno.serve(async (req) => {
       const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
+      // Sub-camada (link / campanha / conjunto / anúncio) do canal pedido.
+      let bd: (typeof breakdownMap)[string] | null = null;
+      if (breakdownChannel && chKey === breakdownChannel) {
+        const k = dimValue(captureMeta);
+        bd = (breakdownMap[k] ||= { key: k, leads: 0, new_leads: 0, converted: 0, converted_new: 0, convertedRevenue: 0, revenue: 0 });
+        bd.leads++;
+        if (!hadPriorSales) bd.new_leads++;
+      }
+
       // A lead is "converted" if it has >= 1 qualifying purchase. Subsequent
       // purchases of the same lead do NOT create new conversions.
       const converted = !!conversionSale;
       if (!converted) continue;
+
+      if (bd) {
+        bd.converted++;
+        if (!hadPriorSales) bd.converted_new++;
+        bd.convertedRevenue += conversionSale.total;
+        bd.revenue += qualifying.reduce((a, s) => a + s.total, 0);
+      }
+
 
       leadsConverted++;
       cap.converted++;
