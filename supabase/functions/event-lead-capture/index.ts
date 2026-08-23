@@ -43,6 +43,9 @@ serve(async (req) => {
       utm_source,
       utm_medium,
       utm_campaign,
+      utm_content,
+      utm_term,
+      link_tag,
       metadata,
       custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
       disqualified,     // true quando o lead não atendeu a condição da pergunta
