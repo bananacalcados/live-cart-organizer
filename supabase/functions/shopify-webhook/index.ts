@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       if (dom && tok) {
         try {
           const rr = await fetch(
-            `https://${dom}/admin/api/2024-01/orders/${externalId}.json?fields=id,name,customer,phone,email,shipping_address,billing_address,note_attributes`,
+            `https://${dom}/admin/api/2024-01/orders/${externalId}.json?fields=id,name,customer,phone,email,shipping_address,billing_address,note_attributes,landing_site`,
             { headers: { "X-Shopify-Access-Token": tok, "Content-Type": "application/json" } },
           );
           if (rr.ok) {
