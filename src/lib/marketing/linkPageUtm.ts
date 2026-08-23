@@ -6,9 +6,9 @@
  * venda no site pode ser atribuída depois à página, ao botão e ao produto exato.
  *
  * Convenção:
- *   utm_source   = linkpage
+ *   utm_source   = slug (nome) da link page — ex.: "lancamento-conforto"
  *   utm_medium   = tipo do botão (website, catalog_product, link, vip...)
- *   utm_campaign = slug da link page
+ *   utm_campaign = slug da link page (mantido para compatibilidade)
  *   utm_content  = identificador do botão/produto (slug legível + id curto)
  *   utm_term     = vendedora (quando houver)
  *   lp_click     = id único do clique (casa com link_page_visits.click_id)
@@ -66,7 +66,9 @@ export function decorateOutboundUrl(input: OutboundUtmInput): string {
       ? slugify(input.productHandle || input.productTitle) || String(input.productId || "")
       : slugify(input.itemLabel || input.itemType) || String(input.itemId || "");
 
-    u.searchParams.set("utm_source", "linkpage");
+    // utm_source = nome (slug) da própria Link Page, ex.: "lancamento-conforto".
+    // Fallback para "linkpage" quando a página não tiver slug.
+    u.searchParams.set("utm_source", slugify(input.pageSlug, 60) || "linkpage");
     u.searchParams.set("utm_medium", isProduct ? "catalog_product" : slugify(input.itemType) || "button");
     if (input.pageSlug) u.searchParams.set("utm_campaign", slugify(input.pageSlug, 60));
     if (content) u.searchParams.set("utm_content", content);
