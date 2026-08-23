@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution, resolveFbclid, resolveUtm } from "@/lib/metaAttribution";
+import { decorateOutboundUrl, newClickId } from "@/lib/marketing/linkPageUtm";
 
 import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
