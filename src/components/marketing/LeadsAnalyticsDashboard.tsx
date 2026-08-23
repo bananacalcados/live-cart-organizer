@@ -16,6 +16,8 @@ import {
 import { toast } from "sonner";
 import { ConvertedLeadsDialog } from "./ConvertedLeadsDialog";
 import { LeadsSourceBreakdownDialog } from "./LeadsSourceBreakdownDialog";
+import { MemberAreaOriginPanel } from "./MemberAreaOriginPanel";
+
 
 
 
@@ -526,6 +528,15 @@ export function LeadsAnalyticsDashboard() {
         ) : null}
       </CardContent>
     </Card>
+
+    <div className="mt-4">
+      <MemberAreaOriginPanel
+        dateFrom={lastParams.date_from as string | Date | undefined}
+        dateTo={lastParams.date_to as string | Date | undefined}
+      />
+    </div>
+
+
 
     <ConvertedLeadsDialog
       open={!!drillChannel}
