@@ -529,6 +529,13 @@ export function LeadsAnalyticsDashboard() {
       channel={drillChannel || ""}
       params={lastParams}
     />
+
+    <LeadsSourceBreakdownDialog
+      channel={breakdownChannel}
+      baseParams={lastParams}
+      onClose={() => setBreakdownChannel(null)}
+    />
+
     </>
   );
 }
