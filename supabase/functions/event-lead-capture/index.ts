@@ -199,6 +199,13 @@ serve(async (req) => {
       }
     }
 
+    // Garante o link de origem gravado no lead quando o front não mandou o slug.
+    if (!existing && !slug && public_slug) {
+      await supabase.from('event_leads').update({ link_slug: public_slug }).eq('id', lead.id);
+    }
+
+
+
     const base = 'https://checkout.bananacalcados.com.br';
     const referral_link = public_slug
       ? `${base}/${source === 'typebot' ? 'typebot' : 'live'}/${public_slug}?ref=${lead.referral_token}`
