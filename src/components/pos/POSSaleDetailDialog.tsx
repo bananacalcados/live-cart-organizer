@@ -83,6 +83,13 @@ interface Sale {
 }
 
 
+const ATTRIBUTION_LABELS: Record<string, string> = {
+  link_page: "Link Page (nosso link)",
+  meta_ads: "Meta Ads",
+  google: "Google",
+  utm: "Campanha externa (UTM)",
+};
+
 const GATEWAY_LABELS: Record<string, string> = {
   mercadopago: "Mercado Pago",
   pagarme: "Pagar.me",
