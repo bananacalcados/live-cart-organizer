@@ -8912,6 +8912,9 @@ export type Database = {
         Row: {
           catalog_product_id: string | null
           click_id: string | null
+          conversion_external_order_id: string | null
+          conversion_value: number | null
+          converted_at: string | null
           created_at: string
           event_type: string
           id: string
@@ -8920,6 +8923,7 @@ export type Database = {
           lead_id: string | null
           lead_phone: string | null
           page_id: string
+          pos_sale_id: string | null
           referrer: string | null
           seller_id: string | null
           user_agent: string | null
@@ -8932,6 +8936,9 @@ export type Database = {
         Insert: {
           catalog_product_id?: string | null
           click_id?: string | null
+          conversion_external_order_id?: string | null
+          conversion_value?: number | null
+          converted_at?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -8940,6 +8947,7 @@ export type Database = {
           lead_id?: string | null
           lead_phone?: string | null
           page_id: string
+          pos_sale_id?: string | null
           referrer?: string | null
           seller_id?: string | null
           user_agent?: string | null
@@ -8952,6 +8960,9 @@ export type Database = {
         Update: {
           catalog_product_id?: string | null
           click_id?: string | null
+          conversion_external_order_id?: string | null
+          conversion_value?: number | null
+          converted_at?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -8960,6 +8971,7 @@ export type Database = {
           lead_id?: string | null
           lead_phone?: string | null
           page_id?: string
+          pos_sale_id?: string | null
           referrer?: string | null
           seller_id?: string | null
           user_agent?: string | null
@@ -14130,6 +14142,7 @@ export type Database = {
       pos_sales: {
         Row: {
           appmax_order_id: string | null
+          attribution_source: string | null
           cash_register_id: string | null
           checkout_step: number | null
           conditional_signed_at: string | null
@@ -14174,6 +14187,10 @@ export type Database = {
           invoice_number: string | null
           invoice_pdf_url: string | null
           is_conditional: boolean
+          link_page_catalog_product_id: string | null
+          link_page_id: string | null
+          link_page_item_id: string | null
+          lp_click_id: string | null
           mercadopago_payment_id: string | null
           motivo_cancelamento:
             | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
@@ -14215,10 +14232,16 @@ export type Database = {
           tracking_code: string | null
           tracking_url: string | null
           updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           vindi_transaction_id: string | null
         }
         Insert: {
           appmax_order_id?: string | null
+          attribution_source?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
@@ -14263,6 +14286,10 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          link_page_catalog_product_id?: string | null
+          link_page_id?: string | null
+          link_page_item_id?: string | null
+          lp_click_id?: string | null
           mercadopago_payment_id?: string | null
           motivo_cancelamento?:
             | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
@@ -14304,10 +14331,16 @@ export type Database = {
           tracking_code?: string | null
           tracking_url?: string | null
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           vindi_transaction_id?: string | null
         }
         Update: {
           appmax_order_id?: string | null
+          attribution_source?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
@@ -14352,6 +14385,10 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          link_page_catalog_product_id?: string | null
+          link_page_id?: string | null
+          link_page_item_id?: string | null
+          lp_click_id?: string | null
           mercadopago_payment_id?: string | null
           motivo_cancelamento?:
             | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
@@ -14393,6 +14430,11 @@ export type Database = {
           tracking_code?: string | null
           tracking_url?: string | null
           updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           vindi_transaction_id?: string | null
         }
         Relationships: [

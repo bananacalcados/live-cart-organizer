@@ -996,17 +996,47 @@ function QrDialog({ pageId, pages, onClose }: { pageId: string | null; pages: an
 function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pageId: string | null; onClose: () => void }) {
   const views = analytics.filter((a) => a.event_type === "page_view");
   const clicks = analytics.filter((a) => a.event_type === "click");
-  const byButton: Record<string, number> = {};
-  const byProduct: Record<string, number> = {};
+  type Row = { clicks: number; orders: number; revenue: number };
+  const byButton: Record<string, Row> = {};
+  const byProduct: Record<string, Row> = {};
+  let orders = 0;
+  let revenue = 0;
+  const bump = (bag: Record<string, Row>, key: string, c: any) => {
+    const row = (bag[key] ||= { clicks: 0, orders: 0, revenue: 0 });
+    row.clicks += 1;
+    if (c.converted_at) {
+      row.orders += 1;
+      row.revenue += Number(c.conversion_value || 0);
+    }
+  };
   for (const c of clicks) {
+    if (c.converted_at) {
+      orders += 1;
+      revenue += Number(c.conversion_value || 0);
+    }
     if (c.catalog_product_id) {
-      const t = c.link_page_catalog_products?.title || "Produto removido";
-      byProduct[t] = (byProduct[t] || 0) + 1;
+      bump(byProduct, c.link_page_catalog_products?.title || "Produto removido", c);
       continue;
     }
-    const label = c.link_page_items?.label || "—";
-    byButton[label] = (byButton[label] || 0) + 1;
+    bump(byButton, c.link_page_items?.label || "—", c);
   }
+  const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const sorted = (bag: Record<string, Row>) =>
+    Object.entries(bag).sort(([, a], [, b]) => b.revenue - a.revenue || b.clicks - a.clicks);
+
+  const Line = ({ label, row }: { label: string; row: Row }) => (
+    <div className="flex justify-between items-center text-sm py-1 gap-3">
+      <span className="text-muted-foreground truncate">{label}</span>
+      <span className="shrink-0 flex items-center gap-3">
+        <span className="text-white font-medium">{row.clicks}</span>
+        {row.orders > 0 && (
+          <span className="text-emerald-400 text-xs font-medium">
+            {row.orders} venda{row.orders > 1 ? "s" : ""} · {money(row.revenue)}
+          </span>
+        )}
+      </span>
+    </div>
+  );
 
   return (
     <Dialog open={!!pageId} onOpenChange={onClose}>
@@ -1018,29 +1048,26 @@ function AnalyticsDialog({ analytics, pageId, onClose }: { analytics: any[]; pag
             <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Cliques</p><p className="text-2xl font-bold text-white">{clicks.length}</p></CardContent></Card>
             <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Engajamento</p><p className="text-2xl font-bold text-white">{views.length ? ((clicks.length / views.length) * 100).toFixed(1) : 0}%</p></CardContent></Card>
           </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Vendas no site</p><p className="text-2xl font-bold text-emerald-400">{orders}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Faturamento</p><p className="text-xl font-bold text-emerald-400">{money(revenue)}</p></CardContent></Card>
+            <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Conversão do clique</p><p className="text-2xl font-bold text-white">{clicks.length ? ((orders / clicks.length) * 100).toFixed(1) : 0}%</p></CardContent></Card>
+          </div>
           <Card><CardContent className="p-3">
-            <p className="text-xs font-semibold text-white mb-2">Cliques por botão</p>
-            {Object.entries(byButton).sort(([, a], [, b]) => b - a).map(([label, count]) => (
-              <div key={label} className="flex justify-between text-sm py-1">
-                <span className="text-muted-foreground">{label}</span><span className="text-white font-medium">{count}</span>
-              </div>
-            ))}
+            <p className="text-xs font-semibold text-white mb-2">Cliques e vendas por botão</p>
+            {sorted(byButton).map(([label, row]) => <Line key={label} label={label} row={row} />)}
             {!Object.keys(byButton).length && <p className="text-xs text-muted-foreground">Sem cliques ainda.</p>}
           </CardContent></Card>
           <Card><CardContent className="p-3">
-            <p className="text-xs font-semibold text-white mb-2">Cliques por produto do catálogo</p>
+            <p className="text-xs font-semibold text-white mb-2">Cliques e vendas por produto do catálogo</p>
             <div className="max-h-56 overflow-y-auto pr-1">
-              {Object.entries(byProduct).sort(([, a], [, b]) => b - a).map(([title, count]) => (
-                <div key={title} className="flex justify-between text-sm py-1 gap-3">
-                  <span className="text-muted-foreground truncate">{title}</span><span className="text-white font-medium shrink-0">{count}</span>
-                </div>
-              ))}
+              {sorted(byProduct).map(([title, row]) => <Line key={title} label={title} row={row} />)}
             </div>
             {!Object.keys(byProduct).length && <p className="text-xs text-muted-foreground">Sem cliques em produtos ainda.</p>}
           </CardContent></Card>
-
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+

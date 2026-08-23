@@ -2,6 +2,12 @@
 // Imports Shopify orders as pos_sales rows for the "Tiny Shopify" store.
 // Idempotent via pos_sales.external_source='shopify' + external_order_id=<order.id>.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  extractShopifyAttribution,
+  resolveLinkPageAttribution,
+  markLinkPageConversion,
+} from "../_shared/shopify-attribution.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +83,7 @@ Deno.serve(async (req) => {
     // status=any + no financial_status filter so we also see cancellations/refunds.
     // Filter by updated_at_min (not created_at_min) so status changes on old
     // orders are caught while keeping the page count tiny on each run.
-    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&updated_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,updated_at,cancelled_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes`;
+    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&updated_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,updated_at,cancelled_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes,landing_site`;
 
     let inserted = 0, skipped = 0, errors = 0, pages = 0, cancelled = 0;
     const safetyMax = 20;
@@ -193,6 +199,10 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Origem/atribuição (UTMs gravadas pelo site no note_attributes)
+          const attribution = extractShopifyAttribution(o);
+          const lp = await resolveLinkPageAttribution(supabase, attribution);
+
           const { data: sale, error: saleErr } = await supabase
             .from("pos_sales")
             .insert({
@@ -215,6 +225,16 @@ Deno.serve(async (req) => {
               customer_city: customerCity,
               customer_state: customerState,
               customer_cep: customerCep,
+              utm_source: attribution.utm_source,
+              utm_medium: attribution.utm_medium,
+              utm_campaign: attribution.utm_campaign,
+              utm_content: attribution.utm_content,
+              utm_term: attribution.utm_term,
+              lp_click_id: attribution.lp_click_id,
+              attribution_source: attribution.attribution_source,
+              link_page_id: lp.link_page_id,
+              link_page_item_id: lp.link_page_item_id,
+              link_page_catalog_product_id: lp.link_page_catalog_product_id,
               shipping_address: {
                 address: custAddress, address_number: custNumber, complement: custComplement,
                 neighborhood: custNeighborhood, city: customerCity, state: customerState,
@@ -227,6 +247,11 @@ Deno.serve(async (req) => {
             .select("id")
             .single();
           if (saleErr) throw saleErr;
+
+          await markLinkPageConversion(supabase, lp.visit_id, {
+            saleId: sale.id, externalOrderId: externalId, total,
+          });
+
 
           if (items.length > 0) {
             const itemRows = items.map((li: any) => ({

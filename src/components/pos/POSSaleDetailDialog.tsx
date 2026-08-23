@@ -72,7 +72,23 @@ interface Sale {
   external_source?: string | null;
   tracking_code?: string | null;
   external_order_id?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
+  lp_click_id?: string | null;
+  attribution_source?: string | null;
+  link_page_id?: string | null;
 }
+
+
+const ATTRIBUTION_LABELS: Record<string, string> = {
+  link_page: "Link Page (nosso link)",
+  meta_ads: "Meta Ads",
+  google: "Google",
+  utm: "Campanha externa (UTM)",
+};
 
 const GATEWAY_LABELS: Record<string, string> = {
   mercadopago: "Mercado Pago",
@@ -1450,6 +1466,21 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                       </div>
                     );
                   }
+                  if (sale.utm_source || sale.attribution_source) {
+                    const mech = ATTRIBUTION_LABELS[sale.attribution_source || ""] || sale.attribution_source || "UTM";
+                    const detail = [sale.utm_source, sale.utm_medium, sale.utm_content].filter(Boolean).join(" · ");
+                    rows.push(
+                      <div key="attribution" className="flex justify-between items-start text-sm gap-2">
+                        <span className="text-gray-600 flex items-center gap-1 shrink-0"><Globe className="h-3 w-3" /> Atribuição</span>
+                        <span className="text-right">
+                          <span className="text-gray-900 font-medium">{mech}</span>
+                          {detail && <span className="block text-[11px] text-gray-500 break-all">{detail}</span>}
+                          {sale.utm_campaign && <span className="block text-[11px] text-gray-500 break-all">campanha: {sale.utm_campaign}</span>}
+                        </span>
+                      </div>
+                    );
+                  }
+
                   if (txId) {
                     rows.push(
                       <div key="tx" className="flex justify-between items-center text-sm gap-2">
