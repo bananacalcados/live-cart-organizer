@@ -221,6 +221,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Origem/atribuição (UTMs no note_attributes gravadas pelo site)
+    const attribution = extractShopifyAttribution(full);
+    const lp = await resolveLinkPageAttribution(supabase, attribution);
+
     const { data: sale, error } = await supabase
       .from("pos_sales")
       .insert({
@@ -241,6 +245,16 @@ Deno.serve(async (req) => {
         customer_city: customerCity,
         customer_state: customerState,
         customer_cep: customerCep,
+        utm_source: attribution.utm_source,
+        utm_medium: attribution.utm_medium,
+        utm_campaign: attribution.utm_campaign,
+        utm_content: attribution.utm_content,
+        utm_term: attribution.utm_term,
+        lp_click_id: attribution.lp_click_id,
+        attribution_source: attribution.attribution_source,
+        link_page_id: lp.link_page_id,
+        link_page_item_id: lp.link_page_item_id,
+        link_page_catalog_product_id: lp.link_page_catalog_product_id,
         shipping_address: {
           address: custAddress, address_number: custNumber, complement: custComplement,
           neighborhood: custNeighborhood, city: customerCity, state: customerState,
@@ -253,6 +267,11 @@ Deno.serve(async (req) => {
       .select("id")
       .single();
     if (error) throw error;
+
+    await markLinkPageConversion(supabase, lp.visit_id, {
+      saleId: sale.id, externalOrderId: externalId, total,
+    });
+
 
     if (items.length > 0) {
       // Enriquece cada item com barcode (gtin) e sku reais via product_variants,
