@@ -284,7 +284,13 @@ export default function LinkPageView() {
                 key={p.id}
                 href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
                 target="_blank" rel="noopener noreferrer"
-                onClick={() => handleClick(item, p)}
+                onClick={(e) => {
+                  const cid = newClickId();
+                  // UTMs da Link Page + id do clique, resolvidos no momento do clique
+                  (e.currentTarget as HTMLAnchorElement).href = buildOutbound(item, p, cid);
+                  handleClick(item, p, cid);
+                }}
+
 
                 className="block snap-start rounded-2xl overflow-hidden bg-white shadow-lg active:scale-95 transition-transform"
               >
