@@ -8,6 +8,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { sendAutomationJob, isTerminalSendError } from "../_shared/automation-send.ts";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
