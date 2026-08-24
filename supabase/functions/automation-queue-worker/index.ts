@@ -23,17 +23,75 @@ const DEFAULT_PER_MINUTE = 60;
 const DEFAULT_JITTER_MIN_MS = 250;
 const DEFAULT_JITTER_MAX_MS = 900;
 
+// Etapa 2 — ritmo por contato
+const DEFAULT_MIN_GAP_SECONDS = 45;        // intervalo mínimo entre msgs p/ o mesmo contato
+const DEFAULT_ACTIVE_GAP_SECONDS = 10;     // cliente respondeu recentemente → conversa ativa
+const DEFAULT_ACTIVE_WINDOW_MIN = 30;      // janela que define "conversa ativa"
+const DEFAULT_DAILY_CAP = 8;
+const DEFAULT_WEEKLY_CAP = 20;
+const DEFAULT_QUIET_START = 22;            // 22h
+const DEFAULT_QUIET_END = 8;               // 08h
+const MAX_RESCHEDULES = 40;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function readSetting(supabase: any, key: string, fallback: number): Promise<number> {
   try {
     const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
     const n = Number(data?.value);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
   } catch (_e) {
     return fallback;
   }
 }
+
+/** Hora atual em São Paulo (0-23). */
+function spHour(d = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(d),
+  ) % 24;
+}
+
+function isQuietHour(hour: number, start: number, end: number): boolean {
+  if (start === end) return false;
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+}
+
+/** Próximo instante fora da janela de silêncio (início do horário permitido em SP). */
+function nextAllowedAfterQuiet(end: number): Date {
+  const now = new Date();
+  for (let i = 0; i <= 48; i++) {
+    const cand = new Date(now.getTime() + i * 30 * 60 * 1000);
+    if (spHour(cand) === end) return cand;
+  }
+  return new Date(now.getTime() + 60 * 60 * 1000);
+}
+
+/** Reagenda um job sem consumir tentativa. */
+async function reschedule(
+  supabase: any,
+  job: any,
+  when: Date,
+  reason: string,
+) {
+  await supabase
+    .from("automation_message_queue")
+    .update({
+      status: "pending",
+      locked_by: null,
+      locked_until: null,
+      scheduled_at: when.toISOString(),
+      attempts: Math.max(0, (job.attempts || 1) - 1),
+      reschedule_count: (job.reschedule_count || 0) + 1,
+      last_error: reason,
+    })
+    .eq("id", job.id);
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
