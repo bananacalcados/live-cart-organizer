@@ -27,6 +27,16 @@ serve(async (req) => {
 
     console.log(`[continue-flow] Continuing flow ${flowId} for ${phone} from step ${startFromStep}`);
 
+    // Etapa 3 — respeita descadastro ("PARAR"): nada é enviado nem enfileirado.
+    if (await isOptedOut(supabase, phone)) {
+      console.log(`[continue-flow] ${phone} está descadastrado (opt-out) — nada enviado`);
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'opted_out' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
+
     const { data: steps } = await supabase
       .from('automation_steps')
       .select('*')
