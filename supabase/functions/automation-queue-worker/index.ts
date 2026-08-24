@@ -137,8 +137,12 @@ Deno.serve(async (req) => {
     let capped = 0;
 
 
-    while (Date.now() - startedAt < RUN_BUDGET_MS && sent + failed + skipped < perMinute) {
-      const batchSize = Math.min(20, perMinute - (sent + failed + skipped));
+    let processed = 0;
+    const PROCESS_LIMIT = Math.max(perMinute * 5, 100);
+
+    while (Date.now() - startedAt < RUN_BUDGET_MS && sent + failed < perMinute && processed < PROCESS_LIMIT) {
+      const batchSize = Math.min(20, perMinute - (sent + failed));
+
       const { data: jobs, error: claimErr } = await supabase.rpc("claim_automation_queue_jobs", {
         p_worker_id: workerId,
         p_batch_size: batchSize,
