@@ -132,6 +132,11 @@ Deno.serve(async (req) => {
     const quietEnd = await readSetting(supabase, "automation_quiet_hours_end", DEFAULT_QUIET_END);
     const baseGapMs = Math.floor(60_000 / Math.max(1, perMinute));
 
+    // Supressão cross-instância: bloqueados + descadastrados ("PARAR")
+    const suppressed = await loadBlockedSuffixes(supabase);
+
+
+
     let sent = 0;
     let failed = 0;
     let skipped = 0;
