@@ -97,6 +97,25 @@ export async function routeMessage(
     return { agent: 'none', reason: 'group_message' };
   }
 
+  // 0a. Opt-out real ("PARAR") — registra o descadastro cross-instância, limpa a
+  // fila pendente do contato e encerra qualquer sessão de IA ativa.
+  try {
+    const { optedOut, keyword } = await handleIncomingOptOut(
+      supabase as unknown as Parameters<typeof handleIncomingOptOut>[0],
+      phone,
+      input.messageText,
+      whatsappNumberId ?? null,
+    );
+    if (optedOut) {
+      console.log(`[router] opt-out de ${phone} via "${keyword}" — nenhum agente acionado`);
+      return { agent: 'none', reason: 'opted_out' };
+    }
+  } catch (err) {
+    console.error('[router] erro ao processar opt-out:', err);
+  }
+
+
+
   // 0b. Check if the WhatsApp instance has AI globally paused (e.g. Ravena)
   if (whatsappNumberId) {
     try {
