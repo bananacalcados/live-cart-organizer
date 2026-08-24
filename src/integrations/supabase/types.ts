@@ -1011,6 +1011,39 @@ export type Database = {
           },
         ]
       }
+      automation_contact_pacing: {
+        Row: {
+          created_at: string
+          day_key: string
+          last_sent_at: string | null
+          phone: string
+          sent_7d: number
+          sent_today: number
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          day_key?: string
+          last_sent_at?: string | null
+          phone: string
+          sent_7d?: number
+          sent_today?: number
+          updated_at?: string
+          week_start?: string
+        }
+        Update: {
+          created_at?: string
+          day_key?: string
+          last_sent_at?: string | null
+          phone?: string
+          sent_7d?: number
+          sent_today?: number
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       automation_dispatch_jobs: {
         Row: {
           batch_size: number
@@ -1243,8 +1276,10 @@ export type Database = {
           payload: Json
           phone: string
           recipient_data: Json
+          reschedule_count: number
           scheduled_at: string
           sent_at: string | null
+          skip_reason: string | null
           status: string
           step_id: string | null
           step_index: number
@@ -1262,8 +1297,10 @@ export type Database = {
           payload?: Json
           phone: string
           recipient_data?: Json
+          reschedule_count?: number
           scheduled_at?: string
           sent_at?: string | null
+          skip_reason?: string | null
           status?: string
           step_id?: string | null
           step_index?: number
@@ -1281,8 +1318,10 @@ export type Database = {
           payload?: Json
           phone?: string
           recipient_data?: Json
+          reschedule_count?: number
           scheduled_at?: string
           sent_at?: string | null
+          skip_reason?: string | null
           status?: string
           step_id?: string | null
           step_index?: number
@@ -20805,6 +20844,25 @@ export type Database = {
         Returns: Json
       }
       audience_filter_options: { Args: never; Returns: Json }
+      automation_pacing_gate: {
+        Args: {
+          p_daily_cap?: number
+          p_min_gap_seconds?: number
+          p_phone: string
+          p_weekly_cap?: number
+        }
+        Returns: {
+          decision: string
+          retry_after_seconds: number
+          sent_7d: number
+          sent_today: number
+        }[]
+      }
+      automation_pacing_release: {
+        Args: { p_phone: string }
+        Returns: undefined
+      }
+      automation_pacing_reset_stale: { Args: never; Returns: number }
       automation_queue_pending_count: { Args: never; Returns: number }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
@@ -20939,8 +20997,10 @@ export type Database = {
           payload: Json
           phone: string
           recipient_data: Json
+          reschedule_count: number
           scheduled_at: string
           sent_at: string | null
+          skip_reason: string | null
           status: string
           step_id: string | null
           step_index: number
