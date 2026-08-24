@@ -1231,6 +1231,66 @@ export type Database = {
           },
         ]
       }
+      automation_message_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          flow_id: string | null
+          id: string
+          last_error: string | null
+          locked_by: string | null
+          locked_until: string | null
+          payload: Json
+          phone: string
+          recipient_data: Json
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          step_id: string | null
+          step_index: number
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          flow_id?: string | null
+          id?: string
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          payload?: Json
+          phone: string
+          recipient_data?: Json
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          step_id?: string | null
+          step_index?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          flow_id?: string | null
+          id?: string
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          payload?: Json
+          phone?: string
+          recipient_data?: Json
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          step_id?: string | null
+          step_index?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       automation_pending_replies: {
         Row: {
           button_branches: Json | null
@@ -20745,6 +20805,7 @@ export type Database = {
         Returns: Json
       }
       audience_filter_options: { Args: never; Returns: Json }
+      automation_queue_pending_count: { Args: never; Returns: number }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
         Args: never
@@ -20859,6 +20920,39 @@ export type Database = {
           toques_no_mes: number
           unified_id: string
         }[]
+      }
+      claim_automation_queue_jobs: {
+        Args: {
+          p_batch_size?: number
+          p_lease_seconds?: number
+          p_max_attempts?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          flow_id: string | null
+          id: string
+          last_error: string | null
+          locked_by: string | null
+          locked_until: string | null
+          payload: Json
+          phone: string
+          recipient_data: Json
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          step_id: string | null
+          step_index: number
+          updated_at: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "automation_message_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       claim_dispatch_jobs: {
         Args: {
