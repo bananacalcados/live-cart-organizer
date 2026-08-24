@@ -157,6 +157,8 @@ Deno.serve(async (req) => {
       if (!jobs || jobs.length === 0) break;
 
       for (const job of jobs as any[]) {
+        processed++;
+
         if (Date.now() - startedAt > RUN_BUDGET_MS) {
           // devolve para a fila sem consumir tentativa extra
           await supabase
