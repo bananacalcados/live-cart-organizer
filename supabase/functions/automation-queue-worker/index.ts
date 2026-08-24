@@ -279,6 +279,10 @@ Deno.serve(async (req) => {
         } catch (err) {
           const msg = String(err);
           const terminal = isTerminalSendError(msg) || (job.attempts || 1) >= MAX_ATTEMPTS;
+          // devolve a cota reservada no gate, já que a mensagem não saiu
+          try {
+            await supabase.rpc("automation_pacing_release", { p_phone: job.phone });
+          } catch (_e) { /* noop */ }
           await supabase
             .from("automation_message_queue")
             .update({
@@ -303,9 +307,11 @@ Deno.serve(async (req) => {
 
     const { data: pending } = await supabase.rpc("automation_queue_pending_count");
 
-    return new Response(JSON.stringify({ success: true, worker: workerId, sent, failed, skipped, pending: pending ?? null }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: true, worker: workerId, sent, failed, skipped, deferred, capped, pending: pending ?? null }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+
   } catch (err) {
     console.error("[automation-queue-worker] fatal:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
