@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendAutomationJob, type AutomationJobPayload } from "../_shared/automation-send.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +65,50 @@ serve(async (req) => {
         .replace(/\{\{telefone\}\}/g, phone);
     }
 
+    // ---------------------------------------------------------------------
+    // ETAPA 1: nada é enviado em rajada aqui. Materializamos os blocos numa
+    // fila (automation_message_queue) e apenas o PRIMEIRO bloco vai inline,
+    // porque o cliente acabou de clicar e precisa de resposta imediata.
+    // ---------------------------------------------------------------------
+    const BLOCK_GAP_MS = 800;   // espaçamento entre blocos do mesmo step
+    const STEP_GAP_MS = 500;    // espaçamento entre steps
+    let cursorMs = 0;           // offset acumulado a partir de agora
+    let firstSent = false;
+    const queueRows: Record<string, unknown>[] = [];
+
+    async function emit(
+      stepId: string,
+      stepIndex: number,
+      numberId: string | null | undefined,
+      payload: AutomationJobPayload,
+    ) {
+      if (!firstSent && cursorMs === 0) {
+        firstSent = true;
+        try {
+          await sendAutomationJob({ supabaseUrl, serviceKey: supabaseKey, supabase }, phone, numberId, payload);
+          await supabase.from('automation_executions').insert({
+            flow_id: flowId, step_id: stepId, status: 'success',
+            result: { phone, action: `inline_${payload.kind}`, continued: true },
+          });
+        } catch (err) {
+          console.error('[continue-flow] inline send failed, enfileirando:', String(err));
+          queueRows.push({
+            phone, flow_id: flowId, step_id: stepId, step_index: stepIndex,
+            payload, whatsapp_number_id: numberId || null,
+            recipient_data: recipientData || {},
+            scheduled_at: new Date(Date.now() + 30_000).toISOString(),
+          });
+        }
+        return;
+      }
+      queueRows.push({
+        phone, flow_id: flowId, step_id: stepId, step_index: stepIndex,
+        payload, whatsapp_number_id: numberId || null,
+        recipient_data: recipientData || {},
+        scheduled_at: new Date(Date.now() + cursorMs).toISOString(),
+      });
+    }
+
     for (let i = startFromStep; i < steps.length; i++) {
       const step = steps[i];
       const config = step.action_config as Record<string, unknown> || {};
@@ -75,9 +120,9 @@ serve(async (req) => {
         break;
       }
 
-      // Apply delay
+      // Delay configurado no step: agora vira offset de agendamento (sem bloquear a função)
       if (step.delay_seconds > 0) {
-        await new Promise(r => setTimeout(r, step.delay_seconds * 1000));
+        cursorMs += step.delay_seconds * 1000;
       }
 
       // If we hit another wait_for_reply, create a new pending reply and stop
@@ -99,7 +144,7 @@ serve(async (req) => {
       }
 
       if (step.action_type === 'delay') {
-        continue; // delay already applied above
+        continue; // delay já contabilizado no cursor
       }
 
       const sendNumberId = (config.whatsappNumberId as string) || whatsappNumberId;
@@ -137,20 +182,11 @@ serve(async (req) => {
           });
         }
 
-        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send-template`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone, templateName,
-            language: (config.language as string) || 'pt_BR',
-            whatsappNumberId: sendNumberId,
-            components: components.length > 0 ? components : undefined,
-          }),
-        });
-
-        await supabase.from('automation_executions').insert({
-          flow_id: flowId, step_id: step.id, status: 'success',
-          result: { phone, action: 'send_template', template: templateName, continued: true },
+        await emit(step.id, i, sendNumberId, {
+          kind: 'template',
+          templateName,
+          language: (config.language as string) || 'pt_BR',
+          components,
         });
 
         // If template has buttonBranches, create pending reply and stop
@@ -204,55 +240,23 @@ serve(async (req) => {
           const blk = rawBlocks[bi];
           const isLastInteractive = hasButtons && bi === lastTextIdxForInteractive;
           if (isLastInteractive) {
-            const bodyText = replaceVars(blk.message || '') || '👇';
-            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone, type: 'interactive',
-                whatsappNumberId: sendNumberId,
-                interactiveData: {
-                  body: bodyText,
-                  buttons: interactiveButtons.slice(0, 3).map((title, idx) => ({ id: `btn-${idx}`, title })),
-                },
-              }),
-            });
-            await supabase.from('whatsapp_messages').insert({
-              phone, message: bodyText, direction: 'outgoing', status: 'sent',
-              whatsapp_number_id: sendNumberId || null,
+            await emit(step.id, i, sendNumberId, {
+              kind: 'interactive',
+              body: replaceVars(blk.message || '') || '👇',
+              buttons: interactiveButtons,
             });
           } else {
             const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
-            const blkMessage = replaceVars(blk.message || '');
-            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone,
-                message: blkMessage,
-                mediaUrl: blk.mediaUrl,
-                mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
-                type: blk.mediaUrl ? blkType : 'text',
-                whatsappNumberId: sendNumberId,
-              }),
-            });
-            // Persist outgoing message (audio/text/media) so it shows up in the chat UI
-            await supabase.from('whatsapp_messages').insert({
-              phone,
-              message: blkMessage || null,
-              media_url: blk.mediaUrl || null,
-              direction: 'outgoing',
-              status: 'sent',
-              whatsapp_number_id: sendNumberId || null,
+            await emit(step.id, i, sendNumberId, {
+              kind: 'text',
+              message: replaceVars(blk.message || ''),
+              mediaUrl: blk.mediaUrl,
+              mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
+              type: blk.mediaUrl ? blkType : 'text',
             });
           }
-          if (bi < rawBlocks.length - 1) await new Promise(r => setTimeout(r, 800));
+          if (bi < rawBlocks.length - 1) cursorMs += BLOCK_GAP_MS;
         }
-
-        await supabase.from('automation_executions').insert({
-          flow_id: flowId, step_id: step.id, status: 'success',
-          result: { phone, action: 'send_text', blocks: rawBlocks.length, hasButtons, continued: true },
-        });
 
         // If buttons present and branches configured, register pending reply and stop
         if (hasButtons && config.buttonBranches && Object.keys(config.buttonBranches as object).length > 0) {
@@ -306,16 +310,7 @@ serve(async (req) => {
         const aiData = await aiRes.json();
 
         if (aiRes.ok && aiData.reply) {
-          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, message: aiData.reply, whatsappNumberId: aiNumberId }),
-          });
-
-          await supabase.from('whatsapp_messages').insert({
-            phone, message: `[IA] ${aiData.reply}`, direction: 'outgoing', status: 'sent',
-            whatsapp_number_id: aiNumberId,
-          });
+          await emit(step.id, i, aiNumberId, { kind: 'text', message: `${aiData.reply}` });
         }
 
         await supabase.from('automation_executions').insert({
@@ -328,10 +323,23 @@ serve(async (req) => {
         break;
       }
 
-      await new Promise(r => setTimeout(r, 500));
+      cursorMs += STEP_GAP_MS;
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    // Persist queue (idempotente: índice único por phone+flow+step+scheduled_at)
+    let queued = 0;
+    if (queueRows.length > 0) {
+      const { data: inserted, error: qErr } = await supabase
+        .from('automation_message_queue')
+        .upsert(queueRows, { onConflict: 'phone,flow_id,step_id,scheduled_at', ignoreDuplicates: true })
+        .select('id');
+      if (qErr) console.error('[continue-flow] queue insert error:', qErr);
+      queued = inserted?.length ?? 0;
+    }
+
+    console.log(`[continue-flow] inline=${firstSent ? 1 : 0} queued=${queued} for ${phone}`);
+
+    return new Response(JSON.stringify({ success: true, inlineSent: firstSent, queued }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
