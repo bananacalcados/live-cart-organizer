@@ -23,17 +23,75 @@ const DEFAULT_PER_MINUTE = 60;
 const DEFAULT_JITTER_MIN_MS = 250;
 const DEFAULT_JITTER_MAX_MS = 900;
 
+// Etapa 2 — ritmo por contato
+const DEFAULT_MIN_GAP_SECONDS = 45;        // intervalo mínimo entre msgs p/ o mesmo contato
+const DEFAULT_ACTIVE_GAP_SECONDS = 10;     // cliente respondeu recentemente → conversa ativa
+const DEFAULT_ACTIVE_WINDOW_MIN = 30;      // janela que define "conversa ativa"
+const DEFAULT_DAILY_CAP = 8;
+const DEFAULT_WEEKLY_CAP = 20;
+const DEFAULT_QUIET_START = 22;            // 22h
+const DEFAULT_QUIET_END = 8;               // 08h
+const MAX_RESCHEDULES = 40;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function readSetting(supabase: any, key: string, fallback: number): Promise<number> {
   try {
     const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
     const n = Number(data?.value);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
   } catch (_e) {
     return fallback;
   }
 }
+
+/** Hora atual em São Paulo (0-23). */
+function spHour(d = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(d),
+  ) % 24;
+}
+
+function isQuietHour(hour: number, start: number, end: number): boolean {
+  if (start === end) return false;
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+}
+
+/** Próximo instante fora da janela de silêncio (início do horário permitido em SP). */
+function nextAllowedAfterQuiet(end: number): Date {
+  const now = new Date();
+  for (let i = 0; i <= 48; i++) {
+    const cand = new Date(now.getTime() + i * 30 * 60 * 1000);
+    if (spHour(cand) === end) return cand;
+  }
+  return new Date(now.getTime() + 60 * 60 * 1000);
+}
+
+/** Reagenda um job sem consumir tentativa. */
+async function reschedule(
+  supabase: any,
+  job: any,
+  when: Date,
+  reason: string,
+) {
+  await supabase
+    .from("automation_message_queue")
+    .update({
+      status: "pending",
+      locked_by: null,
+      locked_until: null,
+      scheduled_at: when.toISOString(),
+      attempts: Math.max(0, (job.attempts || 1) - 1),
+      reschedule_count: (job.reschedule_count || 0) + 1,
+      last_error: reason,
+    })
+    .eq("id", job.id);
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -63,14 +121,28 @@ Deno.serve(async (req) => {
     const perMinute = await readSetting(supabase, "automation_queue_per_minute", DEFAULT_PER_MINUTE);
     const jitterMin = await readSetting(supabase, "automation_queue_jitter_min_ms", DEFAULT_JITTER_MIN_MS);
     const jitterMax = await readSetting(supabase, "automation_queue_jitter_max_ms", DEFAULT_JITTER_MAX_MS);
-    const baseGapMs = Math.floor(60_000 / perMinute);
+    const minGap = await readSetting(supabase, "automation_contact_min_gap_seconds", DEFAULT_MIN_GAP_SECONDS);
+    const activeGap = await readSetting(supabase, "automation_contact_active_gap_seconds", DEFAULT_ACTIVE_GAP_SECONDS);
+    const activeWindowMin = await readSetting(supabase, "automation_contact_active_window_minutes", DEFAULT_ACTIVE_WINDOW_MIN);
+    const dailyCap = await readSetting(supabase, "automation_contact_daily_cap", DEFAULT_DAILY_CAP);
+    const weeklyCap = await readSetting(supabase, "automation_contact_weekly_cap", DEFAULT_WEEKLY_CAP);
+    const quietStart = await readSetting(supabase, "automation_quiet_hours_start", DEFAULT_QUIET_START);
+    const quietEnd = await readSetting(supabase, "automation_quiet_hours_end", DEFAULT_QUIET_END);
+    const baseGapMs = Math.floor(60_000 / Math.max(1, perMinute));
 
     let sent = 0;
     let failed = 0;
     let skipped = 0;
+    let deferred = 0;
+    let capped = 0;
 
-    while (Date.now() - startedAt < RUN_BUDGET_MS && sent + failed + skipped < perMinute) {
-      const batchSize = Math.min(20, perMinute - (sent + failed + skipped));
+
+    let processed = 0;
+    const PROCESS_LIMIT = Math.max(perMinute * 5, 100);
+
+    while (Date.now() - startedAt < RUN_BUDGET_MS && sent + failed < perMinute && processed < PROCESS_LIMIT) {
+      const batchSize = Math.min(20, perMinute - (sent + failed));
+
       const { data: jobs, error: claimErr } = await supabase.rpc("claim_automation_queue_jobs", {
         p_worker_id: workerId,
         p_batch_size: batchSize,
@@ -85,6 +157,8 @@ Deno.serve(async (req) => {
       if (!jobs || jobs.length === 0) break;
 
       for (const job of jobs as any[]) {
+        processed++;
+
         if (Date.now() - startedAt > RUN_BUDGET_MS) {
           // devolve para a fila sem consumir tentativa extra
           await supabase
@@ -103,11 +177,89 @@ Deno.serve(async (req) => {
         if (blocked && blocked.length > 0) {
           await supabase
             .from("automation_message_queue")
-            .update({ status: "skipped", last_error: "blocked_contact", locked_by: null, locked_until: null })
+            .update({ status: "skipped", skip_reason: "blocked_contact", last_error: "blocked_contact", locked_by: null, locked_until: null })
             .eq("id", job.id);
           skipped++;
           continue;
         }
+
+        // --- Etapa 2a: janela de silêncio (22h–08h SP) → reagenda, não descarta
+        if (isQuietHour(spHour(), quietStart, quietEnd)) {
+          await reschedule(supabase, job, nextAllowedAfterQuiet(quietEnd), "quiet_hours");
+          deferred++;
+          continue;
+        }
+
+        // --- Etapa 2b: conversa ativa reduz o intervalo mínimo exigido
+        let gapSeconds = minGap;
+        try {
+          const since = new Date(Date.now() - activeWindowMin * 60 * 1000).toISOString();
+          const { data: inbound } = await supabase
+            .from("whatsapp_messages")
+            .select("id")
+            .eq("phone", job.phone)
+            .eq("direction", "incoming")
+            .gte("created_at", since)
+            .limit(1);
+          if (inbound && inbound.length > 0) gapSeconds = activeGap;
+        } catch (_e) {
+          // sem histórico acessível → mantém o intervalo padrão (mais conservador)
+        }
+
+        // --- Etapa 2c: gate atômico de ritmo + teto por contato
+        const { data: gateRows, error: gateErr } = await supabase.rpc("automation_pacing_gate", {
+          p_phone: job.phone,
+          p_min_gap_seconds: gapSeconds,
+          p_daily_cap: dailyCap,
+          p_weekly_cap: weeklyCap,
+        });
+        if (gateErr) {
+          console.error("[automation-queue-worker] pacing gate error:", gateErr);
+          await reschedule(supabase, job, new Date(Date.now() + 60_000), "pacing_gate_error");
+          deferred++;
+          continue;
+        }
+        const gate = Array.isArray(gateRows) ? gateRows[0] : gateRows;
+        const decision = gate?.decision ?? "allow";
+
+        if (decision === "cap_daily" || decision === "cap_weekly") {
+          await supabase
+            .from("automation_message_queue")
+            .update({
+              status: "skipped",
+              skip_reason: decision,
+              last_error: `contact_cap:${decision} (dia=${gate?.sent_today ?? "?"}, 7d=${gate?.sent_7d ?? "?"})`,
+              locked_by: null,
+              locked_until: null,
+            })
+            .eq("id", job.id);
+          capped++;
+          continue;
+        }
+
+        if (decision === "wait") {
+          if ((job.reschedule_count || 0) >= MAX_RESCHEDULES) {
+            await supabase
+              .from("automation_message_queue")
+              .update({
+                status: "skipped",
+                skip_reason: "max_reschedules",
+                last_error: "reagendado demais aguardando intervalo do contato",
+                locked_by: null,
+                locked_until: null,
+              })
+              .eq("id", job.id);
+            skipped++;
+            continue;
+          }
+          const waitSec = Math.max(5, Number(gate?.retry_after_seconds ?? gapSeconds));
+          const jitterSec = Math.floor(Math.random() * 15);
+          await reschedule(supabase, job, new Date(Date.now() + (waitSec + jitterSec) * 1000), "contact_min_gap");
+          deferred++;
+          continue;
+        }
+
+
 
         try {
           await sendAutomationJob(
@@ -133,6 +285,10 @@ Deno.serve(async (req) => {
         } catch (err) {
           const msg = String(err);
           const terminal = isTerminalSendError(msg) || (job.attempts || 1) >= MAX_ATTEMPTS;
+          // devolve a cota reservada no gate, já que a mensagem não saiu
+          try {
+            await supabase.rpc("automation_pacing_release", { p_phone: job.phone });
+          } catch (_e) { /* noop */ }
           await supabase
             .from("automation_message_queue")
             .update({
@@ -157,9 +313,11 @@ Deno.serve(async (req) => {
 
     const { data: pending } = await supabase.rpc("automation_queue_pending_count");
 
-    return new Response(JSON.stringify({ success: true, worker: workerId, sent, failed, skipped, pending: pending ?? null }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: true, worker: workerId, sent, failed, skipped, deferred, capped, pending: pending ?? null }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+
   } catch (err) {
     console.error("[automation-queue-worker] fatal:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
