@@ -121,11 +121,21 @@ Deno.serve(async (req) => {
     const perMinute = await readSetting(supabase, "automation_queue_per_minute", DEFAULT_PER_MINUTE);
     const jitterMin = await readSetting(supabase, "automation_queue_jitter_min_ms", DEFAULT_JITTER_MIN_MS);
     const jitterMax = await readSetting(supabase, "automation_queue_jitter_max_ms", DEFAULT_JITTER_MAX_MS);
-    const baseGapMs = Math.floor(60_000 / perMinute);
+    const minGap = await readSetting(supabase, "automation_contact_min_gap_seconds", DEFAULT_MIN_GAP_SECONDS);
+    const activeGap = await readSetting(supabase, "automation_contact_active_gap_seconds", DEFAULT_ACTIVE_GAP_SECONDS);
+    const activeWindowMin = await readSetting(supabase, "automation_contact_active_window_minutes", DEFAULT_ACTIVE_WINDOW_MIN);
+    const dailyCap = await readSetting(supabase, "automation_contact_daily_cap", DEFAULT_DAILY_CAP);
+    const weeklyCap = await readSetting(supabase, "automation_contact_weekly_cap", DEFAULT_WEEKLY_CAP);
+    const quietStart = await readSetting(supabase, "automation_quiet_hours_start", DEFAULT_QUIET_START);
+    const quietEnd = await readSetting(supabase, "automation_quiet_hours_end", DEFAULT_QUIET_END);
+    const baseGapMs = Math.floor(60_000 / Math.max(1, perMinute));
 
     let sent = 0;
     let failed = 0;
     let skipped = 0;
+    let deferred = 0;
+    let capped = 0;
+
 
     while (Date.now() - startedAt < RUN_BUDGET_MS && sent + failed + skipped < perMinute) {
       const batchSize = Math.min(20, perMinute - (sent + failed + skipped));
