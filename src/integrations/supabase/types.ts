@@ -1330,6 +1330,54 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_opt_outs: {
+        Row: {
+          created_at: string
+          id: string
+          keyword: string | null
+          phone: string
+          phone_key: string | null
+          source: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keyword?: string | null
+          phone: string
+          phone_key?: string | null
+          source?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keyword?: string | null
+          phone?: string
+          phone_key?: string | null
+          source?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_opt_outs_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_opt_outs_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_pending_replies: {
         Row: {
           button_branches: Json | null
@@ -20863,6 +20911,7 @@ export type Database = {
         Returns: undefined
       }
       automation_pacing_reset_stale: { Args: never; Returns: number }
+      automation_phone_key: { Args: { p_phone: string }; Returns: string }
       automation_queue_pending_count: { Args: never; Returns: number }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
@@ -21774,6 +21823,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      is_automation_opted_out: { Args: { p_phone: string }; Returns: boolean }
       is_cpf_mergeable: { Args: { p_cpf: string }; Returns: boolean }
       is_email_placeholder: { Args: { p_email: string }; Returns: boolean }
       is_generic_email: { Args: { raw: string }; Returns: boolean }
