@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { handleIncomingOptOut, isOptedOut } from "../_shared/opt-out.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +37,27 @@ serve(async (req) => {
     }
 
     console.log(`[incoming-message-trigger] phone=${phone}, instance=${instance}`);
+
+    // ─── Etapa 3: opt-out real ("PARAR") ───────────────────────────────
+    // Registra o descadastro cross-instância e não aciona nenhuma automação.
+    const { optedOut, keyword } = await handleIncomingOptOut(
+      supabase,
+      phone,
+      messageText,
+      whatsappNumberIdFromBody ?? null,
+    );
+    if (optedOut) {
+      return new Response(JSON.stringify({ triggered: 0, reason: 'opted_out', keyword }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (await isOptedOut(supabase, phone)) {
+      return new Response(JSON.stringify({ triggered: 0, reason: 'opted_out' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
 
     // ─── Auto-reply detection: skip automated WhatsApp messages ────────
     const autoReplyPatterns = [

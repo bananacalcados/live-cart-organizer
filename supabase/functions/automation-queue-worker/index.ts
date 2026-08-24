@@ -8,6 +8,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { sendAutomationJob, isTerminalSendError } from "../_shared/automation-send.ts";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,6 +132,11 @@ Deno.serve(async (req) => {
     const quietEnd = await readSetting(supabase, "automation_quiet_hours_end", DEFAULT_QUIET_END);
     const baseGapMs = Math.floor(60_000 / Math.max(1, perMinute));
 
+    // Supressão cross-instância: bloqueados + descadastrados ("PARAR")
+    const suppressed = await loadBlockedSuffixes(supabase);
+
+
+
     let sent = 0;
     let failed = 0;
     let skipped = 0;
@@ -168,20 +175,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Contato bloqueado / opt-out → skip
-        const { data: blocked } = await supabase
-          .from("blocked_contacts")
-          .select("id")
-          .eq("phone", job.phone)
-          .limit(1);
-        if (blocked && blocked.length > 0) {
+        // Contato bloqueado (qualquer instância) ou descadastrado ("PARAR") → skip
+        if (isBlocked(suppressed, job.phone)) {
           await supabase
             .from("automation_message_queue")
-            .update({ status: "skipped", skip_reason: "blocked_contact", last_error: "blocked_contact", locked_by: null, locked_until: null })
+            .update({ status: "skipped", skip_reason: "blocked_or_opt_out", last_error: "blocked_or_opt_out", locked_by: null, locked_until: null })
             .eq("id", job.id);
           skipped++;
           continue;
         }
+
 
         // --- Etapa 2a: janela de silêncio (22h–08h SP) → reagenda, não descarta
         if (isQuietHour(spHour(), quietStart, quietEnd)) {

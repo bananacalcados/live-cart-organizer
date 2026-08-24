@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAutomationJob, type AutomationJobPayload } from "../_shared/automation-send.ts";
+import { isOptedOut } from "../_shared/opt-out.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +28,16 @@ serve(async (req) => {
     }
 
     console.log(`[continue-flow] Continuing flow ${flowId} for ${phone} from step ${startFromStep}`);
+
+    // Etapa 3 — respeita descadastro ("PARAR"): nada é enviado nem enfileirado.
+    if (await isOptedOut(supabase, phone)) {
+      console.log(`[continue-flow] ${phone} está descadastrado (opt-out) — nada enviado`);
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'opted_out' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
 
     const { data: steps } = await supabase
       .from('automation_steps')

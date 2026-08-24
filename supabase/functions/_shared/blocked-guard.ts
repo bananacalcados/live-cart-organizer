@@ -54,8 +54,10 @@ export function phoneKey(phone: string | null | undefined): string {
 export const phoneSuffix = phoneKey;
 
 /**
- * Carrega TODAS as chaves (DDD + 8 díg.) de contatos bloqueados em qualquer instância.
- * Fail-open: se a leitura falhar, retorna conjunto vazio para não derrubar disparos.
+ * Carrega TODAS as chaves (DDD + 8 díg.) de contatos suprimidos: bloqueados em
+ * qualquer instância (`blocked_contacts`) + descadastrados via "PARAR"
+ * (`automation_opt_outs`, Etapa 3 — cross-instância por definição).
+ * Fail-open: se a leitura falhar, retorna o que conseguiu para não derrubar disparos.
  */
 export async function loadBlockedSuffixes(
   supabase: SupabaseClient,
@@ -85,8 +87,36 @@ export async function loadBlockedSuffixes(
   } catch (e) {
     console.error("[blocked-guard] exceção ao carregar bloqueados:", e);
   }
+
+  // Opt-outs ("PARAR") — supressão cross-instância de todo envio proativo.
+  try {
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("automation_opt_outs")
+        .select("phone_key")
+        .range(from, from + pageSize - 1);
+      if (error) {
+        console.error("[blocked-guard] erro ao ler automation_opt_outs:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      for (const r of data) {
+        const key = (r as { phone_key?: string }).phone_key;
+        if (key) set.add(key);
+      }
+      if (data.length < pageSize) break;
+      from += pageSize;
+      if (from > 200000) break;
+    }
+  } catch (e) {
+    console.error("[blocked-guard] exceção ao carregar opt-outs:", e);
+  }
+
   return set;
 }
+
 
 /** True se o telefone está bloqueado (match por DDD + 8 dígitos finais). */
 export function isBlocked(set: Set<string>, phone: string | null | undefined): boolean {

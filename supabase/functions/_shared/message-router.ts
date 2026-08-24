@@ -8,6 +8,8 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { handleIncomingOptOut } from "./opt-out.ts";
+
 
 const AI_MESSAGE_PREFIX_REGEX = /^\[IA(?:-[A-Z]+)?\]\s*/i;
 const AUTOMATED_DUPLICATE_WINDOW_MS = 120_000; // 2 min — Z-API echo can arrive with significant delay
@@ -94,6 +96,25 @@ export async function routeMessage(
   if (isGroup) {
     return { agent: 'none', reason: 'group_message' };
   }
+
+  // 0a. Opt-out real ("PARAR") — registra o descadastro cross-instância, limpa a
+  // fila pendente do contato e encerra qualquer sessão de IA ativa.
+  try {
+    const { optedOut, keyword } = await handleIncomingOptOut(
+      supabase as unknown as Parameters<typeof handleIncomingOptOut>[0],
+      phone,
+      input.messageText,
+      whatsappNumberId ?? null,
+    );
+    if (optedOut) {
+      console.log(`[router] opt-out de ${phone} via "${keyword}" — nenhum agente acionado`);
+      return { agent: 'none', reason: 'opted_out' };
+    }
+  } catch (err) {
+    console.error('[router] erro ao processar opt-out:', err);
+  }
+
+
 
   // 0b. Check if the WhatsApp instance has AI globally paused (e.g. Ravena)
   if (whatsappNumberId) {
