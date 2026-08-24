@@ -168,20 +168,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Contato bloqueado / opt-out → skip
-        const { data: blocked } = await supabase
-          .from("blocked_contacts")
-          .select("id")
-          .eq("phone", job.phone)
-          .limit(1);
-        if (blocked && blocked.length > 0) {
+        // Contato bloqueado (qualquer instância) ou descadastrado ("PARAR") → skip
+        if (isBlocked(suppressed, job.phone)) {
           await supabase
             .from("automation_message_queue")
-            .update({ status: "skipped", skip_reason: "blocked_contact", last_error: "blocked_contact", locked_by: null, locked_until: null })
+            .update({ status: "skipped", skip_reason: "blocked_or_opt_out", last_error: "blocked_or_opt_out", locked_by: null, locked_until: null })
             .eq("id", job.id);
           skipped++;
           continue;
         }
+
 
         // --- Etapa 2a: janela de silêncio (22h–08h SP) → reagenda, não descarta
         if (isQuietHour(spHour(), quietStart, quietEnd)) {
