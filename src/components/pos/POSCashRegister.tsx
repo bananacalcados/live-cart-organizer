@@ -580,10 +580,13 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 <Lock className="h-4 w-4" /> Fechar Caixa
               </Button>
             </div>
+            </>)}
           </TabsContent>
 
           {/* ===== TAB: COMPROVANTES ELETRÔNICOS ===== */}
           <TabsContent value="electronic" className="space-y-4">
+            {register && (<>
+
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-pos-white">Comprovantes de Pagamento</h3>
