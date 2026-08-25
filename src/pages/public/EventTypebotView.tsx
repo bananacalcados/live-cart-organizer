@@ -131,7 +131,8 @@ export default function EventTypebotView() {
     try {
       const { data, error } = await supabase.functions.invoke('event-lead-capture', {
         body: {
-          event_id: tb.event_id,
+          // Typebots globais não têm evento fixo — o backend resolve a live no ar.
+          event_id: tb.event_id ?? null,
           source: 'typebot',
           typebot_id: tb.id,
           slug: tb.slug,
