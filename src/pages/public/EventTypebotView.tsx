@@ -167,7 +167,8 @@ export default function EventTypebotView() {
         try {
           const phoneDigits = (updated.phone || '').replace(/\D/g, '');
           const today = new Date().toISOString().slice(0, 10);
-          const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
+          const scopeId = data?.event_id || tb.event_id || tb.id;
+          const eventId = `lead_${phoneDigits}_${scopeId}_${today}`;
           trackPixelEvent(
             'Lead',
             {
@@ -181,7 +182,7 @@ export default function EventTypebotView() {
             body: {
               phone: phoneDigits,
               event_name: 'Lead',
-              campaign_id: tb.event_id,
+              campaign_id: scopeId,
               campaign_slug: tb.slug,
               campaign_name: tb.name,
               full_name: updated.name,
