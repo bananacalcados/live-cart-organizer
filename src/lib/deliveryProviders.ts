@@ -208,29 +208,32 @@ export async function payProvider(input: PayProviderInput): Promise<ProviderPaym
 
   // Take the money out of the cash register (sangria), if an open register is provided.
   if (cashRegisterId && paidStoreId) {
-    try {
-      const { data: reg } = await supabase
-        .from("pos_cash_registers")
-        .select("withdrawals")
-        .eq("id", cashRegisterId)
-        .maybeSingle();
-      const current = Number((reg as any)?.withdrawals || 0);
-      await supabase
-        .from("pos_cash_registers")
-        .update({ withdrawals: current + totalAmount })
-        .eq("id", cashRegisterId);
-
-      await supabase.from("pos_cash_movements" as any).insert({
-        cash_register_id: cashRegisterId,
-        store_id: paidStoreId,
-        type: "withdraw",
-        amount: totalAmount,
-        description: `Pagamento prestador: ${provider.name}`,
-      } as any);
-    } catch (e) {
-      console.warn("Falha ao registrar sangria do pagamento de prestador:", e);
+    // Register the detailed movement FIRST — the aggregate only moves if the detail was saved,
+    // so the "Sangrias/Reforços" total can never diverge from the detailed list.
+    const { error: movErr } = await supabase.from("pos_cash_movements" as any).insert({
+      cash_register_id: cashRegisterId,
+      store_id: paidStoreId,
+      type: "withdraw",
+      amount: totalAmount,
+      description: `Pagamento prestador: ${provider.name}`,
+    } as any);
+    if (movErr) {
+      console.error("Falha ao registrar sangria do pagamento de prestador:", movErr);
+      throw movErr;
     }
+
+    const { data: reg } = await supabase
+      .from("pos_cash_registers")
+      .select("withdrawals")
+      .eq("id", cashRegisterId)
+      .maybeSingle();
+    const current = Number((reg as any)?.withdrawals || 0);
+    await supabase
+      .from("pos_cash_registers")
+      .update({ withdrawals: current + totalAmount })
+      .eq("id", cashRegisterId);
   }
+
 
   return paymentRow;
 }
