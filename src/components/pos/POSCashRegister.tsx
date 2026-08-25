@@ -254,7 +254,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       if (error) throw error;
 
       // Log individual movement with counterpart account (trigger creates transfer entries)
-      await (supabase as any).from('pos_cash_movements').insert({
+      const { error: movErr } = await (supabase as any).from('pos_cash_movements').insert({
         cash_register_id: register.id,
         store_id: storeId,
         seller_id: sellerId || null,
@@ -263,6 +263,12 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         description: movementNotes || null,
         counterpart_bank_account_id: movementCounterpart,
       });
+      if (movErr) {
+        // rollback the aggregate so total and detailed list never diverge
+        await supabase.from('pos_cash_registers').update({ [field]: current }).eq('id', register.id);
+        throw movErr;
+      }
+
 
       setRegister(r => r ? { ...r, [field]: current + amount } : r);
       setShowMovement(null);
