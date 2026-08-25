@@ -1317,6 +1317,7 @@ export function MassTemplateDispatcher() {
         p_provider: provider,
         p_overrides: [],
         p_skip_unify: skipUnify,
+        p_override_quota: overrideQuota,
       } as any);
       if (error) {
         console.error('enqueue_dispatch_recipients_guarded error:', error);
