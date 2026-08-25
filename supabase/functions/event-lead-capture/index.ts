@@ -298,6 +298,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
+      event_id,
       already_registered: !!existing,
       lead_id: lead.id,
       referral_token: lead.referral_token,
