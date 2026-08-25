@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ProviderPayablesPanel } from "./ProviderPayablesPanel";
+import { POSCashPeriodReport } from "./POSCashPeriodReport";
 import { Truck } from "lucide-react";
 
 interface Props {
@@ -465,34 +466,41 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         )}
       </div>
 
-      {!register ? (
-        <div className="text-center py-16 space-y-4">
-          <div className="h-20 w-20 mx-auto rounded-full bg-pos-orange/10 flex items-center justify-center">
-            <DollarSign className="h-10 w-10 text-pos-orange" />
-          </div>
-          <h3 className="text-xl font-bold text-pos-white">Caixa Fechado</h3>
-          <p className="text-pos-white/50">Abra o caixa para começar a registrar vendas</p>
-          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-8" onClick={() => setShowOpen(true)}>
-            <Unlock className="h-5 w-5" /> Abrir Caixa
-          </Button>
-        </div>
-      ) : (
-        <Tabs defaultValue="cash" className="space-y-4">
-          <TabsList className="bg-pos-white/5 border border-pos-orange/20">
-            <TabsTrigger value="cash" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
-              <DollarSign className="h-4 w-4" /> Dinheiro (Espécie)
-            </TabsTrigger>
-            <TabsTrigger value="electronic" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
-              <CreditCard className="h-4 w-4" /> Comprovantes Eletrônicos
-            </TabsTrigger>
-            <TabsTrigger value="providers" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
-              <Truck className="h-4 w-4" /> Prestadores
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue={register ? "cash" : "period"} className="space-y-4">
+        <TabsList className="bg-pos-white/5 border border-pos-orange/20 flex-wrap h-auto">
+          <TabsTrigger value="cash" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+            <DollarSign className="h-4 w-4" /> Dinheiro (Espécie)
+          </TabsTrigger>
+          <TabsTrigger value="electronic" disabled={!register} className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+            <CreditCard className="h-4 w-4" /> Comprovantes Eletrônicos
+          </TabsTrigger>
+          <TabsTrigger value="providers" disabled={!register} className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+            <Truck className="h-4 w-4" /> Prestadores
+          </TabsTrigger>
+          <TabsTrigger value="period" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+            <FileText className="h-4 w-4" /> Histórico / Período
+          </TabsTrigger>
+        </TabsList>
 
 
           {/* ===== TAB: DINHEIRO ===== */}
           <TabsContent value="cash" className="space-y-4">
+            {!register ? (
+              <div className="text-center py-16 space-y-4">
+                <div className="h-20 w-20 mx-auto rounded-full bg-pos-orange/10 flex items-center justify-center">
+                  <DollarSign className="h-10 w-10 text-pos-orange" />
+                </div>
+                <h3 className="text-xl font-bold text-pos-white">Caixa Fechado</h3>
+                <p className="text-pos-white/50">Abra o caixa para começar a registrar vendas</p>
+                <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-8" onClick={() => setShowOpen(true)}>
+                  <Unlock className="h-5 w-5" /> Abrir Caixa
+                </Button>
+                <p className="text-xs text-pos-white/40">
+                  Para ver fechamentos anteriores, use a aba <span className="text-pos-orange">Histórico / Período</span>.
+                </p>
+              </div>
+            ) : (<>
+
             <div className="flex items-center gap-2 text-xs text-pos-white/50">
               <Clock className="h-3 w-3" />
               Aberto em: {new Date(register.opened_at).toLocaleString('pt-BR')}
@@ -573,10 +581,13 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 <Lock className="h-4 w-4" /> Fechar Caixa
               </Button>
             </div>
+            </>)}
           </TabsContent>
 
           {/* ===== TAB: COMPROVANTES ELETRÔNICOS ===== */}
           <TabsContent value="electronic" className="space-y-4">
+            {register && (<>
+
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-pos-white">Comprovantes de Pagamento</h3>
@@ -650,19 +661,26 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 ))}
               </div>
             )}
+            </>)}
           </TabsContent>
 
           {/* ===== TAB: PRESTADORES ===== */}
           <TabsContent value="providers" className="space-y-4">
-            <ProviderPayablesPanel
-              storeId={storeId}
-              cashRegisterId={register.id}
-              onPaid={loadOpenRegister}
-            />
+            {register && (
+              <ProviderPayablesPanel
+                storeId={storeId}
+                cashRegisterId={register.id}
+                onPaid={loadOpenRegister}
+              />
+            )}
+          </TabsContent>
+
+          {/* ===== TAB: HISTÓRICO / PERÍODO ===== */}
+          <TabsContent value="period" className="space-y-4">
+            <POSCashPeriodReport storeId={storeId} />
           </TabsContent>
         </Tabs>
 
-      )}
 
       {/* Open Dialog */}
       <Dialog open={showOpen} onOpenChange={setShowOpen}>
