@@ -255,6 +255,9 @@ export function MassTemplateDispatcher() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
+  // "Furar teto": libera quem foi barrado só por cota mensal / cooldown / classe×tipo.
+  // Nunca libera opt-out (PARAR), banido, silêncio ou sem telefone.
+  const [overrideQuota, setOverrideQuota] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
