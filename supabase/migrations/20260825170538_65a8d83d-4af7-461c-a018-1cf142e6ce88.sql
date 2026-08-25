@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.resolve_typebot_event_id(uuid) FROM anon, authenticated;
