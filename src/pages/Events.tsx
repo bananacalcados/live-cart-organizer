@@ -1,5 +1,6 @@
 import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
+import { GlobalTypebotsPanel } from "@/components/events/GlobalTypebotsPanel";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
