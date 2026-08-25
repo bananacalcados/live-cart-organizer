@@ -31,7 +31,7 @@ serve(async (req) => {
 
     const body = await req.json();
     const {
-      event_id,
+      event_id: bodyEventId,
       source,           // 'lp' | 'typebot' | 'live_comment'
       landing_page_id,
       typebot_id,
