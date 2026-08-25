@@ -21205,28 +21205,18 @@ export type Database = {
         }
         Returns: Json
       }
-      enqueue_dispatch_recipients_guarded:
-        | {
-            Args: {
-              p_candidates: Json
-              p_dispatch_id: string
-              p_overrides?: Json
-              p_provider?: string
-              p_tipo_comunicacao: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_candidates: Json
-              p_dispatch_id: string
-              p_overrides?: Json
-              p_provider?: string
-              p_skip_unify?: boolean
-              p_tipo_comunicacao: string
-            }
-            Returns: Json
-          }
+      enqueue_dispatch_recipients_guarded: {
+        Args: {
+          p_candidates: Json
+          p_dispatch_id: string
+          p_override_quota?: boolean
+          p_overrides?: Json
+          p_provider?: string
+          p_skip_unify?: boolean
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
       enqueue_live_campaign_dispatches_guarded: {
         Args: {
           p_campaign_id: string
