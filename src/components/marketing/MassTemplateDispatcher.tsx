@@ -255,6 +255,9 @@ export function MassTemplateDispatcher() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
+  // "Furar teto": libera quem foi barrado só por cota mensal / cooldown / classe×tipo.
+  // Nunca libera opt-out (PARAR), banido, silêncio ou sem telefone.
+  const [overrideQuota, setOverrideQuota] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
@@ -1314,6 +1317,7 @@ export function MassTemplateDispatcher() {
         p_provider: provider,
         p_overrides: [],
         p_skip_unify: skipUnify,
+        p_override_quota: overrideQuota,
       } as any);
       if (error) {
         console.error('enqueue_dispatch_recipients_guarded error:', error);
@@ -2875,6 +2879,19 @@ export function MassTemplateDispatcher() {
                 ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
               </Label>
             </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="override-quota-now"
+                checked={overrideQuota}
+                onCheckedChange={(v) => setOverrideQuota(!!v)}
+              />
+              <Label htmlFor="override-quota-now" className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer">
+                🚨 Furar teto do mês (fechamento) — ignora cota mensal, cooldown e classe×tipo.
+                <span className="block font-normal text-[11px] text-muted-foreground">
+                  Descadastrados (PARAR), banidos, silêncio e sem telefone continuam bloqueados.
+                </span>
+              </Label>
+            </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
               Esta ação não pode ser desfeita. Recomendamos testar antes do disparo.
@@ -2984,6 +3001,19 @@ export function MassTemplateDispatcher() {
                 ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
               </Label>
             </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="override-quota-split"
+                checked={overrideQuota}
+                onCheckedChange={(v) => setOverrideQuota(!!v)}
+              />
+              <Label htmlFor="override-quota-split" className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer">
+                🚨 Furar teto do mês (fechamento) — ignora cota mensal, cooldown e classe×tipo.
+                <span className="block font-normal text-[11px] text-muted-foreground">
+                  Descadastrados (PARAR), banidos, silêncio e sem telefone continuam bloqueados.
+                </span>
+              </Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSplitDialogOpen(false)}>Cancelar</Button>
@@ -3064,6 +3094,19 @@ export function MassTemplateDispatcher() {
               />
               <Label htmlFor="force-resend-schedule" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
                 ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="override-quota-schedule"
+                checked={overrideQuota}
+                onCheckedChange={(v) => setOverrideQuota(!!v)}
+              />
+              <Label htmlFor="override-quota-schedule" className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer">
+                🚨 Furar teto do mês (fechamento) — ignora cota mensal, cooldown e classe×tipo.
+                <span className="block font-normal text-[11px] text-muted-foreground">
+                  Descadastrados (PARAR), banidos, silêncio e sem telefone continuam bloqueados.
+                </span>
               </Label>
             </div>
           </div>
