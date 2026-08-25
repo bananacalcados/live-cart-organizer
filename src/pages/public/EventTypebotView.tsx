@@ -31,7 +31,7 @@ interface Step {
 
 interface TypebotData {
   id: string;
-  event_id: string;
+  event_id: string | null;
   slug: string;
   name: string;
   theme_json: { primary?: string; background?: string };
