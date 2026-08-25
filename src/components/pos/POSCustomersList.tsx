@@ -91,7 +91,9 @@ export function POSCustomersList({ onOpenProfile }: Props) {
     });
   }, []);
 
-  // When store/seller filter changes, derive the allowed phone suffixes from pos_sales.
+  // When store/seller filter changes, derive the allowed phone suffixes.
+  // Feito no banco (RPC) para não estourar o limite de URL/linhas: cruza telefone
+  // da venda, cadastro do PDV, cliente unificado e CPF.
   useEffect(() => {
     let cancelled = false;
     async function deriveSuffixes() {
@@ -99,36 +101,23 @@ export function POSCustomersList({ onOpenProfile }: Props) {
         setAllowedSuffixes(null);
         return;
       }
-      let q = supabase
-        .from("pos_sales")
-        .select("customer_id")
-        .not("customer_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (storeFilter !== "all") q = q.eq("store_id", storeFilter);
-      if (sellerFilter !== "all") q = q.eq("seller_id", sellerFilter);
-      const { data: salesData } = await q;
-      const ids = Array.from(new Set((salesData || []).map((s: any) => s.customer_id))).slice(0, 1000);
-      if (ids.length === 0) {
-        if (!cancelled) setAllowedSuffixes([]);
+      const { data, error } = await supabase.rpc("pos_customer_suffixes_by_filter" as any, {
+        p_store_id: storeFilter === "all" ? null : storeFilter,
+        p_seller_id: sellerFilter === "all" ? null : sellerFilter,
+      });
+      if (cancelled) return;
+      if (error) {
+        console.error("[pos_customer_suffixes_by_filter]", error);
+        toast.error("Erro ao filtrar por loja/vendedora");
+        setAllowedSuffixes(null);
         return;
       }
-      const { data: custData } = await supabase
-        .from("pos_customers")
-        .select("whatsapp")
-        .in("id", ids);
-      const suffixes = Array.from(
-        new Set(
-          (custData || [])
-            .map((c: any) => (c.whatsapp || "").replace(/\D/g, "").slice(-8))
-            .filter((s: string) => s.length === 8),
-        ),
-      );
-      if (!cancelled) setAllowedSuffixes(suffixes);
+      setAllowedSuffixes(((data as string[]) || []).filter((s) => /^\d{8}$/.test(s)));
     }
     deriveSuffixes();
     return () => { cancelled = true; };
   }, [storeFilter, sellerFilter]);
+
 
   const fetchPage = useCallback(async () => {
     setLoading(true);
