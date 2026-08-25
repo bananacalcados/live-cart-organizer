@@ -22063,6 +22063,10 @@ export type Database = {
       }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      pos_customer_suffixes_by_filter: {
+        Args: { p_seller_id?: string; p_store_id?: string }
+        Returns: string[]
+      }
       pos_estoque_divergence_summary: { Args: never; Returns: Json }
       pos_sale_to_faturamento: {
         Args: { p_sale_id: string }
