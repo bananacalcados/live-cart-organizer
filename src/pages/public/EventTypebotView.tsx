@@ -31,7 +31,7 @@ interface Step {
 
 interface TypebotData {
   id: string;
-  event_id: string;
+  event_id: string | null;
   slug: string;
   name: string;
   theme_json: { primary?: string; background?: string };
@@ -131,7 +131,8 @@ export default function EventTypebotView() {
     try {
       const { data, error } = await supabase.functions.invoke('event-lead-capture', {
         body: {
-          event_id: tb.event_id,
+          // Typebots globais não têm evento fixo — o backend resolve a live no ar.
+          event_id: tb.event_id ?? null,
           source: 'typebot',
           typebot_id: tb.id,
           slug: tb.slug,
@@ -166,7 +167,8 @@ export default function EventTypebotView() {
         try {
           const phoneDigits = (updated.phone || '').replace(/\D/g, '');
           const today = new Date().toISOString().slice(0, 10);
-          const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
+          const scopeId = data?.event_id || tb.event_id || tb.id;
+          const eventId = `lead_${phoneDigits}_${scopeId}_${today}`;
           trackPixelEvent(
             'Lead',
             {
@@ -180,7 +182,7 @@ export default function EventTypebotView() {
             body: {
               phone: phoneDigits,
               event_name: 'Lead',
-              campaign_id: tb.event_id,
+              campaign_id: scopeId,
               campaign_slug: tb.slug,
               campaign_name: tb.name,
               full_name: updated.name,
