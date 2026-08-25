@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ProviderPayablesPanel } from "./ProviderPayablesPanel";
+import { POSCashPeriodReport } from "./POSCashPeriodReport";
 import { Truck } from "lucide-react";
 
 interface Props {
