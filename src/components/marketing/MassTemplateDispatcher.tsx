@@ -2875,6 +2875,19 @@ export function MassTemplateDispatcher() {
                 ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
               </Label>
             </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="override-quota-now"
+                checked={overrideQuota}
+                onCheckedChange={(v) => setOverrideQuota(!!v)}
+              />
+              <Label htmlFor="override-quota-now" className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer">
+                🚨 Furar teto do mês (fechamento) — ignora cota mensal, cooldown e classe×tipo.
+                <span className="block font-normal text-[11px] text-muted-foreground">
+                  Descadastrados (PARAR), banidos, silêncio e sem telefone continuam bloqueados.
+                </span>
+              </Label>
+            </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
               Esta ação não pode ser desfeita. Recomendamos testar antes do disparo.
