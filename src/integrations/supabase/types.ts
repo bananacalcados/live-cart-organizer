@@ -5764,10 +5764,11 @@ export type Database = {
       event_typebots: {
         Row: {
           created_at: string
-          event_id: string
+          event_id: string | null
           event_starts_at: string | null
           flow_json: Json
           id: string
+          is_global: boolean
           name: string
           prize_description: string | null
           published: boolean
@@ -5780,10 +5781,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          event_id: string
+          event_id?: string | null
           event_starts_at?: string | null
           flow_json?: Json
           id?: string
+          is_global?: boolean
           name?: string
           prize_description?: string | null
           published?: boolean
@@ -5796,10 +5798,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          event_id?: string
+          event_id?: string | null
           event_starts_at?: string | null
           flow_json?: Json
           id?: string
+          is_global?: boolean
           name?: string
           prize_description?: string | null
           published?: boolean
@@ -22238,6 +22241,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_typebot_event_id: {
+        Args: { p_typebot_id: string }
+        Returns: string
       }
       restore_pos_sale_item_stock: {
         Args: { p_barcode: string; p_sale_id: string; p_sku: string }
