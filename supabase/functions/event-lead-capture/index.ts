@@ -56,11 +56,20 @@ serve(async (req) => {
       source_url,
     } = body || {};
 
+    // Typebots globais (sem evento fixo): resolve o evento da live no ar, senão o mais recente.
+    let event_id: string | null = bodyEventId || null;
+    if (!event_id && typebot_id) {
+      const { data: resolved, error: resolveErr } = await supabase
+        .rpc('resolve_typebot_event_id', { p_typebot_id: typebot_id });
+      if (resolveErr) console.error('resolve_typebot_event_id error:', resolveErr);
+      event_id = (resolved as string | null) || null;
+    }
 
     if (!event_id || !source || !name || !phone) {
       return new Response(JSON.stringify({ error: 'event_id, source, name and phone are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
 
     const cf = (custom_fields && typeof custom_fields === 'object' && !Array.isArray(custom_fields))
       ? custom_fields
