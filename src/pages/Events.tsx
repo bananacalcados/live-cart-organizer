@@ -831,10 +831,18 @@ const Events = () => {
             <TabsTrigger value="carousel-templates" className="gap-1">
               <Images className="h-4 w-4" /> Templates API
             </TabsTrigger>
+            <TabsTrigger value="typebots" className="gap-1">
+              <MessageCircle className="h-4 w-4" /> Typebots
+            </TabsTrigger>
             <TabsTrigger value="member-leads" className="gap-1">
               <UserPlus className="h-4 w-4" /> Leads Área de Membros
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="typebots">
+            <GlobalTypebotsPanel />
+          </TabsContent>
+
 
           <TabsContent value="member-leads">
             <MemberAreaLeadsPanel />
