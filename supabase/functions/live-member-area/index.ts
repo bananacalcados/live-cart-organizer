@@ -1295,14 +1295,17 @@ Deno.serve(async (req) => {
       }
       items.splice(idx, 1);
 
+      // Ao remover o ÚLTIMO item o pedido é cancelado, mas os produtos originais
+      // são preservados para que a equipe consiga ver o que a cliente recusou.
       await supabase
         .from("orders")
         .update(
           items.length
             ? { products: items }
-            : { products: items, stage: "cancelled", payment_window_expires_at: null },
+            : { stage: "cancelled", payment_window_expires_at: null },
         )
         .eq("id", order.id);
+
 
       return json(await buildState(session));
     }
