@@ -743,10 +743,21 @@ export function ChatView({
         </div>
       )}
 
+      {/* Chargeback: TAG grande e clicável (Etapa 5) */}
+      {conversation && !conversation.isGroup && chargebacksForChat.length > 0 && (
+        <div className="px-3 py-2 border-b border-destructive/40 bg-destructive/10 flex items-center gap-2 flex-shrink-0">
+          <CustomerChargebackBadge chargebacks={chargebacksForChat} size="lg" />
+          <span className="text-xs text-destructive font-medium">
+            Cliente com chargeback — clique para ver a compra.
+          </span>
+        </div>
+      )}
+
       {/* AI Transfer banner */}
       {conversation && !conversation.isGroup && (
         <AiTransferBanner phone={conversation.phone} />
       )}
+
 
       {/* Customer Info Panel */}
       {customerInfoPanel}
