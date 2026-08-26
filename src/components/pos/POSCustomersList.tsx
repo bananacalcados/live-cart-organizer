@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Loader2, MessageCircle, User, ChevronLeft, ChevronRight,
-  Eye, MapPin, Wallet, Pencil,
+  Eye, MapPin, Wallet, Pencil, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -71,6 +71,33 @@ export function POSCustomersList({ onOpenProfile }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string; store_id: string }[]>([]);
   const [allowedSuffixes, setAllowedSuffixes] = useState<string[] | null>(null);
+  // Mapa de chargebacks (suffix8 / cpf / customer_unified_id) para o selo na lista
+  const [cbKeys, setCbKeys] = useState<{ suffixes: Set<string>; cpfs: Set<string>; ids: Set<string> }>(
+    { suffixes: new Set(), cpfs: new Set(), ids: new Set() },
+  );
+
+  useEffect(() => {
+    supabase
+      .from("chargebacks")
+      .select("phone_key, cpf_digits, customer_unified_id")
+      .then(({ data }) => {
+        const suffixes = new Set<string>();
+        const cpfs = new Set<string>();
+        const ids = new Set<string>();
+        ((data as any[]) || []).forEach((r) => {
+          if (r.phone_key) suffixes.add(String(r.phone_key).slice(-8));
+          if (r.cpf_digits) cpfs.add(String(r.cpf_digits));
+          if (r.customer_unified_id) ids.add(String(r.customer_unified_id));
+        });
+        setCbKeys({ suffixes, cpfs, ids });
+      });
+  }, []);
+
+  const hasChargeback = (c: UnifiedRow) =>
+    cbKeys.ids.has(c.id) ||
+    (!!c.cpf && cbKeys.cpfs.has(c.cpf.replace(/\D/g, ""))) ||
+    (!!c.phone_suffix8 && cbKeys.suffixes.has(c.phone_suffix8)) ||
+    (!!c.phone_e164 && cbKeys.suffixes.has(c.phone_e164.replace(/\D/g, "").slice(-8)));
 
   // WhatsApp dialog
   const [waOpen, setWaOpen] = useState(false);
@@ -308,7 +335,14 @@ export function POSCustomersList({ onOpenProfile }: Props) {
                   {(c.name || "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{c.name || "Sem nome"}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-medium truncate">{c.name || "Sem nome"}</p>
+                    {hasChargeback(c) && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
+                        <ShieldAlert className="h-3 w-3" /> Chargeback
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-pos-white/50">
                     {c.cpf && <span>CPF {c.cpf}</span>}
                     {c.phone_e164 && <span>{c.phone_e164}</span>}

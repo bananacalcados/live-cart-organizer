@@ -11,6 +11,10 @@ import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
 import { searchUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
+import { useCustomerChargebacks } from "@/hooks/useCustomerChargebacks";
+import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
+import { MarkChargebackDialog } from "@/components/expedition/MarkChargebackDialog";
+import { ShieldAlert } from "lucide-react";
 
 interface Props {
   storeId: string;
@@ -85,6 +89,13 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const [sellers, setSellers] = useState<Record<string, string>>({});
   const [legacyAggregate, setLegacyAggregate] = useState<{ total_orders: number; total_spent: number; last_purchase_at: string | null; first_purchase_at: string | null } | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Chargebacks do cliente selecionado (telefone normalizado, CPF ou cliente unificado)
+  const { chargebacks, refresh: refreshChargebacks } = useCustomerChargebacks({
+    phone: selected?.whatsapp,
+    cpf: selected?.cpf,
+    unifiedId: selected?._fromUnified ? selected?.id : null,
+  });
 
   // AI insights state
   const [aiInsights, setAiInsights] = useState<AiInsights | null>(null);
@@ -487,7 +498,10 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <h3 className="text-xl font-bold text-pos-white">{selected.name || "(sem nome)"}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-bold text-pos-white">{selected.name || "(sem nome)"}</h3>
+                    <CustomerChargebackBadge chargebacks={chargebacks} />
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-pos-white/70">
                     {selected.whatsapp && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selected.whatsapp}</span>}
                     {selected.cpf && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{selected.cpf}</span>}
@@ -728,9 +742,47 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                           {Number(s.discount) > 0 && <p className="text-[10px] text-pos-white/50">desc. {fmtMoney(Number(s.discount))}</p>}
                           {s.payment_method && <p className="text-[10px] text-pos-white/50 mt-1">{s.payment_method}</p>}
                           {s.invoice_number && <p className="text-[10px] text-pos-white/40">NF {s.invoice_number}</p>}
+                          {(() => {
+                            const isZoppy = s.id.startsWith("zoppy-");
+                            const cb = chargebacks.find(c => !isZoppy && c.pos_sale_id === s.id);
+                            if (cb) {
+                              return (
+                                <span className="mt-2 inline-flex items-center gap-1 rounded bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                                  <ShieldAlert className="h-3 w-3" /> CHARGEBACK
+                                </span>
+                              );
+                            }
+                            return (
+                              <div className="mt-2">
+                                <MarkChargebackDialog
+                                  onCreated={refreshChargebacks}
+                                  prefill={{
+                                    source: "pos",
+                                    pos_sale_id: isZoppy ? null : s.id,
+                                    source_order_id: isZoppy ? s.id.replace("zoppy-", "") : s.id,
+                                    source_order_name: s.invoice_number ? `NF ${s.invoice_number}` : `Venda ${fmtDate(s.created_at)}`,
+                                    customer_unified_id: selected?._fromUnified ? selected.id : null,
+                                    customer_name: selected?.name || "",
+                                    customer_phone: selected?.whatsapp || "",
+                                    customer_cpf: selected?.cpf || "",
+                                    customer_email: selected?.email || "",
+                                    address_city: selected?.city || "",
+                                    address_state: selected?.state || "",
+                                    amount: Number(s.total || 0),
+                                  }}
+                                  trigger={
+                                    <button className="text-[10px] text-pos-white/50 hover:text-destructive underline underline-offset-2">
+                                      Marcar chargeback
+                                    </button>
+                                  }
+                                />
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </Card>
+
                   ))}
                 </TabsContent>
 
