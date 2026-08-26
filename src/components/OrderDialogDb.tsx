@@ -661,7 +661,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
+          {orderChargebacks.length > 0 && (
+            <Alert className="border-destructive bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-sm text-destructive flex items-center justify-between gap-3">
+                <span>
+                  <strong>CLIENTE COM CHARGEBACK!</strong> Este telefone/@ já pediu estorno em uma compra anterior.
+                </span>
+                <CustomerChargebackBadge chargebacks={orderChargebacks} size="sm" className="shrink-0" />
+              </AlertDescription>
+            </Alert>
+          )}
           {isBanned && (
+
             <Alert className="border-destructive/50 bg-destructive/10">
               <Ban className="h-4 w-4 text-destructive" />
               <AlertDescription className="text-sm text-destructive flex items-center justify-between gap-3">
