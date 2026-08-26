@@ -70,6 +70,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [pixCode, setPixCode] = useState<string>("");
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [banReason, setBanReason] = useState("");
+  const [chargebackConfirmed, setChargebackConfirmed] = useState(false);
+  const [showChargebackConfirm, setShowChargebackConfirm] = useState(false);
+
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookup, setLookup] = useState<any | null>(null);
 
