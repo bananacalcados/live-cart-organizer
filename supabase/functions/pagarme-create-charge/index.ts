@@ -8,6 +8,7 @@ import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_sha
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
@@ -895,6 +896,20 @@ serve(async (req) => {
 
     if (!rawParams.orderId || !rawParams.card || !rawParams.customer || !rawParams.totalAmountCents) {
       throw new Error("Missing required fields: orderId, card, customer, totalAmountCents");
+    }
+
+    {
+      const guardSb = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const blockedResp = await assertNoChargebackBlock(req, guardSb, {
+        phone: rawParams.customer?.phone || null,
+        cpf: rawParams.customer?.document || rawParams.customer?.cpf || null,
+        orderId: String(rawParams.orderId || ""),
+        posSaleId: String(rawParams.orderId || ""),
+      }, getCorsHeaders(req), Boolean(rawParams.chargebackOverride));
+      if (blockedResp) return blockedResp;
     }
 
     const paymentAttemptId = rawParams.paymentAttemptId || null;

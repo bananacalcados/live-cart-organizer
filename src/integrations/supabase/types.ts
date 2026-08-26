@@ -21057,6 +21057,16 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: Json
       }
+      chargeback_gate: {
+        Args: {
+          p_cpf?: string
+          p_customer_unified_id?: string
+          p_order_id?: string
+          p_phone?: string
+          p_pos_sale_id?: string
+        }
+        Returns: Json
+      }
       check_chargeback_risk:
         | {
             Args: {

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
+import { parseChargebackBlock, chargebackBlockMessage } from "@/lib/chargebackBlock";
 
 interface Props {
   open: boolean;
@@ -110,6 +111,8 @@ export function POSWhatsAppPixDialog({
       const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
         body: { orderId: sale.id },
       });
+      const blocked = await parseChargebackBlock(error, data);
+      if (blocked) throw new Error(chargebackBlockMessage(blocked));
       if (error || !data?.qrCode) throw new Error("Erro ao gerar PIX");
       setPixCode(data.qrCode);
       setPixQrBase64(data.qrCodeBase64 || "");

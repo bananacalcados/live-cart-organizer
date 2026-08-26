@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -50,6 +51,19 @@ serve(async (req) => {
 
   try {
     const { orderId } = await req.json();
+
+    // Etapa 4 — bloqueio de cliente com chargeback
+    {
+      const guardClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const blockedResp = await assertNoChargebackBlock(req, guardClient, {
+        orderId: String(orderId || ""),
+        posSaleId: String(orderId || ""),
+      }, getCorsHeaders(req));
+      if (blockedResp) return blockedResp;
+    }
 
     if (!orderId) {
       throw new Error("orderId is required");
