@@ -456,7 +456,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     }
   }, [editingOrder, eventId]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forceChargeback = false) => {
     if (isSubmitting) return;
     if (!instagramHandle.trim()) {
       toast.error("Informe o @ do Instagram");
@@ -464,7 +464,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     }
 
     // Chargeback: avisa e exige confirmação antes de montar o pedido (Etapa 5)
-    if (orderChargebacks.length > 0 && !chargebackConfirmed) {
+    if (orderChargebacks.length > 0 && !forceChargeback && !chargebackConfirmed) {
       setShowChargebackConfirm(true);
       return;
     }
@@ -1256,7 +1256,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Button>
             <Button 
               className="flex-1 btn-accent" 
-              onClick={handleSubmit}
+              onClick={() => handleSubmit()}
               disabled={isBanned || isSubmitting}
             >
               {isSubmitting ? (
@@ -1287,7 +1287,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               onClick={() => {
                 setChargebackConfirmed(true);
                 setShowChargebackConfirm(false);
-                setTimeout(() => handleSubmit(), 0);
+                setTimeout(() => handleSubmit(true), 0);
               }}
             >
               Prosseguir mesmo assim
