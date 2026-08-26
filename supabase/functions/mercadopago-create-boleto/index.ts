@@ -6,6 +6,7 @@ import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 import { barcodeToDigitableLine, formatDigitableLine, itfBars, onlyDigits } from "../_shared/boleto-barcode.ts";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
@@ -96,6 +97,18 @@ serve(async (req) => {
       due_date, // ISO date "YYYY-MM-DD"
       include_pix,
     } = body || {};
+
+    {
+      const guardSb = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const blockedResp = await assertNoChargebackBlock(req, guardSb, {
+        phone: customer_phone || null,
+        cpf: customer_cpf || null,
+      }, cors(req), Boolean((body || {}).chargebackOverride));
+      if (blockedResp) return blockedResp;
+    }
 
     const missing = required(body, [
       "customer_name",
