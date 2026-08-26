@@ -88,6 +88,19 @@ function clientIp(req: Request): string {
   return (fwd.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim();
 }
 
+/**
+ * ⚡ Cache de instância (vive entre requisições da mesma edge function).
+ * A live corrente e o desconto PIX são IGUAIS para todas as clientes; consultá-los
+ * a cada requisição custava 3 idas ao banco por cliente a cada polling.
+ */
+type Cached<T> = { at: number; value: T };
+let EVENT_CACHE: Cached<any> | null = null;
+let PIX_CACHE: Cached<number> | null = null;
+const EVENT_TTL_MS = 15_000;
+const PIX_TTL_MS = 300_000;
+
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
