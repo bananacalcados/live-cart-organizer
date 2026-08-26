@@ -87,6 +87,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [filterTest, setFilterTest] = useState<string>("include");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [filterDay, setFilterDay] = useState<string>("");
+  const [filterExpDate, setFilterExpDate] = useState<string>("all");
+  const [filterExpDay, setFilterExpDay] = useState<string>("");
+  const [filterExpFrom, setFilterExpFrom] = useState<string>("");
+  const [filterExpTo, setFilterExpTo] = useState<string>("");
 
   useEffect(() => {
     setSelected(new Set());
