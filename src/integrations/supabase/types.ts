@@ -2676,15 +2676,23 @@ export type Database = {
           address_state: string | null
           address_street: string | null
           amount: number | null
+          blocked: boolean
+          blocked_at: string | null
+          blocked_by: string | null
           chargeback_date: string | null
           contact_notes: string | null
+          cpf_digits: string | null
           created_at: string
           created_by: string | null
           customer_cpf: string | null
           customer_email: string | null
           customer_name: string
           customer_phone: string | null
+          customer_unified_id: string | null
           id: string
+          order_id: string | null
+          phone_key: string | null
+          pos_sale_id: string | null
           reason: string | null
           source: string
           source_order_id: string | null
@@ -2702,15 +2710,23 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           amount?: number | null
+          blocked?: boolean
+          blocked_at?: string | null
+          blocked_by?: string | null
           chargeback_date?: string | null
           contact_notes?: string | null
+          cpf_digits?: string | null
           created_at?: string
           created_by?: string | null
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name: string
           customer_phone?: string | null
+          customer_unified_id?: string | null
           id?: string
+          order_id?: string | null
+          phone_key?: string | null
+          pos_sale_id?: string | null
           reason?: string | null
           source: string
           source_order_id?: string | null
@@ -2728,15 +2744,23 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           amount?: number | null
+          blocked?: boolean
+          blocked_at?: string | null
+          blocked_by?: string | null
           chargeback_date?: string | null
           contact_notes?: string | null
+          cpf_digits?: string | null
           created_at?: string
           created_by?: string | null
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string | null
+          customer_unified_id?: string | null
           id?: string
+          order_id?: string | null
+          phone_key?: string | null
+          pos_sale_id?: string | null
           reason?: string | null
           source?: string
           source_order_id?: string | null
@@ -20994,17 +21018,30 @@ export type Database = {
         Args: { p_end: string; p_start: string }
         Returns: Json
       }
-      check_chargeback_risk: {
-        Args: {
-          p_address_cep?: string
-          p_address_number?: string
-          p_customer_cpf?: string
-          p_customer_email?: string
-          p_customer_name: string
-          p_customer_phone?: string
-        }
-        Returns: Json
-      }
+      check_chargeback_risk:
+        | {
+            Args: {
+              p_address_cep?: string
+              p_address_number?: string
+              p_customer_cpf?: string
+              p_customer_email?: string
+              p_customer_name: string
+              p_customer_phone?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_address_cep?: string
+              p_address_number?: string
+              p_customer_cpf?: string
+              p_customer_email?: string
+              p_customer_name: string
+              p_customer_phone?: string
+              p_customer_unified_id?: string
+            }
+            Returns: Json
+          }
       check_order_ai_paused: {
         Args: { p_phone: string }
         Returns: {
