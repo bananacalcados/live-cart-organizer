@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -237,6 +238,15 @@ serve(async (req) => {
 
     if (!body.items || body.items.length === 0) {
       throw new Error("At least one item is required");
+    }
+
+    {
+      const blockedResp = await assertNoChargebackBlock(req, supabase, {
+        phone: body.customer?.phone || null,
+        orderId: body.order_id || null,
+        posSaleId: body.order_id || null,
+      }, corsHeaders, Boolean((body as any).chargebackOverride));
+      if (blockedResp) return blockedResp;
     }
 
     // Resolve all items to Yampi sku_ids
