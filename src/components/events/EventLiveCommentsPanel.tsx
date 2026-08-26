@@ -877,6 +877,19 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     setWaChatOpen(true);
   }, [whatsappByHandle]);
 
+  // Chargeback do @ (por cadastro unificado ou pelo WhatsApp vinculado)
+  const { byHandle: cbByHandle, byPhone: cbByPhone } = useChargebackRegistry();
+  const chargebacksForHandle = useCallback(
+    (handle: string): ChargebackRecord[] => {
+      const direct = cbByHandle(handle);
+      if (direct.length) return direct;
+      const wa = whatsappByHandle.get(handle);
+      return wa ? cbByPhone(wa) : [];
+    },
+    [cbByHandle, cbByPhone, whatsappByHandle],
+  );
+
+
 
 
 
