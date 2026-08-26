@@ -90,6 +90,13 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const [legacyAggregate, setLegacyAggregate] = useState<{ total_orders: number; total_spent: number; last_purchase_at: string | null; first_purchase_at: string | null } | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Chargebacks do cliente selecionado (telefone normalizado, CPF ou cliente unificado)
+  const { chargebacks, refresh: refreshChargebacks } = useCustomerChargebacks({
+    phone: selected?.whatsapp,
+    cpf: selected?.cpf,
+    unifiedId: selected?._fromUnified ? selected?.id : null,
+  });
+
   // AI insights state
   const [aiInsights, setAiInsights] = useState<AiInsights | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
