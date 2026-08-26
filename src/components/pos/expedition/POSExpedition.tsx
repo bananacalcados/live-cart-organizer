@@ -711,6 +711,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
                   setFilterShipping("all");
                   setFilterPeriod("all");
                   setFilterDay("");
+                  setFilterExpDate("all");
+                  setFilterExpDay("");
+                  setFilterExpFrom("");
+                  setFilterExpTo("");
                   setFilterTest("hide");
                 }}
               >
