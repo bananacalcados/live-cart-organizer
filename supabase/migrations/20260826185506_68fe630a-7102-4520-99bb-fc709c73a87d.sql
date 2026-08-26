@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.log_chargeback_event() FROM PUBLIC, anon, authenticated;
