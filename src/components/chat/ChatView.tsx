@@ -24,6 +24,9 @@ import { ptBR } from "date-fns/locale";
 import { EmojiPickerButton } from "../EmojiPickerButton";
 import { Message, Conversation } from "./ChatTypes";
 import { supabase } from "@/integrations/supabase/client";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+
 import { uploadMediaToStorage } from "../MediaAttachmentPicker";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
