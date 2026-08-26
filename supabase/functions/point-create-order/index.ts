@@ -14,6 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 const MP_API = "https://api.mercadopago.com";
 
@@ -120,6 +121,13 @@ Deno.serve(async (req) => {
       if (!terminalId) return json({ error: "Selecione a maquininha (terminal)." }, 400);
       if (!Number.isFinite(amountNum) || amountNum <= 0) {
         return json({ error: "Informe um valor válido para a cobrança." }, 400);
+      }
+
+      {
+        const blockedResp = await assertNoChargebackBlock(req, sb, {
+          posSaleId: body.sale_id || null,
+        }, corsHeaders, Boolean((body as any).chargebackOverride));
+        if (blockedResp) return blockedResp;
       }
       const amountStr = amountNum.toFixed(2);
       const externalRef = genExternalRef();
