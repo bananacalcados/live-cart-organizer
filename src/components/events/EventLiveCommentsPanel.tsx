@@ -156,6 +156,10 @@ const CommentRow = memo(function CommentRow({
           >
             <ShoppingBag className="h-3 w-3" />@{handle}
           </button>
+          {chargebacks && chargebacks.length > 0 && (
+            <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />
+          )}
+
           {scoreMeta && (
             <span
               className={cn(
