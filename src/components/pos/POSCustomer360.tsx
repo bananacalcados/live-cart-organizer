@@ -11,6 +11,10 @@ import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
 import { searchUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
+import { useCustomerChargebacks } from "@/hooks/useCustomerChargebacks";
+import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
+import { MarkChargebackDialog } from "@/components/expedition/MarkChargebackDialog";
+import { ShieldAlert } from "lucide-react";
 
 interface Props {
   storeId: string;
