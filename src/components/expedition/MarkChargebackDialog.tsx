@@ -177,6 +177,18 @@ export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
           <Textarea placeholder="Motivo / observações" value={form.reason}
             onChange={(e) => setForm(f => ({ ...f, reason: e.target.value }))} rows={3} />
 
+          <label className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 cursor-pointer">
+            <input type="checkbox" checked={blocked} onChange={(e) => setBlocked(e.target.checked)} className="mt-0.5" />
+            <span className="text-sm">
+              <strong className="text-destructive">Bloquear novas compras</strong>
+              <span className="block text-xs text-muted-foreground">
+                Desmarcado: o cliente fica apenas marcado com alerta, sem impedir a venda.
+              </span>
+            </span>
+          </label>
+
+
+
           <Button onClick={handleSubmit} disabled={loading} variant="destructive" className="w-full">
             {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Registrar Chargeback
