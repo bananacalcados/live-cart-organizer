@@ -444,6 +444,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       toast.error("Informe o @ do Instagram");
       return;
     }
+
+    // Chargeback: avisa e exige confirmação antes de montar o pedido (Etapa 5)
+    if (orderChargebacks.length > 0 && !chargebackConfirmed) {
+      setShowChargebackConfirm(true);
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Check if customer is banned
@@ -452,6 +459,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       toast.error(`Cliente ${customer.instagram_handle} está banido: ${customer.ban_reason || 'Sem motivo especificado'}`);
       return;
     }
+
 
     try {
       if (editingOrder) {
