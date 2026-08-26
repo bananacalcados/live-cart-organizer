@@ -300,7 +300,15 @@ export function ChatView({
     });
   }, [messages, conversationScrollKey]);
 
+  // Chargeback do contato (Etapa 5)
+  const { byPhone: chargebacksByPhone } = useChargebackRegistry();
+  const chargebacksForChat = useMemo(
+    () => (conversation?.phone && !conversation.isGroup ? chargebacksByPhone(conversation.phone) : []),
+    [conversation?.phone, conversation?.isGroup, chargebacksByPhone],
+  );
+
   // Load tags from chat_contacts when conversation changes
+
   useEffect(() => {
     if (!conversation?.phone || conversation.isGroup) {
       setContactTags([]);
