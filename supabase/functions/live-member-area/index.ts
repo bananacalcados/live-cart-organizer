@@ -250,15 +250,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    async function loadCustomers(phone: string) {
+    /** Memo por requisição: `loadCustomers` era chamado 3x por request com o mesmo telefone. */
+    const customersMemo = new Map<string, Promise<any[]>>();
+    function loadCustomers(phone: string): Promise<any[]> {
       const suf = suffix8(phone);
-      const { data } = await supabase
+      const hit = customersMemo.get(suf);
+      if (hit) return hit;
+      const p = supabase
         .from("customers")
         .select("id, instagram_handle, whatsapp")
         .not("whatsapp", "is", null)
-        .ilike("whatsapp", `%${suf}`);
-      return data || [];
+        .ilike("whatsapp", `%${suf}`)
+        .then((r: any) => r.data || []);
+      customersMemo.set(suf, p);
+      return p;
     }
+
 
 
     /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
