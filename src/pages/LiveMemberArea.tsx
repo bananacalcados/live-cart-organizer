@@ -954,6 +954,7 @@ export default function LiveMemberArea() {
     const sig = JSON.stringify(details);
     if (sig === lastAddrSaveRef.current) return;
     const t = window.setTimeout(() => {
+
       lastAddrSaveRef.current = sig;
       // Envia só o que está preenchido: campos vazios não sobrescrevem dados já salvos.
       const partial = Object.fromEntries(
