@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CheckCircle2, ScanBarcode, FileBarChart, Printer, Package, Truck } from 'lucide-react';
+import { useChargebackRegistry } from '@/hooks/useChargebackRegistry';
+import { CustomerChargebackBadge } from '@/components/pos/CustomerChargebackBadge';
 
 interface Props {
   orders: any[];
@@ -18,6 +20,11 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
   const [barcodeInput, setBarcodeInput] = useState('');
   const [verifiedOrders, setVerifiedOrders] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const { byPhone: cbByPhone, byCpf: cbByCpf } = useChargebackRegistry();
+  const chargebacksFor = useCallback((o: any) => {
+    const byPhone = cbByPhone(o?.customer_phone);
+    return byPhone.length ? byPhone : cbByCpf(o?.customer_cpf);
+  }, [cbByPhone, cbByCpf]);
 
   const readyOrders = orders.filter(o => {
     const term = searchTerm.toLowerCase();
@@ -34,6 +41,10 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
     
     const matched = readyOrders.find(o => o.internal_barcode === barcode.trim());
     if (matched) {
+      const cbs = chargebacksFor(matched);
+      if (cbs.length > 0) {
+        toast.error(`⚠ CLIENTE COM CHARGEBACK — ${matched.customer_name || matched.shopify_order_name}. Confirme antes de despachar!`, { duration: 12000 });
+      }
       setVerifiedOrders(prev => new Set(prev).add(matched.id));
       toast.success(`✓ ${matched.shopify_order_name} verificado!`);
       
@@ -47,7 +58,7 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
       toast.error(`Código não encontrado: ${barcode}`);
     }
     setBarcodeInput('');
-  }, [readyOrders]);
+  }, [readyOrders, chargebacksFor]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleScan(barcodeInput);
@@ -239,8 +250,9 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
       <div className="space-y-2">
         {readyOrders.map(order => {
           const isVerified = verifiedOrders.has(order.id) || order.dispatch_verified;
+          const orderChargebacks = chargebacksFor(order);
           return (
-            <Card key={order.id} className={isVerified ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
+            <Card key={order.id} className={orderChargebacks.length > 0 ? 'border-destructive bg-destructive/10' : isVerified ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
               <CardContent className="p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {isVerified ? (
@@ -249,7 +261,12 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
                     <Package className="h-5 w-5 text-muted-foreground" />
                   )}
                   <div>
-                    <span className="font-bold text-foreground">{order.shopify_order_name}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-foreground">{order.shopify_order_name}</span>
+                      {orderChargebacks.length > 0 && (
+                        <CustomerChargebackBadge chargebacks={orderChargebacks} size="sm" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{order.customer_name}</p>
                   </div>
                 </div>
