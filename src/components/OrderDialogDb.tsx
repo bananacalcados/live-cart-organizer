@@ -1268,6 +1268,34 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </div>
         </div>
       </DialogContent>
+
+      {/* Confirmação: cliente com chargeback (Etapa 5) */}
+      <AlertDialog open={showChargebackConfirm} onOpenChange={setShowChargebackConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">CLIENTE COM CHARGEBACK</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este cliente já pediu estorno (chargeback) em uma compra anterior
+              {orderChargebacks[0]?.source_order_name ? ` — ${orderChargebacks[0].source_order_name}` : ""}.
+              Deseja prosseguir com o pedido assim mesmo?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não montar pedido</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setChargebackConfirmed(true);
+                setShowChargebackConfirm(false);
+                setTimeout(() => handleSubmit(), 0);
+              }}
+            >
+              Prosseguir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+
   );
 }
