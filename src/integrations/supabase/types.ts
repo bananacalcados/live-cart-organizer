@@ -2665,6 +2665,45 @@ export type Database = {
         }
         Relationships: []
       }
+      chargeback_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          chargeback_id: string | null
+          created_at: string
+          customer_name_snapshot: string | null
+          from_value: string | null
+          id: string
+          note: string | null
+          order_name_snapshot: string | null
+          to_value: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          chargeback_id?: string | null
+          created_at?: string
+          customer_name_snapshot?: string | null
+          from_value?: string | null
+          id?: string
+          note?: string | null
+          order_name_snapshot?: string | null
+          to_value?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          chargeback_id?: string | null
+          created_at?: string
+          customer_name_snapshot?: string | null
+          from_value?: string | null
+          id?: string
+          note?: string | null
+          order_name_snapshot?: string | null
+          to_value?: string | null
+        }
+        Relationships: []
+      }
       chargebacks: {
         Row: {
           address_cep: string | null
