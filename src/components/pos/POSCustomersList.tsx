@@ -335,7 +335,14 @@ export function POSCustomersList({ onOpenProfile }: Props) {
                   {(c.name || "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{c.name || "Sem nome"}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-medium truncate">{c.name || "Sem nome"}</p>
+                    {hasChargeback(c) && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
+                        <ShieldAlert className="h-3 w-3" /> Chargeback
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-pos-white/50">
                     {c.cpf && <span>CPF {c.cpf}</span>}
                     {c.phone_e164 && <span>{c.phone_e164}</span>}
