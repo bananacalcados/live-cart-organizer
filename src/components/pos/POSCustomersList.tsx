@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Loader2, MessageCircle, User, ChevronLeft, ChevronRight,
-  Eye, MapPin, Wallet, Pencil,
+  Eye, MapPin, Wallet, Pencil, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NewConversationDialog } from "./NewConversationDialog";
