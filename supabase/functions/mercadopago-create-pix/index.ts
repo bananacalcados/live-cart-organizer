@@ -6,6 +6,7 @@ import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
+import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -65,6 +66,17 @@ serve(async (req) => {
 
   try {
     const { orderId, payer, pixDiscountPercent } = await req.json();
+
+    // Etapa 4 — bloqueio de cliente com chargeback (validação no servidor)
+    {
+      const blockedResp = await assertNoChargebackBlock(req, supabase, {
+        phone: (payer?.phone as string) || null,
+        cpf: (payer?.cpf as string) || null,
+        orderId: String(orderId || ""),
+        posSaleId: String(orderId || ""),
+      }, getCorsHeaders(req), Boolean((arguments as any) && false));
+      if (blockedResp) return blockedResp;
+    }
 
     ctx.orderId = String(orderId || "");
     ctx.name = (payer?.firstName ? `${payer.firstName} ${payer?.lastName || ""}`.trim() : null) || null;
