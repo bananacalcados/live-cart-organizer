@@ -456,6 +456,7 @@ Deno.serve(async (req) => {
 
     /** Desconto PIX global (app_settings.pix_discount_percent), ex.: 5%. */
     async function pixDiscountPercent(): Promise<number> {
+      if (PIX_CACHE && Date.now() - PIX_CACHE.at < PIX_TTL_MS) return PIX_CACHE.value;
       try {
         const { data } = await supabase
           .from("app_settings")
@@ -463,11 +464,14 @@ Deno.serve(async (req) => {
           .eq("key", "pix_discount_percent")
           .maybeSingle();
         const pct = Number(String(data?.value ?? "").replace(/"/g, "")) || 0;
-        return pct > 0 && pct < 100 ? pct : 0;
+        const value = pct > 0 && pct < 100 ? pct : 0;
+        PIX_CACHE = { at: Date.now(), value };
+        return value;
       } catch {
         return 0;
       }
     }
+
 
     /**
      * Dados que a cliente JÁ informou antes (mesmo WhatsApp, outro pedido).
