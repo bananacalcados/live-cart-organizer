@@ -192,21 +192,23 @@ Deno.serve(async (req) => {
      * Prioriza a live no ar; senão, o evento ativo mais recente.
      */
     async function resolveCurrentEvent() {
+      if (EVENT_CACHE && Date.now() - EVENT_CACHE.at < EVENT_TTL_MS) return EVENT_CACHE.value;
+
       const base = () =>
         supabase
           .from("events")
           .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id")
           .neq("is_active", false);
 
-      const { data: live } = await base()
-        .eq("is_live_broadcasting", true)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (live?.[0]) return live[0];
-
-      const { data: latest } = await base().order("created_at", { ascending: false }).limit(1);
-      return latest?.[0] || null;
+      const [liveRes, latestRes] = await Promise.all([
+        base().eq("is_live_broadcasting", true).order("created_at", { ascending: false }).limit(1),
+        base().order("created_at", { ascending: false }).limit(1),
+      ]);
+      const value = liveRes.data?.[0] || latestRes.data?.[0] || null;
+      EVENT_CACHE = { at: Date.now(), value };
+      return value;
     }
+
 
 
     async function loadSession(token: string) {
