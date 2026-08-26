@@ -65,7 +65,7 @@ serve(async (req) => {
   } = { orderId: "", amount: null, name: null, phone: null, email: null, stage: "start" };
 
   try {
-    const { orderId, payer, pixDiscountPercent } = await req.json();
+    const { orderId, payer, pixDiscountPercent, chargebackOverride } = await req.json();
 
     // Etapa 4 — bloqueio de cliente com chargeback (validação no servidor)
     {
@@ -74,7 +74,7 @@ serve(async (req) => {
         cpf: (payer?.cpf as string) || null,
         orderId: String(orderId || ""),
         posSaleId: String(orderId || ""),
-      }, getCorsHeaders(req), Boolean((arguments as any) && false));
+      }, getCorsHeaders(req), Boolean(chargebackOverride));
       if (blockedResp) return blockedResp;
     }
 
