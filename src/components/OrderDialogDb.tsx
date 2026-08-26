@@ -155,6 +155,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     return findCustomerByWhatsApp(whatsapp);
   }, [whatsapp, editingOrder, existingCustomer, findCustomerByWhatsApp, customers]);
 
+  // Chargeback do cliente: pelo telefone digitado ou pelo @ do Instagram
+  const { byPhone: cbByPhone, byHandle: cbByHandle } = useChargebackRegistry();
+  const orderChargebacks = useMemo(() => {
+    const phone = whatsapp || editingOrder?.customer?.whatsapp || existingCustomer?.whatsapp || "";
+    const byPhone = cbByPhone(phone);
+    if (byPhone.length) return byPhone;
+    return cbByHandle(instagramHandle || editingOrder?.customer?.instagram_handle || "");
+  }, [whatsapp, instagramHandle, editingOrder, existingCustomer, cbByPhone, cbByHandle]);
+
+  useEffect(() => { setChargebackConfirmed(false); }, [whatsapp, instagramHandle]);
+
+
   // Check if there's an active order for this customer in current event
   const existingOrderInEvent = useMemo(() => {
     if (!existingCustomer || !eventId) return null;
