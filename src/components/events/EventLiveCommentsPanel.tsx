@@ -6,6 +6,10 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
+
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
