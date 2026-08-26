@@ -87,6 +87,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [filterTest, setFilterTest] = useState<string>("include");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [filterDay, setFilterDay] = useState<string>("");
+  const [filterExpDate, setFilterExpDate] = useState<string>("all");
+  const [filterExpDay, setFilterExpDay] = useState<string>("");
+  const [filterExpFrom, setFilterExpFrom] = useState<string>("");
+  const [filterExpTo, setFilterExpTo] = useState<string>("");
 
   useEffect(() => {
     setSelected(new Set());
@@ -136,11 +140,44 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
 
 
+  /** Converte o filtro de Data Expedição em intervalo ISO (UTC) para a query server-side. */
+  const finishedRange = useMemo<{ from?: string; to?: string } | undefined>(() => {
+    if (filterExpDate === "all") return undefined;
+    const now = new Date();
+    const dayMs = 86400000;
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dow = now.getDay();
+    const weekStart = new Date(today0.getTime() - (dow === 0 ? 6 : dow - 1) * dayMs);
+    let fromD: Date | null = null;
+    let toD: Date | null = null;
+    const parseDate = (s: string) => {
+      const [y, m, d] = s.split("-").map(Number);
+      return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+    };
+    switch (filterExpDate) {
+      case "today": fromD = today0; toD = new Date(today0.getTime() + dayMs); break;
+      case "yesterday": fromD = new Date(today0.getTime() - dayMs); toD = today0; break;
+      case "week": fromD = weekStart; toD = new Date(weekStart.getTime() + 7 * dayMs); break;
+      case "last_week": fromD = new Date(weekStart.getTime() - 7 * dayMs); toD = weekStart; break;
+      case "month": fromD = new Date(now.getFullYear(), now.getMonth(), 1); toD = new Date(now.getFullYear(), now.getMonth() + 1, 1); break;
+      case "last_month": fromD = new Date(now.getFullYear(), now.getMonth() - 1, 1); toD = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "day":
+        if (filterExpDay) { fromD = parseDate(filterExpDay); toD = new Date(fromD.getTime() + dayMs); }
+        break;
+      case "period":
+        if (filterExpFrom) fromD = parseDate(filterExpFrom);
+        if (filterExpTo) toD = new Date(parseDate(filterExpTo).getTime() + dayMs);
+        break;
+    }
+    if (!fromD && !toD) return undefined;
+    return { from: fromD?.toISOString(), to: toD?.toISOString() };
+  }, [filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+
   const load = async () => {
     if (!storeId) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(storeId, stage);
+      const rows = await fetchExpeditionOrders(storeId, stage, finishedRange);
       setOrders(rows);
       await loadCounts();
     } catch (e: any) {
@@ -153,7 +190,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage]);
+  }, [storeId, stage, finishedRange]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -205,6 +242,64 @@ export function POSExpedition({ storeId, storeName }: Props) {
         const days = map[filterPeriod] || 0;
         if (days && now - created > days * day) return false;
       }
+      // --- Filtro por DATA DA EXPEDIÇÃO CONCLUÍDA (expedition_finished_at) ---
+      if (filterExpDate !== "all") {
+        const fin = o.expedition_finished_at;
+        if (!fin) return false;
+        const t = new Date(fin).getTime();
+        const now = new Date();
+        const dayMs = 86400000;
+        const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const dow = now.getDay(); // 0 = domingo
+        const weekStart = today0 - (dow === 0 ? 6 : dow - 1) * dayMs; // segunda-feira
+        switch (filterExpDate) {
+          case "today":
+            if (t < today0 || t >= today0 + dayMs) return false;
+            break;
+          case "yesterday":
+            if (t < today0 - dayMs || t >= today0) return false;
+            break;
+          case "week":
+            if (t < weekStart || t >= weekStart + 7 * dayMs) return false;
+            break;
+          case "last_week":
+            if (t < weekStart - 7 * dayMs || t >= weekStart) return false;
+            break;
+          case "month": {
+            const mStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const mEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+            if (t < mStart || t >= mEnd) return false;
+            break;
+          }
+          case "last_month": {
+            const mStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+            const mEnd = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            if (t < mStart || t >= mEnd) return false;
+            break;
+          }
+          case "day": {
+            if (filterExpDay) {
+              const [y, m, d] = filterExpDay.split("-").map(Number);
+              const start = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime();
+              const end = start + dayMs;
+              if (t < start || t >= end) return false;
+            }
+            break;
+          }
+          case "period": {
+            if (filterExpFrom || filterExpTo) {
+              const fromT = filterExpFrom
+                ? (() => { const [y, m, d] = filterExpFrom.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime(); })()
+                : -Infinity;
+              const toT = filterExpTo
+                ? (() => { const [y, m, d] = filterExpTo.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime() + dayMs; })()
+                : Infinity;
+              if (t < fromT || t >= toT) return false;
+            }
+            break;
+          }
+        }
+      }
       if (!q) return true;
       return (
         (o.customer_name || "").toLowerCase().includes(q) ||
@@ -213,7 +308,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
       );
     });
-  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay]);
+  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
@@ -522,7 +617,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
         {showFilters && (
           <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div>
                 <label className="text-xs font-bold text-pos-muted-text uppercase">Origem</label>
                 <Select value={filterOrigin} onValueChange={setFilterOrigin}>
@@ -561,7 +656,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-bold text-pos-muted-text uppercase">Período</label>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Período (criação)</label>
                 <Select value={filterPeriod} onValueChange={setFilterPeriod}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -582,6 +677,49 @@ export function POSExpedition({ storeId, storeName }: Props) {
                     onChange={(e) => setFilterDay(e.target.value)}
                     className="mt-2 h-10"
                   />
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Data Expedição</label>
+                <Select value={filterExpDate} onValueChange={(v) => { setFilterExpDate(v); }}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="today">Hoje</SelectItem>
+                    <SelectItem value="yesterday">Ontem</SelectItem>
+                    <SelectItem value="week">Esta semana</SelectItem>
+                    <SelectItem value="last_week">Semana passada</SelectItem>
+                    <SelectItem value="month">Este mês</SelectItem>
+                    <SelectItem value="last_month">Mês passado</SelectItem>
+                    <SelectItem value="day">Dia específico…</SelectItem>
+                    <SelectItem value="period">Período…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {filterExpDate === "day" && (
+                  <Input
+                    type="date"
+                    value={filterExpDay}
+                    onChange={(e) => setFilterExpDay(e.target.value)}
+                    className="mt-2 h-10"
+                  />
+                )}
+                {filterExpDate === "period" && (
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      type="date"
+                      value={filterExpFrom}
+                      onChange={(e) => setFilterExpFrom(e.target.value)}
+                      className="h-10"
+                      title="De"
+                    />
+                    <Input
+                      type="date"
+                      value={filterExpTo}
+                      onChange={(e) => setFilterExpTo(e.target.value)}
+                      className="h-10"
+                      title="Até"
+                    />
+                  </div>
                 )}
               </div>
               <div>
@@ -606,6 +744,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
                   setFilterShipping("all");
                   setFilterPeriod("all");
                   setFilterDay("");
+                  setFilterExpDate("all");
+                  setFilterExpDay("");
+                  setFilterExpFrom("");
+                  setFilterExpTo("");
                   setFilterTest("hide");
                 }}
               >
