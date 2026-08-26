@@ -38,10 +38,14 @@ interface Props {
 export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState(true);
   const [form, setForm] = useState<ChargebackPrefill & { reason: string; chargeback_date: string }>({
     source: prefill?.source || 'manual',
     source_order_id: prefill?.source_order_id || '',
     source_order_name: prefill?.source_order_name || '',
+    pos_sale_id: prefill?.pos_sale_id || null,
+    order_id: prefill?.order_id || null,
+    customer_unified_id: prefill?.customer_unified_id || null,
     customer_name: prefill?.customer_name || '',
     customer_email: prefill?.customer_email || '',
     customer_phone: prefill?.customer_phone || '',
@@ -68,6 +72,9 @@ export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
       source: form.source,
       source_order_id: form.source_order_id || null,
       source_order_name: form.source_order_name || null,
+      pos_sale_id: form.pos_sale_id || null,
+      order_id: form.order_id || null,
+      customer_unified_id: form.customer_unified_id || null,
       customer_name: form.customer_name!,
       customer_email: form.customer_email || null,
       customer_phone: form.customer_phone || null,
@@ -82,15 +89,18 @@ export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
       amount: form.amount && form.amount > 0 ? form.amount : null,
       chargeback_date: form.chargeback_date || null,
       reason: form.reason || null,
+      blocked,
+      blocked_by: blocked ? (user?.id || null) : null,
       created_by: user?.id || null,
     };
-    const { error } = await supabase.from('chargebacks').insert(payload);
+    const { error } = await supabase.from('chargebacks').insert(payload as any);
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success('Chargeback registrado! Cliente marcado para verificação.');
     setOpen(false);
     onCreated?.();
   };
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
