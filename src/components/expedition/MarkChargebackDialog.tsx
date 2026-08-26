@@ -11,6 +11,9 @@ interface ChargebackPrefill {
   source: 'shopify' | 'pos' | 'expedition_beta' | 'manual';
   source_order_id?: string;
   source_order_name?: string;
+  pos_sale_id?: string | null;
+  order_id?: string | null;
+  customer_unified_id?: string | null;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
@@ -30,6 +33,7 @@ interface Props {
   trigger?: React.ReactNode;
   onCreated?: () => void;
 }
+
 
 export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
   const [open, setOpen] = useState(false);
