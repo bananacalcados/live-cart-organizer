@@ -117,6 +117,7 @@ interface CommentRowProps {
   stats?: HandleOrderStats;
   leadTag?: LeadTag;
   score?: ParticipantScore;
+  chargebacks?: ChargebackRecord[];
   onOpenOrder: (username: string) => void;
   onOpenInstagram: (username: string) => void;
   onOpenWhatsapp: (username: string) => void;
@@ -130,11 +131,13 @@ const CommentRow = memo(function CommentRow({
   stats,
   leadTag,
   score,
+  chargebacks,
   onOpenOrder,
   onOpenInstagram,
   onOpenWhatsapp,
 }: CommentRowProps) {
   const handle = cleanHandle(c.username);
+
   const scoreMeta = score ? SCORE_META[score.category] : undefined;
   return (
     <div className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
