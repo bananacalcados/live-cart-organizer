@@ -204,17 +204,23 @@ export async function fetchExpeditionOrders(
   const SALE_COLS =
     "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method";
 
-  const baseQuery = () =>
-    supabase
+  const baseQuery = () => {
+    let q = supabase
       .from("pos_sales")
       .select(SALE_COLS)
       .eq("store_id", storeId)
       .eq("expedition_stage", stage)
       .in("sale_type", ["live", "online"])
       .order("created_at", { ascending: stage !== "concluido" })
-      .limit(400)
-      .gte("expedition_finished_at", finishedRange?.from || "0001-01-01T00:00:00Z")
-      .lte("expedition_finished_at", finishedRange?.to || "9999-12-31T23:59:59Z");
+      .limit(400);
+    // Filtragem server-side por data de conclusão da expedição.
+    // Só aplicamos quando há intervalo definido — senão excluíria os
+    // pedidos ainda não concluídos (expedition_finished_at = null).
+    if (finishedRange?.from) q = q.gte("expedition_finished_at", finishedRange.from);
+    if (finishedRange?.to) q = q.lte("expedition_finished_at", finishedRange.to);
+    return q;
+  };
+
 
 
   let { data: sales, error } = await baseQuery()
