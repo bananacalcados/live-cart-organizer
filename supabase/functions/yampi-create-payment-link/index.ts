@@ -245,7 +245,7 @@ serve(async (req) => {
         phone: body.customer?.phone || null,
         orderId: body.order_id || null,
         posSaleId: body.order_id || null,
-      }, corsHeaders, Boolean((body as any).chargebackOverride));
+      }, getCorsHeaders(req), Boolean((body as any).chargebackOverride));
       if (blockedResp) return blockedResp;
     }
 
