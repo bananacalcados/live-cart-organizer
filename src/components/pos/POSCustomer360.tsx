@@ -742,9 +742,47 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                           {Number(s.discount) > 0 && <p className="text-[10px] text-pos-white/50">desc. {fmtMoney(Number(s.discount))}</p>}
                           {s.payment_method && <p className="text-[10px] text-pos-white/50 mt-1">{s.payment_method}</p>}
                           {s.invoice_number && <p className="text-[10px] text-pos-white/40">NF {s.invoice_number}</p>}
+                          {(() => {
+                            const isZoppy = s.id.startsWith("zoppy-");
+                            const cb = chargebacks.find(c => !isZoppy && c.pos_sale_id === s.id);
+                            if (cb) {
+                              return (
+                                <span className="mt-2 inline-flex items-center gap-1 rounded bg-destructive px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">
+                                  <ShieldAlert className="h-3 w-3" /> CHARGEBACK
+                                </span>
+                              );
+                            }
+                            return (
+                              <div className="mt-2">
+                                <MarkChargebackDialog
+                                  onCreated={refreshChargebacks}
+                                  prefill={{
+                                    source: "pos",
+                                    pos_sale_id: isZoppy ? null : s.id,
+                                    source_order_id: isZoppy ? s.id.replace("zoppy-", "") : s.id,
+                                    source_order_name: s.invoice_number ? `NF ${s.invoice_number}` : `Venda ${fmtDate(s.created_at)}`,
+                                    customer_unified_id: selected?._fromUnified ? selected.id : null,
+                                    customer_name: selected?.name || "",
+                                    customer_phone: selected?.whatsapp || "",
+                                    customer_cpf: selected?.cpf || "",
+                                    customer_email: selected?.email || "",
+                                    address_city: selected?.city || "",
+                                    address_state: selected?.state || "",
+                                    amount: Number(s.total || 0),
+                                  }}
+                                  trigger={
+                                    <button className="text-[10px] text-pos-white/50 hover:text-destructive underline underline-offset-2">
+                                      Marcar chargeback
+                                    </button>
+                                  }
+                                />
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </Card>
+
                   ))}
                 </TabsContent>
 
