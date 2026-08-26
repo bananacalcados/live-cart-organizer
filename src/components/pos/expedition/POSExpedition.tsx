@@ -584,7 +584,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
         {showFilters && (
           <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div>
                 <label className="text-xs font-bold text-pos-muted-text uppercase">Origem</label>
                 <Select value={filterOrigin} onValueChange={setFilterOrigin}>
@@ -623,7 +623,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-bold text-pos-muted-text uppercase">Período</label>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Período (criação)</label>
                 <Select value={filterPeriod} onValueChange={setFilterPeriod}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -644,6 +644,49 @@ export function POSExpedition({ storeId, storeName }: Props) {
                     onChange={(e) => setFilterDay(e.target.value)}
                     className="mt-2 h-10"
                   />
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Data Expedição</label>
+                <Select value={filterExpDate} onValueChange={(v) => { setFilterExpDate(v); }}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="today">Hoje</SelectItem>
+                    <SelectItem value="yesterday">Ontem</SelectItem>
+                    <SelectItem value="week">Esta semana</SelectItem>
+                    <SelectItem value="last_week">Semana passada</SelectItem>
+                    <SelectItem value="month">Este mês</SelectItem>
+                    <SelectItem value="last_month">Mês passado</SelectItem>
+                    <SelectItem value="day">Dia específico…</SelectItem>
+                    <SelectItem value="period">Período…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {filterExpDate === "day" && (
+                  <Input
+                    type="date"
+                    value={filterExpDay}
+                    onChange={(e) => setFilterExpDay(e.target.value)}
+                    className="mt-2 h-10"
+                  />
+                )}
+                {filterExpDate === "period" && (
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      type="date"
+                      value={filterExpFrom}
+                      onChange={(e) => setFilterExpFrom(e.target.value)}
+                      className="h-10"
+                      title="De"
+                    />
+                    <Input
+                      type="date"
+                      value={filterExpTo}
+                      onChange={(e) => setFilterExpTo(e.target.value)}
+                      className="h-10"
+                      title="Até"
+                    />
+                  </div>
                 )}
               </div>
               <div>
