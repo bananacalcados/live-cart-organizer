@@ -962,7 +962,7 @@ export default function LiveMemberArea() {
       );
       // Rascunho: falhas (ex.: otp_required) são silenciosas — a etapa final avisa.
       act({ action: "save_details", details: partial }, { quiet: true, noMerge: true });
-    }, 700);
+    }, 1500);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, onboardStep, addr, state?.token]);
