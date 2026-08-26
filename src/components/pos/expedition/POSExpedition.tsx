@@ -209,6 +209,64 @@ export function POSExpedition({ storeId, storeName }: Props) {
         const days = map[filterPeriod] || 0;
         if (days && now - created > days * day) return false;
       }
+      // --- Filtro por DATA DA EXPEDIÇÃO CONCLUÍDA (expedition_finished_at) ---
+      if (filterExpDate !== "all") {
+        const fin = o.expedition_finished_at;
+        if (!fin) return false;
+        const t = new Date(fin).getTime();
+        const now = new Date();
+        const dayMs = 86400000;
+        const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const dow = now.getDay(); // 0 = domingo
+        const weekStart = today0 - (dow === 0 ? 6 : dow - 1) * dayMs; // segunda-feira
+        switch (filterExpDate) {
+          case "today":
+            if (t < today0 || t >= today0 + dayMs) return false;
+            break;
+          case "yesterday":
+            if (t < today0 - dayMs || t >= today0) return false;
+            break;
+          case "week":
+            if (t < weekStart || t >= weekStart + 7 * dayMs) return false;
+            break;
+          case "last_week":
+            if (t < weekStart - 7 * dayMs || t >= weekStart) return false;
+            break;
+          case "month": {
+            const mStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const mEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+            if (t < mStart || t >= mEnd) return false;
+            break;
+          }
+          case "last_month": {
+            const mStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+            const mEnd = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            if (t < mStart || t >= mEnd) return false;
+            break;
+          }
+          case "day": {
+            if (filterExpDay) {
+              const [y, m, d] = filterExpDay.split("-").map(Number);
+              const start = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime();
+              const end = start + dayMs;
+              if (t < start || t >= end) return false;
+            }
+            break;
+          }
+          case "period": {
+            if (filterExpFrom || filterExpTo) {
+              const fromT = filterExpFrom
+                ? (() => { const [y, m, d] = filterExpFrom.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime(); })()
+                : -Infinity;
+              const toT = filterExpTo
+                ? (() => { const [y, m, d] = filterExpTo.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime() + dayMs; })()
+                : Infinity;
+              if (t < fromT || t >= toT) return false;
+            }
+            break;
+          }
+        }
+      }
       if (!q) return true;
       return (
         (o.customer_name || "").toLowerCase().includes(q) ||
@@ -217,7 +275,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
       );
     });
-  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay]);
+  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
