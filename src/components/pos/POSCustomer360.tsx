@@ -498,7 +498,10 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <h3 className="text-xl font-bold text-pos-white">{selected.name || "(sem nome)"}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-bold text-pos-white">{selected.name || "(sem nome)"}</h3>
+                    <CustomerChargebackBadge chargebacks={chargebacks} />
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-pos-white/70">
                     {selected.whatsapp && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{selected.whatsapp}</span>}
                     {selected.cpf && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{selected.cpf}</span>}
