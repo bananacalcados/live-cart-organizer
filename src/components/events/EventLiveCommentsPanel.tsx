@@ -971,12 +971,14 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   stats={orderStatsByHandle.get(handle)}
                   leadTag={leadTagByHandle.get(handle)}
                   score={scoreByHandle.get(handle)}
+                  chargebacks={chargebacksForHandle(handle)}
                   onOpenOrder={openForHandle}
                   onOpenInstagram={openInstagramChat}
                   onOpenWhatsapp={openWhatsappChat}
                 />
               );
             })}
+
 
 
           </div>
