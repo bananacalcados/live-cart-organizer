@@ -1194,12 +1194,17 @@ Deno.serve(async (req) => {
 
 
     if (action === "state") {
-      await supabase
-        .from("live_member_sessions")
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq("id", session.id);
-      return json(await buildState(session));
+      // Heartbeat não segura a resposta (era 1 UPDATE bloqueante a cada polling).
+      background(
+        supabase
+          .from("live_member_sessions")
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq("id", session.id) as unknown as Promise<unknown>,
+      );
+      // Polling leve: o histórico de lives passadas não muda durante a live.
+      return json(await buildState(session, { skipHistory: body?.light === true }));
     }
+
 
     // Auditoria dos passos de pagamento na Área de Membros.
     // Best-effort e sempre 200: nunca pode atrapalhar o pagamento da cliente.
