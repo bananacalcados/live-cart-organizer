@@ -88,6 +88,19 @@ function clientIp(req: Request): string {
   return (fwd.split(",")[0] || req.headers.get("cf-connecting-ip") || "unknown").trim();
 }
 
+/**
+ * ⚡ Cache de instância (vive entre requisições da mesma edge function).
+ * A live corrente e o desconto PIX são IGUAIS para todas as clientes; consultá-los
+ * a cada requisição custava 3 idas ao banco por cliente a cada polling.
+ */
+type Cached<T> = { at: number; value: T };
+let EVENT_CACHE: Cached<any> | null = null;
+let PIX_CACHE: Cached<number> | null = null;
+const EVENT_TTL_MS = 15_000;
+const PIX_TTL_MS = 300_000;
+
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -179,21 +192,23 @@ Deno.serve(async (req) => {
      * Prioriza a live no ar; senão, o evento ativo mais recente.
      */
     async function resolveCurrentEvent() {
+      if (EVENT_CACHE && Date.now() - EVENT_CACHE.at < EVENT_TTL_MS) return EVENT_CACHE.value;
+
       const base = () =>
         supabase
           .from("events")
           .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id")
           .neq("is_active", false);
 
-      const { data: live } = await base()
-        .eq("is_live_broadcasting", true)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (live?.[0]) return live[0];
-
-      const { data: latest } = await base().order("created_at", { ascending: false }).limit(1);
-      return latest?.[0] || null;
+      const [liveRes, latestRes] = await Promise.all([
+        base().eq("is_live_broadcasting", true).order("created_at", { ascending: false }).limit(1),
+        base().order("created_at", { ascending: false }).limit(1),
+      ]);
+      const value = liveRes.data?.[0] || latestRes.data?.[0] || null;
+      EVENT_CACHE = { at: Date.now(), value };
+      return value;
     }
+
 
 
     async function loadSession(token: string) {
@@ -235,15 +250,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    async function loadCustomers(phone: string) {
+    /** Memo por requisição: `loadCustomers` era chamado 3x por request com o mesmo telefone. */
+    const customersMemo = new Map<string, Promise<any[]>>();
+    function loadCustomers(phone: string): Promise<any[]> {
       const suf = suffix8(phone);
-      const { data } = await supabase
+      const hit = customersMemo.get(suf);
+      if (hit) return hit;
+      const p = supabase
         .from("customers")
         .select("id, instagram_handle, whatsapp")
         .not("whatsapp", "is", null)
-        .ilike("whatsapp", `%${suf}`);
-      return data || [];
+        .ilike("whatsapp", `%${suf}`)
+        .then((r: any) => r.data || []);
+      customersMemo.set(suf, p);
+      return p;
     }
+
 
 
     /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
@@ -434,6 +456,7 @@ Deno.serve(async (req) => {
 
     /** Desconto PIX global (app_settings.pix_discount_percent), ex.: 5%. */
     async function pixDiscountPercent(): Promise<number> {
+      if (PIX_CACHE && Date.now() - PIX_CACHE.at < PIX_TTL_MS) return PIX_CACHE.value;
       try {
         const { data } = await supabase
           .from("app_settings")
@@ -441,11 +464,14 @@ Deno.serve(async (req) => {
           .eq("key", "pix_discount_percent")
           .maybeSingle();
         const pct = Number(String(data?.value ?? "").replace(/"/g, "")) || 0;
-        return pct > 0 && pct < 100 ? pct : 0;
+        const value = pct > 0 && pct < 100 ? pct : 0;
+        PIX_CACHE = { at: Date.now(), value };
+        return value;
       } catch {
         return 0;
       }
     }
+
 
     /**
      * Dados que a cliente JÁ informou antes (mesmo WhatsApp, outro pedido).
@@ -570,125 +596,144 @@ Deno.serve(async (req) => {
       }
 
 
-      const history = opts.skipHistory ? null : await loadHistory(session.phone, order?.id || null);
+      // ⚡ Tudo o que não depende um do outro roda EM PARALELO.
+      // Antes eram ~8 consultas em fila, cada uma somando latência à mesma resposta.
+      const historyP: Promise<any> = opts.skipHistory
+        ? Promise.resolve(null)
+        : loadHistory(session.phone, order?.id || null);
 
-      // ── Prêmios ativos da roleta (não usados e dentro da validade).
-      let prizes: any[] = [];
-      try {
-        const { data: prizeRows } = await supabase.rpc("get_customer_active_prizes", {
+      const prizesP = supabase
+        .rpc("get_customer_active_prizes", {
           p_phone: String(session.phone || "").replace(/\D/g, ""),
           p_include_history: true,
-        });
-        prizes = (prizeRows || []).map((p: any) => ({
-          id: p.id,
-          label: p.prize_label,
-          type: p.prize_type,
-          value: Number(p.prize_value || 0),
-          coupon_code: p.coupon_code,
-          expires_at: p.expires_at,
-          days_left: Number(p.days_left || 0),
-          is_physical: p.prize_type === "product",
-          // ciclo de vida do prêmio físico: available | reserved | shipped | forfeited | expired
-          fulfillment_status: p.fulfillment_status || "available",
-          reserved_order_id: p.applied_order_id,
-          shipped_at: p.shipped_at,
-          forfeited_at: p.forfeited_at,
-          forfeit_reason: p.forfeit_reason,
-        }));
-      } catch (_e) {
-        prizes = [];
-      }
-      const pixPct = order && !order.is_paid ? await pixDiscountPercent() : 0;
+        })
+        .then((r: any) => r.data || [])
+        .catch(() => []);
+
+      const pixP = order && !order.is_paid ? pixDiscountPercent() : Promise.resolve(0);
+
+      const raffleRowsP = event?.id
+        ? supabase
+            .from("event_raffles")
+            .select("id, name, prize_label, prize_type, prize_value, audience, min_purchase_value, winners_count, status")
+            .eq("event_id", event.id)
+            .then((r: any) => r.data || [])
+            .catch(() => [])
+        : Promise.resolve([]);
+
+      const regP = order?.id
+        ? supabase
+            .from("customer_registrations")
+            .select("*")
+            .eq("order_id", order.id)
+            .maybeSingle()
+            .then((r: any) => r.data || null)
+            .catch(() => null)
+        : Promise.resolve(null);
+
+      const [history, prizeRows, pixPct, raffleRows, regLoaded] = await Promise.all([
+        historyP,
+        prizesP,
+        pixP,
+        raffleRowsP,
+        regP,
+      ]);
+
+      // ── Prêmios ativos da roleta (não usados e dentro da validade).
+      const prizes = (prizeRows || []).map((p: any) => ({
+        id: p.id,
+        label: p.prize_label,
+        type: p.prize_type,
+        value: Number(p.prize_value || 0),
+        coupon_code: p.coupon_code,
+        expires_at: p.expires_at,
+        days_left: Number(p.days_left || 0),
+        is_physical: p.prize_type === "product",
+        // ciclo de vida do prêmio físico: available | reserved | shipped | forfeited | expired
+        fulfillment_status: p.fulfillment_status || "available",
+        reserved_order_id: p.applied_order_id,
+        shipped_at: p.shipped_at,
+        forfeited_at: p.forfeited_at,
+        forfeit_reason: p.forfeit_reason,
+      }));
 
       // ── Sorteios do evento: mostra à cliente se ela está concorrendo e o que
       // precisa fazer para entrar (confirmar pedido / pagar). Só leitura.
       const raffles: any[] = [];
       try {
-        if (event?.id) {
-          const { data: rows } = await supabase
-            .from("event_raffles")
-            .select("id, name, prize_label, prize_type, prize_value, audience, min_purchase_value, winners_count, status")
-            .eq("event_id", event.id);
-
-          if (rows?.length) {
-            const last8 = suffix8(session.phone || "");
-            const { data: leadRow } = await supabase
+        if (event?.id && raffleRows.length) {
+          const rows = raffleRows;
+          const last8 = suffix8(session.phone || "");
+          const [leadRes, winRes] = await Promise.all([
+            supabase
               .from("event_leads")
               .select("id")
               .eq("event_id", event.id)
               .eq("phone_suffix", last8)
-              .limit(1);
-            const { data: winRows } = await supabase
+              .limit(1),
+            supabase
               .from("event_raffle_winners")
               .select("raffle_id, voided_at, phone")
-              .in("raffle_id", rows.map((r: any) => r.id));
+              .in("raffle_id", rows.map((r: any) => r.id)),
+          ]);
+          const leadRow = leadRes.data;
+          const winRows = winRes.data;
 
-            const excluded = ["pre_sale", "incomplete_order", "awaiting_confirmation", "cancelled"];
-            const stage = String(order?.stage || "");
-            const hasConfirmedOrder = !!order && !excluded.includes(stage);
-            const isPayer = !!order && Boolean(order.is_paid || order.paid_externally);
-            const orderValue = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
-            const isLiveLead = !!leadRow?.length && !order;
+          const excluded = ["pre_sale", "incomplete_order", "awaiting_confirmation", "cancelled"];
+          const stage = String(order?.stage || "");
+          const hasConfirmedOrder = !!order && !excluded.includes(stage);
+          const isPayer = !!order && Boolean(order.is_paid || order.paid_externally);
+          const orderValue = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
+          const isLiveLead = !!leadRow?.length && !order;
 
-            for (const r of rows) {
-              const min = Number(r.min_purchase_value || 0);
-              let eligible = false;
-              let hint = "";
-              if (r.audience === "confirmed_orders") {
-                eligible = hasConfirmedOrder && (min <= 0 || orderValue >= min);
-                hint = hasConfirmedOrder
-                  ? min > 0 && orderValue < min
-                    ? `Compre a partir de R$ ${min.toFixed(2)} para concorrer`
-                    : ""
-                  : "Confirme seu pedido para concorrer";
-              } else if (r.audience === "payers") {
-                eligible = isPayer && (min <= 0 || orderValue >= min);
-                hint = isPayer
-                  ? min > 0 && orderValue < min
-                    ? `Pedidos a partir de R$ ${min.toFixed(2)} concorrem`
-                    : ""
-                  : "Finalize o pagamento para concorrer";
-              } else if (r.audience === "live_leads") {
-                eligible = isLiveLead;
-                hint = eligible ? "" : "Sorteio exclusivo para quem se cadastrou nesta live e ainda não fez pedido";
-              }
-
-              const won = (winRows || []).some(
-                (w: any) => !w.voided_at && suffix8(String(w.phone || "")) === last8 && w.raffle_id === r.id,
-              );
-
-              raffles.push({
-                id: r.id,
-                name: r.name,
-                prize_label: r.prize_label,
-                prize_type: r.prize_type,
-                winners_count: Number(r.winners_count || 1),
-                audience: r.audience,
-                status: r.status,
-                eligible,
-                won,
-                hint,
-              });
+          for (const r of rows) {
+            const min = Number(r.min_purchase_value || 0);
+            let eligible = false;
+            let hint = "";
+            if (r.audience === "confirmed_orders") {
+              eligible = hasConfirmedOrder && (min <= 0 || orderValue >= min);
+              hint = hasConfirmedOrder
+                ? min > 0 && orderValue < min
+                  ? `Compre a partir de R$ ${min.toFixed(2)} para concorrer`
+                  : ""
+                : "Confirme seu pedido para concorrer";
+            } else if (r.audience === "payers") {
+              eligible = isPayer && (min <= 0 || orderValue >= min);
+              hint = isPayer
+                ? min > 0 && orderValue < min
+                  ? `Pedidos a partir de R$ ${min.toFixed(2)} concorrem`
+                  : ""
+                : "Finalize o pagamento para concorrer";
+            } else if (r.audience === "live_leads") {
+              eligible = isLiveLead;
+              hint = eligible ? "" : "Sorteio exclusivo para quem se cadastrou nesta live e ainda não fez pedido";
             }
+
+            const won = (winRows || []).some(
+              (w: any) => !w.voided_at && suffix8(String(w.phone || "")) === last8 && w.raffle_id === r.id,
+            );
+
+            raffles.push({
+              id: r.id,
+              name: r.name,
+              prize_label: r.prize_label,
+              prize_type: r.prize_type,
+              winners_count: Number(r.winners_count || 1),
+              audience: r.audience,
+              status: r.status,
+              eligible,
+              won,
+              hint,
+            });
           }
         }
       } catch (e) {
         console.error("[member-area] falha ao montar sorteios:", e);
       }
 
-
-
-
-
-
-      let reg: any = null;
+      let reg: any = regLoaded;
       if (order?.id) {
-        const { data } = await supabase
-          .from("customer_registrations")
-          .select("*")
-          .eq("order_id", order.id)
-          .maybeSingle();
-        reg = data;
+
 
         // ── Cadastro salvo: herda o que ela já informou em pedidos anteriores.
         const missing = !reg?.cep || !reg?.address || !reg?.address_number || !reg?.cpf || !reg?.email;
@@ -1149,12 +1194,17 @@ Deno.serve(async (req) => {
 
 
     if (action === "state") {
-      await supabase
-        .from("live_member_sessions")
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq("id", session.id);
-      return json(await buildState(session));
+      // Heartbeat não segura a resposta (era 1 UPDATE bloqueante a cada polling).
+      background(
+        supabase
+          .from("live_member_sessions")
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq("id", session.id) as unknown as Promise<unknown>,
+      );
+      // Polling leve: o histórico de lives passadas não muda durante a live.
+      return json(await buildState(session, { skipHistory: body?.light === true }));
     }
+
 
     // Auditoria dos passos de pagamento na Área de Membros.
     // Best-effort e sempre 200: nunca pode atrapalhar o pagamento da cliente.

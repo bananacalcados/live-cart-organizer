@@ -538,22 +538,40 @@ export default function LiveMemberArea() {
   }, [applyState]);
 
   /**
+   * Enquanto a cliente está digitando, o polling NÃO pode rodar: a resposta do
+   * servidor (com o cadastro antigo) reescrevia o que ela acabou de digitar e
+   * jogava a etapa de endereço de volta na tela.
+   */
+  const lastTypedRef = useRef(0);
+  useEffect(() => {
+    const onInput = () => {
+      lastTypedRef.current = Date.now();
+    };
+    document.addEventListener("input", onInput, true);
+    return () => document.removeEventListener("input", onInput, true);
+  }, []);
+
+  /**
    * Atualização em tempo quase-real: a vendedora anota o item na live e a cliente
-   * vê aparecer sozinho, sem recarregar. Polling curto (6s) enquanto a aba está
-   * visível, pausado quando ela sai da aba, e refresh imediato ao voltar.
+   * vê aparecer sozinho, sem recarregar. Polling enquanto a aba está visível,
+   * pausado quando ela sai da aba ou está preenchendo dados.
    */
   const refreshState = useCallback(
     async (token: string, silent = true) => {
+      // Digitando agora? Não atualiza (evita perder o que está sendo preenchido).
+      if (silent && Date.now() - lastTypedRef.current < 12000) return;
       try {
         if (!silent) setSyncing(true);
         const seq = ++reqSeqRef.current;
-        const st = await callApi({ action: "state", token });
+        const st = await callApi({ action: "state", token, light: silent });
         if (!st?.ok) return;
         if (seq < appliedSeqRef.current) return;
         appliedSeqRef.current = seq;
-        setState(st);
-        // Correções feitas pela equipe (modal do módulo EVENTOS) refletem aqui.
-        hydrateForms(st);
+        // `light` não traz o histórico de lives passadas: preserva o que já temos.
+        setState((prev: any) => ({ ...st, history: st.history ?? prev?.history }));
+        // Correções feitas pela equipe (modal do módulo EVENTOS) refletem aqui —
+        // mas nunca por cima de campo que a cliente mexeu há pouco.
+        if (Date.now() - lastTypedRef.current > 12000) hydrateForms(st);
 
 
         const sig = itemsSignature(st.order);
@@ -588,8 +606,10 @@ export default function LiveMemberArea() {
 
     const start = () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
-      pollRef.current = window.setInterval(() => refreshState(token), 6000);
+      // 12s: metade da carga no servidor durante a live, sem perder o "tempo real".
+      pollRef.current = window.setInterval(() => refreshState(token), 12000);
     };
+
     const stop = () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
       pollRef.current = null;
@@ -934,6 +954,7 @@ export default function LiveMemberArea() {
     const sig = JSON.stringify(details);
     if (sig === lastAddrSaveRef.current) return;
     const t = window.setTimeout(() => {
+
       lastAddrSaveRef.current = sig;
       // Envia só o que está preenchido: campos vazios não sobrescrevem dados já salvos.
       const partial = Object.fromEntries(
@@ -941,7 +962,7 @@ export default function LiveMemberArea() {
       );
       // Rascunho: falhas (ex.: otp_required) são silenciosas — a etapa final avisa.
       act({ action: "save_details", details: partial }, { quiet: true, noMerge: true });
-    }, 700);
+    }, 1500);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, onboardStep, addr, state?.token]);
