@@ -140,11 +140,44 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
 
 
+  /** Converte o filtro de Data Expedição em intervalo ISO (UTC) para a query server-side. */
+  const finishedRange = useMemo<{ from?: string; to?: string } | undefined>(() => {
+    if (filterExpDate === "all") return undefined;
+    const now = new Date();
+    const dayMs = 86400000;
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dow = now.getDay();
+    const weekStart = new Date(today0.getTime() - (dow === 0 ? 6 : dow - 1) * dayMs);
+    let fromD: Date | null = null;
+    let toD: Date | null = null;
+    const parseDate = (s: string) => {
+      const [y, m, d] = s.split("-").map(Number);
+      return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+    };
+    switch (filterExpDate) {
+      case "today": fromD = today0; toD = new Date(today0.getTime() + dayMs); break;
+      case "yesterday": fromD = new Date(today0.getTime() - dayMs); toD = today0; break;
+      case "week": fromD = weekStart; toD = new Date(weekStart.getTime() + 7 * dayMs); break;
+      case "last_week": fromD = new Date(weekStart.getTime() - 7 * dayMs); toD = weekStart; break;
+      case "month": fromD = new Date(now.getFullYear(), now.getMonth(), 1); toD = new Date(now.getFullYear(), now.getMonth() + 1, 1); break;
+      case "last_month": fromD = new Date(now.getFullYear(), now.getMonth() - 1, 1); toD = new Date(now.getFullYear(), now.getMonth(), 1); break;
+      case "day":
+        if (filterExpDay) { fromD = parseDate(filterExpDay); toD = new Date(fromD.getTime() + dayMs); }
+        break;
+      case "period":
+        if (filterExpFrom) fromD = parseDate(filterExpFrom);
+        if (filterExpTo) toD = new Date(parseDate(filterExpTo).getTime() + dayMs);
+        break;
+    }
+    if (!fromD && !toD) return undefined;
+    return { from: fromD?.toISOString(), to: toD?.toISOString() };
+  }, [filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+
   const load = async () => {
     if (!storeId) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(storeId, stage);
+      const rows = await fetchExpeditionOrders(storeId, stage, finishedRange);
       setOrders(rows);
       await loadCounts();
     } catch (e: any) {
@@ -157,7 +190,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage]);
+  }, [storeId, stage, finishedRange]);
 
   useEffect(() => {
     if (!storeId) return;
