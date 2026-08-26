@@ -6,6 +6,10 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
+
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -117,6 +121,7 @@ interface CommentRowProps {
   stats?: HandleOrderStats;
   leadTag?: LeadTag;
   score?: ParticipantScore;
+  chargebacks?: ChargebackRecord[];
   onOpenOrder: (username: string) => void;
   onOpenInstagram: (username: string) => void;
   onOpenWhatsapp: (username: string) => void;
@@ -130,11 +135,13 @@ const CommentRow = memo(function CommentRow({
   stats,
   leadTag,
   score,
+  chargebacks,
   onOpenOrder,
   onOpenInstagram,
   onOpenWhatsapp,
 }: CommentRowProps) {
   const handle = cleanHandle(c.username);
+
   const scoreMeta = score ? SCORE_META[score.category] : undefined;
   return (
     <div className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
@@ -153,6 +160,10 @@ const CommentRow = memo(function CommentRow({
           >
             <ShoppingBag className="h-3 w-3" />@{handle}
           </button>
+          {chargebacks && chargebacks.length > 0 && (
+            <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />
+          )}
+
           {scoreMeta && (
             <span
               className={cn(
@@ -870,6 +881,19 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     setWaChatOpen(true);
   }, [whatsappByHandle]);
 
+  // Chargeback do @ (por cadastro unificado ou pelo WhatsApp vinculado)
+  const { byHandle: cbByHandle, byPhone: cbByPhone } = useChargebackRegistry();
+  const chargebacksForHandle = useCallback(
+    (handle: string): ChargebackRecord[] => {
+      const direct = cbByHandle(handle);
+      if (direct.length) return direct;
+      const wa = whatsappByHandle.get(handle);
+      return wa ? cbByPhone(wa) : [];
+    },
+    [cbByHandle, cbByPhone, whatsappByHandle],
+  );
+
+
 
 
 
@@ -971,12 +995,14 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   stats={orderStatsByHandle.get(handle)}
                   leadTag={leadTagByHandle.get(handle)}
                   score={scoreByHandle.get(handle)}
+                  chargebacks={chargebacksForHandle(handle)}
                   onOpenOrder={openForHandle}
                   onOpenInstagram={openInstagramChat}
                   onOpenWhatsapp={openWhatsappChat}
                 />
               );
             })}
+
 
 
           </div>

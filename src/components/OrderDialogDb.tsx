@@ -22,6 +22,9 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import {
@@ -70,6 +73,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [pixCode, setPixCode] = useState<string>("");
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [banReason, setBanReason] = useState("");
+  const [chargebackConfirmed, setChargebackConfirmed] = useState(false);
+  const [showChargebackConfirm, setShowChargebackConfirm] = useState(false);
+
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookup, setLookup] = useState<any | null>(null);
 
@@ -151,6 +157,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     if (editingOrder || !whatsapp.trim() || existingCustomer) return null;
     return findCustomerByWhatsApp(whatsapp);
   }, [whatsapp, editingOrder, existingCustomer, findCustomerByWhatsApp, customers]);
+
+  // Chargeback do cliente: pelo telefone digitado ou pelo @ do Instagram
+  const { byPhone: cbByPhone, byHandle: cbByHandle } = useChargebackRegistry();
+  const orderChargebacks = useMemo(() => {
+    const phone = whatsapp || editingOrder?.customer?.whatsapp || existingCustomer?.whatsapp || "";
+    const byPhone = cbByPhone(phone);
+    if (byPhone.length) return byPhone;
+    return cbByHandle(instagramHandle || editingOrder?.customer?.instagram_handle || "");
+  }, [whatsapp, instagramHandle, editingOrder, existingCustomer, cbByPhone, cbByHandle]);
+
+  useEffect(() => { setChargebackConfirmed(false); }, [whatsapp, instagramHandle]);
+
 
   // Check if there's an active order for this customer in current event
   const existingOrderInEvent = useMemo(() => {
@@ -438,12 +456,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     }
   }, [editingOrder, eventId]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forceChargeback = false) => {
     if (isSubmitting) return;
     if (!instagramHandle.trim()) {
       toast.error("Informe o @ do Instagram");
       return;
     }
+
+    // Chargeback: avisa e exige confirmação antes de montar o pedido (Etapa 5)
+    if (orderChargebacks.length > 0 && !forceChargeback && !chargebackConfirmed) {
+      setShowChargebackConfirm(true);
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Check if customer is banned
@@ -452,6 +477,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       toast.error(`Cliente ${customer.instagram_handle} está banido: ${customer.ban_reason || 'Sem motivo especificado'}`);
       return;
     }
+
 
     try {
       if (editingOrder) {
@@ -635,7 +661,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
+          {orderChargebacks.length > 0 && (
+            <Alert className="border-destructive bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-sm text-destructive flex items-center justify-between gap-3">
+                <span>
+                  <strong>CLIENTE COM CHARGEBACK!</strong> Este telefone/@ já pediu estorno em uma compra anterior.
+                </span>
+                <CustomerChargebackBadge chargebacks={orderChargebacks} size="sm" className="shrink-0" />
+              </AlertDescription>
+            </Alert>
+          )}
           {isBanned && (
+
             <Alert className="border-destructive/50 bg-destructive/10">
               <Ban className="h-4 w-4 text-destructive" />
               <AlertDescription className="text-sm text-destructive flex items-center justify-between gap-3">
@@ -1218,7 +1256,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Button>
             <Button 
               className="flex-1 btn-accent" 
-              onClick={handleSubmit}
+              onClick={() => handleSubmit()}
               disabled={isBanned || isSubmitting}
             >
               {isSubmitting ? (
@@ -1230,6 +1268,34 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </div>
         </div>
       </DialogContent>
+
+      {/* Confirmação: cliente com chargeback (Etapa 5) */}
+      <AlertDialog open={showChargebackConfirm} onOpenChange={setShowChargebackConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">CLIENTE COM CHARGEBACK</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este cliente já pediu estorno (chargeback) em uma compra anterior
+              {orderChargebacks[0]?.source_order_name ? ` — ${orderChargebacks[0].source_order_name}` : ""}.
+              Deseja prosseguir com o pedido assim mesmo?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não montar pedido</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setChargebackConfirmed(true);
+                setShowChargebackConfirm(false);
+                setTimeout(() => handleSubmit(true), 0);
+              }}
+            >
+              Prosseguir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+
   );
 }

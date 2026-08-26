@@ -24,6 +24,9 @@ import { ptBR } from "date-fns/locale";
 import { EmojiPickerButton } from "../EmojiPickerButton";
 import { Message, Conversation } from "./ChatTypes";
 import { supabase } from "@/integrations/supabase/client";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+
 import { uploadMediaToStorage } from "../MediaAttachmentPicker";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -300,7 +303,15 @@ export function ChatView({
     });
   }, [messages, conversationScrollKey]);
 
+  // Chargeback do contato (Etapa 5)
+  const { byPhone: chargebacksByPhone } = useChargebackRegistry();
+  const chargebacksForChat = useMemo(
+    () => (conversation?.phone && !conversation.isGroup ? chargebacksByPhone(conversation.phone) : []),
+    [conversation?.phone, conversation?.isGroup, chargebacksByPhone],
+  );
+
   // Load tags from chat_contacts when conversation changes
+
   useEffect(() => {
     if (!conversation?.phone || conversation.isGroup) {
       setContactTags([]);
@@ -743,10 +754,21 @@ export function ChatView({
         </div>
       )}
 
+      {/* Chargeback: TAG grande e clicável (Etapa 5) */}
+      {conversation && !conversation.isGroup && chargebacksForChat.length > 0 && (
+        <div className="px-3 py-2 border-b border-destructive/40 bg-destructive/10 flex items-center gap-2 flex-shrink-0">
+          <CustomerChargebackBadge chargebacks={chargebacksForChat} size="lg" />
+          <span className="text-xs text-destructive font-medium">
+            Cliente com chargeback — clique para ver a compra.
+          </span>
+        </div>
+      )}
+
       {/* AI Transfer banner */}
       {conversation && !conversation.isGroup && (
         <AiTransferBanner phone={conversation.phone} />
       )}
+
 
       {/* Customer Info Panel */}
       {customerInfoPanel}
