@@ -22,6 +22,9 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import {
