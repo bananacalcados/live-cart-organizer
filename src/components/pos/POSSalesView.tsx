@@ -3293,7 +3293,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 )}
                 {showCrediarioPanel && saleResult?.sale_id && (
                   <Button
-                    className="h-14 gap-2 text-base col-span-2 border-2 border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold"
+                    className="h-14 gap-2 text-xl col-span-2 border-2 border-amber-500/40 bg-amber-500/10 text-pos-white hover:bg-amber-500/20 font-bold"
                     variant="outline"
                     disabled={printingCarne}
                     onClick={async () => {
