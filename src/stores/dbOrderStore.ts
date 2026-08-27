@@ -383,36 +383,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         )
       }));
 
-      // Mensagem inicial via Instagram Direct dispara já em "Aguardando
-      // Confirmação" (o pedido com @ do Instagram ainda não tem WhatsApp).
-      // keepStage evita que a edge function mova o pedido de coluna.
-      if (newStage === 'awaiting_confirmation' && previousStage !== 'awaiting_confirmation' && order.customer?.instagram_handle) {
-        try {
-          if (order.event_id) {
-            const { data: eventData } = await supabase
-              .from('events')
-              .select('automation_enabled')
-              .eq('id', order.event_id)
-              .single();
-
-            if (eventData?.automation_enabled) {
-              supabase.functions.invoke('livete-start-order', {
-                body: {
-                  orderId,
-                  fallbackCommentId: order.latest_comment_id || undefined,
-                  forceInstagram: true,
-                  keepStage: true,
-                },
-              }).then(({ error: igErr }) => {
-                if (igErr) console.error('🤖 [LIVETE] IG DM awaiting_confirmation error:', igErr);
-                else console.log('🤖 [LIVETE] IG DM inicial disparado (awaiting_confirmation) para', orderId);
-              });
-            }
-          }
-        } catch (e) {
-          console.error('🤖 [LIVETE] IG awaiting_confirmation trigger error:', e);
-        }
-      }
+      // Nota: a MENSAGEM INICIAL via Instagram Direct ao entrar em
+      // "Aguardando Confirmação" é disparada pela trigger de banco
+      // trg_livete_ig_initial_dm (cobre Kanban, auto-promoção e área de membros).
 
       // Trigger Livete AI only when the card actually re-enters 'new'
       if (newStage === 'new' && previousStage !== 'new') {
