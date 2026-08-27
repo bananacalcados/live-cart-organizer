@@ -22183,9 +22183,9 @@ export type Database = {
       member_area_find_by_identity: {
         Args: { p_event_id: string; p_kind: string; p_value: string }
         Returns: {
-          customer_id: string
+          found_customer_id: string
+          found_order_id: string
           matches: number
-          order_id: string
         }[]
       }
       merge_duplicate_zoppy_customers: {
