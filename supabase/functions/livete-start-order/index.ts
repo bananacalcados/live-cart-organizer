@@ -218,6 +218,20 @@ serve(async (req) => {
       !!metaPhoneNumberId &&
       !!metaTemplateName;
 
+    // ── Links da Área de Membros ──
+    // {member_area_public}: link simples (cliente digita o telefone)
+    // {member_area_link}: link mágico já autenticado (gerado só quando usado)
+    const MEMBER_AREA_PUBLIC = 'https://checkout.bananacalcados.com.br/minha-area';
+    const memberPhoneForLink = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
+    const usageHaystack = JSON.stringify({
+      blocks: initialMessageBlocks,
+      buttons: igInitialButtons,
+      bodyVars: metaTemplateBodyVars,
+      headerVar: metaTemplateHeaderVar,
+    });
+    const memberAreaLink = usageHaystack.includes('{member_area_link}')
+      ? await issueMagicLink(supabase, memberPhoneForLink)
+      : MEMBER_AREA_PUBLIC;
 
     const resolveToken = (token: string): string => {
       switch (token) {
@@ -228,6 +242,8 @@ serve(async (req) => {
         case '{products_short}':
           return products.map((p: any) => `${p.quantity || 1}x ${p.title}`).join(', ');
         case '{checkout_link}': return checkoutLink || '';
+        case '{member_area_link}': return memberAreaLink;
+        case '{member_area_public}': return MEMBER_AREA_PUBLIC;
         case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
         case '{discount}': return `R$${discountAmount.toFixed(2)}`;
         case '{total}': return `R$${total.toFixed(2)}`;
@@ -235,6 +251,7 @@ serve(async (req) => {
         default: return token || '';
       }
     };
+
 
     const recentThreshold = new Date(Date.now() - 15000).toISOString();
     let duplicateQuery = supabase
