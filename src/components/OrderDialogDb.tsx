@@ -53,9 +53,14 @@ interface OrderDialogDbProps {
   eventId: string;
   prefillInstagram?: string;
   prefillCommentId?: string;
+  /** Telefone do lead (área de membros) — resolve o cliente pelo WhatsApp */
+  prefillWhatsapp?: string;
+  /** Nome do lead, usado como identificador quando não há @ do Instagram */
+  prefillName?: string;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
+
   const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
@@ -201,8 +206,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       if (prefillInstagram && open) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
       }
+      if (prefillWhatsapp && open) {
+        const normalized = normalizeBRPhone(prefillWhatsapp);
+        setWhatsapp(normalized);
+        const known = findCustomerByWhatsApp(normalized);
+        if (known?.instagram_handle) {
+          setInstagramHandle(known.instagram_handle.replace(/^@/, ""));
+        } else if (!prefillInstagram) {
+          const slug = (prefillName || "")
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase().trim().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
+          setInstagramHandle(slug || normalized);
+        }
+      }
     }
-  }, [editingOrder, open, prefillInstagram]);
+  }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillName]);
+
 
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {

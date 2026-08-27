@@ -10,8 +10,10 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  UserPlus, Loader2, RefreshCw, Search, Phone, Trophy, Star, Users, Download,
+  UserPlus, Loader2, RefreshCw, Search, Phone, Trophy, Star, Users, Download, ShoppingCart,
 } from "lucide-react";
+import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { useCustomerStore } from "@/stores/customerStore";
 
 interface MemberAreaLead {
   id: string;
@@ -62,6 +64,8 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
   const [search, setSearch] = useState("");
   const [days, setDays] = useState("30");
   const [scopeEvent, setScopeEvent] = useState(!!eventId);
+  const [orderLead, setOrderLead] = useState<MemberAreaLead | null>(null);
+  const fetchCustomers = useCustomerStore((s) => s.fetchCustomers);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,13 +219,26 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
                     </p>
                   </TableCell>
                   <TableCell>
-                    <p className="font-medium">{l.name || "—"}</p>
+                    {(l.event_id || eventId) ? (
+                      <button
+                        type="button"
+                        onClick={async () => { await fetchCustomers(); setOrderLead(l); }}
+                        className="font-medium text-left text-primary hover:underline decoration-dotted flex items-center gap-1"
+                        title="Montar pedido para este cliente"
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5 opacity-70" />
+                        {l.name || fmtPhone(l.phone)}
+                      </button>
+                    ) : (
+                      <p className="font-medium">{l.name || "—"}</p>
+                    )}
                     {l.was_existing_lead && l.first_lead_source && (
                       <p className="text-[11px] text-muted-foreground">
                         1ª captação: {l.first_lead_source} · {fmtDateTime(l.first_lead_at)}
                       </p>
                     )}
                   </TableCell>
+
                   <TableCell>
                     <a
                       href={`https://wa.me/${String(l.phone).replace(/\D/g, "")}`}
@@ -279,6 +296,22 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
           </Table>
         </div>
       </CardContent>
+
+      {/* Montar pedido direto pelo lead da área de membros */}
+      {orderLead && (orderLead.event_id || eventId) && (
+        <OrderDialogDb
+          open={!!orderLead}
+          onOpenChange={(o) => {
+            if (!o) {
+              setOrderLead(null);
+              load();
+            }
+          }}
+          eventId={(orderLead.event_id || eventId) as string}
+          prefillWhatsapp={orderLead.phone}
+          prefillName={orderLead.name || undefined}
+        />
+      )}
     </Card>
   );
 }
