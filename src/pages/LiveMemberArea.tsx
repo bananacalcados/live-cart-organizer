@@ -1313,7 +1313,7 @@ export default function LiveMemberArea() {
             <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
             <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
             <p className="mt-2 text-muted-foreground text-base leading-snug">
-              Digite seu WhatsApp pra continuar
+              {signupMode ? "Pra criar seu cadastro, digite seu WhatsApp" : "Digite seu WhatsApp pra continuar"}
             </p>
             {identityHint && (
               <p className="mt-3 text-sm font-medium text-primary leading-snug">{identityHint}</p>
@@ -1323,7 +1323,8 @@ export default function LiveMemberArea() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              enter();
+              void submitPhone();
+
             }}
             className="mt-8 space-y-6"
           >
