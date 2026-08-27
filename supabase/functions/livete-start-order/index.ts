@@ -302,7 +302,23 @@ serve(async (req) => {
       : duplicateQuery.is('whatsapp_number_id', null);
 
     const { data: recentDuplicate } = await duplicateQuery;
-    const shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+    let shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+
+    // Trava anti-duplicidade POR PEDIDO: no Instagram a mensagem é gravada com
+    // o ID numérico do usuário (não com o @), então a checagem por telefone
+    // acima não pega repetição. Aqui olhamos o log do próprio pedido.
+    if (!shouldSkipSend) {
+      const windowMs = forceInstagram ? 60_000 : 10 * 60_000;
+      const { data: recentStart } = await supabase
+        .from('ai_conversation_logs')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('tool_called', 'livete-start-order')
+        .gte('created_at', new Date(Date.now() - windowMs).toISOString())
+        .limit(1);
+      if (recentStart && recentStart.length > 0) shouldSkipSend = true;
+    }
+
 
     const waPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
 
