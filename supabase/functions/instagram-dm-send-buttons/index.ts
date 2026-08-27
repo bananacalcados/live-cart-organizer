@@ -104,9 +104,11 @@ Deno.serve(async (req) => {
       return { type: "postback", title, payload: String(b.payload || "").slice(0, 1000) };
     });
 
-    const payload = {
+    const buildPayload = (tag: boolean) => ({
       recipient: { id: igUserId },
-      messaging_type: "RESPONSE",
+      ...(tag
+        ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" }
+        : { messaging_type: "RESPONSE" }),
       message: {
         attachment: {
           type: "template",
@@ -117,14 +119,25 @@ Deno.serve(async (req) => {
           },
         },
       },
+    });
+
+    const post = async (tag: boolean) => {
+      const r = await fetch(`${META_API}/me/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(tag)),
+      });
+      const j = await r.json().catch(() => ({}));
+      return { r, j };
     };
 
-    const res = await fetch(`${META_API}/me/messages`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
+    // 1ª tentativa dentro da janela normal; se a Meta recusar por janela
+    // fechada (2534022 / 10 / 551), tenta com a tag HUMAN_AGENT (7 dias).
+    let { r: res, j: data } = await post(false);
+    if (!res.ok) {
+      console.warn("[ig-dm-buttons] RESPONSE failed:", res.status, JSON.stringify(data));
+      ({ r: res, j: data } = await post(true));
+    }
 
     if (!res.ok) {
       console.warn("[ig-dm-buttons] send failed:", res.status, JSON.stringify(data));
@@ -133,6 +146,7 @@ Deno.serve(async (req) => {
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     // Log outgoing (best-effort)
     try {

@@ -302,7 +302,23 @@ serve(async (req) => {
       : duplicateQuery.is('whatsapp_number_id', null);
 
     const { data: recentDuplicate } = await duplicateQuery;
-    const shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+    let shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+
+    // Trava anti-duplicidade POR PEDIDO: no Instagram a mensagem é gravada com
+    // o ID numérico do usuário (não com o @), então a checagem por telefone
+    // acima não pega repetição. Aqui olhamos o log do próprio pedido.
+    if (!shouldSkipSend) {
+      const windowMs = forceInstagram ? 60_000 : 10 * 60_000;
+      const { data: recentStart } = await supabase
+        .from('ai_conversation_logs')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('tool_called', 'livete-start-order')
+        .gte('created_at', new Date(Date.now() - windowMs).toISOString())
+        .limit(1);
+      if (recentStart && recentStart.length > 0) shouldSkipSend = true;
+    }
+
 
     const waPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
 
@@ -372,9 +388,8 @@ serve(async (req) => {
         }
         return /^https?:\/\//i.test(v) ? v : null;
       };
-      const dispatchButtonsForBlock = async (idx: number) => {
+      const buildButtons = (idx: number) => {
         const cfg = buttonsForBlock(idx);
-        if (!cfg.length) return;
         const built: Array<{ type: 'web_url' | 'postback'; title: string; url?: string; payload?: string }> = [];
         for (const b of cfg) {
           const title = (b?.title || '').trim();
@@ -387,81 +402,70 @@ serve(async (req) => {
             if (known) built.push({ type: 'postback', title, payload: `evtauto:${order.event_id}:${b.automationId}` });
           }
         }
-        if (!built.length) return;
-
-        // Fallback em texto: quando a conversa não está aberta (private_reply de
-        // comentário), a Meta recusa o template com botões (erro 2534022). Nesse
-        // caso mandamos os links como texto para o cliente não ficar sem o botão.
-        const sendLinksAsText = async () => {
-          const links = built.filter((b) => b.type === 'web_url' && b.url);
-          if (!links.length) return;
-          const text = links.map((b) => `👉 ${b.title}:\n${b.url}`).join('\n\n');
-          try {
-            await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: igUsername,
-                message: text,
-                eventId: order.event_id,
-                fallbackCommentId,
-                fallbackCommentIds,
-              }),
-            });
-          } catch (e) {
-            console.warn('[livete-start] IG link fallback error:', e);
-          }
-        };
-
-        try {
-          const r = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send-buttons`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: igUsername,
-              text: '👇 Toque em uma opção:',
-              buttons: built,
-              whatsapp_number_id: whatsappNumberId,
-              eventId: order.event_id,
-            }),
-          });
-          if (!r.ok) {
-            const errBody = await r.text().catch(() => '');
-            console.warn(`[livete-start] IG buttons send failed (${r.status}) for @${igUsername}:`, errBody);
-            await sendLinksAsText();
-          }
-        } catch (e) {
-          console.warn('[livete-start] IG buttons dispatch error:', e);
-          await sendLinksAsText();
-        }
+        return built;
       };
 
+      const sendPlainIg = async (text: string) => {
+        return await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: igUsername,
+            message: text,
+            eventId: order.event_id,
+            fallbackCommentId,
+            fallbackCommentIds,
+          }),
+        });
+      };
 
       for (let i = 0; i < rendered.length; i++) {
         const text = rendered[i];
+        const built = buildButtons(i);
+
         if (!igFailed) {
-          const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: igUsername,
-              message: text,
-              eventId: order.event_id,
-              fallbackCommentId,
-              fallbackCommentIds,
-            }),
-          });
-          if (!igResp.ok) {
-            const errBody = await igResp.text().catch(() => '');
-            console.warn(`[livete-start] IG send failed (${igResp.status}) for @${igUsername}:`, errBody);
-            igFailed = true;
-            // Fallback to WA only when IG was the ONLY selected channel
-            if (isInstagram && waPhone) {
-              await sendViaWhatsApp(text);
+          let ok = false;
+
+          // Bloco com botões: manda o PRÓPRIO texto do bloco como template de
+          // botões (um único envio) — assim o cliente vê o botão clicável e não
+          // uma mensagem extra com o link em texto.
+          if (built.length > 0) {
+            try {
+              const r = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send-buttons`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  username: igUsername,
+                  text,
+                  buttons: built,
+                  whatsapp_number_id: whatsappNumberId,
+                  eventId: order.event_id,
+                }),
+              });
+              ok = r.ok;
+              if (!r.ok) {
+                const errBody = await r.text().catch(() => '');
+                console.warn(`[livete-start] IG buttons send failed (${r.status}) for @${igUsername}:`, errBody);
+              }
+            } catch (e) {
+              console.warn('[livete-start] IG buttons dispatch error:', e);
             }
-          } else {
-            // Envia botões configurados para este bloco (opcional, opt-in).
-            await dispatchButtonsForBlock(i);
+          }
+
+          if (!ok) {
+            // Sem botões (ou botões recusados): texto puro, já com os links.
+            const links = built.filter((b) => b.type === 'web_url' && b.url);
+            const fallbackText = links.length
+              ? `${text}\n\n${links.map((b) => `👉 ${b.title}:\n${b.url}`).join('\n\n')}`
+              : text;
+            const igResp = await sendPlainIg(fallbackText);
+            ok = igResp.ok;
+            if (!igResp.ok) {
+              const errBody = await igResp.text().catch(() => '');
+              console.warn(`[livete-start] IG send failed (${igResp.status}) for @${igUsername}:`, errBody);
+              igFailed = true;
+              if (isInstagram && waPhone) await sendViaWhatsApp(fallbackText);
+            }
           }
         } else if (isInstagram && waPhone) {
           await sendViaWhatsApp(text);
@@ -471,6 +475,7 @@ serve(async (req) => {
         }
       }
     };
+
 
     // ---- WhatsApp helpers ----
     const sendViaWhatsApp = async (text: string) => {
