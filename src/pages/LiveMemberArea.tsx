@@ -44,7 +44,7 @@ import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 
 
 
-type Step = "phone" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
+type Step = "phone" | "identity" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
 type OnboardStep = "name" | "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
@@ -133,6 +133,10 @@ export default function LiveMemberArea() {
   const [notFound, setNotFound] = useState(false);
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
+  // Identificação sem expor o telefone em público (nome completo ou @ do Instagram)
+  const [identityKind, setIdentityKind] = useState<"name" | "instagram">("name");
+  const [identityValue, setIdentityValue] = useState("");
+  const [identityHint, setIdentityHint] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
@@ -711,6 +715,35 @@ export default function LiveMemberArea() {
   }, [otpCooldown]);
 
 
+  /** Busca o pedido pelo nome completo ou @ e leva para a confirmação do WhatsApp. */
+  const identify = async () => {
+    const value = identityValue.trim();
+    if (value.length < 3) return;
+    setBusy(true);
+    try {
+      const res = await callApi({ action: "identify", kind: identityKind, value });
+      if (!res?.ok) {
+        toast.error(res?.error || "Não foi possível buscar seu pedido");
+        return;
+      }
+      if (!res.found) {
+        toast.error("Não encontramos pedido com esse dado. Confira e tente de novo.");
+        return;
+      }
+      setName(value);
+      setIdentityHint(
+        res.ambiguous
+          ? "Encontramos mais de uma pessoa com esse dado. Confirme seu WhatsApp pra liberarmos o pedido certo."
+          : "Encontramos seu pedido! Confirme seu WhatsApp (só a gente vê) pra abrir.",
+      );
+      setStep("phone");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao buscar pedido");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const enter = async (withName?: string, code?: string) => {
     setBusy(true);
     try {
@@ -1222,6 +1255,9 @@ export default function LiveMemberArea() {
             <p className="mt-2 text-muted-foreground text-base leading-snug">
               Digite seu WhatsApp pra continuar
             </p>
+            {identityHint && (
+              <p className="mt-3 text-sm font-medium text-primary leading-snug">{identityHint}</p>
+            )}
           </div>
 
           <form
@@ -1254,10 +1290,89 @@ export default function LiveMemberArea() {
 
           <button
             type="button"
+            onClick={() => { setIdentityHint(null); setStep("identity"); }}
+            className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
+          >
+            Prefiro entrar pelo meu nome completo ou @ do Instagram
+          </button>
+
+          <button
+            type="button"
             onClick={backToLive}
             className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
+  // ---------- Etapa 1b: Nome completo / @ do Instagram ----------
+  if (step === "identity") {
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8">
+          <div className="flex flex-col items-center text-center">
+            <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">ENCONTRAR MEU PEDIDO</h1>
+            <p className="mt-2 text-muted-foreground text-base leading-snug">
+              Use o mesmo dado que você passou na live
+            </p>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={identityKind === "name" ? "default" : "outline"}
+              className="h-12 text-sm font-semibold"
+              onClick={() => setIdentityKind("name")}
+            >
+              Nome completo
+            </Button>
+            <Button
+              type="button"
+              variant={identityKind === "instagram" ? "default" : "outline"}
+              className="h-12 text-sm font-semibold"
+              onClick={() => setIdentityKind("instagram")}
+            >
+              @ do Instagram
+            </Button>
+          </div>
+
+          <form
+            onSubmit={(e) => { e.preventDefault(); void identify(); }}
+            className="mt-6 space-y-6"
+          >
+            <Input
+              value={identityValue}
+              onChange={(e) => setIdentityValue(e.target.value)}
+              placeholder={identityKind === "name" ? "Maria Aparecida da Silva" : "@mariasilva"}
+              className="h-14 text-[18px] rounded-xl"
+              autoFocus
+            />
+            <Button
+              type="submit"
+              disabled={identityValue.trim().length < 3 || busy}
+              className="w-full h-14 text-base font-semibold rounded-xl gap-2"
+            >
+              {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+              Buscar meu pedido
+            </Button>
+          </form>
+
+          <p className="mt-4 text-xs text-muted-foreground text-center leading-snug">
+            Por segurança, o pedido só abre depois que você confirmar seu
+            WhatsApp com um código — assim ninguém abre a sua compra.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setStep("phone")}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar
           </button>
         </div>
       </div>

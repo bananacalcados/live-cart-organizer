@@ -14,7 +14,7 @@ interface CustomerStore {
   fetchCustomers: () => Promise<void>;
   findCustomerByInstagram: (handle: string) => DbCustomer | undefined;
   findCustomerByWhatsApp: (whatsapp: string) => DbCustomer | undefined;
-  createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string) => Promise<DbCustomer | null>;
+  createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string, fullName?: string) => Promise<DbCustomer | null>;
   banCustomer: (id: string, reason?: string) => Promise<void>;
   unbanCustomer: (id: string) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<DbCustomer>) => Promise<void>;
@@ -59,10 +59,11 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
     );
   },
 
-  createOrUpdateCustomer: async (instagramHandle, whatsapp) => {
+  createOrUpdateCustomer: async (instagramHandle, whatsapp, fullName) => {
     const formattedHandle = instagramHandle.startsWith('@') 
       ? instagramHandle 
       : `@${instagramHandle}`;
+    const cleanFullName = (fullName || '').trim() || undefined;
 
     try {
       // Check local cache first
@@ -87,11 +88,14 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
       }
 
       if (existing) {
-        // Update whatsapp if provided and different
-        if (whatsapp && whatsapp !== existing.whatsapp) {
+        // Update whatsapp/nome completo if provided and different
+        const patch: Record<string, unknown> = {};
+        if (whatsapp && whatsapp !== existing.whatsapp) patch.whatsapp = whatsapp;
+        if (cleanFullName && cleanFullName !== (existing as any).full_name) patch.full_name = cleanFullName;
+        if (Object.keys(patch).length > 0) {
           const { data, error } = await supabase
             .from('customers')
-            .update({ whatsapp })
+            .update(patch)
             .eq('id', existing.id)
             .select()
             .single();
@@ -114,10 +118,12 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
         .from('customers')
         .insert({ 
           instagram_handle: formattedHandle,
-          whatsapp 
+          whatsapp,
+          full_name: cleanFullName ?? null,
         })
         .select()
         .single();
+
 
       if (error) {
         // Handle unique constraint violation - customer exists but wasn't found

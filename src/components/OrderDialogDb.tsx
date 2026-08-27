@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package, Copy, ShieldCheck, AlertTriangle, ExternalLink } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package, Copy, ShieldCheck, AlertTriangle, ExternalLink, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import {
@@ -66,6 +66,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [fullName, setFullName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
@@ -185,6 +186,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     if (editingOrder) {
       setInstagramHandle(editingOrder.customer?.instagram_handle || "");
       setWhatsapp(editingOrder.customer?.whatsapp || "");
+      setFullName((editingOrder.customer as any)?.full_name || "");
       setCartLink(editingOrder.cart_link || "");
       setNotes(editingOrder.notes || "");
       setStage(editingOrder.stage as OrderStage);
@@ -203,6 +205,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setPixCode("");
     } else {
       resetForm();
+      if (prefillName && open) setFullName(prefillName);
       if (prefillInstagram && open) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
       }
@@ -229,12 +232,16 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       if (existingCustomer.whatsapp) {
         setWhatsapp(existingCustomer.whatsapp);
       }
+      if ((existingCustomer as any).full_name && !fullName.trim()) {
+        setFullName((existingCustomer as any).full_name);
+      }
     }
   }, [existingCustomer, editingOrder]);
 
   const resetForm = () => {
     setInstagramHandle("");
     setWhatsapp("");
+    setFullName("");
     setCartLink("");
     setNotes("");
     setStage("new");
@@ -477,8 +484,23 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
   const handleSubmit = async (forceChargeback = false) => {
     if (isSubmitting) return;
-    if (!instagramHandle.trim()) {
-      toast.error("Informe o @ do Instagram");
+    const nameWords = fullName.trim().split(/\s+/).filter(Boolean);
+    const hasValidFullName = nameWords.length >= 2;
+    // Sem @? Derivamos um identificador a partir do nome completo, para que a
+    // vendedora possa montar o pedido sem pedir o telefone em público na live.
+    let effectiveHandle = instagramHandle.trim();
+    if (!effectiveHandle && hasValidFullName) {
+      effectiveHandle = fullName
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase().trim().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
+      setInstagramHandle(effectiveHandle);
+    }
+    if (!effectiveHandle) {
+      toast.error("Informe o @ do Instagram ou o nome completo do cliente");
+      return;
+    }
+    if (!editingOrder && !whatsapp.trim() && !hasValidFullName) {
+      toast.error("Informe o WhatsApp ou o nome completo (nome e sobrenome)");
       return;
     }
 
@@ -491,7 +513,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setIsSubmitting(true);
 
     // Check if customer is banned
-    const customer = findCustomerByInstagram(instagramHandle);
+    const customer = findCustomerByInstagram(effectiveHandle);
     if (customer?.is_banned) {
       toast.error(`Cliente ${customer.instagram_handle} está banido: ${customer.ban_reason || 'Sem motivo especificado'}`);
       return;
@@ -501,9 +523,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     try {
       if (editingOrder) {
         // Update customer whatsapp if changed
-        if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
+        if (editingOrder.customer && (whatsapp !== editingOrder.customer.whatsapp || fullName.trim() !== ((editingOrder.customer as any).full_name || ""))) {
           const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
-          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa);
+          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa, fullName);
         }
 
         // Update existing order
@@ -547,7 +569,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       } else {
         // Create or get customer
         const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
-        const newCustomer = await createOrUpdateCustomer(instagramHandle, normalizedWa);
+        const newCustomer = await createOrUpdateCustomer(effectiveHandle, normalizedWa, fullName);
         if (!newCustomer) {
           toast.error("Erro ao criar cliente");
           return;
@@ -790,6 +812,24 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 </Alert>
               )}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="fullName" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Nome completo do cliente
+            </Label>
+            <Input
+              id="fullName"
+              placeholder="Maria Aparecida da Silva"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Alternativa segura ao WhatsApp: com nome e sobrenome, a cliente
+              acessa a área de membros pelo nome completo — sem precisar falar o
+              telefone em público na live.
+            </p>
           </div>
 
           {editingOrder && (

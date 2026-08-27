@@ -999,6 +999,33 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    /**
+     * Identificação SEM telefone: a cliente informa o @ do Instagram ou o nome
+     * completo. Nada do pedido é devolvido aqui — apenas se existe pedido
+     * aguardando ela. O acesso continua exigindo WhatsApp + código (OTP),
+     * evitando que golpistas abram pedidos só com um nome público.
+     */
+    if (action === "identify") {
+      if (!(await allow(`identify-ip:${ip}`, 60, 600))) {
+        return await blocked("rate_limit_identify_ip", "Muitas tentativas. Aguarde alguns minutos.");
+      }
+      const value = String(body.value || "").trim();
+      const kind = body.kind === "instagram" ? "instagram" : "name";
+      if (value.length < 3) return json({ ok: false, error: "Informe seu nome completo ou @ do Instagram" }, 400);
+      const event = await resolveCurrentEvent();
+      const { data: found } = await supabase.rpc("member_area_find_by_identity", {
+        p_event_id: event?.id || null,
+        p_kind: kind,
+        p_value: value,
+      });
+      const row = Array.isArray(found) ? found[0] : found;
+      if (!row) return json({ ok: true, found: false });
+      if ((row.matches || 1) > 1) {
+        return json({ ok: true, found: true, ambiguous: true });
+      }
+      return json({ ok: true, found: true, ambiguous: false });
+    }
+
     if (action === "enter") {
 
       // Anti-abuso brando: operadoras móveis compartilham o mesmo IP (CGNAT) e a
@@ -1048,10 +1075,22 @@ Deno.serve(async (req) => {
         if (handle) {
           const { data: byHandle } = await supabase
             .from("customers")
-            .select("id, instagram_handle, whatsapp")
+            .select("id, instagram_handle, whatsapp, full_name")
             .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`)
             .limit(5);
-          const target = (byHandle || []).find(
+          // Também casa pelo NOME COMPLETO (pedido montado na live sem telefone).
+          let pool = byHandle || [];
+          if (pool.length === 0) {
+            const { data: byName } = await supabase
+              .from("customers")
+              .select("id, instagram_handle, whatsapp, full_name")
+              .ilike("full_name", providedName.trim())
+              .limit(5);
+            pool = byName || [];
+            // Nome ambíguo (duas clientes com o mesmo nome): não vincula sozinho.
+            if (pool.length > 1) pool = [];
+          }
+          const target = pool.find(
             (c: any) => !c.whatsapp || !String(c.whatsapp).trim(),
           );
           if (target) {

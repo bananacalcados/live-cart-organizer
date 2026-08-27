@@ -114,10 +114,13 @@ export const isOrderComplete = (order: { products: Array<{ title: string; varian
 };
 
 // Get missing fields for incomplete order badge display
-export const getMissingFields = (order: { products: Array<{ title: string; variant: string }>; customer?: { instagram_handle?: string; whatsapp?: string } | null }): string[] => {
+// Identidade: basta UMA chave de contato (WhatsApp OU nome completo válido).
+// Assim a vendedora não precisa pedir o telefone em público durante a live.
+export const getMissingFields = (order: { products: Array<{ title: string; variant: string }>; customer?: { instagram_handle?: string; whatsapp?: string; full_name?: string | null } | null }): string[] => {
   const missing: string[] = [];
   if (!order.customer?.instagram_handle?.trim()) missing.push('Cliente');
-  if (!order.customer?.whatsapp?.trim()) missing.push('WhatsApp');
+  const hasFullName = (order.customer?.full_name || '').trim().split(/\s+/).filter(Boolean).length >= 2;
+  if (!order.customer?.whatsapp?.trim() && !hasFullName) missing.push('WhatsApp ou Nome completo');
   if (!order.products || order.products.length === 0) missing.push('Produto');
   else {
     const hasIncompleteVariant = order.products.some(p => !p.variant?.trim());

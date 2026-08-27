@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.member_area_find_by_identity(uuid, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.member_area_find_by_identity(uuid, text, text) TO service_role;

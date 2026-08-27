@@ -4106,6 +4106,7 @@ export type Database = {
         Row: {
           ban_reason: string | null
           created_at: string
+          full_name: string | null
           id: string
           instagram_handle: string
           is_banned: boolean
@@ -4117,6 +4118,7 @@ export type Database = {
         Insert: {
           ban_reason?: string | null
           created_at?: string
+          full_name?: string | null
           id?: string
           instagram_handle: string
           is_banned?: boolean
@@ -4128,6 +4130,7 @@ export type Database = {
         Update: {
           ban_reason?: string | null
           created_at?: string
+          full_name?: string | null
           id?: string
           instagram_handle?: string
           is_banned?: boolean
@@ -22177,6 +22180,14 @@ export type Database = {
           this_event: boolean
         }[]
       }
+      member_area_find_by_identity: {
+        Args: { p_event_id: string; p_kind: string; p_value: string }
+        Returns: {
+          customer_id: string
+          matches: number
+          order_id: string
+        }[]
+      }
       merge_duplicate_zoppy_customers: {
         Args: never
         Returns: {
@@ -22209,6 +22220,7 @@ export type Database = {
       next_product_sku_root: { Args: never; Returns: string }
       norm_cpf: { Args: { raw: string }; Returns: string }
       norm_email: { Args: { raw: string }; Returns: string }
+      norm_identity_text: { Args: { p: string }; Returns: string }
       norm_instagram: { Args: { raw: string }; Returns: string }
       norm_phone_br: { Args: { raw: string }; Returns: string }
       norm_txt: { Args: { t: string }; Returns: string }

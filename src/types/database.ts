@@ -23,6 +23,8 @@ export interface DbCustomer {
   id: string;
   instagram_handle: string;
   whatsapp?: string;
+  /** Nome completo — identidade alternativa ao telefone (pedidos criados na live). */
+  full_name?: string | null;
   is_banned: boolean;
   ban_reason?: string;
   tags?: string[];
