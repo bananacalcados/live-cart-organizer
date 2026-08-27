@@ -67,6 +67,7 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
   const [sellerNames, setSellerNames] = useState<Map<string, string>>(new Map());
   const [eventNames, setEventNames] = useState<Map<string, string>>(new Map());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ name: string; phone: string; summary?: string } | null>(null);
 
   useEffect(() => {
     if (!open || sales.length === 0) return;
