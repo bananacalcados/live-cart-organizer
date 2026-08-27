@@ -46,7 +46,7 @@ interface MetaTemplate {
 export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerPhone, cartSummary }: LiveWhatsAppChatDialogProps) {
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+  const { fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
   const currentUserId = useCurrentUserId();
 
   // Media state
