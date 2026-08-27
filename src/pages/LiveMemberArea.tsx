@@ -777,6 +777,33 @@ export default function LiveMemberArea() {
     }
   };
 
+  /**
+   * Envio do WhatsApp. No fluxo de cadastro (sem pedido), antes de entrar
+   * checamos se o número já existe na base (DDD + 8 últimos dígitos) para
+   * perguntar "você é a Fulana?" e vincular ao cadastro completo.
+   */
+  const submitPhone = async () => {
+    if (!signupMode) {
+      void enter();
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await callApi({ action: "phone_lookup", phone });
+      if (res?.ok && res.name) {
+        setKnownName(res.name);
+        setStep("signup_confirm");
+        return;
+      }
+      await enter();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao verificar WhatsApp");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+
   const enter = async (withName?: string, code?: string) => {
     setBusy(true);
     try {
