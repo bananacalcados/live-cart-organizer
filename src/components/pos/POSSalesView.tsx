@@ -2444,7 +2444,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Package className="h-5 w-5 text-pos-orange" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-base text-white whitespace-normal break-words leading-tight">{item.name}</p>
+                          <p className="font-bold text-base text-pos-white whitespace-normal break-words leading-tight">{item.name}</p>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             <Badge className="text-[11px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
                             {item.variant && <span className="text-xs text-pos-white/70 font-medium">{item.variant}</span>}
@@ -2475,11 +2475,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           className={cn(
                             "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.feetChecked
-                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
-                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
+                              ? "bg-emerald-500/25 border-emerald-500 text-pos-white shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-pos-white hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.feetChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
+                          {item.feetChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-600 text-lg leading-none">!</span>}
                           Par completo (2 pés)
                         </button>
                         <button
@@ -2487,11 +2487,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           className={cn(
                             "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.defectChecked
-                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
-                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
+                              ? "bg-emerald-500/25 border-emerald-500 text-pos-white shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-pos-white hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.defectChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
+                          {item.defectChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-600 text-lg leading-none">!</span>}
                           Sem defeito
                         </button>
                         {item.defectChecked === false && item.feetChecked && (
@@ -2504,8 +2504,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                         )}
                       </div>
                       {!conferenceOk && (
-                        <p className="pl-[60px] text-xs font-semibold text-amber-400 flex items-center gap-1">
-                          <AlertTriangle className="h-3.5 w-3.5" /> Confirme "Par completo" e "Sem defeito" para avançar
+                        <p className="pl-[60px] text-xs font-semibold text-pos-white flex items-center gap-1">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> Confirme "Par completo" e "Sem defeito" para avançar
                         </p>
                       )}
                     </div>
