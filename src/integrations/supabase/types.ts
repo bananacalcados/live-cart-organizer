@@ -9953,6 +9953,33 @@ export type Database = {
           },
         ]
       }
+      livete_ig_initial_dm_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          order_id: string
+          pg_net_request_id: number | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          order_id: string
+          pg_net_request_id?: number | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          order_id?: string
+          pg_net_request_id?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
       livete_presenter_alerts: {
         Row: {
           alert_type: string
