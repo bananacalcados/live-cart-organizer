@@ -1074,45 +1074,61 @@ Deno.serve(async (req) => {
         await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
       }
 
-      // Telefone verificado: se ainda não achamos a cliente pelo número, casa
-      // pelo @ do Instagram (pedido criado na live sem WhatsApp). Assim o número
-      // digitado aqui entra automaticamente no cadastro dela dentro do evento.
-      if (!customer && providedName) {
+      // Telefone verificado: vincula a IDENTIDADE informada na entrada (@ do
+      // Instagram ou nome completo) ao telefone. Isso vale também para cliente
+      // que JÁ tem cadastro com esse número: o pedido montado na live só com o
+      // nome nasce num cadastro separado (sem WhatsApp) e, sem esse merge, a
+      // área de membros abria o pedido antigo em vez do pedido de hoje.
+      if (providedName) {
         const handle = providedName.replace(/^@/, "").trim().toLowerCase();
         if (handle) {
+          const noPhone = (c: any) => !c.whatsapp || !String(c.whatsapp).trim();
           const { data: byHandle } = await supabase
             .from("customers")
             .select("id, instagram_handle, whatsapp, full_name")
             .or(`instagram_handle.ilike.${handle},instagram_handle.ilike.@${handle}`)
             .limit(5);
-          // Também casa pelo NOME COMPLETO (pedido montado na live sem telefone).
-          let pool = byHandle || [];
+          let pool = (byHandle || []).filter(noPhone);
           if (pool.length === 0) {
             const { data: byName } = await supabase
               .from("customers")
               .select("id, instagram_handle, whatsapp, full_name")
               .ilike("full_name", providedName.trim())
               .limit(5);
-            pool = byName || [];
+            pool = (byName || []).filter(noPhone);
             // Nome ambíguo (duas clientes com o mesmo nome): não vincula sozinho.
             if (pool.length > 1) pool = [];
           }
-          const target = pool.find(
-            (c: any) => !c.whatsapp || !String(c.whatsapp).trim(),
-          );
-          if (target) {
-            await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
-            customer = { ...target, whatsapp: phone } as any;
+          const target = pool[0];
+          if (target && (!customer || target.id !== customer.id)) {
+            if (!customer) {
+              await supabase.from("customers").update({ whatsapp: phone }).eq("id", target.id);
+              customer = { ...target, whatsapp: phone } as any;
+            } else {
+              // Cadastro duplicado "só nome": traz os pedidos dele para o
+              // cadastro real (o do telefone) e completa os dados que faltam.
+              await supabase.from("orders").update({ customer_id: customer.id }).eq("customer_id", target.id);
+              const patch: Record<string, unknown> = {};
+              if (target.full_name) patch.full_name = target.full_name;
+              if (!customer.instagram_handle && target.instagram_handle) {
+                patch.instagram_handle = target.instagram_handle;
+              }
+              if (Object.keys(patch).length) {
+                await supabase.from("customers").update(patch).eq("id", customer.id);
+              }
+            }
             // Pedido que estava incompleto por falta do WhatsApp já pode seguir
             await supabase
               .from("orders")
               .update({ stage: "awaiting_confirmation" })
-              .eq("customer_id", target.id)
+              .eq("customer_id", customer!.id)
               .eq("stage", "incomplete_order");
+            // Invalida o memo: o pedido de hoje passou a pertencer a este telefone.
+            customersMemo.clear();
           }
-
         }
       }
+
 
 
 
