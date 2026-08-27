@@ -2950,6 +2950,38 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </div>
               )}
 
+              {/* 💳 Crediário — gateway + datas de vencimento (avulso e misto) */}
+              {showCrediarioPanel && (
+                <>
+                  <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                    <Label className="text-pos-white">Gateway do crediário</Label>
+                    {crediarioGateways.length === 0 ? (
+                      <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
+                    ) : (
+                      <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
+                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                          <SelectValue placeholder="Selecione o gateway" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {crediarioGateways.map(g => (
+                            <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <POSCrediarioSchedule
+                    amount={crediarioAmount}
+                    count={crediarioCount}
+                    showCountSelector={!singleIsCrediario}
+                    onCountChange={setMultiCrediarioInstallments}
+                    value={crediarioSchedule}
+                    onChange={setCrediarioSchedule}
+                  />
+                </>
+              )}
+
+
               {/* 🎟️ Vale-troca — resgatar voucher gerado em Trocas/Devoluções */}
               {showVoucherPanel && (
                 <div className="space-y-3 p-4 rounded-xl bg-purple-500/5 border border-purple-500/30">
