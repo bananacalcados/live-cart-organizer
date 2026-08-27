@@ -768,6 +768,43 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       )}
 
+      {/* Envio manual da MENSAGEM INICIAL configurada, via Instagram Direct */}
+      {order.customer?.instagram_handle && (order.stage === 'awaiting_confirmation' || order.stage === 'incomplete_order' || order.stage === 'new' || order.stage === 'no_response') && (
+        <div className="mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1.5 h-7 border-pink-500/50 text-pink-600 hover:bg-pink-500/10"
+            disabled={sendingIgDm}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSendingIgDm(true);
+              try {
+                const { data, error } = await supabase.functions.invoke('livete-start-order', {
+                  body: {
+                    orderId: order.id,
+                    fallbackCommentId: (order as any).latest_comment_id || undefined,
+                    forceInstagram: true,
+                    keepStage: true,
+                  },
+                });
+                if (error) throw error;
+                if ((data as any)?.error) throw new Error((data as any).error);
+                toast.success('Mensagem enviada no Direct do Instagram!');
+              } catch (err: any) {
+                toast.error(err?.message || 'Erro ao enviar no Direct');
+              } finally {
+                setSendingIgDm(false);
+              }
+            }}
+          >
+            {sendingIgDm ? <Loader2 className="h-3 w-3 animate-spin" /> : <Instagram className="h-3 w-3" />}
+            MANDAR MSG NO DIRECT
+          </Button>
+        </div>
+      )}
+
+
       {/* Envio manual do template Meta configurado no evento */}
       {order.stage === 'awaiting_confirmation' && order.customer?.whatsapp && (
         <div className="mb-3">
