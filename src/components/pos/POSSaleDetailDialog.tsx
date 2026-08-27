@@ -350,6 +350,21 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [sale?.id, isRemoteSale]);
 
+  // Verifica se a venda tem parcelas de crediário (para reimpressão do carnê)
+  useEffect(() => {
+    let cancelled = false;
+    setHasCrediario(false);
+    if (!sale?.id) return;
+    (async () => {
+      const { saleHasCrediarioInstallments } = await import('@/lib/crediarioCarne');
+      const has = await saleHasCrediarioInstallments(sale.id);
+      if (!cancelled) setHasCrediario(has);
+    })();
+    return () => { cancelled = true; };
+  }, [sale?.id]);
+
+
+
   const exchangePolicyHtml = `
     <div class="policy">
       <p style="font-weight:bold; margin-bottom:4px;">POLÍTICA DE TROCAS</p>
