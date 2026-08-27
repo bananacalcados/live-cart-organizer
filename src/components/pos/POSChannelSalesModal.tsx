@@ -206,7 +206,8 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
               const pd = s.payment_details || {};
               const shipping = Number(pd?.shipping_amount || 0);
               return (
-                <div key={s.id} className={dup.isDup ? "bg-amber-500/[0.06]" : ""}>
+                <div key={s.id} className={`flex items-stretch ${dup.isDup ? "bg-amber-500/[0.06]" : ""}`}>
+                  <div className="flex-1 min-w-0">
                   <button
                     onClick={() => setExpanded(isOpen ? null : s.id)}
                     className="w-full flex items-center gap-3 p-3 text-left hover:bg-zinc-900/60 transition-colors"
