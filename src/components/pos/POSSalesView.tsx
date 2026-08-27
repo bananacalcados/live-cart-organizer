@@ -1027,18 +1027,25 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
-    // 💳 Crediário: parcelas precisam somar exatamente o valor do crediário
-    if (showCrediarioPanel && crediarioSchedule.length > 0) {
-      const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
-      if (Math.abs(sumInst - crediarioAmount) > 0.01) {
-        toast.error(`Soma das parcelas do crediário (R$ ${sumInst.toFixed(2)}) não bate com R$ ${crediarioAmount.toFixed(2)}.`);
+    // 💳 Crediário: gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
+    if (showCrediarioPanel) {
+      if (!selectedCrediarioGateway) {
+        toast.error("Selecione o gateway do crediário antes de finalizar.");
         setStep("payment");
         return;
       }
-      if (crediarioSchedule.some(r => !r.due_date)) {
-        toast.error("Informe a data de vencimento de todas as parcelas do crediário.");
-        setStep("payment");
-        return;
+      if (crediarioSchedule.length > 0) {
+        const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
+        if (Math.abs(sumInst - crediarioAmount) > 0.01) {
+          toast.error(`Soma das parcelas do crediário (R$ ${sumInst.toFixed(2)}) não bate com R$ ${crediarioAmount.toFixed(2)}.`);
+          setStep("payment");
+          return;
+        }
+        if (crediarioSchedule.some(r => !r.due_date)) {
+          toast.error("Informe a data de vencimento de todas as parcelas do crediário.");
+          setStep("payment");
+          return;
+        }
       }
     }
 
