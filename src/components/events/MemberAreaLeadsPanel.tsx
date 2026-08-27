@@ -13,6 +13,7 @@ import {
   UserPlus, Loader2, RefreshCw, Search, Phone, Trophy, Star, Users, Download, ShoppingCart,
 } from "lucide-react";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { useCustomerStore } from "@/stores/customerStore";
 
 interface MemberAreaLead {
   id: string;
@@ -64,6 +65,7 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
   const [days, setDays] = useState("30");
   const [scopeEvent, setScopeEvent] = useState(!!eventId);
   const [orderLead, setOrderLead] = useState<MemberAreaLead | null>(null);
+  const fetchCustomers = useCustomerStore((s) => s.fetchCustomers);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -220,7 +222,7 @@ export function MemberAreaLeadsPanel({ eventId }: { eventId?: string | null }) {
                     {(l.event_id || eventId) ? (
                       <button
                         type="button"
-                        onClick={() => setOrderLead(l)}
+                        onClick={async () => { await fetchCustomers(); setOrderLead(l); }}
                         className="font-medium text-left text-primary hover:underline decoration-dotted flex items-center gap-1"
                         title="Montar pedido para este cliente"
                       >
