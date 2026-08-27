@@ -464,7 +464,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
                 ? `Histórico da instância selecionada${isLocked && boundNumberId === viewNumberId ? " (conversa real)" : ""}`
                 : "Selecione uma instância para ver o histórico"}
             {isLocked && boundNumber && boundNumberId !== viewNumberId && !viewAll
-              ? ` · conversa real: ${boundNumber.display_name || boundNumber.phone_number}`
+              ? ` · conversa real: ${boundNumber.label || boundNumber.phone_display}`
               : ""}
           </p>
         </div>
