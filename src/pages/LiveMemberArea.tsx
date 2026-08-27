@@ -1412,7 +1412,7 @@ export default function LiveMemberArea() {
 
           <button
             type="button"
-            onClick={() => { setIdentityHint(null); setStep("phone"); }}
+            onClick={() => { setIdentityHint(null); setSignupMode(false); setStep("phone"); }}
             className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
           >
             Prefiro entrar pelo meu WhatsApp
@@ -1429,6 +1429,89 @@ export default function LiveMemberArea() {
       </div>
     );
   }
+
+  // ---------- Etapa 1c: Sem pedido — oferecer cadastro ----------
+  if (step === "signup_offer") {
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <ShoppingBag className="h-9 w-9 text-primary mx-auto" strokeWidth={2.2} />
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">AINDA NÃO ACHAMOS SEU PEDIDO</h1>
+          <p className="mt-3 text-muted-foreground text-base leading-snug">
+            Não encontramos nenhum pedido com{" "}
+            <strong className="text-foreground">{identityValue.trim()}</strong>. Você pode fazer seu
+            cadastro agora pra participar e comprar na live.
+          </p>
+
+          <Button
+            className="mt-7 w-full h-16 text-lg font-bold rounded-2xl"
+            onClick={() => { setIdentityHint(null); setSignupMode(true); setStep("phone"); }}
+          >
+            QUERO ME CADASTRAR
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => { setSignupMode(false); setStep("identity"); }}
+            className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
+          >
+            Tentar de novo com outro nome ou @
+          </button>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Etapa 1d: WhatsApp já cadastrado — "Você é a Fulana?" ----------
+  if (step === "signup_confirm") {
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <ShoppingBag className="h-9 w-9 text-primary mx-auto" strokeWidth={2.2} />
+          <p className="mt-4 text-muted-foreground text-base">Esse WhatsApp já é cadastrado.</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight leading-snug">
+            VOCÊ É {String(knownName || "").toUpperCase()}?
+          </h1>
+
+          <Button
+            className="mt-7 w-full h-16 text-lg font-bold rounded-2xl gap-2"
+            disabled={busy}
+            onClick={() => void enter()}
+          >
+            {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+            SIM, SOU EU
+          </Button>
+
+          <Button
+            variant="outline"
+            className="mt-3 w-full h-14 font-semibold rounded-2xl"
+            disabled={busy}
+            onClick={() => { setKnownName(null); setPhone(""); setStep("phone"); }}
+          >
+            NÃO, CORRIGIR MEU NÚMERO
+          </Button>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
 
 
   // ---------- Etapa 2: Nome ----------
