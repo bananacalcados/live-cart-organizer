@@ -383,6 +383,10 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         )
       }));
 
+      // Nota: a MENSAGEM INICIAL via Instagram Direct ao entrar em
+      // "Aguardando Confirmação" é disparada pela trigger de banco
+      // trg_livete_ig_initial_dm (cobre Kanban, auto-promoção e área de membros).
+
       // Trigger Livete AI only when the card actually re-enters 'new'
       if (newStage === 'new' && previousStage !== 'new') {
         try {

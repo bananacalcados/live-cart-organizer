@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.trigger_livete_ig_initial_dm() FROM PUBLIC, anon, authenticated;
