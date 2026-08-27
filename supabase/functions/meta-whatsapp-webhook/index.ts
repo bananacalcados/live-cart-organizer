@@ -916,12 +916,21 @@ serve(async (req) => {
                   console.error(`Status update failed for ${messageId}: ${updateError.message}`);
                 }
 
-                // Also update dispatch_recipients if this is a mass dispatch message
+                // Also update dispatch_recipients if this is a mass dispatch message.
+                // Só escreve quando o status realmente sobe de nível — evita
+                // milhares de UPDATEs redundantes (write amplification nos índices).
                 if (newStatus === 'delivered' || newStatus === 'read' || newStatus === 'failed') {
+                  const lowerStatuses = newStatus === 'read'
+                    ? ['pending', 'queued', 'leased', 'sent', 'delivered']
+                    : newStatus === 'delivered'
+                      ? ['pending', 'queued', 'leased', 'sent']
+                      : ['pending', 'queued', 'leased', 'sent', 'delivered', 'read'];
                   await supabase
                     .from('dispatch_recipients')
                     .update({ status: newStatus })
-                    .eq('message_wamid', messageId);
+                    .eq('message_wamid', messageId)
+                    .in('status', lowerStatuses);
+
 
                   // Also update carousel campaign deliveries (campanha_envios).
                   // delivered -> entregue, read -> lido.

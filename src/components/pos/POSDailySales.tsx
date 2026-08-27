@@ -184,19 +184,17 @@ export function POSDailySales({ storeId }: Props) {
       // Search whatsapp_messages for outgoing messages containing the sale ID in the URL
       const saleIds = salesToEnrich.map(s => s.id);
       const results = new Map<string, string>();
-      
-      // Query in batches to avoid too-long filters
-      for (const saleId of saleIds) {
-        const { data } = await supabase
-          .from("whatsapp_messages")
-          .select("phone")
-          .eq("direction", "outgoing")
-          .ilike("message", `%${saleId}%`)
-          .limit(1);
-        if (data && data.length > 0) {
-          results.set(saleId, data[0].phone);
-        }
+
+      if (saleIds.length === 0) return;
+
+      // Uma única chamada no servidor (índice trigram) em vez de 1 consulta por venda.
+      const { data } = await supabase.rpc("pos_sales_phone_by_message" as any, {
+        p_sale_ids: saleIds,
+      });
+      for (const row of ((data as any[]) || [])) {
+        if (row?.sale_id && row?.phone) results.set(row.sale_id, row.phone);
       }
+
 
       if (results.size > 0) {
         setSales(prev => prev.map(s => {
