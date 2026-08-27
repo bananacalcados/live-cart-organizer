@@ -72,17 +72,35 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
 
   useEffect(() => { if (open) fetchNumbers(); }, [open, fetchNumbers]);
 
-  // Mensagens unificadas (carrega, broadcast e polling de status)
+  // Instância travada pelo histórico da conversa (não depende das mensagens carregadas,
+  // pois a lista visível passa a ser filtrada por instância).
+  const { boundNumberId, boundNumber, isLocked } = useConversationInstance(open ? viewerPhone : null);
+
+  // Instância "em visualização": controla QUAL histórico aparece.
+  // `undefined` = todas as instâncias.
+  const [viewNumberId, setViewNumberId] = useState<string | undefined>(undefined);
+  const [viewAll, setViewAll] = useState(false);
+  const initializedRef = useRef(false);
+
+  // Ao abrir, começa na instância vinculada à conversa (se houver).
+  useEffect(() => {
+    if (!open) { initializedRef.current = false; return; }
+    if (initializedRef.current) return;
+    if (boundNumberId) {
+      setViewNumberId(boundNumberId);
+      setViewAll(false);
+      initializedRef.current = true;
+    }
+  }, [open, boundNumberId]);
+
+  // Mensagens da instância selecionada (ou de todas quando "Todas" está ativo)
   const { messages, isLoading: loading, refresh: loadMessages } = useChatMessages(
     open ? viewerPhone : null,
-    undefined,
+    viewAll ? undefined : viewNumberId,
   );
 
-  // Trava na instância vinculada à conversa (regra do sistema)
-  const { effectiveNumberId, effectiveNumber, boundNumber, isLocked } = useConversationInstance(
-    viewerPhone,
-    { messages: messages as never },
-  );
+  const effectiveNumberId = viewAll ? (viewNumberId || boundNumberId || null) : (viewNumberId || null);
+  const effectiveNumber = numbers.find((n) => n.id === effectiveNumberId) || null;
 
   const { sendText, sendMedia, sendAudio, isSending } = useChatSender();
 
@@ -98,6 +116,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     const num = effectiveNumber || getSelectedNumber();
     return num?.provider === 'meta' ? 'meta' : 'zapi';
   };
+
 
   const handleSend = async () => {
     if (!newMessage.trim() || isSending) return;
