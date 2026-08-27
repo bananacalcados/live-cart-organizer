@@ -4,8 +4,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronDown, ChevronRight, AlertTriangle, Loader2, Radio, User, Phone, Package, CreditCard, Calendar } from "lucide-react";
+import { ChevronDown, ChevronRight, AlertTriangle, Loader2, Radio, User, Phone, Package, CreditCard, Calendar, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { LiveWhatsAppChatDialog } from "@/components/live/LiveWhatsAppChatDialog";
 
 export interface ChannelSale {
   id: string;
@@ -65,6 +67,7 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
   const [sellerNames, setSellerNames] = useState<Map<string, string>>(new Map());
   const [eventNames, setEventNames] = useState<Map<string, string>>(new Map());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ name: string; phone: string; summary?: string } | null>(null);
 
   useEffect(() => {
     if (!open || sales.length === 0) return;
@@ -204,6 +207,7 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
               const shipping = Number(pd?.shipping_amount || 0);
               return (
                 <div key={s.id} className={dup.isDup ? "bg-amber-500/[0.06]" : ""}>
+                  <div className="flex items-center">
                   <button
                     onClick={() => setExpanded(isOpen ? null : s.id)}
                     className="w-full flex items-center gap-3 p-3 text-left hover:bg-zinc-900/60 transition-colors"
@@ -237,6 +241,25 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
                       <p className="text-[10px] text-zinc-500">{s.payment_method || pd?.method || "—"}</p>
                     </div>
                   </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!s.customer_phone}
+                    title={s.customer_phone ? "Ver conversa no WhatsApp" : "Venda sem telefone"}
+                    onClick={() =>
+                      s.customer_phone &&
+                      setChatTarget({
+                        name: s.customer_name || "Cliente",
+                        phone: s.customer_phone,
+                        summary: `Venda #${s.id.slice(0, 8)} · ${BRL(Number(s.total || 0))}`,
+                      })
+                    }
+                    className="mr-3 shrink-0 h-8 gap-1 border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-emerald-300"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    <span className="text-[11px]">Conversa</span>
+                  </Button>
+                  </div>
 
                   {isOpen && (
                     <div className="px-4 pb-4 pt-1 space-y-3 bg-zinc-900/40">
@@ -298,6 +321,16 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
           </div>
         </ScrollArea>
       </DialogContent>
+
+      {chatTarget && (
+        <LiveWhatsAppChatDialog
+          open={!!chatTarget}
+          onOpenChange={(o) => !o && setChatTarget(null)}
+          viewerName={chatTarget.name}
+          viewerPhone={chatTarget.phone}
+          cartSummary={chatTarget.summary}
+        />
+      )}
     </Dialog>
   );
 }
