@@ -145,6 +145,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [crediarioGateways, setCrediarioGateways] = useState<{ id: string; name: string }[]>([]);
   const [selectedCrediarioGateway, setSelectedCrediarioGateway] = useState<string>("");
+  const [crediarioSchedule, setCrediarioSchedule] = useState<CrediarioInstallment[]>([]);
+  const [multiCrediarioInstallments, setMultiCrediarioInstallments] = useState<number>(1);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
   const [showTaskPopup, setShowTaskPopup] = useState(false);
