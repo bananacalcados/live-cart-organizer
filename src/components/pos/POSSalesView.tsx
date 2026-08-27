@@ -2456,30 +2456,30 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                      {/* Conferência inline (pés + defeito) */}
-                      <div className="flex flex-wrap items-center gap-2 pl-[60px]">
+                      {/* Conferência inline (pés + defeito) — OBRIGATÓRIO antes de avançar */}
+                      <div className="flex flex-wrap items-center gap-3 pl-[60px] pt-1">
                         <button
                           onClick={() => setItemConference(item.id, { feetChecked: !item.feetChecked })}
                           className={cn(
-                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.feetChecked
-                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.feetChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          {item.feetChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
                           Par completo (2 pés)
                         </button>
                         <button
                           onClick={() => setItemConference(item.id, { defectChecked: !item.defectChecked, defectNote: item.defectChecked ? '' : item.defectNote })}
                           className={cn(
-                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.defectChecked
-                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.defectChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          {item.defectChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
                           Sem defeito
                         </button>
                         {item.defectChecked === false && item.feetChecked && (
@@ -2487,10 +2487,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                             value={item.defectNote || ''}
                             onChange={(e) => setItemConference(item.id, { defectNote: e.target.value })}
                             placeholder="Observação do defeito (opcional)"
-                            className="h-7 text-[11px] flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
+                            className="h-12 text-sm flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
                           />
                         )}
                       </div>
+                      {!conferenceOk && (
+                        <p className="pl-[60px] text-xs font-semibold text-amber-400 flex items-center gap-1">
+                          <AlertTriangle className="h-3.5 w-3.5" /> Confirme "Par completo" e "Sem defeito" para avançar
+                        </p>
+                      )}
                     </div>
                     );
                   })}
