@@ -726,7 +726,16 @@ export default function LiveMemberArea() {
     setIdentityKind(kind);
     setBusy(true);
     try {
-      const res = await callApi({ action: "identify", kind, value });
+      let res = await callApi({ action: "identify", kind, value });
+      // Se não achou, tenta a outra interpretação do mesmo texto.
+      if (res?.ok && !res.found) {
+        const other = kind === "name" ? "instagram" : "name";
+        const alt = await callApi({ action: "identify", kind: other, value });
+        if (alt?.ok && alt.found) {
+          setIdentityKind(other);
+          res = alt;
+        }
+      }
       if (!res?.ok) {
         toast.error(res?.error || "Não foi possível buscar seu pedido");
         return;
