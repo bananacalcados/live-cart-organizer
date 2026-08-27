@@ -1,48 +1,56 @@
-# Crediário: vencimentos, carnê e contas a receber
+# Pedido sem telefone na live: identificar por nome completo ou @ do Instagram
 
-## O que encontrei na auditoria
+## Problema
+Hoje o pedido só sai de "Incompleto" quando alguém digita o WhatsApp. Como a cliente fala o número em voz alta na live, golpistas capturam e se passam pela loja. Precisamos criar o pedido com um identificador não sensível e deixar a cliente entregar o telefone só em ambiente privado (a própria área de membros).
 
-- A venda salva o crediário direto em `pos_sales` (colunas `crediario_status`, `crediario_due_date`, `crediario_paid_at`, `crediario_paid_amount`, `crediario_gateway`). Não existe nenhuma tabela de parcelas — o número de parcelas hoje só vira texto no nome da forma de pagamento (ex: "Crediário 4x (R$292.00)"). Por isso não há como dar baixa parcela a parcela.
-- Existem 181 vendas de crediário em aberto e apenas 26 com gateway preenchido.
-- **Causa do erro do item 5:** a busca em CAIXA → Receber Crediário filtra por `payment_method ilike '%crediario%'` (sem acento), mas o banco grava **"Crediário"** com acento — nenhuma venda casa, por isso o resultado vem sempre vazio. Além disso a consulta encadeia dois filtros `.or()` (o segundo sobrescreve a lógica pretendida), não busca por CPF, e nem seleciona as colunas `customer_name`/`customer_phone` que a lista tenta exibir.
+## Como eu resolveria
 
-## Etapas
+### 1. O pedido passa a ter 3 chaves de identidade
+No modal de novo pedido (Eventos > dentro do evento), além de `@ do Instagram` e `WhatsApp`, entra o campo **Nome completo**.
 
-### Etapa 1 — Base de dados das parcelas (sem mudança visual)
-- Criar `pos_crediario_installments`: venda, loja, cliente, número da parcela, total de parcelas, valor, data de vencimento, status (pendente/pago/atrasado/cancelado), valor pago, data/forma do pagamento, gateway, e um **código curto único por parcela** (ex: `CR-4F2A-03`) para localizar o pagamento no carnê.
-- Grants + RLS no mesmo padrão das outras tabelas do PDV, trigger de `updated_at` e índices por loja/vencimento/status.
-- Função de servidor para gerar as parcelas de uma venda de forma idempotente (não duplica se rodar duas vezes).
-- Nenhuma tela muda nesta etapa; só a fundação, para as próximas não gerarem bug.
+Regra nova de estágio: o pedido sai de "Incompleto" para "Aguardando confirmação do cliente" quando tiver **pelo menos uma** chave de identidade:
+- WhatsApp, ou
+- @ do Instagram, ou
+- Nome completo válido (2+ palavras, só letras — mesma validação de `isRealFullName`)
 
-### Etapa 2 — Escolher as datas de vencimento na venda
-- Na etapa PAGAMENTO, ao escolher Crediário (avulso e no pagamento misto), abaixo do seletor de parcelas aparece a grade de parcelas com data e valor de cada uma.
-- Preenchimento automático: primeira parcela em 30 dias, demais a cada 30 dias; com atalhos para mudar o dia base (ex: todo dia 10) e edição manual data a data.
-- Valida soma das parcelas = valor do crediário (a diferença de centavos entra na última).
-- Ao finalizar a venda, as parcelas são gravadas junto com a venda; se a gravação das parcelas falhar, a venda avisa em vez de ficar sem carnê.
+Assim a vendedora nunca precisa pedir o número em público: pede o nome completo (idosa sabe) ou o @ (quem souber).
 
-### Etapa 3 — Corrigir a busca em CAIXA → Receber Crediário
-- Trocar o filtro por uma função de servidor que ignora acento e maiúsculas, busca por **nome, telefone, CPF e código da parcela**, e considera tanto vendas antigas (sem parcelas) quanto as novas (com parcelas).
-- Lista passa a mostrar cliente, vencimento, parcela (3/6) e saldo devedor; baixa passa a ser **por parcela**, atualizando também o resumo da venda (para não quebrar o que já existe em Clientes → Crediário).
-- Pagamento em dinheiro continua entrando como reforço de caixa, como hoje.
+### 2. Entrada na área de membros com 3 opções
+A tela de entrada passa a ter um seletor: **WhatsApp | @ do Instagram | Nome completo**.
 
-### Etapa 4 — Impressão do carnê
-- Na tela de venda finalizada, quando houver crediário, aparece o botão **Imprimir carnê de compra**.
-- Carnê com uma via por parcela: dados da loja, cliente, número do pedido, parcela X/Y, valor, vencimento e o **código da parcela** para localizar o pagamento. Sem código de barras.
-- Também disponível depois, pelo detalhe da venda, para reimpressão.
+- **WhatsApp** — fluxo atual, inalterado.
+- **@ do Instagram** — busca o pedido pelo handle.
+- **Nome completo** — busca o pedido pelo nome normalizado (sem acento, minúsculo) dentro do evento corrente.
 
-### Etapa 5 — Contas a Receber (Crediário Próprio)
-- Nova aba em CAIXA (ou Gestão, conforme preferir) com as parcelas a receber, filtrando por período de vencimento, loja e gateway.
-- Foco em **CREDIÁRIO PRÓPRIO**: totais a receber no mês, vencidas, a vencer nos próximos 7/30 dias, e recebido no período; gateways de terceiros ficam separados, já que o dinheiro não entra na loja.
-- Lista detalhada com cliente, parcela, vencimento, valor, dias de atraso, e acesso rápido para dar baixa ou abrir a conversa no WhatsApp.
-- Exportação CSV e impressão, no mesmo padrão do relatório de período do caixa.
+### 3. O telefone continua sendo o fator de segurança — só que digitado em privado
+Entrar por nome/@ **não abre o pedido direto**. O fluxo é:
 
-### Etapa 6 — Migração do histórico e verificação
-- Gerar parcelas para as vendas de crediário antigas que ainda estão em aberto (usando o número de parcelas que está no texto da forma de pagamento, com 1x como padrão quando não houver), sem alterar as já quitadas.
-- Conferência final: busca no caixa, baixa por parcela, totais de contas a receber batendo com o dashboard, e impressão do carnê.
+```text
+digita nome completo / @  ->  achou pedido do evento
+   -> pede o WhatsApp dela (digitado no celular, não falado na live)
+   -> envia OTP e valida
+   -> vincula o telefone ao pedido/cliente e abre a área de membros
+```
+
+Isso mantém o mesmo nível de proteção de hoje (posse do número), tira o telefone do ar da live e ainda preenche o cadastro automaticamente. Se o telefone já estiver no cadastro dela (cliente conhecida), o OTP é dispensado como hoje.
+
+### 4. Nomes repetidos / tentativa de sequestro de pedido
+- Busca por nome é restrita ao **evento corrente** e a pedidos não cancelados — reduz muito a colisão.
+- Se houver mais de um pedido com o mesmo nome, a tela pede um segundo sinal (o @ do Instagram ou os **4 últimos dígitos** do WhatsApp) em vez de listar os pedidos.
+- Nenhum dado do pedido (itens, valores, endereço) aparece antes do OTP validado. Quem chutar um nome não vê nada.
+- Rate limit por IP e por nome pesquisado, no mesmo padrão já usado para telefone.
+
+### 5. Fallback para quem não sabe o @
+Ordem de preferência mostrada na tela: **Nome completo** primeiro (todo mundo sabe), @ como atalho para quem usa Instagram, WhatsApp para quem já é cliente. Sem exigir @ de ninguém.
 
 ## Detalhes técnicos
+- Banco: coluna `customer_full_name` (ou reuso de `customers.name`) + índice por nome normalizado; RPC de busca `member_area_find_by_identity(event_id, kind, value)` em SECURITY DEFINER, retornando só `order_id` + se precisa de desambiguação — nunca o conteúdo do pedido.
+- `orders.stage`: regra de transição `incomplete_order -> awaiting_confirmation` passa a aceitar qualquer uma das 3 chaves (hoje só telefone).
+- Edge function `live-member-area`: nova ação `identify` (nome/@) que devolve um token temporário de "pré-sessão"; `enter` passa a aceitar esse token + telefone + OTP e faz o merge do telefone no `customers`/`orders` (a lógica de casar por @ e liberar o pedido incompleto já existe nas linhas do `enter` e será generalizada para nome).
+- Front: `OrderDialogDb.tsx` ganha o campo de nome completo com validação; `LiveMemberArea.tsx` ganha o seletor de forma de entrada e o passo de confirmação por telefone.
 
-- Tabela nova: `public.pos_crediario_installments` (FK para `pos_sales`), com `GRANT` para `authenticated`/`service_role`, RLS e índice `(store_id, status, due_date)`.
-- Código da parcela: derivado do id da venda + número da parcela, único, curto e legível.
-- Busca do caixa via RPC `SECURITY DEFINER` com `unaccent`/`lower` — evita o problema atual do acento e permite buscar por CPF, que hoje não é possível no cliente.
-- Compatibilidade: as colunas `crediario_*` em `pos_sales` continuam sendo atualizadas como resumo, para não quebrar Clientes → Crediário, dashboards e o modal de pagamentos.
+## Etapas de entrega
+1. Base de dados + regra de estágio por qualquer identidade.
+2. Campo "Nome completo" no modal de pedido e nos cards/kanban.
+3. Entrada por nome/@ na área de membros, com OTP de telefone no final.
+4. Desambiguação, rate limit e auditoria do fluxo completo.
