@@ -1000,6 +1000,53 @@ Deno.serve(async (req) => {
     }
 
     /**
+     * Reconhecimento do telefone ANTES do acesso: quando a cliente não tem
+     * pedido e escolhe se cadastrar, checamos se o WhatsApp já existe na base
+     * (chave = DDD + 8 últimos dígitos) só para perguntar "você é a Fulana?".
+     * Nenhum dado sensível é devolvido — apenas o nome para confirmação.
+     */
+    if (action === "phone_lookup") {
+      if (!(await allow(`lookup-ip:${ip}`, 60, 600))) {
+        return await blocked("rate_limit_lookup_ip", "Muitas tentativas. Aguarde alguns minutos.");
+      }
+      const ph = normalizePhone(body.phone);
+      if (!ph) return json({ ok: false, error: "Telefone inválido" }, 400);
+      const suf = suffix8(ph);
+      const ddd = ph.slice(2, 4);
+      const sameDdd = (raw: unknown) => {
+        const d = String(raw || "").replace(/\D/g, "");
+        if (!d) return false;
+        const local = d.startsWith("55") ? d.slice(2) : d;
+        return local.slice(0, 2) === ddd;
+      };
+      let name: string | null = null;
+
+      const { data: unified } = await supabase
+        .from("customers_unified")
+        .select("name, ddd, phone_e164")
+        .eq("phone_suffix8", suf)
+        .limit(5);
+      name =
+        (unified || []).find((r: any) => r.name && (r.ddd === ddd || sameDdd(r.phone_e164)))?.name ||
+        null;
+
+      if (!name) {
+        const { data: cus } = await supabase
+          .from("customers")
+          .select("full_name, instagram_handle, whatsapp")
+          .not("whatsapp", "is", null)
+          .ilike("whatsapp", `%${suf}`)
+          .limit(5);
+        const hit = (cus || []).find((c: any) => sameDdd(c.whatsapp) && (c.full_name || c.instagram_handle));
+        name = hit?.full_name || hit?.instagram_handle || null;
+      }
+
+      const known = !!name || (await isKnownCustomer(ph));
+      return json({ ok: true, known, name });
+    }
+
+    /**
+
      * Identificação SEM telefone: a cliente informa o @ do Instagram ou o nome
      * completo. Nada do pedido é devolvido aqui — apenas se existe pedido
      * aguardando ela. O acesso continua exigindo WhatsApp + código (OTP),
