@@ -186,6 +186,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [newProductQty, setNewProductQty] = useState("1");
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
   const [emittingNfce, setEmittingNfce] = useState(false);
+  const [hasCrediario, setHasCrediario] = useState(false);
+  const [printingCarne, setPrintingCarne] = useState(false);
   const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; modelo?: number | null; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null; ambiente?: string | null; rejection_message?: string | null; rejection_code?: string | null } | null>(null);
   const [reemittingProd, setReemittingProd] = useState(false);
   const [sendingNfeWa, setSendingNfeWa] = useState(false);
@@ -348,6 +350,21 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [sale?.id, isRemoteSale]);
 
+  // Verifica se a venda tem parcelas de crediário (para reimpressão do carnê)
+  useEffect(() => {
+    let cancelled = false;
+    setHasCrediario(false);
+    if (!sale?.id) return;
+    (async () => {
+      const { saleHasCrediarioInstallments } = await import('@/lib/crediarioCarne');
+      const has = await saleHasCrediarioInstallments(sale.id);
+      if (!cancelled) setHasCrediario(has);
+    })();
+    return () => { cancelled = true; };
+  }, [sale?.id]);
+
+
+
   const exchangePolicyHtml = `
     <div class="policy">
       <p style="font-weight:bold; margin-bottom:4px;">POLÍTICA DE TROCAS</p>
@@ -358,6 +375,24 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       <p style="margin-top:4px; font-size:10px;">Apresente este cupom no momento da troca.</p>
     </div>
   `;
+
+  const printCarneReprint = async () => {
+    if (!sale) return;
+    setPrintingCarne(true);
+    try {
+      const { printCarneForSale } = await import('@/lib/crediarioCarne');
+      const res = await printCarneForSale(sale.id, {
+        customerName: currentCustomer?.name || null,
+        customerPhone: (currentCustomer as any)?.whatsapp || null,
+        customerCpf: (currentCustomer as any)?.cpf || null,
+        orderLabel: sale.tiny_order_number ? `Pedido #${sale.tiny_order_number}` : `Venda ${sale.id.slice(0, 8).toUpperCase()}`,
+        saleDate: sale.created_at,
+      });
+      if (!res.ok) toast.error(res.error || 'Não foi possível imprimir o carnê.');
+    } finally {
+      setPrintingCarne(false);
+    }
+  };
 
   const printNonFiscal = () => {
     if (!sale) return;
@@ -1637,6 +1672,11 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   <Button onClick={printGift} variant="outline" className="gap-1 h-10 text-xs border-amber-300 text-amber-800 hover:bg-amber-50">
                     🎁 Cupom de Troca
                   </Button>
+                  {hasCrediario && (
+                    <Button onClick={printCarneReprint} disabled={printingCarne} variant="outline" className="gap-1 h-10 text-xs col-span-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-semibold">
+                      📔 {printingCarne ? 'Abrindo carnê...' : 'Imprimir carnê de compra'}
+                    </Button>
+                  )}
                   {(() => {
                     const status = String(fiscalDoc?.status || '').toLowerCase();
                     const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);

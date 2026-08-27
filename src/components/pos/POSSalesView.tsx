@@ -156,6 +156,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [finalizingSale, setFinalizingSale] = useState(false);
   const [saleResult, setSaleResult] = useState<{ tiny_order_id?: string; tiny_order_number?: string; sale_id?: string } | null>(null);
   const [emittingNfce, setEmittingNfce] = useState(false);
+  const [printingCarne, setPrintingCarne] = useState(false);
   const [nfceResult, setNfceResult] = useState<any>(null);
   const [fiscalDoc, setFiscalDoc] = useState<any>(null);
   const [cancelNfceOpen, setCancelNfceOpen] = useState(false);
@@ -3288,6 +3289,33 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     onClick={() => setShowWheel(true)}
                   >
                     🎰 Girar Roleta de Prêmios
+                  </Button>
+                )}
+                {showCrediarioPanel && saleResult?.sale_id && (
+                  <Button
+                    className="h-14 gap-2 text-base col-span-2 border-2 border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold"
+                    variant="outline"
+                    disabled={printingCarne}
+                    onClick={async () => {
+                      setPrintingCarne(true);
+                      try {
+                        const { printCarneForSale } = await import('@/lib/crediarioCarne');
+                        const res = await printCarneForSale(saleResult.sale_id!, {
+                          storeName,
+                          customerName: selectedCustomer?.name || null,
+                          customerPhone: (selectedCustomer as any)?.whatsapp || null,
+                          customerCpf: (selectedCustomer as any)?.cpf || null,
+                          orderLabel: saleResult?.tiny_order_number ? `Pedido #${saleResult.tiny_order_number}` : `Venda ${String(saleResult.sale_id).slice(0, 8).toUpperCase()}`,
+                          saleDate: new Date().toISOString(),
+                        });
+                        if (!res.ok) toast.error(res.error || 'Não foi possível imprimir o carnê.');
+                      } finally {
+                        setPrintingCarne(false);
+                      }
+                    }}
+                  >
+                    {printingCarne ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
+                    Imprimir carnê de compra
                   </Button>
                 )}
                 <Button className="h-14 gap-2 text-base bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold col-span-2" onClick={resetSale}>
