@@ -332,13 +332,42 @@ export function InitialMessageEditor({
                             className="h-8 text-xs flex-1 min-w-[140px]"
                           />
                           {btn.type === "url" ? (
-                            <Input
-                              value={btn.urlToken || ""}
-                              onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
-                              placeholder="{checkout_link} ou https://..."
-                              className="h-8 text-xs flex-[2] min-w-[180px] font-mono"
-                            />
+                            <div className="flex flex-[2] min-w-[200px] flex-col gap-1">
+                              <Select
+                                value={
+                                  URL_VARIABLES.some((v) => v.token === btn.urlToken)
+                                    ? (btn.urlToken as string)
+                                    : CUSTOM_URL
+                                }
+                                onValueChange={(v) =>
+                                  updateButton(idx, btn.id, {
+                                    urlToken: v === CUSTOM_URL ? "" : v,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Destino do botão" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {URL_VARIABLES.map((v) => (
+                                    <SelectItem key={v.token} value={v.token}>
+                                      {v.label}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value={CUSTOM_URL}>Link personalizado…</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {!URL_VARIABLES.some((v) => v.token === btn.urlToken) && (
+                                <Input
+                                  value={btn.urlToken || ""}
+                                  onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
+                                  placeholder="https://..."
+                                  className="h-8 text-xs font-mono"
+                                />
+                              )}
+                            </div>
                           ) : (
+
                             <Select
                               value={btn.automationId || ""}
                               onValueChange={(v) => updateButton(idx, btn.id, { automationId: v })}
