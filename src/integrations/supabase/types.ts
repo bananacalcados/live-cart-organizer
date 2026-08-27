@@ -12862,6 +12862,83 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_crediario_installments: {
+        Row: {
+          amount: number
+          code: string
+          created_at: string
+          customer_cpf: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          due_date: string
+          gateway: string | null
+          id: string
+          installment_number: number
+          installments_total: number
+          notes: string | null
+          paid_amount: number
+          paid_at: string | null
+          paid_method: string | null
+          sale_id: string
+          status: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          code: string
+          created_at?: string
+          customer_cpf?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          due_date: string
+          gateway?: string | null
+          id?: string
+          installment_number: number
+          installments_total: number
+          notes?: string | null
+          paid_amount?: number
+          paid_at?: string | null
+          paid_method?: string | null
+          sale_id: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          code?: string
+          created_at?: string
+          customer_cpf?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          due_date?: string
+          gateway?: string | null
+          id?: string
+          installment_number?: number
+          installments_total?: number
+          notes?: string | null
+          paid_amount?: number
+          paid_at?: string | null
+          paid_method?: string | null
+          sale_id?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_customers: {
         Row: {
           address: string | null
@@ -21378,6 +21455,37 @@ export type Database = {
       format_customer_code: { Args: { seq_val: number }; Returns: string }
       gen_unique_ean13: { Args: never; Returns: string }
       gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
+      generate_crediario_installments: {
+        Args: { p_gateway?: string; p_installments?: Json; p_sale_id: string }
+        Returns: {
+          amount: number
+          code: string
+          created_at: string
+          customer_cpf: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          due_date: string
+          gateway: string | null
+          id: string
+          installment_number: number
+          installments_total: number
+          notes: string | null
+          paid_amount: number
+          paid_at: string | null
+          paid_method: string | null
+          sale_id: string
+          status: string
+          store_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "pos_crediario_installments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
       get_abc_curve_products: {
