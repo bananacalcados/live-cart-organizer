@@ -22247,6 +22247,42 @@ export type Database = {
       }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      pos_crediario_norm: { Args: { p: string }; Returns: string }
+      pos_crediario_pay_installment: {
+        Args: {
+          p_amount: number
+          p_installment_id: string
+          p_method: string
+          p_notes?: string
+        }
+        Returns: Json
+      }
+      pos_crediario_pay_sale: {
+        Args: { p_amount: number; p_method: string; p_sale_id: string }
+        Returns: Json
+      }
+      pos_crediario_search: {
+        Args: { p_limit?: number; p_store_id: string; p_term?: string }
+        Returns: {
+          amount: number
+          balance: number
+          code: string
+          customer_cpf: string
+          customer_name: string
+          customer_phone: string
+          due_date: string
+          gateway: string
+          installment_id: string
+          installment_number: number
+          installments_total: number
+          kind: string
+          paid_amount: number
+          sale_created_at: string
+          sale_id: string
+          sale_total: number
+          status: string
+        }[]
+      }
       pos_customer_suffixes_by_filter: {
         Args: { p_seller_id?: string; p_store_id?: string }
         Returns: string[]

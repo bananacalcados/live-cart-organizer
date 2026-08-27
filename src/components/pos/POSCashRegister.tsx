@@ -34,15 +34,24 @@ interface CashRegister {
   status: string;
 }
 
-interface CrediarioSale {
-  id: string;
-  created_at: string;
-  total: number;
+interface CrediarioRow {
+  kind: 'installment' | 'sale';
+  installment_id: string | null;
+  sale_id: string;
   customer_name: string | null;
   customer_phone: string | null;
-  payment_method: string | null;
-  crediario_status: string | null;
-  crediario_due_date: string | null;
+  customer_cpf: string | null;
+  code: string | null;
+  due_date: string | null;
+  installment_number: number | null;
+  installments_total: number | null;
+  amount: number;
+  paid_amount: number;
+  balance: number;
+  status: string | null;
+  gateway: string | null;
+  sale_created_at: string | null;
+  sale_total: number | null;
 }
 
 interface PaymentReceipt {
@@ -78,9 +87,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   // Crediário
   const [showCrediario, setShowCrediario] = useState(false);
   const [crediarioSearch, setCrediarioSearch] = useState("");
-  const [crediarioResults, setCrediarioResults] = useState<CrediarioSale[]>([]);
+  const [crediarioResults, setCrediarioResults] = useState<CrediarioRow[]>([]);
   const [searchingCrediario, setSearchingCrediario] = useState(false);
-  const [selectedCrediario, setSelectedCrediario] = useState<CrediarioSale | null>(null);
+  const [selectedCrediario, setSelectedCrediario] = useState<CrediarioRow | null>(null);
   const [crediarioPayMethod, setCrediarioPayMethod] = useState("pix");
   const [crediarioPayAmount, setCrediarioPayAmount] = useState("");
   const [receivingCrediario, setReceivingCrediario] = useState(false);
@@ -348,68 +357,67 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     }
   };
 
-  // Crediário search
-  const searchCrediario = async () => {
-    if (crediarioSearch.trim().length < 2) { toast.error("Digite pelo menos 2 caracteres"); return; }
+  // Crediário search (servidor: ignora acento/maiúsculas, busca nome/telefone/CPF/código)
+  const runCrediarioSearch = async (term: string | null) => {
     setSearchingCrediario(true);
     try {
-      const term = `%${crediarioSearch.trim()}%`;
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
-        .eq("store_id", storeId)
-        .ilike("payment_method", "%crediario%")
-        .or(`crediario_status.is.null,crediario_status.eq.pending`)
-        .or(`customer_name.ilike.${term},customer_phone.ilike.${term}` as any)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      setCrediarioResults((data as any as CrediarioSale[]) || []);
-      if (!data || data.length === 0) toast.info("Nenhum crediário pendente encontrado");
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro na busca");
+      const { data, error } = await supabase.rpc('pos_crediario_search' as any, {
+        p_store_id: storeId,
+        p_term: term && term.trim() ? term.trim() : null,
+        p_limit: 100,
+      } as any);
+      if (error) throw error;
+      const rows = ((data as any) || []) as CrediarioRow[];
+      setCrediarioResults(rows);
+      return rows;
+    } catch (e: any) {
+      console.error('[crediario search]', e);
+      toast.error('Erro na busca: ' + (e?.message || 'desconhecido'));
+      setCrediarioResults([]);
+      return [];
     } finally {
       setSearchingCrediario(false);
     }
   };
 
-  const loadAllPendingCrediarios = async () => {
-    setSearchingCrediario(true);
-    try {
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
-        .eq("store_id", storeId)
-        .ilike("payment_method", "%crediario%")
-        .or("crediario_status.is.null,crediario_status.eq.pending")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      setCrediarioResults((data as any as CrediarioSale[]) || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSearchingCrediario(false);
-    }
+  const searchCrediario = async () => {
+    if (crediarioSearch.trim().length < 2) { toast.error("Digite pelo menos 2 caracteres"); return; }
+    const rows = await runCrediarioSearch(crediarioSearch);
+    if (rows.length === 0) toast.info("Nenhum crediário pendente encontrado");
+  };
+
+  const loadAllPendingCrediarios = async () => { await runCrediarioSearch(null); };
+
+  const refreshCrediario = async () => {
+    if (crediarioSearch.trim().length >= 2) await runCrediarioSearch(crediarioSearch);
+    else await runCrediarioSearch(null);
   };
 
   const receiveCrediario = async () => {
-    if (!selectedCrediario || !register) return;
-    const amount = parseFloat(crediarioPayAmount) || selectedCrediario.total;
-    if (amount <= 0) return;
+    if (!selectedCrediario) return;
+    const amount = parseFloat(crediarioPayAmount) || selectedCrediario.balance;
+    if (!(amount > 0)) { toast.error('Valor inválido'); return; }
+    if (amount > selectedCrediario.balance + 0.005) { toast.error('Valor maior que o saldo devedor'); return; }
     setReceivingCrediario(true);
     try {
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({
-          crediario_status: "paid",
-          crediario_paid_at: new Date().toISOString(),
-          crediario_paid_method: crediarioPayMethod,
-          crediario_paid_amount: amount,
-        } as any)
-        .eq("id", selectedCrediario.id);
-      if (error) throw error;
+      if (selectedCrediario.kind === 'installment' && selectedCrediario.installment_id) {
+        const { error } = await supabase.rpc('pos_crediario_pay_installment' as any, {
+          p_installment_id: selectedCrediario.installment_id,
+          p_amount: amount,
+          p_method: crediarioPayMethod,
+          p_notes: null,
+        } as any);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('pos_crediario_pay_sale' as any, {
+          p_sale_id: selectedCrediario.sale_id,
+          p_amount: amount,
+          p_method: crediarioPayMethod,
+        } as any);
+        if (error) throw error;
+      }
 
-      if (crediarioPayMethod === "dinheiro") {
+      if (crediarioPayMethod === "dinheiro" && register) {
         const currentDeposits = register.deposits || 0;
         const currentCash = register.cash_sales || 0;
         await supabase
@@ -423,8 +431,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       setSelectedCrediario(null);
       setCrediarioPayAmount("");
       setCrediarioPayMethod("pix");
-      if (crediarioSearch.trim()) searchCrediario();
-      else loadAllPendingCrediarios();
+      await refreshCrediario();
     } catch (e: any) {
       toast.error("Erro ao receber: " + (e.message || "Erro desconhecido"));
     } finally {
@@ -878,7 +885,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/30" />
                     <Input
-                      placeholder="Buscar por nome ou telefone..."
+                      placeholder="Nome, telefone, CPF ou código da parcela..."
                       value={crediarioSearch}
                       onChange={e => setCrediarioSearch(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && searchCrediario()}
@@ -896,35 +903,57 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                   <p className="text-center text-pos-white/40 text-sm py-4">Nenhum crediário pendente</p>
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {crediarioResults.map(sale => (
-                      <button
-                        key={sale.id}
-                        onClick={() => { setSelectedCrediario(sale); setCrediarioPayAmount(String(sale.total)); }}
-                        className="w-full text-left p-3 rounded-lg border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/40 transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-pos-white font-medium">{sale.customer_name || "Sem nome"}</span>
-                          <Badge className="bg-yellow-500/20 text-yellow-400 text-[9px] border-0">Pendente</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-pos-white/50">
-                            {new Date(sale.created_at).toLocaleDateString("pt-BR")}
-                            {sale.customer_phone && ` · ${sale.customer_phone}`}
-                          </span>
-                          <span className="text-xs text-pos-orange font-bold">R$ {sale.total.toFixed(2)}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {crediarioResults.map(row => {
+                      const overdue = row.due_date ? new Date(row.due_date + 'T23:59:59') < new Date() : false;
+                      return (
+                        <button
+                          key={row.installment_id || row.sale_id}
+                          onClick={() => { setSelectedCrediario(row); setCrediarioPayAmount(row.balance.toFixed(2)); }}
+                          className="w-full text-left p-3 rounded-lg border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/40 transition-all"
+                        >
+                          <div className="flex items-center justify-between mb-1 gap-2">
+                            <span className="text-xs text-pos-white font-medium truncate">{row.customer_name || "Sem nome"}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {row.installment_number ? (
+                                <Badge className="bg-pos-orange/20 text-pos-orange text-[9px] border-0">
+                                  {row.installment_number}/{row.installments_total}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-pos-white/10 text-pos-white/60 text-[9px] border-0">Venda antiga</Badge>
+                              )}
+                              <Badge className={`text-[9px] border-0 ${overdue ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                {overdue ? 'Vencida' : (row.status === 'partial' ? 'Parcial' : 'Pendente')}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-pos-white/50 truncate">
+                              {row.due_date ? `Venc. ${new Date(row.due_date + 'T12:00:00').toLocaleDateString("pt-BR")}` : 'Sem vencimento'}
+                              {row.code && ` · ${row.code}`}
+                              {row.customer_phone && ` · ${row.customer_phone}`}
+                            </span>
+                            <span className="text-xs text-pos-orange font-bold shrink-0">R$ {row.balance.toFixed(2)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
             ) : (
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/20">
-                  <p className="text-xs text-pos-white/50">Crediário selecionado</p>
+                  <p className="text-xs text-pos-white/50">
+                    {selectedCrediario.installment_number
+                      ? `Parcela ${selectedCrediario.installment_number}/${selectedCrediario.installments_total}${selectedCrediario.code ? ` · ${selectedCrediario.code}` : ''}`
+                      : 'Crediário selecionado (venda sem parcelas)'}
+                  </p>
                   <p className="text-sm text-pos-white font-medium">{selectedCrediario.customer_name || "Sem nome"}</p>
-                  <p className="text-xs text-pos-orange font-bold">R$ {selectedCrediario.total.toFixed(2)}</p>
-                  <p className="text-[10px] text-pos-white/40">{new Date(selectedCrediario.created_at).toLocaleDateString("pt-BR")}</p>
+                  <p className="text-xs text-pos-orange font-bold">Saldo devedor: R$ {selectedCrediario.balance.toFixed(2)}</p>
+                  <p className="text-[10px] text-pos-white/40">
+                    {selectedCrediario.due_date ? `Vencimento ${new Date(selectedCrediario.due_date + 'T12:00:00').toLocaleDateString("pt-BR")} · ` : ''}
+                    Venda de {selectedCrediario.sale_created_at ? new Date(selectedCrediario.sale_created_at).toLocaleDateString("pt-BR") : '—'}
+                  </p>
                 </div>
 
                 <div>
