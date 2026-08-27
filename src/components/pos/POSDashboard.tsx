@@ -212,6 +212,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         .eq("store_id", storeId)
         .not("sale_released_at", "is", null)
         .in("status", revenueStatuses)
+        .neq("status_cancelamento", "cancelado")
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
       const completedSales = (sales || []).filter((s: any) => s.revenue_attribution !== "site_pickup_only");
