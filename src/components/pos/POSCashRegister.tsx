@@ -34,15 +34,24 @@ interface CashRegister {
   status: string;
 }
 
-interface CrediarioSale {
-  id: string;
-  created_at: string;
-  total: number;
+interface CrediarioRow {
+  kind: 'installment' | 'sale';
+  installment_id: string | null;
+  sale_id: string;
   customer_name: string | null;
   customer_phone: string | null;
-  payment_method: string | null;
-  crediario_status: string | null;
-  crediario_due_date: string | null;
+  customer_cpf: string | null;
+  code: string | null;
+  due_date: string | null;
+  installment_number: number | null;
+  installments_total: number | null;
+  amount: number;
+  paid_amount: number;
+  balance: number;
+  status: string | null;
+  gateway: string | null;
+  sale_created_at: string | null;
+  sale_total: number | null;
 }
 
 interface PaymentReceipt {
