@@ -1637,6 +1637,11 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   <Button onClick={printGift} variant="outline" className="gap-1 h-10 text-xs border-amber-300 text-amber-800 hover:bg-amber-50">
                     🎁 Cupom de Troca
                   </Button>
+                  {hasCrediario && (
+                    <Button onClick={printCarneReprint} disabled={printingCarne} variant="outline" className="gap-1 h-10 text-xs col-span-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-semibold">
+                      📔 {printingCarne ? 'Abrindo carnê...' : 'Imprimir carnê de compra'}
+                    </Button>
+                  )}
                   {(() => {
                     const status = String(fiscalDoc?.status || '').toLowerCase();
                     const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);
