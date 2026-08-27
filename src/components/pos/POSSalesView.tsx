@@ -3534,8 +3534,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <p className="font-bold text-pos-white text-sm">Total <span className="text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span></p>
           </div>
           <Button
-            className="h-10 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
-            disabled={cart.length === 0 || finalizingSale}
+            className="h-12 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+            disabled={cart.length === 0 || finalizingSale || (step === "scan" && !scanConferenceOk)}
             onClick={handlePrimaryAction}
           >
             {finalizingSale ? (
@@ -3544,6 +3544,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
             ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
               <><Check className="h-4 w-4" /> {primaryActionLabel}</>
+            ) : step === "scan" && !scanConferenceOk ? (
+              <><AlertTriangle className="h-4 w-4" /> {primaryActionLabel}</>
             ) : (
               <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
             )}
