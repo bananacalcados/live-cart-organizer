@@ -94,9 +94,21 @@ serve(async (req) => {
       }
     }
 
-    const wantsInstagram = channelPreferences.includes('instagram');
-    const wantsZapi = channelPreferences.includes('whatsapp');
-    const wantsMeta = channelPreferences.includes('meta_whatsapp');
+    const igHandleRaw = (customer?.instagram_handle || '').replace(/^@/, '').trim().toLowerCase();
+    const hasPhone = Boolean((customer?.whatsapp || '').replace(/\D/g, ''));
+
+    let wantsInstagram = channelPreferences.includes('instagram');
+    let wantsZapi = channelPreferences.includes('whatsapp');
+    let wantsMeta = channelPreferences.includes('meta_whatsapp');
+
+    // Pedido montado só com nome/@ (sem WhatsApp): o único canal possível é o
+    // Instagram — usa a MENSAGEM INICIAL VIA INSTAGRAM DIRECT configurada na live.
+    if (!hasPhone && igHandleRaw) {
+      wantsInstagram = true;
+      wantsZapi = false;
+      wantsMeta = false;
+    }
+
     // For legacy logic compatibility: "isInstagram" means IG is the only channel
     const isInstagram = wantsInstagram && !wantsZapi && !wantsMeta;
 
@@ -115,11 +127,12 @@ serve(async (req) => {
       });
     }
 
-    const igUsername = (customer?.instagram_handle || '').replace(/^@/, '').trim().toLowerCase();
+    const igUsername = igHandleRaw;
     const rawPhone = (customer?.whatsapp || '').replace(/\D/g, '');
     const phone = isInstagram
       ? igUsername
       : (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone);
+
 
     let savedAddress: Record<string, string> | null = null;
     if (customer.id) {
