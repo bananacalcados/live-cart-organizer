@@ -73,64 +73,64 @@ export function POSCrediarioSchedule({ amount, count, onCountChange, showCountSe
   const regenerate = () => onChange(buildSchedule(amount, count, fromISO(firstDue)));
 
   return (
-    <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
-      <div className="flex items-center justify-between gap-2">
-        <Label className="text-pos-white flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-pos-orange" /> Vencimentos do crediário
+    <div className="space-y-5 p-6 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-lg font-semibold text-pos-white flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-pos-orange" /> Vencimentos do crediário
         </Label>
-        <Button type="button" size="sm" variant="ghost" onClick={regenerate} className="h-7 text-xs text-pos-white/60 hover:text-pos-orange gap-1">
-          <RefreshCw className="h-3 w-3" /> Recalcular
+        <Button type="button" size="default" variant="ghost" onClick={regenerate} className="h-11 text-sm text-pos-white/70 hover:text-pos-orange gap-1.5">
+          <RefreshCw className="h-4 w-4" /> Recalcular
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-4">
         {showCountSelector && (
-          <div className="space-y-1">
-            <span className="text-[11px] text-pos-white/50">Parcelas</span>
+          <div className="space-y-2">
+            <span className="text-sm text-pos-white/60">Parcelas</span>
             <Select value={String(count)} onValueChange={(v) => onCountChange?.(Number(v))}>
-              <SelectTrigger className="h-9 bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-12 text-base bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                  <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                  <SelectItem key={n} value={String(n)} className="text-base">{n}x</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         )}
-        <div className="space-y-1">
-          <span className="text-[11px] text-pos-white/50">1º vencimento</span>
+        <div className="space-y-2">
+          <span className="text-sm text-pos-white/60">1º vencimento</span>
           <Input
             type="date"
             value={firstDue}
             onChange={(e) => e.target.value && setFirstDue(e.target.value)}
-            className="h-9 bg-pos-white/5 border-pos-orange/30 text-pos-white"
+            className="h-12 text-base bg-pos-white/5 border-pos-orange/30 text-pos-white"
           />
         </div>
       </div>
 
-      <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
+      <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
         {value.map((r, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-12 shrink-0 text-xs text-pos-white/50">{i + 1}/{value.length}</span>
+          <div key={i} className="flex items-center gap-3">
+            <span className="w-14 shrink-0 text-base font-medium text-pos-white/60">{i + 1}/{value.length}</span>
             <Input
               type="date"
               value={r.due_date}
               onChange={(e) => e.target.value && setRow(i, { due_date: e.target.value })}
-              className="h-9 flex-1 bg-pos-white/5 border-pos-orange/20 text-pos-white"
+              className="h-12 flex-1 text-base bg-pos-white/5 border-pos-orange/20 text-pos-white"
             />
             <Input
               type="number"
               step="0.01"
               value={r.amount}
               onChange={(e) => setRow(i, { amount: Number(e.target.value) })}
-              className="h-9 w-28 bg-pos-white/5 border-pos-orange/20 text-pos-white"
+              className="h-12 w-40 text-base bg-pos-white/5 border-pos-orange/20 text-pos-white"
             />
           </div>
         ))}
       </div>
 
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-pos-white/50">Soma das parcelas</span>
+      <div className="flex items-center justify-between text-base pt-1">
+        <span className="text-pos-white/60">Soma das parcelas</span>
         <span className={diff === 0 ? "font-semibold text-green-400" : "font-semibold text-red-400"}>
           {BRL(sum)}{diff !== 0 && ` · difere ${BRL(diff)} do total (${BRL(amount)})`}
         </span>

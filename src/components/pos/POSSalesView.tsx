@@ -1027,18 +1027,25 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
-    // 💳 Crediário: parcelas precisam somar exatamente o valor do crediário
-    if (showCrediarioPanel && crediarioSchedule.length > 0) {
-      const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
-      if (Math.abs(sumInst - crediarioAmount) > 0.01) {
-        toast.error(`Soma das parcelas do crediário (R$ ${sumInst.toFixed(2)}) não bate com R$ ${crediarioAmount.toFixed(2)}.`);
+    // 💳 Crediário: gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
+    if (showCrediarioPanel) {
+      if (!selectedCrediarioGateway) {
+        toast.error("Selecione o gateway do crediário antes de finalizar.");
         setStep("payment");
         return;
       }
-      if (crediarioSchedule.some(r => !r.due_date)) {
-        toast.error("Informe a data de vencimento de todas as parcelas do crediário.");
-        setStep("payment");
-        return;
+      if (crediarioSchedule.length > 0) {
+        const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
+        if (Math.abs(sumInst - crediarioAmount) > 0.01) {
+          toast.error(`Soma das parcelas do crediário (R$ ${sumInst.toFixed(2)}) não bate com R$ ${crediarioAmount.toFixed(2)}.`);
+          setStep("payment");
+          return;
+        }
+        if (crediarioSchedule.some(r => !r.due_date)) {
+          toast.error("Informe a data de vencimento de todas as parcelas do crediário.");
+          setStep("payment");
+          return;
+        }
       }
     }
 
@@ -2986,21 +2993,26 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               {/* 💳 Crediário — gateway + datas de vencimento (avulso e misto) */}
               {showCrediarioPanel && (
                 <>
-                  <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
-                    <Label className="text-pos-white">Gateway do crediário</Label>
+                  <div className="space-y-4 p-6 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                    <Label className="text-lg font-semibold text-pos-white">
+                      Gateway do crediário <span className="text-red-400">*</span>
+                    </Label>
                     {crediarioGateways.length === 0 ? (
-                      <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
+                      <p className="text-sm text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
                     ) : (
                       <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
-                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                        <SelectTrigger className="h-12 text-base bg-pos-white/5 border-pos-orange/30 text-pos-white">
                           <SelectValue placeholder="Selecione o gateway" />
                         </SelectTrigger>
                         <SelectContent>
                           {crediarioGateways.map(g => (
-                            <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                            <SelectItem key={g.id} value={g.name} className="text-base">{g.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                    {!selectedCrediarioGateway && crediarioGateways.length > 0 && (
+                      <p className="text-sm text-red-400">Selecione um gateway para finalizar a venda.</p>
                     )}
                   </div>
                   <POSCrediarioSchedule
