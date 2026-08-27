@@ -39,7 +39,7 @@ import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
-import { POSCrediarioSchedule, type CrediarioInstallment } from "./POSCrediarioSchedule";
+import { POSCrediarioSchedule, buildSchedule, type CrediarioInstallment } from "./POSCrediarioSchedule";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
 import { fetchProviders, createDeliveryCost, storeNameToSource, ServiceProvider, ProviderType } from "@/lib/deliveryProviders";
