@@ -117,6 +117,14 @@ serve(async (req) => {
       wantsMeta = false;
     }
 
+    // Envio manual pelo botão "MSG NO DIRECT": só Instagram.
+    if (forceInstagram && igHandleRaw) {
+      wantsInstagram = true;
+      wantsZapi = false;
+      wantsMeta = false;
+    }
+
+
     // For legacy logic compatibility: "isInstagram" means IG is the only channel
     const isInstagram = wantsInstagram && !wantsZapi && !wantsMeta;
 
