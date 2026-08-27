@@ -2986,21 +2986,26 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               {/* 💳 Crediário — gateway + datas de vencimento (avulso e misto) */}
               {showCrediarioPanel && (
                 <>
-                  <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
-                    <Label className="text-pos-white">Gateway do crediário</Label>
+                  <div className="space-y-4 p-6 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                    <Label className="text-lg font-semibold text-pos-white">
+                      Gateway do crediário <span className="text-red-400">*</span>
+                    </Label>
                     {crediarioGateways.length === 0 ? (
-                      <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
+                      <p className="text-sm text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
                     ) : (
                       <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
-                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                        <SelectTrigger className="h-12 text-base bg-pos-white/5 border-pos-orange/30 text-pos-white">
                           <SelectValue placeholder="Selecione o gateway" />
                         </SelectTrigger>
                         <SelectContent>
                           {crediarioGateways.map(g => (
-                            <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                            <SelectItem key={g.id} value={g.name} className="text-base">{g.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                    {!selectedCrediarioGateway && crediarioGateways.length > 0 && (
+                      <p className="text-sm text-red-400">Selecione um gateway para finalizar a venda.</p>
                     )}
                   </div>
                   <POSCrediarioSchedule
