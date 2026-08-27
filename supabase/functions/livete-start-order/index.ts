@@ -18,7 +18,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { orderId, fallbackCommentId: requestFallbackCommentId } = await req.json();
+    const {
+      orderId,
+      fallbackCommentId: requestFallbackCommentId,
+      // Envio manual: força o canal Instagram Direct e (opcionalmente) mantém
+      // o pedido no estágio atual (ex.: "Aguardando Confirmação").
+      forceInstagram = false,
+      keepStage = false,
+    } = await req.json();
+
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'orderId required' }), {
         status: 400,
