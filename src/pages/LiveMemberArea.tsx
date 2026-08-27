@@ -1330,49 +1330,31 @@ export default function LiveMemberArea() {
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8">
           <div className="flex flex-col items-center text-center">
             <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
-            <h1 className="mt-4 text-2xl font-bold tracking-tight">ENCONTRAR MEU PEDIDO</h1>
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
             <p className="mt-2 text-muted-foreground text-base leading-snug">
-              Use o mesmo dado que você passou na live
+              Digite seu <strong className="text-foreground">nome completo</strong> ou o{" "}
+              <strong className="text-foreground">@ do Instagram</strong>
             </p>
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant={identityKind === "name" ? "default" : "outline"}
-              className="h-12 text-sm font-semibold"
-              onClick={() => setIdentityKind("name")}
-            >
-              Nome completo
-            </Button>
-            <Button
-              type="button"
-              variant={identityKind === "instagram" ? "default" : "outline"}
-              className="h-12 text-sm font-semibold"
-              onClick={() => setIdentityKind("instagram")}
-            >
-              @ do Instagram
-            </Button>
           </div>
 
           <form
             onSubmit={(e) => { e.preventDefault(); void identify(); }}
-            className="mt-6 space-y-6"
+            className="mt-7 space-y-5"
           >
             <Input
               value={identityValue}
               onChange={(e) => setIdentityValue(e.target.value)}
-              placeholder={identityKind === "name" ? "Maria Aparecida da Silva" : "@mariasilva"}
-              className="h-14 text-[18px] rounded-xl"
+              placeholder="Maria Aparecida da Silva  ou  @mariasilva"
+              className="h-20 text-[22px] font-medium rounded-2xl px-5 placeholder:text-base placeholder:font-normal"
               autoFocus
             />
             <Button
               type="submit"
               disabled={identityValue.trim().length < 3 || busy}
-              className="w-full h-14 text-base font-semibold rounded-xl gap-2"
+              className="w-full h-16 text-lg font-bold rounded-2xl gap-2"
             >
               {busy && <Loader2 className="h-5 w-5 animate-spin" />}
-              Buscar meu pedido
+              Continuar
             </Button>
           </form>
 
@@ -1383,10 +1365,18 @@ export default function LiveMemberArea() {
 
           <button
             type="button"
-            onClick={() => setStep("phone")}
+            onClick={() => { setIdentityHint(null); setStep("phone"); }}
+            className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
+          >
+            Prefiro entrar pelo meu WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={backToLive}
             className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" /> Voltar
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
           </button>
         </div>
       </div>
