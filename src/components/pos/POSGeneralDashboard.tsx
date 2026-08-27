@@ -173,6 +173,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
           .not("sale_released_at", "is", null)
           .in("status", ["completed", "pending_sync", "paid"])
           .neq("revenue_attribution", "site_pickup_only")
+          // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
+          .neq("status_cancelamento", "cancelado")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
         supabase.from("pos_goals").select("id, store_id, goal_value, period, period_start, period_end, goal_type, created_at")

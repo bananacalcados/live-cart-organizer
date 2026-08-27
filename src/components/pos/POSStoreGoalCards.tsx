@@ -96,6 +96,8 @@ export function POSStoreGoalCards({ storeId }: Props) {
             .not("sale_released_at", "is", null)
             .in("status", REVENUE_STATUSES)
             .neq("revenue_attribution", "site_pickup_only")
+            // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
+            .neq("status_cancelamento", "cancelado")
             .or(`and(paid_at.gte.${monthStart.toISOString()},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${monthStart.toISOString()},created_at.lte.${endIso})`)
             .limit(20000),
         ]);

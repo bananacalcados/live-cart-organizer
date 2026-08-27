@@ -239,6 +239,7 @@ export function POSDailySales({ storeId }: Props) {
           .eq("store_id", storeId)
           .not("sale_released_at", "is", null)
           .in("status", ["paid", "completed", "pending_sync"])
+          .neq("status_cancelamento", "cancelado")
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
         supabase
@@ -247,6 +248,7 @@ export function POSDailySales({ storeId }: Props) {
           .eq("store_id", storeId)
           .is("sale_released_at", null)
           .in("status", ["paid", "completed", "pending_sync"])
+          .neq("status_cancelamento", "cancelado")
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
         supabase
