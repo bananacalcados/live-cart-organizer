@@ -1013,12 +1013,19 @@ Deno.serve(async (req) => {
       const kind = body.kind === "instagram" ? "instagram" : "name";
       if (value.length < 3) return json({ ok: false, error: "Informe seu nome completo ou @ do Instagram" }, 400);
       const event = await resolveCurrentEvent();
-      const { data: found } = await supabase.rpc("member_area_find_by_identity", {
-        p_event_id: event?.id || null,
-        p_kind: kind,
-        p_value: value,
-      });
-      const row = Array.isArray(found) ? found[0] : found;
+      const lookup = async (eventId: string | null) => {
+        const { data, error } = await supabase.rpc("member_area_find_by_identity", {
+          p_event_id: eventId,
+          p_kind: kind,
+          p_value: value,
+        });
+        if (error) console.error("[member-area] identify falhou:", error);
+        return Array.isArray(data) ? data[0] : data;
+      };
+      // Primeiro no evento atual; se não achar, procura em qualquer pedido
+      // aberto dela (pedido montado numa live anterior).
+      let row = await lookup(event?.id || null);
+      if (!row && event?.id) row = await lookup(null);
       if (!row) return json({ ok: true, found: false });
       if ((row.matches || 1) > 1) {
         return json({ ok: true, found: true, ambiguous: true });
