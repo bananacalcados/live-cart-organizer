@@ -147,6 +147,10 @@ export default function LiveMemberArea() {
   const [identityKind, setIdentityKind] = useState<"name" | "instagram">("name");
   const [identityValue, setIdentityValue] = useState("");
   const [identityHint, setIdentityHint] = useState<string | null>(null);
+  /** Fluxo de cadastro: quem não tem pedido informa o WhatsApp e confirma quem é. */
+  const [signupMode, setSignupMode] = useState(false);
+  const [knownName, setKnownName] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
