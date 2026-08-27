@@ -1845,6 +1845,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   // Ação do botão principal (rodapé) — roteia por tipo de venda/etapa.
+  const scanConferenceOk = step === "scan" ? cart.length > 0 && cart.every(i => i.feetChecked && i.defectChecked) : true;
   const primaryActionLabel = finalizingSale
     ? (isNewConditional ? "Gerando..." : "Finalizando...")
     : step === "invoice"
@@ -1855,7 +1856,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           ? "Finalizar Condicional"
           : step === "payment"
             ? "Finalizar Venda"
-            : "Avançar";
+            : step === "scan" && !scanConferenceOk
+              ? "Confira os itens para avançar"
+              : "Avançar";
 
   const handlePrimaryAction = () => {
     if (step === "invoice") { resetSale(); return; }
@@ -1871,6 +1874,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
     if (step === "customer" && isFinalizeConditional) {
       // sem validação extra: cliente já veio do condicional
+    }
+    // Gate: conferência obrigatória (Par completo + Sem defeito) antes de sair da etapa de Produtos
+    if (step === "scan" && cart.length > 0) {
+      const notConferidos = cart.filter(i => !i.feetChecked || !i.defectChecked);
+      if (notConferidos.length > 0) {
+        toast.error(`Confirme "Par completo" e "Sem defeito" em todos os itens (${notConferidos.length} pendente${notConferidos.length > 1 ? 's' : ''}) antes de avançar.`);
+        return;
+      }
     }
     if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].id);
   };
@@ -2432,11 +2443,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Package className="h-5 w-5 text-pos-orange" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-pos-white whitespace-normal break-words">{item.name}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
-                            {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
-                            {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                          <p className="font-bold text-base text-white whitespace-normal break-words leading-tight">{item.name}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <Badge className="text-[11px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
+                            {item.variant && <span className="text-xs text-pos-white/70 font-medium">{item.variant}</span>}
+                            {item.size && <span className="text-xs text-pos-white/60 font-medium">Tam: {item.size}</span>}
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -2456,30 +2467,30 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                      {/* Conferência inline (pés + defeito) */}
-                      <div className="flex flex-wrap items-center gap-2 pl-[60px]">
+                      {/* Conferência inline (pés + defeito) — OBRIGATÓRIO antes de avançar */}
+                      <div className="flex flex-wrap items-center gap-3 pl-[60px] pt-1">
                         <button
                           onClick={() => setItemConference(item.id, { feetChecked: !item.feetChecked })}
                           className={cn(
-                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.feetChecked
-                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.feetChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          {item.feetChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
                           Par completo (2 pés)
                         </button>
                         <button
                           onClick={() => setItemConference(item.id, { defectChecked: !item.defectChecked, defectNote: item.defectChecked ? '' : item.defectNote })}
                           className={cn(
-                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            "text-sm font-bold rounded-xl px-5 py-3 border-2 transition-all flex items-center gap-2 min-h-[48px]",
                             item.defectChecked
-                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                              ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10"
+                              : "bg-amber-500/10 border-amber-500/70 text-amber-200 hover:border-amber-400 hover:bg-amber-500/20"
                           )}
                         >
-                          {item.defectChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          {item.defectChecked ? <Check className="h-5 w-5" /> : <span className="text-amber-400 text-lg leading-none">!</span>}
                           Sem defeito
                         </button>
                         {item.defectChecked === false && item.feetChecked && (
@@ -2487,10 +2498,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                             value={item.defectNote || ''}
                             onChange={(e) => setItemConference(item.id, { defectNote: e.target.value })}
                             placeholder="Observação do defeito (opcional)"
-                            className="h-7 text-[11px] flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
+                            className="h-12 text-sm flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
                           />
                         )}
                       </div>
+                      {!conferenceOk && (
+                        <p className="pl-[60px] text-xs font-semibold text-amber-400 flex items-center gap-1">
+                          <AlertTriangle className="h-3.5 w-3.5" /> Confirme "Par completo" e "Sem defeito" para avançar
+                        </p>
+                      )}
                     </div>
                     );
                   })}
@@ -3484,8 +3500,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               )
             )}
             <Button
-              className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
-              disabled={cart.length === 0 || finalizingSale}
+              className="w-full h-12 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+              disabled={cart.length === 0 || finalizingSale || (step === "scan" && !scanConferenceOk)}
               onClick={handlePrimaryAction}
             >
               {finalizingSale ? (
@@ -3494,6 +3510,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
               ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
                 <><Check className="h-4 w-4" /> {primaryActionLabel}</>
+              ) : step === "scan" && !scanConferenceOk ? (
+                <><AlertTriangle className="h-4 w-4" /> {primaryActionLabel}</>
               ) : (
                 <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
               )}
@@ -3516,8 +3534,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <p className="font-bold text-pos-white text-sm">Total <span className="text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span></p>
           </div>
           <Button
-            className="h-10 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
-            disabled={cart.length === 0 || finalizingSale}
+            className="h-12 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+            disabled={cart.length === 0 || finalizingSale || (step === "scan" && !scanConferenceOk)}
             onClick={handlePrimaryAction}
           >
             {finalizingSale ? (
@@ -3526,6 +3544,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
             ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
               <><Check className="h-4 w-4" /> {primaryActionLabel}</>
+            ) : step === "scan" && !scanConferenceOk ? (
+              <><AlertTriangle className="h-4 w-4" /> {primaryActionLabel}</>
             ) : (
               <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
             )}
