@@ -44,7 +44,17 @@ import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 
 
 
-type Step = "phone" | "identity" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
+type Step =
+  | "phone"
+  | "identity"
+  | "signup_offer"
+  | "signup_confirm"
+  | "name"
+  | "signup_otp"
+  | "confirm"
+  | "onboarding"
+  | "area";
+
 type OnboardStep = "name" | "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
@@ -137,6 +147,10 @@ export default function LiveMemberArea() {
   const [identityKind, setIdentityKind] = useState<"name" | "instagram">("name");
   const [identityValue, setIdentityValue] = useState("");
   const [identityHint, setIdentityHint] = useState<string | null>(null);
+  /** Fluxo de cadastro: quem não tem pedido informa o WhatsApp e confirma quem é. */
+  const [signupMode, setSignupMode] = useState(false);
+  const [knownName, setKnownName] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
@@ -741,22 +755,54 @@ export default function LiveMemberArea() {
         return;
       }
       if (!res.found) {
-        toast.error("Não encontramos pedido com esse dado. Confira e tente de novo.");
+        // Sem pedido: em vez de travar, oferecemos o cadastro.
+        setName(value);
+        setSignupMode(true);
+        setStep("signup_offer");
         return;
       }
       setName(value);
+      setSignupMode(false);
       setIdentityHint(
         res.ambiguous
           ? "Encontramos mais de uma pessoa com esse dado. Confirme seu WhatsApp pra liberarmos o pedido certo."
           : "Encontramos seu pedido! Confirme seu WhatsApp (só a gente vê) pra abrir.",
       );
       setStep("phone");
+
     } catch (e: any) {
       toast.error(e?.message || "Erro ao buscar pedido");
     } finally {
       setBusy(false);
     }
   };
+
+  /**
+   * Envio do WhatsApp. No fluxo de cadastro (sem pedido), antes de entrar
+   * checamos se o número já existe na base (DDD + 8 últimos dígitos) para
+   * perguntar "você é a Fulana?" e vincular ao cadastro completo.
+   */
+  const submitPhone = async () => {
+    if (!signupMode) {
+      void enter();
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await callApi({ action: "phone_lookup", phone });
+      if (res?.ok && res.name) {
+        setKnownName(res.name);
+        setStep("signup_confirm");
+        return;
+      }
+      await enter();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao verificar WhatsApp");
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const enter = async (withName?: string, code?: string) => {
     setBusy(true);
@@ -1267,7 +1313,7 @@ export default function LiveMemberArea() {
             <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
             <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
             <p className="mt-2 text-muted-foreground text-base leading-snug">
-              Digite seu WhatsApp pra continuar
+              {signupMode ? "Pra criar seu cadastro, digite seu WhatsApp" : "Digite seu WhatsApp pra continuar"}
             </p>
             {identityHint && (
               <p className="mt-3 text-sm font-medium text-primary leading-snug">{identityHint}</p>
@@ -1277,7 +1323,8 @@ export default function LiveMemberArea() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              enter();
+              void submitPhone();
+
             }}
             className="mt-8 space-y-6"
           >
@@ -1365,7 +1412,7 @@ export default function LiveMemberArea() {
 
           <button
             type="button"
-            onClick={() => { setIdentityHint(null); setStep("phone"); }}
+            onClick={() => { setIdentityHint(null); setSignupMode(false); setStep("phone"); }}
             className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
           >
             Prefiro entrar pelo meu WhatsApp
@@ -1382,6 +1429,89 @@ export default function LiveMemberArea() {
       </div>
     );
   }
+
+  // ---------- Etapa 1c: Sem pedido — oferecer cadastro ----------
+  if (step === "signup_offer") {
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <ShoppingBag className="h-9 w-9 text-primary mx-auto" strokeWidth={2.2} />
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">AINDA NÃO ACHAMOS SEU PEDIDO</h1>
+          <p className="mt-3 text-muted-foreground text-base leading-snug">
+            Não encontramos nenhum pedido com{" "}
+            <strong className="text-foreground">{identityValue.trim()}</strong>. Você pode fazer seu
+            cadastro agora pra participar e comprar na live.
+          </p>
+
+          <Button
+            className="mt-7 w-full h-16 text-lg font-bold rounded-2xl"
+            onClick={() => { setIdentityHint(null); setSignupMode(true); setStep("phone"); }}
+          >
+            QUERO ME CADASTRAR
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => { setSignupMode(false); setStep("identity"); }}
+            className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
+          >
+            Tentar de novo com outro nome ou @
+          </button>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Etapa 1d: WhatsApp já cadastrado — "Você é a Fulana?" ----------
+  if (step === "signup_confirm") {
+    return (
+      <div className="min-h-screen bg-muted/40 text-foreground flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <ShoppingBag className="h-9 w-9 text-primary mx-auto" strokeWidth={2.2} />
+          <p className="mt-4 text-muted-foreground text-base">Esse WhatsApp já é cadastrado.</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight leading-snug">
+            VOCÊ É {String(knownName || "").toUpperCase()}?
+          </h1>
+
+          <Button
+            className="mt-7 w-full h-16 text-lg font-bold rounded-2xl gap-2"
+            disabled={busy}
+            onClick={() => void enter()}
+          >
+            {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+            SIM, SOU EU
+          </Button>
+
+          <Button
+            variant="outline"
+            className="mt-3 w-full h-14 font-semibold rounded-2xl"
+            disabled={busy}
+            onClick={() => { setKnownName(null); setPhone(""); setStep("phone"); }}
+          >
+            NÃO, CORRIGIR MEU NÚMERO
+          </Button>
+
+          <button
+            type="button"
+            onClick={backToLive}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
 
 
   // ---------- Etapa 2: Nome ----------
