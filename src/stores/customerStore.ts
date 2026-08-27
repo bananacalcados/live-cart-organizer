@@ -14,7 +14,7 @@ interface CustomerStore {
   fetchCustomers: () => Promise<void>;
   findCustomerByInstagram: (handle: string) => DbCustomer | undefined;
   findCustomerByWhatsApp: (whatsapp: string) => DbCustomer | undefined;
-  createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string) => Promise<DbCustomer | null>;
+  createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string, fullName?: string) => Promise<DbCustomer | null>;
   banCustomer: (id: string, reason?: string) => Promise<void>;
   unbanCustomer: (id: string) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<DbCustomer>) => Promise<void>;
