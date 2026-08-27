@@ -1872,6 +1872,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     if (step === "customer" && isFinalizeConditional) {
       // sem validação extra: cliente já veio do condicional
     }
+    // Gate: conferência obrigatória (Par completo + Sem defeito) antes de sair da etapa de Produtos
+    if (step === "scan" && cart.length > 0) {
+      const notConferidos = cart.filter(i => !i.feetChecked || !i.defectChecked);
+      if (notConferidos.length > 0) {
+        toast.error(`Confirme "Par completo" e "Sem defeito" em todos os itens (${notConferidos.length} pendente${notConferidos.length > 1 ? 's' : ''}) antes de avançar.`);
+        return;
+      }
+    }
     if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].id);
   };
 
