@@ -357,68 +357,67 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     }
   };
 
-  // Crediário search
-  const searchCrediario = async () => {
-    if (crediarioSearch.trim().length < 2) { toast.error("Digite pelo menos 2 caracteres"); return; }
+  // Crediário search (servidor: ignora acento/maiúsculas, busca nome/telefone/CPF/código)
+  const runCrediarioSearch = async (term: string | null) => {
     setSearchingCrediario(true);
     try {
-      const term = `%${crediarioSearch.trim()}%`;
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
-        .eq("store_id", storeId)
-        .ilike("payment_method", "%crediario%")
-        .or(`crediario_status.is.null,crediario_status.eq.pending`)
-        .or(`customer_name.ilike.${term},customer_phone.ilike.${term}` as any)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      setCrediarioResults((data as any as CrediarioSale[]) || []);
-      if (!data || data.length === 0) toast.info("Nenhum crediário pendente encontrado");
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro na busca");
+      const { data, error } = await supabase.rpc('pos_crediario_search' as any, {
+        p_store_id: storeId,
+        p_term: term && term.trim() ? term.trim() : null,
+        p_limit: 100,
+      } as any);
+      if (error) throw error;
+      const rows = ((data as any) || []) as CrediarioRow[];
+      setCrediarioResults(rows);
+      return rows;
+    } catch (e: any) {
+      console.error('[crediario search]', e);
+      toast.error('Erro na busca: ' + (e?.message || 'desconhecido'));
+      setCrediarioResults([]);
+      return [];
     } finally {
       setSearchingCrediario(false);
     }
   };
 
-  const loadAllPendingCrediarios = async () => {
-    setSearchingCrediario(true);
-    try {
-      const { data } = await supabase
-        .from("pos_sales")
-        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
-        .eq("store_id", storeId)
-        .ilike("payment_method", "%crediario%")
-        .or("crediario_status.is.null,crediario_status.eq.pending")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      setCrediarioResults((data as any as CrediarioSale[]) || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSearchingCrediario(false);
-    }
+  const searchCrediario = async () => {
+    if (crediarioSearch.trim().length < 2) { toast.error("Digite pelo menos 2 caracteres"); return; }
+    const rows = await runCrediarioSearch(crediarioSearch);
+    if (rows.length === 0) toast.info("Nenhum crediário pendente encontrado");
+  };
+
+  const loadAllPendingCrediarios = async () => { await runCrediarioSearch(null); };
+
+  const refreshCrediario = async () => {
+    if (crediarioSearch.trim().length >= 2) await runCrediarioSearch(crediarioSearch);
+    else await runCrediarioSearch(null);
   };
 
   const receiveCrediario = async () => {
-    if (!selectedCrediario || !register) return;
-    const amount = parseFloat(crediarioPayAmount) || selectedCrediario.total;
-    if (amount <= 0) return;
+    if (!selectedCrediario) return;
+    const amount = parseFloat(crediarioPayAmount) || selectedCrediario.balance;
+    if (!(amount > 0)) { toast.error('Valor inválido'); return; }
+    if (amount > selectedCrediario.balance + 0.005) { toast.error('Valor maior que o saldo devedor'); return; }
     setReceivingCrediario(true);
     try {
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({
-          crediario_status: "paid",
-          crediario_paid_at: new Date().toISOString(),
-          crediario_paid_method: crediarioPayMethod,
-          crediario_paid_amount: amount,
-        } as any)
-        .eq("id", selectedCrediario.id);
-      if (error) throw error;
+      if (selectedCrediario.kind === 'installment' && selectedCrediario.installment_id) {
+        const { error } = await supabase.rpc('pos_crediario_pay_installment' as any, {
+          p_installment_id: selectedCrediario.installment_id,
+          p_amount: amount,
+          p_method: crediarioPayMethod,
+          p_notes: null,
+        } as any);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('pos_crediario_pay_sale' as any, {
+          p_sale_id: selectedCrediario.sale_id,
+          p_amount: amount,
+          p_method: crediarioPayMethod,
+        } as any);
+        if (error) throw error;
+      }
 
-      if (crediarioPayMethod === "dinheiro") {
+      if (crediarioPayMethod === "dinheiro" && register) {
         const currentDeposits = register.deposits || 0;
         const currentCash = register.cash_sales || 0;
         await supabase
@@ -432,8 +431,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       setSelectedCrediario(null);
       setCrediarioPayAmount("");
       setCrediarioPayMethod("pix");
-      if (crediarioSearch.trim()) searchCrediario();
-      else loadAllPendingCrediarios();
+      await refreshCrediario();
     } catch (e: any) {
       toast.error("Erro ao receber: " + (e.message || "Erro desconhecido"));
     } finally {
