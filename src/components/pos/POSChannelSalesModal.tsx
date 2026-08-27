@@ -241,6 +241,25 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
                       <p className="text-[10px] text-zinc-500">{s.payment_method || pd?.method || "—"}</p>
                     </div>
                   </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!s.customer_phone}
+                    title={s.customer_phone ? "Ver conversa no WhatsApp" : "Venda sem telefone"}
+                    onClick={() =>
+                      s.customer_phone &&
+                      setChatTarget({
+                        name: s.customer_name || "Cliente",
+                        phone: s.customer_phone,
+                        summary: `Venda #${s.id.slice(0, 8)} · ${BRL(Number(s.total || 0))}`,
+                      })
+                    }
+                    className="mr-3 shrink-0 h-8 gap-1 border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-emerald-300"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    <span className="text-[11px]">Conversa</span>
+                  </Button>
+                  </div>
 
                   {isOpen && (
                     <div className="px-4 pb-4 pt-1 space-y-3 bg-zinc-900/40">
