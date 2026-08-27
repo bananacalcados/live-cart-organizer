@@ -3500,8 +3500,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               )
             )}
             <Button
-              className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
-              disabled={cart.length === 0 || finalizingSale}
+              className="w-full h-12 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+              disabled={cart.length === 0 || finalizingSale || (step === "scan" && !scanConferenceOk)}
               onClick={handlePrimaryAction}
             >
               {finalizingSale ? (
@@ -3510,6 +3510,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
               ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
                 <><Check className="h-4 w-4" /> {primaryActionLabel}</>
+              ) : step === "scan" && !scanConferenceOk ? (
+                <><AlertTriangle className="h-4 w-4" /> {primaryActionLabel}</>
               ) : (
                 <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
               )}
