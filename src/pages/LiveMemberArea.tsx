@@ -719,9 +719,14 @@ export default function LiveMemberArea() {
   const identify = async () => {
     const value = identityValue.trim();
     if (value.length < 3) return;
+    // A mesma caixa serve pros dois: com @ ou sem espaço = Instagram; com
+    // sobrenome = nome completo.
+    const kind: "name" | "instagram" =
+      value.startsWith("@") || !/\s/.test(value) ? "instagram" : "name";
+    setIdentityKind(kind);
     setBusy(true);
     try {
-      const res = await callApi({ action: "identify", kind: identityKind, value });
+      const res = await callApi({ action: "identify", kind, value });
       if (!res?.ok) {
         toast.error(res?.error || "Não foi possível buscar seu pedido");
         return;
