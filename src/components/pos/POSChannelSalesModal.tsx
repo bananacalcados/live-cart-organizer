@@ -4,8 +4,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronDown, ChevronRight, AlertTriangle, Loader2, Radio, User, Phone, Package, CreditCard, Calendar } from "lucide-react";
+import { ChevronDown, ChevronRight, AlertTriangle, Loader2, Radio, User, Phone, Package, CreditCard, Calendar, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { LiveWhatsAppChatDialog } from "@/components/live/LiveWhatsAppChatDialog";
 
 export interface ChannelSale {
   id: string;
