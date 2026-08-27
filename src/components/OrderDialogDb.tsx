@@ -53,9 +53,14 @@ interface OrderDialogDbProps {
   eventId: string;
   prefillInstagram?: string;
   prefillCommentId?: string;
+  /** Telefone do lead (área de membros) — resolve o cliente pelo WhatsApp */
+  prefillWhatsapp?: string;
+  /** Nome do lead, usado como identificador quando não há @ do Instagram */
+  prefillName?: string;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
+
   const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
