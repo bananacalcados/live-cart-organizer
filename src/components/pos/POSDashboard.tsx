@@ -52,6 +52,8 @@ async function loadPayrollTotals(start: Date, end: Date, storeId: string) {
       .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
       .in("status", PAYROLL_REVENUE_STATUSES)
       .neq("revenue_attribution", "site_pickup_only")
+      // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
+      .neq("status_cancelamento", "cancelado")
       .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
       .limit(20000),
     supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),

@@ -190,6 +190,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
         .not("sale_released_at", "is", null)
         .in("status", ["completed", "pending_sync", "paid"])
         .neq("revenue_attribution", "site_pickup_only")
+        // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
+        .neq("status_cancelamento", "cancelado")
         .or(`and(paid_at.gte.${startStr},paid_at.lte.${endStr}),and(paid_at.is.null,created_at.gte.${startStr},created_at.lte.${endStr})`);
 
       const monthRev = (salesData || []).reduce((s, r) => s + (r.total || 0), 0);
