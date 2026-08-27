@@ -2518,7 +2518,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   )}
                 </div>
               </ScrollArea>
-            </>
+            </div>
           )}
 
           {step === "customer" && (
