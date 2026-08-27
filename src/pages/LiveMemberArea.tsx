@@ -131,7 +131,7 @@ export default function LiveMemberArea() {
   const [busy, setBusy] = useState(false);
   const [event, setEvent] = useState<{ id: string; name: string; is_live: boolean } | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [step, setStep] = useState<Step>("phone");
+  const [step, setStep] = useState<Step>("identity");
   const [phone, setPhone] = useState("");
   // Identificação sem expor o telefone em público (nome completo ou @ do Instagram)
   const [identityKind, setIdentityKind] = useState<"name" | "instagram">("name");
