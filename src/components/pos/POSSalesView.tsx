@@ -1118,12 +1118,30 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
         const saleId = data?.sale_id;
 
-        // Persist crediário gateway when chosen
-        if (saleId && !useMultiPayment && selectedCrediarioGateway && (selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario'))) {
+        // Crediário: gateway + parcelas com datas de vencimento
+        if (saleId && showCrediarioPanel) {
           try {
-            await supabase.from('pos_sales').update({ crediario_gateway: selectedCrediarioGateway } as any).eq('id', saleId);
-          } catch (e) { console.error('[crediario_gateway update]', e); }
+            const rows = crediarioSchedule.length
+              ? crediarioSchedule
+              : buildSchedule(crediarioAmount, crediarioCount, new Date(Date.now() + 30 * 86400000));
+            const firstDue = rows.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0]?.due_date || null;
+            await supabase.from('pos_sales').update({
+              crediario_gateway: selectedCrediarioGateway || null,
+              crediario_due_date: firstDue,
+            } as any).eq('id', saleId);
+
+            const { error: instErr } = await supabase.rpc('generate_crediario_installments' as any, {
+              p_sale_id: saleId,
+              p_installments: rows,
+              p_gateway: selectedCrediarioGateway || null,
+            } as any);
+            if (instErr) throw instErr;
+          } catch (e: any) {
+            console.error('[crediario installments]', e);
+            toast.error('Venda salva, mas as parcelas do crediário não foram geradas: ' + (e?.message || 'erro desconhecido'));
+          }
         }
+
 
         // Custo de entrega → fica "a pagar" ao entregador e aparece no Caixa da Loja
         if (saleId && deliveryEnabled && deliveryProviderId && parseFloat(deliveryAmount) > 0) {
