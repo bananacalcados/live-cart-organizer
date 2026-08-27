@@ -1845,6 +1845,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   // Ação do botão principal (rodapé) — roteia por tipo de venda/etapa.
+  const scanConferenceOk = step === "scan" ? cart.length > 0 && cart.every(i => i.feetChecked && i.defectChecked) : true;
   const primaryActionLabel = finalizingSale
     ? (isNewConditional ? "Gerando..." : "Finalizando...")
     : step === "invoice"
@@ -1855,7 +1856,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           ? "Finalizar Condicional"
           : step === "payment"
             ? "Finalizar Venda"
-            : "Avançar";
+            : step === "scan" && !scanConferenceOk
+              ? "Confira os itens para avançar"
+              : "Avançar";
 
   const handlePrimaryAction = () => {
     if (step === "invoice") { resetSale(); return; }
