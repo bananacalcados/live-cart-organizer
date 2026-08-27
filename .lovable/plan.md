@@ -1,49 +1,48 @@
-# Bloqueio de clientes com Chargeback — plano por etapas
+# Crediário: vencimentos, carnê e contas a receber
 
-Objetivo: marcar uma venda específica como chargeback direto no PDV > Clientes, e a partir disso alertar/barrar esse cliente em novas compras (checkout, PDV, expedição, chat e live).
+## O que encontrei na auditoria
 
-Base já existente: tabela `chargebacks` (vazia, sem FK), RPC `check_chargeback_risk`, `ChargebackRiskBadge` e o diálogo `MarkChargebackDialog` (hoje só na Expedição).
+- A venda salva o crediário direto em `pos_sales` (colunas `crediario_status`, `crediario_due_date`, `crediario_paid_at`, `crediario_paid_amount`, `crediario_gateway`). Não existe nenhuma tabela de parcelas — o número de parcelas hoje só vira texto no nome da forma de pagamento (ex: "Crediário 4x (R$292.00)"). Por isso não há como dar baixa parcela a parcela.
+- Existem 181 vendas de crediário em aberto e apenas 26 com gateway preenchido.
+- **Causa do erro do item 5:** a busca em CAIXA → Receber Crediário filtra por `payment_method ilike '%crediario%'` (sem acento), mas o banco grava **"Crediário"** com acento — nenhuma venda casa, por isso o resultado vem sempre vazio. Além disso a consulta encadeia dois filtros `.or()` (o segundo sobrescreve a lógica pretendida), não busca por CPF, e nem seleciona as colunas `customer_name`/`customer_phone` que a lista tenta exibir.
 
----
+## Etapas
 
-## Etapa 1 — Fundação de dados (banco)
-- Adicionar em `chargebacks`: vínculo real com a venda (`pos_sale_id`, `order_id`), `customer_unified_id`, `phone_key` (DDD + 8 dígitos), `cpf_digits`, `blocked` (bloqueia compra sim/não).
-- Preencher `phone_key`/`cpf_digits` por trigger, sempre normalizado (nunca confiar no texto digitado).
-- Índices por `phone_key`, `cpf_digits` e `customer_unified_id`.
-- Reescrever `check_chargeback_risk` para casar por telefone normalizado, CPF, cliente unificado e endereço (CEP + número), devolvendo nível de risco e motivo.
+### Etapa 1 — Base de dados das parcelas (sem mudança visual)
+- Criar `pos_crediario_installments`: venda, loja, cliente, número da parcela, total de parcelas, valor, data de vencimento, status (pendente/pago/atrasado/cancelado), valor pago, data/forma do pagamento, gateway, e um **código curto único por parcela** (ex: `CR-4F2A-03`) para localizar o pagamento no carnê.
+- Grants + RLS no mesmo padrão das outras tabelas do PDV, trigger de `updated_at` e índices por loja/vencimento/status.
+- Função de servidor para gerar as parcelas de uma venda de forma idempotente (não duplica se rodar duas vezes).
+- Nenhuma tela muda nesta etapa; só a fundação, para as próximas não gerarem bug.
 
-Risco tratado: registros órfãos (sem saber qual venda) e match por telefone falhando por formatação.
+### Etapa 2 — Escolher as datas de vencimento na venda
+- Na etapa PAGAMENTO, ao escolher Crediário (avulso e no pagamento misto), abaixo do seletor de parcelas aparece a grade de parcelas com data e valor de cada uma.
+- Preenchimento automático: primeira parcela em 30 dias, demais a cada 30 dias; com atalhos para mudar o dia base (ex: todo dia 10) e edição manual data a data.
+- Valida soma das parcelas = valor do crediário (a diferença de centavos entra na última).
+- Ao finalizar a venda, as parcelas são gravadas junto com a venda; se a gravação das parcelas falhar, a venda avisa em vez de ficar sem carnê.
 
-## Etapa 2 — Marcar chargeback no PDV > Clientes
-- No Perfil 360° do cliente, cada venda do histórico ganha ação "Marcar chargeback", que abre o diálogo já existente pré-preenchido com venda, cliente, endereço e valor.
-- O registro nasce vinculado à venda e ao cliente unificado, com opção "bloquear novas compras".
-- Selo permanente de chargeback no cabeçalho do cliente e na lista de clientes, derivado da tabela `chargebacks` (não de tag manual).
+### Etapa 3 — Corrigir a busca em CAIXA → Receber Crediário
+- Trocar o filtro por uma função de servidor que ignora acento e maiúsculas, busca por **nome, telefone, CPF e código da parcela**, e considera tanto vendas antigas (sem parcelas) quanto as novas (com parcelas).
+- Lista passa a mostrar cliente, vencimento, parcela (3/6) e saldo devedor; baixa passa a ser **por parcela**, atualizando também o resumo da venda (para não quebrar o que já existe em Clientes → Crediário).
+- Pagamento em dinheiro continua entrando como reforço de caixa, como hoje.
 
-Risco tratado: dependência de tag em texto livre no chat, que some se alguém editar.
+### Etapa 4 — Impressão do carnê
+- Na tela de venda finalizada, quando houver crediário, aparece o botão **Imprimir carnê de compra**.
+- Carnê com uma via por parcela: dados da loja, cliente, número do pedido, parcela X/Y, valor, vencimento e o **código da parcela** para localizar o pagamento. Sem código de barras.
+- Também disponível depois, pelo detalhe da venda, para reimpressão.
 
-## Etapa 3 — Painel de gestão
-- A aba de Chargebacks passa a listar por cliente (não só por registro), mostrando venda vinculada, valor, status e se está bloqueado.
-- Ações: bloquear/desbloquear, mudar status, remover marcação errada (com histórico de quem fez).
+### Etapa 5 — Contas a Receber (Crediário Próprio)
+- Nova aba em CAIXA (ou Gestão, conforme preferir) com as parcelas a receber, filtrando por período de vencimento, loja e gateway.
+- Foco em **CREDIÁRIO PRÓPRIO**: totais a receber no mês, vencidas, a vencer nos próximos 7/30 dias, e recebido no período; gateways de terceiros ficam separados, já que o dinheiro não entra na loja.
+- Lista detalhada com cliente, parcela, vencimento, valor, dias de atraso, e acesso rápido para dar baixa ou abrir a conversa no WhatsApp.
+- Exportação CSV e impressão, no mesmo padrão do relatório de período do caixa.
 
-## Etapa 4 — Bloqueio na venda (o ponto crítico)
-- Checagem no servidor antes de criar pedido/cobrança: checkout público, PDV e link de pagamento.
-- Cliente bloqueado: pedido não é criado; o operador do PDV vê o alerta e o motivo, com liberação manual só por gestor.
-- Cliente marcado mas não bloqueado: só alerta, venda segue.
-- Validação sempre no backend (nunca só na tela), para não ser contornável.
+### Etapa 6 — Migração do histórico e verificação
+- Gerar parcelas para as vendas de crediário antigas que ainda estão em aberto (usando o número de parcelas que está no texto da forma de pagamento, com 1x como padrão quando não houver), sem alterar as já quitadas.
+- Conferência final: busca no caixa, baixa por parcela, totais de contas a receber batendo com o dashboard, e impressão do carnê.
 
-## Etapa 5 — Alertas nos outros pontos
-- Expedição: alerta antes de despachar (reaproveita o selo atual).
-- Chat/WhatsApp: faixa de aviso na conversa quando o telefone bate.
-- Live: aviso na anotação/pedido quando o cliente for identificado por telefone ou @ já vinculado.
-- Limitação conhecida: cliente que só tem @ do Instagram sem cadastro não é identificado — o alerta aparece assim que telefone ou CPF entrar no pedido.
+## Detalhes técnicos
 
-## Etapa 6 — Retroativo e verificação
-- Importar chargebacks antigos manualmente pela tela (ou lista fornecida) para a base já nascer útil.
-- Teste ponta a ponta: marcar → tentar comprar no checkout → tentar no PDV → conferir alerta na expedição e no chat.
-
----
-
-### Detalhes técnicos
-- Chave de identidade: DDD + últimos 8 dígitos (padrão do projeto) e CPF só como identidade forte.
-- Todas as novas colunas com RLS e GRANT no mesmo passo; escrita restrita a usuários autenticados, leitura de risco via função `security definer`.
-- Bloqueio aplicado nas edge functions de criação de pedido/pagamento para valer também fora da interface.
+- Tabela nova: `public.pos_crediario_installments` (FK para `pos_sales`), com `GRANT` para `authenticated`/`service_role`, RLS e índice `(store_id, status, due_date)`.
+- Código da parcela: derivado do id da venda + número da parcela, único, curto e legível.
+- Busca do caixa via RPC `SECURITY DEFINER` com `unaccent`/`lower` — evita o problema atual do acento e permite buscar por CPF, que hoje não é possível no cliente.
+- Compatibilidade: as colunas `crediario_*` em `pos_sales` continuam sendo atualizadas como resumo, para não quebrar Clientes → Crediário, dashboards e o modal de pagamentos.
