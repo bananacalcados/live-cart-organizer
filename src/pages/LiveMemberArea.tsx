@@ -131,7 +131,7 @@ export default function LiveMemberArea() {
   const [busy, setBusy] = useState(false);
   const [event, setEvent] = useState<{ id: string; name: string; is_live: boolean } | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [step, setStep] = useState<Step>("phone");
+  const [step, setStep] = useState<Step>("identity");
   const [phone, setPhone] = useState("");
   // Identificação sem expor o telefone em público (nome completo ou @ do Instagram)
   const [identityKind, setIdentityKind] = useState<"name" | "instagram">("name");
@@ -719,9 +719,23 @@ export default function LiveMemberArea() {
   const identify = async () => {
     const value = identityValue.trim();
     if (value.length < 3) return;
+    // A mesma caixa serve pros dois: com @ ou sem espaço = Instagram; com
+    // sobrenome = nome completo.
+    const kind: "name" | "instagram" =
+      value.startsWith("@") || !/\s/.test(value) ? "instagram" : "name";
+    setIdentityKind(kind);
     setBusy(true);
     try {
-      const res = await callApi({ action: "identify", kind: identityKind, value });
+      let res = await callApi({ action: "identify", kind, value });
+      // Se não achou, tenta a outra interpretação do mesmo texto.
+      if (res?.ok && !res.found) {
+        const other = kind === "name" ? "instagram" : "name";
+        const alt = await callApi({ action: "identify", kind: other, value });
+        if (alt?.ok && alt.found) {
+          setIdentityKind(other);
+          res = alt;
+        }
+      }
       if (!res?.ok) {
         toast.error(res?.error || "Não foi possível buscar seu pedido");
         return;
@@ -1316,49 +1330,31 @@ export default function LiveMemberArea() {
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-lg border border-border p-8">
           <div className="flex flex-col items-center text-center">
             <ShoppingBag className="h-9 w-9 text-primary" strokeWidth={2.2} />
-            <h1 className="mt-4 text-2xl font-bold tracking-tight">ENCONTRAR MEU PEDIDO</h1>
+            <h1 className="mt-4 text-2xl font-bold tracking-tight">ÁREA DE MEMBROS</h1>
             <p className="mt-2 text-muted-foreground text-base leading-snug">
-              Use o mesmo dado que você passou na live
+              Digite seu <strong className="text-foreground">nome completo</strong> ou o{" "}
+              <strong className="text-foreground">@ do Instagram</strong>
             </p>
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant={identityKind === "name" ? "default" : "outline"}
-              className="h-12 text-sm font-semibold"
-              onClick={() => setIdentityKind("name")}
-            >
-              Nome completo
-            </Button>
-            <Button
-              type="button"
-              variant={identityKind === "instagram" ? "default" : "outline"}
-              className="h-12 text-sm font-semibold"
-              onClick={() => setIdentityKind("instagram")}
-            >
-              @ do Instagram
-            </Button>
           </div>
 
           <form
             onSubmit={(e) => { e.preventDefault(); void identify(); }}
-            className="mt-6 space-y-6"
+            className="mt-7 space-y-5"
           >
             <Input
               value={identityValue}
               onChange={(e) => setIdentityValue(e.target.value)}
-              placeholder={identityKind === "name" ? "Maria Aparecida da Silva" : "@mariasilva"}
-              className="h-14 text-[18px] rounded-xl"
+              placeholder="Maria Aparecida da Silva  ou  @mariasilva"
+              className="h-20 text-[22px] font-medium rounded-2xl px-5 placeholder:text-base placeholder:font-normal"
               autoFocus
             />
             <Button
               type="submit"
               disabled={identityValue.trim().length < 3 || busy}
-              className="w-full h-14 text-base font-semibold rounded-xl gap-2"
+              className="w-full h-16 text-lg font-bold rounded-2xl gap-2"
             >
               {busy && <Loader2 className="h-5 w-5 animate-spin" />}
-              Buscar meu pedido
+              Continuar
             </Button>
           </form>
 
@@ -1369,10 +1365,18 @@ export default function LiveMemberArea() {
 
           <button
             type="button"
-            onClick={() => setStep("phone")}
+            onClick={() => { setIdentityHint(null); setStep("phone"); }}
+            className="mt-5 w-full text-sm font-semibold text-primary underline underline-offset-4"
+          >
+            Prefiro entrar pelo meu WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={backToLive}
             className="mt-6 w-full inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" /> Voltar
+            <ArrowLeft className="h-4 w-4" /> Voltar pra live
           </button>
         </div>
       </div>
