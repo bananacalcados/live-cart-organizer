@@ -2432,11 +2432,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Package className="h-5 w-5 text-pos-orange" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-pos-white whitespace-normal break-words">{item.name}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
-                            {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
-                            {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                          <p className="font-bold text-base text-white whitespace-normal break-words leading-tight">{item.name}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <Badge className="text-[11px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
+                            {item.variant && <span className="text-xs text-pos-white/70 font-medium">{item.variant}</span>}
+                            {item.size && <span className="text-xs text-pos-white/60 font-medium">Tam: {item.size}</span>}
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
