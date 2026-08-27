@@ -39,6 +39,7 @@ import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
+import { POSCrediarioSchedule, buildSchedule, type CrediarioInstallment } from "./POSCrediarioSchedule";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
 import { fetchProviders, createDeliveryCost, storeNameToSource, ServiceProvider, ProviderType } from "@/lib/deliveryProviders";
@@ -145,6 +146,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [crediarioGateways, setCrediarioGateways] = useState<{ id: string; name: string }[]>([]);
   const [selectedCrediarioGateway, setSelectedCrediarioGateway] = useState<string>("");
+  const [crediarioSchedule, setCrediarioSchedule] = useState<CrediarioInstallment[]>([]);
+  const [multiCrediarioInstallments, setMultiCrediarioInstallments] = useState<number>(1);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
   const [showTaskPopup, setShowTaskPopup] = useState(false);
@@ -1024,6 +1027,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
+    // 💳 Crediário: parcelas precisam somar exatamente o valor do crediário
+    if (showCrediarioPanel && crediarioSchedule.length > 0) {
+      const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
+      if (Math.abs(sumInst - crediarioAmount) > 0.01) {
+        toast.error(`Soma das parcelas do crediário (R$ ${sumInst.toFixed(2)}) não bate com R$ ${crediarioAmount.toFixed(2)}.`);
+        setStep("payment");
+        return;
+      }
+      if (crediarioSchedule.some(r => !r.due_date)) {
+        toast.error("Informe a data de vencimento de todas as parcelas do crediário.");
+        setStep("payment");
+        return;
+      }
+    }
+
     // 🎟️ Vale-troca: exige voucher aplicado e saldo suficiente
     if (valeTrocaAmountRequired > 0) {
       if (!voucherApplied) {
@@ -1115,12 +1133,30 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
         const saleId = data?.sale_id;
 
-        // Persist crediário gateway when chosen
-        if (saleId && !useMultiPayment && selectedCrediarioGateway && (selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario'))) {
+        // Crediário: gateway + parcelas com datas de vencimento
+        if (saleId && showCrediarioPanel) {
           try {
-            await supabase.from('pos_sales').update({ crediario_gateway: selectedCrediarioGateway } as any).eq('id', saleId);
-          } catch (e) { console.error('[crediario_gateway update]', e); }
+            const rows = crediarioSchedule.length
+              ? crediarioSchedule
+              : buildSchedule(crediarioAmount, crediarioCount, new Date(Date.now() + 30 * 86400000));
+            const firstDue = rows.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0]?.due_date || null;
+            await supabase.from('pos_sales').update({
+              crediario_gateway: selectedCrediarioGateway || null,
+              crediario_due_date: firstDue,
+            } as any).eq('id', saleId);
+
+            const { error: instErr } = await supabase.rpc('generate_crediario_installments' as any, {
+              p_sale_id: saleId,
+              p_installments: rows,
+              p_gateway: selectedCrediarioGateway || null,
+            } as any);
+            if (instErr) throw instErr;
+          } catch (e: any) {
+            console.error('[crediario installments]', e);
+            toast.error('Venda salva, mas as parcelas do crediário não foram geradas: ' + (e?.message || 'erro desconhecido'));
+          }
         }
+
 
         // Custo de entrega → fica "a pagar" ao entregador e aparece no Caixa da Loja
         if (saleId && deliveryEnabled && deliveryProviderId && parseFloat(deliveryAmount) > 0) {
@@ -1762,6 +1798,17 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const valeTrocaAmountRequired = useMultiPayment
     ? multiPayments.filter(p => isValeTrocaName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
     : (singleIsValeTroca ? totalWithDiscount : 0);
+
+  // ── Crediário: valor e quantidade de parcelas ───────────────────────────────
+  const isCrediarioName = (n?: string | null) =>
+    (n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("crediario");
+  const singleIsCrediario = !useMultiPayment && isCrediarioName(selectedPaymentName);
+  const multiCrediarioAmount = useMultiPayment
+    ? multiPayments.filter(p => isCrediarioName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
+    : 0;
+  const showCrediarioPanel = singleIsCrediario || multiCrediarioAmount > 0;
+  const crediarioAmount = singleIsCrediario ? totalWithDiscount : multiCrediarioAmount;
+  const crediarioCount = singleIsCrediario ? Number(installments || 1) : multiCrediarioInstallments;
 
   const applyVoucherForSale = async () => {
     const codigo = voucherCodeInput.trim();
@@ -2822,25 +2869,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       </Select>
                     </div>
                   )}
-                  {(selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario')) && (
-                    <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
-                      <Label className="text-pos-white">Gateway do crediário</Label>
-                      {crediarioGateways.length === 0 ? (
-                        <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
-                      ) : (
-                        <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
-                          <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
-                            <SelectValue placeholder="Selecione o gateway" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {crediarioGateways.map(g => (
-                              <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  )}
+                  {/* gateway + vencimentos do crediário são renderizados abaixo (single e misto) */}
                   {selectedPaymentName.toLowerCase().includes('dinheiro') && (
                     <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
                       <Label className="text-pos-white">Valor recebido</Label>
@@ -2953,6 +2982,38 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   )}
                 </div>
               )}
+
+              {/* 💳 Crediário — gateway + datas de vencimento (avulso e misto) */}
+              {showCrediarioPanel && (
+                <>
+                  <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                    <Label className="text-pos-white">Gateway do crediário</Label>
+                    {crediarioGateways.length === 0 ? (
+                      <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
+                    ) : (
+                      <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
+                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                          <SelectValue placeholder="Selecione o gateway" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {crediarioGateways.map(g => (
+                            <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <POSCrediarioSchedule
+                    amount={crediarioAmount}
+                    count={crediarioCount}
+                    showCountSelector={!singleIsCrediario}
+                    onCountChange={setMultiCrediarioInstallments}
+                    value={crediarioSchedule}
+                    onChange={setCrediarioSchedule}
+                  />
+                </>
+              )}
+
 
               {/* 🎟️ Vale-troca — resgatar voucher gerado em Trocas/Devoluções */}
               {showVoucherPanel && (
