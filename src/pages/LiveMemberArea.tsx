@@ -755,16 +755,21 @@ export default function LiveMemberArea() {
         return;
       }
       if (!res.found) {
-        toast.error("Não encontramos pedido com esse dado. Confira e tente de novo.");
+        // Sem pedido: em vez de travar, oferecemos o cadastro.
+        setName(value);
+        setSignupMode(true);
+        setStep("signup_offer");
         return;
       }
       setName(value);
+      setSignupMode(false);
       setIdentityHint(
         res.ambiguous
           ? "Encontramos mais de uma pessoa com esse dado. Confirme seu WhatsApp pra liberarmos o pedido certo."
           : "Encontramos seu pedido! Confirme seu WhatsApp (só a gente vê) pra abrir.",
       );
       setStep("phone");
+
     } catch (e: any) {
       toast.error(e?.message || "Erro ao buscar pedido");
     } finally {
