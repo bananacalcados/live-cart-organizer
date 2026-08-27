@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye, List, FileText, Printer } from "lucide-react";
+import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye, List, FileText, Printer, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ProviderPayablesPanel } from "./ProviderPayablesPanel";
 import { POSCashPeriodReport } from "./POSCashPeriodReport";
+import { POSCrediarioReceivables } from "./POSCrediarioReceivables";
 import { Truck } from "lucide-react";
 
 interface Props {
@@ -493,7 +494,11 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           <TabsTrigger value="period" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
             <FileText className="h-4 w-4" /> Histórico / Período
           </TabsTrigger>
+          <TabsTrigger value="receivables" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+            <Wallet className="h-4 w-4" /> Contas a Receber
+          </TabsTrigger>
         </TabsList>
+
 
 
           {/* ===== TAB: DINHEIRO ===== */}
@@ -692,7 +697,25 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           <TabsContent value="period" className="space-y-4">
             <POSCashPeriodReport storeId={storeId} />
           </TabsContent>
+
+          {/* ===== TAB: CONTAS A RECEBER (CREDIÁRIO) ===== */}
+          <TabsContent value="receivables" className="space-y-4">
+            <POSCrediarioReceivables
+              storeId={storeId}
+              onCashReceived={async (amount) => {
+                if (!register) return;
+                const currentDeposits = register.deposits || 0;
+                const currentCash = register.cash_sales || 0;
+                await supabase
+                  .from("pos_cash_registers")
+                  .update({ deposits: currentDeposits + amount, cash_sales: currentCash + amount })
+                  .eq("id", register.id);
+                setRegister(r => r ? { ...r, deposits: currentDeposits + amount, cash_sales: currentCash + amount } : r);
+              }}
+            />
+          </TabsContent>
         </Tabs>
+
 
 
       {/* Open Dialog */}
