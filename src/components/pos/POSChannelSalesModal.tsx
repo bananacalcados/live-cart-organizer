@@ -321,6 +321,16 @@ export function POSChannelSalesModal({ open, onClose, title, channel, sales }: P
           </div>
         </ScrollArea>
       </DialogContent>
+
+      {chatTarget && (
+        <LiveWhatsAppChatDialog
+          open={!!chatTarget}
+          onOpenChange={(o) => !o && setChatTarget(null)}
+          viewerName={chatTarget.name}
+          viewerPhone={chatTarget.phone}
+          cartSummary={chatTarget.summary}
+        />
+      )}
     </Dialog>
   );
 }
