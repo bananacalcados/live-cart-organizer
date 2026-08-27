@@ -206,8 +206,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       if (prefillInstagram && open) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
       }
+      if (prefillWhatsapp && open) {
+        const normalized = normalizeBRPhone(prefillWhatsapp);
+        setWhatsapp(normalized);
+        const known = findCustomerByWhatsApp(normalized);
+        if (known?.instagram_handle) {
+          setInstagramHandle(known.instagram_handle.replace(/^@/, ""));
+        } else if (!prefillInstagram) {
+          const slug = (prefillName || "")
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase().trim().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
+          setInstagramHandle(slug || normalized);
+        }
+      }
     }
-  }, [editingOrder, open, prefillInstagram]);
+  }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillName]);
+
 
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {
