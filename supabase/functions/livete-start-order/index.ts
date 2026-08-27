@@ -388,6 +388,31 @@ serve(async (req) => {
           }
         }
         if (!built.length) return;
+
+        // Fallback em texto: quando a conversa não está aberta (private_reply de
+        // comentário), a Meta recusa o template com botões (erro 2534022). Nesse
+        // caso mandamos os links como texto para o cliente não ficar sem o botão.
+        const sendLinksAsText = async () => {
+          const links = built.filter((b) => b.type === 'web_url' && b.url);
+          if (!links.length) return;
+          const text = links.map((b) => `👉 ${b.title}:\n${b.url}`).join('\n\n');
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: igUsername,
+                message: text,
+                eventId: order.event_id,
+                fallbackCommentId,
+                fallbackCommentIds,
+              }),
+            });
+          } catch (e) {
+            console.warn('[livete-start] IG link fallback error:', e);
+          }
+        };
+
         try {
           const r = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send-buttons`, {
             method: 'POST',
@@ -403,11 +428,14 @@ serve(async (req) => {
           if (!r.ok) {
             const errBody = await r.text().catch(() => '');
             console.warn(`[livete-start] IG buttons send failed (${r.status}) for @${igUsername}:`, errBody);
+            await sendLinksAsText();
           }
         } catch (e) {
           console.warn('[livete-start] IG buttons dispatch error:', e);
+          await sendLinksAsText();
         }
       };
+
 
       for (let i = 0; i < rendered.length; i++) {
         const text = rendered[i];
