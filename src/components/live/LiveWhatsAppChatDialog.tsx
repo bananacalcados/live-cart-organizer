@@ -435,10 +435,40 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           </div>
         )}
 
-        {/* Number selector */}
-        <div className="px-3 py-1.5 border-b flex-shrink-0">
-          <WhatsAppNumberSelector className="h-8 text-xs" />
+        {/* Number selector — filtra o histórico exibido por instância */}
+        <div className="px-3 py-1.5 border-b flex-shrink-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <WhatsAppNumberSelector
+                className="h-8 text-xs"
+                value={viewNumberId ?? null}
+                autoSelect={false}
+                onValueChange={(id) => { setViewNumberId(id); setViewAll(false); }}
+              />
+            </div>
+            <Button
+              type="button"
+              variant={viewAll ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-[10px] px-2 shrink-0"
+              onClick={() => setViewAll(v => !v)}
+              title="Ver mensagens de todas as instâncias"
+            >
+              Todas
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {viewAll
+              ? "Mostrando mensagens de todas as instâncias"
+              : viewNumberId
+                ? `Histórico da instância selecionada${isLocked && boundNumberId === viewNumberId ? " (conversa real)" : ""}`
+                : "Selecione uma instância para ver o histórico"}
+            {isLocked && boundNumber && boundNumberId !== viewNumberId && !viewAll
+              ? ` · conversa real: ${boundNumber.display_name || boundNumber.phone_number}`
+              : ""}
+          </p>
         </div>
+
 
         {/* Templates panel */}
         {showTemplates && (
