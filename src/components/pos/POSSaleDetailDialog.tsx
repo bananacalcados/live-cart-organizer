@@ -359,6 +359,24 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     </div>
   `;
 
+  const printCarneReprint = async () => {
+    if (!sale) return;
+    setPrintingCarne(true);
+    try {
+      const { printCarneForSale } = await import('@/lib/crediarioCarne');
+      const res = await printCarneForSale(sale.id, {
+        customerName: currentCustomer?.name || null,
+        customerPhone: (currentCustomer as any)?.whatsapp || null,
+        customerCpf: (currentCustomer as any)?.cpf || null,
+        orderLabel: sale.tiny_order_number ? `Pedido #${sale.tiny_order_number}` : `Venda ${sale.id.slice(0, 8).toUpperCase()}`,
+        saleDate: sale.created_at,
+      });
+      if (!res.ok) toast.error(res.error || 'Não foi possível imprimir o carnê.');
+    } finally {
+      setPrintingCarne(false);
+    }
+  };
+
   const printNonFiscal = () => {
     if (!sale) return;
     const subtotal = currentItems.reduce((s, i) => s + i.unit_price * i.quantity, 0);
