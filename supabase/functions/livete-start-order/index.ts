@@ -18,7 +18,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { orderId, fallbackCommentId: requestFallbackCommentId } = await req.json();
+    const {
+      orderId,
+      fallbackCommentId: requestFallbackCommentId,
+      // Envio manual: força o canal Instagram Direct e (opcionalmente) mantém
+      // o pedido no estágio atual (ex.: "Aguardando Confirmação").
+      forceInstagram = false,
+      keepStage = false,
+    } = await req.json();
+
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'orderId required' }), {
         status: 400,
@@ -108,6 +116,14 @@ serve(async (req) => {
       wantsZapi = false;
       wantsMeta = false;
     }
+
+    // Envio manual pelo botão "MSG NO DIRECT": só Instagram.
+    if (forceInstagram && igHandleRaw) {
+      wantsInstagram = true;
+      wantsZapi = false;
+      wantsMeta = false;
+    }
+
 
     // For legacy logic compatibility: "isInstagram" means IG is the only channel
     const isInstagram = wantsInstagram && !wantsZapi && !wantsMeta;
@@ -212,15 +228,18 @@ serve(async (req) => {
       });
     }
 
-    await supabase.rpc('update_order_stage', {
-      p_order_id: orderId,
-      p_stage: initialStage,
-    });
-    // Em modo "Área de Membros" a coluna "Contatado" não existe no Kanban:
-    // o pedido confirmado deve permanecer em "Novo Pedido (confirmado)".
-    if (operationMode !== 'member_area') {
-      await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
+    if (!keepStage) {
+      await supabase.rpc('update_order_stage', {
+        p_order_id: orderId,
+        p_stage: initialStage,
+      });
+      // Em modo "Área de Membros" a coluna "Contatado" não existe no Kanban:
+      // o pedido confirmado deve permanecer em "Novo Pedido (confirmado)".
+      if (operationMode !== 'member_area') {
+        await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
+      }
     }
+
 
     // ===== Branch: Meta WhatsApp Template (overrides 3-block send for WA) =====
     // If the event's WhatsApp number is a Meta API instance AND a template is
