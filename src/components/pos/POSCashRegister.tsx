@@ -87,9 +87,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   // Crediário
   const [showCrediario, setShowCrediario] = useState(false);
   const [crediarioSearch, setCrediarioSearch] = useState("");
-  const [crediarioResults, setCrediarioResults] = useState<CrediarioSale[]>([]);
+  const [crediarioResults, setCrediarioResults] = useState<CrediarioRow[]>([]);
   const [searchingCrediario, setSearchingCrediario] = useState(false);
-  const [selectedCrediario, setSelectedCrediario] = useState<CrediarioSale | null>(null);
+  const [selectedCrediario, setSelectedCrediario] = useState<CrediarioRow | null>(null);
   const [crediarioPayMethod, setCrediarioPayMethod] = useState("pix");
   const [crediarioPayAmount, setCrediarioPayAmount] = useState("");
   const [receivingCrediario, setReceivingCrediario] = useState(false);
