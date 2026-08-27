@@ -49,7 +49,11 @@ const MAX_BTNS_PER_BLOCK = 3;
 
 const URL_VARIABLES = [
   { token: "{checkout_link}", label: "Link do checkout" },
+  { token: "{member_area_link}", label: "Área de Membros (já autenticada)" },
+  { token: "{member_area_public}", label: "Área de Membros (login por telefone)" },
 ];
+
+const CUSTOM_URL = "__custom__";
 
 // Mantém em sync com livete-start-order/resolveToken
 const VARIABLES: { token: string; label: string; sample: string }[] = [
@@ -57,6 +61,8 @@ const VARIABLES: { token: string; label: string; sample: string }[] = [
   { token: "{customer_name}", label: "Nome / @ completo", sample: "@juliana_soares_292" },
   { token: "{instagram}", label: "@ do Instagram", sample: "@juliana_soares_292" },
   { token: "{checkout_link}", label: "Link de pagamento", sample: "https://checkout.bananacalcados.com.br/checkout/order/abc12345" },
+  { token: "{member_area_link}", label: "Área de Membros (já autenticada)", sample: "https://checkout.bananacalcados.com.br/minha-area?ml=xxxx" },
+  { token: "{member_area_public}", label: "Área de Membros (login por telefone)", sample: "https://checkout.bananacalcados.com.br/minha-area" },
   { token: "{products}", label: "Lista de produtos (longa)", sample: "1x Tênis Jess Ortopédico (37 Preto) — R$199.90" },
   { token: "{products_short}", label: "Lista de produtos (curta)", sample: "1x Tênis Jess Ortopédico" },
   { token: "{subtotal}", label: "Subtotal", sample: "R$199.90" },
@@ -64,6 +70,7 @@ const VARIABLES: { token: string; label: string; sample: string }[] = [
   { token: "{total}", label: "Total", sample: "R$189.90" },
   { token: "{order_id}", label: "ID do pedido (curto)", sample: "abc12345" },
 ];
+
 
 const DEFAULT_BLOCKS = [
   "Oii {customer_first_name}, já separamos seu pedido.",
@@ -325,13 +332,42 @@ export function InitialMessageEditor({
                             className="h-8 text-xs flex-1 min-w-[140px]"
                           />
                           {btn.type === "url" ? (
-                            <Input
-                              value={btn.urlToken || ""}
-                              onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
-                              placeholder="{checkout_link} ou https://..."
-                              className="h-8 text-xs flex-[2] min-w-[180px] font-mono"
-                            />
+                            <div className="flex flex-[2] min-w-[200px] flex-col gap-1">
+                              <Select
+                                value={
+                                  URL_VARIABLES.some((v) => v.token === btn.urlToken)
+                                    ? (btn.urlToken as string)
+                                    : CUSTOM_URL
+                                }
+                                onValueChange={(v) =>
+                                  updateButton(idx, btn.id, {
+                                    urlToken: v === CUSTOM_URL ? "" : v,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Destino do botão" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {URL_VARIABLES.map((v) => (
+                                    <SelectItem key={v.token} value={v.token}>
+                                      {v.label}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value={CUSTOM_URL}>Link personalizado…</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {!URL_VARIABLES.some((v) => v.token === btn.urlToken) && (
+                                <Input
+                                  value={btn.urlToken || ""}
+                                  onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
+                                  placeholder="https://..."
+                                  className="h-8 text-xs font-mono"
+                                />
+                              )}
+                            </div>
                           ) : (
+
                             <Select
                               value={btn.automationId || ""}
                               onValueChange={(v) => updateButton(idx, btn.id, { automationId: v })}
