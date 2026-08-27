@@ -814,6 +814,24 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="fullName" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Nome completo do cliente
+            </Label>
+            <Input
+              id="fullName"
+              placeholder="Maria Aparecida da Silva"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Alternativa segura ao WhatsApp: com nome e sobrenome, a cliente
+              acessa a área de membros pelo nome completo — sem precisar falar o
+              telefone em público na live.
+            </p>
+          </div>
+
           {editingOrder && (
             <div className="space-y-2">
               <Label>Etapa do Pedido</Label>
