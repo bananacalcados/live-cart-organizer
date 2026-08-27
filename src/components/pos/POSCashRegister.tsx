@@ -885,7 +885,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/30" />
                     <Input
-                      placeholder="Buscar por nome ou telefone..."
+                      placeholder="Nome, telefone, CPF ou código da parcela..."
                       value={crediarioSearch}
                       onChange={e => setCrediarioSearch(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && searchCrediario()}
@@ -903,35 +903,57 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                   <p className="text-center text-pos-white/40 text-sm py-4">Nenhum crediário pendente</p>
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {crediarioResults.map(sale => (
-                      <button
-                        key={sale.id}
-                        onClick={() => { setSelectedCrediario(sale); setCrediarioPayAmount(String(sale.total)); }}
-                        className="w-full text-left p-3 rounded-lg border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/40 transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-pos-white font-medium">{sale.customer_name || "Sem nome"}</span>
-                          <Badge className="bg-yellow-500/20 text-yellow-400 text-[9px] border-0">Pendente</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-pos-white/50">
-                            {new Date(sale.created_at).toLocaleDateString("pt-BR")}
-                            {sale.customer_phone && ` · ${sale.customer_phone}`}
-                          </span>
-                          <span className="text-xs text-pos-orange font-bold">R$ {sale.total.toFixed(2)}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {crediarioResults.map(row => {
+                      const overdue = row.due_date ? new Date(row.due_date + 'T23:59:59') < new Date() : false;
+                      return (
+                        <button
+                          key={row.installment_id || row.sale_id}
+                          onClick={() => { setSelectedCrediario(row); setCrediarioPayAmount(row.balance.toFixed(2)); }}
+                          className="w-full text-left p-3 rounded-lg border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/40 transition-all"
+                        >
+                          <div className="flex items-center justify-between mb-1 gap-2">
+                            <span className="text-xs text-pos-white font-medium truncate">{row.customer_name || "Sem nome"}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {row.installment_number ? (
+                                <Badge className="bg-pos-orange/20 text-pos-orange text-[9px] border-0">
+                                  {row.installment_number}/{row.installments_total}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-pos-white/10 text-pos-white/60 text-[9px] border-0">Venda antiga</Badge>
+                              )}
+                              <Badge className={`text-[9px] border-0 ${overdue ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                {overdue ? 'Vencida' : (row.status === 'partial' ? 'Parcial' : 'Pendente')}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-pos-white/50 truncate">
+                              {row.due_date ? `Venc. ${new Date(row.due_date + 'T12:00:00').toLocaleDateString("pt-BR")}` : 'Sem vencimento'}
+                              {row.code && ` · ${row.code}`}
+                              {row.customer_phone && ` · ${row.customer_phone}`}
+                            </span>
+                            <span className="text-xs text-pos-orange font-bold shrink-0">R$ {row.balance.toFixed(2)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
             ) : (
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/20">
-                  <p className="text-xs text-pos-white/50">Crediário selecionado</p>
+                  <p className="text-xs text-pos-white/50">
+                    {selectedCrediario.installment_number
+                      ? `Parcela ${selectedCrediario.installment_number}/${selectedCrediario.installments_total}${selectedCrediario.code ? ` · ${selectedCrediario.code}` : ''}`
+                      : 'Crediário selecionado (venda sem parcelas)'}
+                  </p>
                   <p className="text-sm text-pos-white font-medium">{selectedCrediario.customer_name || "Sem nome"}</p>
-                  <p className="text-xs text-pos-orange font-bold">R$ {selectedCrediario.total.toFixed(2)}</p>
-                  <p className="text-[10px] text-pos-white/40">{new Date(selectedCrediario.created_at).toLocaleDateString("pt-BR")}</p>
+                  <p className="text-xs text-pos-orange font-bold">Saldo devedor: R$ {selectedCrediario.balance.toFixed(2)}</p>
+                  <p className="text-[10px] text-pos-white/40">
+                    {selectedCrediario.due_date ? `Vencimento ${new Date(selectedCrediario.due_date + 'T12:00:00').toLocaleDateString("pt-BR")} · ` : ''}
+                    Venda de {selectedCrediario.sale_created_at ? new Date(selectedCrediario.sale_created_at).toLocaleDateString("pt-BR") : '—'}
+                  </p>
                 </div>
 
                 <div>
