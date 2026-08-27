@@ -2375,7 +2375,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         {/* Left: Step Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {step === "scan" && (
-            <div className="dark flex-1 flex flex-col overflow-hidden">
+            <>
               <div className="p-2 md:p-4 border-b border-pos-orange/10 bg-pos-black">
                 <div className="flex gap-1.5 md:gap-2">
                   <div className="relative flex-1">
@@ -2518,7 +2518,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   )}
                 </div>
               </ScrollArea>
-            </div>
+            </>
           )}
 
           {step === "customer" && (
