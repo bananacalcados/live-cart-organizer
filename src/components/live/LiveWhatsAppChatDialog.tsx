@@ -46,7 +46,7 @@ interface MetaTemplate {
 export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerPhone, cartSummary }: LiveWhatsAppChatDialogProps) {
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+  const { fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
   const currentUserId = useCurrentUserId();
 
   // Media state
@@ -72,17 +72,35 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
 
   useEffect(() => { if (open) fetchNumbers(); }, [open, fetchNumbers]);
 
-  // Mensagens unificadas (carrega, broadcast e polling de status)
+  // Instância travada pelo histórico da conversa (não depende das mensagens carregadas,
+  // pois a lista visível passa a ser filtrada por instância).
+  const { boundNumberId, boundNumber, isLocked } = useConversationInstance(open ? viewerPhone : null);
+
+  // Instância "em visualização": controla QUAL histórico aparece.
+  // `undefined` = todas as instâncias.
+  const [viewNumberId, setViewNumberId] = useState<string | undefined>(undefined);
+  const [viewAll, setViewAll] = useState(false);
+  const initializedRef = useRef(false);
+
+  // Ao abrir, começa na instância vinculada à conversa (se houver).
+  useEffect(() => {
+    if (!open) { initializedRef.current = false; return; }
+    if (initializedRef.current) return;
+    if (boundNumberId) {
+      setViewNumberId(boundNumberId);
+      setViewAll(false);
+      initializedRef.current = true;
+    }
+  }, [open, boundNumberId]);
+
+  // Mensagens da instância selecionada (ou de todas quando "Todas" está ativo)
   const { messages, isLoading: loading, refresh: loadMessages } = useChatMessages(
     open ? viewerPhone : null,
-    undefined,
+    viewAll ? undefined : viewNumberId,
   );
 
-  // Trava na instância vinculada à conversa (regra do sistema)
-  const { effectiveNumberId, effectiveNumber, boundNumber, isLocked } = useConversationInstance(
-    viewerPhone,
-    { messages: messages as never },
-  );
+  const effectiveNumberId = viewAll ? (viewNumberId || boundNumberId || null) : (viewNumberId || null);
+  const effectiveNumber = numbers.find((n) => n.id === effectiveNumberId) || null;
 
   const { sendText, sendMedia, sendAudio, isSending } = useChatSender();
 
@@ -98,6 +116,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     const num = effectiveNumber || getSelectedNumber();
     return num?.provider === 'meta' ? 'meta' : 'zapi';
   };
+
 
   const handleSend = async () => {
     if (!newMessage.trim() || isSending) return;
@@ -416,10 +435,40 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           </div>
         )}
 
-        {/* Number selector */}
-        <div className="px-3 py-1.5 border-b flex-shrink-0">
-          <WhatsAppNumberSelector className="h-8 text-xs" />
+        {/* Number selector — filtra o histórico exibido por instância */}
+        <div className="px-3 py-1.5 border-b flex-shrink-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <WhatsAppNumberSelector
+                className="h-8 text-xs"
+                value={viewNumberId ?? null}
+                autoSelect={false}
+                onValueChange={(id) => { setViewNumberId(id); setViewAll(false); }}
+              />
+            </div>
+            <Button
+              type="button"
+              variant={viewAll ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-[10px] px-2 shrink-0"
+              onClick={() => setViewAll(v => !v)}
+              title="Ver mensagens de todas as instâncias"
+            >
+              Todas
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {viewAll
+              ? "Mostrando mensagens de todas as instâncias"
+              : viewNumberId
+                ? `Histórico da instância selecionada${isLocked && boundNumberId === viewNumberId ? " (conversa real)" : ""}`
+                : "Selecione uma instância para ver o histórico"}
+            {isLocked && boundNumber && boundNumberId !== viewNumberId && !viewAll
+              ? ` · conversa real: ${boundNumber.label || boundNumber.phone_display}`
+              : ""}
+          </p>
         </div>
+
 
         {/* Templates panel */}
         {showTemplates && (
