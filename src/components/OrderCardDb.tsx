@@ -110,6 +110,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [sendingIgDm, setSendingIgDm] = useState(false);
+
   const [sendingViaInstance, setSendingViaInstance] = useState(false);
   const { numbers: waNumbers, fetchNumbers: fetchWaNumbers } = useWhatsAppNumberStore();
   const nonApiNumbers = waNumbers.filter(
