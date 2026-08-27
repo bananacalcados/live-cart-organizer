@@ -1763,6 +1763,17 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     ? multiPayments.filter(p => isValeTrocaName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
     : (singleIsValeTroca ? totalWithDiscount : 0);
 
+  // ── Crediário: valor e quantidade de parcelas ───────────────────────────────
+  const isCrediarioName = (n?: string | null) =>
+    (n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("crediario");
+  const singleIsCrediario = !useMultiPayment && isCrediarioName(selectedPaymentName);
+  const multiCrediarioAmount = useMultiPayment
+    ? multiPayments.filter(p => isCrediarioName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
+    : 0;
+  const showCrediarioPanel = singleIsCrediario || multiCrediarioAmount > 0;
+  const crediarioAmount = singleIsCrediario ? totalWithDiscount : multiCrediarioAmount;
+  const crediarioCount = singleIsCrediario ? Number(installments || 1) : multiCrediarioInstallments;
+
   const applyVoucherForSale = async () => {
     const codigo = voucherCodeInput.trim();
     if (!codigo) return;
