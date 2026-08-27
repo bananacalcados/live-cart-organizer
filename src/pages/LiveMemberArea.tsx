@@ -44,7 +44,17 @@ import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 
 
 
-type Step = "phone" | "identity" | "name" | "signup_otp" | "confirm" | "onboarding" | "area";
+type Step =
+  | "phone"
+  | "identity"
+  | "signup_offer"
+  | "signup_confirm"
+  | "name"
+  | "signup_otp"
+  | "confirm"
+  | "onboarding"
+  | "area";
+
 type OnboardStep = "name" | "address" | "shipping" | "cpf" | "email";
 
 interface ShippingOption {
