@@ -22148,6 +22148,13 @@ export type Database = {
         Args: { p_sale_id: string }
         Returns: undefined
       }
+      pos_sales_phone_by_message: {
+        Args: { p_sale_ids: string[] }
+        Returns: {
+          phone: string
+          sale_id: string
+        }[]
+      }
       process_pos_sale_sale_event: {
         Args: { p_sale_id: string }
         Returns: undefined
