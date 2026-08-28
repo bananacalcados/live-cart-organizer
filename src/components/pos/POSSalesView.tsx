@@ -1028,13 +1028,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
-    // 💳 Crediário: gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
+    // 💳 Crediário: cliente vinculado + gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
     if (showCrediarioPanel) {
+      if (!selectedCustomer?.id) {
+        toast.error("Crediário exige cliente cadastrado e vinculado ao pedido. Selecione o cliente na etapa de identificação.");
+        setStep("customer");
+        return;
+      }
       if (!selectedCrediarioGateway) {
         toast.error("Selecione o gateway do crediário antes de finalizar.");
         setStep("payment");
         return;
       }
+
       if (crediarioSchedule.length > 0) {
         const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
         if (Math.abs(sumInst - crediarioAmount) > 0.01) {
@@ -3010,7 +3016,26 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               {/* 💳 Crediário — gateway + datas de vencimento (avulso e misto) */}
               {showCrediarioPanel && (
                 <>
+                  {!selectedCustomer?.id && (
+                    <div className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 space-y-2">
+                      <p className="text-sm font-semibold text-red-300">
+                        Crediário exige cliente vinculado ao pedido.
+                      </p>
+                      <p className="text-xs text-red-200/80">
+                        Volte à etapa de identificação e selecione (ou cadastre) o cliente para concluir a venda.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 border-red-400/40 text-red-200"
+                        onClick={() => setStep("customer")}
+                      >
+                        Ir para identificação do cliente
+                      </Button>
+                    </div>
+                  )}
                   <div className="space-y-4 p-6 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+
                     <Label className="text-lg font-semibold text-pos-white">
                       Gateway do crediário <span className="text-red-400">*</span>
                     </Label>
