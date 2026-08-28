@@ -1028,13 +1028,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
-    // 💳 Crediário: gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
+    // 💳 Crediário: cliente vinculado + gateway obrigatório + parcelas precisam somar exatamente o valor do crediário
     if (showCrediarioPanel) {
+      if (!selectedCustomer?.id) {
+        toast.error("Crediário exige cliente cadastrado e vinculado ao pedido. Selecione o cliente na etapa de identificação.");
+        setStep("customer");
+        return;
+      }
       if (!selectedCrediarioGateway) {
         toast.error("Selecione o gateway do crediário antes de finalizar.");
         setStep("payment");
         return;
       }
+
       if (crediarioSchedule.length > 0) {
         const sumInst = crediarioSchedule.reduce((s, r) => s + Number(r.amount || 0), 0);
         if (Math.abs(sumInst - crediarioAmount) > 0.01) {
