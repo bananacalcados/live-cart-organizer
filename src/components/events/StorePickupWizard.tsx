@@ -111,9 +111,6 @@ export function StorePickupWizard({
           payment_confirmed_source: "manual",
         });
       }
-      if (!payNow) {
-        Object.assign(updates, { release_to_expedition: true });
-      }
 
       await updateOrder(orderId, updates as any);
 
