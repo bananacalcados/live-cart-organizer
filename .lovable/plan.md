@@ -1,14 +1,14 @@
-# Performance + Independência: plano em 3 fases
+# Performance, Independência e Venda do Sistema (SaaS)
 
-## O diagnóstico honesto (dados de agora)
+## Parte A — O diagnóstico da lentidão (dados de agora)
 
-Olhei o estado real do banco antes de propor qualquer migração:
+Antes de propor migração, olhei o estado real do banco:
 
 - Tamanho do banco: **5.186 MB**
-- Linhas totais: **1.247.391**
+- Linhas totais: **~1,25 milhão**
 - Tabelas: **408**
 
-Isso é um banco **pequeno**. Um servidor com essa carga não deveria ficar lento — e não fica. A lentidão não vem de falta de CPU/RAM do servidor: vem de **como o app consulta os dados**. As três consultas que mais consomem tempo hoje provam isso:
+Isso é um banco **pequeno**. A lentidão não vem de falta de CPU/RAM: vem de **como o app consulta os dados**. As consultas mais caras hoje:
 
 | Consulta | Chamadas | Média | Tempo total |
 |---|---|---|---|
@@ -16,54 +16,96 @@ Isso é um banco **pequeno**. Um servidor com essa carga não deveria ficar lent
 | `SELECT * FROM chat_contacts` (sem filtro) | **67.135** | 15 ms | 16,9 min |
 | `INSERT em whatsapp_messages` | 706 | **1.298 ms** (pico 7,7 s) | 15,3 min |
 
-O que isso significa em português:
+Em português:
 
-1. **Busca de venda por telefone usa `ILIKE`** — isso ignora qualquer índice e varre a tabela inteira toda vez. É o campeão de lentidão.
-2. **A lista inteira de contatos do chat é baixada 67 mil vezes** — o app puxa a tabela toda em vez de buscar só o contato necessário.
-3. **Gravar uma mensagem de WhatsApp leva 1,3 s** — sinal clássico de excesso de triggers/índices na tabela mais escrita do sistema.
+1. **Busca de venda por telefone usa `ILIKE`** — ignora índice e varre a tabela inteira toda vez.
+2. **A lista inteira de contatos do chat é baixada 67 mil vezes** — o app puxa a tabela toda em vez de buscar só o contato.
+3. **Gravar uma mensagem de WhatsApp leva 1,3 s** — excesso de triggers/índices na tabela mais escrita do sistema.
 
-Migrar isso para um servidor maior faria essas mesmas consultas rodarem talvez 30% mais rápido — e em dois meses estaríamos de novo no mesmo lugar, agora com você pagando servidor e administrando infra. É exatamente o padrão que você descreveu: "resolve momentaneamente e volta".
-
-Por isso o plano abaixo ataca a causa primeiro, e trata independência como um objetivo separado (que é legítimo, mas não é o remédio da lentidão).
+Trocar de servidor deixaria essas mesmas consultas talvez 30% mais rápidas — e em dois meses voltaríamos ao mesmo lugar, agora com você pagando e administrando infra. É exatamente o padrão que você descreveu.
 
 ---
 
-## Fase 1 — Matar as causas da lentidão (impacto imediato)
+## Parte B — Vender o sistema para outras empresas: é possível?
 
-1. **Índices e busca por telefone**
-   - Trocar toda busca `ILIKE` em `pos_sales.customer_phone` por comparação por sufixo normalizado (DDD + 8 dígitos), com coluna indexada.
-   - Índices `pg_trgm` onde busca textual livre for mesmo necessária.
-2. **Parar de baixar tabelas inteiras**
-   - `chat_contacts`: consulta por telefone/instância em vez de `select *`; cache compartilhado com TTL no lugar das 67 mil chamadas.
-   - Auditar os demais `select('*')` sem filtro no PDV e no Chat.
-3. **Desafogar `whatsapp_messages`**
-   - Revisar triggers disparados em cada insert e mover o que não é crítico para processamento assíncrono.
-   - Revisar índices redundantes (cada índice extra custa em toda gravação).
+Sim, é possível. Mas preciso ser direto sobre o tamanho da coisa, porque a decisão certa aqui depende disso.
 
-Resultado esperado: o uso diário (PDV, Chat, cards de pedido) volta a responder rápido — sem trocar de servidor.
+Hoje o banco tem **374 tabelas e praticamente nenhuma coluna `tenant_id`** (encontrei apenas 1). Existem ~300 funções de banco e ~200 edge functions escritas assumindo que **existe uma única empresa**: a Banana Calçados.
 
-## Fase 2 — Impedir que a lentidão volte (é aqui que o padrão se quebra)
+Isso abre dois caminhos, e eles são muito diferentes em custo e risco.
 
-O que faltou nas vezes anteriores foi vigilância contínua. Sem isso, cada funcionalidade nova reintroduz consultas pesadas.
+### Caminho 1 — Banco compartilhado com `tenant_id` (o modelo "Bling/Tiny")
 
-1. **Painel interno de saúde do banco** — página admin listando as consultas mais lentas da semana, para você ver a degradação chegando antes dos clientes sentirem.
-2. **Política de retenção** — arquivar mensagens de WhatsApp e logs antigos para tabelas históricas. Hoje as tabelas de maior escrita crescem para sempre.
-3. **Regra de projeto** — toda nova tela passa a nascer com filtro e paginação obrigatórios; nada de `select *` aberto.
+Todas as empresas dividem o mesmo banco; cada linha carrega o `tenant_id` do dono; RLS filtra por empresa.
 
-## Fase 3 — Independência e controle (quando você quiser, sem pressa)
+- Exige adicionar `tenant_id` em ~374 tabelas, reescrever ~374 conjuntos de políticas RLS, revisar ~300 funções de banco e ~200 edge functions uma a uma.
+- **Todo lugar esquecido é um vazamento de dados entre clientes.** Uma função `SECURITY DEFINER` sem filtro de tenant entrega a base de clientes de uma empresa para outra. E o projeto usa muitas.
+- Vantagem: custo de infra baixíssimo por cliente, atualização instantânea para todos.
+- Realidade: é um projeto de meses, e o risco de vazamento durante a transição é alto.
 
-Independente da performance, você tem direito a controlar sua infra. Caminhos reais:
+### Caminho 2 — Um banco por cliente, mesmo código (modelo "silo") — **recomendado**
 
-- **Código (frontend + edge functions):** já sai daqui via GitHub. Você pode hospedar em VPS/Vercel/Cloudflare seu e continuar editando por aqui — cada alteração vira commit e o deploy é automático. Isso é reversível e de baixo risco. **Recomendo fazer isso já**, na Fase 1 ou 2.
-- **Banco de dados:** o Postgres pode ir para uma instância Supabase própria (self-hosted ou conta Supabase sua) ou um Postgres gerenciado. Aí você é dono do backup, do tamanho da máquina e das extensões.
-  - Custo real: cutover com janela de indisponibilidade, reconfiguração de todos os webhooks (Mercado Pago, Shopify, Meta, uazapi, WaSender), migração de secrets e dos crons.
-  - Trade-off: mais controle, mais responsabilidade operacional (backup, atualização, monitoramento são seus).
-- **Continuar editando aqui após migrar:** sim, funciona — o código continua sincronizado por Git; o que muda é para onde apontam as variáveis de banco.
+Cada empresa cliente ganha a própria instância de banco. O **código é um só**, versionado no Git; ao atualizar, o deploy vai para todas as instâncias.
+
+- **Isolamento por construção**: é fisicamente impossível o cliente A ver dados do cliente B, porque não existe conexão entre os bancos. Nada de esquecer um filtro.
+- **Performance não se mistura**: uma live pesada de um cliente não derruba o PDV de outro. Isso resolve, de graça, a preocupação de "pesar os dados".
+- **Atualização única**: exatamente como você descreveu — melhora feita aqui vai para todos, porque todos rodam o mesmo código. O que precisa de disciplina é o versionamento das **migrações de banco**, que passam a rodar em sequência em cada instância.
+- Custo: cada cliente tem sua própria infra (mais caro por cliente que o compartilhado, mas repassável na mensalidade), e você precisa de um processo automatizado de provisionamento.
+- Trabalho no código: **muito menor** — não é preciso mexer em 374 tabelas. O código já funciona; só passa a apontar para bancos diferentes.
+
+Minha recomendação é o Caminho 2. Ele entrega o mesmo resultado comercial com uma fração do risco de vazamento, e é o único que dá para executar sem parar a operação da Banana.
+
+### Módulos por cliente
+
+Independente do caminho, o controle de módulos é a parte fácil — o projeto **já tem a base**: `ProtectedRoute` com `requiredModule` e a função `get_user_allowed_modules`. O que falta:
+
+- Tabela de **licença** por instância: quais módulos estão contratados (PDV, Eventos/Live, Marketing, Fiscal, Expedição, Financeiro...).
+- O gate de módulo passa a checar **licença E permissão do usuário** — hoje só checa permissão.
+- Menu e rotas escondem o que não está contratado.
+- Um painel só seu (fora do sistema do cliente) para ligar/desligar módulo por cliente.
+
+### O que cada cliente configura sozinho
+
+Já existe estrutura para quase tudo — o que precisa é tirar o que hoje está fixo no código e mover para configuração:
+
+- **Lojas e estoque**: já é multi-loja (`pos_stores`), funciona.
+- **Conexões de WhatsApp**: já é multi-instância (`whatsapp_numbers`), funciona.
+- **Base de clientes, vendedoras, metas, comissões**: já são dados de banco.
+- **Precisa ser destravado**: gateways de pagamento, credenciais fiscais/certificado digital, integração Shopify, domínio de checkout, textos e regras hoje escritos com o nome/regras da Banana (frete de GV, retirada só em GV, e-mail `@cliente.bananacalcados.com.br`, identidade visual).
 
 ---
 
-## Recomendação
+## Parte C — Ordem de execução recomendada
 
-Começar pela **Fase 1**. Ela é rápida, não tem risco de cutover e resolve o sintoma que está te incomodando hoje. A Fase 3 (independência) é uma decisão estratégica sua, não uma emergência técnica — e fica muito mais segura de executar depois que as consultas estiverem saudáveis, porque aí você migra um sistema eficiente em vez de levar o problema junto.
+**Fase 1 — Performance (fazer já, sem depender de nada)**
+1. Substituir a busca `ILIKE` por telefone em `pos_sales` por busca indexada por sufixo (DDD + 8 dígitos).
+2. Parar de baixar `chat_contacts` inteira: consulta filtrada + cache com TTL.
+3. Desafogar `whatsapp_messages`: revisar triggers do insert e índices redundantes.
+4. Retenção: arquivar `dispatch_recipients` (636 mil linhas), `webhook_events_raw` (155 mil) e mensagens antigas.
 
-Se aprovar, começo pela Fase 1, item 1 (busca por telefone em `pos_sales`), que sozinha é o maior ganho isolado.
+Isso vale por si só — e vale ainda mais depois, porque você não quer vender para 10 clientes um sistema com esses gargalos replicados 10 vezes.
+
+**Fase 2 — Não deixar a lentidão voltar**
+5. Painel interno de saúde do banco (consultas mais lentas da semana), para ver a degradação chegando.
+6. Regra de projeto: toda tela nova nasce com filtro e paginação; nada de `select *` aberto.
+
+**Fase 3 — Preparar para SaaS (sem ainda ter cliente)**
+7. Tabela de licença + gate de módulos ligado à licença.
+8. Extrair para configuração tudo que hoje está fixo com a marca e as regras da Banana.
+9. Definir e testar o processo de migração versionada de banco (a peça crítica do modelo silo).
+
+**Fase 4 — Independência de infra**
+10. Frontend e edge functions hospedados em infra sua via GitHub — continua editável aqui, cada alteração vira commit com deploy automático.
+11. Banco em instância própria, com cutover planejado (reconfigurar webhooks de Mercado Pago, Shopify, Meta, uazapi, WaSender; migrar secrets e crons).
+
+**Fase 5 — Primeiro cliente**
+12. Provisionamento automatizado: criar instância, rodar migrações, semear dados iniciais, ativar módulos contratados.
+13. Onboarding: o cliente cadastra lojas, estoque, WhatsApp, gateways e dados fiscais dele.
+
+---
+
+## Recomendação final
+
+Não misturar as duas coisas. A Fase 1 é rápida, sem risco, e resolve a dor de hoje. A virada para SaaS é uma decisão de negócio que fica muito mais barata e segura depois que o sistema estiver eficiente — senão você replica os gargalos atuais em cada cliente novo.
+
+Se aprovar, começo pela Fase 1, item 1 (busca por telefone em `pos_sales`), que é o maior ganho isolado.
