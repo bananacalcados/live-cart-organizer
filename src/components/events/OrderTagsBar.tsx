@@ -130,28 +130,28 @@ export function OrderTagsBar({ orderId }: Props) {
   const applied = allTags.filter((t) => selected.includes(t.id));
 
   return (
-    <div className="flex flex-wrap items-center gap-1 mb-2">
-      {applied.map((tag) => (
-        <span
-          key={tag.id}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-          style={{ backgroundColor: tag.color }}
+    <>
+      {/* Marca d'água diagonal sobre todo o card — puramente visual, não bloqueia cliques */}
+      {applied.length > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden select-none"
         >
-          {tag.name}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggle(tag.id);
-            }}
-            className="opacity-70 hover:opacity-100"
-            title="Remover etiqueta"
-          >
-            <X className="h-2.5 w-2.5" />
-          </button>
-        </span>
-      ))}
+          <div className="flex flex-col items-center gap-6 -rotate-[24deg]">
+            {applied.map((tag) => (
+              <span
+                key={tag.id}
+                className="whitespace-nowrap text-3xl font-black uppercase tracking-[0.2em] opacity-[0.13]"
+                style={{ color: tag.color }}
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
+      <div className="relative z-10 flex flex-wrap items-center gap-1 mb-2">
       <Popover>
         <PopoverTrigger asChild>
           <Button
