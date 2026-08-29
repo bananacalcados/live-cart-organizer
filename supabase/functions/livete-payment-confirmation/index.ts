@@ -130,6 +130,7 @@ serve(async (req) => {
     const sendNumberId = event?.whatsapp_number_id;
     if (!sendNumberId) {
       console.log(`[livete-payment-confirmation] No WhatsApp number for event of order ${orderId}`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_whatsapp_number' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
