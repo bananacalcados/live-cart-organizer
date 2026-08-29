@@ -11957,6 +11957,8 @@ export type Database = {
           payment_method_label: string | null
           payment_on_delivery: boolean
           payment_window_expires_at: string | null
+          pickup_date: string | null
+          pickup_pay_at_store: boolean
           pickup_store_id: string | null
           pos_routing_claimed_at: string | null
           pos_sale_id: string | null
@@ -12017,6 +12019,8 @@ export type Database = {
           payment_method_label?: string | null
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
+          pickup_date?: string | null
+          pickup_pay_at_store?: boolean
           pickup_store_id?: string | null
           pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
@@ -12077,6 +12081,8 @@ export type Database = {
           payment_method_label?: string | null
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
+          pickup_date?: string | null
+          pickup_pay_at_store?: boolean
           pickup_store_id?: string | null
           pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
@@ -13722,6 +13728,51 @@ export type Database = {
           },
         ]
       }
+      pos_pickup_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          customer_name: string | null
+          dismissed_at: string | null
+          dismissed_by: string | null
+          id: string
+          order_id: string | null
+          sale_id: string | null
+          store_id: string
+          target_date: string | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          customer_name?: string | null
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          id?: string
+          order_id?: string | null
+          sale_id?: string | null
+          store_id: string
+          target_date?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          customer_name?: string | null
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          id?: string
+          order_id?: string | null
+          sale_id?: string | null
+          store_id?: string
+          target_date?: string | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_prizes: {
         Row: {
           created_at: string
@@ -14573,6 +14624,7 @@ export type Database = {
           invoice_number: string | null
           invoice_pdf_url: string | null
           is_conditional: boolean
+          is_store_pickup: boolean
           link_page_catalog_product_id: string | null
           link_page_id: string | null
           link_page_item_id: string | null
@@ -14594,6 +14646,7 @@ export type Database = {
           payment_method: string | null
           payment_method_detail: string | null
           payment_on_delivery: boolean
+          pickup_date: string | null
           pickup_store_id: string | null
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at: string | null
@@ -14672,6 +14725,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          is_store_pickup?: boolean
           link_page_catalog_product_id?: string | null
           link_page_id?: string | null
           link_page_item_id?: string | null
@@ -14693,6 +14747,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          pickup_date?: string | null
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at?: string | null
@@ -14771,6 +14826,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          is_store_pickup?: boolean
           link_page_catalog_product_id?: string | null
           link_page_id?: string | null
           link_page_item_id?: string | null
@@ -14792,6 +14848,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          pickup_date?: string | null
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at?: string | null

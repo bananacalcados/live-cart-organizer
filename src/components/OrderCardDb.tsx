@@ -11,6 +11,8 @@ import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { InstagramDMChat } from "./events/InstagramDMChat";
 import { OrderTagsBar } from "./events/OrderTagsBar";
+import { StorePickupWizard } from "./events/StorePickupWizard";
+
 
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
@@ -92,6 +94,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showFullViewDialog, setShowFullViewDialog] = useState(false);
   const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
   const [showPayOnDeliveryDialog, setShowPayOnDeliveryDialog] = useState(false);
+  const [showPickupWizard, setShowPickupWizard] = useState(false);
+
 
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
@@ -555,16 +559,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handlePickup = async (e: React.MouseEvent) => {
+  const handlePickup = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await storeMove(order.id, 'awaiting_pickup');
-      await supabase.from('orders').update({ delivery_method: 'pickup' }).eq('id', order.id);
-      toast.success('Pedido movido para Aguardando Retirada');
-    } catch {
-      toast.error('Erro ao mover pedido');
-    }
+    setShowPickupWizard(true);
   };
+
 
   const handleMarkDelivered = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1131,7 +1130,18 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                   Pagar na entrega
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs gap-1 border-stage-awaiting-pickup/50 text-stage-awaiting-pickup hover:bg-stage-awaiting-pickup/10"
+                onClick={handlePickup}
+              >
+                <MapPin className="h-3 w-3" />
+                Retirar na loja
+              </Button>
             </>
+
           )}
 
 
@@ -1357,6 +1367,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
         total={finalValue}
       />
+
+      <StorePickupWizard
+        open={showPickupWizard}
+        onOpenChange={setShowPickupWizard}
+        orderId={order.id}
+        eventId={order.event_id}
+        alreadyPaid={!!(order.is_paid || order.paid_externally)}
+        customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
 
 
 

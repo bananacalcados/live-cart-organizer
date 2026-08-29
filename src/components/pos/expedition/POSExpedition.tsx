@@ -38,6 +38,8 @@ import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 interface Props {
   storeId: string;
   storeName?: string;
+  /** Abre a Expedição já com este pedido expandido (vindo do aviso de retirada). */
+  focusSaleId?: string | null;
 }
 
 const stageStyles: Record<ExpStage, { chip: string; ring: string; text: string }> = {
@@ -56,14 +58,15 @@ const stageIcon: Record<ExpStage, any> = {
   concluido: CheckCircle2,
 };
 
-export function POSExpedition({ storeId, storeName }: Props) {
+export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(focusSaleId || null);
+  useEffect(() => { if (focusSaleId) setExpanded(focusSaleId); }, [focusSaleId]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
@@ -948,6 +951,15 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               </Badge>
                             )}
                           </div>
+
+                          {(o.is_store_pickup || o.pickup_date) && (
+                            <div className="mt-2 rounded-lg px-4 py-2 border-4 bg-stage-awaiting-pickup/15 border-stage-awaiting-pickup text-stage-awaiting-pickup">
+                              <div className="text-lg font-black uppercase tracking-wide">
+                                📍 RETIRADA NA LOJA
+                                {o.pickup_date ? ` — ${o.pickup_date.split("-").reverse().join("/")}` : ""}
+                              </div>
+                            </div>
+                          )}
 
                           {o.payment_on_delivery && (
                             <div className="mt-2 rounded-lg px-4 py-3 border-4 bg-stage-awaiting-mototaxi text-white border-stage-awaiting-mototaxi">

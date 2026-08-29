@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, paid_externally, payment_method_label, installments, payment_on_delivery, expected_payment_method, release_to_expedition")
+      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, paid_externally, payment_method_label, installments, payment_on_delivery, expected_payment_method, release_to_expedition, pickup_store_id, pickup_date, pickup_pay_at_store")
       .eq("id", order_id)
       .maybeSingle();
 
@@ -63,7 +63,10 @@ Deno.serve(async (req) => {
     // Aceitar eventos "site" também: rotear para a loja Site/Live (fallback).
     // Antes rejeitávamos site → agora entra como sale_type='live' em Site/Live.
     const isSiteChannel = event?.channel === "site";
-    const resolvedStoreId = event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
+    // Retirada agendada na loja: a loja escolhida no assistente tem prioridade
+    // sobre a loja padrão do evento.
+    const resolvedStoreId =
+      (order as any).pickup_store_id || event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
 
     if (!resolvedStoreId) {
       await releaseClaim();
@@ -172,6 +175,9 @@ Deno.serve(async (req) => {
         payment_method: (order as any).payment_method_label || null,
         payment_on_delivery: payOnDelivery,
         expected_payment_method: payOnDelivery ? (order as any).expected_payment_method || null : null,
+        pickup_date: (order as any).pickup_date || null,
+        is_store_pickup: !!(order as any).pickup_store_id,
+        shipping_carrier: (order as any).pickup_store_id ? "Retirada na loja" : undefined,
         notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}${payOnDelivery ? " · PAGAMENTO NA ENTREGA" : ""}`,
         payment_details: {
           source: "live_event_auto_route",

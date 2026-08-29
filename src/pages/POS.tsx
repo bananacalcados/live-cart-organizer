@@ -28,6 +28,7 @@ import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
 import { POSShipments } from "@/components/pos/POSShipments";
 import { POSExpedition } from "@/components/pos/expedition/POSExpedition";
+import { POSPickupAlerts } from "@/components/pos/POSPickupAlerts";
 import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineHub } from "@/components/pos/POSOnlineHub";
@@ -74,6 +75,7 @@ export default function POS() {
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [customer360Query, setCustomer360Query] = useState<string | undefined>(undefined);
+  const [focusSaleId, setFocusSaleId] = useState<string | null>(null);
 
   // Listener for "Ver Perfil 360°" event from customer form
   useEffect(() => {
@@ -311,7 +313,7 @@ export default function POS() {
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} onExitFullScreen={!isMobile ? () => setSection("dashboard") : undefined} />}
         {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
-        {section === "expedition" && <POSExpedition storeId={selectedStore} />}
+        {section === "expedition" && <POSExpedition storeId={selectedStore} focusSaleId={focusSaleId} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
         {section === "meta-pixel" && (
           <POSMetaPixelDashboard storeId={selectedStore} onBack={() => setSection("dashboard")} />
@@ -325,6 +327,13 @@ export default function POS() {
         {section === "seller-dashboard" && <POSSellerDashboard storeId={selectedStore} />}
         {section === "customers" && <POSCustomersHub storeId={selectedStore} initialQuery={customer360Query} />}
       </div>
+
+      {selectedStore && (
+        <POSPickupAlerts
+          storeId={selectedStore}
+          onOpenSale={(saleId) => { setFocusSaleId(saleId); setSection("expedition"); }}
+        />
+      )}
 
       {/* Config PIN Dialog */}
       <Dialog open={showConfigPin} onOpenChange={setShowConfigPin}>
