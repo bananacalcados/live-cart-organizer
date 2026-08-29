@@ -38,6 +38,8 @@ import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 interface Props {
   storeId: string;
   storeName?: string;
+  /** Abre a Expedição já com este pedido expandido (vindo do aviso de retirada). */
+  focusSaleId?: string | null;
 }
 
 const stageStyles: Record<ExpStage, { chip: string; ring: string; text: string }> = {
@@ -56,14 +58,14 @@ const stageIcon: Record<ExpStage, any> = {
   concluido: CheckCircle2,
 };
 
-export function POSExpedition({ storeId, storeName }: Props) {
+export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(focusSaleId || null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
