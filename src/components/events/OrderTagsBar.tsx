@@ -235,6 +235,7 @@ export function OrderTagsBar({ orderId }: Props) {
           </div>
         </PopoverContent>
       </Popover>
-    </div>
+      </div>
+    </>
   );
 }
