@@ -1357,6 +1357,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         total={finalValue}
       />
 
+      <StorePickupWizard
+        open={showPickupWizard}
+        onOpenChange={setShowPickupWizard}
+        orderId={order.id}
+        eventId={order.event_id}
+        alreadyPaid={!!(order.is_paid || order.paid_externally)}
+        customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
+        total={finalValue}
+      />
+
+
 
 
 
