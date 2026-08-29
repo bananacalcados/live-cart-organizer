@@ -80,6 +80,7 @@ serve(async (req) => {
 
     if (!customer?.whatsapp) {
       console.log(`[livete-payment-confirmation] No WhatsApp for customer of order ${orderId}`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_whatsapp' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
