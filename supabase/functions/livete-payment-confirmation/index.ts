@@ -98,6 +98,7 @@ serve(async (req) => {
     const products = (order.products as any[]) || [];
     if (products.length === 0) {
       console.log(`[livete-payment-confirmation] Order ${orderId} has no products`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_products' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
