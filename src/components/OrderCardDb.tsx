@@ -625,7 +625,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
   return (
     <div
-      className={`order-card ${isDragging ? "dragging" : ""} ${
+      className={`order-card relative ${isDragging ? "dragging" : ""} ${
         hasUnread ? "ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
       }`}
     >
