@@ -949,6 +949,15 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             )}
                           </div>
 
+                          {(o.is_store_pickup || o.pickup_date) && (
+                            <div className="mt-2 rounded-lg px-4 py-2 border-4 bg-stage-awaiting-pickup/15 border-stage-awaiting-pickup text-stage-awaiting-pickup">
+                              <div className="text-lg font-black uppercase tracking-wide">
+                                📍 RETIRADA NA LOJA
+                                {o.pickup_date ? ` — ${o.pickup_date.split("-").reverse().join("/")}` : ""}
+                              </div>
+                            </div>
+                          )}
+
                           {o.payment_on_delivery && (
                             <div className="mt-2 rounded-lg px-4 py-3 border-4 bg-stage-awaiting-mototaxi text-white border-stage-awaiting-mototaxi">
                               <div className="text-xl font-black uppercase tracking-wide">
