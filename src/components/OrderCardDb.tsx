@@ -555,16 +555,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handlePickup = async (e: React.MouseEvent) => {
+  const handlePickup = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await storeMove(order.id, 'awaiting_pickup');
-      await supabase.from('orders').update({ delivery_method: 'pickup' }).eq('id', order.id);
-      toast.success('Pedido movido para Aguardando Retirada');
-    } catch {
-      toast.error('Erro ao mover pedido');
-    }
+    setShowPickupWizard(true);
   };
+
 
   const handleMarkDelivered = async (e: React.MouseEvent) => {
     e.stopPropagation();
