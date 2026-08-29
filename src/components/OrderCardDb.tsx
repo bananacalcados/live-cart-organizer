@@ -647,7 +647,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       </div>
 
+      {/* Etiquetas do pedido (reutilizáveis entre lives) */}
+      <OrderTagsBar orderId={order.id} />
+
       {/* AI Paused indicator */}
+
       {order.ai_paused && (
         <div className="flex items-center gap-1.5 mb-2 px-2 py-1 bg-destructive/10 border border-destructive/30 rounded-md">
           <Bot className="h-3 w-3 text-destructive" />
