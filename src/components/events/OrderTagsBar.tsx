@@ -129,20 +129,33 @@ export function OrderTagsBar({ orderId }: Props) {
 
   const applied = allTags.filter((t) => selected.includes(t.id));
 
+  /** Fonte adaptativa: quanto maior o texto (e quanto mais etiquetas), menor a fonte. */
+  const fontSizeFor = (text: string) => {
+    const len = Math.max(1, text.trim().length);
+    // ~90% da largura útil de um card estreito (~230px), considerando tracking largo
+    let px = 200 / (len * 0.78);
+    if (applied.length > 1) px *= applied.length === 2 ? 0.8 : 0.62;
+    return Math.max(9, Math.min(26, px));
+  };
+
   return (
     <>
       {/* Marca d'água diagonal sobre todo o card — puramente visual, não bloqueia cliques */}
       {applied.length > 0 && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden select-none"
+          className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden select-none px-2"
         >
-          <div className="flex flex-col items-center gap-6 -rotate-[24deg]">
+          <div className="flex w-full flex-col items-center gap-2 -rotate-[24deg]">
             {applied.map((tag) => (
               <span
                 key={tag.id}
-                className="whitespace-nowrap text-3xl font-black uppercase tracking-[0.2em] opacity-[0.13]"
-                style={{ color: tag.color }}
+                className="max-w-full truncate text-center font-black uppercase leading-tight opacity-[0.15]"
+                style={{
+                  color: tag.color,
+                  fontSize: `${fontSizeFor(tag.name)}px`,
+                  letterSpacing: tag.name.length > 14 ? "0.04em" : "0.14em",
+                }}
               >
                 {tag.name}
               </span>
@@ -150,6 +163,7 @@ export function OrderTagsBar({ orderId }: Props) {
           </div>
         </div>
       )}
+
 
       <div className="relative z-10 flex flex-wrap items-center gap-1 mb-2">
       <Popover>
