@@ -11,6 +11,8 @@ import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { InstagramDMChat } from "./events/InstagramDMChat";
 import { OrderTagsBar } from "./events/OrderTagsBar";
+import { StorePickupWizard } from "./events/StorePickupWizard";
+
 
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
