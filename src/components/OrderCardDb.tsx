@@ -92,6 +92,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showFullViewDialog, setShowFullViewDialog] = useState(false);
   const [showMarkPaidDialog, setShowMarkPaidDialog] = useState(false);
   const [showPayOnDeliveryDialog, setShowPayOnDeliveryDialog] = useState(false);
+  const [showPickupWizard, setShowPickupWizard] = useState(false);
+
 
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
