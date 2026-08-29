@@ -54,6 +54,23 @@ serve(async (req) => {
       });
     }
 
+    // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
+    const { error: claimError } = await supabase
+      .from('livete_payment_confirmation_sent')
+      .insert({ order_id: orderId });
+
+    if (claimError) {
+      console.log(`[livete-payment-confirmation] Duplicate suppressed for order ${orderId}: ${claimError.message}`);
+      return new Response(JSON.stringify({ handled: false, reason: 'already_sent' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Release the claim if we bail out before actually sending
+    const releaseClaim = async () => {
+      await supabase.from('livete_payment_confirmation_sent').delete().eq('order_id', orderId);
+    };
+
     // 2. Get customer phone
     const { data: customer } = await supabase
       .from('customers')
