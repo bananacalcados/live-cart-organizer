@@ -1130,7 +1130,18 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                   Pagar na entrega
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs gap-1 border-stage-awaiting-pickup/50 text-stage-awaiting-pickup hover:bg-stage-awaiting-pickup/10"
+                onClick={handlePickup}
+              >
+                <MapPin className="h-3 w-3" />
+                Retirar na loja
+              </Button>
             </>
+
           )}
 
 
