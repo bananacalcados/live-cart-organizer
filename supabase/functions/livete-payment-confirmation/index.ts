@@ -54,6 +54,23 @@ serve(async (req) => {
       });
     }
 
+    // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
+    const { error: claimError } = await supabase
+      .from('livete_payment_confirmation_sent')
+      .insert({ order_id: orderId });
+
+    if (claimError) {
+      console.log(`[livete-payment-confirmation] Duplicate suppressed for order ${orderId}: ${claimError.message}`);
+      return new Response(JSON.stringify({ handled: false, reason: 'already_sent' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Release the claim if we bail out before actually sending
+    const releaseClaim = async () => {
+      await supabase.from('livete_payment_confirmation_sent').delete().eq('order_id', orderId);
+    };
+
     // 2. Get customer phone
     const { data: customer } = await supabase
       .from('customers')
@@ -63,6 +80,7 @@ serve(async (req) => {
 
     if (!customer?.whatsapp) {
       console.log(`[livete-payment-confirmation] No WhatsApp for customer of order ${orderId}`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_whatsapp' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -80,6 +98,7 @@ serve(async (req) => {
     const products = (order.products as any[]) || [];
     if (products.length === 0) {
       console.log(`[livete-payment-confirmation] Order ${orderId} has no products`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_products' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -111,6 +130,7 @@ serve(async (req) => {
     const sendNumberId = event?.whatsapp_number_id;
     if (!sendNumberId) {
       console.log(`[livete-payment-confirmation] No WhatsApp number for event of order ${orderId}`);
+      await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'no_whatsapp_number' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -9980,6 +9980,24 @@ export type Database = {
         }
         Relationships: []
       }
+      livete_payment_confirmation_sent: {
+        Row: {
+          order_id: string
+          phone: string | null
+          sent_at: string
+        }
+        Insert: {
+          order_id: string
+          phone?: string | null
+          sent_at?: string
+        }
+        Update: {
+          order_id?: string
+          phone?: string | null
+          sent_at?: string
+        }
+        Relationships: []
+      }
       livete_presenter_alerts: {
         Row: {
           alert_type: string
