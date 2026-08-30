@@ -135,7 +135,8 @@ export default function PresenterDashboard() {
 
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
-      const subtotal = products.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+      const subtotal = orderNetValue(o as any);
+
       const cust = customerMap.get(o.customer_id);
       const lastSent = o.last_sent_message_at as string | null;
       const lastCustomer = o.last_customer_message_at as string | null;
