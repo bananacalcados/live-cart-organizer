@@ -16,6 +16,8 @@ import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
+
 
 interface PresenterAlert {
   id: string;
@@ -116,7 +118,7 @@ export default function PresenterDashboard() {
     if (!eventId) return;
     const { data: ordersData } = await supabase
       .from("orders")
-      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
+      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
@@ -133,7 +135,8 @@ export default function PresenterDashboard() {
 
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
-      const subtotal = products.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+      const subtotal = orderNetValue(o as any);
+
       const cust = customerMap.get(o.customer_id);
       const lastSent = o.last_sent_message_at as string | null;
       const lastCustomer = o.last_customer_message_at as string | null;
@@ -154,13 +157,11 @@ export default function PresenterDashboard() {
 
     setOrders(mapped);
 
-    // Metrics
-    const paidOrders = ordersData.filter(o => o.is_paid);
-    const totalRevenue = paidOrders.reduce((s, o) => {
-      const prods = (o.products as any[]) || [];
-      return s + prods.reduce((ps: number, p: any) => ps + Number(p.price || 0) * Number(p.quantity || 1), 0);
-    }, 0);
-    const pendingOrders = ordersData.filter(o => !o.is_paid && o.stage !== "cancelled");
+    // Metrics (padronizado: cancelados fora, desconto aplicado, mesmo critério de pago)
+    const paidOrders = ordersData.filter((o) => isRevenuePaid(o as any));
+    const totalRevenue = paidOrders.reduce((s, o) => s + orderNetValue(o as any), 0);
+    const pendingOrders = ordersData.filter((o) => !isRevenuePaid(o as any) && o.stage !== "cancelled");
+
 
     setMetrics({
       totalPaid: paidOrders.length,
