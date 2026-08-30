@@ -154,13 +154,11 @@ export default function PresenterDashboard() {
 
     setOrders(mapped);
 
-    // Metrics
-    const paidOrders = ordersData.filter(o => o.is_paid);
-    const totalRevenue = paidOrders.reduce((s, o) => {
-      const prods = (o.products as any[]) || [];
-      return s + prods.reduce((ps: number, p: any) => ps + Number(p.price || 0) * Number(p.quantity || 1), 0);
-    }, 0);
-    const pendingOrders = ordersData.filter(o => !o.is_paid && o.stage !== "cancelled");
+    // Metrics (padronizado: cancelados fora, desconto aplicado, mesmo critério de pago)
+    const paidOrders = ordersData.filter((o) => isRevenuePaid(o as any));
+    const totalRevenue = paidOrders.reduce((s, o) => s + orderNetValue(o as any), 0);
+    const pendingOrders = ordersData.filter((o) => !isRevenuePaid(o as any) && o.stage !== "cancelled");
+
 
     setMetrics({
       totalPaid: paidOrders.length,
