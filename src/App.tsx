@@ -42,6 +42,7 @@ const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
 const LiveRedirectPage = lazy(() => import("./pages/LiveRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
 const ConfortoLP = lazy(() => import("./pages/ConfortoLP"));
+const PublicTracking = lazy(() => import("./pages/PublicTracking"));
 
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
