@@ -2,6 +2,8 @@
 // Cron a cada 10 min — consulta SEFAZ via BrasilNFe para notas pendentes/sent
 // e atualiza o status. Rede de segurança caso o webhook não chegue.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,13 +61,17 @@ Deno.serve(async (req) => {
 
         if (codigo === 100) { // Autorizada
           newStatus = "authorized";
+          // Decodifica XML/DANFE em base64, se a consulta os devolver.
+          const files = await persistFiscalFiles(supabase, respBody, doc.chave_acesso);
           extras = {
             protocolo: respBody.Protocolo || respBody.NumeroProtocolo,
             data_autorizacao: respBody.DataAutorizacao || new Date().toISOString(),
             xml_url: respBody.XmlUrl || respBody.UrlXml,
-            danfe_url: respBody.DanfeUrl || respBody.UrlDanfe,
+            danfe_url: files.danfe_url || respBody.DanfeUrl || respBody.UrlDanfe,
+            ...(files.xml_content ? { xml_content: files.xml_content } : {}),
           };
         } else if (codigo === 101 || codigo === 135) { // Cancelada
+
           newStatus = "cancelled";
         } else if (codigo === 110 || codigo === 301 || codigo === 302) { // Denegada
           newStatus = "denied";

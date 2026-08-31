@@ -50,6 +50,8 @@
 // Veja mem://features/fiscal/nfe-payload-golden-template para detalhes.
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -300,11 +302,18 @@ Deno.serve(async (req) => {
     const ret = respJson?.ReturnNF || {};
     const ok = !!ret.Ok && !!ret.ChaveNF;
     const chave = ret.ChaveNF || null;
+
+    // BrasilNFe devolve XML e DANFCe em base64 — decodificar e persistir.
+    // Sem isso a nota fica autorizada mas fora do arquivo XML da contabilidade.
+    const fiscalFiles = ok ? await persistFiscalFiles(supabase, respJson, chave) : {};
+
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
     const serieRet = ret.Serie ? Number(ret.Serie) : 1;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
     const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
+
+
 
     // Detecta SEFAZ fora do ar → fila de contingência (a venda continua válida).
     // Códigos: 108 (paralisado momentâneo), 109 (sem previsão), 999 (erro comunic),
@@ -330,7 +339,10 @@ Deno.serve(async (req) => {
       numero: numeroRet, serie: serieRet,
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
-      danfe_url: buildRenderableDanfeUrl(respJson?.DanfeUrl || respJson?.danfe_url || null),
+      xml_content: (fiscalFiles as any).xml_content ?? null,
+      danfe_url: (fiscalFiles as any).danfe_url
+        || buildRenderableDanfeUrl(respJson?.DanfeUrl || respJson?.danfe_url || null),
+
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
       rejection_code: ok ? null : (codSefaz ? String(codSefaz) : (httpStatus ? String(httpStatus) : "NETWORK")),
       rejection_message: ok ? null : (errorMsg || respText.slice(0, 500) || "Erro desconhecido"),
