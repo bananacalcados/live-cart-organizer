@@ -300,11 +300,18 @@ Deno.serve(async (req) => {
     const ret = respJson?.ReturnNF || {};
     const ok = !!ret.Ok && !!ret.ChaveNF;
     const chave = ret.ChaveNF || null;
+
+    // BrasilNFe devolve XML e DANFCe em base64 — decodificar e persistir.
+    // Sem isso a nota fica autorizada mas fora do arquivo XML da contabilidade.
+    const fiscalFiles = ok ? await persistFiscalFiles(supabase, respJson, chave) : {};
+
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
     const serieRet = ret.Serie ? Number(ret.Serie) : 1;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
     const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
+
+
 
     // Detecta SEFAZ fora do ar → fila de contingência (a venda continua válida).
     // Códigos: 108 (paralisado momentâneo), 109 (sem previsão), 999 (erro comunic),
