@@ -50,6 +50,8 @@
 // Veja mem://features/fiscal/nfe-payload-golden-template para detalhes.
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
