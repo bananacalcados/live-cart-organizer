@@ -59,13 +59,17 @@ Deno.serve(async (req) => {
 
         if (codigo === 100) { // Autorizada
           newStatus = "authorized";
+          // Decodifica XML/DANFE em base64, se a consulta os devolver.
+          const files = await persistFiscalFiles(supabase, respBody, doc.chave_acesso);
           extras = {
             protocolo: respBody.Protocolo || respBody.NumeroProtocolo,
             data_autorizacao: respBody.DataAutorizacao || new Date().toISOString(),
             xml_url: respBody.XmlUrl || respBody.UrlXml,
-            danfe_url: respBody.DanfeUrl || respBody.UrlDanfe,
+            danfe_url: files.danfe_url || respBody.DanfeUrl || respBody.UrlDanfe,
+            ...(files.xml_content ? { xml_content: files.xml_content } : {}),
           };
         } else if (codigo === 101 || codigo === 135) { // Cancelada
+
           newStatus = "cancelled";
         } else if (codigo === 110 || codigo === 301 || codigo === 302) { // Denegada
           newStatus = "denied";
