@@ -2,6 +2,8 @@
 // Cron a cada 10 min — consulta SEFAZ via BrasilNFe para notas pendentes/sent
 // e atualiza o status. Rede de segurança caso o webhook não chegue.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
