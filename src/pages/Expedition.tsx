@@ -10,7 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock, SearchCheck, ArrowLeftRight, ShieldAlert } from 'lucide-react';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock, SearchCheck, ArrowLeftRight, ShieldAlert, MapPin } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -23,6 +23,7 @@ import { SupportDashboard } from '@/components/expedition/SupportDashboard';
 import { ExpeditionWhatsApp } from '@/components/expedition/ExpeditionWhatsApp';
 import { OnlineExchanges } from '@/components/expedition/OnlineExchanges';
 import { ChargebacksDashboard } from '@/components/expedition/ChargebacksDashboard';
+import { ShipmentSimulations } from '@/components/expedition/ShipmentSimulations';
 
 const STEPS = [
   { id: 'orders', label: 'Pedidos', icon: Package, description: 'Sincronizar e visualizar' },
@@ -337,6 +338,17 @@ export default function Expedition() {
               <span className="hidden md:inline font-medium">Chargebacks</span>
             </button>
             <button
+              onClick={() => setActiveStep('simu_envios')}
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
+                activeStep === 'simu_envios'
+                  ? 'bg-amber-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <MapPin className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden md:inline font-medium">SIMU ENVIOS</span>
+            </button>
+            <button
               onClick={() => setActiveStep('returns')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'returns'
@@ -458,6 +470,7 @@ export default function Expedition() {
             )}
             {activeStep === 'online_exchanges' && <OnlineExchanges />}
             {activeStep === 'chargebacks' && <ChargebacksDashboard />}
+            {activeStep === 'simu_envios' && <ShipmentSimulations />}
 
             {/* Next Step Button (show on workflow steps, not support/returns) */}
             {STEPS.some(s => s.id === activeStep) && activeStep !== 'manifest' && (
