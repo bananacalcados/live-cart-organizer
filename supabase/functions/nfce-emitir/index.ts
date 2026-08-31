@@ -339,7 +339,10 @@ Deno.serve(async (req) => {
       numero: numeroRet, serie: serieRet,
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
-      danfe_url: buildRenderableDanfeUrl(respJson?.DanfeUrl || respJson?.danfe_url || null),
+      xml_content: (fiscalFiles as any).xml_content ?? null,
+      danfe_url: (fiscalFiles as any).danfe_url
+        || buildRenderableDanfeUrl(respJson?.DanfeUrl || respJson?.danfe_url || null),
+
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
       rejection_code: ok ? null : (codSefaz ? String(codSefaz) : (httpStatus ? String(httpStatus) : "NETWORK")),
       rejection_message: ok ? null : (errorMsg || respText.slice(0, 500) || "Erro desconhecido"),
