@@ -15,7 +15,7 @@ export function InstallPrompt() {
   useEffect(() => {
     // Hide on transparent checkout routes (public payment links)
     const path = window.location.pathname;
-    const isCheckoutRoute = /^\/(checkout|checkout-loja|pay|pagar|r\/)/i.test(path);
+    const isCheckoutRoute = /^\/(checkout|checkout-loja|pay|pagar|rastreio|r\/)/i.test(path);
     if (isCheckoutRoute) return;
 
     // Check if dismissed recently

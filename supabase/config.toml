@@ -313,3 +313,6 @@ verify_jwt = false
 
 [functions.event-prize-wheel]
 verify_jwt = false
+
+[functions.shipment-tracking-public]
+verify_jwt = false

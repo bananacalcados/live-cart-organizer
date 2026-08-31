@@ -17728,6 +17728,72 @@ export type Database = {
         }
         Relationships: []
       }
+      shipment_simulations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          destination_city: string
+          destination_state: string
+          id: string
+          manual_offset_days: number
+          notes: string | null
+          order_id: string | null
+          order_reference: string | null
+          origin_city: string
+          origin_state: string
+          posted_at: string
+          status: string
+          step_interval_days: number
+          stops: Json
+          tracking_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          destination_city: string
+          destination_state: string
+          id?: string
+          manual_offset_days?: number
+          notes?: string | null
+          order_id?: string | null
+          order_reference?: string | null
+          origin_city: string
+          origin_state: string
+          posted_at?: string
+          status?: string
+          step_interval_days?: number
+          stops?: Json
+          tracking_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          destination_city?: string
+          destination_state?: string
+          id?: string
+          manual_offset_days?: number
+          notes?: string | null
+          order_id?: string | null
+          order_reference?: string | null
+          origin_city?: string
+          origin_state?: string
+          posted_at?: string
+          status?: string
+          step_interval_days?: number
+          stops?: Json
+          tracking_code?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shipping_rules: {
         Row: {
           carrier_match: string | null
