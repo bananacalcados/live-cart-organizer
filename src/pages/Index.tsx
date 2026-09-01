@@ -202,29 +202,34 @@ const Index = () => {
           </div>
         )}
 
-        <div className="container pt-2">
-          <StatsBar orders={orders} />
-        </div>
+        {!liveCompact && (
+          <div className="container pt-2">
+            <StatsBar orders={orders} />
+          </div>
+        )}
 
-        {currentEventId && <EventInnerDashboard eventId={currentEventId} />}
+        {!liveCompact && currentEventId && <EventInnerDashboard eventId={currentEventId} />}
 
         {currentEventId && currentEvent && (
           <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
         )}
-        
-        <EventPaymentCardsBar
-          orders={orders}
-          onSelectOrder={handleEditOrder}
-        />
 
-        {currentEventId && (
+        {!liveCompact && (
+          <EventPaymentCardsBar
+            orders={orders}
+            onSelectOrder={handleEditOrder}
+          />
+        )}
+
+        {!liveCompact && currentEventId && (
           <div className="container py-2">
             <EventStockAlerts eventId={currentEventId} />
           </div>
         )}
 
-        <main className="container py-6 flex-1">
-          <Tabs defaultValue={isWhatsAppMode ? "attendance" : "kanban"} className="w-full">
+        <main className={cn("container flex-1", tab === "attendance" ? "py-2" : "py-6")}>
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
+
 
             <div className="flex items-center gap-2 mb-4">
               <div className="relative flex-1 max-w-sm">
