@@ -25,6 +25,7 @@ import { EventFollowupsManager } from "./EventFollowupsManager";
 import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessageEditor";
 import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
+import { LiveWhatsAppLinkConfig } from "./LiveWhatsAppLinkConfig";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
