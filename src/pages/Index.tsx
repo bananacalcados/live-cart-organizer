@@ -241,7 +241,7 @@ const Index = () => {
           <Tabs value={tab} onValueChange={setTab} className="w-full">
 
 
-            <div className="flex items-center gap-2 mb-4">
+            <div className={cn("flex items-center gap-2", tab === "attendance" ? "mb-2" : "mb-4")}>
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -251,7 +251,18 @@ const Index = () => {
                   className="pl-9"
                 />
               </div>
+              {tab === "attendance" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setShowDash((v) => !v)}
+                >
+                  {showDash ? "Ocultar dashboard" : "Mostrar dashboard"}
+                </Button>
+              )}
               <TabsList className="ml-auto">
+
                 {isWhatsAppMode && (
                   <TabsTrigger value="attendance" className="gap-1">
                     <MessageSquare className="h-3 w-3" />
