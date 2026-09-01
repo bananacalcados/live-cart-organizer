@@ -224,6 +224,20 @@ export function LiveAttendanceCenter({
         prefillWhatsapp={prefill.phone}
         prefillName={prefill.name}
       />
+
+      {actionsConv && (
+        <LiveQuickActionsDialog
+          open={!!actionsConv}
+          onOpenChange={(o) => !o && setActionsConv(null)}
+          phone={actionsConv.phone}
+          name={actionsConv.name}
+          order={
+            orders.find((o) => suffix8(o.customer?.whatsapp) === suffix8(actionsConv.phone)) || null
+          }
+          stages={stages}
+        />
+      )}
+
     </div>
   );
 }
