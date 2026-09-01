@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Trophy, Clock, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ interface PrizeEligibleListProps {
 export function PrizeEligibleList({ eventId }: PrizeEligibleListProps) {
   const [eligibleOrders, setEligibleOrders] = useState<PrizeEligibleOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const reloadTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadEligibleOrders();
@@ -37,11 +38,16 @@ export function PrizeEligibleList({ eventId }: PrizeEligibleListProps) {
         table: 'orders',
         filter: `event_id=eq.${eventId}`,
       }, () => {
-        loadEligibleOrders();
+        // Agrupa rajadas de updates em um único recarregamento (sem piscar a cada evento)
+        if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = window.setTimeout(() => loadEligibleOrders(), 1500);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [eventId]);
 
   const loadEligibleOrders = async () => {
