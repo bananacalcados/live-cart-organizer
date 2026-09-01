@@ -57,6 +57,8 @@ const Index = () => {
   const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders, lockOrderEditing, unlockOrderEditing } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
+  const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+
 
   // Fetch events on mount
   useEffect(() => {
