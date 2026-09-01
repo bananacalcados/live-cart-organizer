@@ -208,14 +208,21 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
-  // Instância escolhida no filtro (uma só, ou todas)
-  const byInstance = useMemo(
-    () =>
-      instanceId === ALL
-        ? conversations
-        : conversations.filter((c) => c.whatsappNumberId === instanceId),
-    [conversations, instanceId]
+  // Instâncias fixadas (vazio = todas as instâncias permitidas)
+  const allowedIds = useMemo(
+    () => new Set(selectableNumbers.map((n) => n.id)),
+    [selectableNumbers]
   );
+
+  const byInstance = useMemo(() => {
+    const pinned = new Set(pinnedIds);
+    return conversations.filter((c) => {
+      const id = c.whatsappNumberId;
+      if (pinned.size > 0) return !!id && pinned.has(id);
+      return !id || allowedIds.has(id);
+    });
+  }, [conversations, pinnedIds, allowedIds]);
+
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
