@@ -61,7 +61,14 @@ interface DbOrderStore {
   upsertOrderRealtime: (order: DbOrder) => void;
   removeOrderRealtime: (orderId: string) => void;
   subscribeToEventOrders: (eventId: string) => () => void;
+  lockOrderEditing: (orderId: string) => void;
+  unlockOrderEditing: (orderId: string) => void;
 }
+
+// Pedidos abertos no modal de edição: updates externos ficam represados
+// para a tela não "piscar"/sobrescrever o que está sendo montado.
+const lockedOrderIds = new Set<string>();
+const pendingRealtime = new Map<string, DbOrder>();
 
 export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
   orders: [],
@@ -680,9 +687,33 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       ? { ...order, stage: 'paid' }
       : order;
 
-    set((state) => ({
-      orders: mergeDbOrder(state.orders, normalizedOrder),
-    }));
+    if (lockedOrderIds.has(normalizedOrder.id)) {
+      pendingRealtime.set(normalizedOrder.id, normalizedOrder);
+      return;
+    }
+
+    set((state) => {
+      const current = state.orders.find((o) => o.id === normalizedOrder.id);
+      // Nada mudou de fato → não mexe no estado (evita re-render à toa)
+      if (current && JSON.stringify(current) === JSON.stringify(normalizedOrder)) {
+        return state;
+      }
+      return { orders: mergeDbOrder(state.orders, normalizedOrder) };
+    });
+  },
+
+  lockOrderEditing: (orderId) => {
+    if (orderId) lockedOrderIds.add(orderId);
+  },
+
+  unlockOrderEditing: (orderId) => {
+    if (!orderId) return;
+    lockedOrderIds.delete(orderId);
+    const pending = pendingRealtime.get(orderId);
+    if (pending) {
+      pendingRealtime.delete(orderId);
+      get().upsertOrderRealtime(pending);
+    }
   },
 
   removeOrderRealtime: (orderId) => {
