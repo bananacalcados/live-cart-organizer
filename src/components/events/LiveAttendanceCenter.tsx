@@ -155,9 +155,10 @@ export function LiveAttendanceCenter({
             </div>
             <div className="min-h-0 flex-1">
               <WhatsAppChat
-                key={`${selected.phone}::${selectedOrder?.id || "noorder"}`}
+                key={`${selected.phone}::${selected.whatsappNumberId || "noinstance"}::${selectedOrder?.id || "noorder"}`}
                 order={chatOrder}
                 orderless={!selectedOrder}
+                conversationNumberId={selected.whatsappNumberId}
               />
             </div>
           </>
