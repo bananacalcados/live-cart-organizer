@@ -6,7 +6,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
@@ -32,14 +32,20 @@ interface LiveWhatsAppQueueProps {
   eventId: string;
   /** Início da live: conversas com mensagem depois disso entram no filtro "Da live". */
   liveStartedAt?: string | null;
+  /** Início do período do evento (data do evento) — corta conversas antigas. */
+  eventPeriodStart?: string | null;
+  /** Fim do período do evento (opcional). */
+  eventPeriodEnd?: string | null;
   /** Pedidos do evento atual (para marcar quem já tem pedido). */
   orders: DbOrder[];
   selectedKey: string | null;
   onSelect: (conv: LiveConversation) => void;
   onCreateOrder: (conv: LiveConversation) => void;
+  onQuickActions?: (conv: LiveConversation) => void;
   /** Instância configurada na live (usada como padrão do filtro). */
   defaultInstanceId?: string | null;
 }
+
 
 const suffix8 = (phone?: string | null) => {
   const digits = (phone || "").replace(/\D/g, "");
@@ -74,18 +80,23 @@ const pinKey = (eventId: string) => `live_center_pinned_instances_${eventId}`;
 export function LiveWhatsAppQueue({
   eventId,
   liveStartedAt,
+  eventPeriodStart = null,
+  eventPeriodEnd = null,
   orders,
   selectedKey,
   onSelect,
   onCreateOrder,
+  onQuickActions,
   defaultInstanceId = null,
 }: LiveWhatsAppQueueProps) {
 
   const [conversations, setConversations] = useState<LiveConversation[]>([]);
   const [filter, setFilter] = useState<QueueFilter>("live");
+  const [onlyEventPeriod, setOnlyEventPeriod] = useState(true);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [archived, setArchived] = useState<Set<string>>(new Set());
+
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
 
   // Instâncias fixadas NESTE evento (persistem ao sair e voltar da aba)
@@ -208,6 +219,23 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
+  // Período do evento: início no começo do dia da data do evento; fim opcional.
+  const periodStartMs = useMemo(() => {
+    if (!eventPeriodStart) return null;
+    const d = new Date(eventPeriodStart);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, [eventPeriodStart]);
+
+  const periodEndMs = useMemo(() => {
+    if (!eventPeriodEnd) return null;
+    const d = new Date(eventPeriodEnd);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  }, [eventPeriodEnd]);
+
   // Instâncias fixadas (vazio = todas as instâncias permitidas)
   const allowedIds = useMemo(
     () => new Set(selectableNumbers.map((n) => n.id)),
@@ -217,11 +245,17 @@ export function LiveWhatsAppQueue({
   const byInstance = useMemo(() => {
     const pinned = new Set(pinnedIds);
     return conversations.filter((c) => {
+      if (onlyEventPeriod) {
+        const t = c.lastMessageAt.getTime();
+        if (periodStartMs && t < periodStartMs) return false;
+        if (periodEndMs && t > periodEndMs) return false;
+      }
       const id = c.whatsappNumberId;
       if (pinned.size > 0) return !!id && pinned.has(id);
       return !id || allowedIds.has(id);
     });
-  }, [conversations, pinnedIds, allowedIds]);
+  }, [conversations, pinnedIds, allowedIds, onlyEventPeriod, periodStartMs, periodEndMs]);
+
 
 
   const filtered = useMemo(() => {
@@ -337,7 +371,21 @@ export function LiveWhatsAppQueue({
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setOnlyEventPeriod((v) => !v)}
+            title="Mostrar apenas conversas dentro do período do evento"
+            className={cn(
+              "rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
+              onlyEventPeriod
+                ? "bg-amber-500 text-white"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {onlyEventPeriod ? "Período do evento" : "Sem filtro de data"}
+          </button>
         </div>
+
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
@@ -462,7 +510,28 @@ export function LiveWhatsAppQueue({
                     </>
                   )}
                 </span>
+                {onQuickActions && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    title="Ações rápidas (link da área de membros, checkout, ficha, etapa, pagamento)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickActions(c);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        onQuickActions(c);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1 rounded border border-border bg-secondary px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <Zap className="h-3 w-3" /> Ações
+                  </span>
+                )}
               </div>
+
 
             </button>
           );

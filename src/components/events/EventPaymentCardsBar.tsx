@@ -369,13 +369,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
       <div className="container py-2">
         {/* Aviso para a apresentadora */}
-        <Button
-          onClick={() => setPresenterMsgOpen(true)}
-          className="w-full mb-2 h-12 text-base font-bold gap-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
-        >
-          <Megaphone className="h-5 w-5" />
-          ENVIAR MENSAGEM PARA A APRESENTADORA
-        </Button>
+
 
         <Dialog open={presenterMsgOpen} onOpenChange={setPresenterMsgOpen}>
           <DialogContent>
@@ -400,7 +394,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
 
         {/* Toggle Aguardando / Pagos / Erros */}
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Button
+            size="sm"
+            onClick={() => setPresenterMsgOpen(true)}
+            className="h-8 gap-1.5 px-3 text-xs font-bold bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+          >
+            <Megaphone className="h-3.5 w-3.5" />
+            Apresentadora
+          </Button>
+
           <button
             onClick={() => setFilter("awaiting")}
             className={cn(

@@ -43,6 +43,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
 
 const Index = () => {
   const navigate = useNavigate();
@@ -51,6 +53,8 @@ const Index = () => {
   const [selectedStage, setSelectedStage] = useState<OrderStage | "all" | "unpaid">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [tab, setTab] = useState<string>("kanban");
+  const [showDash, setShowDash] = useState(false);
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -58,6 +62,14 @@ const Index = () => {
 
   const currentEvent = getCurrentEvent();
   const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+  // Na Central da Live o dashboard fica recolhido para sobrar espaço ao chat.
+  const liveCompact = tab === "attendance" && !showDash;
+
+  useEffect(() => {
+    if (isWhatsAppMode) setTab((t) => (t === "kanban" ? "attendance" : t));
+  }, [isWhatsAppMode]);
+
+
 
 
   // Fetch events on mount
@@ -202,31 +214,36 @@ const Index = () => {
           </div>
         )}
 
-        <div className="container pt-2">
-          <StatsBar orders={orders} />
-        </div>
+        {!liveCompact && (
+          <div className="container pt-2">
+            <StatsBar orders={orders} />
+          </div>
+        )}
 
-        {currentEventId && <EventInnerDashboard eventId={currentEventId} />}
+        {!liveCompact && currentEventId && <EventInnerDashboard eventId={currentEventId} />}
 
         {currentEventId && currentEvent && (
           <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
         )}
-        
-        <EventPaymentCardsBar
-          orders={orders}
-          onSelectOrder={handleEditOrder}
-        />
 
-        {currentEventId && (
+        {!liveCompact && (
+          <EventPaymentCardsBar
+            orders={orders}
+            onSelectOrder={handleEditOrder}
+          />
+        )}
+
+        {!liveCompact && currentEventId && (
           <div className="container py-2">
             <EventStockAlerts eventId={currentEventId} />
           </div>
         )}
 
-        <main className="container py-6 flex-1">
-          <Tabs defaultValue={isWhatsAppMode ? "attendance" : "kanban"} className="w-full">
+        <main className={cn("container flex-1", tab === "attendance" ? "py-2" : "py-6")}>
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
 
-            <div className="flex items-center gap-2 mb-4">
+
+            <div className={cn("flex items-center gap-2", tab === "attendance" ? "mb-2" : "mb-4")}>
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -236,7 +253,18 @@ const Index = () => {
                   className="pl-9"
                 />
               </div>
+              {tab === "attendance" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setShowDash((v) => !v)}
+                >
+                  {showDash ? "Ocultar dashboard" : "Mostrar dashboard"}
+                </Button>
+              )}
               <TabsList className="ml-auto">
+
                 {isWhatsAppMode && (
                   <TabsTrigger value="attendance" className="gap-1">
                     <MessageSquare className="h-3 w-3" />

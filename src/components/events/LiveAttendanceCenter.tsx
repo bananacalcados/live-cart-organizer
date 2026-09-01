@@ -7,9 +7,11 @@ import { EventLiveCommentsPanel } from "./EventLiveCommentsPanel";
 import { PresenterTeamChat } from "./PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { LiveQuickActionsDialog } from "./LiveQuickActionsDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Plus, Users } from "lucide-react";
+import { MessageSquare, Plus, Users, Zap } from "lucide-react";
+
 
 interface LiveAttendanceCenterProps {
   eventId: string;
@@ -56,7 +58,9 @@ export function LiveAttendanceCenter({
   const [selected, setSelected] = useState<LiveConversation | null>(null);
   const [sideTab, setSideTab] = useState<"comments" | "team">("comments");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [actionsConv, setActionsConv] = useState<LiveConversation | null>(null);
   const [prefill, setPrefill] = useState<{ phone?: string; name?: string }>({});
+
 
   const liveStartedAt: string | null =
     event?.live_broadcast_started_at || event?.start_date || null;
@@ -92,19 +96,26 @@ export function LiveAttendanceCenter({
   };
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] min-h-[600px] gap-3 px-3 pb-3">
+    <div className="flex h-[calc(100vh-7rem)] min-h-[600px] gap-3 px-3 pb-3">
       {/* Coluna 1 — fila */}
       <div className="hidden w-[280px] shrink-0 lg:block">
         <LiveWhatsAppQueue
           eventId={eventId}
           liveStartedAt={liveStartedAt}
+          eventPeriodStart={event?.start_date || event?.created_at || null}
+          eventPeriodEnd={event?.end_date || null}
           orders={orders}
           selectedKey={selected ? `${selected.phone}::${selected.whatsappNumberId || ""}` : null}
           onSelect={(c) => setSelected(c)}
           onCreateOrder={openCreateOrder}
+          onQuickActions={(c) => {
+            setSelected(c);
+            setActionsConv(c);
+          }}
           defaultInstanceId={instanceIds[0] || null}
         />
       </div>
+
 
 
       {/* Coluna 2 — chat */}
@@ -121,15 +132,26 @@ export function LiveAttendanceCenter({
                   {selectedOrder ? ` · pedido #${String(selectedOrder.id).slice(0, 6)}` : " · sem pedido nesta live"}
                 </p>
               </div>
-              {selectedOrder ? (
-                <Button size="sm" variant="outline" onClick={() => onEditOrder(selectedOrder)}>
-                  Abrir pedido
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-1"
+                  onClick={() => setActionsConv(selected)}
+                >
+                  <Zap className="h-3.5 w-3.5" /> Ações
                 </Button>
-              ) : (
-                <Button size="sm" className="gap-1 font-bold" onClick={() => openCreateOrder(selected)}>
-                  <Plus className="h-3.5 w-3.5" /> Criar pedido na live
-                </Button>
-              )}
+                {selectedOrder ? (
+                  <Button size="sm" variant="outline" onClick={() => onEditOrder(selectedOrder)}>
+                    Abrir pedido
+                  </Button>
+                ) : (
+                  <Button size="sm" className="gap-1 font-bold" onClick={() => openCreateOrder(selected)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar pedido na live
+                  </Button>
+                )}
+              </div>
+
             </div>
             <div className="min-h-0 flex-1">
               <WhatsAppChat
@@ -204,6 +226,20 @@ export function LiveAttendanceCenter({
         prefillWhatsapp={prefill.phone}
         prefillName={prefill.name}
       />
+
+      {actionsConv && (
+        <LiveQuickActionsDialog
+          open={!!actionsConv}
+          onOpenChange={(o) => !o && setActionsConv(null)}
+          phone={actionsConv.phone}
+          name={actionsConv.name}
+          order={
+            orders.find((o) => suffix8(o.customer?.whatsapp) === suffix8(actionsConv.phone)) || null
+          }
+          stages={stages}
+        />
+      )}
+
     </div>
   );
 }
