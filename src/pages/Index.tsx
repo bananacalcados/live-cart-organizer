@@ -28,6 +28,7 @@ import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButt
 import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
 import { EventSetupWizard } from "@/components/events/EventSetupWizard";
 import { EventInnerDashboard } from "@/components/events/EventInnerDashboard";
+import { LiveAttendanceCenter } from "@/components/events/LiveAttendanceCenter";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
