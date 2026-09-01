@@ -147,17 +147,11 @@ export function useConversationEnrichment() {
   ) => {
     const phoneKey = normalizePhoneKey(phone);
     const finishedAtIso = new Date().toISOString();
-    if (phoneKey) {
-      setFinishedPhones(prev => new Set([...prev, phoneKey]));
-      // Keep the timestamp map in sync too — enrichConversations reads this map
-      // (not the Set) to decide isFinished, so it MUST be updated optimistically
-      // or the conversation reverts on the next list refresh.
-      setFinishedAtByPhone(prev => {
-        const next = new Map(prev);
-        next.set(phoneKey, finishedAtIso);
-        return next;
-      });
-    }
+    // Escrita otimista direto no cache compartilhado — enrichConversations lê
+    // dele para decidir isFinished, então precisa ser atualizado antes do
+    // round-trip ou a conversa "volta" na próxima atualização da lista.
+    if (phoneKey) setFinishedLocal(phone, finishedAtIso);
+
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
