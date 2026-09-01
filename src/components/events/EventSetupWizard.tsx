@@ -706,6 +706,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 preencha as variáveis. A mensagem inicial abaixo é usada como saudação no chat.
               </p>
 
+              {operationMode === "whatsapp" && event?.id && (
+                <LiveWhatsAppLinkConfig
+                  eventId={event.id}
+                  eventName={name}
+                  defaultWhatsappNumberId={whatsappNumberId}
+                />
+              )}
+
+
               {/* WhatsApp API instance selector */}
               <div className="space-y-2 rounded-md border p-3 bg-muted/30">
                 <Label className="flex items-center gap-2 text-xs font-semibold">
