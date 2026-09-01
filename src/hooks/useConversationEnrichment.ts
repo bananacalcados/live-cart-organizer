@@ -87,10 +87,12 @@ export function useConversationEnrichment() {
   }, [aiTransferredPhones]);
 
   useEffect(() => {
-    loadFinished();
+    // `chat_finished_conversations` NÃO é mais baixada inteira aqui: cada tela
+    // resolve sob demanda os telefones visíveis (ver ensureFinished).
     loadArchived();
     loadAwaitingPayment();
     loadAiTransferred();
+
 
     // Debounce realtime reloads. Each of these handlers re-fetches an entire
     // table; without debouncing, a burst of changes (e.g. many conversations
