@@ -170,7 +170,7 @@ export default function ChatPage() {
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [supportFilterActive, setSupportFilterActive] = useState(false);
-  const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
+  const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
 
