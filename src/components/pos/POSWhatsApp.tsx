@@ -1477,6 +1477,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     const name = editNameValue.trim();
     try {
       await supabase.from("chat_contacts").upsert({ phone: selectedPhone, custom_name: name || null }, { onConflict: "phone" });
+      invalidateChatContactsCache(selectedPhone);
       setChatContacts(prev => {
         const next = { ...prev };
         if (name) next[selectedPhone] = name;
