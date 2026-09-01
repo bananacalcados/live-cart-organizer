@@ -781,7 +781,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         )}
       </div>
 
-      {!showPurchases && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && !showSimu && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
