@@ -51,13 +51,16 @@ export function GlobalWhatsAppChat() {
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || conversations.length === 0) return;
+    let alive = true;
     const loadChatContacts = async () => {
-      const { names } = await getChatContactMaps();
-      setChatContacts(names);
+      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const { names } = await resolveChatContacts(phones);
+      if (alive) setChatContacts(prev => ({ ...prev, ...names }));
     };
     loadChatContacts();
-  }, [isOpen]);
+    return () => { alive = false; };
+  }, [isOpen, conversations]);
 
   // Helper to map RPC rows to Conversation objects
   const mapRowsToConvs = (rows: any[]) => {
