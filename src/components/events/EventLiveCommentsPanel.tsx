@@ -83,6 +83,12 @@ const phoneKey = (p: string): string => {
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
+// Cache de resolução de @ do Instagram -> cliente/WhatsApp.
+// Vive fora do componente para sobreviver aos refreshes automáticos do painel
+// (15s/60s), evitando reconsultar os mesmos @ centenas de milhares de vezes.
+const igHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null }>();
+
+
 // Compara duas listas de comentários por identidade (id + ordem). Usado para
 // evitar substituir o array (e resetar o scroll) quando nada mudou no refresh.
 const sameComments = (a: LiveComment[], b: LiveComment[]): boolean => {
