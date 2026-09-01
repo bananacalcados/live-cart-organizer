@@ -328,7 +328,7 @@ export function useConversationEnrichment() {
         otherInstanceLabels,
       };
     });
-  }, [computeStatus, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
+  }, [computeStatus, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel, ensureFinished]);
 
   return {
     enrichConversations,
