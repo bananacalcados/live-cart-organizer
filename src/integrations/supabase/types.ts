@@ -4917,6 +4917,33 @@ export type Database = {
         }
         Relationships: []
       }
+      event_archived_conversations: {
+        Row: {
+          archived_by: string | null
+          created_at: string
+          event_id: string
+          id: string
+          phone: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          archived_by?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          phone: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          archived_by?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          phone?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       event_crossell_offers: {
         Row: {
           created_at: string

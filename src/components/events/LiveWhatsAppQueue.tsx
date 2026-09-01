@@ -6,9 +6,17 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircle, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
 
 export interface LiveConversation {
@@ -22,9 +30,11 @@ export interface LiveConversation {
   isGroup: boolean;
 }
 
-export type QueueFilter = "live" | "no_order" | "all";
+export type QueueFilter = "live" | "no_order" | "all" | "archived";
 
 interface LiveWhatsAppQueueProps {
+  /** Evento atual: o arquivamento vale SÓ para a Central desta live. */
+  eventId: string;
   /** Início da live: conversas com mensagem depois disso entram no filtro "Da live". */
   liveStartedAt?: string | null;
   /** Pedidos do evento atual (para marcar quem já tem pedido). */
@@ -32,8 +42,8 @@ interface LiveWhatsAppQueueProps {
   selectedKey: string | null;
   onSelect: (conv: LiveConversation) => void;
   onCreateOrder: (conv: LiveConversation) => void;
-  /** Restringe às instâncias configuradas para a live (vazio = todas). */
-  instanceIds?: string[];
+  /** Instância configurada na live (usada como padrão do filtro). */
+  defaultInstanceId?: string | null;
 }
 
 const suffix8 = (phone?: string | null) => {
@@ -41,23 +51,75 @@ const suffix8 = (phone?: string | null) => {
   return digits ? digits.slice(-8) : "";
 };
 
+const ALL = "__all__";
+
 export function LiveWhatsAppQueue({
+  eventId,
   liveStartedAt,
   orders,
   selectedKey,
   onSelect,
   onCreateOrder,
-  instanceIds = [],
+  defaultInstanceId = null,
 }: LiveWhatsAppQueueProps) {
+
   const [conversations, setConversations] = useState<LiveConversation[]>([]);
   const [filter, setFilter] = useState<QueueFilter>("live");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [instanceId, setInstanceId] = useState<string>(defaultInstanceId || ALL);
+  const [archived, setArchived] = useState<Set<string>>(new Set());
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
 
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
+
+  useEffect(() => {
+    if (defaultInstanceId) setInstanceId(defaultInstanceId);
+  }, [defaultInstanceId]);
+
+  // Conversas arquivadas SÓ nesta live
+  const loadArchived = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("event_archived_conversations")
+      .select("phone")
+      .eq("event_id", eventId);
+    setArchived(new Set(((data || []) as any[]).map((r) => suffix8(r.phone))));
+  }, [eventId]);
+
+  useEffect(() => {
+    loadArchived();
+  }, [loadArchived]);
+
+  const toggleArchive = useCallback(
+    async (conv: LiveConversation) => {
+      const key = suffix8(conv.phone);
+      const isArchived = archived.has(key);
+      if (isArchived) {
+        await (supabase as any)
+          .from("event_archived_conversations")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("phone", conv.phone);
+        setArchived((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        toast.success("Conversa restaurada na fila da live");
+      } else {
+        await (supabase as any).from("event_archived_conversations").insert({
+          event_id: eventId,
+          phone: conv.phone,
+          whatsapp_number_id: conv.whatsappNumberId,
+        });
+        setArchived((prev) => new Set(prev).add(key));
+        toast.success("Conversa arquivada nesta live");
+      }
+    },
+    [archived, eventId]
+  );
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc("get_conversations", {
@@ -69,10 +131,7 @@ export function LiveWhatsAppQueue({
       setLoading(false);
       return;
     }
-    let rows = (data || []) as any[];
-    if (instanceIds.length > 0) {
-      rows = rows.filter((r) => instanceIds.includes(r.whatsapp_number_id));
-    }
+    const rows = (data || []) as any[];
     const convs: LiveConversation[] = rows
       .filter((r) => !r.is_dispatch_only)
       .map((r) => ({
@@ -94,7 +153,7 @@ export function LiveWhatsAppQueue({
       convs.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
     );
     setLoading(false);
-  }, [instanceIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     load();
@@ -115,9 +174,24 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
+  // Instância escolhida no filtro (uma só, ou todas)
+  const byInstance = useMemo(
+    () =>
+      instanceId === ALL
+        ? conversations
+        : conversations.filter((c) => c.whatsappNumberId === instanceId),
+    [conversations, instanceId]
+  );
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return conversations.filter((c) => {
+    return byInstance.filter((c) => {
+      const isArchived = archived.has(suffix8(c.phone));
+      if (filter === "archived") {
+        if (!isArchived) return false;
+      } else if (isArchived) {
+        return false;
+      }
       const order = orderBySuffix.get(suffix8(c.phone));
       if (filter === "live" && startedAtMs && c.lastMessageAt.getTime() < startedAtMs) return false;
       if (filter === "no_order" && order) return false;
@@ -127,20 +201,28 @@ export function LiveWhatsAppQueue({
       }
       return true;
     });
-  }, [conversations, filter, search, orderBySuffix, startedAtMs]);
+  }, [byInstance, filter, search, orderBySuffix, startedAtMs, archived]);
 
   const counts = useMemo(() => {
     let live = 0;
     let noOrder = 0;
-    for (const c of conversations) {
+    let archivedCount = 0;
+    let all = 0;
+    for (const c of byInstance) {
+      if (archived.has(suffix8(c.phone))) {
+        archivedCount++;
+        continue;
+      }
+      all++;
       if (!startedAtMs || c.lastMessageAt.getTime() >= startedAtMs) live++;
       if (!orderBySuffix.get(suffix8(c.phone))) noOrder++;
     }
-    return { live, noOrder, all: conversations.length };
-  }, [conversations, orderBySuffix, startedAtMs]);
+    return { live, noOrder, all, archived: archivedCount };
+  }, [byInstance, orderBySuffix, startedAtMs, archived]);
 
   const instanceLabel = (id: string | null) =>
     numbers.find((n) => n.id === id)?.label || null;
+
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card">
@@ -154,6 +236,19 @@ export function LiveWhatsAppQueue({
       </div>
 
       <div className="space-y-2 px-2 py-2">
+        <Select value={instanceId} onValueChange={setInstanceId}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="Instância" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todas as instâncias</SelectItem>
+            {numbers.map((n) => (
+              <SelectItem key={n.id} value={n.id}>
+                {n.label} · {n.phone_display}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -165,7 +260,9 @@ export function LiveWhatsAppQueue({
             ["live", `Da live (${counts.live})`],
             ["no_order", `Sem pedido (${counts.noOrder})`],
             ["all", `Todas (${counts.all})`],
+            ["archived", `Arquivadas (${counts.archived})`],
           ] as [QueueFilter, string][]).map(([id, label]) => (
+
             <button
               key={id}
               type="button"
@@ -198,6 +295,8 @@ export function LiveWhatsAppQueue({
           const isSelected = selectedKey === key;
           const isFromLive = !startedAtMs || c.lastMessageAt.getTime() >= startedAtMs;
           const label = instanceLabel(c.whatsappNumberId);
+          const isArchived = archived.has(suffix8(c.phone));
+
           return (
             <button
               key={key}
@@ -249,25 +348,62 @@ export function LiveWhatsAppQueue({
                   </span>
                 )}
               </div>
-              {!order && (
+              <div className="mt-2 flex items-center gap-1">
+                {!order && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateOrder(c);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        onCreateOrder(c);
+                      }
+                    }}
+                    className="flex flex-1 items-center justify-center gap-1 rounded bg-primary py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+                  >
+                    <Plus className="h-3 w-3" /> Criar pedido
+                  </span>
+                )}
                 <span
                   role="button"
                   tabIndex={0}
+                  title={
+                    isArchived
+                      ? "Restaurar conversa nesta live"
+                      : "Arquivar somente na Central desta live"
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
-                    onCreateOrder(c);
+                    toggleArchive(c);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.stopPropagation();
-                      onCreateOrder(c);
+                      toggleArchive(c);
                     }
                   }}
-                  className="mt-2 flex w-full items-center justify-center gap-1 rounded bg-primary py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded border border-border bg-secondary py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground",
+                    order ? "flex-1" : "px-2"
+                  )}
                 >
-                  <Plus className="h-3 w-3" /> Criar pedido
+                  {isArchived ? (
+                    <>
+                      <ArchiveRestore className="h-3 w-3" /> Restaurar
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-3 w-3" />
+                      {order ? " Arquivar" : ""}
+                    </>
+                  )}
                 </span>
-              )}
+              </div>
+
             </button>
           );
         })}
