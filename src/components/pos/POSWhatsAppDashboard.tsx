@@ -92,6 +92,11 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     return storeNumberIds.has(msg.whatsapp_number_id);
   }, [storeNumberIds]);
 
+  // Resolve sob demanda o status de "finalizada" dos telefones deste período.
+  useEffect(() => {
+    if (messages.length) ensureFinished(messages.map((m: any) => m.phone));
+  }, [messages, ensureFinished]);
+
   // ── Status counters from ALL messages across store instances ──
   const statusCounters = useMemo(() => {
     const phoneMap = new Map<string, { direction: string }[]>();
@@ -109,7 +114,9 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     let followUp = 0;
 
     for (const phone of allPhones) {
-      if (finishedPhones.has(phone) || archivedPhones.has(phone)) continue;
+      const phoneKey = String(phone || '').replace(/\D/g, '').slice(-8);
+      if (finishedPhones.has(phoneKey) || archivedPhones.has(phone)) continue;
+
       
       if (awaitingPaymentPhones.has(phone)) {
         awaitingPayment++;
