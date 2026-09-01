@@ -273,7 +273,20 @@ const Index = () => {
 
             </div>
 
+            {isWhatsAppMode && currentEventId && (
+              <TabsContent value="attendance" className="-mx-4 md:-mx-6">
+                <LiveAttendanceCenter
+                  eventId={currentEventId}
+                  event={currentEvent}
+                  orders={filteredOrders}
+                  stages={getStagesForMode((currentEvent as any)?.operation_mode)}
+                  onEditOrder={handleEditOrder}
+                />
+              </TabsContent>
+            )}
+
             <TabsContent value="kanban">
+
               
               
               {isLoading ? (
