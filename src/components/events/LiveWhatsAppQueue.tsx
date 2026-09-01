@@ -113,10 +113,6 @@ export function LiveWhatsAppQueue({
   }, [fetchNumbers]);
 
 
-  useEffect(() => {
-    if (defaultInstanceId) setInstanceId(defaultInstanceId);
-  }, [defaultInstanceId]);
-
   // Conversas arquivadas SÓ nesta live
   const loadArchived = useCallback(async () => {
     const { data } = await (supabase as any)
