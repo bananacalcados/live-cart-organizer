@@ -346,25 +346,62 @@ export function LiveWhatsAppQueue({
                   </span>
                 )}
               </div>
-              {!order && (
+              <div className="mt-2 flex items-center gap-1">
+                {!order && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateOrder(c);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        onCreateOrder(c);
+                      }
+                    }}
+                    className="flex flex-1 items-center justify-center gap-1 rounded bg-primary py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+                  >
+                    <Plus className="h-3 w-3" /> Criar pedido
+                  </span>
+                )}
                 <span
                   role="button"
                   tabIndex={0}
+                  title={
+                    isArchived
+                      ? "Restaurar conversa nesta live"
+                      : "Arquivar somente na Central desta live"
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
-                    onCreateOrder(c);
+                    toggleArchive(c);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.stopPropagation();
-                      onCreateOrder(c);
+                      toggleArchive(c);
                     }
                   }}
-                  className="mt-2 flex w-full items-center justify-center gap-1 rounded bg-primary py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90"
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded border border-border bg-secondary py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground",
+                    order ? "flex-1" : "px-2"
+                  )}
                 >
-                  <Plus className="h-3 w-3" /> Criar pedido
+                  {isArchived ? (
+                    <>
+                      <ArchiveRestore className="h-3 w-3" /> Restaurar
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="h-3 w-3" />
+                      {order ? " Arquivar" : ""}
+                    </>
+                  )}
                 </span>
-              )}
+              </div>
+
             </button>
           );
         })}
