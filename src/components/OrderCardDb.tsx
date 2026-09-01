@@ -85,7 +85,7 @@ const dbOrderToOrder = (dbOrder: DbOrder): Order => {
   };
 };
 
-export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
+function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
   const [showIgChatDialog, setShowIgChatDialog] = useState(false);
@@ -1609,3 +1609,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     </div>
   );
 }
+
+// Memoizado: só re-renderiza quando o pedido realmente mudou.
+export const OrderCardDb = memo(OrderCardDbComponent, (prev, next) => {
+  if (prev.isDragging !== next.isDragging) return false;
+  if (prev.onEdit !== next.onEdit || prev.onDelete !== next.onDelete) return false;
+  const a = prev.order as any;
+  const b = next.order as any;
+  if (a === b) return true;
+  if (a?.id !== b?.id) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+});
