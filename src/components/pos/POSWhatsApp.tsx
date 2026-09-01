@@ -619,7 +619,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       }
     };
     load();
-  }, [metaNumbers]);
+    return () => { alive = false; };
+  }, [metaNumbers, conversations]);
 
   // Fetch profile pics for conversation phones not yet in chat_contacts
   const fetchedPhonesRef = useMemo(() => new Set<string>(), []);
