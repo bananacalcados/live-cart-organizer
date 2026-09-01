@@ -841,8 +841,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
+      {showSimu && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ShipmentSimulations />
+        </div>
+      )}
+
       {/* List */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases ? "hidden" : ""}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
