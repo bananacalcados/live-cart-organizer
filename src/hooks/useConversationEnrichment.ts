@@ -169,18 +169,10 @@ export function useConversationEnrichment() {
 
 
     if (error && phoneKey) {
-      setFinishedPhones(prev => {
-        const next = new Set(prev);
-        next.delete(phoneKey);
-        return next;
-      });
-      setFinishedAtByPhone(prev => {
-        const next = new Map(prev);
-        next.delete(phoneKey);
-        return next;
-      });
+      setFinishedLocal(phone, null);
       throw error;
     }
+
 
     // Track sale conversion + fire Meta CAPI when reason is 'compra' and value > 0
     if (reason === 'compra' && extras?.saleValue && extras.saleValue > 0) {
