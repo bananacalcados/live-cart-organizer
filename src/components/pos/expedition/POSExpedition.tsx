@@ -604,7 +604,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             );
           })}
           <button
-            onClick={() => setShowPurchases((v) => !v)}
+            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showPurchases
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -615,6 +615,21 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <ShoppingCart className={`h-6 w-6 ${showPurchases ? "text-white" : "text-exp-prep"}`} />
               <span className={`text-lg font-black uppercase leading-tight ${showPurchases ? "text-white" : "text-pos-text"}`}>
                 Compras
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); }}
+            className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
+              showSimu
+                ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
+                : "bg-pos-elevated border-exp-prep/40 hover:scale-[1.01]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <MapPin className={`h-6 w-6 ${showSimu ? "text-white" : "text-exp-prep"}`} />
+              <span className={`text-lg font-black uppercase leading-tight ${showSimu ? "text-white" : "text-pos-text"}`}>
+                Simu Envios
               </span>
             </div>
           </button>
