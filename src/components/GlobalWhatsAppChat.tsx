@@ -3,7 +3,7 @@ import { MessageCircle, X, ChevronLeft, Phone, Users, Pencil, Check } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { getChatContactMaps } from "@/lib/chatContactsCache";
+import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -51,13 +51,16 @@ export function GlobalWhatsAppChat() {
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || conversations.length === 0) return;
+    let alive = true;
     const loadChatContacts = async () => {
-      const { names } = await getChatContactMaps();
-      setChatContacts(names);
+      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const { names } = await resolveChatContacts(phones);
+      if (alive) setChatContacts(prev => ({ ...prev, ...names }));
     };
     loadChatContacts();
-  }, [isOpen]);
+    return () => { alive = false; };
+  }, [isOpen, conversations]);
 
   // Helper to map RPC rows to Conversation objects
   const mapRowsToConvs = (rows: any[]) => {

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -131,13 +132,6 @@ interface MetaTemplate {
   }>;
 }
 
-// ── Chat contact type ──
-interface ChatContact {
-  id: string;
-  phone: string;
-  display_name: string | null;
-  custom_name: string | null;
-}
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -170,7 +164,7 @@ export default function ChatPage() {
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [supportFilterActive, setSupportFilterActive] = useState(false);
-  const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
+  const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
 
@@ -252,34 +246,20 @@ export default function ChatPage() {
     return map;
   }, [numbers]);
   
+  // Resolve nomes de contato APENAS dos telefones visíveis (evita ler a tabela inteira).
   useEffect(() => {
+    if (conversationPhones.length === 0) return;
+    let alive = true;
     const loadContacts = async () => {
-      // Fetch all contacts (table may exceed default 1000-row limit)
-      let allContacts: ChatContact[] = [];
-      let from = 0;
-      const PAGE = 1000;
-      while (true) {
-        const { data } = await supabase.from('chat_contacts').select('*').range(from, from + PAGE - 1);
-        if (!data || data.length === 0) break;
-        allContacts = allContacts.concat(data as ChatContact[]);
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-      setChatContacts(allContacts);
+      const { names } = await resolveChatContacts(conversationPhones);
+      if (alive) setChatContacts(prev => ({ ...prev, ...names }));
     };
     loadContacts();
-    const channel = supabase
-      .channel('chat-contacts-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_contacts' }, () => loadContacts())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    return () => { alive = false; };
+  }, [conversationPhones]);
 
   const getContactName = useCallback((phone: string): string | null => {
-    const contact = chatContacts.find(c => c.phone === phone);
-    if (contact?.custom_name) return contact.custom_name;
-    if (contact?.display_name) return contact.display_name;
-    return null;
+    return chatContacts[phone] || null;
   }, [chatContacts]);
 
   const getConversationKey = useCallback((conversation: Pick<Conversation, 'conversationKey' | 'phone' | 'whatsapp_number_id'>) => {
@@ -294,12 +274,16 @@ export default function ChatPage() {
   }, [selectedPhone, selectedConvNumberId]);
 
   const saveContactName = async (phone: string, customName: string) => {
-    const existing = chatContacts.find(c => c.phone === phone);
-    if (existing) {
-      await supabase.from('chat_contacts').update({ custom_name: customName || null }).eq('id', existing.id);
-    } else {
-      await supabase.from('chat_contacts').insert({ phone, custom_name: customName || null });
-    }
+    await supabase
+      .from('chat_contacts')
+      .upsert({ phone, custom_name: customName || null }, { onConflict: 'phone' });
+    invalidateChatContactsCache(phone);
+    setChatContacts(prev => {
+      const next = { ...prev };
+      if (customName) next[phone] = customName;
+      else delete next[phone];
+      return next;
+    });
     setEditingName(false);
   };
 

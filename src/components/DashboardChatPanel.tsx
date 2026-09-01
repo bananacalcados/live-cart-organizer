@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { getChatContactMaps } from "@/lib/chatContactsCache";
+import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -56,13 +56,18 @@ export function DashboardChatPanel() {
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   useEffect(() => {
+    if (conversations.length === 0) return;
+    let alive = true;
     const loadChatContacts = async () => {
-      const { names, pics } = await getChatContactMaps();
-      setChatContacts(names);
+      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const { names, pics } = await resolveChatContacts(phones);
+      if (!alive) return;
+      setChatContacts(prev => ({ ...prev, ...names }));
       setProfilePics(prev => ({ ...prev, ...pics }));
     };
     loadChatContacts();
-  }, []);
+    return () => { alive = false; };
+  }, [conversations]);
 
   // Build a map of normalized phone → instagram handle from current event orders
   const orderPhoneMap = useMemo(() => {
