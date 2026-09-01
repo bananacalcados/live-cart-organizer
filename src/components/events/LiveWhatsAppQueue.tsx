@@ -277,19 +277,38 @@ export function LiveWhatsAppQueue({
       </div>
 
       <div className="space-y-2 px-2 py-2">
-        <Select value={instanceId} onValueChange={setInstanceId}>
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder="Instância" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as instâncias</SelectItem>
-            {numbers.map((n) => (
-              <SelectItem key={n.id} value={n.id}>
-                {n.label} · {n.phone_display}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1">
+          <MultiInstanceFilter
+            numbers={selectableNumbers}
+            selectedIds={pinnedIds}
+            onSelectedIdsChange={setPinnedIds}
+            className="h-8 flex-1 justify-start text-xs"
+          />
+          {pinnedIds.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-primary"
+              title="Instâncias fixadas neste evento — clique para desafixar"
+              onClick={() => setPinnedIds([])}
+            >
+              <PinOff className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <span
+              className="flex h-8 w-8 items-center justify-center text-muted-foreground"
+              title="Selecione instâncias para fixá-las neste evento"
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </div>
+        {pinnedIds.length > 0 && (
+          <p className="px-0.5 text-[10px] text-muted-foreground">
+            {pinnedIds.length} instância(s) fixada(s) nesta live
+          </p>
+        )}
+
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
