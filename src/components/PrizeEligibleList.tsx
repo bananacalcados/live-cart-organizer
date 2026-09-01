@@ -24,6 +24,7 @@ interface PrizeEligibleListProps {
 export function PrizeEligibleList({ eventId }: PrizeEligibleListProps) {
   const [eligibleOrders, setEligibleOrders] = useState<PrizeEligibleOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const reloadTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadEligibleOrders();
