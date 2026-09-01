@@ -371,7 +371,21 @@ export function LiveWhatsAppQueue({
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setOnlyEventPeriod((v) => !v)}
+            title="Mostrar apenas conversas dentro do período do evento"
+            className={cn(
+              "rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
+              onlyEventPeriod
+                ? "bg-amber-500 text-white"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {onlyEventPeriod ? "Período do evento" : "Sem filtro de data"}
+          </button>
         </div>
+
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
