@@ -6,18 +6,13 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Archive, ArchiveRestore, MessageCircle, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
+
 
 export interface LiveConversation {
   phone: string;
