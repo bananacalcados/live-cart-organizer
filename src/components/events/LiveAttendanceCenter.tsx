@@ -96,14 +96,16 @@ export function LiveAttendanceCenter({
       {/* Coluna 1 — fila */}
       <div className="hidden w-[280px] shrink-0 lg:block">
         <LiveWhatsAppQueue
+          eventId={eventId}
           liveStartedAt={liveStartedAt}
           orders={orders}
           selectedKey={selected ? `${selected.phone}::${selected.whatsappNumberId || ""}` : null}
           onSelect={(c) => setSelected(c)}
           onCreateOrder={openCreateOrder}
-          instanceIds={instanceIds}
+          defaultInstanceId={instanceIds[0] || null}
         />
       </div>
+
 
       {/* Coluna 2 — chat */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
