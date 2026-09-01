@@ -75,6 +75,18 @@ const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", c
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("pt-BR");
 const fmtDateTime = (d: string) => new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
+// Cache em memória do perfil do cliente (evita refetch repetido do mesmo cliente)
+const CUSTOMER360_TTL_MS = 60_000;
+const customer360Cache = new Map<string, {
+  at: number;
+  cashbacks: CashbackRow[];
+  sales: SaleRow[];
+  loyalty: { total_points: number; lifetime_points: number; expires_at: string } | null;
+  npsList: NpsRow[];
+  sellers: Record<string, string>;
+  legacyAggregate: { total_orders: number; total_spent: number; last_purchase_at: string | null; first_purchase_at: string | null } | null;
+}>();
+
 export function POSCustomer360({ storeId, initialQuery }: Props) {
   const [query, setQuery] = useState(initialQuery || "");
   const [searching, setSearching] = useState(false);
@@ -191,6 +203,21 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
   const handleSelect = async (c: CustomerRow) => {
     setSelected(c);
+
+    // Cache de 60s por cliente: reabrir o mesmo perfil não refaz as consultas
+    const cached = customer360Cache.get(c.id);
+    if (cached && Date.now() - cached.at < CUSTOMER360_TTL_MS) {
+      setCashbacks(cached.cashbacks);
+      setSales(cached.sales);
+      setLoyalty(cached.loyalty);
+      setNpsList(cached.npsList);
+      setSellers(cached.sellers);
+      setLegacyAggregate(cached.legacyAggregate);
+      setAiInsights(null);
+      setLoadingDetail(false);
+      return;
+    }
+
     setLoadingDetail(true);
     setCashbacks([]);
     setSales([]);
@@ -317,6 +344,31 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
       const sm: Record<string, string> = {};
       (sel.data || []).forEach((s: any) => { sm[s.id] = s.name; });
       setSellers(sm);
+
+      customer360Cache.set(c.id, {
+        at: Date.now(),
+        cashbacks: (cb.data as CashbackRow[]) || [],
+        sales: merged,
+        loyalty: lyData.length
+          ? {
+              total_points: lyData.reduce((acc, r) => acc + (r.total_points || 0), 0),
+              lifetime_points: lyData.reduce((acc, r) => acc + (r.lifetime_points || 0), 0),
+              expires_at:
+                lyData.reduce((min: string | null, r: any) => (!min || r.expires_at < min ? r.expires_at : min), null as string | null) || "",
+            }
+          : null,
+        npsList: (np.data as NpsRow[]) || [],
+        sellers: sm,
+        legacyAggregate:
+          legAgg && (legAgg as any).data
+            ? {
+                total_orders: Number((legAgg as any).data.total_orders || 0),
+                total_spent: Number((legAgg as any).data.total_spent || 0),
+                last_purchase_at: (legAgg as any).data.last_purchase_at || null,
+                first_purchase_at: (legAgg as any).data.first_purchase_at || null,
+              }
+            : null,
+      });
     } catch (e: any) {
       toast.error("Erro ao carregar perfil: " + e.message);
     } finally {
