@@ -32,6 +32,7 @@ import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
+import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 
 
 
