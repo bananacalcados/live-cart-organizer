@@ -135,7 +135,30 @@ export function LiveWhatsAppQueue({
 
   useEffect(() => {
     loadArchived();
-  }, [loadArchived]);
+    // Desarquivamento automático: o banco remove o arquivamento quando o
+    // cliente manda mensagem nova; aqui só refletimos a mudança na hora.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase
+      .channel(`event-archived-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_archived_conversations",
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(loadArchived, 500);
+        }
+      )
+      .subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [loadArchived, eventId]);
 
   const toggleArchive = useCallback(
     async (conv: LiveConversation) => {
