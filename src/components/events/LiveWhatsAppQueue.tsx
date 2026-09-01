@@ -6,9 +6,17 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageCircle, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
 
 export interface LiveConversation {
@@ -22,9 +30,11 @@ export interface LiveConversation {
   isGroup: boolean;
 }
 
-export type QueueFilter = "live" | "no_order" | "all";
+export type QueueFilter = "live" | "no_order" | "all" | "archived";
 
 interface LiveWhatsAppQueueProps {
+  /** Evento atual: o arquivamento vale SÓ para a Central desta live. */
+  eventId: string;
   /** Início da live: conversas com mensagem depois disso entram no filtro "Da live". */
   liveStartedAt?: string | null;
   /** Pedidos do evento atual (para marcar quem já tem pedido). */
@@ -32,8 +42,8 @@ interface LiveWhatsAppQueueProps {
   selectedKey: string | null;
   onSelect: (conv: LiveConversation) => void;
   onCreateOrder: (conv: LiveConversation) => void;
-  /** Restringe às instâncias configuradas para a live (vazio = todas). */
-  instanceIds?: string[];
+  /** Instância configurada na live (usada como padrão do filtro). */
+  defaultInstanceId?: string | null;
 }
 
 const suffix8 = (phone?: string | null) => {
@@ -41,14 +51,18 @@ const suffix8 = (phone?: string | null) => {
   return digits ? digits.slice(-8) : "";
 };
 
+const ALL = "__all__";
+
 export function LiveWhatsAppQueue({
+  eventId,
   liveStartedAt,
   orders,
   selectedKey,
   onSelect,
   onCreateOrder,
-  instanceIds = [],
+  defaultInstanceId = null,
 }: LiveWhatsAppQueueProps) {
+
   const [conversations, setConversations] = useState<LiveConversation[]>([]);
   const [filter, setFilter] = useState<QueueFilter>("live");
   const [search, setSearch] = useState("");
