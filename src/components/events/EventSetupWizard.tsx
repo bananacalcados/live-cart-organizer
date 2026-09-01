@@ -631,7 +631,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     <p className="text-xs text-muted-foreground">
                       Nesta live aparece a aba <strong>Central da Live</strong>: fila de conversas
                       do WhatsApp, chat aberto ao lado e os pedidos empilhados na vertical — sem
-                      perder os comentários da live.
+                      perder os comentários da live. O template API <strong>não</strong> é disparado
+                      automaticamente quando a cliente confirma o pedido na Área de Clientes — o
+                      contato acontece pelo link abaixo (configure na etapa Mensagem).
                     </p>
                   </div>
                 )}
