@@ -130,15 +130,26 @@ export function LiveAttendanceCenter({
                   {selectedOrder ? ` · pedido #${String(selectedOrder.id).slice(0, 6)}` : " · sem pedido nesta live"}
                 </p>
               </div>
-              {selectedOrder ? (
-                <Button size="sm" variant="outline" onClick={() => onEditOrder(selectedOrder)}>
-                  Abrir pedido
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-1"
+                  onClick={() => setActionsConv(selected)}
+                >
+                  <Zap className="h-3.5 w-3.5" /> Ações
                 </Button>
-              ) : (
-                <Button size="sm" className="gap-1 font-bold" onClick={() => openCreateOrder(selected)}>
-                  <Plus className="h-3.5 w-3.5" /> Criar pedido na live
-                </Button>
-              )}
+                {selectedOrder ? (
+                  <Button size="sm" variant="outline" onClick={() => onEditOrder(selectedOrder)}>
+                    Abrir pedido
+                  </Button>
+                ) : (
+                  <Button size="sm" className="gap-1 font-bold" onClick={() => openCreateOrder(selected)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar pedido na live
+                  </Button>
+                )}
+              </div>
+
             </div>
             <div className="min-h-0 flex-1">
               <WhatsAppChat
