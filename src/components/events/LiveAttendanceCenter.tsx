@@ -190,10 +190,11 @@ export function LiveAttendanceCenter({
         </div>
       </div>
 
-      {/* Telas menores: pedidos abaixo do chat na coluna lateral estreita */}
-      <div className="hidden w-[300px] shrink-0 flex-col xl:flex 2xl:hidden">
+      {/* Telas médias: pedidos ao lado do chat */}
+      <div className="hidden w-[280px] shrink-0 flex-col xl:flex 2xl:hidden">
         <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
       </div>
+
 
 
       <OrderDialogDb
