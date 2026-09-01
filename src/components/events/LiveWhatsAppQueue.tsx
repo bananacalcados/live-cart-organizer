@@ -32,14 +32,20 @@ interface LiveWhatsAppQueueProps {
   eventId: string;
   /** Início da live: conversas com mensagem depois disso entram no filtro "Da live". */
   liveStartedAt?: string | null;
+  /** Início do período do evento (data do evento) — corta conversas antigas. */
+  eventPeriodStart?: string | null;
+  /** Fim do período do evento (opcional). */
+  eventPeriodEnd?: string | null;
   /** Pedidos do evento atual (para marcar quem já tem pedido). */
   orders: DbOrder[];
   selectedKey: string | null;
   onSelect: (conv: LiveConversation) => void;
   onCreateOrder: (conv: LiveConversation) => void;
+  onQuickActions?: (conv: LiveConversation) => void;
   /** Instância configurada na live (usada como padrão do filtro). */
   defaultInstanceId?: string | null;
 }
+
 
 const suffix8 = (phone?: string | null) => {
   const digits = (phone || "").replace(/\D/g, "");
