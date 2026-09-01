@@ -67,11 +67,59 @@ export function LiveWhatsAppQueue({
   const [filter, setFilter] = useState<QueueFilter>("live");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [instanceId, setInstanceId] = useState<string>(defaultInstanceId || ALL);
+  const [archived, setArchived] = useState<Set<string>>(new Set());
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
 
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
+
+  useEffect(() => {
+    if (defaultInstanceId) setInstanceId(defaultInstanceId);
+  }, [defaultInstanceId]);
+
+  // Conversas arquivadas SÓ nesta live
+  const loadArchived = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("event_archived_conversations")
+      .select("phone")
+      .eq("event_id", eventId);
+    setArchived(new Set(((data || []) as any[]).map((r) => suffix8(r.phone))));
+  }, [eventId]);
+
+  useEffect(() => {
+    loadArchived();
+  }, [loadArchived]);
+
+  const toggleArchive = useCallback(
+    async (conv: LiveConversation) => {
+      const key = suffix8(conv.phone);
+      const isArchived = archived.has(key);
+      if (isArchived) {
+        await (supabase as any)
+          .from("event_archived_conversations")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("phone", conv.phone);
+        setArchived((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        toast.success("Conversa restaurada na fila da live");
+      } else {
+        await (supabase as any).from("event_archived_conversations").insert({
+          event_id: eventId,
+          phone: conv.phone,
+          whatsapp_number_id: conv.whatsappNumberId,
+        });
+        setArchived((prev) => new Set(prev).add(key));
+        toast.success("Conversa arquivada nesta live");
+      }
+    },
+    [archived, eventId]
+  );
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc("get_conversations", {
@@ -83,10 +131,7 @@ export function LiveWhatsAppQueue({
       setLoading(false);
       return;
     }
-    let rows = (data || []) as any[];
-    if (instanceIds.length > 0) {
-      rows = rows.filter((r) => instanceIds.includes(r.whatsapp_number_id));
-    }
+    const rows = (data || []) as any[];
     const convs: LiveConversation[] = rows
       .filter((r) => !r.is_dispatch_only)
       .map((r) => ({
@@ -108,7 +153,7 @@ export function LiveWhatsAppQueue({
       convs.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
     );
     setLoading(false);
-  }, [instanceIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     load();
@@ -129,9 +174,24 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
+  // Instância escolhida no filtro (uma só, ou todas)
+  const byInstance = useMemo(
+    () =>
+      instanceId === ALL
+        ? conversations
+        : conversations.filter((c) => c.whatsappNumberId === instanceId),
+    [conversations, instanceId]
+  );
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return conversations.filter((c) => {
+    return byInstance.filter((c) => {
+      const isArchived = archived.has(suffix8(c.phone));
+      if (filter === "archived") {
+        if (!isArchived) return false;
+      } else if (isArchived) {
+        return false;
+      }
       const order = orderBySuffix.get(suffix8(c.phone));
       if (filter === "live" && startedAtMs && c.lastMessageAt.getTime() < startedAtMs) return false;
       if (filter === "no_order" && order) return false;
@@ -141,20 +201,28 @@ export function LiveWhatsAppQueue({
       }
       return true;
     });
-  }, [conversations, filter, search, orderBySuffix, startedAtMs]);
+  }, [byInstance, filter, search, orderBySuffix, startedAtMs, archived]);
 
   const counts = useMemo(() => {
     let live = 0;
     let noOrder = 0;
-    for (const c of conversations) {
+    let archivedCount = 0;
+    let all = 0;
+    for (const c of byInstance) {
+      if (archived.has(suffix8(c.phone))) {
+        archivedCount++;
+        continue;
+      }
+      all++;
       if (!startedAtMs || c.lastMessageAt.getTime() >= startedAtMs) live++;
       if (!orderBySuffix.get(suffix8(c.phone))) noOrder++;
     }
-    return { live, noOrder, all: conversations.length };
-  }, [conversations, orderBySuffix, startedAtMs]);
+    return { live, noOrder, all, archived: archivedCount };
+  }, [byInstance, orderBySuffix, startedAtMs, archived]);
 
   const instanceLabel = (id: string | null) =>
     numbers.find((n) => n.id === id)?.label || null;
+
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card">
