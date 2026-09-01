@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -131,7 +132,6 @@ interface MetaTemplate {
   }>;
 }
 
-// ── Chat contact type ──
 
 export default function ChatPage() {
   const navigate = useNavigate();
