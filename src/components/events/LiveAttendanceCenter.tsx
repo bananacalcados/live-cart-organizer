@@ -147,13 +147,14 @@ export function LiveAttendanceCenter({
         )}
       </div>
 
-      {/* Coluna 3 — pedidos vertical */}
+      {/* Coluna 3 — pedidos vertical (telas largas) */}
       <div className="hidden w-[300px] shrink-0 flex-col 2xl:flex">
         <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
       </div>
 
       {/* Coluna 4 — comentários da live (sempre visível) */}
-      <div className="hidden w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card xl:flex">
+      <div className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
+
         <div className="flex gap-1 border-b border-border px-2 py-2">
           <button
             type="button"
@@ -189,10 +190,11 @@ export function LiveAttendanceCenter({
         </div>
       </div>
 
-      {/* Telas menores: pedidos abaixo do chat na coluna lateral estreita */}
-      <div className="hidden w-[300px] shrink-0 flex-col xl:flex 2xl:hidden">
+      {/* Telas médias: pedidos ao lado do chat */}
+      <div className="hidden w-[280px] shrink-0 flex-col xl:flex 2xl:hidden">
         <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
       </div>
+
 
 
       <OrderDialogDb
