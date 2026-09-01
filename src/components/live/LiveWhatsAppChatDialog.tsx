@@ -111,10 +111,17 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     }
   }, [messages]);
 
-  // Provider efetivo: prioriza o vinculado à conversa; fallback no seletor global.
-  const resolveProvider = (): 'meta' | 'zapi' => {
+  // Rota efetiva (canal + provider) derivada da instância da conversa.
+  // Instagram/Messenger vão para meta-messenger-send; WhatsApp respeita o provider real
+  // (meta | uazapi | wasender | zapi) — nunca forçar meta-whatsapp-send para conta IG.
+  const resolveRoute = (): { channel: 'whatsapp' | 'instagram' | 'messenger'; provider: 'meta' | 'zapi' | 'uazapi' | 'wasender'; numberId: string | null } => {
     const num = effectiveNumber || getSelectedNumber();
-    return num?.provider === 'meta' ? 'meta' : 'zapi';
+    const p = (num?.provider || 'zapi') as string;
+    if (p === 'instagram' || p === 'messenger') {
+      return { channel: p, provider: 'meta', numberId: effectiveNumberId || num?.id || null };
+    }
+    const provider = p === 'meta' || p === 'uazapi' || p === 'wasender' ? p : 'zapi';
+    return { channel: 'whatsapp', provider, numberId: effectiveNumberId || null };
   };
 
 
@@ -125,7 +132,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     const result = await sendText({
       phone: viewerPhone,
       message: text,
-      route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+      route: resolveRoute(),
       senderUserId: currentUserId || null,
     });
     if (result.success) {
@@ -162,7 +169,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
         phone: viewerPhone,
         mediaUrl: publicUrl,
         mediaType,
-        route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+        route: resolveRoute(),
         senderUserId: currentUserId || null,
       });
       if (result.success) {
@@ -207,7 +214,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           const result = await sendAudio({
             phone: viewerPhone,
             mediaUrl: publicUrl,
-            route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+            route: resolveRoute(),
             senderUserId: currentUserId || null,
           });
           if (result.success) {
