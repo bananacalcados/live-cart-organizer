@@ -64,6 +64,8 @@ interface MediaAttachment {
 interface WhatsAppChatProps {
   order: Order;
   onBack?: () => void;
+  /** Conversa sem pedido vinculado: bloqueia gravações em `orders`. */
+  orderless?: boolean;
 }
 
 // Status icon now uses shared component
@@ -101,7 +103,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -118,7 +120,24 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [fichaOpen, setFichaOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOrderOpen, setEditOrderOpen] = useState(false);
-  const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
+  const {
+    moveOrder: moveOrderRaw,
+    setHasUnreadMessages: setHasUnreadMessagesRaw,
+    updateOrder: updateOrderRaw,
+  } = useDbOrderStore();
+  // Conversa sem pedido vinculado: nenhuma escrita em `orders`.
+  const moveOrder = useCallback(
+    (id: string, stage: OrderStage) => { if (!orderless) moveOrderRaw(id, stage); },
+    [orderless, moveOrderRaw]
+  );
+  const setHasUnreadMessages = useCallback(
+    async (id: string, v: boolean) => { if (!orderless) await setHasUnreadMessagesRaw(id, v); },
+    [orderless, setHasUnreadMessagesRaw]
+  );
+  const updateOrder = useCallback(
+    async (id: string, updates: any) => { if (!orderless) await updateOrderRaw(id, updates); },
+    [orderless, updateOrderRaw]
+  );
   const dbOrders = useDbOrderStore((s) => s.orders);
   const dbOrder = useMemo(() => dbOrders.find((o) => o.id === order.id) || null, [dbOrders, order.id]);
   const { getTemplatesByStage, templates } = useTemplateStore();
