@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
