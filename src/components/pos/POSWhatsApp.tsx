@@ -289,9 +289,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return out;
   }, [conversations, liveStageMap, liveGhostRows]);
 
+  // Ghost rows não passam pelo enrichConversations, então resolvemos o status
+  // de "finalizada" desses telefones sob demanda (lote + cache compartilhado).
+  useEffect(() => {
+    if (liveGhostRows.length) ensureFinished(liveGhostRows.map(g => g.phone));
+  }, [liveGhostRows, ensureFinished]);
+
   // Ghost conversations: live orders whose phones aren't in real conversations.
   // Injected only when liveFilterActive so they don't pollute other tabs.
   const ghostConversations = useMemo<Conversation[]>(() => {
+
     if (!liveFilterActive) return [];
     const existingKeys = new Set(conversations.map(c => livePhoneKey(c.phone)));
     return liveGhostRows
