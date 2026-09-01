@@ -22657,6 +22657,13 @@ export type Database = {
         Args: { p_cpf?: string; p_phone: string }
         Returns: string
       }
+      resolve_finished_conversations: {
+        Args: { p_keys: string[] }
+        Returns: {
+          finished_at: string
+          phone_key: string
+        }[]
+      }
       resolve_fiscal_rule: {
         Args: {
           p_ncm: string
