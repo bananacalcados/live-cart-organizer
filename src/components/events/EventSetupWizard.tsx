@@ -578,7 +578,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
               {/* Modo de operação da live */}
               <div className="space-y-2">
                 <Label>Como essa live vai funcionar? *</Label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setOperationMode("manual")}
@@ -609,7 +609,33 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                       Link único na live: a cliente confirma e paga sozinha.
                     </p>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode("whatsapp")}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === "whatsapp"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">WhatsApp</p>
+                    <p className="text-xs text-muted-foreground">
+                      O botão da live leva a cliente pro WhatsApp e o atendimento acontece na
+                      Central da Live (fila + chat + pedidos).
+                    </p>
+                  </button>
                 </div>
+                {operationMode === "whatsapp" && (
+                  <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Nesta live aparece a aba <strong>Central da Live</strong>: fila de conversas
+                      do WhatsApp, chat aberto ao lado e os pedidos empilhados na vertical — sem
+                      perder os comentários da live.
+                    </p>
+                  </div>
+                )}
+
                 {operationMode === "member_area" && (
                   <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
                     <Label className="text-xs text-muted-foreground">

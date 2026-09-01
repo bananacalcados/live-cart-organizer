@@ -570,7 +570,7 @@ const Events = () => {
                    {/* Modo de operação da live */}
                    <div className="space-y-2">
                      <Label>Como essa live vai funcionar? *</Label>
-                     <div className="grid grid-cols-2 gap-2">
+                     <div className="grid grid-cols-3 gap-2">
                        <button
                          type="button"
                          onClick={() => setOperationMode("manual")}
@@ -598,8 +598,23 @@ const Events = () => {
                          <p className="text-xs text-muted-foreground">
                            Link único na live: a cliente confirma e paga sozinha.
                          </p>
-                       </button>
-                     </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOperationMode("whatsapp")}
+                          className={`rounded-lg border-2 p-3 text-left transition ${
+                            operationMode === "whatsapp"
+                              ? "border-primary bg-primary/10"
+                              : "border-border hover:border-primary/40"
+                          }`}
+                        >
+                          <p className="font-semibold text-sm">WhatsApp</p>
+                          <p className="text-xs text-muted-foreground">
+                            O botão da live leva pro WhatsApp e o atendimento roda na Central da Live.
+                          </p>
+                        </button>
+                      </div>
+
                      {operationMode === "member_area" && (
                        <div className="space-y-1 pt-1">
                          <Label htmlFor="memberAreaSlug" className="text-xs text-muted-foreground">

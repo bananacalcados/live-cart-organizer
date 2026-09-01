@@ -28,6 +28,7 @@ import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButt
 import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
 import { EventSetupWizard } from "@/components/events/EventSetupWizard";
 import { EventInnerDashboard } from "@/components/events/EventInnerDashboard";
+import { LiveAttendanceCenter } from "@/components/events/LiveAttendanceCenter";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -56,6 +57,8 @@ const Index = () => {
   const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders, lockOrderEditing, unlockOrderEditing } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
+  const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+
 
   // Fetch events on mount
   useEffect(() => {
@@ -221,7 +224,8 @@ const Index = () => {
         )}
 
         <main className="container py-6 flex-1">
-          <Tabs defaultValue="kanban" className="w-full">
+          <Tabs defaultValue={isWhatsAppMode ? "attendance" : "kanban"} className="w-full">
+
             <div className="flex items-center gap-2 mb-4">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -233,7 +237,14 @@ const Index = () => {
                 />
               </div>
               <TabsList className="ml-auto">
+                {isWhatsAppMode && (
+                  <TabsTrigger value="attendance" className="gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    Central da Live
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="kanban">Pedidos</TabsTrigger>
+
                 <TabsTrigger value="promotions" className="gap-1">
                   <Tag className="h-3 w-3" />
                   Promoções
@@ -265,7 +276,20 @@ const Index = () => {
 
             </div>
 
+            {isWhatsAppMode && currentEventId && (
+              <TabsContent value="attendance" className="-mx-4 md:-mx-6">
+                <LiveAttendanceCenter
+                  eventId={currentEventId}
+                  event={currentEvent}
+                  orders={filteredOrders}
+                  stages={getStagesForMode((currentEvent as any)?.operation_mode)}
+                  onEditOrder={handleEditOrder}
+                />
+              </TabsContent>
+            )}
+
             <TabsContent value="kanban">
+
               
               
               {isLoading ? (
