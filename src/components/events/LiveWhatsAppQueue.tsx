@@ -295,6 +295,8 @@ export function LiveWhatsAppQueue({
           const isSelected = selectedKey === key;
           const isFromLive = !startedAtMs || c.lastMessageAt.getTime() >= startedAtMs;
           const label = instanceLabel(c.whatsappNumberId);
+          const isArchived = archived.has(suffix8(c.phone));
+
           return (
             <button
               key={key}
