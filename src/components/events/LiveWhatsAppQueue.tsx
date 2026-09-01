@@ -510,7 +510,28 @@ export function LiveWhatsAppQueue({
                     </>
                   )}
                 </span>
+                {onQuickActions && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    title="Ações rápidas (link da área de membros, checkout, ficha, etapa, pagamento)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onQuickActions(c);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.stopPropagation();
+                        onQuickActions(c);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1 rounded border border-border bg-secondary px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <Zap className="h-3 w-3" /> Ações
+                  </span>
+                )}
               </div>
+
 
             </button>
           );
