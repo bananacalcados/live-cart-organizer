@@ -342,6 +342,8 @@ export function useConversationEnrichment() {
     awaitingPaymentPhones,
     aiTransferredPhones,
     resolveAiTransfer,
+    ensureFinished,
     loadFinished,
+
   };
 }
