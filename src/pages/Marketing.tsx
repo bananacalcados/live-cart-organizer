@@ -1697,7 +1697,7 @@ export default function Marketing() {
                         const { data: sales } = await supabase
                           .from('pos_sales')
                           .select('id, seller_id, customer_phone')
-                          .ilike('customer_phone', `%${suffix}`)
+                          .eq('phone_suffix8', suffix)
                           .order('created_at', { ascending: false })
                           .limit(1);
                         if (sales && sales.length > 0) {
@@ -2197,7 +2197,7 @@ export default function Marketing() {
 
                         // Fetch zoppy_sales with line_items, pos_sales with items, cashback, and prizes in parallel
                         const [zRes, posCustomersRes, cashbackRes, prizesRes] = await Promise.all([
-                          supabase.from('zoppy_sales').select('completed_at, total, status, line_items, customer_name').ilike('customer_phone', `%${suffix8}`).order('completed_at', { ascending: false }).limit(50),
+                          supabase.from('zoppy_sales').select('completed_at, total, status, line_items, customer_name').eq('phone_suffix8', suffix8).order('completed_at', { ascending: false }).limit(50),
                           supabase.from('pos_customers').select('id, whatsapp').ilike('whatsapp', `%${suffix8}`),
                           supabase.from('customer_loyalty_points').select('total_points, expires_at').ilike('customer_phone', `%${suffix8}`).limit(1),
                           supabase.from('customer_prizes').select('prize_label, coupon_code, is_redeemed, expires_at, prize_value').ilike('customer_phone', `%${suffix8}`).order('created_at', { ascending: false }).limit(10),

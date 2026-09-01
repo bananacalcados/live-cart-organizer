@@ -232,7 +232,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
         ? supabase
             .from("zoppy_sales")
             .select("id, completed_at, total, status, line_items, customer_phone")
-            .ilike("customer_phone", `%${last8}`)
+            .eq("phone_suffix8", last8)
             .order("completed_at", { ascending: false })
             .limit(50)
         : Promise.resolve({ data: [], error: null } as any);

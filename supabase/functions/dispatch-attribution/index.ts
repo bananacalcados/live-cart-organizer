@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
       const { data: prevZoppy } = await supabase
         .from("zoppy_sales")
         .select("id, total, completed_at, customer_name, line_items, status")
-        .ilike("customer_phone", `%${suffix.slice(-8)}`)
+        .eq("phone_suffix8", suffix.slice(-8))
         .lt("completed_at", dispatchDate)
         .in("status", ["paid", "complete", "completed"])
         .order("completed_at", { ascending: false })

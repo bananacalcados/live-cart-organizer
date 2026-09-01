@@ -185,7 +185,7 @@ async function findOrder(
       const { data: sales } = await supabase
         .from("pos_sales")
         .select("id, status, notes, total, created_at")
-        .ilike("customer_phone", `%${phoneSuffix}`)
+        .eq("phone_suffix8", phoneSuffix)
         .not("status", "in", '("paid","completed")')
         .gte("created_at", windowStart)
         .order("created_at", { ascending: false })
