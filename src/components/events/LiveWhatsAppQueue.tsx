@@ -80,18 +80,23 @@ const pinKey = (eventId: string) => `live_center_pinned_instances_${eventId}`;
 export function LiveWhatsAppQueue({
   eventId,
   liveStartedAt,
+  eventPeriodStart = null,
+  eventPeriodEnd = null,
   orders,
   selectedKey,
   onSelect,
   onCreateOrder,
+  onQuickActions,
   defaultInstanceId = null,
 }: LiveWhatsAppQueueProps) {
 
   const [conversations, setConversations] = useState<LiveConversation[]>([]);
   const [filter, setFilter] = useState<QueueFilter>("live");
+  const [onlyEventPeriod, setOnlyEventPeriod] = useState(true);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [archived, setArchived] = useState<Set<string>>(new Set());
+
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
 
   // Instâncias fixadas NESTE evento (persistem ao sair e voltar da aba)
