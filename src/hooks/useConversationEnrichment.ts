@@ -1,66 +1,45 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Conversation, ConversationStatus } from '@/components/chat/ChatTypes';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
+import {
+  finishedPhoneKey,
+  peekFinishedMap,
+  resolveFinishedConversations,
+  setFinishedLocal,
+  subscribeFinishedCache,
+} from '@/lib/finishedConversationsCache';
 
-interface FinishedConversation {
-  phone: string;
-  finished_at: string;
-}
-
-const normalizePhoneKey = (phone: string | null | undefined) => {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits ? digits.slice(-8) : '';
-};
+const normalizePhoneKey = (phone: string | null | undefined) => finishedPhoneKey(phone);
 
 /**
  * Computes conversation status from message data and enriches with instance info.
  */
 export function useConversationEnrichment() {
-  const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
-  const [finishedAtByPhone, setFinishedAtByPhone] = useState<Map<string, string>>(new Map());
+  // Bump-only counter: o mapa de finalizadas vive no cache de módulo
+  // (compartilhado entre todas as telas de chat) e este contador apenas força
+  // o re-render quando o cache muda.
+  const [finishedVersion, setFinishedVersion] = useState(0);
   const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
   const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
   const [aiTransferredPhones, setAiTransferredPhones] = useState<Set<string>>(new Set());
   const { numbers } = useWhatsAppNumberStore();
 
-  const loadFinished = useCallback(async () => {
-    let allFinished: FinishedConversation[] = [];
-    let from = 0;
-    const PAGE_SIZE = 1000;
+  useEffect(() => subscribeFinishedCache(() => setFinishedVersion(v => v + 1)), []);
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('chat_finished_conversations')
-        .select('phone, finished_at')
-        // Stable ordering is REQUIRED: without it, .range() pagination over
-        // thousands of rows can drop/duplicate rows between pages, causing a
-        // just-finished conversation to silently disappear from the map and
-        // pop back into its original tab.
-        .order('phone', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
+  const finishedAtByPhone = useMemo(() => peekFinishedMap(), [finishedVersion]);
+  const finishedPhones = useMemo(() => new Set(finishedAtByPhone.keys()), [finishedAtByPhone]);
 
-      if (error || !data || data.length === 0) break;
-
-      allFinished = allFinished.concat(data as FinishedConversation[]);
-
-      if (data.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
-
-    const nextFinishedMap = new Map<string, string>();
-    for (const row of allFinished) {
-      const key = normalizePhoneKey(row.phone);
-      if (!key || !row.finished_at) continue;
-      const existing = nextFinishedMap.get(key);
-      if (!existing || new Date(row.finished_at).getTime() > new Date(existing).getTime()) {
-        nextFinishedMap.set(key, row.finished_at);
-      }
-    }
-
-    setFinishedAtByPhone(nextFinishedMap);
-    setFinishedPhones(new Set(nextFinishedMap.keys()));
+  /** Resolve (sob demanda) apenas os telefones informados. */
+  const ensureFinished = useCallback((phones: (string | null | undefined)[]) => {
+    void resolveFinishedConversations(phones);
   }, []);
+
+  // Fallback: força re-resolução dos telefones já conhecidos.
+  const loadFinished = useCallback(async () => {
+    await resolveFinishedConversations(Array.from(peekFinishedMap().keys()), true);
+  }, []);
+
 
   const loadArchived = useCallback(async () => {
     const { data } = await supabase.from('chat_archived_conversations').select('phone');
