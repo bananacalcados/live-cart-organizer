@@ -56,7 +56,9 @@ export function LiveAttendanceCenter({
   const [selected, setSelected] = useState<LiveConversation | null>(null);
   const [sideTab, setSideTab] = useState<"comments" | "team">("comments");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [actionsConv, setActionsConv] = useState<LiveConversation | null>(null);
   const [prefill, setPrefill] = useState<{ phone?: string; name?: string }>({});
+
 
   const liveStartedAt: string | null =
     event?.live_broadcast_started_at || event?.start_date || null;
