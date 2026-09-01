@@ -110,7 +110,15 @@ export function useConversationEnrichment() {
 
     const channel = supabase
       .channel('chat-enrichment-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => debounce('finished', loadFinished))
+      // Atualização cirúrgica: usa o telefone que vem no próprio evento e
+      // altera SÓ aquela entrada do cache — sem ida ao banco.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, (payload: any) => {
+        const row = payload.new ?? payload.old;
+        const phone = row?.phone;
+        if (!phone) return;
+        if (payload.eventType === 'DELETE') setFinishedLocal(phone, null);
+        else setFinishedLocal(phone, row.finished_at ?? new Date().toISOString());
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => debounce('archived', loadArchived))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => debounce('awaiting', loadAwaitingPayment))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => debounce('transferred', loadAiTransferred))
@@ -119,7 +127,8 @@ export function useConversationEnrichment() {
       Object.values(timers).forEach((t) => t && clearTimeout(t));
       supabase.removeChannel(channel);
     };
-  }, [loadFinished, loadArchived, loadAwaitingPayment, loadAiTransferred]);
+  }, [loadArchived, loadAwaitingPayment, loadAiTransferred]);
+
 
   const finishConversation = useCallback(async (
     phone: string,
