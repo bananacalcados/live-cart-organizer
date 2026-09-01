@@ -6,7 +6,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
