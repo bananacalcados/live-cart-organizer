@@ -6,18 +6,13 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Archive, ArchiveRestore, MessageCircle, Plus, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, Pin, PinOff, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
+
 
 export interface LiveConversation {
   phone: string;
@@ -51,7 +46,30 @@ const suffix8 = (phone?: string | null) => {
   return digits ? digits.slice(-8) : "";
 };
 
-const ALL = "__all__";
+/** Instâncias que NÃO devem aparecer no filtro da Central da Live. */
+const HIDDEN_INSTANCE_LABELS = [
+  "zoppy",
+  "whats carol",
+  "matthews whats",
+  "ravena",
+  "datacrazy",
+  "banana calcados",
+  "banana calçados",
+];
+
+const normalizeLabel = (v?: string | null) =>
+  (v || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isHiddenInstance = (label?: string | null) => {
+  const n = normalizeLabel(label);
+  return HIDDEN_INSTANCE_LABELS.some((h) => n === normalizeLabel(h));
+};
+
+const pinKey = (eventId: string) => `live_center_pinned_instances_${eventId}`;
 
 export function LiveWhatsAppQueue({
   eventId,
@@ -67,17 +85,33 @@ export function LiveWhatsAppQueue({
   const [filter, setFilter] = useState<QueueFilter>("live");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [instanceId, setInstanceId] = useState<string>(defaultInstanceId || ALL);
   const [archived, setArchived] = useState<Set<string>>(new Set());
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
+
+  // Instâncias fixadas NESTE evento (persistem ao sair e voltar da aba)
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(pinKey(eventId));
+      if (raw) return JSON.parse(raw) as string[];
+    } catch { /* ignore */ }
+    return defaultInstanceId ? [defaultInstanceId] : [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(pinKey(eventId), JSON.stringify(pinnedIds));
+    } catch { /* ignore */ }
+  }, [pinnedIds, eventId]);
+
+  const selectableNumbers = useMemo(
+    () => numbers.filter((n) => !isHiddenInstance(n.label)),
+    [numbers]
+  );
 
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
 
-  useEffect(() => {
-    if (defaultInstanceId) setInstanceId(defaultInstanceId);
-  }, [defaultInstanceId]);
 
   // Conversas arquivadas SÓ nesta live
   const loadArchived = useCallback(async () => {
@@ -174,14 +208,21 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
-  // Instância escolhida no filtro (uma só, ou todas)
-  const byInstance = useMemo(
-    () =>
-      instanceId === ALL
-        ? conversations
-        : conversations.filter((c) => c.whatsappNumberId === instanceId),
-    [conversations, instanceId]
+  // Instâncias fixadas (vazio = todas as instâncias permitidas)
+  const allowedIds = useMemo(
+    () => new Set(selectableNumbers.map((n) => n.id)),
+    [selectableNumbers]
   );
+
+  const byInstance = useMemo(() => {
+    const pinned = new Set(pinnedIds);
+    return conversations.filter((c) => {
+      const id = c.whatsappNumberId;
+      if (pinned.size > 0) return !!id && pinned.has(id);
+      return !id || allowedIds.has(id);
+    });
+  }, [conversations, pinnedIds, allowedIds]);
+
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -236,19 +277,38 @@ export function LiveWhatsAppQueue({
       </div>
 
       <div className="space-y-2 px-2 py-2">
-        <Select value={instanceId} onValueChange={setInstanceId}>
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder="Instância" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as instâncias</SelectItem>
-            {numbers.map((n) => (
-              <SelectItem key={n.id} value={n.id}>
-                {n.label} · {n.phone_display}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1">
+          <MultiInstanceFilter
+            numbers={selectableNumbers}
+            selectedIds={pinnedIds}
+            onSelectedIdsChange={setPinnedIds}
+            className="h-8 flex-1 justify-start text-xs"
+          />
+          {pinnedIds.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-primary"
+              title="Instâncias fixadas neste evento — clique para desafixar"
+              onClick={() => setPinnedIds([])}
+            >
+              <PinOff className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <span
+              className="flex h-8 w-8 items-center justify-center text-muted-foreground"
+              title="Selecione instâncias para fixá-las neste evento"
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </div>
+        {pinnedIds.length > 0 && (
+          <p className="px-0.5 text-[10px] text-muted-foreground">
+            {pinnedIds.length} instância(s) fixada(s) nesta live
+          </p>
+        )}
+
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
