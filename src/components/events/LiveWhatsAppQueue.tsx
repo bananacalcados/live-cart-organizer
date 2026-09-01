@@ -236,6 +236,19 @@ export function LiveWhatsAppQueue({
       </div>
 
       <div className="space-y-2 px-2 py-2">
+        <Select value={instanceId} onValueChange={setInstanceId}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="Instância" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todas as instâncias</SelectItem>
+            {numbers.map((n) => (
+              <SelectItem key={n.id} value={n.id}>
+                {n.label} · {n.phone_display}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -247,7 +260,9 @@ export function LiveWhatsAppQueue({
             ["live", `Da live (${counts.live})`],
             ["no_order", `Sem pedido (${counts.noOrder})`],
             ["all", `Todas (${counts.all})`],
+            ["archived", `Arquivadas (${counts.archived})`],
           ] as [QueueFilter, string][]).map(([id, label]) => (
+
             <button
               key={id}
               type="button"
