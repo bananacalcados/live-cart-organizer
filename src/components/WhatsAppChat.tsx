@@ -66,6 +66,8 @@ interface WhatsAppChatProps {
   onBack?: () => void;
   /** Conversa sem pedido vinculado: bloqueia gravações em `orders`. */
   orderless?: boolean;
+  /** Instância exata escolhida na fila (evita resolver outra conta pelo telefone). */
+  conversationNumberId?: string | null;
 }
 
 // Status icon now uses shared component
@@ -103,7 +105,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -166,10 +168,12 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
       else localStorage.removeItem(overrideStorageKey);
     } catch { /* ignore */ }
   }, [overrideStorageKey]);
-  const effectiveNumberId = overrideNumberId || hookEffectiveNumberId;
+  const effectiveNumberId = overrideNumberId || conversationNumberId || hookEffectiveNumberId;
   const boundNumber = overrideNumberId
     ? (numbers.find((n) => n.id === overrideNumberId) || null)
-    : hookBoundNumber;
+    : (conversationNumberId
+        ? (numbers.find((n) => n.id === conversationNumberId) || null)
+        : hookBoundNumber);
 
 
 
@@ -290,10 +294,12 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
     overrideNumberId ? { 'x-force-instance': 'true' } : {};
 
   // ── Detect provider for the instance bound to this conversation ──
-  const getProvider = (): 'zapi' | 'meta' | 'wasender' | 'uazapi' => {
+  const getProvider = (): 'zapi' | 'meta' | 'wasender' | 'uazapi' | 'instagram' | 'messenger' => {
     const num = boundNumber
       ?? (effectiveNumberId ? numbers.find(n => n.id === effectiveNumberId) : null)
       ?? getSelectedNumber();
+    if (num?.provider === 'instagram') return 'instagram';
+    if (num?.provider === 'messenger') return 'messenger';
     if (num?.provider === 'zapi') return 'zapi';
     if (num?.provider === 'wasender') return 'wasender';
     if (num?.provider === 'uazapi') return 'uazapi';
@@ -414,6 +420,34 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
     }
   };
 
+  // ── Send Instagram Direct / Messenger through the matching Meta account ──
+  const sendViaMessenger = async (
+    recipientId: string,
+    message: string,
+    channel: 'instagram' | 'messenger',
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-messenger-send', {
+        body: {
+          recipientId,
+          message,
+          channel,
+          type: type === 'document' ? 'file' : type,
+          mediaUrl,
+          whatsapp_number_id: effectiveNumberId,
+        },
+        headers: forceInstanceHeaders(),
+      });
+      if (error) return { success: false, error: error.message };
+      if (data?.success) return { success: true, messageId: data.messageId };
+      return { success: false, error: data?.error || 'Erro ao enviar Direct' };
+    } catch {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
+
   // ── Unified send that routes based on provider ──
   const sendMessage = async (
     phoneNumber: string,
@@ -423,6 +457,9 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
     caption?: string,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     const provider = getProvider();
+    if (provider === 'instagram' || provider === 'messenger') {
+      return sendViaMessenger(phoneNumber, message, provider, type, mediaUrl);
+    }
     if (provider === 'wasender') {
       return sendViaWasender(phoneNumber, message, type, mediaUrl, caption);
     }
@@ -494,7 +531,7 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
   const loadMessages = async () => {
     // Quando o operador troca a instância manualmente, o histórico deve ser o
     // daquela instância. Sem override, resolve pela última mensagem da conversa.
-    let convNumberId: string | null = overrideNumberId;
+    let convNumberId: string | null = overrideNumberId || conversationNumberId;
     if (!convNumberId) {
       const { data: instRow } = await supabase
         .from('whatsapp_messages')
@@ -533,7 +570,7 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedPhone, order.id, overrideNumberId, setHasUnreadMessages]);
+  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, setHasUnreadMessages]);
 
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
@@ -631,6 +668,7 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
           media_url: mediaUrl,
           message_id: result.messageId || null,
           whatsapp_number_id: effectiveNumberId || null,
+          channel: getProvider() === 'instagram' || getProvider() === 'messenger' ? getProvider() : 'whatsapp',
           sender_user_id: currentUserId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
@@ -679,6 +717,7 @@ export function WhatsAppChat({ order, onBack, orderless = false }: WhatsAppChatP
         status: 'sent',
         message_id: result.messageId || null,
         whatsapp_number_id: effectiveNumberId || null,
+        channel: getProvider() === 'instagram' || getProvider() === 'messenger' ? getProvider() : 'whatsapp',
         sender_user_id: currentUserId || null,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
