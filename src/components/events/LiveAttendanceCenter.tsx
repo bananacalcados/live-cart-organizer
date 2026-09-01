@@ -147,47 +147,53 @@ export function LiveAttendanceCenter({
         )}
       </div>
 
-      {/* Coluna 3 — pedidos vertical + comentários */}
-      <div className="hidden w-[340px] shrink-0 flex-col gap-3 xl:flex">
-        <div className="min-h-0 flex-[3]">
-          <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
-        </div>
-        <div className="flex min-h-0 flex-[2] flex-col overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex gap-1 border-b border-border px-2 py-2">
-            <button
-              type="button"
-              onClick={() => setSideTab("comments")}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
-                sideTab === "comments"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Comentários da Live
-            </button>
-            <button
-              type="button"
-              onClick={() => setSideTab("team")}
-              className={cn(
-                "flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
-                sideTab === "team"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Users className="h-3 w-3" /> Chat da equipe
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {sideTab === "comments" ? (
-              <EventLiveCommentsPanel eventId={eventId} />
-            ) : (
-              <PresenterTeamChat eventId={eventId} />
+      {/* Coluna 3 — pedidos vertical */}
+      <div className="hidden w-[300px] shrink-0 flex-col 2xl:flex">
+        <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
+      </div>
+
+      {/* Coluna 4 — comentários da live (sempre visível) */}
+      <div className="hidden w-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card xl:flex">
+        <div className="flex gap-1 border-b border-border px-2 py-2">
+          <button
+            type="button"
+            onClick={() => setSideTab("comments")}
+            className={cn(
+              "rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
+              sideTab === "comments"
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
             )}
-          </div>
+          >
+            Comentários da Live
+          </button>
+          <button
+            type="button"
+            onClick={() => setSideTab("team")}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors",
+              sideTab === "team"
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Users className="h-3 w-3" /> Chat da equipe
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {sideTab === "comments" ? (
+            <EventLiveCommentsPanel eventId={eventId} />
+          ) : (
+            <PresenterTeamChat eventId={eventId} />
+          )}
         </div>
       </div>
+
+      {/* Telas menores: pedidos abaixo do chat na coluna lateral estreita */}
+      <div className="hidden w-[300px] shrink-0 flex-col xl:flex 2xl:hidden">
+        <LiveOrdersColumn orders={orders} stages={stages} onEditOrder={onEditOrder} />
+      </div>
+
 
       <OrderDialogDb
         open={dialogOpen}
