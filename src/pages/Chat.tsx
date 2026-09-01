@@ -132,12 +132,6 @@ interface MetaTemplate {
 }
 
 // ── Chat contact type ──
-interface ChatContact {
-  id: string;
-  phone: string;
-  display_name: string | null;
-  custom_name: string | null;
-}
 
 export default function ChatPage() {
   const navigate = useNavigate();
