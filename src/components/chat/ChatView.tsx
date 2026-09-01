@@ -76,7 +76,7 @@ interface ChatViewProps {
   conversation: Conversation | null;
   newMessage: string;
   onNewMessageChange: (message: string) => void;
-  onSendMessage: () => void;
+  onSendMessage: (overrideText?: string) => void;
   onSendAudio?: (audioUrl: string) => void;
   onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
   onDeleteMessage?: (msg: Message) => Promise<void>;
@@ -124,9 +124,56 @@ export function ChatView({
   onExtraSent,
   hideTagsBar,
 }: ChatViewProps) {
+  /**
+   * Rascunho LOCAL do composer. Antes, cada tecla atualizava o estado do
+   * componente pai (POSWhatsApp/Chat/Dashboard), re-renderizando a lista de
+   * conversas e todo o histórico a cada caractere — o que deixava a digitação
+   * travada. Agora o texto vive aqui e é sincronizado com o pai com debounce
+   * (e imediatamente antes de enviar).
+   */
+  const [draft, setDraft] = useState(newMessage);
+  const draftRef = useRef(newMessage);
+  const syncTimerRef = useRef<number | null>(null);
+
+  // Mudanças vindas de fora (limpeza pós-envio, resposta rápida etc.)
+  useEffect(() => {
+    if (newMessage !== draftRef.current) {
+      draftRef.current = newMessage;
+      setDraft(newMessage);
+    }
+  }, [newMessage]);
+
+  const updateDraft = useCallback((value: string) => {
+    draftRef.current = value;
+    setDraft(value);
+    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = window.setTimeout(() => {
+      syncTimerRef.current = null;
+      onNewMessageChange(draftRef.current);
+    }, 250);
+  }, [onNewMessageChange]);
+
+  const flushDraft = useCallback(() => {
+    if (syncTimerRef.current) {
+      window.clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    onNewMessageChange(draftRef.current);
+    return draftRef.current;
+  }, [onNewMessageChange]);
+
+  const handleSendClick = useCallback(() => {
+    const text = flushDraft();
+    onSendMessage(text);
+  }, [flushDraft, onSendMessage]);
+
+  useEffect(() => () => {
+    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
+  }, []);
+
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
-    useSpellAssist(newMessage);
-  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
+    useSpellAssist(draft);
+  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(draft, {
     isFinished: conversation?.isFinished,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1062,7 +1109,7 @@ export function ChatView({
 
       <SpellSuggestionBar
         suggestions={spellSuggestions}
-        onApply={(m, replacement) => onNewMessageChange(applySuggestion(newMessage, m, replacement))}
+        onApply={(m, replacement) => updateDraft(applySuggestion(draft, m, replacement))}
         onDismiss={dismissSpell}
         onAddToDictionary={addSpellWord}
       />
@@ -1138,9 +1185,9 @@ export function ChatView({
           </>
         ) : (
           <>
-            <QuickReplyPicker onSelect={(text) => onNewMessageChange(text)} />
+            <QuickReplyPicker onSelect={(text) => updateDraft(text)} />
             <EmojiPickerButton 
-              onEmojiSelect={(emoji) => onNewMessageChange(newMessage + emoji)} 
+              onEmojiSelect={(emoji) => updateDraft(draft + emoji)} 
             />
             {onSendMedia && (
               <Popover>
@@ -1191,12 +1238,12 @@ export function ChatView({
             )}
             <textarea
               placeholder="Digite uma mensagem..."
-              value={newMessage}
-              onChange={(e) => onNewMessageChange(capitalizeSentences(e.target.value))}
+              value={draft}
+              onChange={(e) => updateDraft(capitalizeSentences(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  onSendMessage();
+                  handleSendClick();
                 }
               }}
               rows={1}
@@ -1207,7 +1254,7 @@ export function ChatView({
                 target.style.height = Math.min(target.scrollHeight, 120) + 'px';
               }}
             />
-            {newMessage.trim() ? (
+            {draft.trim() ? (
               <div className="flex gap-1">
                 <Button
                   size="icon"
@@ -1220,7 +1267,7 @@ export function ChatView({
                 </Button>
                 <Button
                   size="icon"
-                  onClick={onSendMessage}
+                  onClick={handleSendClick}
                   disabled={isSending}
                   className="bg-stage-paid hover:bg-stage-paid/90"
                 >
@@ -1245,9 +1292,9 @@ export function ChatView({
           open={showScheduleDialog}
           onOpenChange={setShowScheduleDialog}
           phone={conversation.phone}
-          message={newMessage}
+          message={draft}
           whatsappNumberId={conversation.whatsapp_number_id}
-          onScheduled={() => onNewMessageChange("")}
+          onScheduled={() => updateDraft("")}
         />
       )}
 
