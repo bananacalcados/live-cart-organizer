@@ -532,8 +532,16 @@ serve(async (req) => {
       }
     };
 
+    // Modo WhatsApp da live: a cliente chega pelo link /zap (redirecionador) e o
+    // atendimento é humano na Central da Live — NÃO dispara template API/blocos
+    // de WhatsApp automaticamente. Instagram Direct continua permitido.
+    const skipWhatsAppAuto = operationMode === 'whatsapp' && !forceInstagram;
+
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
+    } else if (skipWhatsAppAuto) {
+      console.log(`[livete-start] Modo WhatsApp: template automático suprimido para order ${orderId}`);
+      await Promise.allSettled([dispatchInstagram()]);
     } else {
       // Run all selected channels in parallel
       await Promise.allSettled([

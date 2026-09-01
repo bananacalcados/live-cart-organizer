@@ -200,12 +200,33 @@ export function LiveWhatsAppQueue({
     setLoading(false);
   }, []);
 
+  // Cliques do link /zap desta live já casados com um telefone (código, tempo ou contexto)
+  const [zapMatches, setZapMatches] = useState<Map<string, { method: string; hasFb: boolean }>>(new Map());
+  const loadZapMatches = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("live_whatsapp_clicks")
+      .select("phone, match_method, fbc, fbp")
+      .eq("event_id", eventId)
+      .not("phone", "is", null);
+    const map = new Map<string, { method: string; hasFb: boolean }>();
+    for (const r of (data || []) as any[]) {
+      const key = suffix8(r.phone);
+      if (!key) continue;
+      const prev = map.get(key);
+      const next = { method: r.match_method || "context", hasFb: Boolean(r.fbc || r.fbp) };
+      if (!prev || (next.hasFb && !prev.hasFb)) map.set(key, next);
+    }
+    setZapMatches(map);
+  }, [eventId]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadZapMatches();
+  }, [load, loadZapMatches]);
 
   useWaMessageBroadcast(() => {
     load();
+    loadZapMatches();
   }, { debounceMs: 1200 });
 
   const orderBySuffix = useMemo(() => {
@@ -404,6 +425,7 @@ export function LiveWhatsAppQueue({
           const isFromLive = !startedAtMs || c.lastMessageAt.getTime() >= startedAtMs;
           const label = instanceLabel(c.whatsappNumberId);
           const isArchived = archived.has(suffix8(c.phone));
+          const zap = zapMatches.get(suffix8(c.phone));
 
           return (
             <button
@@ -431,10 +453,25 @@ export function LiveWhatsAppQueue({
               </div>
               <p className="truncate text-[11px] text-muted-foreground">{c.lastMessage}</p>
               <div className="mt-1 flex flex-wrap items-center gap-1">
-                {isFromLive && (
-                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-300">
-                    veio da live
+                {zap ? (
+                  <span
+                    className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300"
+                    title={
+                      zap.method === "code"
+                        ? "Identificada pelo código do link da live"
+                        : zap.method === "time"
+                          ? "Casada pelo horário do clique no link da live"
+                          : "Escreveu 'vim da live' (sem código)"
+                    }
+                  >
+                    link da live{zap.hasFb ? " · ads ✓" : ""}
                   </span>
+                ) : (
+                  isFromLive && (
+                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-300">
+                      veio da live
+                    </span>
+                  )
                 )}
                 {order ? (
                   <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[9px] font-semibold text-sky-600 dark:text-sky-300">

@@ -25,6 +25,7 @@ import { EventFollowupsManager } from "./EventFollowupsManager";
 import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessageEditor";
 import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
+import { LiveWhatsAppLinkConfig } from "./LiveWhatsAppLinkConfig";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
@@ -631,7 +632,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     <p className="text-xs text-muted-foreground">
                       Nesta live aparece a aba <strong>Central da Live</strong>: fila de conversas
                       do WhatsApp, chat aberto ao lado e os pedidos empilhados na vertical — sem
-                      perder os comentários da live.
+                      perder os comentários da live. O template API <strong>não</strong> é disparado
+                      automaticamente quando a cliente confirma o pedido na Área de Clientes — o
+                      contato acontece pelo link abaixo (configure na etapa Mensagem).
                     </p>
                   </div>
                 )}
@@ -703,6 +706,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 Selecione a instância de WhatsApp oficial (Meta), escolha o template aprovado e
                 preencha as variáveis. A mensagem inicial abaixo é usada como saudação no chat.
               </p>
+
+              {operationMode === "whatsapp" && event?.id && (
+                <LiveWhatsAppLinkConfig
+                  eventId={event.id}
+                  eventName={name}
+                  defaultWhatsappNumberId={whatsappNumberId}
+                />
+              )}
+
 
               {/* WhatsApp API instance selector */}
               <div className="space-y-2 rounded-md border p-3 bg-muted/30">

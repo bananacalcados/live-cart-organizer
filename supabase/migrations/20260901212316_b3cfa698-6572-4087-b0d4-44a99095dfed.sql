@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.live_zap_match_incoming() FROM PUBLIC, anon, authenticated;

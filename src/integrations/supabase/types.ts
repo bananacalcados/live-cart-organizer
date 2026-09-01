@@ -9980,6 +9980,157 @@ export type Database = {
           },
         ]
       }
+      live_whatsapp_clicks: {
+        Row: {
+          code: string | null
+          created_at: string
+          event_id: string | null
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
+          id: string
+          ip: string | null
+          link_id: string | null
+          match_method: string | null
+          matched_at: string | null
+          message_id: string | null
+          phone: string | null
+          referer: string | null
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          event_id?: string | null
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          id?: string
+          ip?: string | null
+          link_id?: string | null
+          match_method?: string | null
+          matched_at?: string | null
+          message_id?: string | null
+          phone?: string | null
+          referer?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          event_id?: string | null
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          id?: string
+          ip?: string | null
+          link_id?: string | null
+          match_method?: string | null
+          matched_at?: string | null
+          message_id?: string | null
+          phone?: string | null
+          referer?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_whatsapp_clicks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_whatsapp_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "live_whatsapp_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_whatsapp_links: {
+        Row: {
+          click_count: number
+          created_at: string
+          event_id: string | null
+          id: string
+          is_active: boolean
+          message_text: string
+          name: string
+          slug: string
+          target_phone: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          click_count?: number
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          message_text?: string
+          name: string
+          slug: string
+          target_phone: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          click_count?: number
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          message_text?: string
+          name?: string
+          slug?: string
+          target_phone?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_whatsapp_links_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_whatsapp_links_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_whatsapp_links_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       livete_ig_initial_dm_log: {
         Row: {
           created_at: string
