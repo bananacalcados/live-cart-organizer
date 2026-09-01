@@ -557,24 +557,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     }
   }, [selectedPhone]);
 
-  // Load chat contacts + photos + group names
+  // Load chat contacts (apenas dos telefones visíveis) + photos + group names
   useEffect(() => {
+    if (conversations.length === 0) return;
+    let alive = true;
     const load = async () => {
-      // Fetch all contacts (table may exceed default 1000-row limit)
-      let allContactData: any[] = [];
-      let from = 0;
-      const PAGE = 1000;
-      while (true) {
-        const { data: page } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url, tags").range(from, from + PAGE - 1);
-        if (!page || page.length === 0) break;
-        allContactData = allContactData.concat(page);
-        if (page.length < PAGE) break;
-        from += PAGE;
-      }
-      const [groupsRes] = await Promise.all([
+      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const [{ rows }, groupsRes] = await Promise.all([
+        resolveChatContacts(phones),
         supabase.from("whatsapp_groups").select("group_id, name"),
       ]);
-      const data = allContactData;
+      if (!alive) return;
+      const data = rows;
       if (data) {
         const nameMap: Record<string, string> = {};
         const photoMap: Record<string, string> = {};
@@ -595,9 +589,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             }
           }
         }
-        setChatContacts(nameMap);
-        setContactPhotos(photoMap);
-        setContactTagsMap(tagsMap);
+        setChatContacts(prev => ({ ...prev, ...nameMap }));
+        setContactPhotos(prev => ({ ...prev, ...photoMap }));
+        setContactTagsMap(prev => ({ ...prev, ...tagsMap }));
 
         // Fetch missing profile pics from Z-API (batch of 20)
         if (phonesWithoutPhotos.length > 0) {
