@@ -394,7 +394,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
 
         {/* Toggle Aguardando / Pagos / Erros */}
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Button
+            size="sm"
+            onClick={() => setPresenterMsgOpen(true)}
+            className="h-8 gap-1.5 px-3 text-xs font-bold bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+          >
+            <Megaphone className="h-3.5 w-3.5" />
+            Apresentadora
+          </Button>
+
           <button
             onClick={() => setFilter("awaiting")}
             className={cn(
