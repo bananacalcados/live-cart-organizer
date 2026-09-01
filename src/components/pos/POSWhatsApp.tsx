@@ -180,7 +180,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   // Conversation enrichment (finished/archived/etc.) — declared early so the
   // live ghost-row memo below can exclude finalized/archived phones.
-  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer, ensureFinished } = useConversationEnrichment();
 
 
 
