@@ -219,6 +219,23 @@ export function LiveWhatsAppQueue({
 
   const startedAtMs = liveStartedAt ? new Date(liveStartedAt).getTime() : null;
 
+  // Período do evento: início no começo do dia da data do evento; fim opcional.
+  const periodStartMs = useMemo(() => {
+    if (!eventPeriodStart) return null;
+    const d = new Date(eventPeriodStart);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, [eventPeriodStart]);
+
+  const periodEndMs = useMemo(() => {
+    if (!eventPeriodEnd) return null;
+    const d = new Date(eventPeriodEnd);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  }, [eventPeriodEnd]);
+
   // Instâncias fixadas (vazio = todas as instâncias permitidas)
   const allowedIds = useMemo(
     () => new Set(selectableNumbers.map((n) => n.id)),
@@ -228,11 +245,17 @@ export function LiveWhatsAppQueue({
   const byInstance = useMemo(() => {
     const pinned = new Set(pinnedIds);
     return conversations.filter((c) => {
+      if (onlyEventPeriod) {
+        const t = c.lastMessageAt.getTime();
+        if (periodStartMs && t < periodStartMs) return false;
+        if (periodEndMs && t > periodEndMs) return false;
+      }
       const id = c.whatsappNumberId;
       if (pinned.size > 0) return !!id && pinned.has(id);
       return !id || allowedIds.has(id);
     });
-  }, [conversations, pinnedIds, allowedIds]);
+  }, [conversations, pinnedIds, allowedIds, onlyEventPeriod, periodStartMs, periodEndMs]);
+
 
 
   const filtered = useMemo(() => {
