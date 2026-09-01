@@ -118,6 +118,8 @@ const App = () => (
               <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/ao-vivo/:slug" element={<LiveRedirectPage />} />
+              <Route path="/zap/:slug" element={<LiveWhatsAppRedirectPage />} />
+
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
 
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
