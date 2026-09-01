@@ -40,6 +40,7 @@ const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
 const LiveRedirectPage = lazy(() => import("./pages/LiveRedirectPage"));
+const LiveWhatsAppRedirectPage = lazy(() => import("./pages/LiveWhatsAppRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
 const ConfortoLP = lazy(() => import("./pages/ConfortoLP"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking"));
