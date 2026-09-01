@@ -234,7 +234,14 @@ const Index = () => {
                 />
               </div>
               <TabsList className="ml-auto">
+                {isWhatsAppMode && (
+                  <TabsTrigger value="attendance" className="gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    Central da Live
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="kanban">Pedidos</TabsTrigger>
+
                 <TabsTrigger value="promotions" className="gap-1">
                   <Tag className="h-3 w-3" />
                   Promoções
