@@ -51,6 +51,8 @@ const Index = () => {
   const [selectedStage, setSelectedStage] = useState<OrderStage | "all" | "unpaid">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [tab, setTab] = useState<string>("kanban");
+  const [showDash, setShowDash] = useState(false);
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -58,6 +60,14 @@ const Index = () => {
 
   const currentEvent = getCurrentEvent();
   const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+  // Na Central da Live o dashboard fica recolhido para sobrar espaço ao chat.
+  const liveCompact = tab === "attendance" && !showDash;
+
+  useEffect(() => {
+    if (isWhatsAppMode) setTab((t) => (t === "kanban" ? "attendance" : t));
+  }, [isWhatsAppMode]);
+
+
 
 
   // Fetch events on mount
