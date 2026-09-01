@@ -503,6 +503,33 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     loadBanned();
   }, [loadBanned]);
 
+  // Resolve os @ dos comentários uma única vez (cache persistente entre refreshes).
+  // Antes, cada ciclo de atualização (15s/60s) refazia TODAS as buscas do zero e
+  // ainda mandava 3 variantes por @ ("h", "@h", "@ h").
+  const resolveHandles = useCallback(async (handles: string[]) => {
+    const pending = handles.filter((h) => h && !igHandleCache.has(h));
+    if (pending.length === 0) return;
+    const batchSize = 300;
+    for (let i = 0; i < pending.length; i += batchSize) {
+      const batch = pending.slice(i, i + batchSize);
+      const { data, error } = await supabase.rpc("resolve_ig_handles", { _handles: batch });
+      if (error) return;
+      (data || []).forEach((r: any) => {
+        const h = cleanHandle(r.handle || "");
+        if (!h) return;
+        const prev = igHandleCache.get(h);
+        igHandleCache.set(h, {
+          customerId: r.customer_id || prev?.customerId || null,
+          whatsapp: r.whatsapp || prev?.whatsapp || null,
+        });
+      });
+      // Marca como "não encontrado" para não reconsultar a cada refresh.
+      batch.forEach((h) => {
+        if (!igHandleCache.has(h)) igHandleCache.set(h, { customerId: null, whatsapp: null });
+      });
+    }
+  }, []);
+
   // Carrega o WhatsApp cadastrado dos @ que comentaram (para o botão de WhatsApp)
   useEffect(() => {
     const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
@@ -519,34 +546,20 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
         if (h && wa) map.set(h, o.customer!.whatsapp!);
       }
-      // 2) Busca na tabela de clientes os handles ainda sem WhatsApp
-      const variants: string[] = [];
+      // 2) Resolve no banco só os @ ainda desconhecidos (com cache)
+      await resolveHandles(handles.filter((h) => !map.has(h)));
       handles.forEach((h) => {
-        if (!map.has(h)) {
-          variants.push(h, `@${h}`, `@ ${h}`);
-        }
+        if (map.has(h)) return;
+        const cached = igHandleCache.get(h);
+        const wa = (cached?.whatsapp || "").replace(/\D/g, "");
+        if (cached?.whatsapp && wa) map.set(h, cached.whatsapp);
       });
-      if (variants.length > 0) {
-        const batchSize = 200;
-        for (let i = 0; i < variants.length; i += batchSize) {
-          const batch = variants.slice(i, i + batchSize);
-          const { data } = await supabase
-            .from("customers")
-            .select("instagram_handle, whatsapp")
-            .in("instagram_handle", batch);
-          (data || []).forEach((c: any) => {
-            const h = cleanHandle(c.instagram_handle || "");
-            const wa = (c.whatsapp || "").replace(/\D/g, "");
-            if (h && wa && !map.has(h)) map.set(h, c.whatsapp);
-          });
-        }
-      }
       if (!cancelled) setWhatsappByHandle(map);
     })();
     return () => {
       cancelled = true;
     };
-  }, [comments, orders]);
+  }, [comments, orders, resolveHandles]);
 
   // Carrega o histórico de pedidos (concluídos x abertos) dos @ que comentaram.
   // Serve para sinalizar no painel quem já comprou e quem costuma deixar pedidos sem pagar.
@@ -570,22 +583,13 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         if (h && cid && handlesSet.has(h)) idToHandle.set(cid, h);
       }
 
-      // 1b) Resolve via tabela de clientes. Inclui variantes "@h" e "@ h"
-      //     (alguns handles foram salvos com espaço depois do @).
-      const variants: string[] = [];
-      handles.forEach((h) => variants.push(h, `@${h}`, `@ ${h}`));
-      const cBatch = 200;
-      for (let i = 0; i < variants.length; i += cBatch) {
-        const batch = variants.slice(i, i + cBatch);
-        const { data } = await supabase
-          .from("customers")
-          .select("id, instagram_handle")
-          .in("instagram_handle", batch);
-        (data || []).forEach((c: any) => {
-          const h = cleanHandle(c.instagram_handle || "");
-          if (h && c.id && handlesSet.has(h)) idToHandle.set(c.id, h);
-        });
-      }
+      // 1b) Resolve o restante pelo cache/RPC normalizada (1 consulta por lote).
+      await resolveHandles(handles);
+      handles.forEach((h) => {
+        const cached = igHandleCache.get(h);
+        if (cached?.customerId) idToHandle.set(cached.customerId, h);
+      });
+
 
 
       const customerIds = Array.from(idToHandle.keys());
