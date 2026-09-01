@@ -453,10 +453,25 @@ export function LiveWhatsAppQueue({
               </div>
               <p className="truncate text-[11px] text-muted-foreground">{c.lastMessage}</p>
               <div className="mt-1 flex flex-wrap items-center gap-1">
-                {isFromLive && (
-                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-300">
-                    veio da live
+                {zap ? (
+                  <span
+                    className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300"
+                    title={
+                      zap.method === "code"
+                        ? "Identificada pelo código do link da live"
+                        : zap.method === "time"
+                          ? "Casada pelo horário do clique no link da live"
+                          : "Escreveu 'vim da live' (sem código)"
+                    }
+                  >
+                    link da live{zap.hasFb ? " · ads ✓" : ""}
                   </span>
+                ) : (
+                  isFromLive && (
+                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-300">
+                      veio da live
+                    </span>
+                  )
                 )}
                 {order ? (
                   <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[9px] font-semibold text-sky-600 dark:text-sky-300">
