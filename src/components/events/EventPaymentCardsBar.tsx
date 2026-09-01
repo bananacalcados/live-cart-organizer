@@ -369,13 +369,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
       <div className="container py-2">
         {/* Aviso para a apresentadora */}
-        <Button
-          onClick={() => setPresenterMsgOpen(true)}
-          className="w-full mb-2 h-12 text-base font-bold gap-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
-        >
-          <Megaphone className="h-5 w-5" />
-          ENVIAR MENSAGEM PARA A APRESENTADORA
-        </Button>
+
 
         <Dialog open={presenterMsgOpen} onOpenChange={setPresenterMsgOpen}>
           <DialogContent>
