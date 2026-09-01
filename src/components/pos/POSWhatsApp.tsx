@@ -1280,9 +1280,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     ]);
   };
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedPhone || isSending) return;
-    const messageText = newMessage.trim();
+  const handleSendMessage = async (overrideText?: string) => {
+    const source = overrideText !== undefined ? overrideText : newMessage;
+    if (!source.trim() || !selectedPhone || isSending) return;
+    const messageText = source.trim();
     const route = buildSendRoute();
     if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");

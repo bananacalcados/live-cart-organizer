@@ -175,9 +175,10 @@ export function GlobalWhatsAppChat() {
     if (order) setHasUnreadMessages(order.id, false);
   };
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedPhone || isSending) return;
-    const messageText = newMessage.trim();
+  const handleSendMessage = async (overrideText?: string) => {
+    const source = overrideText !== undefined ? overrideText : newMessage;
+    if (!source.trim() || !selectedPhone || isSending) return;
+    const messageText = source.trim();
     setIsSending(true);
     setNewMessage("");
     try {
