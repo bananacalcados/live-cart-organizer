@@ -7,9 +7,11 @@ import { EventLiveCommentsPanel } from "./EventLiveCommentsPanel";
 import { PresenterTeamChat } from "./PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { LiveQuickActionsDialog } from "./LiveQuickActionsDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Plus, Users } from "lucide-react";
+import { MessageSquare, Plus, Users, Zap } from "lucide-react";
+
 
 interface LiveAttendanceCenterProps {
   eventId: string;
