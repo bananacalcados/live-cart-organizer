@@ -132,7 +132,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     const result = await sendText({
       phone: viewerPhone,
       message: text,
-      route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+      route: resolveRoute(),
       senderUserId: currentUserId || null,
     });
     if (result.success) {
@@ -169,7 +169,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
         phone: viewerPhone,
         mediaUrl: publicUrl,
         mediaType,
-        route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+        route: resolveRoute(),
         senderUserId: currentUserId || null,
       });
       if (result.success) {
@@ -214,7 +214,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           const result = await sendAudio({
             phone: viewerPhone,
             mediaUrl: publicUrl,
-            route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+            route: resolveRoute(),
             senderUserId: currentUserId || null,
           });
           if (result.success) {
