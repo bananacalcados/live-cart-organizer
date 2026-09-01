@@ -53,7 +53,7 @@ const Index = () => {
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
-  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders } = useDbOrderStore();
+  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders, lockOrderEditing, unlockOrderEditing } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
 
@@ -100,8 +100,18 @@ const Index = () => {
   };
 
   const handleEditOrder = (order: DbOrder) => {
+    // Trava atualizações externas do pedido enquanto ele está aberto
+    lockOrderEditing(order.id);
     setEditingOrder(order);
     setDialogOpen(true);
+  };
+
+  const handleOrderDialogOpenChange = (open: boolean) => {
+    if (!open && editingOrder) {
+      // Libera e aplica o que chegou enquanto o modal estava aberto
+      unlockOrderEditing(editingOrder.id);
+    }
+    setDialogOpen(open);
   };
 
   // Filter orders by stage and search
@@ -315,7 +325,7 @@ const Index = () => {
 
         <OrderDialogDb
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={handleOrderDialogOpenChange}
           editingOrder={editingOrder}
           eventId={currentEventId}
         />

@@ -37,11 +37,16 @@ export function PrizeEligibleList({ eventId }: PrizeEligibleListProps) {
         table: 'orders',
         filter: `event_id=eq.${eventId}`,
       }, () => {
-        loadEligibleOrders();
+        // Agrupa rajadas de updates em um único recarregamento (sem piscar a cada evento)
+        if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = window.setTimeout(() => loadEligibleOrders(), 1500);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [eventId]);
 
   const loadEligibleOrders = async () => {
