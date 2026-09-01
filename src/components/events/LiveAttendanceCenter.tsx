@@ -92,19 +92,26 @@ export function LiveAttendanceCenter({
   };
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] min-h-[600px] gap-3 px-3 pb-3">
+    <div className="flex h-[calc(100vh-7rem)] min-h-[600px] gap-3 px-3 pb-3">
       {/* Coluna 1 — fila */}
       <div className="hidden w-[280px] shrink-0 lg:block">
         <LiveWhatsAppQueue
           eventId={eventId}
           liveStartedAt={liveStartedAt}
+          eventPeriodStart={event?.start_date || event?.created_at || null}
+          eventPeriodEnd={event?.end_date || null}
           orders={orders}
           selectedKey={selected ? `${selected.phone}::${selected.whatsappNumberId || ""}` : null}
           onSelect={(c) => setSelected(c)}
           onCreateOrder={openCreateOrder}
+          onQuickActions={(c) => {
+            setSelected(c);
+            setActionsConv(c);
+          }}
           defaultInstanceId={instanceIds[0] || null}
         />
       </div>
+
 
 
       {/* Coluna 2 — chat */}
