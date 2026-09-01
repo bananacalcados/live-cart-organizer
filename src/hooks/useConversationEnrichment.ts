@@ -1,66 +1,45 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Conversation, ConversationStatus } from '@/components/chat/ChatTypes';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
+import {
+  finishedPhoneKey,
+  peekFinishedMap,
+  resolveFinishedConversations,
+  setFinishedLocal,
+  subscribeFinishedCache,
+} from '@/lib/finishedConversationsCache';
 
-interface FinishedConversation {
-  phone: string;
-  finished_at: string;
-}
-
-const normalizePhoneKey = (phone: string | null | undefined) => {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits ? digits.slice(-8) : '';
-};
+const normalizePhoneKey = (phone: string | null | undefined) => finishedPhoneKey(phone);
 
 /**
  * Computes conversation status from message data and enriches with instance info.
  */
 export function useConversationEnrichment() {
-  const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
-  const [finishedAtByPhone, setFinishedAtByPhone] = useState<Map<string, string>>(new Map());
+  // Bump-only counter: o mapa de finalizadas vive no cache de módulo
+  // (compartilhado entre todas as telas de chat) e este contador apenas força
+  // o re-render quando o cache muda.
+  const [finishedVersion, setFinishedVersion] = useState(0);
   const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
   const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
   const [aiTransferredPhones, setAiTransferredPhones] = useState<Set<string>>(new Set());
   const { numbers } = useWhatsAppNumberStore();
 
-  const loadFinished = useCallback(async () => {
-    let allFinished: FinishedConversation[] = [];
-    let from = 0;
-    const PAGE_SIZE = 1000;
+  useEffect(() => subscribeFinishedCache(() => setFinishedVersion(v => v + 1)), []);
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('chat_finished_conversations')
-        .select('phone, finished_at')
-        // Stable ordering is REQUIRED: without it, .range() pagination over
-        // thousands of rows can drop/duplicate rows between pages, causing a
-        // just-finished conversation to silently disappear from the map and
-        // pop back into its original tab.
-        .order('phone', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
+  const finishedAtByPhone = useMemo(() => peekFinishedMap(), [finishedVersion]);
+  const finishedPhones = useMemo(() => new Set(finishedAtByPhone.keys()), [finishedAtByPhone]);
 
-      if (error || !data || data.length === 0) break;
-
-      allFinished = allFinished.concat(data as FinishedConversation[]);
-
-      if (data.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
-
-    const nextFinishedMap = new Map<string, string>();
-    for (const row of allFinished) {
-      const key = normalizePhoneKey(row.phone);
-      if (!key || !row.finished_at) continue;
-      const existing = nextFinishedMap.get(key);
-      if (!existing || new Date(row.finished_at).getTime() > new Date(existing).getTime()) {
-        nextFinishedMap.set(key, row.finished_at);
-      }
-    }
-
-    setFinishedAtByPhone(nextFinishedMap);
-    setFinishedPhones(new Set(nextFinishedMap.keys()));
+  /** Resolve (sob demanda) apenas os telefones informados. */
+  const ensureFinished = useCallback((phones: (string | null | undefined)[]) => {
+    void resolveFinishedConversations(phones);
   }, []);
+
+  // Fallback: força re-resolução dos telefones já conhecidos.
+  const loadFinished = useCallback(async () => {
+    await resolveFinishedConversations(Array.from(peekFinishedMap().keys()), true);
+  }, []);
+
 
   const loadArchived = useCallback(async () => {
     const { data } = await supabase.from('chat_archived_conversations').select('phone');
@@ -108,10 +87,12 @@ export function useConversationEnrichment() {
   }, [aiTransferredPhones]);
 
   useEffect(() => {
-    loadFinished();
+    // `chat_finished_conversations` NÃO é mais baixada inteira aqui: cada tela
+    // resolve sob demanda os telefones visíveis (ver ensureFinished).
     loadArchived();
     loadAwaitingPayment();
     loadAiTransferred();
+
 
     // Debounce realtime reloads. Each of these handlers re-fetches an entire
     // table; without debouncing, a burst of changes (e.g. many conversations
@@ -129,7 +110,15 @@ export function useConversationEnrichment() {
 
     const channel = supabase
       .channel('chat-enrichment-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => debounce('finished', loadFinished))
+      // Atualização cirúrgica: usa o telefone que vem no próprio evento e
+      // altera SÓ aquela entrada do cache — sem ida ao banco.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, (payload: any) => {
+        const row = payload.new ?? payload.old;
+        const phone = row?.phone;
+        if (!phone) return;
+        if (payload.eventType === 'DELETE') setFinishedLocal(phone, null);
+        else setFinishedLocal(phone, row.finished_at ?? new Date().toISOString());
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => debounce('archived', loadArchived))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => debounce('awaiting', loadAwaitingPayment))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => debounce('transferred', loadAiTransferred))
@@ -138,7 +127,8 @@ export function useConversationEnrichment() {
       Object.values(timers).forEach((t) => t && clearTimeout(t));
       supabase.removeChannel(channel);
     };
-  }, [loadFinished, loadArchived, loadAwaitingPayment, loadAiTransferred]);
+  }, [loadArchived, loadAwaitingPayment, loadAiTransferred]);
+
 
   const finishConversation = useCallback(async (
     phone: string,
@@ -157,17 +147,11 @@ export function useConversationEnrichment() {
   ) => {
     const phoneKey = normalizePhoneKey(phone);
     const finishedAtIso = new Date().toISOString();
-    if (phoneKey) {
-      setFinishedPhones(prev => new Set([...prev, phoneKey]));
-      // Keep the timestamp map in sync too — enrichConversations reads this map
-      // (not the Set) to decide isFinished, so it MUST be updated optimistically
-      // or the conversation reverts on the next list refresh.
-      setFinishedAtByPhone(prev => {
-        const next = new Map(prev);
-        next.set(phoneKey, finishedAtIso);
-        return next;
-      });
-    }
+    // Escrita otimista direto no cache compartilhado — enrichConversations lê
+    // dele para decidir isFinished, então precisa ser atualizado antes do
+    // round-trip ou a conversa "volta" na próxima atualização da lista.
+    if (phoneKey) setFinishedLocal(phone, finishedAtIso);
+
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
@@ -185,18 +169,10 @@ export function useConversationEnrichment() {
 
 
     if (error && phoneKey) {
-      setFinishedPhones(prev => {
-        const next = new Set(prev);
-        next.delete(phoneKey);
-        return next;
-      });
-      setFinishedAtByPhone(prev => {
-        const next = new Map(prev);
-        next.delete(phoneKey);
-        return next;
-      });
+      setFinishedLocal(phone, null);
       throw error;
     }
+
 
     // Track sale conversion + fire Meta CAPI when reason is 'compra' and value > 0
     if (reason === 'compra' && extras?.saleValue && extras.saleValue > 0) {
@@ -244,34 +220,17 @@ export function useConversationEnrichment() {
 
   const reopenConversation = useCallback(async (phone: string) => {
     const phoneKey = normalizePhoneKey(phone);
-    const prevFinishedAt = phoneKey ? finishedAtByPhone.get(phoneKey) : undefined;
-    if (phoneKey) {
-      setFinishedPhones(prev => {
-        const next = new Set(prev);
-        next.delete(phoneKey);
-        return next;
-      });
-      setFinishedAtByPhone(prev => {
-        const next = new Map(prev);
-        next.delete(phoneKey);
-        return next;
-      });
-    }
+    const prevFinishedAt = phoneKey ? peekFinishedMap().get(phoneKey) : undefined;
+    if (phoneKey) setFinishedLocal(phone, null);
 
     const { error } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
 
     if (error && phoneKey) {
-      setFinishedPhones(prev => new Set([...prev, phoneKey]));
-      if (prevFinishedAt) {
-        setFinishedAtByPhone(prev => {
-          const next = new Map(prev);
-          next.set(phoneKey, prevFinishedAt);
-          return next;
-        });
-      }
+      setFinishedLocal(phone, prevFinishedAt ?? null);
       throw error;
     }
-  }, [finishedAtByPhone]);
+  }, []);
+
 
   const archiveConversation = useCallback(async (phone: string, archivedBy?: string) => {
     await supabase.from('chat_archived_conversations').upsert({
@@ -310,6 +269,11 @@ export function useConversationEnrichment() {
     convs: Conversation[],
     phoneMessages: Map<string, { direction: string }[]>
   ): Conversation[] => {
+    // Resolve sob demanda apenas os telefones desta lista (lote + cache).
+    // Quando novos telefones são resolvidos, o cache notifica e o componente
+    // re-renderiza com as etiquetas corretas.
+    ensureFinished(convs.map(c => c.phone));
+
     // Track all phone base numbers to detect cross-instance contacts
     // Key: phone digits suffix, Value: array of { conversationKey, instanceLabel }
     const phoneBaseMap = new Map<string, { key: string; label: string }[]>();
@@ -320,6 +284,7 @@ export function useConversationEnrichment() {
       if (!phoneBaseMap.has(base)) phoneBaseMap.set(base, []);
       phoneBaseMap.get(base)!.push({ key: convKey, label: label || 'Sem instância' });
     }
+
 
     return convs.map(conv => {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
@@ -363,7 +328,7 @@ export function useConversationEnrichment() {
         otherInstanceLabels,
       };
     });
-  }, [computeStatus, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
+  }, [computeStatus, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel, ensureFinished]);
 
   return {
     enrichConversations,
@@ -377,6 +342,8 @@ export function useConversationEnrichment() {
     awaitingPaymentPhones,
     aiTransferredPhones,
     resolveAiTransfer,
+    ensureFinished,
     loadFinished,
+
   };
 }
