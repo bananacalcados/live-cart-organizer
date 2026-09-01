@@ -56,13 +56,18 @@ export function DashboardChatPanel() {
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   useEffect(() => {
+    if (conversations.length === 0) return;
+    let alive = true;
     const loadChatContacts = async () => {
-      const { names, pics } = await getChatContactMaps();
-      setChatContacts(names);
+      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const { names, pics } = await resolveChatContacts(phones);
+      if (!alive) return;
+      setChatContacts(prev => ({ ...prev, ...names }));
       setProfilePics(prev => ({ ...prev, ...pics }));
     };
     loadChatContacts();
-  }, []);
+    return () => { alive = false; };
+  }, [conversations]);
 
   // Build a map of normalized phone → instagram handle from current event orders
   const orderPhoneMap = useMemo(() => {
