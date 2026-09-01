@@ -22219,6 +22219,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ig_handle_norm: { Args: { _h: string }; Returns: string }
       increment_campaign_leads_captured: {
         Args: { p_campaign_id: string }
         Returns: undefined
@@ -22690,6 +22691,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_ig_handles: {
+        Args: { _handles: string[] }
+        Returns: {
+          customer_id: string
+          handle: string
+          whatsapp: string
+        }[]
       }
       resolve_or_create_unified_customer: {
         Args: { p_name?: string; p_phone: string }
