@@ -46,7 +46,30 @@ const suffix8 = (phone?: string | null) => {
   return digits ? digits.slice(-8) : "";
 };
 
-const ALL = "__all__";
+/** Instâncias que NÃO devem aparecer no filtro da Central da Live. */
+const HIDDEN_INSTANCE_LABELS = [
+  "zoppy",
+  "whats carol",
+  "matthews whats",
+  "ravena",
+  "datacrazy",
+  "banana calcados",
+  "banana calçados",
+];
+
+const normalizeLabel = (v?: string | null) =>
+  (v || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isHiddenInstance = (label?: string | null) => {
+  const n = normalizeLabel(label);
+  return HIDDEN_INSTANCE_LABELS.some((h) => n === normalizeLabel(h));
+};
+
+const pinKey = (eventId: string) => `live_center_pinned_instances_${eventId}`;
 
 export function LiveWhatsAppQueue({
   eventId,
@@ -62,13 +85,33 @@ export function LiveWhatsAppQueue({
   const [filter, setFilter] = useState<QueueFilter>("live");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [instanceId, setInstanceId] = useState<string>(defaultInstanceId || ALL);
   const [archived, setArchived] = useState<Set<string>>(new Set());
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
+
+  // Instâncias fixadas NESTE evento (persistem ao sair e voltar da aba)
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(pinKey(eventId));
+      if (raw) return JSON.parse(raw) as string[];
+    } catch { /* ignore */ }
+    return defaultInstanceId ? [defaultInstanceId] : [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(pinKey(eventId), JSON.stringify(pinnedIds));
+    } catch { /* ignore */ }
+  }, [pinnedIds, eventId]);
+
+  const selectableNumbers = useMemo(
+    () => numbers.filter((n) => !isHiddenInstance(n.label)),
+    [numbers]
+  );
 
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
+
 
   useEffect(() => {
     if (defaultInstanceId) setInstanceId(defaultInstanceId);
