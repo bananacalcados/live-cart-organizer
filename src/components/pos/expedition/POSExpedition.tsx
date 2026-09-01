@@ -62,6 +62,7 @@ const stageIcon: Record<ExpStage, any> = {
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
+  const [showSimu, setShowSimu] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
