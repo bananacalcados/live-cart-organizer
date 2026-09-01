@@ -45,7 +45,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   const [agg, setAgg] = useState<AggResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
+  const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones, ensureFinished } = useConversationEnrichment();
 
   const periodDays = period === '7d' ? 7 : 30;
   const dateFilter = useMemo(() => {
