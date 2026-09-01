@@ -14664,6 +14664,7 @@ export type Database = {
           payment_method: string | null
           payment_method_detail: string | null
           payment_on_delivery: boolean
+          phone_suffix8: string | null
           pickup_date: string | null
           pickup_store_id: string | null
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
@@ -14765,6 +14766,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          phone_suffix8?: string | null
           pickup_date?: string | null
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
@@ -14866,6 +14868,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          phone_suffix8?: string | null
           pickup_date?: string | null
           pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
@@ -20719,6 +20722,7 @@ export type Database = {
           external_id: string | null
           id: string
           line_items: Json | null
+          phone_suffix8: string | null
           shipping: number | null
           status: string
           subtotal: number | null
@@ -20740,6 +20744,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           line_items?: Json | null
+          phone_suffix8?: string | null
           shipping?: number | null
           status?: string
           subtotal?: number | null
@@ -20761,6 +20766,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           line_items?: Json | null
+          phone_suffix8?: string | null
           shipping?: number | null
           status?: string
           subtotal?: number | null
