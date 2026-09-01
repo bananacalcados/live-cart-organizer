@@ -269,6 +269,11 @@ export function useConversationEnrichment() {
     convs: Conversation[],
     phoneMessages: Map<string, { direction: string }[]>
   ): Conversation[] => {
+    // Resolve sob demanda apenas os telefones desta lista (lote + cache).
+    // Quando novos telefones são resolvidos, o cache notifica e o componente
+    // re-renderiza com as etiquetas corretas.
+    ensureFinished(convs.map(c => c.phone));
+
     // Track all phone base numbers to detect cross-instance contacts
     // Key: phone digits suffix, Value: array of { conversationKey, instanceLabel }
     const phoneBaseMap = new Map<string, { key: string; label: string }[]>();
@@ -279,6 +284,7 @@ export function useConversationEnrichment() {
       if (!phoneBaseMap.has(base)) phoneBaseMap.set(base, []);
       phoneBaseMap.get(base)!.push({ key: convKey, label: label || 'Sem instância' });
     }
+
 
     return convs.map(conv => {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
