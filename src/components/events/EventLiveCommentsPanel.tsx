@@ -457,7 +457,16 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const { data, error } = await supabase.functions.invoke("instagram-live-sync", {
         body: { eventId },
       });
-      if (error) throw error;
+      if (error) {
+        // 404 = nenhuma live ativa / conta IG não configurada. Estado normal
+        // fora do ar — não é erro de runtime.
+        const status = (error as any)?.context?.status;
+        if (status === 404) {
+          if (!opts?.silent) setLiveSyncStatus("Nenhuma live ativa no Instagram agora.");
+          return;
+        }
+        throw error;
+      }
       const found = Number((data as any)?.comments_found || 0);
       const inserted = Number((data as any)?.live_comments_inserted || 0);
       if (!opts?.silent) {
@@ -467,7 +476,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       }
       await loadComments({ silent: true });
     } catch (e: any) {
-      console.error("instagram-live-sync failed", e);
+      console.warn("instagram-live-sync failed", e);
       if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
     } finally {
       liveSyncInFlightRef.current = false;
