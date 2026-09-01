@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
