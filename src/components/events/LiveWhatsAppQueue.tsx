@@ -200,12 +200,33 @@ export function LiveWhatsAppQueue({
     setLoading(false);
   }, []);
 
+  // Cliques do link /zap desta live já casados com um telefone (código, tempo ou contexto)
+  const [zapMatches, setZapMatches] = useState<Map<string, { method: string; hasFb: boolean }>>(new Map());
+  const loadZapMatches = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("live_whatsapp_clicks")
+      .select("phone, match_method, fbc, fbp")
+      .eq("event_id", eventId)
+      .not("phone", "is", null);
+    const map = new Map<string, { method: string; hasFb: boolean }>();
+    for (const r of (data || []) as any[]) {
+      const key = suffix8(r.phone);
+      if (!key) continue;
+      const prev = map.get(key);
+      const next = { method: r.match_method || "context", hasFb: Boolean(r.fbc || r.fbp) };
+      if (!prev || (next.hasFb && !prev.hasFb)) map.set(key, next);
+    }
+    setZapMatches(map);
+  }, [eventId]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadZapMatches();
+  }, [load, loadZapMatches]);
 
   useWaMessageBroadcast(() => {
     load();
+    loadZapMatches();
   }, { debounceMs: 1200 });
 
   const orderBySuffix = useMemo(() => {
