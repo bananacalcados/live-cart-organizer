@@ -32,6 +32,7 @@ import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
+import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 
 
 
@@ -61,6 +62,7 @@ const stageIcon: Record<ExpStage, any> = {
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
+  const [showSimu, setShowSimu] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -602,7 +604,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             );
           })}
           <button
-            onClick={() => setShowPurchases((v) => !v)}
+            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showPurchases
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -613,6 +615,21 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <ShoppingCart className={`h-6 w-6 ${showPurchases ? "text-white" : "text-exp-prep"}`} />
               <span className={`text-lg font-black uppercase leading-tight ${showPurchases ? "text-white" : "text-pos-text"}`}>
                 Compras
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); }}
+            className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
+              showSimu
+                ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
+                : "bg-pos-elevated border-exp-prep/40 hover:scale-[1.01]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <MapPin className={`h-6 w-6 ${showSimu ? "text-white" : "text-exp-prep"}`} />
+              <span className={`text-lg font-black uppercase leading-tight ${showSimu ? "text-white" : "text-pos-text"}`}>
+                Simu Envios
               </span>
             </div>
           </button>
@@ -764,7 +781,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         )}
       </div>
 
-      {!showPurchases && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && !showSimu && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
@@ -824,8 +841,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
+      {showSimu && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ShipmentSimulations />
+        </div>
+      )}
+
       {/* List */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases ? "hidden" : ""}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
