@@ -383,10 +383,12 @@ const Index = () => {
         />
       </div>
 
-      {/* Fixed WhatsApp Chat Panel - Right Side */}
-      <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
-        <EventLiveCommentsPanel eventId={currentEventId} />
-      </div>
+      {/* Fixed WhatsApp Chat Panel - Right Side (oculto na Central da Live, que já tem coluna própria) */}
+      {tab !== "attendance" && (
+        <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
+          <EventLiveCommentsPanel eventId={currentEventId} />
+        </div>
+      )}
 
       <EventSetupWizard
         event={currentEvent as any}
