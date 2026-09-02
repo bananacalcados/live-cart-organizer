@@ -54,7 +54,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2Off, RefreshCw, Trash, Radio } from "lucide-react";
+import { Link2Off, RefreshCw, Trash, Radio, Shuffle } from "lucide-react";
+import { useEventStore } from "@/stores/eventStore";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -119,6 +120,12 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   const [sendingIgDm, setSendingIgDm] = useState(false);
 
   const [sendingViaInstance, setSendingViaInstance] = useState(false);
+  const [sendingWaInitial, setSendingWaInitial] = useState(false);
+  const orderEvent = useEventStore((st) => st.events.find((ev) => ev.id === order.event_id));
+  const waInitialReady =
+    Boolean((orderEvent as any)?.wa_initial_enabled) &&
+    Array.isArray((orderEvent as any)?.wa_initial_variants) &&
+    ((orderEvent as any).wa_initial_variants as any[]).length > 0;
   const { numbers: waNumbers, fetchNumbers: fetchWaNumbers } = useWhatsAppNumberStore();
   const nonApiNumbers = waNumbers.filter(
     (n) => n.is_active && ['uazapi', 'wasender', 'zapi'].includes(String(n.provider || '')),
@@ -837,6 +844,37 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
           >
             {sendingTemplate ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageCircle className="h-3 w-3" />}
             ENVIAR MSG API
+          </Button>
+        </div>
+      )}
+
+      {/* Mensagem inicial não-API do evento (modo WhatsApp) — variações em rodízio */}
+      {waInitialReady && order.customer?.whatsapp && (
+        <div className="mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1.5 h-7 border-sky-500/50 text-sky-700 hover:bg-sky-500/10"
+            disabled={sendingWaInitial}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSendingWaInitial(true);
+              try {
+                const { data, error } = await supabase.functions.invoke('event-order-wa-initial-send', {
+                  body: { orderId: order.id },
+                });
+                if (error) throw error;
+                if ((data as any)?.error) throw new Error((data as any).error);
+                toast.success(`Mensagem inicial enviada por ${(data as any)?.via || 'uazapi'} (variação ${((data as any)?.variant_index ?? 0) + 1}/${(data as any)?.variants ?? '?'})`);
+              } catch (err: any) {
+                toast.error(err?.message || 'Erro ao enviar mensagem inicial');
+              } finally {
+                setSendingWaInitial(false);
+              }
+            }}
+          >
+            {sendingWaInitial ? <Loader2 className="h-3 w-3 animate-spin" /> : <Shuffle className="h-3 w-3" />}
+            ENVIAR MSG INICIAL (UAZAPI)
           </Button>
         </div>
       )}

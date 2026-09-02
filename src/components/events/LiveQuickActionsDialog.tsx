@@ -29,7 +29,9 @@ import {
   KeyRound,
   Loader2,
   Move,
+  Shuffle,
 } from "lucide-react";
+import { useEventStore } from "@/stores/eventStore";
 
 interface Props {
   open: boolean;
@@ -60,6 +62,29 @@ export function LiveQuickActionsDialog({
   const [fichaOpen, setFichaOpen] = useState(false);
   const [paidOpen, setPaidOpen] = useState(false);
   const [savingStage, setSavingStage] = useState(false);
+  const [sendingWaInitial, setSendingWaInitial] = useState(false);
+  const orderEvent = useEventStore((st) => st.events.find((ev) => ev.id === order?.event_id));
+  const waInitialReady =
+    Boolean((orderEvent as any)?.wa_initial_enabled) &&
+    Array.isArray((orderEvent as any)?.wa_initial_variants) &&
+    ((orderEvent as any).wa_initial_variants as any[]).length > 0;
+
+  const sendWaInitial = async () => {
+    if (!order) return;
+    setSendingWaInitial(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("event-order-wa-initial-send", {
+        body: { orderId: order.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Mensagem inicial enviada (variação ${((data as any)?.variant_index ?? 0) + 1}/${(data as any)?.variants ?? "?"})`);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao enviar mensagem inicial");
+    } finally {
+      setSendingWaInitial(false);
+    }
+  };
 
   const checkoutLink = order
     ? (order as any).cart_link || `${CHECKOUT_BASE}/checkout/order/${order.id}`
@@ -146,6 +171,18 @@ export function LiveQuickActionsDialog({
               <Copy className="h-4 w-4" />
               Copiar link do checkout
             </Button>
+
+            {waInitialReady && (
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 border-sky-500/50 text-sky-700 hover:bg-sky-500/10"
+                disabled={!order || sendingWaInitial}
+                onClick={sendWaInitial}
+              >
+                {sendingWaInitial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+                Enviar mensagem inicial (uazapi, em rodízio)
+              </Button>
+            )}
 
             <Button
               variant="outline"
