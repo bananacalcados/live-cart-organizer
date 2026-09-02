@@ -26,6 +26,8 @@ import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessage
 import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { LiveWhatsAppLinkConfig } from "./LiveWhatsAppLinkConfig";
+import { WaInitialMessageEditor, type WaInitialConfig } from "./WaInitialMessageEditor";
+import { MessagePresetControls } from "./MessagePresetControls";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
@@ -119,6 +121,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
   const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
   const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
+  const [waInitial, setWaInitial] = useState<WaInitialConfig>({ enabled: false, auto: false, numberId: null, variants: [] });
 
   // Aviso automático no WhatsApp (Área de Clientes)
   const [maNotifyEnabled, setMaNotifyEnabled] = useState(false);
@@ -155,7 +158,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     return {
       general: Boolean(e.name) && e.name !== EVENT_DRAFT_NAME && Boolean(e.channel),
       shipping: e.default_shipping_cost != null || e.free_shipping_threshold != null,
-      template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled),
+      template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled) || Boolean(e.wa_initial_enabled),
       installments: e.installment_max != null,
       crossell: Boolean(e.crossell_configured),
       live: Boolean(e.live_active_until) && new Date(e.live_active_until).getTime() > Date.now(),
@@ -184,6 +187,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setInitialMessageBlocks((e.initial_message_blocks as string[]) || []);
     setIgButtons((e.ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
     setIgAutomations((e.ig_automations as IgAutomation[]) || []);
+    setWaInitial({
+      enabled: Boolean(e.wa_initial_enabled),
+      auto: Boolean(e.wa_initial_auto),
+      numberId: e.wa_initial_number_id || null,
+      variants: Array.isArray(e.wa_initial_variants) ? e.wa_initial_variants : [],
+    });
     setMaNotifyEnabled(Boolean(e.member_area_notify_enabled));
     setMaWaId(e.member_area_wa_number_id || "none");
     setMaTemplateName(e.member_area_template_name || null);
@@ -309,6 +318,10 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.initial_message_blocks = initialMessageBlocks;
       updates.ig_initial_message_buttons = igButtons;
       updates.ig_automations = igAutomations;
+      updates.wa_initial_enabled = waInitial.enabled;
+      updates.wa_initial_auto = waInitial.auto;
+      updates.wa_initial_number_id = waInitial.numberId;
+      updates.wa_initial_variants = waInitial.variants.filter((v) => v.text && v.text.trim().length > 0);
       updates.member_area_notify_enabled = maNotifyEnabled;
       updates.member_area_wa_number_id = maWhatsappNumberId;
       updates.member_area_template_name = maTemplateName;
@@ -715,12 +728,34 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 />
               )}
 
+              {operationMode === "whatsapp" && (
+                <WaInitialMessageEditor value={waInitial} onChange={setWaInitial} />
+              )}
+
 
               {/* WhatsApp API instance selector */}
               <div className="space-y-2 rounded-md border p-3 bg-muted/30">
                 <Label className="flex items-center gap-2 text-xs font-semibold">
                   <Smartphone className="h-4 w-4 text-accent" /> Instância de WhatsApp (Meta API)
                 </Label>
+                <MessagePresetControls
+                  kind="meta_template"
+                  canSave={Boolean(whatsappNumberId && metaTemplateName)}
+                  getPayload={() => ({
+                    whatsapp_number_id: whatsappNumberId,
+                    template_name: metaTemplateName,
+                    language: metaTemplateLanguage,
+                    body_variables: metaTemplateBodyVars,
+                    header_variable: metaTemplateHeaderVar,
+                  })}
+                  onApply={(p) => {
+                    setSelectedWaId((p.whatsapp_number_id as string) || "none");
+                    setMetaTemplateName((p.template_name as string) || null);
+                    setMetaTemplateLanguage((p.language as string) || "pt_BR");
+                    setMetaTemplateBodyVars((p.body_variables as string[]) || []);
+                    setMetaTemplateHeaderVar((p.header_variable as string) || null);
+                  }}
+                />
                 <Select value={selectedWaId} onValueChange={setSelectedWaId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o número WhatsApp..." />
