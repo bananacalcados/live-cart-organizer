@@ -467,6 +467,10 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         }
         throw error;
       }
+      if ((data as any)?.ok === false) {
+        if (!opts?.silent) setLiveSyncStatus("Nenhuma live ativa no Instagram agora.");
+        return;
+      }
       const found = Number((data as any)?.comments_found || 0);
       const inserted = Number((data as any)?.live_comments_inserted || 0);
       if (!opts?.silent) {
