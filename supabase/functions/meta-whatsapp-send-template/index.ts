@@ -170,6 +170,36 @@ function renderTemplateMessage(
 // send components so the webhook can identify which card the customer tapped. We
 // only add a quick-reply button when the template card actually defines one and the
 // caller hasn't already provided that button component. ──
+// Meta rejects `{ type: 'image', link }` — media params must be nested as
+// `{ type: 'image', image: { link } }`. Normalize legacy/flat shapes defensively.
+function normalizeMediaParams(components: any[] | undefined): any[] | undefined {
+  if (!Array.isArray(components)) return components;
+  const fixParam = (p: any) => {
+    const t = String(p?.type || '').toLowerCase();
+    if (['image', 'video', 'document'].includes(t) && p.link && !p[t]) {
+      const { link, filename, ...rest } = p;
+      return { ...rest, [t]: { link, ...(filename ? { filename } : {}) } };
+    }
+    return p;
+  };
+  return components.map((c: any) => {
+    const out = { ...c };
+    if (Array.isArray(out.parameters)) out.parameters = out.parameters.map(fixParam);
+    if (out.cards && Array.isArray(out.cards)) {
+      out.cards = out.cards.map((card: any) => ({
+        ...card,
+        components: Array.isArray(card.components)
+          ? card.components.map((cc: any) => ({
+              ...cc,
+              parameters: Array.isArray(cc.parameters) ? cc.parameters.map(fixParam) : cc.parameters,
+            }))
+          : card.components,
+      }));
+    }
+    return out;
+  });
+}
+
 function injectCarouselQuickReplyPayloads(def: any, components: any[] | undefined): any[] | undefined {
   if (!components || components.length === 0) return components;
   const carouselDef = (def?.components || []).find(
