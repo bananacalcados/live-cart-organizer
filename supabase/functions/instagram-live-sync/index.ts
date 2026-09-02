@@ -177,7 +177,9 @@ Deno.serve(async (req) => {
       : await eventQuery.gt("live_active_until", new Date().toISOString()).maybeSingle();
 
     if (eventError) return json({ error: "event_lookup_failed", details: eventError.message }, 500);
-    if (!event?.id) return json({ error: "active_live_event_not_found" }, 404);
+    // Estado normal (sem live ativa / evento não encontrado): responde 200 com
+    // ok:false para não gerar erro de runtime no painel que faz poll silencioso.
+    if (!event?.id) return json({ ok: false, reason: "active_live_event_not_found", comments_found: 0, live_comments_inserted: 0 });
 
     const { data: accounts, error: accountsError } = await supabase
       .from("whatsapp_numbers")
@@ -189,7 +191,7 @@ Deno.serve(async (req) => {
     if (accountsError) return json({ error: "instagram_accounts_lookup_failed", details: accountsError.message }, 500);
 
     const rows = (accounts || []) as IgAccountRow[];
-    if (rows.length === 0) return json({ error: "no_instagram_accounts_configured" }, 404);
+    if (rows.length === 0) return json({ ok: false, reason: "no_instagram_accounts_configured", comments_found: 0, live_comments_inserted: 0 });
 
     const liveRows: any[] = [];
     const linkRows: any[] = [];
