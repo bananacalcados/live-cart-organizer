@@ -538,7 +538,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     };
   };
 
+  // Sequência de requisições: descarta respostas de uma carga antiga (ex.: o
+  // operador trocou de instância enquanto o fetch anterior estava em voo). Sem
+  // isso o histórico "voltava sozinho" para a instância anterior.
+  const loadSeqRef = useRef(0);
   const loadMessages = async () => {
+    const seq = ++loadSeqRef.current;
     // Quando o operador troca a instância manualmente, o histórico deve ser o
     // daquela instância. Sem override, resolve pela última mensagem da conversa.
     let convNumberId: string | null = overrideNumberId || conversationNumberId;
@@ -551,6 +556,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (seq !== loadSeqRef.current) return;
       convNumberId = (instRow as any)?.whatsapp_number_id ?? null;
     }
 
@@ -569,6 +575,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       : query.is('whatsapp_number_id', null);
 
     const { data, error } = await query.order('created_at', { ascending: true });
+    if (seq !== loadSeqRef.current) return; // resposta obsoleta
 
     if (error) {
       console.error('Error loading messages:', error);
@@ -577,8 +584,14 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     }
     setIsLoading(false);
   };
+  // Sempre aponta para a versão mais recente (instância/telefone atuais) para
+  // que polling e broadcast nunca usem um closure antigo.
+  const loadMessagesRef = useRef(loadMessages);
+  loadMessagesRef.current = loadMessages;
 
   useEffect(() => {
+    setIsLoading(true);
+    setMessages([]);
     loadMessages();
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
@@ -590,17 +603,17 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // Payload carries minimal info — we filter by phone, then refetch.
   useWaMessageBroadcast((payload) => {
     if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
-    loadMessages();
+    loadMessagesRef.current();
     if (payload.direction === 'incoming') {
       setHasUnreadMessages(order.id, false);
     }
   });
 
-  // Status (✓✓) refresh: refetch every 15s while open.
+  // Status (✓✓) refresh: refetch every 15s while open (via ref → sem closure velho).
   useEffect(() => {
-    const interval = setInterval(() => loadMessages(), 15000);
+    const interval = setInterval(() => loadMessagesRef.current(), 15000);
     return () => clearInterval(interval);
-  }, [normalizedPhone]);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
