@@ -179,27 +179,34 @@ export function OrderDetailsDialog({
 
         setOrder(orderRow as unknown as OrderRow);
 
+        let resolved: Registration | null = null;
         if (regRow) {
-          setReg(regRow as unknown as Registration);
+          resolved = regRow as unknown as Registration;
         } else if ((orderRow as any)?.customer_id) {
-          // Fallback: última ficha do cliente
+          // Fallback 1: última ficha do cliente vinculado ao pedido
           const { data: prev } = await supabase
             .rpc("get_latest_registration_by_customer", {
               p_customer_id: (orderRow as any).customer_id,
             })
             .maybeSingle();
-          if (prev) setReg(prev as unknown as Registration);
-          else setReg(null);
-        } else {
-          setReg(null);
+          if (prev) resolved = prev as unknown as Registration;
         }
+        // Fallback 2: cliente recorrente sem pedido nesta live (ou pedido sem vínculo)
+        // — busca a última ficha completa pelo telefone (DDD + 8 dígitos).
+        if (!resolved && fallbackWhatsapp && fallbackWhatsapp.replace(/\D/g, "").length >= 8) {
+          const { data: byPhone } = await supabase.rpc("find_customer_prefill_by_phone" as any, {
+            p_phone: fallbackWhatsapp,
+          });
+          if (byPhone) resolved = byPhone as unknown as Registration;
+        }
+        setReg(resolved);
       } catch (e) {
         console.error("[OrderDetails] load error:", e);
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, orderId]);
+  }, [open, orderId, fallbackWhatsapp]);
 
   // ── Payment ──
   const payLabel = order?.payment_method_label || "";

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { DbOrder } from "@/types/database";
 import { Order, OrderStage, Stage, STAGES } from "@/types/order";
 import { LiveWhatsAppQueue, LiveConversation } from "./LiveWhatsAppQueue";
@@ -76,19 +77,46 @@ export function LiveAttendanceCenter({
     return orders.find((o) => suffix8(o.customer?.whatsapp) === key) || null;
   }, [selected, orders]);
 
+  // Cliente recorrente (já comprou em outra live) — resolve pelo telefone (8 últimos dígitos)
+  // para exibir o @ do Instagram e permitir puxar a ficha mesmo sem pedido nesta live.
+  const [knownCustomer, setKnownCustomer] = useState<{
+    id: string;
+    instagram_handle: string | null;
+    full_name: string | null;
+  } | null>(null);
+  const selectedKey = suffix8(selected?.phone);
+  useEffect(() => {
+    let cancelled = false;
+    setKnownCustomer(null);
+    if (!selectedKey || selectedKey.length < 8 || selectedOrder) return;
+    (async () => {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, instagram_handle, full_name")
+        .like("whatsapp", `%${selectedKey}`)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setKnownCustomer((data as any) || null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, selectedOrder]);
+
   const chatOrder: Order | null = useMemo(() => {
     if (!selected) return null;
     if (selectedOrder) return dbOrderToOrder(selectedOrder);
     return {
       id: `live-conv-${selected.phone}`,
-      instagramHandle: selected.name || "",
+      instagramHandle: knownCustomer?.instagram_handle || selected.name || "",
       whatsapp: selected.phone,
       products: [],
       stage: "pre_sale" as OrderStage,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-  }, [selected, selectedOrder]);
+  }, [selected, selectedOrder, knownCustomer]);
 
   const openCreateOrder = (conv: LiveConversation) => {
     setPrefill({ phone: conv.phone, name: conv.name });
@@ -125,11 +153,20 @@ export function LiveAttendanceCenter({
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">
-                  {selected.name || selected.phone}
+                  {knownCustomer?.full_name || selected.name || selected.phone}
+                  {!selectedOrder && knownCustomer?.instagram_handle && (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      {knownCustomer.instagram_handle}
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {selected.phone}
-                  {selectedOrder ? ` · pedido #${String(selectedOrder.id).slice(0, 6)}` : " · sem pedido nesta live"}
+                  {selectedOrder
+                    ? ` · pedido #${String(selectedOrder.id).slice(0, 6)}`
+                    : knownCustomer
+                      ? " · cliente já cadastrada · sem pedido nesta live"
+                      : " · sem pedido nesta live"}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
