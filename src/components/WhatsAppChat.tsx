@@ -68,6 +68,8 @@ interface WhatsAppChatProps {
   orderless?: boolean;
   /** Instância exata escolhida na fila (evita resolver outra conta pelo telefone). */
   conversationNumberId?: string | null;
+  /** Na Central da Live, mantém somente o histórico de Direct do Instagram. */
+  hideInstagramComments?: boolean;
 }
 
 // Status icon now uses shared component
@@ -105,7 +107,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -551,6 +553,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       .from('whatsapp_messages')
       .select('*')
       .in('phone', phoneVariations);
+    if (hideInstagramComments) {
+      query = query.not('message', 'like', '💬 Comentário%');
+    }
     query = convNumberId
       ? query.eq('whatsapp_number_id', convNumberId)
       : query.is('whatsapp_number_id', null);
@@ -570,7 +575,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, setHasUnreadMessages]);
+  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages]);
 
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
