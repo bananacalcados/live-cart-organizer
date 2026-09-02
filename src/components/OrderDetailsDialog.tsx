@@ -206,7 +206,7 @@ export function OrderDetailsDialog({
         setLoading(false);
       }
     })();
-  }, [open, orderId]);
+  }, [open, orderId, fallbackWhatsapp]);
 
   // ── Payment ──
   const payLabel = order?.payment_method_label || "";
