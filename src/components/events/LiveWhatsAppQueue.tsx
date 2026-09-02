@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
@@ -190,7 +190,9 @@ export function LiveWhatsAppQueue({
     [archived, eventId]
   );
 
+  const loadSeqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const { data, error } = await supabase.rpc("get_conversations", {
       p_number_id: null,
       p_dispatch_only: false,
@@ -260,6 +262,7 @@ export function LiveWhatsAppQueue({
 
     // Nomes apenas dos telefones visíveis (cache compartilhado)
     const maps = await resolveChatContacts(onlyDms.slice(0, 200).map((c) => c.phone));
+    if (seq !== loadSeqRef.current) return; // resposta obsoleta
     setConversations(
       onlyDms.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
     );
@@ -294,6 +297,27 @@ export function LiveWhatsAppQueue({
     load();
     loadZapMatches();
   }, { debounceMs: 1200 });
+
+  // Fallback quando o broadcast em tempo real não chega (ex.: websocket
+  // bloqueado no preview): polling leve a cada 20s + refresh ao voltar à aba.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        load();
+        loadZapMatches();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [load, loadZapMatches]);
 
   const orderBySuffix = useMemo(() => {
     const map = new Map<string, DbOrder>();
