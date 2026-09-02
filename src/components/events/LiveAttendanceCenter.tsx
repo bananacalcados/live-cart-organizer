@@ -159,6 +159,7 @@ export function LiveAttendanceCenter({
                 order={chatOrder}
                 orderless={!selectedOrder}
                 conversationNumberId={selected.whatsappNumberId}
+                hideInstagramComments={selected.channel === "instagram"}
               />
             </div>
           </>

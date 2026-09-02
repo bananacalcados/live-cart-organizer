@@ -23,6 +23,7 @@ export interface LiveConversation {
   whatsappNumberId: string | null;
   name?: string;
   isGroup: boolean;
+  channel?: string | null;
 }
 
 export type QueueFilter = "live" | "no_order" | "all" | "archived";
@@ -211,6 +212,7 @@ export function LiveWhatsAppQueue({
         whatsappNumberId: r.whatsapp_number_id || null,
         name: r.sender_name || undefined,
         isGroup: Boolean(r.is_group) || String(r.phone).includes("@g.us"),
+        channel: r.channel || null,
       }))
       .filter((c) => !c.isGroup)
       .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
@@ -219,24 +221,42 @@ export function LiveWhatsAppQueue({
     // Comentários (live, post, reel) são espelhados em whatsapp_messages com o
     // prefixo "💬 Comentário no ..." ou com referral.source_type comment/reel;
     // quem só comentou e nunca mandou Direct fica fora da fila.
-    const isIgCandidate = (c: LiveConversation) =>
-      c.lastMessage.startsWith("💬 Comentário") ||
-      (c.phone.replace(/\D/g, "").length >= 15 && !c.phone.includes("@"));
-    const candidates = convs.filter(isIgCandidate).map((c) => c.phone);
-    const withRealDm = new Set<string>();
-    for (let i = 0; i < candidates.length; i += 100) {
-      const chunk = candidates.slice(i, i + 100);
-      const { data: dms } = await (supabase as any)
+    const igConversations = convs.filter((c) => c.channel === "instagram");
+    const realDmKeys = new Set<string>();
+    const latestRealDm = new Map<string, any>();
+    for (let i = 0; i < igConversations.length; i += 100) {
+      const chunk = igConversations.slice(i, i + 100);
+      const phones = [...new Set(chunk.map((c) => c.phone))];
+      const { data: realMessages } = await (supabase as any)
         .from("whatsapp_messages")
-        .select("phone")
-        .in("phone", chunk)
-        .eq("direction", "incoming")
+        .select("phone, whatsapp_number_id, message, created_at, direction, sender_name, status")
+        .in("phone", phones)
+        .eq("channel", "instagram")
         .not("message", "like", "💬 Comentário%")
-        .or("referral.is.null,referral->>source_type.not.in.(comment,reel)")
+        .gte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
         .limit(5000);
-      for (const r of (dms || []) as { phone: string }[]) withRealDm.add(r.phone);
+      for (const row of (realMessages || []) as any[]) {
+        const key = `${row.phone}::${row.whatsapp_number_id || ""}`;
+        if (row.direction === "incoming") realDmKeys.add(key);
+        if (!latestRealDm.has(key)) latestRealDm.set(key, row);
+      }
     }
-    const onlyDms = convs.filter((c) => !isIgCandidate(c) || withRealDm.has(c.phone));
+    const onlyDms = convs
+      .filter((c) => c.channel !== "instagram" || realDmKeys.has(`${c.phone}::${c.whatsappNumberId || ""}`))
+      .map((c) => {
+        if (c.channel !== "instagram") return c;
+        const latest = latestRealDm.get(`${c.phone}::${c.whatsappNumberId || ""}`);
+        if (!latest) return c;
+        return {
+          ...c,
+          lastMessage: latest.message || "",
+          lastMessageAt: new Date(latest.created_at),
+          direction: latest.direction,
+          name: latest.sender_name || c.name,
+        };
+      })
+      .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
 
     // Nomes apenas dos telefones visíveis (cache compartilhado)
     const maps = await resolveChatContacts(onlyDms.slice(0, 200).map((c) => c.phone));
