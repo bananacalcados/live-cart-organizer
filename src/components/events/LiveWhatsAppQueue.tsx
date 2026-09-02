@@ -295,6 +295,27 @@ export function LiveWhatsAppQueue({
     loadZapMatches();
   }, { debounceMs: 1200 });
 
+  // Fallback quando o broadcast em tempo real não chega (ex.: websocket
+  // bloqueado no preview): polling leve a cada 20s + refresh ao voltar à aba.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        load();
+        loadZapMatches();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [load, loadZapMatches]);
+
   const orderBySuffix = useMemo(() => {
     const map = new Map<string, DbOrder>();
     for (const o of orders) {
