@@ -29,13 +29,15 @@ import { EventPaymentNotification } from "@/components/events/EventPaymentNotifi
 import { EventSetupWizard } from "@/components/events/EventSetupWizard";
 import { EventInnerDashboard } from "@/components/events/EventInnerDashboard";
 import { LiveAttendanceCenter } from "@/components/events/LiveAttendanceCenter";
+import { EventBulkSendDialog } from "@/components/events/EventBulkSendDialog";
+import { EventBulkSendsHistory } from "@/components/events/EventBulkSendsHistory";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, UserPlus } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, UserPlus, Users } from "lucide-react";
 
 
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,7 @@ const Index = () => {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [tab, setTab] = useState<string>("kanban");
   const [showDash, setShowDash] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -263,6 +266,17 @@ const Index = () => {
                   {showDash ? "Ocultar dashboard" : "Mostrar dashboard"}
                 </Button>
               )}
+              {(tab === "kanban" || tab === "attendance" || tab === "bulk") && currentEventId && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
+                  onClick={() => setBulkOpen(true)}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Envio em massa
+                </Button>
+              )}
               <TabsList className="ml-auto">
 
                 {isWhatsAppMode && (
@@ -272,6 +286,10 @@ const Index = () => {
                   </TabsTrigger>
                 )}
                 <TabsTrigger value="kanban">Pedidos</TabsTrigger>
+                <TabsTrigger value="bulk" className="gap-1">
+                  <Users className="h-3 w-3" />
+                  Envios em massa
+                </TabsTrigger>
 
                 <TabsTrigger value="promotions" className="gap-1">
                   <Tag className="h-3 w-3" />
@@ -331,6 +349,12 @@ const Index = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="bulk">
+              {currentEventId && (
+                <EventBulkSendsHistory eventId={currentEventId} onNew={() => setBulkOpen(true)} />
+              )}
+            </TabsContent>
+
             <TabsContent value="promotions">
               <EventPromotionManager eventId={currentEventId} />
             </TabsContent>
@@ -375,7 +399,18 @@ const Index = () => {
 
         </main>
 
-        <OrderDialogDb
+        {currentEventId && (
+        <EventBulkSendDialog
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          eventId={currentEventId}
+          orders={orders}
+          stages={getStagesForMode((currentEvent as any)?.operation_mode)}
+          initialStage={selectedStage !== "all" && selectedStage !== "unpaid" ? selectedStage : null}
+          onQueued={() => setTab("bulk")}
+        />
+      )}
+      <OrderDialogDb
           open={dialogOpen}
           onOpenChange={handleOrderDialogOpenChange}
           editingOrder={editingOrder}

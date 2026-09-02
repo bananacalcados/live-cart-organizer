@@ -4944,6 +4944,148 @@ export type Database = {
         }
         Relationships: []
       }
+      event_bulk_send_items: {
+        Row: {
+          attempts: number
+          components: Json
+          created_at: string
+          customer_name: string | null
+          id: string
+          locked_until: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string
+          reason: string | null
+          rendered_message: string | null
+          send_id: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          components?: Json
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          locked_until?: string | null
+          message_id?: string | null
+          order_id?: string | null
+          phone: string
+          reason?: string | null
+          rendered_message?: string | null
+          send_id: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          components?: Json
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          locked_until?: string | null
+          message_id?: string | null
+          order_id?: string | null
+          phone?: string
+          reason?: string | null
+          rendered_message?: string | null
+          send_id?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_bulk_send_items_send_id_fkey"
+            columns: ["send_id"]
+            isOneToOne: false
+            referencedRelation: "event_bulk_sends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_bulk_sends: {
+        Row: {
+          allow_resend: boolean
+          base_components: Json
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          event_id: string
+          failed_count: number
+          id: string
+          kind: string
+          sent_count: number
+          skipped_count: number
+          stages: string[]
+          status: string
+          template_label: string | null
+          template_language: string
+          template_name: string
+          total_count: number
+          updated_at: string
+          variable_map: Json
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          allow_resend?: boolean
+          base_components?: Json
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          event_id: string
+          failed_count?: number
+          id?: string
+          kind: string
+          sent_count?: number
+          skipped_count?: number
+          stages?: string[]
+          status?: string
+          template_label?: string | null
+          template_language?: string
+          template_name: string
+          total_count?: number
+          updated_at?: string
+          variable_map?: Json
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          allow_resend?: boolean
+          base_components?: Json
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          event_id?: string
+          failed_count?: number
+          id?: string
+          kind?: string
+          sent_count?: number
+          skipped_count?: number
+          stages?: string[]
+          status?: string
+          template_label?: string | null
+          template_language?: string
+          template_name?: string
+          total_count?: number
+          updated_at?: string
+          variable_map?: Json
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_bulk_sends_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_crossell_offers: {
         Row: {
           created_at: string
@@ -21664,6 +21806,33 @@ export type Database = {
           recipient_name: string
         }[]
       }
+      claim_event_bulk_send_items: {
+        Args: { p_limit?: number; p_lock_seconds?: number }
+        Returns: {
+          attempts: number
+          components: Json
+          created_at: string
+          customer_name: string | null
+          id: string
+          locked_until: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string
+          reason: string | null
+          rendered_message: string | null
+          send_id: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "event_bulk_send_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_event_order_routing: {
         Args: { p_order_id: string }
         Returns: boolean
@@ -22781,6 +22950,10 @@ export type Database = {
       }
       refresh_dispatch_counts: {
         Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
+      refresh_event_bulk_send_counts: {
+        Args: { p_send_id: string }
         Returns: undefined
       }
       refresh_vip_orphans: { Args: never; Returns: Json }
