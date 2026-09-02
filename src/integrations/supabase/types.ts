@@ -5478,6 +5478,36 @@ export type Database = {
           },
         ]
       }
+      event_message_presets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          name: string
+          payload: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          name: string
+          payload?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_pinned_conversations: {
         Row: {
           created_at: string
@@ -6106,6 +6136,11 @@ export type Database = {
           start_date: string | null
           store_ids: string[] | null
           updated_at: string
+          wa_initial_auto: boolean
+          wa_initial_enabled: boolean
+          wa_initial_number_id: string | null
+          wa_initial_rotation: number
+          wa_initial_variants: Json
           whatsapp_number_id: string | null
         }
         Insert: {
@@ -6155,6 +6190,11 @@ export type Database = {
           start_date?: string | null
           store_ids?: string[] | null
           updated_at?: string
+          wa_initial_auto?: boolean
+          wa_initial_enabled?: boolean
+          wa_initial_number_id?: string | null
+          wa_initial_rotation?: number
+          wa_initial_variants?: Json
           whatsapp_number_id?: string | null
         }
         Update: {
@@ -6204,6 +6244,11 @@ export type Database = {
           start_date?: string | null
           store_ids?: string[] | null
           updated_at?: string
+          wa_initial_auto?: boolean
+          wa_initial_enabled?: boolean
+          wa_initial_number_id?: string | null
+          wa_initial_rotation?: number
+          wa_initial_variants?: Json
           whatsapp_number_id?: string | null
         }
         Relationships: [
@@ -22805,6 +22850,10 @@ export type Database = {
         }[]
       }
       merge_unified_zoppy_duplicates: { Args: never; Returns: Json }
+      next_event_wa_initial_variant: {
+        Args: { p_event_id: string }
+        Returns: number
+      }
       next_product_sku_root: { Args: never; Returns: string }
       norm_cpf: { Args: { raw: string }; Returns: string }
       norm_email: { Args: { raw: string }; Returns: string }

@@ -64,6 +64,7 @@ serve(async (req) => {
     let metaTemplateBodyVars: string[] = [];
     let metaTemplateHeaderVar: string | null = null;
     let operationMode: string | null = null;
+    let waInitialAuto = false;
     let initialMessageEnabled = false;
     let initialMessageBlocks: string[] = [];
     let igInitialButtons: Array<{ blockIndex: number; buttons: Array<{ id: string; type: 'url' | 'automation'; title: string; urlToken?: string; automationId?: string }> }> = [];
@@ -72,11 +73,12 @@ serve(async (req) => {
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('operation_mode, whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
+        .select('operation_mode, wa_initial_auto, wa_initial_enabled, whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
         .eq('id', order.event_id)
         .single();
 
       operationMode = (eventData as any)?.operation_mode || null;
+      waInitialAuto = Boolean((eventData as any)?.wa_initial_auto) && Boolean((eventData as any)?.wa_initial_enabled);
       if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
       channelPreferences = ((eventData as any)?.channel_preferences as string[]) || [];
       if (!channelPreferences.length) channelPreferences = [channelPreference];
@@ -540,8 +542,18 @@ serve(async (req) => {
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
     } else if (skipWhatsAppAuto) {
-      console.log(`[livete-start] Modo WhatsApp: template automático suprimido para order ${orderId}`);
-      await Promise.allSettled([dispatchInstagram()]);
+      console.log(`[livete-start] Modo WhatsApp: template automático suprimido para order ${orderId} (waInitialAuto=${waInitialAuto})`);
+      // Opt-in: mensagem inicial NÃO-API (uazapi) com rodízio de variações.
+      const dispatchWaInitial = async () => {
+        if (!waInitialAuto || !waPhone) return;
+        const r = await fetch(`${supabaseUrl}/functions/v1/event-order-wa-initial-send`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        });
+        if (!r.ok) console.error('[livete-start] wa-initial falhou:', r.status, await r.text().catch(() => ''));
+      };
+      await Promise.allSettled([dispatchInstagram(), dispatchWaInitial()]);
     } else {
       // Run all selected channels in parallel
       await Promise.allSettled([
