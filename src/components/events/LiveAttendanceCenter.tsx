@@ -76,19 +76,46 @@ export function LiveAttendanceCenter({
     return orders.find((o) => suffix8(o.customer?.whatsapp) === key) || null;
   }, [selected, orders]);
 
+  // Cliente recorrente (já comprou em outra live) — resolve pelo telefone (8 últimos dígitos)
+  // para exibir o @ do Instagram e permitir puxar a ficha mesmo sem pedido nesta live.
+  const [knownCustomer, setKnownCustomer] = useState<{
+    id: string;
+    instagram_handle: string | null;
+    full_name: string | null;
+  } | null>(null);
+  const selectedKey = suffix8(selected?.phone);
+  useEffect(() => {
+    let cancelled = false;
+    setKnownCustomer(null);
+    if (!selectedKey || selectedKey.length < 8 || selectedOrder) return;
+    (async () => {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, instagram_handle, full_name")
+        .like("whatsapp", `%${selectedKey}`)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setKnownCustomer((data as any) || null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedKey, selectedOrder]);
+
   const chatOrder: Order | null = useMemo(() => {
     if (!selected) return null;
     if (selectedOrder) return dbOrderToOrder(selectedOrder);
     return {
       id: `live-conv-${selected.phone}`,
-      instagramHandle: selected.name || "",
+      instagramHandle: knownCustomer?.instagram_handle || selected.name || "",
       whatsapp: selected.phone,
       products: [],
       stage: "pre_sale" as OrderStage,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-  }, [selected, selectedOrder]);
+  }, [selected, selectedOrder, knownCustomer]);
 
   const openCreateOrder = (conv: LiveConversation) => {
     setPrefill({ phone: conv.phone, name: conv.name });
