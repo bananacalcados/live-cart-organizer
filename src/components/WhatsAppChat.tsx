@@ -158,18 +158,26 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   // Troca MANUAL da instância desta conversa (ex.: cliente não recebe pela API
   // Meta e precisamos continuar o atendimento por uma instância não-API).
-  // Persistida por telefone para não "voltar sozinha" quando o modal remonta.
-  const overrideStorageKey = `wa-chat-instance:${(order.whatsapp || '').replace(/\D/g, '')}`;
+  // Persistida por telefone + conversa (instância de origem) para não "voltar
+  // sozinha" ao remontar e para NÃO vazar para a conversa do mesmo telefone
+  // em outra instância (o que deixava o chat "sem histórico").
+  const overrideStorageKey = `wa-chat-instance:${(order.whatsapp || '').replace(/\D/g, '')}:${conversationNumberId || 'auto'}`;
   const [overrideNumberId, setOverrideNumberIdState] = useState<string | null>(() => {
     try { return localStorage.getItem(overrideStorageKey); } catch { return null; }
   });
+  // Re-sincroniza quando a conversa (telefone/instância) muda sem remontar.
+  useEffect(() => {
+    try { setOverrideNumberIdState(localStorage.getItem(overrideStorageKey)); } catch { setOverrideNumberIdState(null); }
+  }, [overrideStorageKey]);
   const setOverrideNumberId = useCallback((id: string | null) => {
-    setOverrideNumberIdState(id);
+    // Escolher a própria instância da conversa = remover override.
+    const next = id && id === conversationNumberId ? null : id;
+    setOverrideNumberIdState(next);
     try {
-      if (id) localStorage.setItem(overrideStorageKey, id);
+      if (next) localStorage.setItem(overrideStorageKey, next);
       else localStorage.removeItem(overrideStorageKey);
     } catch { /* ignore */ }
-  }, [overrideStorageKey]);
+  }, [overrideStorageKey, conversationNumberId]);
   const effectiveNumberId = overrideNumberId || conversationNumberId || hookEffectiveNumberId;
   const boundNumber = overrideNumberId
     ? (numbers.find((n) => n.id === overrideNumberId) || null)
