@@ -822,7 +822,7 @@ export default function ChatPage() {
     if (headerComp?.format === 'IMAGE' && headerComp.example?.header_handle?.[0]) {
       components.push({
         type: 'header',
-        parameters: [{ type: 'image', image: { link: headerComp.example.header_handle[0] } }],
+        parameters: [{ type: 'image', image: { link: headerComp.example.header_handle[0] } } as any],
       });
     }
 
