@@ -482,7 +482,9 @@ serve(async (req) => {
     // Inject `bcq:auto:<cardIndex>` payloads on carousel QUICK_REPLY buttons when
     // the caller didn't already provide them. This lets the webhook identify which
     // card the customer tapped, regardless of which send path was used.
-    const sendComponents = injectCarouselQuickReplyPayloads(templateDef, components);
+    const sendComponents = normalizeMediaParams(
+      injectCarouselQuickReplyPayloads(templateDef, components),
+    );
 
     const templateBody: Record<string, unknown> = {
       messaging_product: 'whatsapp',
