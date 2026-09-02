@@ -215,10 +215,33 @@ export function LiveWhatsAppQueue({
       .filter((c) => !c.isGroup)
       .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
 
+    // Instagram: só entram na fila conversas que tenham DIRECT de verdade.
+    // Comentários (live, post, reel) são espelhados em whatsapp_messages com o
+    // prefixo "💬 Comentário no ..." ou com referral.source_type comment/reel;
+    // quem só comentou e nunca mandou Direct fica fora da fila.
+    const isIgCandidate = (c: LiveConversation) =>
+      c.lastMessage.startsWith("💬 Comentário") ||
+      (c.phone.replace(/\D/g, "").length >= 15 && !c.phone.includes("@"));
+    const candidates = convs.filter(isIgCandidate).map((c) => c.phone);
+    const withRealDm = new Set<string>();
+    for (let i = 0; i < candidates.length; i += 100) {
+      const chunk = candidates.slice(i, i + 100);
+      const { data: dms } = await (supabase as any)
+        .from("whatsapp_messages")
+        .select("phone")
+        .in("phone", chunk)
+        .eq("direction", "incoming")
+        .not("message", "like", "💬 Comentário%")
+        .or("referral.is.null,referral->>source_type.not.in.(comment,reel)")
+        .limit(5000);
+      for (const r of (dms || []) as { phone: string }[]) withRealDm.add(r.phone);
+    }
+    const onlyDms = convs.filter((c) => !isIgCandidate(c) || withRealDm.has(c.phone));
+
     // Nomes apenas dos telefones visíveis (cache compartilhado)
-    const maps = await resolveChatContacts(convs.slice(0, 200).map((c) => c.phone));
+    const maps = await resolveChatContacts(onlyDms.slice(0, 200).map((c) => c.phone));
     setConversations(
-      convs.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
+      onlyDms.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
     );
     setLoading(false);
   }, []);
