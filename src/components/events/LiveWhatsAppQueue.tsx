@@ -190,7 +190,9 @@ export function LiveWhatsAppQueue({
     [archived, eventId]
   );
 
+  const loadSeqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const { data, error } = await supabase.rpc("get_conversations", {
       p_number_id: null,
       p_dispatch_only: false,
@@ -260,6 +262,7 @@ export function LiveWhatsAppQueue({
 
     // Nomes apenas dos telefones visíveis (cache compartilhado)
     const maps = await resolveChatContacts(onlyDms.slice(0, 200).map((c) => c.phone));
+    if (seq !== loadSeqRef.current) return; // resposta obsoleta
     setConversations(
       onlyDms.map((c) => ({ ...c, name: maps.names[c.phone] || c.name }))
     );
