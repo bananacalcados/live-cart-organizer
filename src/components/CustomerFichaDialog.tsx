@@ -176,6 +176,10 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
 
 
   const handleSave = async () => {
+    if (!isRealOrder) {
+      toast.error("Crie o pedido desta conversa antes de salvar a ficha");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
