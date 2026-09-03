@@ -12,14 +12,17 @@ const JUNK_LOCAL_PARTS = new Set([
   "semmail", "sememail", "nao", "email", "a", "aa", "qwe", "qwerty",
 ]);
 
-/** Nome real = 2+ palavras, só letras, sem @, sem números. */
+/**
+ * Nome real = 2+ palavras com 2+ letras, só letras, sem @, sem números.
+ * Conectores de 1 letra ("Romilda Cardoso E Onofre") são aceitos.
+ */
 export function isRealFullName(raw?: string | null): boolean {
   const v = String(raw ?? "").trim();
   if (!v || v.includes("@") || /\d/.test(v)) return false;
   if (/[._]/.test(v)) return false; // "amalia.ferraz" é handle, não nome
   const parts = v.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return false;
-  return parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]{2,}$/.test(p));
+  if (!parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]+$/.test(p))) return false;
+  return parts.filter((p) => p.length >= 2).length >= 2;
 }
 
 /** Divide em primeiro/último nome já higienizados. */
