@@ -120,14 +120,58 @@ serve(async (req) => {
       `${productLines}\n\n` +
       `Tá tudo certo? Responde *SIM* pra confirmar ou me avisa se precisa corrigir algo 😊`;
 
-    // 6. Find the WhatsApp number used for this event
+    // 6. Resolve the WhatsApp instance to send from.
+    //    Conversa = (telefone + instância): no modo WhatsApp a live pode não ter
+    //    instância fixa (`events.whatsapp_number_id` vazio), então caímos para
+    //    a instância onde a cliente realmente conversou conosco.
+    const suffix8 = fullPhone.slice(-8);
     const { data: event } = await supabase
       .from('events')
-      .select('whatsapp_number_id')
+      .select('whatsapp_number_id, operation_mode')
       .eq('id', order.event_id)
       .single();
 
-    const sendNumberId = event?.whatsapp_number_id;
+    let sendNumberId: string | null = null;
+    let resolvedVia = 'event';
+
+    // 6a. Instância onde a cliente falou por último (prioridade: histórico real)
+    const { data: lastMsg } = await supabase
+      .from('whatsapp_messages')
+      .select('whatsapp_number_id, direction, created_at')
+      .like('phone', `%${suffix8}`)
+      .not('whatsapp_number_id', 'is', null)
+      .not('message', 'like', '💬 Comentário%')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastMsg?.whatsapp_number_id) {
+      sendNumberId = lastMsg.whatsapp_number_id;
+      resolvedVia = 'last_conversation';
+    }
+
+    // 6b. Clique no link /zap da live (atribuição explícita)
+    if (!sendNumberId) {
+      const { data: click } = await supabase
+        .from('live_whatsapp_clicks')
+        .select('whatsapp_number_id')
+        .eq('event_id', order.event_id)
+        .like('phone', `%${suffix8}`)
+        .not('whatsapp_number_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (click?.whatsapp_number_id) {
+        sendNumberId = click.whatsapp_number_id;
+        resolvedVia = 'zap_click';
+      }
+    }
+
+    // 6c. Instância fixa do evento
+    if (!sendNumberId && event?.whatsapp_number_id) {
+      sendNumberId = event.whatsapp_number_id;
+      resolvedVia = 'event';
+    }
+
     if (!sendNumberId) {
       console.log(`[livete-payment-confirmation] No WhatsApp number for event of order ${orderId}`);
       await releaseClaim();
@@ -136,26 +180,49 @@ serve(async (req) => {
       });
     }
 
-    // 7. Send with human-like delay
-    await sleep(typingDelay(message));
-
     const { data: wnData } = await supabase
       .from('whatsapp_numbers')
-      .select('provider, phone_number_id')
+      .select('provider, phone_number_id, is_active, label')
       .eq('id', sendNumberId)
       .single();
 
-    if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
-      await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+    if (wnData && wnData.is_active === false && event?.whatsapp_number_id && event.whatsapp_number_id !== sendNumberId) {
+      // Instância do histórico está desligada: usa a do evento.
+      sendNumberId = event.whatsapp_number_id;
+      resolvedVia = 'event_fallback_inactive';
+    }
+
+    const { data: wn } = sendNumberId === wnData ? { data: wnData } : await supabase
+      .from('whatsapp_numbers')
+      .select('provider, phone_number_id, is_active, label')
+      .eq('id', sendNumberId)
+      .single();
+    const provider = String(wn?.provider || wnData?.provider || '');
+    console.log(`[livete-payment-confirmation] order ${orderId} → instance ${sendNumberId} (${wn?.label || ''}/${provider}) via ${resolvedVia}`);
+
+    // 7. Send with human-like delay
+    await sleep(typingDelay(message));
+
+    const headers = { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' };
+    let sendResp: Response;
+    if (provider === 'meta') {
+      sendResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+        method: 'POST', headers,
         body: JSON.stringify({ phone: fullPhone, message, whatsappNumberId: sendNumberId }),
       });
     } else {
-      await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: sendNumberId }),
+      const fnBase = provider === 'uazapi' ? 'uazapi' : provider === 'wasender' ? 'wasender' : 'zapi';
+      sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: sendNumberId, whatsappNumberId: sendNumberId }),
+      });
+    }
+    if (!sendResp.ok) {
+      const txt = await sendResp.text().catch(() => '');
+      console.error(`[livete-payment-confirmation] send failed (${sendResp.status}) via ${provider}: ${txt}`);
+      await releaseClaim();
+      return new Response(JSON.stringify({ handled: false, reason: 'send_failed', status: sendResp.status, details: txt }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
