@@ -369,6 +369,16 @@ export function LiveWhatsAppQueue({
 
 
 
+  // "Ao vivo": mensagem após o início da transmissão OU conversa que veio pelo
+  // link /zap desta live (mesmo que tenha chegado antes de clicar em "Iniciar live").
+  const isLiveConv = useCallback(
+    (c: LiveConversation) => {
+      if (zapMatches.has(suffix8(c.phone))) return true;
+      return !startedAtMs || c.lastMessageAt.getTime() >= startedAtMs;
+    },
+    [zapMatches, startedAtMs]
+  );
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return byInstance.filter((c) => {
@@ -379,7 +389,7 @@ export function LiveWhatsAppQueue({
         return false;
       }
       const order = orderBySuffix.get(suffix8(c.phone));
-      if (filter === "live" && startedAtMs && c.lastMessageAt.getTime() < startedAtMs) return false;
+      if (filter === "live" && !isLiveConv(c)) return false;
       if (filter === "no_order" && order) return false;
       if (term) {
         const hay = `${c.name || ""} ${c.phone}`.toLowerCase();
@@ -387,7 +397,7 @@ export function LiveWhatsAppQueue({
       }
       return true;
     });
-  }, [byInstance, filter, search, orderBySuffix, startedAtMs, archived]);
+  }, [byInstance, filter, search, orderBySuffix, isLiveConv, archived]);
 
   const counts = useMemo(() => {
     let live = 0;
@@ -400,11 +410,11 @@ export function LiveWhatsAppQueue({
         continue;
       }
       all++;
-      if (!startedAtMs || c.lastMessageAt.getTime() >= startedAtMs) live++;
+      if (isLiveConv(c)) live++;
       if (!orderBySuffix.get(suffix8(c.phone))) noOrder++;
     }
     return { live, noOrder, all, archived: archivedCount };
-  }, [byInstance, orderBySuffix, startedAtMs, archived]);
+  }, [byInstance, orderBySuffix, isLiveConv, archived]);
 
   const instanceLabel = (id: string | null) =>
     numbers.find((n) => n.id === id)?.label || null;
