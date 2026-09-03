@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
       full_name = null,
       source_url = null,
       event_time = null, // optional UNIX seconds (for backfill up to 7 days)
+      event_id: explicitEventId = null, // MESMO id usado no Pixel do navegador (dedupe)
+      fbp = null,
+      fbc = null,
     } = body || {};
 
     if (!phone) {
@@ -102,10 +105,14 @@ Deno.serve(async (req) => {
 
     const phoneDigits = normalizePhone(phone);
 
-    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia (do evento)
+    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia (do evento).
+    // Se o front mandou event_id (mesmo do Pixel), usa-o para a Meta deduplicar browser+server.
     const eventTimeSec = event_time && Number.isFinite(event_time) ? Math.floor(event_time) : Math.floor(Date.now() / 1000);
     const dayKey = new Date(eventTimeSec * 1000).toISOString().slice(0, 10);
-    const eventId = `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${dayKey}`;
+    const eventId =
+      (typeof explicitEventId === "string" && explicitEventId.trim().length > 0 && explicitEventId.length <= 200)
+        ? explicitEventId.trim()
+        : `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${dayKey}`;
 
     // Verifica duplicação
     const { data: existing } = await supabase
