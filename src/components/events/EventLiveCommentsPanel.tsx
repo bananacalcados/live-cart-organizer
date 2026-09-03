@@ -81,7 +81,31 @@ const phoneKey = (p: string): string => {
 };
 
 
-const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
+const cleanHandle = (h: string) => (h || "").replace(/^\s*@\s*/, "").trim().toLowerCase();
+// Chave "frouxa": ignora . e _ — cadastros digitados à mão trocam "sonia_evaristo" por "sonia.evaristo".
+const looseHandle = (h: string) => cleanHandle(h).replace(/[._\s]/g, "");
+
+/**
+ * Dado o conjunto de @ que comentaram, devolve uma função que traduz o @ de um
+ * cadastro/pedido para o @ do comentário correspondente (exato primeiro, depois
+ * ignorando ./_). Assim todos os mapas ficam indexados pelo @ que aparece no painel.
+ */
+const makeHandleMatcher = (commentHandles: Iterable<string>) => {
+  const exact = new Set<string>();
+  const loose = new Map<string, string>();
+  for (const h of commentHandles) {
+    if (!h) continue;
+    exact.add(h);
+    const lk = looseHandle(h);
+    if (lk && !loose.has(lk)) loose.set(lk, h);
+  }
+  return (rawHandle: string | null | undefined): string | null => {
+    const h = cleanHandle(rawHandle || "");
+    if (!h) return null;
+    if (exact.has(h)) return h;
+    return loose.get(looseHandle(h)) || null;
+  };
+};
 
 // Cache de resolução de @ do Instagram -> cliente/WhatsApp.
 // Vive fora do componente para sobreviver aos refreshes automáticos do painel
