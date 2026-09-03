@@ -38,6 +38,8 @@ interface ProdRow {
   barcode: string | null;
   price: number;
   stock: number;
+  /** Estoque por loja (todas as lojas reais) — a baixa é feita pela função do banco. */
+  storeStocks: { store: string; stock: number; isOrderStore: boolean }[];
 }
 
 /**
