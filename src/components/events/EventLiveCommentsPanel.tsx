@@ -1041,7 +1041,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                 <CommentRow
                   key={c.id}
                   comment={c}
-                  isBanned={bannedHandles.has(handle)}
+                  isBanned={bannedHandles.has(handle) || bannedHandles.has(looseHandle(handle))}
                   hasUnpaid={unpaidOrderByHandle.has(handle)}
                   hasWhatsapp={whatsappByHandle.has(handle)}
                   stats={orderStatsByHandle.get(handle)}
