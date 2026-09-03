@@ -86,7 +86,9 @@ const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCas
 // Cache de resolução de @ do Instagram -> cliente/WhatsApp.
 // Vive fora do componente para sobreviver aos refreshes automáticos do painel
 // (15s/60s), evitando reconsultar os mesmos @ centenas de milhares de vezes.
-const igHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null }>();
+const igHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt?: number }>();
+/** @ sem cadastro voltam a ser consultados após este intervalo (cliente pode se cadastrar depois de comentar). */
+const NEGATIVE_CACHE_TTL_MS = 45_000;
 
 
 // Compara duas listas de comentários por identidade (id + ordem). Usado para
@@ -526,7 +528,16 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Antes, cada ciclo de atualização (15s/60s) refazia TODAS as buscas do zero e
   // ainda mandava 3 variantes por @ ("h", "@h", "@ h").
   const resolveHandles = useCallback(async (handles: string[]) => {
-    const pending = handles.filter((h) => h && !igHandleCache.has(h));
+    // @ SEM cadastro são reconsultados após um TTL curto: a cliente pode comentar
+    // antes de fazer o primeiro pedido na live (cadastro criado depois do comentário).
+    const now = Date.now();
+    const pending = handles.filter((h) => {
+      if (!h) return false;
+      const cached = igHandleCache.get(h);
+      if (!cached) return true;
+      if (cached.customerId) return false;
+      return now - (cached.checkedAt || 0) > NEGATIVE_CACHE_TTL_MS;
+    });
     if (pending.length === 0) return;
     const batchSize = 300;
     for (let i = 0; i < pending.length; i += batchSize) {
@@ -540,11 +551,13 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         igHandleCache.set(h, {
           customerId: r.customer_id || prev?.customerId || null,
           whatsapp: r.whatsapp || prev?.whatsapp || null,
+          checkedAt: now,
         });
       });
-      // Marca como "não encontrado" para não reconsultar a cada refresh.
+      // Marca como "não encontrado" (com carimbo de tempo) para reconsultar só após o TTL.
       batch.forEach((h) => {
-        if (!igHandleCache.has(h)) igHandleCache.set(h, { customerId: null, whatsapp: null });
+        const cached = igHandleCache.get(h);
+        if (!cached?.customerId) igHandleCache.set(h, { customerId: null, whatsapp: null, checkedAt: now });
       });
     }
   }, []);
