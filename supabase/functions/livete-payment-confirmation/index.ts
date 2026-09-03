@@ -192,12 +192,16 @@ serve(async (req) => {
       resolvedVia = 'event_fallback_inactive';
     }
 
-    const { data: wn } = sendNumberId === wnData ? { data: wnData } : await supabase
-      .from('whatsapp_numbers')
-      .select('provider, phone_number_id, is_active, label')
-      .eq('id', sendNumberId)
-      .single();
-    const provider = String(wn?.provider || wnData?.provider || '');
+    let wn = wnData;
+    if (resolvedVia === 'event_fallback_inactive') {
+      const { data: wn2 } = await supabase
+        .from('whatsapp_numbers')
+        .select('provider, phone_number_id, is_active, label')
+        .eq('id', sendNumberId)
+        .single();
+      wn = wn2;
+    }
+    const provider = String(wn?.provider || '');
     console.log(`[livete-payment-confirmation] order ${orderId} → instance ${sendNumberId} (${wn?.label || ''}/${provider}) via ${resolvedVia}`);
 
     // 7. Send with human-like delay
