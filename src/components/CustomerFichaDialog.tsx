@@ -363,15 +363,15 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
         )}
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
-          <Button variant="outline" onClick={handleCopyLink}>
+          <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
             <Copy className="h-4 w-4 mr-2" /> Copiar link
           </Button>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSave} disabled={saving || loading}>
+            <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Salvar
             </Button>
-            <Button onClick={handleSendPaymentLink} disabled={sending || loading}>
+            <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Enviar link Pagamento
             </Button>
