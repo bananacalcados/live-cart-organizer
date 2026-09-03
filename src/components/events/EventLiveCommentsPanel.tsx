@@ -81,31 +81,7 @@ const phoneKey = (p: string): string => {
 };
 
 
-const cleanHandle = (h: string) => (h || "").replace(/^\s*@\s*/, "").trim().toLowerCase();
-// Chave "frouxa": ignora . e _ — cadastros digitados à mão trocam "sonia_evaristo" por "sonia.evaristo".
-const looseHandle = (h: string) => cleanHandle(h).replace(/[._\s]/g, "");
-
-/**
- * Dado o conjunto de @ que comentaram, devolve uma função que traduz o @ de um
- * cadastro/pedido para o @ do comentário correspondente (exato primeiro, depois
- * ignorando ./_). Assim todos os mapas ficam indexados pelo @ que aparece no painel.
- */
-const makeHandleMatcher = (commentHandles: Iterable<string>) => {
-  const exact = new Set<string>();
-  const loose = new Map<string, string>();
-  for (const h of commentHandles) {
-    if (!h) continue;
-    exact.add(h);
-    const lk = looseHandle(h);
-    if (lk && !loose.has(lk)) loose.set(lk, h);
-  }
-  return (rawHandle: string | null | undefined): string | null => {
-    const h = cleanHandle(rawHandle || "");
-    if (!h) return null;
-    if (exact.has(h)) return h;
-    return loose.get(looseHandle(h)) || null;
-  };
-};
+const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
 // Cache de resolução de @ do Instagram -> cliente/WhatsApp.
 // Vive fora do componente para sobreviver aos refreshes automáticos do painel
@@ -538,8 +514,6 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     (data || []).forEach((c: any) => {
       const h = cleanHandle(c.instagram_handle || "");
       if (h) set.add(h);
-      const lk = looseHandle(h);
-      if (lk) set.add(lk);
     });
     setBannedHandles(set);
   }, []);
@@ -585,10 +559,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     let cancelled = false;
     (async () => {
       const map = new Map<string, string>();
-      const matchHandle = makeHandleMatcher(handles);
       // 1) Aproveita o WhatsApp dos pedidos já carregados deste evento
       for (const o of orders) {
-        const h = matchHandle(o.customer?.instagram_handle);
+        const h = cleanHandle(o.customer?.instagram_handle || "");
         const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
         if (h && wa) map.set(h, o.customer!.whatsapp!);
       }
@@ -618,15 +591,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     let cancelled = false;
     (async () => {
       // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
-      const matchHandle = makeHandleMatcher(handles);
+      const handlesSet = new Set(handles);
       const idToHandle = new Map<string, string>();
 
       // 1a) Resolve via pedidos já carregados (robusto: pega o @ direto do pedido,
-      //     mesmo quando o cadastro do cliente está com formato divergente, ex. "." x "_").
+      //     mesmo quando o cadastro do cliente está com formato divergente).
       for (const o of orders) {
-        const h = matchHandle(o.customer?.instagram_handle);
+        const h = cleanHandle(o.customer?.instagram_handle || "");
         const cid = o.customer_id || (o.customer as any)?.id;
-        if (h && cid) idToHandle.set(cid, h);
+        if (h && cid && handlesSet.has(h)) idToHandle.set(cid, h);
       }
 
       // 1b) Resolve o restante pelo cache/RPC normalizada (1 consulta por lote).
@@ -881,19 +854,17 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Mapa handle -> pedido NÃO PAGO mais recente deste evento
   const unpaidOrderByHandle = useMemo(() => {
     const map = new Map<string, DbOrder>();
-    const matchHandle = makeHandleMatcher(comments.map((c) => cleanHandle(c.username)));
     for (const o of orders) {
-      const rawH = cleanHandle(o.customer?.instagram_handle || "");
-      if (!rawH) continue;
+      const h = cleanHandle(o.customer?.instagram_handle || "");
+      if (!h) continue;
       if (isOrderMarkedPaid(o) || o.stage === "cancelled") continue;
-      const h = matchHandle(rawH) || rawH;
       const existing = map.get(h);
       if (!existing || new Date(o.updated_at) > new Date(existing.updated_at)) {
         map.set(h, o);
       }
     }
     return map;
-  }, [orders, comments]);
+  }, [orders]);
 
   const openForHandle = useCallback((rawHandle: string) => {
     const clean = cleanHandle(rawHandle);
@@ -1041,7 +1012,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                 <CommentRow
                   key={c.id}
                   comment={c}
-                  isBanned={bannedHandles.has(handle) || bannedHandles.has(looseHandle(handle))}
+                  isBanned={bannedHandles.has(handle)}
                   hasUnpaid={unpaidOrderByHandle.has(handle)}
                   hasWhatsapp={whatsappByHandle.has(handle)}
                   stats={orderStatsByHandle.get(handle)}
