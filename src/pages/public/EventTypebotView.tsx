@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getFbp, getFbc } from '@/lib/metaPixel';
 import { captureAttribution, resolveFbclid, resolveUtm } from '@/lib/metaAttribution';
+import { normalizeBRPhone } from '@/lib/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
