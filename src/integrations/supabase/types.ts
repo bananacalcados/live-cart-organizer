@@ -22611,6 +22611,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ig_handle_loose: { Args: { _h: string }; Returns: string }
       ig_handle_norm: { Args: { _h: string }; Returns: string }
       increment_campaign_leads_captured: {
         Args: { p_campaign_id: string }
