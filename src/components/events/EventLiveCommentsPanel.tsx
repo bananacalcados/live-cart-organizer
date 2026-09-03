@@ -583,9 +583,10 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     let cancelled = false;
     (async () => {
       const map = new Map<string, string>();
+      const matchHandle = makeHandleMatcher(handles);
       // 1) Aproveita o WhatsApp dos pedidos já carregados deste evento
       for (const o of orders) {
-        const h = cleanHandle(o.customer?.instagram_handle || "");
+        const h = matchHandle(o.customer?.instagram_handle);
         const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
         if (h && wa) map.set(h, o.customer!.whatsapp!);
       }
