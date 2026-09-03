@@ -79,17 +79,55 @@ export function ExpItemsEditDialog({ order, storeId, open, onOpenChange, onSaved
     if (q.length < 2) return toast.error("Digite ao menos 2 caracteres");
     setSearching(true);
     try {
+      // Busca em TODAS as lojas reais (não só a do pedido) e inclui produtos
+      // inativos/zerados: a função do banco escolhe a loja com estoque na hora
+      // de dar baixa (prioriza a loja do pedido, depois a de maior estoque).
+      const safe = q.replace(/[,()]/g, " ");
       const { data, error } = await supabase
         .from("pos_products")
-        .select("id, name, variant, size, sku, barcode, price, stock, pos_stores!inner(is_simulation)")
-        .eq("store_id", storeId)
-        .eq("is_active", true)
+        .select("id, name, variant, size, sku, barcode, price, stock, store_id, pos_stores!inner(name, is_simulation)")
         .eq("pos_stores.is_simulation", false)
-        .or(`name.ilike.%${q}%,sku.ilike.%${q}%,barcode.ilike.%${q}%`)
+        .or(`name.ilike.%${safe}%,sku.ilike.%${safe}%,barcode.ilike.%${safe}%`)
         .order("name")
-        .limit(40);
+        .limit(200);
       if (error) throw error;
-      setResults((data || []) as any);
+
+      // Agrupa variantes iguais (mesmo código de barras/SKU) entre lojas
+      const grouped = new Map<string, ProdRow>();
+      for (const r of (data || []) as any[]) {
+        const key = r.barcode || r.sku || r.id;
+        const storeName: string = r.pos_stores?.name || "Loja";
+        const isOrderStore = r.store_id === storeId;
+        const stock = Number(r.stock) || 0;
+        const cur = grouped.get(key);
+        if (!cur) {
+          grouped.set(key, {
+            id: r.id,
+            name: r.name,
+            variant: r.variant,
+            size: r.size,
+            sku: r.sku,
+            barcode: r.barcode,
+            price: Number(r.price) || 0,
+            stock,
+            storeStocks: [{ store: storeName, stock, isOrderStore }],
+          });
+        } else {
+          cur.stock += stock;
+          cur.storeStocks.push({ store: storeName, stock, isOrderStore });
+          // Prefere dados (nome/preço) da loja do pedido ou da que tem estoque
+          if (isOrderStore || (stock > 0 && cur.price <= 0)) {
+            cur.id = r.id;
+            cur.name = r.name;
+            cur.price = Number(r.price) || cur.price;
+          }
+        }
+      }
+      const list = Array.from(grouped.values())
+        .sort((a, b) => (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0) || a.name.localeCompare(b.name) || String(a.size).localeCompare(String(b.size)))
+        .slice(0, 60);
+      setResults(list);
+      if (!list.length) toast.info("Nenhum produto encontrado em nenhuma loja");
     } catch (e: any) {
       toast.error(e.message || "Erro ao buscar produtos");
     } finally {
