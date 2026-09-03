@@ -130,7 +130,7 @@ export function LiveAttendanceCenter({
         <LiveWhatsAppQueue
           eventId={eventId}
           liveStartedAt={liveStartedAt}
-          eventPeriodStart={event?.start_date || event?.created_at || null}
+          eventPeriodStart={event?.start_date || null}
           eventPeriodEnd={event?.end_date || null}
           orders={orders}
           selectedKey={selected ? `${selected.phone}::${selected.whatsappNumberId || ""}` : null}
