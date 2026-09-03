@@ -7,16 +7,42 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+/**
+ * Rotas INTERNAS (equipe) onde o banner "Instale o app" pode aparecer.
+ * Qualquer outra rota é considerada pública (área de membros, checkout,
+ * typebot, LPs, redirecionadores, rastreio, etc.) e NUNCA mostra o banner.
+ */
+const INTERNAL_ROUTE_PREFIXES = [
+  "/login",
+  "/dashboard",
+  "/events",
+  "/chat",
+  "/marketing",
+  "/expedition",
+  "/expedition-beta",
+  "/pos",
+  "/inventory",
+  "/management",
+  "/admin",
+  "/ai-agents",
+  "/presenter",
+  "/livete-anotador",
+];
+
+export function isInternalAppRoute(path: string): boolean {
+  if (path === "/" || path === "") return true;
+  return INTERNAL_ROUTE_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
+}
+
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Hide on transparent checkout routes (public payment links)
+    // Só mostra o banner em rotas internas da equipe; rotas públicas nunca.
     const path = window.location.pathname;
-    const isCheckoutRoute = /^\/(checkout|checkout-loja|pay|pagar|rastreio|r\/)/i.test(path);
-    if (isCheckoutRoute) return;
+    if (!isInternalAppRoute(path)) return;
 
     // Check if dismissed recently
     const dismissed = localStorage.getItem("pwa-install-dismissed");
