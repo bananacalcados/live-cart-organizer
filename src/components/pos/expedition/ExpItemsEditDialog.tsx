@@ -218,15 +218,29 @@ export function ExpItemsEditDialog({ order, storeId, open, onOpenChange, onSaved
             {results.length > 0 && (
               <div className="mt-3 max-h-56 overflow-y-auto space-y-1">
                 {results.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border p-2">
+                  <div key={p.barcode || p.sku || p.id} className="flex items-center justify-between gap-2 rounded-md border p-2">
                     <div className="min-w-0">
                       <p className="font-bold truncate">{p.name}</p>
                       <p className="text-sm text-muted-foreground truncate">
                         {[p.variant, p.size && `Tam ${p.size}`, p.sku].filter(Boolean).join(" • ")}
                       </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {p.storeStocks
+                          .filter((s) => s.stock > 0 || s.isOrderStore)
+                          .map((s) => (
+                            <Badge
+                              key={s.store}
+                              variant={s.stock > 0 ? "secondary" : "outline"}
+                              className="text-[10px] px-1.5 py-0"
+                              title={s.isOrderStore ? "Loja do pedido" : undefined}
+                            >
+                              {s.store}: {s.stock}
+                            </Badge>
+                          ))}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant={p.stock > 0 ? "secondary" : "destructive"}>Estoque {p.stock}</Badge>
+                      <Badge variant={p.stock > 0 ? "secondary" : "destructive"}>Total {p.stock}</Badge>
                       <span className="font-black">{brl(p.price)}</span>
                       <Button size="sm" onClick={() => addProduct(p)}>
                         <Plus className="h-4 w-4" />
