@@ -184,6 +184,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   }, [existingCustomer, eventId, findActiveOrderByCustomer, orders]);
 
   useEffect(() => {
+    setEditingHandle(false);
     if (editingOrder) {
       setInstagramHandle(editingOrder.customer?.instagram_handle || "");
       setWhatsapp(editingOrder.customer?.whatsapp || "");
