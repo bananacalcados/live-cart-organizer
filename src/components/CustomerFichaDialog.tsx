@@ -64,6 +64,12 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   const [sending, setSending] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
 
+  // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
+  // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
+  const isRealOrder = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(order.id),
+  );
+
   const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}?step=3`;
 
   useEffect(() => {
@@ -72,11 +78,13 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
       setLoading(true);
       try {
         // 1. Cadastro DESTE pedido (mesmo parcial) — nunca é descartado.
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state")
-          .eq("order_id", order.id)
-          .maybeSingle();
+        const { data: reg } = isRealOrder
+          ? await supabase
+              .from("customer_registrations")
+              .select("full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state")
+              .eq("order_id", order.id)
+              .maybeSingle()
+          : { data: null as any };
 
         const clean = (v: any) => {
           const s = String(v ?? "").trim();
