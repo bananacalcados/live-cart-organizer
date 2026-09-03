@@ -171,6 +171,17 @@ Deno.serve(async (req) => {
       ln: ln ? [ln] : undefined,
       country: [co],
     };
+    // Sinais do navegador (quando o evento veio de uma página nossa, ex.: Typebot):
+    // melhoram o match e permitem que a Meta deduplique com o evento do Pixel.
+    const fromBrowser = typeof fbp === "string" && fbp.startsWith("fb.");
+    if (typeof fbp === "string" && fbp.startsWith("fb.")) userData.fbp = fbp;
+    if (typeof fbc === "string" && fbc.startsWith("fb.")) userData.fbc = fbc;
+    if (fromBrowser) {
+      const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+      const ua = req.headers.get("user-agent") || "";
+      if (ip) userData.client_ip_address = ip;
+      if (ua) userData.client_user_agent = ua;
+    }
     Object.keys(userData).forEach((k) => userData[k] === undefined && delete userData[k]);
 
     const payload = {
@@ -179,7 +190,7 @@ Deno.serve(async (req) => {
           event_name,
           event_time: eventTimeSec,
           event_id: eventId,
-          action_source: "chat",
+          action_source: fromBrowser ? "website" : "chat",
           event_source_url: source_url || undefined,
           user_data: userData,
           custom_data: {
