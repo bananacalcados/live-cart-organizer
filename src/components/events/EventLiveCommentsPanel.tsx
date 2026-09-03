@@ -615,15 +615,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     let cancelled = false;
     (async () => {
       // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
-      const handlesSet = new Set(handles);
+      const matchHandle = makeHandleMatcher(handles);
       const idToHandle = new Map<string, string>();
 
       // 1a) Resolve via pedidos já carregados (robusto: pega o @ direto do pedido,
-      //     mesmo quando o cadastro do cliente está com formato divergente).
+      //     mesmo quando o cadastro do cliente está com formato divergente, ex. "." x "_").
       for (const o of orders) {
-        const h = cleanHandle(o.customer?.instagram_handle || "");
+        const h = matchHandle(o.customer?.instagram_handle);
         const cid = o.customer_id || (o.customer as any)?.id;
-        if (h && cid && handlesSet.has(h)) idToHandle.set(cid, h);
+        if (h && cid) idToHandle.set(cid, h);
       }
 
       // 1b) Resolve o restante pelo cache/RPC normalizada (1 consulta por lote).
