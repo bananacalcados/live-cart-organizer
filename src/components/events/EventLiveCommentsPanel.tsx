@@ -538,6 +538,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     (data || []).forEach((c: any) => {
       const h = cleanHandle(c.instagram_handle || "");
       if (h) set.add(h);
+      const lk = looseHandle(h);
+      if (lk) set.add(lk);
     });
     setBannedHandles(set);
   }, []);
