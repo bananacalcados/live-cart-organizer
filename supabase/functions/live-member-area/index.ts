@@ -45,8 +45,9 @@ function isRealFullName(raw?: string | null): boolean {
   const v = String(raw ?? "").trim();
   if (!v || v.includes("@") || /\d/.test(v) || /[._]/.test(v)) return false;
   const parts = v.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return false;
-  return parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]{2,}$/.test(p));
+  // Conectores de 1 letra ("Romilda Cardoso E Onofre") são aceitos.
+  if (!parts.every((p) => /^[a-zA-ZÀ-ÿ'’-]+$/.test(p))) return false;
+  return parts.filter((p) => p.length >= 2).length >= 2;
 }
 
 const JUNK_EMAIL_LOCALS = new Set([
