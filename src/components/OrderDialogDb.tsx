@@ -745,14 +745,31 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               <Label htmlFor="instagram" className="flex items-center gap-2">
                 <Instagram className="h-4 w-4" />
                 Instagram *
+                {!!editingOrder && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setEditingHandle((v) => !v)}
+                  >
+                    {editingHandle ? "Cancelar" : "Editar @"}
+                  </Button>
+                )}
               </Label>
               <Input
                 id="instagram"
                 placeholder="@usuario"
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
-                disabled={!!editingOrder}
+                disabled={!!editingOrder && !editingHandle}
               />
+              {!!editingOrder && editingHandle && (
+                <p className="text-xs text-muted-foreground">
+                  O @ será alterado no cadastro do cliente ao salvar o pedido.
+                </p>
+              )}
+
               {existingCustomer && !editingOrder && (
                 <Alert className="mt-2 border-accent/50 bg-accent/10">
                   <Info className="h-4 w-4 text-accent" />
