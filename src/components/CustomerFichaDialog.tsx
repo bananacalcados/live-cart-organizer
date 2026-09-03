@@ -64,6 +64,12 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   const [sending, setSending] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
 
+  // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
+  // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
+  const isRealOrder = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(order.id),
+  );
+
   const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}?step=3`;
 
   useEffect(() => {
@@ -72,11 +78,13 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
       setLoading(true);
       try {
         // 1. Cadastro DESTE pedido (mesmo parcial) — nunca é descartado.
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state")
-          .eq("order_id", order.id)
-          .maybeSingle();
+        const { data: reg } = isRealOrder
+          ? await supabase
+              .from("customer_registrations")
+              .select("full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state")
+              .eq("order_id", order.id)
+              .maybeSingle()
+          : { data: null as any };
 
         const clean = (v: any) => {
           const s = String(v ?? "").trim();
@@ -168,6 +176,10 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
 
 
   const handleSave = async () => {
+    if (!isRealOrder) {
+      toast.error("Crie o pedido desta conversa antes de salvar a ficha");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -275,6 +287,13 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
           </DialogTitle>
         </DialogHeader>
 
+        {!isRealOrder && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            Esta conversa ainda não tem pedido. Crie o pedido para salvar a ficha e gerar o link de
+            pagamento.
+          </p>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -344,15 +363,15 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
         )}
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
-          <Button variant="outline" onClick={handleCopyLink}>
+          <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
             <Copy className="h-4 w-4 mr-2" /> Copiar link
           </Button>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSave} disabled={saving || loading}>
+            <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Salvar
             </Button>
-            <Button onClick={handleSendPaymentLink} disabled={sending || loading}>
+            <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Enviar link Pagamento
             </Button>
