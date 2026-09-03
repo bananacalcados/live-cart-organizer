@@ -165,7 +165,10 @@ export default function EventTypebotView() {
       // Meta Pixel — Lead (skip when disqualified)
       if (!opts.disqualified) {
         try {
-          const phoneDigits = (updated.phone || '').replace(/\D/g, '');
+          // IMPORTANTE: o event_id do Pixel e da CAPI precisam ser IDÊNTICOS
+          // para a Meta deduplicar. Usa telefone normalizado (55+DDD+9 dígitos)
+          // e envia o mesmo event_id explicitamente para a CAPI.
+          const phoneDigits = normalizeBRPhone(updated.phone || '');
           const today = new Date().toISOString().slice(0, 10);
           const scopeId = data?.event_id || tb.event_id || tb.id;
           const eventId = `lead_${phoneDigits}_${scopeId}_${today}`;
@@ -181,12 +184,15 @@ export default function EventTypebotView() {
           supabase.functions.invoke('meta-capi-lead', {
             body: {
               phone: phoneDigits,
+              event_id: eventId,
               event_name: 'Lead',
               campaign_id: scopeId,
               campaign_slug: tb.slug,
               campaign_name: tb.name,
               full_name: updated.name,
               source_url: window.location.href,
+              fbp: getFbp() || undefined,
+              fbc: getFbc() || undefined,
             },
           }).catch((e) => console.warn('[meta-capi-lead] invoke error', e));
         } catch (e) {
