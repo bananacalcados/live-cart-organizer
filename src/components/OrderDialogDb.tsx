@@ -524,11 +524,35 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
     try {
       if (editingOrder) {
+        // Update customer instagram handle if changed
+        if (editingOrder.customer && editingHandle) {
+          const raw = instagramHandle.trim().replace(/^@+/, "");
+          const newHandle = raw ? `@${raw}` : "";
+          const currentHandle = editingOrder.customer.instagram_handle || "";
+          if (!newHandle) {
+            toast.error("Informe o @ do Instagram");
+            setIsSubmitting(false);
+            return;
+          }
+          if (newHandle.toLowerCase() !== currentHandle.toLowerCase()) {
+            const conflict = findCustomerByInstagram(newHandle);
+            if (conflict && conflict.id !== editingOrder.customer.id) {
+              toast.error(`O @ ${newHandle} já pertence a outro cliente cadastrado`);
+              setIsSubmitting(false);
+              return;
+            }
+            await updateCustomer(editingOrder.customer.id, { instagram_handle: newHandle } as Partial<DbCustomer>);
+            (editingOrder.customer as any).instagram_handle = newHandle;
+            toast.success("@ do Instagram atualizado");
+          }
+        }
+
         // Update customer whatsapp if changed
         if (editingOrder.customer && (whatsapp !== editingOrder.customer.whatsapp || fullName.trim() !== ((editingOrder.customer as any).full_name || ""))) {
           const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
           await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa, fullName);
         }
+
 
         // Update existing order
         const orderUpdates: Partial<DbOrder> = {
