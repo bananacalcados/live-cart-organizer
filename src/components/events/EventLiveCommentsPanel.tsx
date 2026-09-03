@@ -86,7 +86,9 @@ const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCas
 // Cache de resolução de @ do Instagram -> cliente/WhatsApp.
 // Vive fora do componente para sobreviver aos refreshes automáticos do painel
 // (15s/60s), evitando reconsultar os mesmos @ centenas de milhares de vezes.
-const igHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null }>();
+const igHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt?: number }>();
+/** @ sem cadastro voltam a ser consultados após este intervalo (cliente pode se cadastrar depois de comentar). */
+const NEGATIVE_CACHE_TTL_MS = 45_000;
 
 
 // Compara duas listas de comentários por identidade (id + ordem). Usado para
