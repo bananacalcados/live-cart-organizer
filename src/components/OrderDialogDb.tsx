@@ -61,7 +61,8 @@ interface OrderDialogDbProps {
 
 export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
 
-  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
+  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
+  const [editingHandle, setEditingHandle] = useState(false);
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
   const [instagramHandle, setInstagramHandle] = useState("");
@@ -183,6 +184,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   }, [existingCustomer, eventId, findActiveOrderByCustomer, orders]);
 
   useEffect(() => {
+    setEditingHandle(false);
     if (editingOrder) {
       setInstagramHandle(editingOrder.customer?.instagram_handle || "");
       setWhatsapp(editingOrder.customer?.whatsapp || "");
@@ -522,11 +524,35 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
     try {
       if (editingOrder) {
+        // Update customer instagram handle if changed
+        if (editingOrder.customer && editingHandle) {
+          const raw = instagramHandle.trim().replace(/^@+/, "");
+          const newHandle = raw ? `@${raw}` : "";
+          const currentHandle = editingOrder.customer.instagram_handle || "";
+          if (!newHandle) {
+            toast.error("Informe o @ do Instagram");
+            setIsSubmitting(false);
+            return;
+          }
+          if (newHandle.toLowerCase() !== currentHandle.toLowerCase()) {
+            const conflict = findCustomerByInstagram(newHandle);
+            if (conflict && conflict.id !== editingOrder.customer.id) {
+              toast.error(`O @ ${newHandle} já pertence a outro cliente cadastrado`);
+              setIsSubmitting(false);
+              return;
+            }
+            await updateCustomer(editingOrder.customer.id, { instagram_handle: newHandle } as Partial<DbCustomer>);
+            (editingOrder.customer as any).instagram_handle = newHandle;
+            toast.success("@ do Instagram atualizado");
+          }
+        }
+
         // Update customer whatsapp if changed
         if (editingOrder.customer && (whatsapp !== editingOrder.customer.whatsapp || fullName.trim() !== ((editingOrder.customer as any).full_name || ""))) {
           const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
           await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa, fullName);
         }
+
 
         // Update existing order
         const orderUpdates: Partial<DbOrder> = {
@@ -743,14 +769,31 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               <Label htmlFor="instagram" className="flex items-center gap-2">
                 <Instagram className="h-4 w-4" />
                 Instagram *
+                {!!editingOrder && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setEditingHandle((v) => !v)}
+                  >
+                    {editingHandle ? "Cancelar" : "Editar @"}
+                  </Button>
+                )}
               </Label>
               <Input
                 id="instagram"
                 placeholder="@usuario"
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
-                disabled={!!editingOrder}
+                disabled={!!editingOrder && !editingHandle}
               />
+              {!!editingOrder && editingHandle && (
+                <p className="text-xs text-muted-foreground">
+                  O @ será alterado no cadastro do cliente ao salvar o pedido.
+                </p>
+              )}
+
               {existingCustomer && !editingOrder && (
                 <Alert className="mt-2 border-accent/50 bg-accent/10">
                   <Info className="h-4 w-4 text-accent" />
