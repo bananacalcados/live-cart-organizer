@@ -878,17 +878,19 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Mapa handle -> pedido NÃO PAGO mais recente deste evento
   const unpaidOrderByHandle = useMemo(() => {
     const map = new Map<string, DbOrder>();
+    const matchHandle = makeHandleMatcher(comments.map((c) => cleanHandle(c.username)));
     for (const o of orders) {
-      const h = cleanHandle(o.customer?.instagram_handle || "");
-      if (!h) continue;
+      const rawH = cleanHandle(o.customer?.instagram_handle || "");
+      if (!rawH) continue;
       if (isOrderMarkedPaid(o) || o.stage === "cancelled") continue;
+      const h = matchHandle(rawH) || rawH;
       const existing = map.get(h);
       if (!existing || new Date(o.updated_at) > new Date(existing.updated_at)) {
         map.set(h, o);
       }
     }
     return map;
-  }, [orders]);
+  }, [orders, comments]);
 
   const openForHandle = useCallback((rawHandle: string) => {
     const clean = cleanHandle(rawHandle);
