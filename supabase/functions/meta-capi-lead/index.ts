@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
       full_name = null,
       source_url = null,
       event_time = null, // optional UNIX seconds (for backfill up to 7 days)
+      event_id: explicitEventId = null, // MESMO id usado no Pixel do navegador (dedupe)
+      fbp = null,
+      fbc = null,
     } = body || {};
 
     if (!phone) {
@@ -102,10 +105,14 @@ Deno.serve(async (req) => {
 
     const phoneDigits = normalizePhone(phone);
 
-    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia (do evento)
+    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia (do evento).
+    // Se o front mandou event_id (mesmo do Pixel), usa-o para a Meta deduplicar browser+server.
     const eventTimeSec = event_time && Number.isFinite(event_time) ? Math.floor(event_time) : Math.floor(Date.now() / 1000);
     const dayKey = new Date(eventTimeSec * 1000).toISOString().slice(0, 10);
-    const eventId = `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${dayKey}`;
+    const eventId =
+      (typeof explicitEventId === "string" && explicitEventId.trim().length > 0 && explicitEventId.length <= 200)
+        ? explicitEventId.trim()
+        : `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${dayKey}`;
 
     // Verifica duplicação
     const { data: existing } = await supabase
@@ -164,6 +171,17 @@ Deno.serve(async (req) => {
       ln: ln ? [ln] : undefined,
       country: [co],
     };
+    // Sinais do navegador (quando o evento veio de uma página nossa, ex.: Typebot):
+    // melhoram o match e permitem que a Meta deduplique com o evento do Pixel.
+    const fromBrowser = typeof fbp === "string" && fbp.startsWith("fb.");
+    if (typeof fbp === "string" && fbp.startsWith("fb.")) userData.fbp = fbp;
+    if (typeof fbc === "string" && fbc.startsWith("fb.")) userData.fbc = fbc;
+    if (fromBrowser) {
+      const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+      const ua = req.headers.get("user-agent") || "";
+      if (ip) userData.client_ip_address = ip;
+      if (ua) userData.client_user_agent = ua;
+    }
     Object.keys(userData).forEach((k) => userData[k] === undefined && delete userData[k]);
 
     const payload = {
@@ -172,7 +190,7 @@ Deno.serve(async (req) => {
           event_name,
           event_time: eventTimeSec,
           event_id: eventId,
-          action_source: "chat",
+          action_source: fromBrowser ? "website" : "chat",
           event_source_url: source_url || undefined,
           user_data: userData,
           custom_data: {
