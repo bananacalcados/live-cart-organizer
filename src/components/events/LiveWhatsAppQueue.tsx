@@ -78,6 +78,25 @@ const isHiddenInstance = (label?: string | null) => {
 
 const pinKey = (eventId: string) => `live_center_pinned_instances_${eventId}`;
 
+const eventDateBoundary = (value: string, endOfDay: boolean) => {
+  const dateOnly = value.slice(0, 10);
+  const parts = dateOnly.split("-").map(Number);
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    const [year, month, day] = parts;
+    return new Date(
+      year,
+      month - 1,
+      day,
+      endOfDay ? 23 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 999 : 0
+    ).getTime();
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 export function LiveWhatsAppQueue({
   eventId,
   liveStartedAt,
@@ -333,18 +352,12 @@ export function LiveWhatsAppQueue({
   // Período do evento: início no começo do dia da data do evento; fim opcional.
   const periodStartMs = useMemo(() => {
     if (!eventPeriodStart) return null;
-    const d = new Date(eventPeriodStart);
-    if (Number.isNaN(d.getTime())) return null;
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
+    return eventDateBoundary(eventPeriodStart, false);
   }, [eventPeriodStart]);
 
   const periodEndMs = useMemo(() => {
     if (!eventPeriodEnd) return null;
-    const d = new Date(eventPeriodEnd);
-    if (Number.isNaN(d.getTime())) return null;
-    d.setHours(23, 59, 59, 999);
-    return d.getTime();
+    return eventDateBoundary(eventPeriodEnd, true);
   }, [eventPeriodEnd]);
 
   // Instâncias fixadas (vazio = todas as instâncias permitidas)
@@ -369,14 +382,20 @@ export function LiveWhatsAppQueue({
 
 
 
-  // "Ao vivo": mensagem após o início da transmissão OU conversa que veio pelo
-  // link /zap desta live (mesmo que tenha chegado antes de clicar em "Iniciar live").
+  // "Da live": conversa identificada pelo /zap OU com atividade no período do
+  // evento. O horário do botão "Ao vivo" é apenas um refinamento: não pode
+  // esconder clientes que escreveram minutos antes de a transmissão ser iniciada.
   const isLiveConv = useCallback(
     (c: LiveConversation) => {
       if (zapMatches.has(suffix8(c.phone))) return true;
-      return !startedAtMs || c.lastMessageAt.getTime() >= startedAtMs;
+      const time = c.lastMessageAt.getTime();
+      if (startedAtMs && time >= startedAtMs) return true;
+      if (periodStartMs && time >= periodStartMs && (!periodEndMs || time <= periodEndMs)) {
+        return true;
+      }
+      return !startedAtMs && !periodStartMs;
     },
-    [zapMatches, startedAtMs]
+    [zapMatches, startedAtMs, periodStartMs, periodEndMs]
   );
 
   const filtered = useMemo(() => {
