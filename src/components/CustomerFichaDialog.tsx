@@ -287,6 +287,13 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
           </DialogTitle>
         </DialogHeader>
 
+        {!isRealOrder && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            Esta conversa ainda não tem pedido. Crie o pedido para salvar a ficha e gerar o link de
+            pagamento.
+          </p>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
