@@ -3006,6 +3006,39 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_conversation_lanes: {
+        Row: {
+          created_at: string
+          id: string
+          lane: string
+          moved_at: string
+          moved_by: string | null
+          phone_key: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lane: string
+          moved_at?: string
+          moved_by?: string | null
+          phone_key: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lane?: string
+          moved_at?: string
+          moved_by?: string | null
+          phone_key?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: []
+      }
       chat_finish_reasons: {
         Row: {
           color: string | null
