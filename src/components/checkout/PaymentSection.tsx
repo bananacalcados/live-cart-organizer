@@ -688,21 +688,26 @@ function CardPaymentForm({
 
 
       // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
-      const mpToken = await tokenizeCardMP({
-        number: cardNumber.replace(/\D/g, ""),
-        holderName: cardName.trim(),
-        expMonth: expiryParts[0].padStart(2, "0"),
-        expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
-        cvv: cvv.trim(),
-        cpf: form.cpf.replace(/\D/g, ""),
-      }, mode);
+      // Teto de 25s: com internet ruim a validação pode ficar girando pra sempre.
+      const mpToken = await Promise.race([
+        tokenizeCardMP({
+          number: cardNumber.replace(/\D/g, ""),
+          holderName: cardName.trim(),
+          expMonth: expiryParts[0].padStart(2, "0"),
+          expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+          cvv: cvv.trim(),
+          cpf: form.cpf.replace(/\D/g, ""),
+        }, mode),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 25000)),
+      ]);
 
       // Débito só roda pelo Mercado Pago — sem token não há como cobrar.
       if (isDebit && !mpToken) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         processingRef.current = false;
         setIsProcessing(false);
-        setPaymentError("Não conseguimos validar seu cartão de débito agora. Tente novamente ou pague no Pix.");
+        onStepEvent?.("card_validation_timeout", { method: "debit_card", amount });
+        setPaymentError("Não conseguimos conectar para validar seu cartão. Confira a internet e tente de novo, ou pague no Pix.");
         return;
       }
 
