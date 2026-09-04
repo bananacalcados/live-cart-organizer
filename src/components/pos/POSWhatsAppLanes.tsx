@@ -150,6 +150,7 @@ export function POSWhatsAppLanes({
     out.followup.sort(asc);
     out.live.sort(desc);
     out.support.sort(desc);
+    out.groups.sort(desc);
     out.finished.sort(desc);
     out.finished = out.finished.slice(0, FINISHED_LIMIT);
     return { out, graceLeft, manual };
@@ -195,7 +196,7 @@ export function POSWhatsAppLanes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, onSearchChange]);
 
-  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished").reduce((n, l) => n + lanes.out[l].length, 0);
+  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished" && l !== "groups").reduce((n, l) => n + lanes.out[l].length, 0);
 
   // Conversas selecionadas (apenas as visíveis nas linhas, sem grupos).
   const allVisible = useMemo(
