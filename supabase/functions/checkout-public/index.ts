@@ -527,6 +527,28 @@ serve(async (req) => {
         return json({ ok: true });
       }
 
+      // Auditoria dos passos de pagamento no checkout por link (best-effort).
+      case "track_payment_step": {
+        try {
+          const orderId = typeof body?.orderId === "string" ? body.orderId.slice(0, 100) : "";
+          if (!orderId) return json({ ok: true });
+          await supabase.from("order_payment_events").insert({
+            order_id: orderId,
+            customer_phone: digits(body?.phone) || null,
+            event_type: String(body?.eventType || "unknown").slice(0, 60),
+            method: body?.method ? String(body.method).slice(0, 30) : null,
+            gateway: body?.gateway ? String(body.gateway).slice(0, 40) : null,
+            amount: Number.isFinite(Number(body?.amount)) ? Number(body.amount) : null,
+            detail: body?.detail ? String(body.detail).slice(0, 500) : null,
+            source: "checkout_link",
+            metadata: body?.metadata && typeof body.metadata === "object" ? body.metadata : {},
+          });
+        } catch (e) {
+          console.error("[checkout-public:track_payment_step] ignorado:", e);
+        }
+        return json({ ok: true });
+      }
+
       default:
         return json({ error: "unknown action" }, 400);
     }
