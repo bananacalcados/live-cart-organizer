@@ -327,7 +327,7 @@ export function LiveContactCards({
     markSeen(eventId, c.key);
     setChatOrder({
       id: `live-contact-${c.key}`,
-      instagramHandle: c.instagramHandle || "",
+      instagramHandle: c.instagramHandle || c.name || "",
       whatsapp: c.phone,
       products: [],
       stage: "new" as Order["stage"],
