@@ -68,12 +68,29 @@ const Index = () => {
 
   const currentEvent = getCurrentEvent();
   const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+  // A Central da Live fica DESATIVADA por padrão (não monta, não faz polling).
+  // Pode ser reativada manualmente pelo botão e a escolha fica salva no aparelho.
+  const [attendanceEnabled, setAttendanceEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("live-attendance-enabled") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("live-attendance-enabled", attendanceEnabled ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [attendanceEnabled]);
+  // Se a Central estiver desligada, nunca deixar a aba selecionada.
+  useEffect(() => {
+    if (!attendanceEnabled) setTab((t) => (t === "attendance" ? "kanban" : t));
+  }, [attendanceEnabled]);
   // Na Central da Live o dashboard fica recolhido para sobrar espaço ao chat.
   const liveCompact = tab === "attendance" && !showDash;
 
-  useEffect(() => {
-    if (isWhatsAppMode) setTab((t) => (t === "kanban" ? "attendance" : t));
-  }, [isWhatsAppMode]);
 
   // Preferência de quadro minimizado por evento (salva no aparelho).
   useEffect(() => {
