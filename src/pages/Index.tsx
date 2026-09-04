@@ -58,6 +58,9 @@ const Index = () => {
   const [tab, setTab] = useState<string>("kanban");
   const [showDash, setShowDash] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  // Quadro (kanban) minimizável — nas lives em modo WhatsApp começa minimizado
+  // para dar espaço às linhas de etapas de atendimento.
+  const [kanbanCollapsed, setKanbanCollapsed] = useState(false);
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -71,6 +74,26 @@ const Index = () => {
   useEffect(() => {
     if (isWhatsAppMode) setTab((t) => (t === "kanban" ? "attendance" : t));
   }, [isWhatsAppMode]);
+
+  // Preferência de quadro minimizado por evento (salva no aparelho).
+  useEffect(() => {
+    if (!currentEventId) return;
+    try {
+      const saved = localStorage.getItem(`live-kanban-collapsed:${currentEventId}`);
+      setKanbanCollapsed(saved === null ? isWhatsAppMode : saved === "1");
+    } catch {
+      setKanbanCollapsed(isWhatsAppMode);
+    }
+  }, [currentEventId, isWhatsAppMode]);
+
+  useEffect(() => {
+    if (!currentEventId) return;
+    try {
+      localStorage.setItem(`live-kanban-collapsed:${currentEventId}`, kanbanCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [currentEventId, kanbanCollapsed]);
 
 
 
@@ -233,6 +256,9 @@ const Index = () => {
           <EventPaymentCardsBar
             orders={orders}
             onSelectOrder={handleEditOrder}
+            lanes={isWhatsAppMode}
+            eventId={currentEventId}
+            search={searchQuery}
           />
         )}
 
@@ -338,11 +364,22 @@ const Index = () => {
 
               
               
+              <div className="flex justify-end pb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={() => setKanbanCollapsed((v) => !v)}
+                >
+                  {kanbanCollapsed ? "Mostrar quadro de pedidos" : "Minimizar quadro de pedidos"}
+                </Button>
+              </div>
+
               {isLoading ? (
                 <div className="text-center py-12 text-muted-foreground">
                   Carregando pedidos...
                 </div>
-              ) : (
+              ) : kanbanCollapsed ? null : (
                 <div className="overflow-x-auto">
                   <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} stages={getStagesForMode((currentEvent as any)?.operation_mode)} />
                 </div>
