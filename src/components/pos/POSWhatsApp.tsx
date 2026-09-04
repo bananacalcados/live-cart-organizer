@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3 } from "lucide-react";
 import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
+import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
+import { useChatConversationLanes, type ManualChatLane } from "@/hooks/useChatConversationLanes";
+import { CHAT_LANE_META } from "@/lib/chat/conversationLanes";
 import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
@@ -154,6 +157,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showTaskPopup, setShowTaskPopup] = useState(false);
   // Versão visual do atendimento (Tradicional x Linhas), lembrada no aparelho por loja.
   const [viewMode, setViewMode] = useState<POSWhatsAppViewMode | null>(() => readViewMode(storeId));
+  // Marcações manuais de linha (Etapa 2) — só carrega na versão em Linhas.
+  const laneMarks = useChatConversationLanes(viewMode === "lanes");
+  const getManualLane = useCallback(
+    (phone: string, numberId?: string | null) => laneMarks.getMark(phone, numberId)?.lane ?? null,
+    [laneMarks],
+  );
+  const moveConversationLane = useCallback(async (phone: string, numberId: string | null | undefined, lane: ManualChatLane) => {
+    await laneMarks.setLane(phone, numberId, lane);
+    toast.success(`Movida para ${CHAT_LANE_META[lane].title}`);
+  }, [laneMarks]);
 
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
@@ -1788,6 +1801,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               liveStageMap={liveStageByPhone}
               hasActiveSupport={hasActiveSupport}
               finishedAtByPhone={finishedAtByPhone}
+              getManualLane={getManualLane}
+              onMoveLane={(conv, lane) => moveConversationLane(conv.phone, conv.whatsapp_number_id, lane)}
+              onFinishLane={(conv) => {
+                handleSelectConversation(conv.phone, conv.whatsapp_number_id);
+                setShowFinishDialog(true);
+              }}
+              onClearManualLane={(conv) => laneMarks.clearLane(conv.phone)}
             />
           </div>
         ) : (
@@ -2015,7 +2035,20 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     <span className="hidden xl:inline">Template</span>
                   </Button>
                 )}
-                <CreateSupportTicketDialog phone={selectedPhone} customerName={selectedConversation?.customerName} />
+                <CreateSupportTicketDialog
+                  phone={selectedPhone}
+                  customerName={selectedConversation?.customerName}
+                  onCreated={() => { if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }}
+                />
+                {viewMode === "lanes" && !selectedConversation?.isGroup && (
+                  <TransferLaneMenu
+                    currentLane={getManualLane(selectedPhone, selectedConvNumberId)}
+                    hasManualMark={!!getManualLane(selectedPhone, selectedConvNumberId)}
+                    onMove={(lane) => moveConversationLane(selectedPhone, selectedConvNumberId, lane)}
+                    onFinish={() => setShowFinishDialog(true)}
+                    onClearManual={() => laneMarks.clearLane(selectedPhone)}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
