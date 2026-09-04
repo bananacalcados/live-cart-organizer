@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3 } from "lucide-react";
+import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
+import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
