@@ -1832,7 +1832,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         {/* Team Chat Panel takes precedence */}
         {teamChatActive ? (
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
-        ) : selectedPhone ? (
+        ) : selectedPhone ? (() => {
+          const chatPanel = (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
             <ProductArrivalCard
               arrived={waitlist.arrived}
