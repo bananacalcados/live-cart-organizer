@@ -1667,6 +1667,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
             />
           )}
+          {/* Versão visual: Tradicional x Linhas */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+            onClick={() => {
+              const next = viewMode === "lanes" ? "classic" : "lanes";
+              setViewMode(next);
+              saveViewMode(storeId, next);
+              setTeamChatActive(false);
+            }}
+            title={viewMode === "lanes" ? "Mudar para a versão Tradicional" : "Mudar para a versão em Linhas"}
+          >
+            {viewMode === "lanes" ? <Columns2 className="h-4 w-4" /> : <Rows3 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{viewMode === "lanes" ? "Tradicional" : "Linhas"}</span>
+          </Button>
           {/* Attendant switcher */}
           <Button
             variant="ghost"
