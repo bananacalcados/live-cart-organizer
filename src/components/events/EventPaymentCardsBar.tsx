@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNewContactsLane";
 import { useEventContactLanes } from "@/hooks/useEventContactLanes";
+import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
 import { ptBR } from "date-fns/locale";
 
 interface EventPaymentCardsBarProps {
@@ -402,6 +403,26 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
       ? paidEntries
       : awaiting.map((o) => ({ rep: o, group: [o] }));
 
+  // Modo linhas: a busca da aba Pedidos filtra também as linhas de pedidos.
+  const laneFilter = useCallback(
+    (list: CardEntry[]) => {
+      const q = (search || "").trim().toLowerCase();
+      if (!lanes || !q) return list;
+      const qd = q.replace(/\D/g, "");
+      return list.filter((e) =>
+        e.group.some((o) => {
+          const handle = (o.customer?.instagram_handle || "").toLowerCase();
+          const phone = (o.customer?.whatsapp || "").replace(/\D/g, "");
+          return handle.includes(q) || (qd.length >= 3 && phone.includes(qd)) || o.id.toLowerCase().startsWith(q);
+        }),
+      );
+    },
+    [lanes, search],
+  );
+  const laneAwaiting = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
+  const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
+  const laneCancelled = useMemo(() => laneFilter(cancelledEntries), [laneFilter, cancelledEntries]);
+
 
   const eventIdForAlerts = orders.find((o) => o.event_id)?.event_id || null;
 
@@ -576,6 +597,19 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                     </button>
                   )}
 
+                  {/* Modo linhas: msg da Área de Membros + links (só aguardando) */}
+                  {lanes && !paidCard && eventId && !isGroup && order.customer?.whatsapp && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <LiveCardMessageActions
+                        eventId={eventId}
+                        phone={order.customer.whatsapp}
+                        name={order.customer.instagram_handle}
+                        orderId={order.id}
+                        checkoutLink={(order as any).cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${order.id}`}
+                      />
+                    </div>
+                  )}
+
                   {/* Tags: SEM RESPOSTA + Etapa do link */}
 
                   {(noResponse || step > 0) && (
@@ -696,34 +730,34 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               id="awaiting"
               eventId={eventId}
               title="Aguardando pagamento"
-              count={awaitingEntries.length}
+              count={laneAwaiting.length}
               tone="text-yellow-500"
               icon={<Clock className="h-3.5 w-3.5 text-yellow-500" />}
             >
-              {renderRow(awaitingEntries, false, "Nenhum pedido aguardando pagamento neste evento.")}
+              {renderRow(laneAwaiting, false, "Nenhum pedido aguardando pagamento neste evento.")}
             </LiveLaneSection>
 
             <LiveLaneSection
               id="paid"
               eventId={eventId}
               title="Pagamentos concluídos"
-              count={paidEntries.length}
+              count={lanePaid.length}
               tone="text-stage-paid"
               icon={<Check className="h-3.5 w-3.5 text-stage-paid" />}
             >
-              {renderRow(paidEntries, true, "Nenhum pagamento concluído neste evento ainda.")}
+              {renderRow(lanePaid, true, "Nenhum pagamento concluído neste evento ainda.")}
             </LiveLaneSection>
 
             <LiveLaneSection
               id="cancelled"
               eventId={eventId}
               title="Dúvidas & cancelamentos"
-              count={cancelledEntries.length + doubtContacts.length}
+              count={laneCancelled.length + doubtContacts.length}
               tone="text-muted-foreground"
               icon={<MessageSquareOff className="h-3.5 w-3.5 text-muted-foreground" />}
             >
               {renderRow(
-                cancelledEntries,
+                laneCancelled,
                 false,
                 "Nenhum pedido cancelado ou contato marcado como dúvida.",
                 eventId && doubtContacts.length > 0 ? (

@@ -29,22 +29,33 @@ serve(async (req) => {
     // como mensagem comum por uma instância NÃO-API (uazapi/wasender/zapi).
     // Serve para validar se o número que a cliente passou na live existe de fato
     // (a Cloud API devolve 131026 "Message undeliverable" nesses casos).
-    const { orderId, viaNumberId } = await req.json();
-    if (!orderId) return json({ error: 'orderId required' }, 400);
+    // Modo CONTATO (sem pedido): eventId + phone (+ name) — linha "Novos contatos".
+    const { orderId, viaNumberId, eventId: contactEventId, phone: contactPhone, name: contactName } = await req.json();
+    if (!orderId && !(contactEventId && contactPhone)) {
+      return json({ error: 'orderId ou (eventId + phone) required' }, 400);
+    }
 
-    const { data: order } = await supabase
-      .from('orders')
-      .select('id, event_id, customer_id, products, cart_link, discount_type, discount_value')
-      .eq('id', orderId)
-      .maybeSingle();
-    if (!order) return json({ error: 'Pedido não encontrado' }, 404);
-    if (!order.event_id) return json({ error: 'Pedido sem evento vinculado' }, 400);
-
-    const { data: customer } = await supabase
-      .from('customers')
-      .select('id, instagram_handle, whatsapp')
-      .eq('id', order.customer_id)
-      .maybeSingle();
+    let order: any;
+    let customer: any;
+    if (orderId) {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, event_id, customer_id, products, cart_link, discount_type, discount_value')
+        .eq('id', orderId)
+        .maybeSingle();
+      if (!data) return json({ error: 'Pedido não encontrado' }, 404);
+      if (!data.event_id) return json({ error: 'Pedido sem evento vinculado' }, 400);
+      order = data;
+      const { data: c } = await supabase
+        .from('customers')
+        .select('id, instagram_handle, whatsapp')
+        .eq('id', order.customer_id)
+        .maybeSingle();
+      customer = c;
+    } else {
+      order = { id: null, event_id: contactEventId, products: [], cart_link: null, discount_type: null, discount_value: null };
+      customer = { instagram_handle: contactName || null, whatsapp: contactPhone };
+    }
 
     const rawPhone = (customer?.whatsapp || '').replace(/\D/g, '');
     if (!rawPhone) return json({ error: 'Cliente sem WhatsApp cadastrado' }, 400);
@@ -86,7 +97,7 @@ serve(async (req) => {
     const igName = igHandle.startsWith('@') ? igHandle : `@${igHandle}`;
     const firstName = (igHandle.replace(/^@/, '').split(/[._\s]/)[0] || '').trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
-    const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
+    const checkoutLink = order.cart_link || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : 'https://checkout.bananacalcados.com.br/minha-area');
 
     const bodyVarsRaw = ((eventData as any)?.meta_template_body_variables as string[]) || [];
     const headerVarRaw = (eventData as any)?.meta_template_header_variable || null;
@@ -109,7 +120,7 @@ serve(async (req) => {
         case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
         case '{discount}': return `R$${discountAmount.toFixed(2)}`;
         case '{total}': return `R$${total.toFixed(2)}`;
-        case '{order_id}': return String(orderId).slice(0, 8);
+        case '{order_id}': return orderId ? String(orderId).slice(0, 8) : '';
         default: return token || '';
       }
     };
@@ -234,10 +245,9 @@ serve(async (req) => {
         message_id: (sendResult as any)?.messageId || null,
       });
 
-      await supabase
-        .from('orders')
-        .update({ last_sent_message_at: new Date().toISOString() })
-        .eq('id', orderId);
+      if (orderId) {
+        await supabase.from('orders').update({ last_sent_message_at: new Date().toISOString() }).eq('id', orderId);
+      }
 
       return json({ success: true, via: viaNum.label || provider, phone: waPhone });
     }
@@ -262,10 +272,9 @@ serve(async (req) => {
       return json({ error: (result as any)?.error || 'Falha ao enviar template', details: result }, 502);
     }
 
-    await supabase
-      .from('orders')
-      .update({ last_sent_message_at: new Date().toISOString() })
-      .eq('id', orderId);
+    if (orderId) {
+      await supabase.from('orders').update({ last_sent_message_at: new Date().toISOString() }).eq('id', orderId);
+    }
 
     return json({ success: true, templateName, phone: waPhone });
   } catch (e) {

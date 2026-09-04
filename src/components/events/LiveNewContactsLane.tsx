@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { ContactLaneMark } from "@/hooks/useEventContactLanes";
+import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
+import { useEventStore } from "@/stores/eventStore";
 
 interface ClickRow {
   id: string;
@@ -34,6 +36,29 @@ export interface NewContact {
   name: string | null;
   talked: boolean;
   createdAt: string;
+  /** Há mensagem da cliente mais recente que a última resposta nossa e que a última abertura do chat. */
+  unread: boolean;
+  lastIncomingAt: string | null;
+}
+
+/** Última vez que o chat deste contato foi aberto neste aparelho (por evento). */
+const seenKey = (eventId: string) => `live-contact-seen:${eventId}`;
+function readSeen(eventId: string): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(seenKey(eventId)) || "{}");
+  } catch {
+    return {};
+  }
+}
+function markSeen(eventId: string, key: string) {
+  const m = readSeen(eventId);
+  m[key] = Date.now();
+  try {
+    localStorage.setItem(seenKey(eventId), JSON.stringify(m));
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent("live-contact-seen", { detail: { eventId } }));
 }
 
 const suffix8 = (phone?: string | null) => {
@@ -58,6 +83,9 @@ function formatPhone(phone?: string | null): string {
 export function useLiveNewContacts(eventId: string | null | undefined, excludeKeys: Set<string>, search?: string) {
   const [rows, setRows] = useState<ClickRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activity, setActivity] = useState<Map<string, { lastIn: string | null; lastOut: string | null }>>(new Map());
+  const [seen, setSeen] = useState<Record<string, number>>({});
+  const eventStart = useEventStore((st) => (st.events.find((ev) => ev.id === eventId) as any)?.start_date as string | undefined);
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -89,17 +117,71 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     load();
   }, [load]);
 
-  // Tempo real: novos cliques confirmados entram na linha sem recarregar a tela.
+  // Atividade de conversa (última mensagem recebida/enviada) dos contatos que já falaram.
+  const talkedPhones = useMemo(
+    () => [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))],
+    [rows],
+  );
+  const loadActivity = useCallback(async () => {
+    if (!eventId || talkedPhones.length === 0) {
+      setActivity(new Map());
+      return;
+    }
+    const since = eventStart || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const map = new Map<string, { lastIn: string | null; lastOut: string | null }>();
+    for (let i = 0; i < talkedPhones.length; i += 200) {
+      const batch = talkedPhones.slice(i, i + 200);
+      const { data } = await supabase
+        .from("whatsapp_messages")
+        .select("phone, direction, created_at")
+        .in("phone", batch)
+        .gte("created_at", since)
+        .not("message", "ilike", "💬 Comentário%")
+        .order("created_at", { ascending: false })
+        .limit(3000);
+      for (const m of (data || []) as { phone: string; direction: string; created_at: string }[]) {
+        const k = suffix8(m.phone);
+        const cur = map.get(k) || { lastIn: null, lastOut: null };
+        if (m.direction === "incoming" && !cur.lastIn) cur.lastIn = m.created_at;
+        if (m.direction === "outgoing" && !cur.lastOut) cur.lastOut = m.created_at;
+        map.set(k, cur);
+      }
+    }
+    setActivity(map);
+  }, [eventId, talkedPhones, eventStart]);
+
+  useEffect(() => {
+    loadActivity();
+  }, [loadActivity]);
+
   useEffect(() => {
     if (!eventId) return;
+    setSeen(readSeen(eventId));
+    const onSeen = (e: Event) => {
+      if ((e as CustomEvent).detail?.eventId === eventId) setSeen(readSeen(eventId));
+    };
+    window.addEventListener("live-contact-seen", onSeen);
+    return () => window.removeEventListener("live-contact-seen", onSeen);
+  }, [eventId]);
+
+  // Tempo real: novos cliques confirmados e novas mensagens entram na linha sem recarregar a tela.
+  useEffect(() => {
+    if (!eventId) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const bump = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => loadActivity(), 800);
+    };
     const channel = supabase
       .channel(`live-new-contacts-${eventId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "live_whatsapp_clicks" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, bump)
       .subscribe();
     return () => {
+      if (t) clearTimeout(t);
       supabase.removeChannel(channel);
     };
-  }, [eventId, load]);
+  }, [eventId, load, loadActivity]);
 
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
@@ -109,12 +191,18 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       if (!key || key.length < 8) continue;
       if (excludeKeys.has(key)) continue;
       const existing = byKey.get(key);
+      const act = activity.get(key);
+      const lastIn = act?.lastIn ? +new Date(act.lastIn) : 0;
+      const lastOut = act?.lastOut ? +new Date(act.lastOut) : 0;
+      const unread = lastIn > 0 && lastIn > lastOut && lastIn > (seen[key] || 0);
       const contact: NewContact = {
         key,
         phone,
         name: r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null,
         talked: !!r.phone,
         createdAt: r.created_at,
+        unread,
+        lastIncomingAt: act?.lastIn || null,
       };
       if (!existing) byKey.set(key, contact);
       else if (!existing.name && contact.name) byKey.set(key, { ...existing, name: contact.name });
@@ -128,8 +216,12 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
             c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")),
         )
       : list;
-    return filtered.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  }, [rows, excludeKeys, search]);
+    // Não lidas primeiro; depois mais recentes.
+    return filtered.sort((a, b) => {
+      if (a.unread !== b.unread) return a.unread ? -1 : 1;
+      return +new Date(b.createdAt) - +new Date(a.createdAt);
+    });
+  }, [rows, excludeKeys, search, activity, seen]);
 
   return { contacts, loading, reload: load };
 }
@@ -171,6 +263,7 @@ export function LiveContactCards({
   const [reason, setReason] = useState("");
 
   const openChat = (c: NewContact) => {
+    markSeen(eventId, c.key);
     setChatOrder({
       id: `live-contact-${c.key}`,
       instagramHandle: "",
@@ -196,12 +289,24 @@ export function LiveContactCards({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") openChat(c);
         }}
-        title="Abrir conversa"
+        title={c.unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
         className={cn(
-          "group relative flex min-h-[104px] w-[210px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-y-neutral-700 border-r-neutral-700 border-l-4 bg-neutral-900 px-3 py-2 text-left text-white transition-colors hover:bg-neutral-800",
+          "group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-y-neutral-700 border-r-neutral-700 border-l-4 bg-neutral-900 px-3 py-2 text-left text-white transition-colors hover:bg-neutral-800",
           isDoubts ? "border-l-neutral-400" : "border-l-sky-400",
+          c.unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
         )}
       >
+        {c.unread && (
+          <>
+            <span className="absolute -left-1.5 -top-1.5 flex h-3.5 w-3.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+              <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
+            </span>
+            <span className="absolute right-9 top-1.5 rounded-full bg-yellow-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-black">
+              Não lida
+            </span>
+          </>
+        )}
         {(onMoveToDoubts || onBackToNew) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -282,6 +387,9 @@ export function LiveContactCards({
           >
             <Plus className="h-3 w-3" /> Pedido
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <LiveCardMessageActions eventId={eventId} phone={c.phone} name={c.name} />
         </div>
       </div>
     );
