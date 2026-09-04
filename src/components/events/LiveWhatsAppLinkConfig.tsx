@@ -54,7 +54,10 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [stats, setStats] = useState<{ confirmed: number; matched: number; withFb: number } | null>(null);
+  const [stats, setStats] = useState<{
+    confirmed: number; matched: number; withFb: number;
+    byPhone: number; byCode: number; byTime: number; divergent: number;
+  } | null>(null);
 
   const [slug, setSlug] = useState("");
   const [waId, setWaId] = useState<string>("none");
@@ -90,15 +93,20 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
         setText(data.message_text || "");
         const { data: clicks } = await (supabase as any)
           .from("live_whatsapp_clicks")
-          .select("phone, fbc, fbp, entered_phone")
+          .select("phone, fbc, fbp, entered_phone, match_method, divergent, superseded")
           .eq("link_id", data.id)
           .or("phone.not.is.null,entered_phone.not.is.null");
         if (!cancelled) {
-          const arr = (clicks || []) as any[];
+          const arr = ((clicks || []) as any[]).filter((c) => !c.superseded);
+          const by = (m: string) => arr.filter((c) => c.phone && c.match_method === m).length;
           setStats({
             confirmed: arr.filter((c) => c.entered_phone).length,
             matched: arr.filter((c) => c.phone).length,
             withFb: arr.filter((c) => c.phone && (c.fbc || c.fbp)).length,
+            byPhone: by("phone"),
+            byCode: by("code"),
+            byTime: by("time") + by("context"),
+            divergent: arr.filter((c) => c.divergent).length,
           });
         }
       } else {
