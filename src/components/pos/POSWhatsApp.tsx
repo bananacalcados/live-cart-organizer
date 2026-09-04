@@ -1749,7 +1749,28 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <PixPaidGlobalAlert />
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
-        {/* Conversation List */}
+        {/* Visão em Linhas (etapas de atendimento) */}
+        {viewMode === "lanes" && !teamChatActive ? (
+          <div className="flex-1 min-w-0 min-h-0">
+            <POSWhatsAppLanes
+              storeId={storeId}
+              conversations={multiInstanceFilter.length > 0
+                ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+                : mergedConversationsFlagged}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSelectConversation={handleSelectConversation}
+              selectedConversationKey={selectedConvKey}
+              contactPhotos={contactPhotos}
+              contactNames={chatContacts}
+              igUsernameById={igUsernameById}
+              getAssignedName={getAssignedName}
+              liveStageMap={liveStageByPhone}
+              hasActiveSupport={hasActiveSupport}
+              finishedAtByPhone={finishedAtByPhone}
+            />
+          </div>
+        ) : (
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
           (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
