@@ -583,6 +583,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
     const { data, error } = await query.order('created_at', { ascending: true });
     if (seq !== loadSeqRef.current) return; // resposta obsoleta
+    activeNumberIdRef.current = convNumberId;
 
     if (error) {
       console.error('Error loading messages:', error);
@@ -596,14 +597,54 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const loadMessagesRef = useRef(loadMessages);
   loadMessagesRef.current = loadMessages;
 
+  // "Ler msgs antigas": UMA consulta pontual ao arquivo, restrita a este telefone
+  // + esta instância + anterior à mensagem mais antiga já exibida (100 por vez).
+  // Usa o índice (phone, whatsapp_number_id, created_at) — não gera polling.
+  const loadArchivedMessages = async () => {
+    if (isLoadingArchive || archiveExhausted) return;
+    setIsLoadingArchive(true);
+    try {
+      const oldest = archivedMessages[0]?.created_at ?? messages[0]?.created_at ?? null;
+      const convNumberId = activeNumberIdRef.current;
+      let q = supabase
+        .from('whatsapp_messages_archive' as any)
+        .select('*')
+        .in('phone', phoneVariations);
+      q = convNumberId ? q.eq('whatsapp_number_id', convNumberId) : q.is('whatsapp_number_id', null);
+      if (hideInstagramComments) q = q.not('message', 'like', '💬 Comentário%');
+      if (oldest) q = q.lt('created_at', oldest);
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(ARCHIVE_PAGE);
+      if (error) throw error;
+      const rows = ((data as unknown as Message[]) || []).reverse();
+      if (rows.length < ARCHIVE_PAGE) setArchiveExhausted(true);
+      if (rows.length > 0) {
+        setArchivedMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          return [...rows.filter((r) => !seen.has(r.id)), ...prev];
+        });
+      } else if (!oldest) {
+        toast.info('Nenhuma mensagem antiga arquivada para esta conversa nesta instância.');
+      }
+    } catch (e) {
+      console.error('Error loading archived messages:', e);
+      toast.error('Não foi possível carregar as mensagens antigas.');
+    } finally {
+      setIsLoadingArchive(false);
+    }
+  };
+
   useEffect(() => {
     setIsLoading(true);
     setMessages([]);
+    setArchivedMessages([]);
+    setArchiveExhausted(false);
     loadMessages();
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages]);
+
+  const displayMessages = archivedMessages.length > 0 ? [...archivedMessages, ...messages] : messages;
 
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
