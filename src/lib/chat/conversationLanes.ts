@@ -1,9 +1,9 @@
 import type { Conversation } from "@/components/chat/ChatTypes";
 
 /** Linhas (etapas de atendimento) da visão em Linhas do WhatsApp do PDV. */
-export type ChatLane = "new" | "unread" | "followup" | "live" | "support" | "finished";
+export type ChatLane = "new" | "unread" | "followup" | "live" | "support" | "groups" | "finished";
 
-export const CHAT_LANE_ORDER: ChatLane[] = ["new", "unread", "followup", "live", "support", "finished"];
+export const CHAT_LANE_ORDER: ChatLane[] = ["new", "unread", "followup", "live", "support", "groups", "finished"];
 
 export const CHAT_LANE_META: Record<ChatLane, { title: string; tone: string; description: string }> = {
   new: { title: "Novas", tone: "text-emerald-600 dark:text-emerald-400", description: "Nunca atendidas ou finalizadas que voltaram a falar" },
@@ -11,6 +11,7 @@ export const CHAT_LANE_META: Record<ChatLane, { title: string; tone: string; des
   followup: { title: "Follow Up", tone: "text-sky-600 dark:text-sky-400", description: "Respondemos e a cliente ainda não retornou" },
   live: { title: "Pedidos da Live", tone: "text-fuchsia-600 dark:text-fuchsia-400", description: "Clientes com pedido em Live Shopping" },
   support: { title: "Suporte", tone: "text-orange-600 dark:text-orange-400", description: "Ticket de suporte aberto ou movida manualmente" },
+  groups: { title: "Grupos", tone: "text-violet-600 dark:text-violet-400", description: "Conversas de grupos do WhatsApp, separadas dos atendimentos individuais" },
   finished: { title: "Finalizadas", tone: "text-muted-foreground", description: "Encerradas por qualquer atendente" },
 };
 
@@ -44,6 +45,8 @@ export function classifyConversationLane(input: LaneClassifyInput): ChatLane {
 
   if (manualLane) return manualLane;
   if (conv.isFinished) return "finished";
+  // Grupos ficam em linha própria, separados dos atendimentos individuais.
+  if (conv.isGroup) return "groups";
   if (isLive) return "live";
   if (hasSupport) return "support";
 

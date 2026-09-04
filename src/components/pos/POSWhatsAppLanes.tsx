@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X } from "lucide-react";
+import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LaneSection } from "@/components/chat/LaneSection";
@@ -46,6 +46,7 @@ const LANE_ICON: Record<ChatLane, JSX.Element> = {
   followup: <Clock className="h-3.5 w-3.5 text-sky-500" />,
   live: <Radio className="h-3.5 w-3.5 text-fuchsia-500" />,
   support: <Headphones className="h-3.5 w-3.5 text-orange-500" />,
+  groups: <Users className="h-3.5 w-3.5 text-violet-500" />,
   finished: <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />,
 };
 
@@ -106,7 +107,7 @@ export function POSWhatsAppLanes({
   const q = searchQuery.trim().toLowerCase();
 
   const lanes = useMemo(() => {
-    const out: Record<ChatLane, Conversation[]> = { new: [], unread: [], followup: [], live: [], support: [], finished: [] };
+    const out: Record<ChatLane, Conversation[]> = { new: [], unread: [], followup: [], live: [], support: [], groups: [], finished: [] };
     const graceLeft = new Map<string, number>();
     const manual = new Set<string>();
     const prev = previousLaneRef.current;
@@ -149,6 +150,7 @@ export function POSWhatsAppLanes({
     out.followup.sort(asc);
     out.live.sort(desc);
     out.support.sort(desc);
+    out.groups.sort(desc);
     out.finished.sort(desc);
     out.finished = out.finished.slice(0, FINISHED_LIMIT);
     return { out, graceLeft, manual };
@@ -156,7 +158,7 @@ export function POSWhatsAppLanes({
 
   // Etapa 3 — contadores no topo + atalhos de teclado.
   const searchRef = useRef<HTMLInputElement>(null);
-  const [expandSignal, setExpandSignal] = useState<Record<ChatLane, number>>({ new: 0, unread: 0, followup: 0, live: 0, support: 0, finished: 0 });
+  const [expandSignal, setExpandSignal] = useState<Record<ChatLane, number>>({ new: 0, unread: 0, followup: 0, live: 0, support: 0, groups: 0, finished: 0 });
   const laneDomId = (lane: ChatLane) => `pos-wa-lane-${storeId}-${lane}`;
   const jumpToLane = (lane: ChatLane) => {
     setExpandSignal((s) => ({ ...s, [lane]: s[lane] + 1 }));
@@ -194,7 +196,7 @@ export function POSWhatsAppLanes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, onSearchChange]);
 
-  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished").reduce((n, l) => n + lanes.out[l].length, 0);
+  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished" && l !== "groups").reduce((n, l) => n + lanes.out[l].length, 0);
 
   // Conversas selecionadas (apenas as visíveis nas linhas, sem grupos).
   const allVisible = useMemo(
