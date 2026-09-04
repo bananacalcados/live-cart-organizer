@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { laneAutoKey, type ChatLane } from "@/lib/chat/conversationLanes";
 
 /** Linhas que podem ser escolhidas manualmente (Finalizadas usa o fluxo de Finalizar). */
-export type ManualChatLane = Extract<ChatLane, "new" | "unread" | "followup" | "support">;
+export type ManualChatLane = Extract<ChatLane, "new" | "unread" | "followup" | "live" | "support">;
 
 export interface ChatLaneMark {
   lane: ManualChatLane;

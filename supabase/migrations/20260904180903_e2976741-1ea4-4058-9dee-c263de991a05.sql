@@ -1,0 +1,2 @@
+ALTER TABLE public.chat_conversation_lanes DROP CONSTRAINT IF EXISTS chat_conversation_lanes_lane_check;
+ALTER TABLE public.chat_conversation_lanes ADD CONSTRAINT chat_conversation_lanes_lane_check CHECK (lane IN ('new', 'unread', 'followup', 'live', 'support'));
