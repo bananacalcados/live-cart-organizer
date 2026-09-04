@@ -866,23 +866,49 @@ function CardPaymentForm({
         </div>
       )}
 
+      {showFieldErrors && !formComplete && (
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">Falta preencher os dados do cartão</p>
+              <p className="text-xs text-destructive/80 mt-1">
+                O pagamento ainda NÃO foi feito. Preencha: {missingFields.join(", ")}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
-          <Input value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
+          <Input ref={cardNameRef} className={errClass(isCardNameValid)} value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
+          {showFieldErrors && !isCardNameValid && (
+            <p className="text-xs text-destructive mt-1">Digite o nome impresso no cartão.</p>
+          )}
         </div>
         <div>
           <Label className="text-sm">Número do cartão *</Label>
-          <Input value={cardNumber} onChange={(e) => setCardNumber(formatCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" maxLength={19} />
+          <Input ref={cardNumberRef} className={errClass(isCardNumberValid)} value={cardNumber} onChange={(e) => setCardNumber(formatCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" maxLength={19} inputMode="numeric" />
+          {showFieldErrors && !isCardNumberValid && (
+            <p className="text-xs text-destructive mt-1">Digite o número do cartão.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-sm">Validade *</Label>
-            <Input value={expiry} onChange={(e) => setExpiry(formatExpiry(e.target.value))} placeholder="MM/AA" maxLength={5} />
+            <Input ref={expiryRef} className={errClass(isExpiryValid)} value={expiry} onChange={(e) => setExpiry(formatExpiry(e.target.value))} placeholder="MM/AA" maxLength={5} inputMode="numeric" />
+            {showFieldErrors && !isExpiryValid && (
+              <p className="text-xs text-destructive mt-1">Use MM/AA.</p>
+            )}
           </div>
           <div>
             <Label className="text-sm">CVV *</Label>
-            <Input value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" maxLength={4} type="password" />
+            <Input ref={cvvRef} className={errClass(isCvvValid)} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" maxLength={4} type="password" inputMode="numeric" />
+            {showFieldErrors && !isCvvValid && (
+              <p className="text-xs text-destructive mt-1">Digite o CVV.</p>
+            )}
           </div>
         </div>
       </div>
