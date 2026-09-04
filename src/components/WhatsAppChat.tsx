@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -110,6 +110,13 @@ interface MetaTemplate {
 export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
+  // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
+  // pelo botão "Ler msgs antigas". Nunca entra no polling/broadcast.
+  const [archivedMessages, setArchivedMessages] = useState<Message[]>([]);
+  const [isLoadingArchive, setIsLoadingArchive] = useState(false);
+  const [archiveExhausted, setArchiveExhausted] = useState(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  const ARCHIVE_PAGE = 100;
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMedia, setSelectedMedia] = useState<MediaAttachment | null>(null);
@@ -576,6 +583,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
     const { data, error } = await query.order('created_at', { ascending: true });
     if (seq !== loadSeqRef.current) return; // resposta obsoleta
+    activeNumberIdRef.current = convNumberId;
 
     if (error) {
       console.error('Error loading messages:', error);
@@ -589,14 +597,54 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const loadMessagesRef = useRef(loadMessages);
   loadMessagesRef.current = loadMessages;
 
+  // "Ler msgs antigas": UMA consulta pontual ao arquivo, restrita a este telefone
+  // + esta instância + anterior à mensagem mais antiga já exibida (100 por vez).
+  // Usa o índice (phone, whatsapp_number_id, created_at) — não gera polling.
+  const loadArchivedMessages = async () => {
+    if (isLoadingArchive || archiveExhausted) return;
+    setIsLoadingArchive(true);
+    try {
+      const oldest = archivedMessages[0]?.created_at ?? messages[0]?.created_at ?? null;
+      const convNumberId = activeNumberIdRef.current;
+      let q = supabase
+        .from('whatsapp_messages_archive' as any)
+        .select('*')
+        .in('phone', phoneVariations);
+      q = convNumberId ? q.eq('whatsapp_number_id', convNumberId) : q.is('whatsapp_number_id', null);
+      if (hideInstagramComments) q = q.not('message', 'like', '💬 Comentário%');
+      if (oldest) q = q.lt('created_at', oldest);
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(ARCHIVE_PAGE);
+      if (error) throw error;
+      const rows = ((data as unknown as Message[]) || []).reverse();
+      if (rows.length < ARCHIVE_PAGE) setArchiveExhausted(true);
+      if (rows.length > 0) {
+        setArchivedMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          return [...rows.filter((r) => !seen.has(r.id)), ...prev];
+        });
+      } else if (!oldest) {
+        toast.info('Nenhuma mensagem antiga arquivada para esta conversa nesta instância.');
+      }
+    } catch (e) {
+      console.error('Error loading archived messages:', e);
+      toast.error('Não foi possível carregar as mensagens antigas.');
+    } finally {
+      setIsLoadingArchive(false);
+    }
+  };
+
   useEffect(() => {
     setIsLoading(true);
     setMessages([]);
+    setArchivedMessages([]);
+    setArchiveExhausted(false);
     loadMessages();
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages]);
+
+  const displayMessages = archivedMessages.length > 0 ? [...archivedMessages, ...messages] : messages;
 
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
@@ -1361,11 +1409,32 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cfc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
+        {!isLoading && (
+          <div className="flex justify-center mb-2">
+            {archiveExhausted ? (
+              archivedMessages.length > 0 && (
+                <span className="bg-white/70 text-gray-500 text-[11px] px-3 py-1 rounded-full shadow-sm">
+                  Início do histórico arquivado
+                </span>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={loadArchivedMessages}
+                disabled={isLoadingArchive}
+                className="inline-flex items-center gap-1.5 bg-white/90 hover:bg-white text-[#075E54] text-xs font-medium px-3 py-1.5 rounded-full shadow-sm disabled:opacity-60"
+              >
+                {isLoadingArchive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                {archivedMessages.length > 0 ? 'Ler mais msgs antigas' : 'Ler msgs antigas'}
+              </button>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-[#075E54]" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : displayMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="bg-white/80 rounded-lg px-6 py-4 shadow-sm">
               <p className="text-sm text-gray-600">Nenhuma mensagem ainda</p>
@@ -1374,9 +1443,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           </div>
         ) : (
           <div className="space-y-1">
-            {messages.map((msg, index) => {
+            {displayMessages.map((msg, index) => {
               const showDate = index === 0 || 
-                new Date(msg.created_at).toDateString() !== new Date(messages[index - 1].created_at).toDateString();
+                new Date(msg.created_at).toDateString() !== new Date(displayMessages[index - 1].created_at).toDateString();
               
               return (
                 <div key={msg.id}>

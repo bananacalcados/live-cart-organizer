@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_wm_archive_phone_inst_created ON public.whatsapp_messages_archive (phone, whatsapp_number_id, created_at DESC);
