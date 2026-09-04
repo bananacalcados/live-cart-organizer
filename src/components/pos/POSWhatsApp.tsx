@@ -1849,6 +1849,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             }}
           />
         </div>
+        )}
 
         {/* Team Chat Panel takes precedence */}
         {teamChatActive ? (
