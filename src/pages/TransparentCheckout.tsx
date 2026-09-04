@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
+import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration, cpTrackPaymentStep } from "@/lib/checkoutPublic";
 import { lpUpdateViewer } from "@/lib/livePublic";
 import { initMetaPixel, trackPixelEvent, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP, getCardCapabilities, type CardCapabilities, type CardMode } from "@/lib/mercadopago";
@@ -1614,6 +1614,7 @@ export default function TransparentCheckout() {
                       onPaymentConfirmed={handlePaymentConfirmed}
                       onBack={() => setCurrentStep(2)}
                       onProcessingChange={setIsPaymentProcessing}
+                      onStepEvent={trackStep}
                     />
                   )}
                 </div>
