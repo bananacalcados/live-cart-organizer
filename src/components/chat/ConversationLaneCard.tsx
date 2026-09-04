@@ -1,4 +1,5 @@
-import { Users, Radio, Timer } from "lucide-react";
+import type { ReactNode } from "react";
+import { Users, Radio, Timer, Pin } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,6 +17,10 @@ interface ConversationLaneCardProps {
   liveStage?: { stageTitle: string; eventName?: string } | null;
   /** Milissegundos restantes na janela de 5 min (mostra contador). */
   graceMsLeft?: number;
+  /** Conversa foi movida manualmente para esta linha. */
+  manualMark?: boolean;
+  /** Menu de ações (ex.: Transferir etapa), renderizado no canto do card. */
+  menu?: ReactNode;
   onClick: () => void;
 }
 
@@ -45,6 +50,8 @@ export function ConversationLaneCard({
   igUsername,
   liveStage,
   graceMsLeft,
+  manualMark,
+  menu,
   onClick,
 }: ConversationLaneCardProps) {
   const name = conv.customerName || contactName || conv.phone;
@@ -52,10 +59,18 @@ export function ConversationLaneCard({
   const graceMin = graceMsLeft && graceMsLeft > 0 ? Math.ceil(graceMsLeft / 60000) : 0;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
+        "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "w-[230px] shrink-0 snap-start rounded-lg border border-border/60 bg-card px-2.5 py-2 text-left shadow-sm transition-colors hover:bg-muted/60",
         conv.hasUnansweredMessage && "border-[#00a884]/50 bg-[#c7e9c0]/30 dark:bg-[#005c4b]/20",
         selected && "ring-2 ring-[#00a884]",
@@ -71,8 +86,11 @@ export function ConversationLaneCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-1">
             <span className="truncate text-[13px] font-semibold text-foreground">{name}</span>
-            <span className={cn("shrink-0 text-[10px]", conv.hasUnansweredMessage ? "font-medium text-[#00a884]" : "text-muted-foreground")}>
-              {formatTime(conv.lastMessageAt)}
+            <span className="flex shrink-0 items-center gap-1">
+              <span className={cn("text-[10px]", conv.hasUnansweredMessage ? "font-medium text-[#00a884]" : "text-muted-foreground")}>
+                {formatTime(conv.lastMessageAt)}
+              </span>
+              {menu}
             </span>
           </div>
           {showPhone && <div className="truncate text-[10px] text-muted-foreground">{conv.phone}</div>}
@@ -118,12 +136,17 @@ export function ConversationLaneCard({
             <Timer className="h-2.5 w-2.5" /> {graceMin} min
           </span>
         )}
+        {manualMark && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-500/15 px-1.5 py-[1px] text-[9px] font-semibold text-indigo-700 dark:text-indigo-400" title="Movida manualmente para esta linha">
+            <Pin className="h-2.5 w-2.5" /> manual
+          </span>
+        )}
         {conv.unreadCount > 0 && (
           <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00a884] px-1 text-[10px] font-bold text-white">
             {conv.unreadCount}
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }
