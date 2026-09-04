@@ -10170,7 +10170,10 @@ export type Database = {
       live_whatsapp_clicks: {
         Row: {
           code: string | null
+          confirmed_at: string | null
           created_at: string
+          entered_phone: string | null
+          entered_phone_key: string | null
           event_id: string | null
           fbc: string | null
           fbclid: string | null
@@ -10193,7 +10196,10 @@ export type Database = {
         }
         Insert: {
           code?: string | null
+          confirmed_at?: string | null
           created_at?: string
+          entered_phone?: string | null
+          entered_phone_key?: string | null
           event_id?: string | null
           fbc?: string | null
           fbclid?: string | null
@@ -10216,7 +10222,10 @@ export type Database = {
         }
         Update: {
           code?: string | null
+          confirmed_at?: string | null
           created_at?: string
+          entered_phone?: string | null
+          entered_phone_key?: string | null
           event_id?: string | null
           fbc?: string | null
           fbclid?: string | null
