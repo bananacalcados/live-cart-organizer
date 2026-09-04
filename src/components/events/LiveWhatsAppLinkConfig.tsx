@@ -54,7 +54,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [stats, setStats] = useState<{ matched: number; withFb: number } | null>(null);
+  const [stats, setStats] = useState<{ confirmed: number; matched: number; withFb: number } | null>(null);
 
   const [slug, setSlug] = useState("");
   const [waId, setWaId] = useState<string>("none");
@@ -239,7 +239,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
             <MousePointerClick className="h-3 w-3" /> {row.click_count} cliques
             {stats && (
               <>
-                {" · "}{stats.matched} chegaram no WhatsApp{" · "}{stats.withFb} com fbc/fbp
+                {" · "}{stats.confirmed} digitaram o telefone{" · "}{stats.matched} chegaram no WhatsApp{" · "}{stats.withFb} com fbc/fbp
               </>
             )}
           </p>
