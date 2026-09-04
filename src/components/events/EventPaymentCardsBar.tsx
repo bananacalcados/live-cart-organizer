@@ -672,16 +672,22 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               id="new-contacts"
               eventId={eventId}
               title="Novos contatos"
-              count={newContactsCount}
+              count={newContacts.length}
               tone="text-sky-500"
               icon={<UserPlus className="h-3.5 w-3.5 text-sky-500" />}
             >
               {eventId && (
-                <LiveNewContactsLane
+                <LiveContactCards
                   eventId={eventId}
-                  excludeKeys={orderPhoneKeys}
-                  search={search}
-                  onCountChange={setNewContactsCount}
+                  contacts={newContacts}
+                  variant="new"
+                  marks={laneMarks}
+                  loading={loadingContacts}
+                  onReload={reloadContacts}
+                  onMoveToDoubts={(c, reason) => {
+                    setLane(c.phone, "doubts", reason);
+                    toast.success("Movido para Dúvidas & cancelamentos");
+                  }}
                 />
               )}
             </LiveLaneSection>
@@ -712,11 +718,28 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               id="cancelled"
               eventId={eventId}
               title="Dúvidas & cancelamentos"
-              count={cancelledEntries.length}
+              count={cancelledEntries.length + doubtContacts.length}
               tone="text-muted-foreground"
               icon={<MessageSquareOff className="h-3.5 w-3.5 text-muted-foreground" />}
             >
-              {renderRow(cancelledEntries, false, "Nenhum pedido cancelado ou marcado como dúvida.")}
+              {renderRow(
+                cancelledEntries,
+                false,
+                "Nenhum pedido cancelado ou contato marcado como dúvida.",
+                eventId && doubtContacts.length > 0 ? (
+                  <LiveContactCards
+                    eventId={eventId}
+                    contacts={doubtContacts}
+                    variant="doubts"
+                    marks={laneMarks}
+                    inline
+                    onBackToNew={(c) => {
+                      clearLane(c.phone);
+                      toast.success("De volta para Novos contatos");
+                    }}
+                  />
+                ) : null,
+              )}
             </LiveLaneSection>
           </div>
         ) : (
