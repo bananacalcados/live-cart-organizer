@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2 } from "lucide-react";
+import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { LaneSection } from "@/components/chat/LaneSection";
 import { ConversationLaneCard } from "@/components/chat/ConversationLaneCard";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
@@ -34,6 +35,9 @@ interface POSWhatsAppLanesProps {
   onMoveLane?: (conv: Conversation, lane: ManualChatLane) => void;
   onFinishLane?: (conv: Conversation) => void;
   onClearManualLane?: (conv: Conversation) => void;
+  /** Ações em massa (seleção de vários cards). */
+  onBulkMoveLane?: (convs: Conversation[], lane: ManualChatLane) => void;
+  onBulkFinish?: (convs: Conversation[]) => void;
 }
 
 const LANE_ICON: Record<ChatLane, JSX.Element> = {
@@ -70,7 +74,24 @@ export function POSWhatsAppLanes({
   onMoveLane,
   onFinishLane,
   onClearManualLane,
+  onBulkMoveLane,
+  onBulkFinish,
 }: POSWhatsAppLanesProps) {
+  // Seleção em massa (chave = conversationKey). Só existe enquanto o modo está ligado.
+  const [selectMode, setSelectMode] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  const convKey = (conv: Conversation) => conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
+  const toggleChecked = (key: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setChecked(new Set());
+  };
   // Tick de 30s só para reavaliar a janela de 5 min (sem consulta ao banco).
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -175,19 +196,86 @@ export function POSWhatsAppLanes({
 
   const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished").reduce((n, l) => n + lanes.out[l].length, 0);
 
+  // Conversas selecionadas (apenas as visíveis nas linhas, sem grupos).
+  const allVisible = useMemo(
+    () => CHAT_LANE_ORDER.flatMap((l) => lanes.out[l]).filter((c) => !c.isGroup),
+    [lanes],
+  );
+  const selectedConvs = useMemo(() => allVisible.filter((c) => checked.has(convKey(c))), [allVisible, checked]);
+  const selectedFinishable = selectedConvs.filter((c) => !lanes.out.finished.includes(c));
+  const canBulk = !!(onBulkMoveLane || onBulkFinish);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-col gap-1.5 border-b border-border/50 bg-background/60 px-2 py-1.5">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={searchRef}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar por nome, telefone ou mensagem…  (atalho: /)"
-            className="h-8 pl-7 text-xs"
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchRef}
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Buscar por nome, telefone ou mensagem…  (atalho: /)"
+              className="h-8 pl-7 text-xs"
+            />
+          </div>
+          {canBulk && (
+            <Button
+              type="button"
+              size="sm"
+              variant={selectMode ? "secondary" : "outline"}
+              className="h-8 gap-1 text-xs"
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            >
+              {selectMode ? <X className="h-3.5 w-3.5" /> : <CheckSquare className="h-3.5 w-3.5" />}
+              {selectMode ? "Cancelar seleção" : "Selecionar"}
+            </Button>
+          )}
         </div>
+        {selectMode ? (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5" aria-label="Ações em massa">
+            <span className="text-[11px] font-semibold text-foreground">
+              {selectedConvs.length} selecionada{selectedConvs.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              type="button"
+              className="text-[11px] text-primary underline-offset-2 hover:underline"
+              onClick={() =>
+                setChecked((prev) => (prev.size >= allVisible.length ? new Set() : new Set(allVisible.map(convKey))))
+              }
+            >
+              {checked.size >= allVisible.length && allVisible.length > 0 ? "Limpar" : "Selecionar todas visíveis"}
+            </button>
+            <span className="mx-1 h-4 w-px bg-border" />
+            {onBulkMoveLane && (
+              <TransferLaneMenu
+                variant="button"
+                onMove={(l) => {
+                  onBulkMoveLane(selectedConvs, l);
+                  exitSelectMode();
+                }}
+                onFinish={onBulkFinish && selectedFinishable.length > 0 ? () => { onBulkFinish(selectedFinishable); exitSelectMode(); } : undefined}
+                className={selectedConvs.length === 0 ? "pointer-events-none opacity-50" : undefined}
+              />
+            )}
+            {onBulkFinish && (
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                disabled={selectedFinishable.length === 0}
+                onClick={() => {
+                  onBulkFinish(selectedFinishable);
+                  exitSelectMode();
+                }}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Finalizar selecionadas{selectedFinishable.length > 0 ? ` (${selectedFinishable.length})` : ""}
+              </Button>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground">Clique nos cards para marcar</span>
+          </div>
+        ) : (
         <div className="flex flex-wrap items-center gap-1" aria-label="Contadores por linha">
           <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
             {totalActive} em atendimento
@@ -211,6 +299,7 @@ export function POSWhatsAppLanes({
             );
           })}
         </div>
+        )}
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
         {CHAT_LANE_ORDER.map((lane) => {
@@ -256,8 +345,11 @@ export function POSWhatsAppLanes({
                             onClearManual={onClearManualLane ? () => onClearManualLane(conv) : undefined}
                           />
                         ) : null}
-                        onFinish={onFinishLane && lane !== "finished" && !conv.isGroup ? () => onFinishLane(conv) : undefined}
+                        onFinish={onFinishLane && lane !== "finished" && !conv.isGroup && !selectMode ? () => onFinishLane(conv) : undefined}
                         onClick={() => onSelectConversation(conv.phone, conv.whatsapp_number_id)}
+                        selectable={selectMode && !conv.isGroup}
+                        checked={checked.has(key)}
+                        onToggleChecked={() => toggleChecked(key)}
                       />
                     );
                   })}

@@ -61,6 +61,7 @@ import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
 import { useChatMessages } from "@/hooks/chat/useChatMessages";
+import { useArchivedMessages } from "@/hooks/chat/useArchivedMessages";
 import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 import { ContactTagsPopover } from "@/components/chat/ContactTagsPopover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -129,6 +130,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, selectedConvNumberId);
+  // Histórico arquivado sob demanda ("Ler msgs antigas") — fora do polling.
+  const archiveLoader = useArchivedMessages(selectedPhone, selectedConvNumberId, messages);
+  const chatMessages = useMemo(
+    () => (archiveLoader.messages.length > 0 ? [...archiveLoader.messages, ...messages] : messages),
+    [archiveLoader.messages, messages],
+  );
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -1823,6 +1830,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 setShowFinishDialog(true);
               }}
               onClearManualLane={(conv) => laneMarks.clearLane(conv.phone)}
+              onBulkMoveLane={async (convs, lane) => {
+                let ok = 0;
+                for (const conv of convs) {
+                  try {
+                    const wasFinished = finishedAtByPhone.has(laneAutoKey(conv.phone));
+                    if (wasFinished) await reopenConversation(conv.phone);
+                    await laneMarks.setLane(conv.phone, conv.whatsapp_number_id, lane);
+                    ok++;
+                  } catch (e) {
+                    console.warn("[bulkMoveLane] failed", conv.phone, e);
+                  }
+                }
+                const phones = new Set(convs.map(c => laneAutoKey(c.phone)));
+                setConversations(prev => prev.map(c => phones.has(laneAutoKey(c.phone)) ? { ...c, isFinished: false } : c));
+                toast.success(`${ok} conversa${ok !== 1 ? "s" : ""} movida${ok !== 1 ? "s" : ""} para ${CHAT_LANE_META[lane].title}`);
+              }}
+              onBulkFinish={(convs) => {
+                if (convs.length === 0) return;
+                setBulkFinishPhones(Array.from(new Set(convs.map(c => c.phone))));
+                setShowBulkFinishDialog(true);
+              }}
             />
           </div>
         ) : (
@@ -2156,7 +2184,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 onShowArrived={() => setStatusFilter("awaiting_product")}
               />
               <ChatView
-                messages={messages}
+                messages={chatMessages}
+                archive={{
+                  load: archiveLoader.load,
+                  loading: archiveLoader.loading,
+                  exhausted: archiveLoader.exhausted,
+                  loadedCount: archiveLoader.messages.length,
+                }}
                 conversation={selectedConversation}
                 newMessage={newMessage}
                 onNewMessageChange={setNewMessage}
@@ -2659,9 +2693,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <POSFinishConversationDialog
         open={showBulkFinishDialog}
         onOpenChange={setShowBulkFinishDialog}
-        onFinish={async (reason) => {
+        onFinish={async (reason, extras) => {
           for (const phone of bulkFinishPhones) {
-            await finishConversation(phone, reason, selectedSellerId || undefined);
+            // A mesma opção de finalização escolhida vale para todas as conversas.
+            const conv = conversations.find(c => c.phone === phone);
+            await finishConversation(phone, reason, selectedSellerId || undefined, {
+              ...(extras || {}),
+              whatsappNumberId: conv?.whatsapp_number_id || null,
+            });
             // Deactivate followups
             supabase.from('chat_payment_followups')
               .update({ is_active: false, completed_at: new Date().toISOString() } as any)
