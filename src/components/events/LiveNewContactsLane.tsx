@@ -34,11 +34,48 @@ export interface NewContact {
   key: string;
   phone: string;
   name: string | null;
+  /** @ do Instagram já conhecido na base (clientes da live / CRM). */
+  instagramHandle: string | null;
   talked: boolean;
   createdAt: string;
   /** Há mensagem da cliente mais recente que a última resposta nossa e que a última abertura do chat. */
   unread: boolean;
   lastIncomingAt: string | null;
+}
+
+interface KnownIdentity {
+  name: string | null;
+  handle: string | null;
+}
+
+/**
+ * Cache (por sessão) de identidades já resolvidas na base — evita repetir a
+ * consulta a cada atualização em tempo real. `null` = consultado e não encontrado.
+ */
+const identityCache = new Map<string, KnownIdentity | null>();
+
+/** Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas. */
+async function resolveIdentities(keys: string[]): Promise<Map<string, KnownIdentity | null>> {
+  const missing = [...new Set(keys)].filter((k) => k.length === 8 && !identityCache.has(k));
+  if (missing.length > 0) {
+    for (let i = 0; i < missing.length; i += 300) {
+      const batch = missing.slice(i, i + 300);
+      const { data, error } = await supabase.rpc("live_resolve_contact_identities", { p_suffixes: batch });
+      if (error) {
+        console.warn("[LiveNewContacts] identidade:", error.message);
+        break;
+      }
+      const found = new Set<string>();
+      for (const r of (data || []) as { suffix8: string; name: string | null; instagram_handle: string | null }[]) {
+        identityCache.set(r.suffix8, { name: r.name, handle: r.instagram_handle });
+        found.add(r.suffix8);
+      }
+      for (const k of batch) if (!found.has(k)) identityCache.set(k, null);
+    }
+  }
+  const out = new Map<string, KnownIdentity | null>();
+  for (const k of keys) out.set(k, identityCache.get(k) ?? null);
+  return out;
 }
 
 /** Última vez que o chat deste contato foi aberto neste aparelho (por evento). */
@@ -183,6 +220,26 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     };
   }, [eventId, load, loadActivity]);
 
+  // Identidade conhecida na base (clientes da live, CRM, cadastros, leads, contatos) — 1 RPC indexada, com cache.
+  const [identities, setIdentities] = useState<Map<string, KnownIdentity | null>>(new Map());
+  const rowKeys = useMemo(
+    () => [...new Set(rows.map((r) => suffix8(r.real_phone || r.phone || r.entered_phone)).filter((k) => k.length === 8))],
+    [rows],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    if (rowKeys.length === 0) {
+      setIdentities(new Map());
+      return;
+    }
+    resolveIdentities(rowKeys).then((m) => {
+      if (!cancelled) setIdentities(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rowKeys]);
+
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
     for (const r of rows) {
@@ -195,10 +252,13 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       const lastIn = act?.lastIn ? +new Date(act.lastIn) : 0;
       const lastOut = act?.lastOut ? +new Date(act.lastOut) : 0;
       const unread = lastIn > 0 && lastIn > lastOut && lastIn > (seen[key] || 0);
+      const known = identities.get(key);
+      const leadName = r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null;
       const contact: NewContact = {
         key,
         phone,
-        name: r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null,
+        name: known?.name || leadName,
+        instagramHandle: known?.handle || null,
         talked: !!r.phone,
         createdAt: r.created_at,
         unread,
@@ -213,6 +273,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       ? list.filter(
           (c) =>
             (c.name || "").toLowerCase().includes(q) ||
+            (c.instagramHandle || "").toLowerCase().includes(q.replace(/^@/, "")) ||
             c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")),
         )
       : list;
@@ -221,7 +282,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       if (a.unread !== b.unread) return a.unread ? -1 : 1;
       return +new Date(b.createdAt) - +new Date(a.createdAt);
     });
-  }, [rows, excludeKeys, search, activity, seen]);
+  }, [rows, excludeKeys, search, activity, seen, identities]);
 
   return { contacts, loading, reload: load };
 }
@@ -257,7 +318,7 @@ export function LiveContactCards({
 }: LiveContactCardsProps) {
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [prefill, setPrefill] = useState<{ phone: string; name?: string } | null>(null);
+  const [prefill, setPrefill] = useState<{ phone: string; name?: string; handle?: string } | null>(null);
   const [orderOpen, setOrderOpen] = useState(false);
   const [moving, setMoving] = useState<NewContact | null>(null);
   const [reason, setReason] = useState("");
@@ -266,7 +327,7 @@ export function LiveContactCards({
     markSeen(eventId, c.key);
     setChatOrder({
       id: `live-contact-${c.key}`,
-      instagramHandle: "",
+      instagramHandle: c.instagramHandle || c.name || "",
       whatsapp: c.phone,
       products: [],
       stage: "new" as Order["stage"],
@@ -350,6 +411,9 @@ export function LiveContactCards({
           </span>
           <span className="truncate text-xs font-semibold">{c.name || "Novo contato"}</span>
         </div>
+        {c.instagramHandle && (
+          <span className="truncate text-[11px] text-white/60">@{c.instagramHandle.replace(/^@+/, "")}</span>
+        )}
         <span className="flex items-center gap-1 truncate text-[11px] text-white/70">
           <Phone className="h-3 w-3 shrink-0" />
           {formatPhone(c.phone)}
@@ -380,7 +444,7 @@ export function LiveContactCards({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setPrefill({ phone: c.phone, name: c.name || undefined });
+              setPrefill({ phone: c.phone, name: c.name || undefined, handle: c.instagramHandle || undefined });
               setOrderOpen(true);
             }}
             className="inline-flex items-center gap-1 rounded-md border border-sky-400/50 bg-sky-400/15 px-2 py-1 text-[10px] font-semibold text-sky-200 hover:bg-sky-400/25"
@@ -426,6 +490,7 @@ export function LiveContactCards({
           eventId={eventId}
           prefillWhatsapp={prefill.phone}
           prefillName={prefill.name}
+          prefillInstagram={prefill.handle}
         />
       )}
 
