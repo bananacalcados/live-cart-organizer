@@ -110,6 +110,13 @@ interface MetaTemplate {
 export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
+  // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
+  // pelo botão "Ler msgs antigas". Nunca entra no polling/broadcast.
+  const [archivedMessages, setArchivedMessages] = useState<Message[]>([]);
+  const [isLoadingArchive, setIsLoadingArchive] = useState(false);
+  const [archiveExhausted, setArchiveExhausted] = useState(false);
+  const activeNumberIdRef = useRef<string | null>(null);
+  const ARCHIVE_PAGE = 100;
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMedia, setSelectedMedia] = useState<MediaAttachment | null>(null);
