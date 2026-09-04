@@ -10181,6 +10181,7 @@ export type Database = {
           fbp: string | null
           id: string
           ip: string | null
+          lead_id: string | null
           link_id: string | null
           match_method: string | null
           matched_at: string | null
@@ -10210,6 +10211,7 @@ export type Database = {
           fbp?: string | null
           id?: string
           ip?: string | null
+          lead_id?: string | null
           link_id?: string | null
           match_method?: string | null
           matched_at?: string | null
@@ -10239,6 +10241,7 @@ export type Database = {
           fbp?: string | null
           id?: string
           ip?: string | null
+          lead_id?: string | null
           link_id?: string | null
           match_method?: string | null
           matched_at?: string | null
@@ -10261,6 +10264,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_whatsapp_clicks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "event_leads"
             referencedColumns: ["id"]
           },
           {
@@ -22788,6 +22798,7 @@ export type Database = {
         Returns: undefined
       }
       live_zap_phone_key: { Args: { p_phone: string }; Returns: string }
+      live_zap_upsert_lead: { Args: { p_click_id: string }; Returns: string }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
         Returns: {

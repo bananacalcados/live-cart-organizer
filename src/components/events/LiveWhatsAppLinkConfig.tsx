@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Check, Copy, Link2, Loader2, MousePointerClick } from "lucide-react";
+import { LiveWhatsAppClicksList } from "./LiveWhatsAppClicksList";
 
 const PUBLIC_HOST = "https://checkout.bananacalcados.com.br";
 
@@ -54,6 +55,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showClicks, setShowClicks] = useState(false);
   const [stats, setStats] = useState<{
     confirmed: number; matched: number; withFb: number;
     byPhone: number; byCode: number; byTime: number; divergent: number;
@@ -265,6 +267,23 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
           {row ? "Salvar link" : "Criar link"}
         </Button>
       </div>
+
+      {row && (
+        <div>
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setShowClicks((v) => !v)}
+          >
+            {showClicks ? "Ocultar cliques" : "Ver cliques e leads do link"}
+          </button>
+          {showClicks && (
+            <div className="mt-2">
+              <LiveWhatsAppClicksList linkId={row.id} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

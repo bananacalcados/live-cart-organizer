@@ -115,6 +115,15 @@ serve(async (req) => {
         }
       }
 
+      // Etapa 3: quem confirmou o telefone vira lead da Live (mesmo sem mandar mensagem)
+      if (saved) {
+        supabase
+          .rpc("live_zap_upsert_lead", { p_click_id: click.id })
+          .then(({ error }: { error: unknown }) => {
+            if (error) console.error("[live-whatsapp-redirect] upsert lead error:", error);
+          });
+      }
+
       const baseText = (link.message_text || "Oii, vim da Live, pode me ajudar?").trim();
       const text = saved ? `${baseText} #${code}` : baseText;
       const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;

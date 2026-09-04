@@ -56,6 +56,8 @@ const LEAD_SOURCE_LABEL: Record<string, string> = {
   typebot: "Typebot",
   referral: "Indicação",
   manual: "Manual",
+  member_area: "Área de Membros",
+  live_whatsapp_link: "Link WhatsApp",
 };
 
 interface ParticipantScore {
