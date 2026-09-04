@@ -369,5 +369,29 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
       });
   },
 
+  dismissMany: (saleIds) => {
+    const ids = Array.from(new Set(saleIds.map(String))).filter(Boolean);
+    if (ids.length === 0) return;
+    set((s) => {
+      const dismissed = new Set(s._dismissed);
+      ids.forEach((id) => dismissed.add(id));
+      saveDismissed(dismissed);
+      const idSet = new Set(ids);
+      return {
+        _dismissed: dismissed,
+        tabs: s.tabs.filter((t) => !idSet.has(t.saleId)),
+        paidAlert: s.paidAlert && idSet.has(s.paidAlert.saleId) ? null : s.paidAlert,
+      };
+    });
+    supabase
+      .from("chat_awaiting_payment")
+      .delete()
+      .in("sale_id", ids)
+      .then(({ error }) => {
+        if (error) console.error("[pix-notifications] dismissMany delete error:", error);
+      });
+  },
+
+
   clearPaidAlert: () => set({ paidAlert: null }),
 }));
