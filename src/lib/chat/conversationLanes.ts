@@ -45,6 +45,8 @@ export function classifyConversationLane(input: LaneClassifyInput): ChatLane {
 
   if (manualLane) return manualLane;
   if (conv.isFinished) return "finished";
+  // Grupos ficam em linha própria, separados dos atendimentos individuais.
+  if (conv.isGroup) return "groups";
   if (isLive) return "live";
   if (hasSupport) return "support";
 
