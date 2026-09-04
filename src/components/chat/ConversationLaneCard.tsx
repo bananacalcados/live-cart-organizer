@@ -83,7 +83,7 @@ export function ConversationLaneCard({
       className={cn(
         "relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "w-[230px] shrink-0 snap-start rounded-lg border border-border/60 bg-card px-2.5 py-2 text-left shadow-sm transition-colors hover:bg-muted/60",
-        conv.hasUnansweredMessage && "border-[#00a884]/50 bg-[#c7e9c0]/30 dark:bg-[#005c4b]/20",
+        conv.hasUnansweredMessage && "animate-pulse border-[#00a884]/50 bg-[#c7e9c0]/30 dark:bg-[#005c4b]/20",
         selected && "ring-2 ring-[#00a884]",
         selectable && checked && "ring-2 ring-primary bg-primary/5",
       )}

@@ -529,7 +529,7 @@ export function ConversationList({
                   }}
                   className={cn(
                     "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#dde2e7] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#cfd6dc]/60 dark:border-[#1f2c34]",
-                    conv.hasUnansweredMessage && "bg-[#c7e9c0]/40 dark:bg-[#005c4b]/20",
+                    conv.hasUnansweredMessage && "animate-pulse bg-[#c7e9c0]/40 dark:bg-[#005c4b]/20",
                     (selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone) && "bg-[#cfd6dc] dark:bg-[#2a3942]",
                     selectMode && selectedPhones.has(conv.phone) && "bg-[#00a884]/15"
                   )}
