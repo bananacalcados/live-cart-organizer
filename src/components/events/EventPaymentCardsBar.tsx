@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -18,12 +18,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format } from "date-fns";
+import { LiveLaneSection } from "@/components/events/LiveLaneSection";
+import { LiveNewContactsLane } from "@/components/events/LiveNewContactsLane";
 import { ptBR } from "date-fns/locale";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
   /** Mantido por compatibilidade — abrir pedido (não usado no clique principal). */
   onSelectOrder?: (order: DbOrder) => void;
+  /** Modo "linhas de etapa" (lives em modo WhatsApp): todas as etapas visíveis ao mesmo tempo. */
+  lanes?: boolean;
+  /** Evento atual (necessário no modo linhas quando ainda não há pedidos). */
+  eventId?: string | null;
+  /** Busca da aba Pedidos, aplicada também à linha de novos contatos. */
+  search?: string;
 }
 
 type PayFilter = "awaiting" | "paid" | "errors";
@@ -91,7 +99,7 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  * instância em que a conversa aconteceu (mesma da mensagem inicial da live),
  * e não o modal de pedido.
  */
-export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
+export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdProp = null, search }: EventPaymentCardsBarProps) {
   const [filter, setFilter] = useState<PayFilter>("awaiting");
   // Aviso rápido para a apresentadora (aparece como modal no Painel da Apresentadora)
   const [presenterMsgOpen, setPresenterMsgOpen] = useState(false);
@@ -103,6 +111,8 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [igOpen, setIgOpen] = useState(false);
 
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
+  const [errorsOpen, setErrorsOpen] = useState(false);
+  const [newContactsCount, setNewContactsCount] = useState(0);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
   // Team-shared pinned conversations + checkout-link step per order.
@@ -114,7 +124,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
   // Agrupamento por cliente (aba Pagos) + unificação de pedidos.
   const { fetchOrdersByEvent } = useDbOrderStore();
-  const eventId = orders[0] ? (orders[0] as any).event_id : null;
+  const eventId = orders[0] ? (orders[0] as any).event_id : eventIdProp;
   const refreshOrders = useCallback(() => {
     if (eventId) fetchOrdersByEvent(eventId);
   }, [eventId, fetchOrdersByEvent]);
@@ -123,6 +133,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+
+  // Telefones (DDD + 8 dígitos) que já têm pedido neste evento — não aparecem em "Novos contatos".
+  const orderPhoneKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orders) {
+      const d = (o.customer?.whatsapp || "").replace(/\D/g, "");
+      if (d.length >= 8) set.add(d.slice(-8));
+    }
+    return set;
+  }, [orders]);
 
 
   const handleCardClick = (order: DbOrder) => {
@@ -193,8 +213,8 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   }, [orderIds]);
 
   useEffect(() => {
-    if (filter === "errors") loadErrors();
-  }, [filter, loadErrors]);
+    if (filter === "errors" || lanes) loadErrors();
+  }, [filter, lanes, loadErrors]);
 
   // ── Load team-shared pins for the currently listed orders ──
   const loadPins = useCallback(async () => {
@@ -297,7 +317,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
   const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
   useEffect(() => {
-    if (filter !== "paid") return;
+    if (filter !== "paid" && !lanes) return;
     const ids = paidIds ? paidIds.split(",") : [];
     if (ids.length === 0) { setPaidRegs({}); return; }
     let cancelled = false;
@@ -315,7 +335,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
       if (!cancelled) setPaidRegs(map);
     })();
     return () => { cancelled = true; };
-  }, [filter, paidIds]);
+  }, [filter, lanes, paidIds]);
 
   // Entradas da aba Pagos: cada entrada é um cliente (1+ pedidos agrupados).
   const paidEntries = useMemo(() => {
@@ -335,6 +355,20 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   }, [paid, paidRegs]);
 
   type CardEntry = { rep: DbOrder; group: DbOrder[] };
+
+  // Linha "Dúvidas & Cancelamentos": pedidos cancelados deste evento.
+  const cancelledEntries: CardEntry[] = useMemo(
+    () =>
+      orders
+        .filter((o) => o.stage === "cancelled")
+        .sort((a, b) => +new Date(b.updated_at || b.created_at) - +new Date(a.updated_at || a.created_at))
+        .map((o) => ({ rep: o, group: [o] })),
+    [orders],
+  );
+  const awaitingEntries: CardEntry[] = useMemo(
+    () => awaiting.map((o) => ({ rep: o, group: [o] })),
+    [awaiting],
+  );
   const cards: CardEntry[] =
     filter === "paid"
       ? paidEntries
@@ -365,178 +399,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     }
   };
 
-  return (
-    <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
-      <div className="container py-2">
-        {/* Aviso para a apresentadora */}
-
-
-        <Dialog open={presenterMsgOpen} onOpenChange={setPresenterMsgOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Mensagem para a apresentadora</DialogTitle>
-            </DialogHeader>
-            <Textarea
-              value={presenterMsg}
-              onChange={(e) => setPresenterMsg(e.target.value)}
-              placeholder="Digite o aviso que aparecerá no painel da apresentadora..."
-              rows={5}
-              autoFocus
-            />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setPresenterMsgOpen(false)}>Cancelar</Button>
-              <Button onClick={sendPresenterMessage} disabled={!presenterMsg.trim() || sendingPresenterMsg}>
-                {sendingPresenterMsg ? "Enviando..." : "Enviar"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-
-        {/* Toggle Aguardando / Pagos / Erros */}
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <Button
-            size="sm"
-            onClick={() => setPresenterMsgOpen(true)}
-            className="h-8 gap-1.5 px-3 text-xs font-bold bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
-          >
-            <Megaphone className="h-3.5 w-3.5" />
-            Apresentadora
-          </Button>
-
-          <button
-            onClick={() => setFilter("awaiting")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
-              filter === "awaiting"
-                ? "bg-neutral-900 text-yellow-400 ring-1 ring-yellow-400/60"
-                : "bg-neutral-900/10 text-neutral-900 dark:text-neutral-200 hover:bg-neutral-900/20",
-            )}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            Aguardando Pagamento
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded-full text-[10px]",
-                filter === "awaiting" ? "bg-yellow-400 text-neutral-900 font-bold" : "bg-background/20",
-              )}
-            >
-              {awaiting.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setFilter("paid")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
-              filter === "paid"
-                ? "bg-stage-paid text-white"
-                : "bg-stage-paid/10 text-stage-paid hover:bg-stage-paid/20",
-            )}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Pagamentos Concluídos
-            <span className="bg-background/20 px-1.5 py-0.5 rounded-full text-[10px]">{paid.length}</span>
-          </button>
-          <button
-            onClick={() => setFilter("errors")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
-              filter === "errors"
-                ? "bg-red-900 text-white ring-1 ring-red-400/60"
-                : "bg-red-900/10 text-red-800 dark:text-red-300 hover:bg-red-900/20",
-            )}
-          >
-            <AlertCircle className="h-3.5 w-3.5" />
-            Erros de Pagamento
-            {failedAttempts.length > 0 && (
-              <span
-                className={cn(
-                  "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
-                  filter === "errors" ? "bg-white text-red-900" : "bg-red-900/20",
-                )}
-              >
-                {failedAttempts.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Conteúdo: Erros de Pagamento */}
-        {filter === "errors" ? (
-          <div className="rounded-lg bg-red-950 border border-red-800/60 p-2 text-white">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-xs font-semibold text-red-100">
-                Tentativas de pagamento que falharam neste evento
-              </span>
-              <button
-                onClick={loadErrors}
-                className="flex items-center gap-1 text-[11px] text-red-200 hover:text-white"
-              >
-                <RefreshCw className={cn("h-3 w-3", loadingErrors && "animate-spin")} />
-                Atualizar
-              </button>
-            </div>
-            {loadingErrors && failedAttempts.length === 0 ? (
-              <div className="text-xs text-red-200 py-2 px-1">Carregando erros de pagamento...</div>
-            ) : failedAttempts.length === 0 ? (
-              <div className="text-xs text-red-200 py-2 px-1">
-                Nenhum erro de pagamento registrado neste evento.
-              </div>
-            ) : (
-              <div className="flex items-stretch gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                {failedAttempts.map((att) => (
-                  <button
-                    key={att.id}
-                    onClick={() => handleAttemptClick(att)}
-                    title="Abrir conversa"
-                    className="group flex flex-col gap-1 min-w-[220px] max-w-[260px] px-3 py-2 rounded-lg border border-red-700 bg-red-900 text-white text-left transition-colors shrink-0 hover:bg-red-800"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-white shrink-0">
-                        <AlertCircle className="h-3 w-3" />
-                      </span>
-                      <span className="truncate text-xs font-semibold text-white">
-                        {att.customer_name || "Sem nome"}
-                      </span>
-                    </div>
-                    {att.customer_phone && (
-                      <span className="flex items-center gap-1 text-[11px] truncate text-white/70">
-                        <Phone className="h-3 w-3 shrink-0" />
-                        {formatPhone(att.customer_phone)}
-                      </span>
-                    )}
-                    <span className="text-[12px] font-bold text-red-200">
-                      {methodLabel(att.payment_method)}
-                      {att.gateway ? ` · ${att.gateway}` : ""}
-                      {att.amount ? ` • R$ ${att.amount.toFixed(2)}` : ""}
-                    </span>
-                    {att.error_message && (
-                      <span className="text-[10px] text-red-300 line-clamp-2" title={att.error_message}>
-                        {att.error_message}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-white/50">
-                      {format(new Date(att.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : /* Cards de pedidos (Aguardando / Pagos) */ cards.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2 px-1">
-            {filter === "paid"
-              ? "Nenhum pagamento concluído neste evento ainda."
-              : "Nenhum pedido aguardando pagamento neste evento."}
-          </div>
-        ) : (
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string) =>
+    list.length === 0 ? (
+      <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
+    ) : (
           <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
-            {cards.map((entry) => {
+            {list.map((entry) => {
               const order = entry.rep;
               const group = entry.group;
               const isGroup = group.length > 1;
               const groupMerged = isGroup && group.some((o) => o.merged_into_order_id);
-              const paidCard = filter === "paid";
               // Card precisa de unificação: cliente com 2+ pedidos pagos,
               // ainda não unificados e com o MESMO endereço de entrega.
               const needsUnify =
@@ -704,7 +576,302 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               );
             })}
           </div>
+    );
+
+  return (
+    <div
+      className={cn(
+        lanes
+          ? "border-b border-border/40 bg-background"
+          : "sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40",
+      )}
+    >
+      <div className="container py-2">
+        {/* Aviso para a apresentadora */}
+
+
+        <Dialog open={presenterMsgOpen} onOpenChange={setPresenterMsgOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Mensagem para a apresentadora</DialogTitle>
+            </DialogHeader>
+            <Textarea
+              value={presenterMsg}
+              onChange={(e) => setPresenterMsg(e.target.value)}
+              placeholder="Digite o aviso que aparecerá no painel da apresentadora..."
+              rows={5}
+              autoFocus
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPresenterMsgOpen(false)}>Cancelar</Button>
+              <Button onClick={sendPresenterMessage} disabled={!presenterMsg.trim() || sendingPresenterMsg}>
+                {sendingPresenterMsg ? "Enviando..." : "Enviar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+
+        {lanes ? (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setPresenterMsgOpen(true)}
+                className="h-8 gap-1.5 px-3 text-xs font-bold bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+              >
+                <Megaphone className="h-3.5 w-3.5" />
+                Apresentadora
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setErrorsOpen(true)}
+                className="h-8 gap-1.5 px-3 text-xs font-bold border-red-500/50 text-red-600 dark:text-red-300 hover:bg-red-500/10"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                Erros de Pagamento
+                {failedAttempts.length > 0 && (
+                  <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {failedAttempts.length}
+                  </span>
+                )}
+              </Button>
+            </div>
+
+            <LiveLaneSection
+              id="new-contacts"
+              eventId={eventId}
+              title="Novos contatos"
+              count={newContactsCount}
+              tone="text-sky-500"
+              icon={<UserPlus className="h-3.5 w-3.5 text-sky-500" />}
+            >
+              {eventId && (
+                <LiveNewContactsLane
+                  eventId={eventId}
+                  excludeKeys={orderPhoneKeys}
+                  search={search}
+                  onCountChange={setNewContactsCount}
+                />
+              )}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+              id="awaiting"
+              eventId={eventId}
+              title="Aguardando pagamento"
+              count={awaitingEntries.length}
+              tone="text-yellow-500"
+              icon={<Clock className="h-3.5 w-3.5 text-yellow-500" />}
+            >
+              {renderRow(awaitingEntries, false, "Nenhum pedido aguardando pagamento neste evento.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+              id="paid"
+              eventId={eventId}
+              title="Pagamentos concluídos"
+              count={paidEntries.length}
+              tone="text-stage-paid"
+              icon={<Check className="h-3.5 w-3.5 text-stage-paid" />}
+            >
+              {renderRow(paidEntries, true, "Nenhum pagamento concluído neste evento ainda.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+              id="cancelled"
+              eventId={eventId}
+              title="Dúvidas & cancelamentos"
+              count={cancelledEntries.length}
+              tone="text-muted-foreground"
+              icon={<MessageSquareOff className="h-3.5 w-3.5 text-muted-foreground" />}
+            >
+              {renderRow(cancelledEntries, false, "Nenhum pedido cancelado ou marcado como dúvida.")}
+            </LiveLaneSection>
+          </div>
+        ) : (
+          <>
+
+          {/* Toggle Aguardando / Pagos / Erros */}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <Button
+              size="sm"
+              onClick={() => setPresenterMsgOpen(true)}
+              className="h-8 gap-1.5 px-3 text-xs font-bold bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+            >
+              <Megaphone className="h-3.5 w-3.5" />
+              Apresentadora
+            </Button>
+
+            <button
+              onClick={() => setFilter("awaiting")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
+                filter === "awaiting"
+                  ? "bg-neutral-900 text-yellow-400 ring-1 ring-yellow-400/60"
+                  : "bg-neutral-900/10 text-neutral-900 dark:text-neutral-200 hover:bg-neutral-900/20",
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Aguardando Pagamento
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded-full text-[10px]",
+                  filter === "awaiting" ? "bg-yellow-400 text-neutral-900 font-bold" : "bg-background/20",
+                )}
+              >
+                {awaiting.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilter("paid")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
+                filter === "paid"
+                  ? "bg-stage-paid text-white"
+                  : "bg-stage-paid/10 text-stage-paid hover:bg-stage-paid/20",
+              )}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Pagamentos Concluídos
+              <span className="bg-background/20 px-1.5 py-0.5 rounded-full text-[10px]">{paid.length}</span>
+            </button>
+            <button
+              onClick={() => setFilter("errors")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
+                filter === "errors"
+                  ? "bg-red-900 text-white ring-1 ring-red-400/60"
+                  : "bg-red-900/10 text-red-800 dark:text-red-300 hover:bg-red-900/20",
+              )}
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              Erros de Pagamento
+              {failedAttempts.length > 0 && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                    filter === "errors" ? "bg-white text-red-900" : "bg-red-900/20",
+                  )}
+                >
+                  {failedAttempts.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Conteúdo: Erros de Pagamento */}
+          {filter === "errors" ? (
+            <div className="rounded-lg bg-red-950 border border-red-800/60 p-2 text-white">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="text-xs font-semibold text-red-100">
+                  Tentativas de pagamento que falharam neste evento
+                </span>
+                <button
+                  onClick={loadErrors}
+                  className="flex items-center gap-1 text-[11px] text-red-200 hover:text-white"
+                >
+                  <RefreshCw className={cn("h-3 w-3", loadingErrors && "animate-spin")} />
+                  Atualizar
+                </button>
+              </div>
+              {loadingErrors && failedAttempts.length === 0 ? (
+                <div className="text-xs text-red-200 py-2 px-1">Carregando erros de pagamento...</div>
+              ) : failedAttempts.length === 0 ? (
+                <div className="text-xs text-red-200 py-2 px-1">
+                  Nenhum erro de pagamento registrado neste evento.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                  {failedAttempts.map((att) => (
+                    <button
+                      key={att.id}
+                      onClick={() => handleAttemptClick(att)}
+                      title="Abrir conversa"
+                      className="group flex flex-col gap-1 min-w-[220px] max-w-[260px] px-3 py-2 rounded-lg border border-red-700 bg-red-900 text-white text-left transition-colors shrink-0 hover:bg-red-800"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-white shrink-0">
+                          <AlertCircle className="h-3 w-3" />
+                        </span>
+                        <span className="truncate text-xs font-semibold text-white">
+                          {att.customer_name || "Sem nome"}
+                        </span>
+                      </div>
+                      {att.customer_phone && (
+                        <span className="flex items-center gap-1 text-[11px] truncate text-white/70">
+                          <Phone className="h-3 w-3 shrink-0" />
+                          {formatPhone(att.customer_phone)}
+                        </span>
+                      )}
+                      <span className="text-[12px] font-bold text-red-200">
+                        {methodLabel(att.payment_method)}
+                        {att.gateway ? ` · ${att.gateway}` : ""}
+                        {att.amount ? ` • R$ ${att.amount.toFixed(2)}` : ""}
+                      </span>
+                      {att.error_message && (
+                        <span className="text-[10px] text-red-300 line-clamp-2" title={att.error_message}>
+                          {att.error_message}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-white/50">
+                        {format(new Date(att.created_at), "dd/MM HH:mm", { locale: ptBR })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            renderRow(
+              cards,
+              filter === "paid",
+              filter === "paid"
+                ? "Nenhum pagamento concluído neste evento ainda."
+                : "Nenhum pedido aguardando pagamento neste evento.",
+            )
+          )}
+          </>
         )}
+
+        {/* Erros de pagamento em janela (modo linhas) */}
+        <Dialog open={errorsOpen} onOpenChange={setErrorsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Erros de pagamento neste evento</DialogTitle>
+            </DialogHeader>
+            {failedAttempts.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">Nenhum erro de pagamento registrado.</p>
+            ) : (
+              <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+                {failedAttempts.map((att) => (
+                  <button
+                    key={att.id}
+                    type="button"
+                    onClick={() => { setErrorsOpen(false); handleAttemptClick(att); }}
+                    className="flex w-full flex-col gap-0.5 rounded-lg border border-red-500/40 bg-red-500/5 px-3 py-2 text-left hover:bg-red-500/10"
+                  >
+                    <span className="text-xs font-semibold">{att.customer_name || "Sem nome"}</span>
+                    <span className="text-[11px] text-muted-foreground">{formatPhone(att.customer_phone)}</span>
+                    <span className="text-[12px] font-bold text-red-600 dark:text-red-300">
+                      {methodLabel(att.payment_method)}
+                      {att.gateway ? ` · ${att.gateway}` : ""}
+                      {att.amount ? ` • R$ ${att.amount.toFixed(2)}` : ""}
+                    </span>
+                    {att.error_message && (
+                      <span className="text-[10px] text-muted-foreground line-clamp-2">{att.error_message}</span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {format(new Date(att.created_at), "dd/MM HH:mm", { locale: ptBR })}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
 
       </div>
 

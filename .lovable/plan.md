@@ -23,7 +23,6 @@ Regras de movimentação entre linhas (automáticas, sem intervenção):
 | Situação | Linha |
 | --- | --- |
 | Digitou o WhatsApp no link `/zap` deste evento (falou ou não) e ainda não tem pedido | Novos Contatos |
-| Chegou mensagem de número que não digitou no link e não tem pedido (fila da Central) | Novos Contatos, com selo "sem cadastro no link" |
 | Pedido criado e não pago | Aguardando Pagamento |
 | Pedido pago | Pagamentos Concluídos |
 | Pedido cancelado | Dúvidas & Cancelamentos |
@@ -46,7 +45,7 @@ Isso aparece apenas nas lives em **modo WhatsApp**; nos modos Manual e Área de 
 - Botão "Minimizar Kanban" na aba Pedidos; recolhido por padrão nas lives em modo WhatsApp, escolha salva no aparelho por evento. Minimizado mostra só uma faixa com contadores por etapa.
 - Atualização em tempo real: a linha Novos Contatos escuta inserções/alterações nos cliques e leads do evento; as linhas de pedido já usam o fluxo em tempo real existente.
 
-Nuances tratadas: mesma pessoa com vários cliques aparece uma vez (o mais recente); clique com telefone digitado diferente do número real usa o real quando já casou; contato que falou sem passar pelo link entra pela fila da Central com selo próprio.
+Nuances tratadas: mesma pessoa com vários cliques aparece uma vez (o mais recente); clique com telefone digitado diferente do número real usa o real quando já casou. Quem nunca digitou o telefone no link do evento NÃO aparece nas linhas — a ideia é justamente não poluir com conversas sem ligação com a Live.
 
 ### Etapa 2 — Movimento manual e persistência da linha "Dúvidas"
 
