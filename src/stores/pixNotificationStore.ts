@@ -97,6 +97,8 @@ interface PixNotificationState {
   requestOpen: (phone: string, numberId: string | null) => void;
   clearOpenRequest: () => void;
   dismiss: (saleId: string) => void;
+  dismissMany: (saleIds: string[]) => void;
+
   clearPaidAlert: () => void;
 }
 
