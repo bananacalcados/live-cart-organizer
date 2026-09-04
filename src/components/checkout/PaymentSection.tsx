@@ -947,9 +947,19 @@ function CardPaymentForm({
         </div>
       )}
 
-      <Button onClick={handleSubmit} disabled={isProcessing || !!mismatch} className="w-full h-14 text-lg font-semibold" size="lg">
-        <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
-      </Button>
+      <div className="space-y-1.5">
+        <Button
+          onClick={handleSubmit}
+          disabled={isProcessing || !!mismatch}
+          className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
+          size="lg"
+        >
+          <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
+        </Button>
+        <p className={`text-center text-sm font-semibold ${formComplete ? "text-muted-foreground" : "text-destructive"}`}>
+          {formComplete ? "CLIQUE PRA PAGAR" : "Preencha os dados do cartão acima"}
+        </p>
+      </div>
     </div>
   );
 }
