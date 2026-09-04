@@ -150,6 +150,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
   const [showTaskPopup, setShowTaskPopup] = useState(false);
+  // Versão visual do atendimento (Tradicional x Linhas), lembrada no aparelho por loja.
+  const [viewMode, setViewMode] = useState<POSWhatsAppViewMode | null>(() => readViewMode(storeId));
 
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
