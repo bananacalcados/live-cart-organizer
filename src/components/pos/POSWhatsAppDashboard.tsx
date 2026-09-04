@@ -61,7 +61,9 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
       supabase
         .from('whatsapp_messages')
         .select('id, phone, direction, created_at, status, whatsapp_number_id, is_group')
-        .order('created_at', { ascending: false }),
+        .gte('created_at', dateFilter)
+        .order('created_at', { ascending: false })
+        .limit(1000),
       supabase
         .from('chat_finished_conversations')
         .select('*')

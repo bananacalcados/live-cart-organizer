@@ -21,8 +21,11 @@ interface TransferLaneMenuProps {
   /** Escolher "Finalizadas" abre o fluxo normal de Finalizar. */
   onFinish?: () => void;
   onClearManual?: () => void;
-  /** "button" = botão do cabeçalho do chat; "icon" = ícone compacto no card. */
-  variant?: "button" | "icon";
+  /**
+   * "button" = botão do cabeçalho do chat; "icon" = ícone compacto;
+   * "card" = botão destacado no rodapé do card ("Mover de linha").
+   */
+  variant?: "button" | "icon" | "card";
   className?: string;
 }
 
@@ -56,6 +59,20 @@ export function TransferLaneMenu({
             aria-label="Transferir etapa"
           >
             <ArrowDownUp className="h-3.5 w-3.5" />
+          </button>
+        ) : variant === "card" ? (
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1 rounded-md border border-indigo-500/50 bg-indigo-500/15 py-1.5 text-[11px] font-bold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-500/30 dark:text-indigo-300",
+              className,
+            )}
+            title="Mover para outra linha"
+            aria-label="Mover para outra linha"
+          >
+            <ArrowDownUp className="h-4 w-4" />
+            Mover de linha
           </button>
         ) : (
           <Button variant="ghost" size="sm" className={cn("h-7 px-1.5 text-xs gap-1 text-indigo-600 hover:text-indigo-500", className)} title="Transferir etapa (linha)">
