@@ -22787,6 +22787,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      live_zap_phone_key: { Args: { p_phone: string }; Returns: string }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
