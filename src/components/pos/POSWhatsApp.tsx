@@ -1103,12 +1103,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // Guarda anti-flicker: só troca o estado (e re-renderiza a lista) se algo
       // realmente mudou. Sem isso, o polling de segurança faria a lista "piscar"
       // a cada 20s mesmo quando nada novo chegou.
-      const sig = enriched
-        .map(c => `${c.conversationKey ?? c.phone}:${c.lastMessageAt.getTime()}:${c.unreadCount}:${c.lastMessage ?? ''}:${c.isFinished ? 1 : 0}:${c.isArchived ? 1 : 0}:${c.isAwaitingPayment ? 1 : 0}`)
-        .join('|');
+      const itemSig = (c: Conversation) =>
+        `${c.conversationKey ?? c.phone}:${c.lastMessageAt.getTime()}:${c.unreadCount}:${c.lastMessage ?? ''}:${c.isFinished ? 1 : 0}:${c.isArchived ? 1 : 0}:${c.isAwaitingPayment ? 1 : 0}:${c.customerName ?? ''}:${c.conversationStatus ?? ''}:${c.isAiTransferred ? 1 : 0}:${c.instanceLabel ?? ''}`;
+      const itemSigs = enriched.map(itemSig);
+      const sig = itemSigs.join('|');
       if (sig !== convSigRef.current) {
         convSigRef.current = sig;
-        setConversations(enriched);
+        // Preserva a identidade dos objetos que NÃO mudaram: os cards memoizados
+        // dessas conversas não são redesenhados (só os que realmente mudaram).
+        setConversations(prev => {
+          const prevByKey = new Map<string, { sig: string; conv: Conversation }>();
+          for (const c of prev) prevByKey.set(c.conversationKey ?? c.phone, { sig: itemSig(c), conv: c });
+          return enriched.map((c, i) => {
+            const p = prevByKey.get(c.conversationKey ?? c.phone);
+            return p && p.sig === itemSigs[i] && p.conv.whatsapp_number_id === c.whatsapp_number_id ? p.conv : c;
+          });
+        });
         if (dbgOn) console.log('[NOVAS-DEBUG] setConversations aplicado');
       } else if (dbgOn) {
         console.log('[NOVAS-DEBUG] signature idêntica → setConversations SUPRIMIDO');
