@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck, Camera, Video, FileText } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck, Camera, Video, FileText, Archive, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -92,6 +92,8 @@ interface ChatViewProps {
   onExtraSent?: () => void;
   /** Esconde a barra de tags interna (quando o cabeçalho externo já gerencia tags). */
   hideTagsBar?: boolean;
+  /** Botão "Ler msgs antigas" (histórico arquivado sob demanda). */
+  archive?: { load: () => void; loading: boolean; exhausted: boolean; loadedCount: number };
 }
 
 const PREDEFINED_TAGS = [
@@ -123,6 +125,7 @@ export function ChatView({
   onCancelQuote,
   onExtraSent,
   hideTagsBar,
+  archive,
 }: ChatViewProps) {
   /**
    * Rascunho LOCAL do composer. Antes, cada tecla atualizava o estado do
@@ -832,6 +835,27 @@ export function ChatView({
         }}
       >
         <div className="p-3 w-full max-w-full overflow-hidden">
+          {archive && conversation && (
+            <div className="flex justify-center mb-2">
+              {archive.exhausted ? (
+                archive.loadedCount > 0 && (
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] text-gray-500 shadow-sm dark:bg-black/30 dark:text-gray-300">
+                    Início do histórico arquivado
+                  </span>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={archive.load}
+                  disabled={archive.loading}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-[#075E54] shadow-sm hover:bg-white disabled:opacity-60 dark:bg-black/40 dark:text-[#00a884]"
+                >
+                  {archive.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                  {archive.loadedCount > 0 ? 'Ler mais msgs antigas' : 'Ler msgs antigas'}
+                </button>
+              )}
+            </div>
+          )}
           {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';
             // Delete is always available for outgoing msgs (with fallback to local DB removal when Z-API can't)

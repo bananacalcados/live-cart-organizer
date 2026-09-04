@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Users, Radio, Timer, Pin, CheckCircle2 } from "lucide-react";
+import { Users, Radio, Timer, Pin, CheckCircle2, Check } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +24,10 @@ interface ConversationLaneCardProps {
   /** Botão "Finalizar" no rodapé do card (oculto quando ausente). */
   onFinish?: () => void;
   onClick: () => void;
+  /** Modo de seleção em massa: mostra caixa de marcar e o clique alterna a seleção. */
+  selectable?: boolean;
+  checked?: boolean;
+  onToggleChecked?: () => void;
 }
 
 const formatTime = (date: Date) => {
@@ -56,29 +60,45 @@ export function ConversationLaneCard({
   menu,
   onFinish,
   onClick,
+  selectable,
+  checked,
+  onToggleChecked,
 }: ConversationLaneCardProps) {
   const name = conv.customerName || contactName || conv.phone;
   const showPhone = !!(conv.customerName || contactName);
   const graceMin = graceMsLeft && graceMsLeft > 0 ? Math.ceil(graceMsLeft / 60000) : 0;
+  const activate = () => (selectable && onToggleChecked ? onToggleChecked() : onClick());
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={activate}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onClick();
+          activate();
         }
       }}
       className={cn(
-        "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "w-[230px] shrink-0 snap-start rounded-lg border border-border/60 bg-card px-2.5 py-2 text-left shadow-sm transition-colors hover:bg-muted/60",
         conv.hasUnansweredMessage && "border-[#00a884]/50 bg-[#c7e9c0]/30 dark:bg-[#005c4b]/20",
         selected && "ring-2 ring-[#00a884]",
+        selectable && checked && "ring-2 ring-primary bg-primary/5",
       )}
     >
+      {selectable && (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 bg-background shadow",
+            checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+          )}
+        >
+          {checked && <Check className="h-3 w-3" />}
+        </span>
+      )}
       <div className="flex items-start gap-2">
         <Avatar className="h-9 w-9 shrink-0">
           {photoUrl ? <AvatarImage src={photoUrl} /> : null}
