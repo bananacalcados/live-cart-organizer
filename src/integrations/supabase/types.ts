@@ -5086,6 +5086,50 @@ export type Database = {
           },
         ]
       }
+      event_contact_lanes: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          lane: string
+          moved_at: string
+          moved_by: string | null
+          phone_key: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          lane?: string
+          moved_at?: string
+          moved_by?: string | null
+          phone_key: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          lane?: string
+          moved_at?: string
+          moved_by?: string | null
+          phone_key?: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_contact_lanes_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_crossell_offers: {
         Row: {
           created_at: string

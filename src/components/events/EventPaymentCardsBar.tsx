@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
 import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +19,8 @@ import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format } from "date-fns";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
-import { LiveNewContactsLane } from "@/components/events/LiveNewContactsLane";
+import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNewContactsLane";
+import { useEventContactLanes } from "@/hooks/useEventContactLanes";
 import { ptBR } from "date-fns/locale";
 
 interface EventPaymentCardsBarProps {
@@ -112,7 +113,6 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
 
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
   const [errorsOpen, setErrorsOpen] = useState(false);
-  const [newContactsCount, setNewContactsCount] = useState(0);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
   // Team-shared pinned conversations + checkout-link step per order.
@@ -143,6 +143,34 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
     return set;
   }, [orders]);
+
+  // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
+  const { contacts: linkContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
+    lanes ? eventId : null,
+    orderPhoneKeys,
+    search,
+  );
+  const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
+  const { newContacts, doubtContacts } = useMemo(() => {
+    const n: typeof linkContacts = [];
+    const d: typeof linkContacts = [];
+    for (const c of linkContacts) (laneMarks.get(c.key)?.lane === "doubts" ? d : n).push(c);
+    d.sort((a, b) => +new Date(laneMarks.get(b.key)?.movedAt || 0) - +new Date(laneMarks.get(a.key)?.movedAt || 0));
+    return { newContacts: n, doubtContacts: d };
+  }, [linkContacts, laneMarks]);
+
+  // Precedência: pedido (aguardando/pago) vence marcação manual → limpa a marca
+  // de quem ganhou pedido ativo para o card subir sozinho.
+  useEffect(() => {
+    if (!lanes || laneMarks.size === 0) return;
+    for (const o of orders) {
+      if (o.stage === "cancelled" || o.stage === "incomplete_order") continue;
+      const d = (o.customer?.whatsapp || "").replace(/\D/g, "");
+      const key = d.slice(-8);
+      if (key.length === 8 && laneMarks.get(key)?.lane === "doubts") clearLane(d);
+    }
+  }, [lanes, orders, laneMarks, clearLane]);
+
 
 
   const handleCardClick = (order: DbOrder) => {
@@ -399,11 +427,12 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
   };
 
-  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string) =>
-    list.length === 0 ? (
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: ReactNode) =>
+    list.length === 0 && !extra ? (
       <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
     ) : (
           <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {extra}
             {list.map((entry) => {
               const order = entry.rep;
               const group = entry.group;
@@ -643,16 +672,22 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               id="new-contacts"
               eventId={eventId}
               title="Novos contatos"
-              count={newContactsCount}
+              count={newContacts.length}
               tone="text-sky-500"
               icon={<UserPlus className="h-3.5 w-3.5 text-sky-500" />}
             >
               {eventId && (
-                <LiveNewContactsLane
+                <LiveContactCards
                   eventId={eventId}
-                  excludeKeys={orderPhoneKeys}
-                  search={search}
-                  onCountChange={setNewContactsCount}
+                  contacts={newContacts}
+                  variant="new"
+                  marks={laneMarks}
+                  loading={loadingContacts}
+                  onReload={reloadContacts}
+                  onMoveToDoubts={(c, reason) => {
+                    setLane(c.phone, "doubts", reason);
+                    toast.success("Movido para Dúvidas & cancelamentos");
+                  }}
                 />
               )}
             </LiveLaneSection>
@@ -683,11 +718,28 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               id="cancelled"
               eventId={eventId}
               title="Dúvidas & cancelamentos"
-              count={cancelledEntries.length}
+              count={cancelledEntries.length + doubtContacts.length}
               tone="text-muted-foreground"
               icon={<MessageSquareOff className="h-3.5 w-3.5 text-muted-foreground" />}
             >
-              {renderRow(cancelledEntries, false, "Nenhum pedido cancelado ou marcado como dúvida.")}
+              {renderRow(
+                cancelledEntries,
+                false,
+                "Nenhum pedido cancelado ou contato marcado como dúvida.",
+                eventId && doubtContacts.length > 0 ? (
+                  <LiveContactCards
+                    eventId={eventId}
+                    contacts={doubtContacts}
+                    variant="doubts"
+                    marks={laneMarks}
+                    inline
+                    onBackToNew={(c) => {
+                      clearLane(c.phone);
+                      toast.success("De volta para Novos contatos");
+                    }}
+                  />
+                ) : null,
+              )}
             </LiveLaneSection>
           </div>
         ) : (
