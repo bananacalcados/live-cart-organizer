@@ -33,23 +33,35 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // viaNumberId (opcional) sobrescreve a instância do evento
-    const { orderId, viaNumberId } = await req.json();
-    if (!orderId) return json({ error: "orderId required" }, 400);
+    // viaNumberId (opcional) sobrescreve a instância do evento.
+    // Modo CONTATO (sem pedido): informe eventId + phone (+ name opcional) —
+    // usado na linha "Novos contatos" da live para quem só digitou o WhatsApp.
+    const { orderId, viaNumberId, eventId: contactEventId, phone: contactPhone, name: contactName } = await req.json();
+    if (!orderId && !(contactEventId && contactPhone)) {
+      return json({ error: "orderId ou (eventId + phone) required" }, 400);
+    }
 
-    const { data: order } = await supabase
-      .from("orders")
-      .select("id, event_id, customer_id, products, cart_link, discount_type, discount_value")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (!order) return json({ error: "Pedido não encontrado" }, 404);
-    if (!order.event_id) return json({ error: "Pedido sem evento vinculado" }, 400);
-
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("id, instagram_handle, whatsapp")
-      .eq("id", order.customer_id)
-      .maybeSingle();
+    let order: any;
+    let customer: any;
+    if (orderId) {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, event_id, customer_id, products, cart_link, discount_type, discount_value")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (!data) return json({ error: "Pedido não encontrado" }, 404);
+      if (!data.event_id) return json({ error: "Pedido sem evento vinculado" }, 400);
+      order = data;
+      const { data: c } = await supabase
+        .from("customers")
+        .select("id, instagram_handle, whatsapp")
+        .eq("id", order.customer_id)
+        .maybeSingle();
+      customer = c;
+    } else {
+      order = { id: null, event_id: contactEventId, products: [], cart_link: null, discount_type: null, discount_value: null };
+      customer = { instagram_handle: contactName || null, whatsapp: contactPhone };
+    }
 
     const rawPhone = (customer?.whatsapp || "").replace(/\D/g, "");
     if (!rawPhone) return json({ error: "Cliente sem WhatsApp cadastrado" }, 400);
