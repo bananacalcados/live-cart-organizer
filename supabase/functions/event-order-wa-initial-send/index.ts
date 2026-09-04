@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     const igName = igHandle.startsWith("@") ? igHandle : `@${igHandle}`;
     const firstName = (igHandle.replace(/^@/, "").split(/[._\s]/)[0] || "").trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
-    const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
+    const checkoutLink = order.cart_link || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
 
     const memberAreaLink = variant.text.includes("{member_area_link}")
       ? await issueMagicLink(supabase, waPhone).catch(() => MEMBER_AREA_PUBLIC)
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       "{subtotal}": `R$${subtotal.toFixed(2)}`,
       "{discount}": `R$${discountAmount.toFixed(2)}`,
       "{total}": `R$${total.toFixed(2)}`,
-      "{order_id}": String(orderId).slice(0, 8),
+      "{order_id}": orderId ? String(orderId).slice(0, 8) : "",
     };
     const text = variant.text.replace(/\{[a-z_]+\}/g, (m) => (m in tokens ? tokens[m] : m)).trim();
 
@@ -185,7 +185,9 @@ Deno.serve(async (req) => {
       whatsapp_number_id: numberId,
       message_id: (sendResult as any)?.messageId || null,
     });
-    await supabase.from("orders").update({ last_sent_message_at: new Date().toISOString() }).eq("id", orderId);
+    if (orderId) {
+      await supabase.from("orders").update({ last_sent_message_at: new Date().toISOString() }).eq("id", orderId);
+    }
 
     return json({ success: true, via: num.label || provider, phone: waPhone, variant_index: idx, variants: variants.length });
   } catch (e) {
