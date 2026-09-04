@@ -145,6 +145,34 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     return set;
   }, [orders]);
 
+  // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
+  const { contacts: linkContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
+    lanes ? eventId : null,
+    orderPhoneKeys,
+    search,
+  );
+  const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
+  const { newContacts, doubtContacts } = useMemo(() => {
+    const n: typeof linkContacts = [];
+    const d: typeof linkContacts = [];
+    for (const c of linkContacts) (laneMarks.get(c.key)?.lane === "doubts" ? d : n).push(c);
+    d.sort((a, b) => +new Date(laneMarks.get(b.key)?.movedAt || 0) - +new Date(laneMarks.get(a.key)?.movedAt || 0));
+    return { newContacts: n, doubtContacts: d };
+  }, [linkContacts, laneMarks]);
+
+  // Precedência: pedido (aguardando/pago) vence marcação manual → limpa a marca
+  // de quem ganhou pedido ativo para o card subir sozinho.
+  useEffect(() => {
+    if (!lanes || laneMarks.size === 0) return;
+    for (const o of orders) {
+      if (o.stage === "cancelled" || o.stage === "incomplete_order") continue;
+      const d = (o.customer?.whatsapp || "").replace(/\D/g, "");
+      const key = d.slice(-8);
+      if (key.length === 8 && laneMarks.get(key)?.lane === "doubts") clearLane(d);
+    }
+  }, [lanes, orders, laneMarks, clearLane]);
+
+
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
