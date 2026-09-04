@@ -2256,7 +2256,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </DialogContent>
             </Dialog>
           </div>
-        ) : (
+          );
+          if (viewMode !== "lanes") return chatPanel;
+          // Visão em Linhas: o chat abre em janela por cima das linhas.
+          return (
+            <Dialog open onOpenChange={(o) => { if (!o) { setSelectedPhone(null); setSelectedConvKey(null); } }}>
+              <DialogContent className="max-w-5xl sm:max-w-5xl w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:z-20">
+                <div className="flex h-full w-full min-h-0 bg-background">{chatPanel}</div>
+              </DialogContent>
+            </Dialog>
+          );
+        })() : viewMode === "lanes" ? null : (
           <div className="relative hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
             <ProductArrivalCard
               arrived={waitlist.arrived}
