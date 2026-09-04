@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { QrCode, CreditCard, Check, X, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePixNotificationStore, type PixTab } from "@/stores/pixNotificationStore";
@@ -8,31 +8,41 @@ import { usePixNotificationStore, type PixTab } from "@/stores/pixNotificationSt
  * aguardando pagamento. Fica fixa no topo da área de chat, persiste ao trocar de
  * conversa. Aba paga AO VIVO fica piscando em verde até o operador clicar/descartar.
  */
+// Formatadores criados UMA vez (toLocale*String cria um Intl.DateTimeFormat a
+// cada chamada — com centenas de abas isso era o maior custo de cada clique).
+const TIME_FMT = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const DATE_FMT = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
+const dateLabelCache = new Map<string, { day: string; label: string }>();
+
 function formatTabDate(iso: string): string {
   try {
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    const cached = dateLabelCache.get(iso);
+    if (cached && cached.day === todayKey) return cached.label;
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
-    const now = new Date();
     const sameDay =
       d.getDate() === now.getDate() &&
       d.getMonth() === now.getMonth() &&
       d.getFullYear() === now.getFullYear();
-    const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    if (sameDay) return `Hoje ${time}`;
-    const date = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-    return `${date} ${time}`;
+    const time = TIME_FMT.format(d);
+    const label = sameDay ? `Hoje ${time}` : `${DATE_FMT.format(d)} ${time}`;
+    if (dateLabelCache.size > 2000) dateLabelCache.clear();
+    dateLabelCache.set(iso, { day: todayKey, label });
+    return label;
   } catch {
     return "";
   }
 }
 
-export function PixPendingTabsBar() {
+export const PixPendingTabsBar = memo(function PixPendingTabsBar() {
   const tabs = usePixNotificationStore((s) => s.tabs);
 
-  if (tabs.length === 0) return null;
+  const paidTabs = useMemo(() => tabs.filter((t) => t.status === "paid"), [tabs]);
+  const pendingTabs = useMemo(() => tabs.filter((t) => t.status !== "paid"), [tabs]);
 
-  const paidTabs = tabs.filter((t) => t.status === "paid");
-  const pendingTabs = tabs.filter((t) => t.status !== "paid");
+  if (tabs.length === 0) return null;
 
   return (
     <div className="flex flex-col bg-black/20 border-b border-white/10">
@@ -40,9 +50,9 @@ export function PixPendingTabsBar() {
       <TabsRow label="Aguardando" count={pendingTabs.length} tabs={pendingTabs} tone="text-amber-300" />
     </div>
   );
-}
+});
 
-function TabsRow({ label, count, tabs, tone }: { label: string; count: number; tabs: PixTab[]; tone: string }) {
+const TabsRow = memo(function TabsRow({ label, count, tabs, tone }: { label: string; count: number; tabs: PixTab[]; tone: string }) {
   const requestOpen = usePixNotificationStore((s) => s.requestOpen);
   const dismiss = usePixNotificationStore((s) => s.dismiss);
   const dismissMany = usePixNotificationStore((s) => s.dismissMany);
