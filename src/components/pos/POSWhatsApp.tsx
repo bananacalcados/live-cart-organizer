@@ -2462,6 +2462,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         onSkip={() => setShowSellerGate(false)}
       />
 
+      {/* Escolha da versão visual (só na 1ª vez neste aparelho, após escolher a vendedora) */}
+      <POSWhatsAppViewModeDialog
+        open={viewMode === null && !(showSellerGate && !selectedSellerId) && !showDashboard}
+        onChoose={(mode) => {
+          setViewMode(mode);
+          saveViewMode(storeId, mode);
+        }}
+      />
+
+
       {selectedSellerId && (
         <SellerTaskReminderPopup
           open={showTaskPopup}
