@@ -1,6 +1,6 @@
 import { QrCode, CreditCard, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePixNotificationStore } from "@/stores/pixNotificationStore";
+import { usePixNotificationStore, type PixTab } from "@/stores/pixNotificationStore";
 
 /**
  * Barra de "abas" (estilo aba de navegador do Chrome) que lista os PIX/checkout
