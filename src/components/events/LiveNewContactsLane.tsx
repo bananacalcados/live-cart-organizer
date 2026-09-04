@@ -318,7 +318,7 @@ export function LiveContactCards({
 }: LiveContactCardsProps) {
   const [chatOrder, setChatOrder] = useState<Order | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [prefill, setPrefill] = useState<{ phone: string; name?: string } | null>(null);
+  const [prefill, setPrefill] = useState<{ phone: string; name?: string; handle?: string } | null>(null);
   const [orderOpen, setOrderOpen] = useState(false);
   const [moving, setMoving] = useState<NewContact | null>(null);
   const [reason, setReason] = useState("");
@@ -327,7 +327,8 @@ export function LiveContactCards({
     markSeen(eventId, c.key);
     setChatOrder({
       id: `live-contact-${c.key}`,
-      instagramHandle: "",
+      instagramHandle: c.instagramHandle || "",
+      customerName: c.name || undefined,
       whatsapp: c.phone,
       products: [],
       stage: "new" as Order["stage"],
@@ -411,6 +412,9 @@ export function LiveContactCards({
           </span>
           <span className="truncate text-xs font-semibold">{c.name || "Novo contato"}</span>
         </div>
+        {c.instagramHandle && (
+          <span className="truncate text-[11px] text-white/60">@{c.instagramHandle.replace(/^@+/, "")}</span>
+        )}
         <span className="flex items-center gap-1 truncate text-[11px] text-white/70">
           <Phone className="h-3 w-3 shrink-0" />
           {formatPhone(c.phone)}
@@ -441,7 +445,7 @@ export function LiveContactCards({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setPrefill({ phone: c.phone, name: c.name || undefined });
+              setPrefill({ phone: c.phone, name: c.name || undefined, handle: c.instagramHandle || undefined });
               setOrderOpen(true);
             }}
             className="inline-flex items-center gap-1 rounded-md border border-sky-400/50 bg-sky-400/15 px-2 py-1 text-[10px] font-semibold text-sky-200 hover:bg-sky-400/25"
@@ -487,6 +491,7 @@ export function LiveContactCards({
           eventId={eventId}
           prefillWhatsapp={prefill.phone}
           prefillName={prefill.name}
+          prefillInstagram={prefill.handle}
         />
       )}
 
