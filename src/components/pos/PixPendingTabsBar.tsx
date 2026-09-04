@@ -1,6 +1,6 @@
 import { QrCode, CreditCard, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePixNotificationStore } from "@/stores/pixNotificationStore";
+import { usePixNotificationStore, type PixTab } from "@/stores/pixNotificationStore";
 
 /**
  * Barra de "abas" (estilo aba de navegador do Chrome) que lista os PIX/checkout
@@ -27,13 +27,32 @@ function formatTabDate(iso: string): string {
 
 export function PixPendingTabsBar() {
   const tabs = usePixNotificationStore((s) => s.tabs);
-  const requestOpen = usePixNotificationStore((s) => s.requestOpen);
-  const dismiss = usePixNotificationStore((s) => s.dismiss);
 
   if (tabs.length === 0) return null;
 
+  const paidTabs = tabs.filter((t) => t.status === "paid");
+  const pendingTabs = tabs.filter((t) => t.status !== "paid");
+
   return (
-    <div className="flex items-end gap-1.5 px-2 pt-1.5 overflow-x-auto bg-black/20 border-b border-white/10 scrollbar-thin">
+    <div className="flex flex-col bg-black/20 border-b border-white/10">
+      <TabsRow label="Pagos" count={paidTabs.length} tabs={paidTabs} tone="text-emerald-300" />
+      <TabsRow label="Aguardando" count={pendingTabs.length} tabs={pendingTabs} tone="text-amber-300" />
+    </div>
+  );
+}
+
+function TabsRow({ label, count, tabs, tone }: { label: string; count: number; tabs: PixTab[]; tone: string }) {
+  const requestOpen = usePixNotificationStore((s) => s.requestOpen);
+  const dismiss = usePixNotificationStore((s) => s.dismiss);
+
+  return (
+    <div className="flex items-end gap-1.5 px-2 pt-1.5 overflow-x-auto scrollbar-thin border-b border-white/5 last:border-b-0">
+      <span className={cn("shrink-0 self-center mr-1 text-[10px] font-bold uppercase tracking-wide", tone)}>
+        {label} <span className="opacity-80">({count})</span>
+      </span>
+      {tabs.length === 0 && (
+        <span className="self-center pb-1 text-[11px] text-zinc-400">Nenhum</span>
+      )}
       {tabs.map((tab) => {
         const paid = tab.status === "paid";
         const Icon = tab.type === "checkout" ? CreditCard : QrCode;

@@ -346,7 +346,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
   requestOpen: (phone, numberId) => set({ openRequest: { phone, numberId } }),
   clearOpenRequest: () => set({ openRequest: null }),
 
-  dismiss: (saleId) =>
+  dismiss: (saleId) => {
     set((s) => {
       const dismissed = new Set(s._dismissed);
       dismissed.add(saleId);
@@ -356,7 +356,18 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         tabs: s.tabs.filter((t) => t.saleId !== saleId),
         paidAlert: s.paidAlert?.saleId === saleId ? null : s.paidAlert,
       };
-    }),
+    });
+    // Fechar = encerrar o acompanhamento no SERVIDOR: apaga a linha da fila
+    // (chat_awaiting_payment) para o card sumir em todos os aparelhos/usuários
+    // e nunca mais voltar. A venda em si (pos_sales) não é alterada.
+    supabase
+      .from("chat_awaiting_payment")
+      .delete()
+      .eq("sale_id", saleId)
+      .then(({ error }) => {
+        if (error) console.error("[pix-notifications] dismiss delete error:", error);
+      });
+  },
 
   clearPaidAlert: () => set({ paidAlert: null }),
 }));
