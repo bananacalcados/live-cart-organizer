@@ -119,13 +119,13 @@ export function POSWhatsAppLanes({
       out[lane].push(conv);
     }
 
-    // Ordenação: Não lidas / Novas / Follow Up — mais antigas primeiro (quem espera há mais tempo);
+    // Ordenação: Novas / Não lidas / Follow Up — mais antigas primeiro (quem espera há mais tempo);
     // demais — mais recentes primeiro.
     const asc = (a: Conversation, b: Conversation) => a.lastMessageAt.getTime() - b.lastMessageAt.getTime();
     const desc = (a: Conversation, b: Conversation) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
     out.new.sort(asc);
     out.unread.sort(asc);
-    out.followup.sort(desc);
+    out.followup.sort(asc);
     out.live.sort(desc);
     out.support.sort(desc);
     out.finished.sort(desc);
@@ -133,17 +133,83 @@ export function POSWhatsAppLanes({
     return { out, graceLeft, manual };
   }, [conversations, now, q, contactNames, liveStageMap, hasActiveSupport, finishedAtByPhone, getManualLane]);
 
+  // Etapa 3 — contadores no topo + atalhos de teclado.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [expandSignal, setExpandSignal] = useState<Record<ChatLane, number>>({ new: 0, unread: 0, followup: 0, live: 0, support: 0, finished: 0 });
+  const laneDomId = (lane: ChatLane) => `pos-wa-lane-${storeId}-${lane}`;
+  const jumpToLane = (lane: ChatLane) => {
+    setExpandSignal((s) => ({ ...s, [lane]: s[lane] + 1 }));
+    requestAnimationFrame(() => {
+      document.getElementById(laneDomId(lane))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      // Atalhos só valem com a tela de linhas em foco (sem diálogo aberto).
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (e.key === "Escape" && typing && target === searchRef.current) {
+        onSearchChange("");
+        searchRef.current?.blur();
+        return;
+      }
+      if (typing) return;
+      const idx = Number(e.key) - 1;
+      if (idx >= 0 && idx < CHAT_LANE_ORDER.length) {
+        e.preventDefault();
+        jumpToLane(CHAT_LANE_ORDER[idx]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, onSearchChange]);
+
+  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished").reduce((n, l) => n + lanes.out[l].length, 0);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-border/50 bg-background/60 px-2 py-1.5">
+      <div className="flex flex-col gap-1.5 border-b border-border/50 bg-background/60 px-2 py-1.5">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchRef}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar por nome, telefone ou mensagem…"
+            placeholder="Buscar por nome, telefone ou mensagem…  (atalho: /)"
             className="h-8 pl-7 text-xs"
           />
+        </div>
+        <div className="flex flex-wrap items-center gap-1" aria-label="Contadores por linha">
+          <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            {totalActive} em atendimento
+          </span>
+          {CHAT_LANE_ORDER.map((lane, i) => {
+            const meta = CHAT_LANE_META[lane];
+            const n = lanes.out[lane].length;
+            return (
+              <button
+                key={lane}
+                type="button"
+                onClick={() => jumpToLane(lane)}
+                title={`${meta.title} — atalho ${i + 1}`}
+                className={`flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-semibold transition-colors hover:bg-muted ${n > 0 ? meta.tone : "text-muted-foreground/60"}`}
+              >
+                {LANE_ICON[lane]}
+                <span className="uppercase tracking-wide">{meta.title}</span>
+                <span className="rounded-full bg-current/10 px-1.5 text-current">{n}</span>
+                <kbd className="ml-0.5 hidden rounded border border-border/60 px-1 text-[9px] font-mono text-muted-foreground md:inline">{i + 1}</kbd>
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
@@ -153,6 +219,8 @@ export function POSWhatsAppLanes({
           return (
             <LaneSection
               key={lane}
+              id={laneDomId(lane)}
+              expandSignal={expandSignal[lane]}
               storageKey={`pos-wa-lane-collapsed:${storeId}:${lane}`}
               title={meta.title}
               count={items.length}
