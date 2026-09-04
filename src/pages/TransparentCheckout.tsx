@@ -1001,6 +1001,20 @@ export default function TransparentCheckout() {
     })();
   }, [orderData]);
 
+  // Auditoria dos passos de pagamento no checkout por link (best-effort).
+  const trackStep = useCallback(
+    (eventType: string, data?: Record<string, unknown>) => {
+      const oid = orderData?.id || orderId;
+      if (!oid) return;
+      void cpTrackPaymentStep(oid, eventType, {
+        phone: customerForm.whatsapp,
+        ...(data || {}),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orderData?.id, orderId, customerForm.whatsapp],
+  );
+
   // Recalcula o pedido local quando itens de crossell são adicionados/removidos
   const handleCrossellCartChanged = useCallback((products: any[]) => {
     setOrderData((prev) => {
