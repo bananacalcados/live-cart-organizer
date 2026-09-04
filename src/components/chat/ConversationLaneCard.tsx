@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Users, Radio, Timer, Pin } from "lucide-react";
+import { Users, Radio, Timer, Pin, CheckCircle2 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,6 +21,8 @@ interface ConversationLaneCardProps {
   manualMark?: boolean;
   /** Menu de ações (ex.: Transferir etapa), renderizado no canto do card. */
   menu?: ReactNode;
+  /** Botão "Finalizar" no rodapé do card (oculto quando ausente). */
+  onFinish?: () => void;
   onClick: () => void;
 }
 
@@ -52,6 +54,7 @@ export function ConversationLaneCard({
   graceMsLeft,
   manualMark,
   menu,
+  onFinish,
   onClick,
 }: ConversationLaneCardProps) {
   const name = conv.customerName || contactName || conv.phone;
@@ -147,6 +150,19 @@ export function ConversationLaneCard({
           </span>
         )}
       </div>
+      {onFinish && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFinish();
+          }}
+          className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-border/60 bg-background/60 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-[#00a884]/50 hover:bg-[#00a884]/10 hover:text-[#017561] dark:hover:text-[#25d366]"
+          title="Finalizar conversa"
+        >
+          <CheckCircle2 className="h-3 w-3" /> Finalizar conversa
+        </button>
+      )}
     </div>
   );
 }

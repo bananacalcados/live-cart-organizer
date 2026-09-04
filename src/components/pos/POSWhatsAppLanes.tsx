@@ -97,7 +97,9 @@ export function POSWhatsAppLanes({
         if (!hay.includes(q)) continue;
       }
       const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
-      const manualLane = conv.isFinished ? null : (getManualLane?.(conv.phone, conv.whatsapp_number_id) || null);
+      // Marcação manual vale mesmo para finalizadas: mover tira da linha Finalizadas
+      // (o servidor apaga a marcação quando a conversa é finalizada de novo).
+      const manualLane = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
       if (manualLane) manual.add(key);
       const lane = classifyConversationLane({
         conv,
@@ -186,6 +188,7 @@ export function POSWhatsAppLanes({
                             onClearManual={onClearManualLane ? () => onClearManualLane(conv) : undefined}
                           />
                         ) : null}
+                        onFinish={onFinishLane && lane !== "finished" && !conv.isGroup ? () => onFinishLane(conv) : undefined}
                         onClick={() => onSelectConversation(conv.phone, conv.whatsapp_number_id)}
                       />
                     );

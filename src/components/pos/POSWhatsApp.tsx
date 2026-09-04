@@ -4,7 +4,7 @@ import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, Phone
 import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
 import { useChatConversationLanes, type ManualChatLane } from "@/hooks/useChatConversationLanes";
-import { CHAT_LANE_META } from "@/lib/chat/conversationLanes";
+import { CHAT_LANE_META, laneAutoKey } from "@/lib/chat/conversationLanes";
 import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
@@ -163,10 +164,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     (phone: string, numberId?: string | null) => laneMarks.getMark(phone, numberId)?.lane ?? null,
     [laneMarks],
   );
-  const moveConversationLane = useCallback(async (phone: string, numberId: string | null | undefined, lane: ManualChatLane) => {
-    await laneMarks.setLane(phone, numberId, lane);
-    toast.success(`Movida para ${CHAT_LANE_META[lane].title}`);
-  }, [laneMarks]);
 
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
@@ -198,6 +195,24 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Conversation enrichment (finished/archived/etc.) — declared early so the
   // live ghost-row memo below can exclude finalized/archived phones.
   const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer, ensureFinished } = useConversationEnrichment();
+
+  // Mover para outra linha. Se a conversa estava Finalizada, reabre primeiro
+  // (para todas as atendentes) — senão a marcação manual seria ignorada.
+  const moveConversationLane = useCallback(async (phone: string, numberId: string | null | undefined, lane: ManualChatLane) => {
+    const wasFinished = finishedAtByPhone.has(laneAutoKey(phone));
+    if (wasFinished) {
+      try {
+        await reopenConversation(phone);
+        setConversations(prev => prev.map(c => laneAutoKey(c.phone) === laneAutoKey(phone) ? { ...c, isFinished: false } : c));
+      } catch (e) {
+        console.warn("[moveConversationLane] reopen failed", e);
+        toast.error("Não foi possível reabrir a conversa finalizada");
+        return;
+      }
+    }
+    await laneMarks.setLane(phone, numberId, lane);
+    toast.success(`Movida para ${CHAT_LANE_META[lane].title}`);
+  }, [laneMarks, finishedAtByPhone, reopenConversation]);
 
 
 
@@ -1974,6 +1989,36 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 );
               })() : selectedChannel === "messenger" ? (
                 <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">💬 Messenger</Badge>
+              ) : conversationBoundNumber && viewMode === "lanes" && !selectedConversation?.isGroup ? (
+                // Visão em Linhas: permite espiar o histórico desta pessoa em OUTRA instância
+                // enquanto a janela estiver aberta. O card na tela principal não muda —
+                // ao fechar a janela a seleção é descartada.
+                <Select
+                  value={conversationBoundNumber.id}
+                  onValueChange={(id) => {
+                    setSelectedConvNumberId(id);
+                    const n = metaNumbers.find((number) => number.id === id);
+                    setSelectedSendNumberId(storeNumbers.some((number) => number.id === id) ? id : null);
+                    if (n) setSendVia(n.provider === 'meta' ? 'meta' : 'zapi');
+                    loadMessages(selectedPhone, id);
+                  }}
+                >
+                  <SelectTrigger
+                    className="h-7 w-auto max-w-[190px] gap-1 rounded-full border-0 bg-[#00a884] px-2 text-[10px] font-medium text-white shadow-none focus:ring-0 [&>svg]:text-white"
+                    title="Instância da conversa — troque para ver o histórico em outra instância (só nesta janela)"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200]">
+                    {metaNumbers
+                      .filter((n) => n.provider !== 'instagram' && n.provider !== 'messenger')
+                      .map((n) => (
+                        <SelectItem key={n.id} value={n.id} className="text-xs">
+                          {n.label}{n.id === selectedConvKey?.split('__')[1] ? ' (original)' : ''}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               ) : conversationBoundNumber ? (
                 <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium flex-shrink-0" title="Instância da conversa">
                   {conversationBoundNumber.label}

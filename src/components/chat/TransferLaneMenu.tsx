@@ -1,4 +1,4 @@
-import { ArrowDownUp, Check, RotateCcw, Sparkles, MailWarning, Clock, Headphones, CheckCircle2 } from "lucide-react";
+import { ArrowDownUp, Check, RotateCcw, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ const OPTIONS: { lane: ManualChatLane; icon: JSX.Element }[] = [
   { lane: "new", icon: <Sparkles className="h-3.5 w-3.5 text-emerald-500" /> },
   { lane: "unread", icon: <MailWarning className="h-3.5 w-3.5 text-amber-500" /> },
   { lane: "followup", icon: <Clock className="h-3.5 w-3.5 text-sky-500" /> },
+  { lane: "live", icon: <Radio className="h-3.5 w-3.5 text-fuchsia-500" /> },
   { lane: "support", icon: <Headphones className="h-3.5 w-3.5 text-orange-500" /> },
 ];
 
