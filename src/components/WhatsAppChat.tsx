@@ -1409,11 +1409,32 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cfc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
+        {!isLoading && (
+          <div className="flex justify-center mb-2">
+            {archiveExhausted ? (
+              archivedMessages.length > 0 && (
+                <span className="bg-white/70 text-gray-500 text-[11px] px-3 py-1 rounded-full shadow-sm">
+                  Início do histórico arquivado
+                </span>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={loadArchivedMessages}
+                disabled={isLoadingArchive}
+                className="inline-flex items-center gap-1.5 bg-white/90 hover:bg-white text-[#075E54] text-xs font-medium px-3 py-1.5 rounded-full shadow-sm disabled:opacity-60"
+              >
+                {isLoadingArchive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                {archivedMessages.length > 0 ? 'Ler mais msgs antigas' : 'Ler msgs antigas'}
+              </button>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-[#075E54]" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : displayMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="bg-white/80 rounded-lg px-6 py-4 shadow-sm">
               <p className="text-sm text-gray-600">Nenhuma mensagem ainda</p>
@@ -1422,9 +1443,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           </div>
         ) : (
           <div className="space-y-1">
-            {messages.map((msg, index) => {
+            {displayMessages.map((msg, index) => {
               const showDate = index === 0 || 
-                new Date(msg.created_at).toDateString() !== new Date(messages[index - 1].created_at).toDateString();
+                new Date(msg.created_at).toDateString() !== new Date(displayMessages[index - 1].created_at).toDateString();
               
               return (
                 <div key={msg.id}>
