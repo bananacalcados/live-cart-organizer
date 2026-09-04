@@ -54,7 +54,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [stats, setStats] = useState<{ matched: number; withFb: number } | null>(null);
+  const [stats, setStats] = useState<{ confirmed: number; matched: number; withFb: number } | null>(null);
 
   const [slug, setSlug] = useState("");
   const [waId, setWaId] = useState<string>("none");
@@ -90,12 +90,16 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
         setText(data.message_text || "");
         const { data: clicks } = await (supabase as any)
           .from("live_whatsapp_clicks")
-          .select("phone, fbc, fbp")
+          .select("phone, fbc, fbp, entered_phone")
           .eq("link_id", data.id)
-          .not("phone", "is", null);
+          .or("phone.not.is.null,entered_phone.not.is.null");
         if (!cancelled) {
           const arr = (clicks || []) as any[];
-          setStats({ matched: arr.length, withFb: arr.filter((c) => c.fbc || c.fbp).length });
+          setStats({
+            confirmed: arr.filter((c) => c.entered_phone).length,
+            matched: arr.filter((c) => c.phone).length,
+            withFb: arr.filter((c) => c.phone && (c.fbc || c.fbp)).length,
+          });
         }
       } else {
         setSlug(slugify(eventName) || `live-${eventId.slice(0, 6)}`);
@@ -235,7 +239,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
             <MousePointerClick className="h-3 w-3" /> {row.click_count} cliques
             {stats && (
               <>
-                {" · "}{stats.matched} chegaram no WhatsApp{" · "}{stats.withFb} com fbc/fbp
+                {" · "}{stats.confirmed} digitaram o telefone{" · "}{stats.matched} chegaram no WhatsApp{" · "}{stats.withFb} com fbc/fbp
               </>
             )}
           </p>
