@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3 } from "lucide-react";
+import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
+import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -150,6 +152,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
   const [showTaskPopup, setShowTaskPopup] = useState(false);
+  // Versão visual do atendimento (Tradicional x Linhas), lembrada no aparelho por loja.
+  const [viewMode, setViewMode] = useState<POSWhatsAppViewMode | null>(() => readViewMode(storeId));
 
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
@@ -1667,6 +1671,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
             />
           )}
+          {/* Versão visual: Tradicional x Linhas */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+            onClick={() => {
+              const next = viewMode === "lanes" ? "classic" : "lanes";
+              setViewMode(next);
+              saveViewMode(storeId, next);
+              setTeamChatActive(false);
+            }}
+            title={viewMode === "lanes" ? "Mudar para a versão Tradicional" : "Mudar para a versão em Linhas"}
+          >
+            {viewMode === "lanes" ? <Columns2 className="h-4 w-4" /> : <Rows3 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{viewMode === "lanes" ? "Tradicional" : "Linhas"}</span>
+          </Button>
           {/* Attendant switcher */}
           <Button
             variant="ghost"
@@ -1749,7 +1769,28 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <PixPaidGlobalAlert />
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
-        {/* Conversation List */}
+        {/* Visão em Linhas (etapas de atendimento) */}
+        {viewMode === "lanes" && !teamChatActive ? (
+          <div className="flex-1 min-w-0 min-h-0">
+            <POSWhatsAppLanes
+              storeId={storeId}
+              conversations={multiInstanceFilter.length > 0
+                ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+                : mergedConversationsFlagged}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSelectConversation={handleSelectConversation}
+              selectedConversationKey={selectedConvKey}
+              contactPhotos={contactPhotos}
+              contactNames={chatContacts}
+              igUsernameById={igUsernameById}
+              getAssignedName={getAssignedName}
+              liveStageMap={liveStageByPhone}
+              hasActiveSupport={hasActiveSupport}
+              finishedAtByPhone={finishedAtByPhone}
+            />
+          </div>
+        ) : (
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
           (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
@@ -1828,11 +1869,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             }}
           />
         </div>
+        )}
 
         {/* Team Chat Panel takes precedence */}
         {teamChatActive ? (
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
-        ) : selectedPhone ? (
+        ) : selectedPhone ? (() => {
+          const chatPanel = (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
             <ProductArrivalCard
               arrived={waitlist.arrived}
@@ -2256,7 +2299,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </DialogContent>
             </Dialog>
           </div>
-        ) : (
+          );
+          if (viewMode !== "lanes") return chatPanel;
+          // Visão em Linhas: o chat abre em janela por cima das linhas.
+          return (
+            <Dialog open onOpenChange={(o) => { if (!o) { setSelectedPhone(null); setSelectedConvKey(null); } }}>
+              <DialogContent className="max-w-5xl sm:max-w-5xl w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:hidden">
+                <div className="flex h-full w-full min-h-0 bg-background">{chatPanel}</div>
+              </DialogContent>
+            </Dialog>
+          );
+        })() : viewMode === "lanes" ? null : (
           <div className="relative hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
             <ProductArrivalCard
               arrived={waitlist.arrived}
@@ -2408,6 +2461,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         }}
         onSkip={() => setShowSellerGate(false)}
       />
+
+      {/* Escolha da versão visual (só na 1ª vez neste aparelho, após escolher a vendedora) */}
+      <POSWhatsAppViewModeDialog
+        open={viewMode === null && !(showSellerGate && !selectedSellerId) && !showDashboard}
+        onChoose={(mode) => {
+          setViewMode(mode);
+          saveViewMode(storeId, mode);
+        }}
+      />
+
 
       {selectedSellerId && (
         <SellerTaskReminderPopup
