@@ -2304,7 +2304,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           // Visão em Linhas: o chat abre em janela por cima das linhas.
           return (
             <Dialog open onOpenChange={(o) => { if (!o) { setSelectedPhone(null); setSelectedConvKey(null); } }}>
-              <DialogContent className="max-w-5xl sm:max-w-5xl w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:z-20">
+              <DialogContent className="max-w-5xl sm:max-w-5xl w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:hidden">
                 <div className="flex h-full w-full min-h-0 bg-background">{chatPanel}</div>
               </DialogContent>
             </Dialog>
