@@ -19,7 +19,8 @@ import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format } from "date-fns";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
-import { LiveNewContactsLane } from "@/components/events/LiveNewContactsLane";
+import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNewContactsLane";
+import { useEventContactLanes } from "@/hooks/useEventContactLanes";
 import { ptBR } from "date-fns/locale";
 
 interface EventPaymentCardsBarProps {
