@@ -24,6 +24,12 @@ interface EventPaymentCardsBarProps {
   orders: DbOrder[];
   /** Mantido por compatibilidade — abrir pedido (não usado no clique principal). */
   onSelectOrder?: (order: DbOrder) => void;
+  /** Modo "linhas de etapa" (lives em modo WhatsApp): 4 linhas visíveis ao mesmo tempo. */
+  lanes?: boolean;
+  /** Evento atual (necessário no modo linhas quando ainda não há pedidos). */
+  eventId?: string | null;
+  /** Busca da aba Pedidos, aplicada também à linha de novos contatos. */
+  search?: string;
 }
 
 type PayFilter = "awaiting" | "paid" | "errors";
@@ -91,7 +97,7 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  * instância em que a conversa aconteceu (mesma da mensagem inicial da live),
  * e não o modal de pedido.
  */
-export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
+export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdProp = null, search }: EventPaymentCardsBarProps) {
   const [filter, setFilter] = useState<PayFilter>("awaiting");
   // Aviso rápido para a apresentadora (aparece como modal no Painel da Apresentadora)
   const [presenterMsgOpen, setPresenterMsgOpen] = useState(false);
@@ -114,7 +120,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
   // Agrupamento por cliente (aba Pagos) + unificação de pedidos.
   const { fetchOrdersByEvent } = useDbOrderStore();
-  const eventId = orders[0] ? (orders[0] as any).event_id : null;
+  const eventId = orders[0] ? (orders[0] as any).event_id : eventIdProp;
   const refreshOrders = useCallback(() => {
     if (eventId) fetchOrdersByEvent(eventId);
   }, [eventId, fetchOrdersByEvent]);
@@ -193,8 +199,8 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   }, [orderIds]);
 
   useEffect(() => {
-    if (filter === "errors") loadErrors();
-  }, [filter, loadErrors]);
+    if (filter === "errors" || lanes) loadErrors();
+  }, [filter, lanes, loadErrors]);
 
   // ── Load team-shared pins for the currently listed orders ──
   const loadPins = useCallback(async () => {
@@ -297,7 +303,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
   const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
   useEffect(() => {
-    if (filter !== "paid") return;
+    if (filter !== "paid" && !lanes) return;
     const ids = paidIds ? paidIds.split(",") : [];
     if (ids.length === 0) { setPaidRegs({}); return; }
     let cancelled = false;
@@ -315,7 +321,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
       if (!cancelled) setPaidRegs(map);
     })();
     return () => { cancelled = true; };
-  }, [filter, paidIds]);
+  }, [filter, lanes, paidIds]);
 
   // Entradas da aba Pagos: cada entrada é um cliente (1+ pedidos agrupados).
   const paidEntries = useMemo(() => {
@@ -335,6 +341,17 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   }, [paid, paidRegs]);
 
   type CardEntry = { rep: DbOrder; group: DbOrder[] };
+
+  // Linha "Dúvidas & Cancelamentos": por enquanto, pedidos cancelados do evento.
+  const cancelledEntries: CardEntry[] = useMemo(
+    () =>
+      orders
+        .filter((o) => o.stage === "cancelled")
+        .sort((a, b) => +new Date(b.updated_at || b.created_at) - +new Date(a.updated_at || a.created_at))
+        .map((o) => ({ rep: o, group: [o] })),
+    [orders],
+  );
+  const awaitingEntries: CardEntry[] = useMemo(() => awaiting.map((o) => ({ rep: o, group: [o] })), [awaiting]);
   const cards: CardEntry[] =
     filter === "paid"
       ? paidEntries
@@ -365,8 +382,57 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     }
   };
 
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string) =>
+    list.length === 0 ? (
+      <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
+    ) : (
+          <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {list.map((entry) => {
+              const order = entry.rep;
+              const group = entry.group;
+              const isGroup = group.length > 1;
+              const groupMerged = isGroup && group.some((o) => o.merged_into_order_id);
+              // Card precisa de unificação: cliente com 2+ pedidos pagos,
+              // ainda não unificados e com o MESMO endereço de entrega.
+              const needsUnify =
+                paidCard && isGroup && !groupMerged && sameShippingAddress(group, paidRegs);
+              const name = order.customer?.instagram_handle?.trim() || "Sem nome";
+              const phone = formatPhone(order.customer?.whatsapp);
+              const value = isGroup
+                ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
+                : getOrderFinalValue(order);
+              // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
+              const unread = !paidCard && !!order.has_unread_messages;
+              const isPinned = pinnedIds.has(order.id);
+              // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
+              const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
+              const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
+              const onCardClick = () => {
+                if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
+                else handleCardClick(order);
+              };
+              return (
+                <div
+                  key={order.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={onCardClick}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onCardClick(); }}
+                  title={isGroup ? "Ver todos os pedidos deste cliente" : unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
+                  className={cn(
+                    "group relative flex flex-col gap-1 min-w-[210px] max-w-[250px] min-h-[104px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0 cursor-pointer",
+                    paidCard
+                      ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
+                      : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
+                    unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
+                    isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
+                    isGroup && !needsUnify && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+                    // Precisa unificar → anel âmbar pulsante para chamar atenção.
+                    needsUnify && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background animate-pulse",
+    );
+
   return (
-    <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
+    <div className={cn(lanes ? "border-b border-border/40 bg-background" : "sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40")}>
       <div className="container py-2">
         {/* Aviso para a apresentadora */}
 
