@@ -328,7 +328,6 @@ export function LiveContactCards({
     setChatOrder({
       id: `live-contact-${c.key}`,
       instagramHandle: c.instagramHandle || "",
-      customerName: c.name || undefined,
       whatsapp: c.phone,
       products: [],
       stage: "new" as Order["stage"],
