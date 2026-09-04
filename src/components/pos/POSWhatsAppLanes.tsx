@@ -3,6 +3,8 @@ import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2 }
 import { Input } from "@/components/ui/input";
 import { LaneSection } from "@/components/chat/LaneSection";
 import { ConversationLaneCard } from "@/components/chat/ConversationLaneCard";
+import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
+import type { ManualChatLane } from "@/hooks/useChatConversationLanes";
 import type { Conversation } from "@/components/chat/ChatTypes";
 import {
   CHAT_LANE_META,
@@ -27,8 +29,11 @@ interface POSWhatsAppLanesProps {
   liveStageMap?: Record<string, { stageTitle: string; eventName?: string }>;
   hasActiveSupport?: (phone: string) => boolean;
   finishedAtByPhone?: Map<string, string>;
-  /** Marcações manuais (Etapa 2). Chave = conversationKey. */
-  manualLanes?: Map<string, ChatLane>;
+  /** Marcação manual da conversa (Etapa 2). */
+  getManualLane?: (phone: string, whatsappNumberId?: string | null) => ChatLane | null;
+  onMoveLane?: (conv: Conversation, lane: ManualChatLane) => void;
+  onFinishLane?: (conv: Conversation) => void;
+  onClearManualLane?: (conv: Conversation) => void;
 }
 
 const LANE_ICON: Record<ChatLane, JSX.Element> = {
@@ -61,7 +66,10 @@ export function POSWhatsAppLanes({
   liveStageMap = {},
   hasActiveSupport,
   finishedAtByPhone,
-  manualLanes,
+  getManualLane,
+  onMoveLane,
+  onFinishLane,
+  onClearManualLane,
 }: POSWhatsAppLanesProps) {
   // Tick de 30s só para reavaliar a janela de 5 min (sem consulta ao banco).
   const [now, setNow] = useState(() => Date.now());
@@ -79,6 +87,7 @@ export function POSWhatsAppLanes({
   const lanes = useMemo(() => {
     const out: Record<ChatLane, Conversation[]> = { new: [], unread: [], followup: [], live: [], support: [], finished: [] };
     const graceLeft = new Map<string, number>();
+    const manual = new Set<string>();
     const prev = previousLaneRef.current;
 
     for (const conv of conversations) {
@@ -88,13 +97,15 @@ export function POSWhatsAppLanes({
         if (!hay.includes(q)) continue;
       }
       const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
+      const manualLane = conv.isFinished ? null : (getManualLane?.(conv.phone, conv.whatsapp_number_id) || null);
+      if (manualLane) manual.add(key);
       const lane = classifyConversationLane({
         conv,
         now,
         isLive: !!liveStageMap[conv.phone],
         hasSupport: !!hasActiveSupport?.(conv.phone),
         finishedAt: finishedAtByPhone?.get(laneAutoKey(conv.phone)) || null,
-        manualLane: manualLanes?.get(key) || null,
+        manualLane,
         previousLane: prev.get(key) || null,
       });
       // Atualiza memória: só guardamos linhas "de origem" reais.
@@ -117,8 +128,8 @@ export function POSWhatsAppLanes({
     out.support.sort(desc);
     out.finished.sort(desc);
     out.finished = out.finished.slice(0, FINISHED_LIMIT);
-    return { out, graceLeft };
-  }, [conversations, now, q, contactNames, liveStageMap, hasActiveSupport, finishedAtByPhone, manualLanes]);
+    return { out, graceLeft, manual };
+  }, [conversations, now, q, contactNames, liveStageMap, hasActiveSupport, finishedAtByPhone, getManualLane]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -164,6 +175,17 @@ export function POSWhatsAppLanes({
                         igUsername={conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] : null}
                         liveStage={liveStageMap[conv.phone] || null}
                         graceMsLeft={lanes.graceLeft.get(key)}
+                        manualMark={lanes.manual.has(key)}
+                        menu={onMoveLane && !conv.isGroup ? (
+                          <TransferLaneMenu
+                            variant="icon"
+                            currentLane={lane}
+                            hasManualMark={lanes.manual.has(key)}
+                            onMove={(l) => onMoveLane(conv, l)}
+                            onFinish={onFinishLane && lane !== "finished" ? () => onFinishLane(conv) : undefined}
+                            onClearManual={onClearManualLane ? () => onClearManualLane(conv) : undefined}
+                          />
+                        ) : null}
                         onClick={() => onSelectConversation(conv.phone, conv.whatsapp_number_id)}
                       />
                     );
