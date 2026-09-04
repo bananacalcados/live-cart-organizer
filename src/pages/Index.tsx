@@ -376,7 +376,7 @@ const Index = () => {
 
             </div>
 
-            {isWhatsAppMode && currentEventId && (
+            {isWhatsAppMode && attendanceEnabled && currentEventId && (
               <TabsContent value="attendance" className="-mx-4 md:-mx-6">
                 <LiveAttendanceCenter
                   eventId={currentEventId}
