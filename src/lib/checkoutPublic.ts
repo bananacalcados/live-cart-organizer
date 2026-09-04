@@ -73,3 +73,12 @@ export async function cpUpsertRegistration(registration: Record<string, unknown>
   return call<{ ok: boolean }>("registration_upsert", { registration });
 }
 
+/** Auditoria dos passos de pagamento no checkout por link (best-effort). */
+export async function cpTrackPaymentStep(
+  orderId: string,
+  eventType: string,
+  data?: Record<string, unknown>,
+) {
+  return call<{ ok: boolean }>("track_payment_step", { orderId, eventType, ...(data || {}) });
+}
+

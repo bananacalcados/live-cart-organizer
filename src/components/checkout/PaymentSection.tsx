@@ -478,8 +478,30 @@ function CardPaymentForm({
   const [installments, setInstallments] = useState("1");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const processingRef = useRef(false);
   const attemptIdRef = useRef<string | null>(null);
+  const cardNameRef = useRef<HTMLInputElement>(null);
+  const cardNumberRef = useRef<HTMLInputElement>(null);
+  const expiryRef = useRef<HTMLInputElement>(null);
+  const cvvRef = useRef<HTMLInputElement>(null);
+
+  // ── Validação visível dos campos do cartão ────────────────────────────
+  const isCardNameValid = cardName.trim().length >= 2;
+  const isCardNumberValid = cardNumber.replace(/\D/g, "").length >= 13;
+  const expiryDigits = expiry.replace(/\D/g, "");
+  const isExpiryValid =
+    expiryDigits.length === 4 && Number(expiryDigits.slice(0, 2)) >= 1 && Number(expiryDigits.slice(0, 2)) <= 12;
+  const isCvvValid = cvv.replace(/\D/g, "").length >= 3;
+  const missingFields = [
+    !isCardNameValid && "nome no cartão",
+    !isCardNumberValid && "número do cartão",
+    !isExpiryValid && "validade",
+    !isCvvValid && "CVV",
+  ].filter(Boolean) as string[];
+  const formComplete = missingFields.length === 0;
+  const errClass = (ok: boolean) =>
+    !ok && showFieldErrors ? "border-destructive focus-visible:ring-destructive" : "";
 
   // Propagate processing state to parent for full-screen overlay
   useEffect(() => {
@@ -616,22 +638,37 @@ function CardPaymentForm({
 
 
   const handleSubmit = async () => {
+    // Registra SEMPRE o clique, antes de qualquer validação — é isso que revela
+    // a cliente que "clicou em Pagar" com o cartão em branco.
+    onStepEvent?.("card_pay_clicked", {
+      method: isDebit ? "debit_card" : "credit_card",
+      amount,
+      detail: missingFields.length ? `faltando: ${missingFields.join(", ")}` : "campos completos",
+    });
+
     // Prevent double-click with ref (synchronous check)
     if (processingRef.current) return;
 
-    if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
-      toast.error("Preencha todos os dados do cartão");
-      return;
-    }
-    if (cardNumber.replace(/\D/g, "").length < 13) {
-      toast.error("Número do cartão inválido");
+    if (missingFields.length) {
+      setShowFieldErrors(true);
+      setPaymentError(null);
+      const firstInvalid = [
+        [!cardName.trim(), cardNameRef],
+        [!isCardNumberValid, cardNumberRef],
+        [!isExpiryValid, expiryRef],
+        [!isCvvValid, cvvRef],
+      ].find(([bad]) => bad)?.[1] as React.RefObject<HTMLInputElement> | undefined;
+      firstInvalid?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalid?.current?.focus({ preventScroll: true });
       return;
     }
     const expiryParts = expiry.split("/");
     if (expiryParts.length !== 2) {
-      toast.error("Validade inválida. Use MM/AA");
+      setShowFieldErrors(true);
+      expiryRef.current?.focus();
       return;
     }
+
 
     // Lock immediately
     processingRef.current = true;
@@ -651,21 +688,26 @@ function CardPaymentForm({
 
 
       // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
-      const mpToken = await tokenizeCardMP({
-        number: cardNumber.replace(/\D/g, ""),
-        holderName: cardName.trim(),
-        expMonth: expiryParts[0].padStart(2, "0"),
-        expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
-        cvv: cvv.trim(),
-        cpf: form.cpf.replace(/\D/g, ""),
-      }, mode);
+      // Teto de 25s: com internet ruim a validação pode ficar girando pra sempre.
+      const mpToken = await Promise.race([
+        tokenizeCardMP({
+          number: cardNumber.replace(/\D/g, ""),
+          holderName: cardName.trim(),
+          expMonth: expiryParts[0].padStart(2, "0"),
+          expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+          cvv: cvv.trim(),
+          cpf: form.cpf.replace(/\D/g, ""),
+        }, mode),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 25000)),
+      ]);
 
       // Débito só roda pelo Mercado Pago — sem token não há como cobrar.
       if (isDebit && !mpToken) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         processingRef.current = false;
         setIsProcessing(false);
-        setPaymentError("Não conseguimos validar seu cartão de débito agora. Tente novamente ou pague no Pix.");
+        onStepEvent?.("card_validation_timeout", { method: "debit_card", amount });
+        setPaymentError("Não conseguimos conectar para validar seu cartão. Confira a internet e tente de novo, ou pague no Pix.");
         return;
       }
 
@@ -829,23 +871,49 @@ function CardPaymentForm({
         </div>
       )}
 
+      {showFieldErrors && !formComplete && (
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-destructive">Falta preencher os dados do cartão</p>
+              <p className="text-xs text-destructive/80 mt-1">
+                O pagamento ainda NÃO foi feito. Preencha: {missingFields.join(", ")}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
-          <Input value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
+          <Input ref={cardNameRef} className={errClass(isCardNameValid)} value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
+          {showFieldErrors && !isCardNameValid && (
+            <p className="text-xs text-destructive mt-1">Digite o nome impresso no cartão.</p>
+          )}
         </div>
         <div>
           <Label className="text-sm">Número do cartão *</Label>
-          <Input value={cardNumber} onChange={(e) => setCardNumber(formatCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" maxLength={19} />
+          <Input ref={cardNumberRef} className={errClass(isCardNumberValid)} value={cardNumber} onChange={(e) => setCardNumber(formatCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" maxLength={19} inputMode="numeric" />
+          {showFieldErrors && !isCardNumberValid && (
+            <p className="text-xs text-destructive mt-1">Digite o número do cartão.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-sm">Validade *</Label>
-            <Input value={expiry} onChange={(e) => setExpiry(formatExpiry(e.target.value))} placeholder="MM/AA" maxLength={5} />
+            <Input ref={expiryRef} className={errClass(isExpiryValid)} value={expiry} onChange={(e) => setExpiry(formatExpiry(e.target.value))} placeholder="MM/AA" maxLength={5} inputMode="numeric" />
+            {showFieldErrors && !isExpiryValid && (
+              <p className="text-xs text-destructive mt-1">Use MM/AA.</p>
+            )}
           </div>
           <div>
             <Label className="text-sm">CVV *</Label>
-            <Input value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" maxLength={4} type="password" />
+            <Input ref={cvvRef} className={errClass(isCvvValid)} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="123" maxLength={4} type="password" inputMode="numeric" />
+            {showFieldErrors && !isCvvValid && (
+              <p className="text-xs text-destructive mt-1">Digite o CVV.</p>
+            )}
           </div>
         </div>
       </div>
@@ -884,9 +952,19 @@ function CardPaymentForm({
         </div>
       )}
 
-      <Button onClick={handleSubmit} disabled={isProcessing || !!mismatch} className="w-full h-14 text-lg font-semibold" size="lg">
-        <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
-      </Button>
+      <div className="space-y-1.5">
+        <Button
+          onClick={handleSubmit}
+          disabled={isProcessing || !!mismatch}
+          className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
+          size="lg"
+        >
+          <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
+        </Button>
+        <p className={`text-center text-sm font-semibold ${formComplete ? "text-muted-foreground" : "text-destructive"}`}>
+          {formComplete ? "CLIQUE PRA PAGAR" : "Preencha os dados do cartão acima"}
+        </p>
+      </div>
     </div>
   );
 }

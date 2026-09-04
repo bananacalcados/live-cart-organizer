@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
+import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration, cpTrackPaymentStep } from "@/lib/checkoutPublic";
 import { lpUpdateViewer } from "@/lib/livePublic";
 import { initMetaPixel, trackPixelEvent, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP, getCardCapabilities, type CardCapabilities, type CardMode } from "@/lib/mercadopago";
@@ -1001,6 +1001,20 @@ export default function TransparentCheckout() {
     })();
   }, [orderData]);
 
+  // Auditoria dos passos de pagamento no checkout por link (best-effort).
+  const trackStep = useCallback(
+    (eventType: string, data?: Record<string, unknown>) => {
+      const oid = orderData?.id || orderId;
+      if (!oid) return;
+      void cpTrackPaymentStep(oid, eventType, {
+        phone: customerForm.whatsapp,
+        ...(data || {}),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orderData?.id, orderId, customerForm.whatsapp],
+  );
+
   // Recalcula o pedido local quando itens de crossell são adicionados/removidos
   const handleCrossellCartChanged = useCallback((products: any[]) => {
     setOrderData((prev) => {
@@ -1600,6 +1614,7 @@ export default function TransparentCheckout() {
                       onPaymentConfirmed={handlePaymentConfirmed}
                       onBack={() => setCurrentStep(2)}
                       onProcessingChange={setIsPaymentProcessing}
+                      onStepEvent={trackStep}
                     />
                   )}
                 </div>
