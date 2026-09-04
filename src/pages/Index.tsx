@@ -68,12 +68,29 @@ const Index = () => {
 
   const currentEvent = getCurrentEvent();
   const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+  // A Central da Live fica DESATIVADA por padrão (não monta, não faz polling).
+  // Pode ser reativada manualmente pelo botão e a escolha fica salva no aparelho.
+  const [attendanceEnabled, setAttendanceEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("live-attendance-enabled") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("live-attendance-enabled", attendanceEnabled ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [attendanceEnabled]);
+  // Se a Central estiver desligada, nunca deixar a aba selecionada.
+  useEffect(() => {
+    if (!attendanceEnabled) setTab((t) => (t === "attendance" ? "kanban" : t));
+  }, [attendanceEnabled]);
   // Na Central da Live o dashboard fica recolhido para sobrar espaço ao chat.
   const liveCompact = tab === "attendance" && !showDash;
 
-  useEffect(() => {
-    if (isWhatsAppMode) setTab((t) => (t === "kanban" ? "attendance" : t));
-  }, [isWhatsAppMode]);
 
   // Preferência de quadro minimizado por evento (salva no aparelho).
   useEffect(() => {
@@ -303,14 +320,25 @@ const Index = () => {
                   Envio em massa
                 </Button>
               )}
+              {isWhatsAppMode && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-muted-foreground"
+                  onClick={() => setAttendanceEnabled((v) => !v)}
+                >
+                  {attendanceEnabled ? "Desligar Central da Live" : "Ligar Central da Live"}
+                </Button>
+              )}
               <TabsList className="ml-auto">
 
-                {isWhatsAppMode && (
+                {isWhatsAppMode && attendanceEnabled && (
                   <TabsTrigger value="attendance" className="gap-1">
                     <MessageSquare className="h-3 w-3" />
                     Central da Live
                   </TabsTrigger>
                 )}
+
                 <TabsTrigger value="kanban">Pedidos</TabsTrigger>
                 <TabsTrigger value="bulk" className="gap-1">
                   <Users className="h-3 w-3" />
@@ -348,7 +376,7 @@ const Index = () => {
 
             </div>
 
-            {isWhatsAppMode && currentEventId && (
+            {isWhatsAppMode && attendanceEnabled && currentEventId && (
               <TabsContent value="attendance" className="-mx-4 md:-mx-6">
                 <LiveAttendanceCenter
                   eventId={currentEventId}
