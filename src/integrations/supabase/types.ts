@@ -10172,6 +10172,7 @@ export type Database = {
           code: string | null
           confirmed_at: string | null
           created_at: string
+          divergent: boolean
           entered_phone: string | null
           entered_phone_key: string | null
           event_id: string | null
@@ -10185,7 +10186,9 @@ export type Database = {
           matched_at: string | null
           message_id: string | null
           phone: string | null
+          real_phone: string | null
           referer: string | null
+          superseded: boolean
           user_agent: string | null
           utm_campaign: string | null
           utm_content: string | null
@@ -10198,6 +10201,7 @@ export type Database = {
           code?: string | null
           confirmed_at?: string | null
           created_at?: string
+          divergent?: boolean
           entered_phone?: string | null
           entered_phone_key?: string | null
           event_id?: string | null
@@ -10211,7 +10215,9 @@ export type Database = {
           matched_at?: string | null
           message_id?: string | null
           phone?: string | null
+          real_phone?: string | null
           referer?: string | null
+          superseded?: boolean
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -10224,6 +10230,7 @@ export type Database = {
           code?: string | null
           confirmed_at?: string | null
           created_at?: string
+          divergent?: boolean
           entered_phone?: string | null
           entered_phone_key?: string | null
           event_id?: string | null
@@ -10237,7 +10244,9 @@ export type Database = {
           matched_at?: string | null
           message_id?: string | null
           phone?: string | null
+          real_phone?: string | null
           referer?: string | null
+          superseded?: boolean
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -22770,6 +22779,13 @@ export type Database = {
       live_member_rate_limit: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: boolean
+      }
+      live_zap_after_match: {
+        Args: {
+          p_click: Database["public"]["Tables"]["live_whatsapp_clicks"]["Row"]
+          p_real_phone: string
+        }
+        Returns: undefined
       }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
