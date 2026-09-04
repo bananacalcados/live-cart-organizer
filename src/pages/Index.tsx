@@ -320,14 +320,25 @@ const Index = () => {
                   Envio em massa
                 </Button>
               )}
+              {isWhatsAppMode && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-muted-foreground"
+                  onClick={() => setAttendanceEnabled((v) => !v)}
+                >
+                  {attendanceEnabled ? "Desligar Central da Live" : "Ligar Central da Live"}
+                </Button>
+              )}
               <TabsList className="ml-auto">
 
-                {isWhatsAppMode && (
+                {isWhatsAppMode && attendanceEnabled && (
                   <TabsTrigger value="attendance" className="gap-1">
                     <MessageSquare className="h-3 w-3" />
                     Central da Live
                   </TabsTrigger>
                 )}
+
                 <TabsTrigger value="kanban">Pedidos</TabsTrigger>
                 <TabsTrigger value="bulk" className="gap-1">
                   <Users className="h-3 w-3" />
