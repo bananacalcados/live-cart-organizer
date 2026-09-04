@@ -616,22 +616,37 @@ function CardPaymentForm({
 
 
   const handleSubmit = async () => {
+    // Registra SEMPRE o clique, antes de qualquer validação — é isso que revela
+    // a cliente que "clicou em Pagar" com o cartão em branco.
+    onStepEvent?.("card_pay_clicked", {
+      method: isDebit ? "debit_card" : "credit_card",
+      amount,
+      detail: missingFields.length ? `faltando: ${missingFields.join(", ")}` : "campos completos",
+    });
+
     // Prevent double-click with ref (synchronous check)
     if (processingRef.current) return;
 
-    if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
-      toast.error("Preencha todos os dados do cartão");
-      return;
-    }
-    if (cardNumber.replace(/\D/g, "").length < 13) {
-      toast.error("Número do cartão inválido");
+    if (missingFields.length) {
+      setShowFieldErrors(true);
+      setPaymentError(null);
+      const firstInvalid = [
+        [!cardName.trim(), cardNameRef],
+        [!isCardNumberValid, cardNumberRef],
+        [!isExpiryValid, expiryRef],
+        [!isCvvValid, cvvRef],
+      ].find(([bad]) => bad)?.[1] as React.RefObject<HTMLInputElement> | undefined;
+      firstInvalid?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalid?.current?.focus({ preventScroll: true });
       return;
     }
     const expiryParts = expiry.split("/");
     if (expiryParts.length !== 2) {
-      toast.error("Validade inválida. Use MM/AA");
+      setShowFieldErrors(true);
+      expiryRef.current?.focus();
       return;
     }
+
 
     // Lock immediately
     processingRef.current = true;
