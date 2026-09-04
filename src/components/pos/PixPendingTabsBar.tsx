@@ -226,4 +226,4 @@ const TabsRow = memo(function TabsRow({ label, count, tabs, tone }: { label: str
       )}
     </div>
   );
-}
+});
