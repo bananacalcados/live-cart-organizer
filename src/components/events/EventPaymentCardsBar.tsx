@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
 import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -113,7 +113,6 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
 
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
   const [errorsOpen, setErrorsOpen] = useState(false);
-  const [newContactsCount, setNewContactsCount] = useState(0);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
   // Team-shared pinned conversations + checkout-link step per order.
@@ -428,7 +427,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
   };
 
-  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: React.ReactNode) =>
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: ReactNode) =>
     list.length === 0 && !extra ? (
       <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
     ) : (
