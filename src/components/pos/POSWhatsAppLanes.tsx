@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,83 @@ const LANE_ICON: Record<ChatLane, JSX.Element> = {
 
 /** Quantas finalizadas mostrar (as mais recentes) para não pesar a tela. */
 const FINISHED_LIMIT = 40;
+/** Cards desenhados por linha antes do botão "Mostrar mais" (cada card ≈ 35 nós de DOM). */
+const LANE_RENDER_LIMIT = 40;
+
+/** Ações do card lidas via ref — funções estáveis, então os cards memoizados não re-renderizam. */
+interface LaneCardActions {
+  select: (conv: Conversation) => void;
+  move: (conv: Conversation, lane: ManualChatLane) => void;
+  finish: (conv: Conversation) => void;
+  clearManual: (conv: Conversation) => void;
+  toggleChecked: (key: string) => void;
+}
+
+interface LaneCardItemProps {
+  convKey: string;
+  conv: Conversation;
+  lane: ChatLane;
+  selected: boolean;
+  photoUrl?: string;
+  contactName?: string;
+  attendantName: string | null;
+  igUsername: string | null;
+  liveStage: { stageTitle: string; eventName?: string } | null;
+  graceMsLeft?: number;
+  manualMark: boolean;
+  canMove: boolean;
+  canFinish: boolean;
+  canClearManual: boolean;
+  selectMode: boolean;
+  checked: boolean;
+  actions: LaneCardActions;
+}
+
+/**
+ * Item memoizado: só redesenha quando algo DESTE card muda. Antes, cada clique
+ * na tela (abrir/fechar conversa) redesenhava as centenas de cards de uma vez.
+ */
+const LaneCardItem = memo(function LaneCardItem({
+  convKey, conv, lane, selected, photoUrl, contactName, attendantName, igUsername, liveStage,
+  graceMsLeft, manualMark, canMove, canFinish, canClearManual, selectMode, checked, actions,
+}: LaneCardItemProps) {
+  const onClick = useCallback(() => actions.select(conv), [actions, conv]);
+  const onToggleChecked = useCallback(() => actions.toggleChecked(convKey), [actions, convKey]);
+  const onFinish = useMemo(() => (canFinish ? () => actions.finish(conv) : undefined), [actions, conv, canFinish]);
+  const footerMenu = useMemo(
+    () =>
+      canMove && !selectMode ? (
+        <TransferLaneMenu
+          variant="card"
+          currentLane={lane}
+          hasManualMark={manualMark}
+          onMove={(l) => actions.move(conv, l)}
+          onFinish={canFinish ? () => actions.finish(conv) : undefined}
+          onClearManual={canClearManual ? () => actions.clearManual(conv) : undefined}
+        />
+      ) : null,
+    [actions, conv, lane, manualMark, canMove, canFinish, canClearManual, selectMode],
+  );
+  return (
+    <ConversationLaneCard
+      conv={conv}
+      selected={selected}
+      photoUrl={photoUrl}
+      contactName={contactName}
+      attendantName={attendantName}
+      igUsername={igUsername}
+      liveStage={liveStage}
+      graceMsLeft={graceMsLeft}
+      manualMark={manualMark}
+      footerMenu={footerMenu}
+      onFinish={selectMode ? undefined : onFinish}
+      onClick={onClick}
+      selectable={selectMode && !conv.isGroup}
+      checked={checked}
+      onToggleChecked={onToggleChecked}
+    />
+  );
+});
 
 /**
  * Visão em Linhas do WhatsApp do PDV: todas as etapas visíveis ao mesmo tempo.
@@ -82,17 +159,31 @@ export function POSWhatsAppLanes({
   const [selectMode, setSelectMode] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const convKey = (conv: Conversation) => conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
-  const toggleChecked = (key: string) =>
+  const toggleChecked = useCallback((key: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
-    });
+    }), []);
   const exitSelectMode = () => {
     setSelectMode(false);
     setChecked(new Set());
   };
+  // Cards extras liberados por linha via "Mostrar mais".
+  const [extraVisible, setExtraVisible] = useState<Partial<Record<ChatLane, number>>>({});
+
+  // Callbacks vindos da tela-mãe mudam a cada render dela; guardamos a versão
+  // mais recente numa ref e expomos um objeto de ações ESTÁVEL para os cards.
+  const latestRef = useRef({ onSelectConversation, onMoveLane, onFinishLane, onClearManualLane, toggleChecked });
+  latestRef.current = { onSelectConversation, onMoveLane, onFinishLane, onClearManualLane, toggleChecked };
+  const actions = useMemo<LaneCardActions>(() => ({
+    select: (conv) => latestRef.current.onSelectConversation(conv.phone, conv.whatsapp_number_id),
+    move: (conv, lane) => latestRef.current.onMoveLane?.(conv, lane),
+    finish: (conv) => latestRef.current.onFinishLane?.(conv),
+    clearManual: (conv) => latestRef.current.onClearManualLane?.(conv),
+    toggleChecked: (key) => latestRef.current.toggleChecked(key),
+  }), []);
   // Tick de 30s só para reavaliar a janela de 5 min (sem consulta ao banco).
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -307,6 +398,9 @@ export function POSWhatsAppLanes({
         {CHAT_LANE_ORDER.map((lane) => {
           const items = lanes.out[lane];
           const meta = CHAT_LANE_META[lane];
+          const limit = LANE_RENDER_LIMIT + (extraVisible[lane] || 0);
+          const visible = items.length > limit ? items.slice(0, limit) : items;
+          const hiddenCount = items.length - visible.length;
           return (
             <LaneSection
               key={lane}
@@ -323,38 +417,41 @@ export function POSWhatsAppLanes({
                 <p className="px-1 py-1.5 text-[11px] text-muted-foreground/70">Nenhuma conversa aqui.</p>
               ) : (
                 <div className="flex snap-x gap-2 overflow-x-auto pb-1.5 pt-0.5">
-                  {items.map((conv) => {
+                  {visible.map((conv) => {
                     const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
                     return (
-                      <ConversationLaneCard
+                      <LaneCardItem
                         key={key}
+                        convKey={key}
                         conv={conv}
+                        lane={lane}
                         selected={selectedConversationKey === key}
                         photoUrl={contactPhotos[conv.phone]}
                         contactName={contactNames[conv.phone]}
-                        attendantName={getAssignedName?.(key)}
-                        igUsername={conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] : null}
+                        attendantName={getAssignedName?.(key) ?? null}
+                        igUsername={conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] ?? null : null}
                         liveStage={liveStageMap[conv.phone] || null}
                         graceMsLeft={lanes.graceLeft.get(key)}
                         manualMark={lanes.manual.has(key)}
-                        menu={onMoveLane && !conv.isGroup ? (
-                          <TransferLaneMenu
-                            variant="icon"
-                            currentLane={lane}
-                            hasManualMark={lanes.manual.has(key)}
-                            onMove={(l) => onMoveLane(conv, l)}
-                            onFinish={onFinishLane && lane !== "finished" ? () => onFinishLane(conv) : undefined}
-                            onClearManual={onClearManualLane ? () => onClearManualLane(conv) : undefined}
-                          />
-                        ) : null}
-                        onFinish={onFinishLane && lane !== "finished" && !conv.isGroup && !selectMode ? () => onFinishLane(conv) : undefined}
-                        onClick={() => onSelectConversation(conv.phone, conv.whatsapp_number_id)}
-                        selectable={selectMode && !conv.isGroup}
+                        canMove={!!onMoveLane && !conv.isGroup}
+                        canFinish={!!onFinishLane && lane !== "finished" && !conv.isGroup}
+                        canClearManual={!!onClearManualLane}
+                        selectMode={selectMode}
                         checked={checked.has(key)}
-                        onToggleChecked={() => toggleChecked(key)}
+                        actions={actions}
                       />
                     );
                   })}
+                  {hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setExtraVisible((s) => ({ ...s, [lane]: (s[lane] || 0) + LANE_RENDER_LIMIT }))}
+                      className="flex w-[150px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border/70 bg-muted/30 px-2 py-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      <span className="text-base font-bold text-foreground">+{hiddenCount}</span>
+                      Mostrar mais
+                    </button>
+                  )}
                 </div>
               )}
             </LaneSection>

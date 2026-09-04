@@ -201,7 +201,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   // Conversation enrichment (finished/archived/etc.) — declared early so the
   // live ghost-row memo below can exclude finalized/archived phones.
-  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer, ensureFinished } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, finishConversationsBulk, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer, ensureFinished } = useConversationEnrichment();
 
   // Mover para outra linha. Se a conversa estava Finalizada, reabre primeiro
   // (para todas as atendentes) — senão a marcação manual seria ignorada.
@@ -1103,12 +1103,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // Guarda anti-flicker: só troca o estado (e re-renderiza a lista) se algo
       // realmente mudou. Sem isso, o polling de segurança faria a lista "piscar"
       // a cada 20s mesmo quando nada novo chegou.
-      const sig = enriched
-        .map(c => `${c.conversationKey ?? c.phone}:${c.lastMessageAt.getTime()}:${c.unreadCount}:${c.lastMessage ?? ''}:${c.isFinished ? 1 : 0}:${c.isArchived ? 1 : 0}:${c.isAwaitingPayment ? 1 : 0}`)
-        .join('|');
+      const itemSig = (c: Conversation) =>
+        `${c.conversationKey ?? c.phone}:${c.lastMessageAt.getTime()}:${c.unreadCount}:${c.lastMessage ?? ''}:${c.isFinished ? 1 : 0}:${c.isArchived ? 1 : 0}:${c.isAwaitingPayment ? 1 : 0}:${c.customerName ?? ''}:${c.conversationStatus ?? ''}:${c.isAiTransferred ? 1 : 0}:${c.instanceLabel ?? ''}`;
+      const itemSigs = enriched.map(itemSig);
+      const sig = itemSigs.join('|');
       if (sig !== convSigRef.current) {
         convSigRef.current = sig;
-        setConversations(enriched);
+        // Preserva a identidade dos objetos que NÃO mudaram: os cards memoizados
+        // dessas conversas não são redesenhados (só os que realmente mudaram).
+        setConversations(prev => {
+          const prevByKey = new Map<string, { sig: string; conv: Conversation }>();
+          for (const c of prev) prevByKey.set(c.conversationKey ?? c.phone, { sig: itemSig(c), conv: c });
+          return enriched.map((c, i) => {
+            const p = prevByKey.get(c.conversationKey ?? c.phone);
+            return p && p.sig === itemSigs[i] && p.conv.whatsapp_number_id === c.whatsapp_number_id ? p.conv : c;
+          });
+        });
         if (dbgOn) console.log('[NOVAS-DEBUG] setConversations aplicado');
       } else if (dbgOn) {
         console.log('[NOVAS-DEBUG] signature idêntica → setConversations SUPRIMIDO');
@@ -1144,16 +1154,20 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   useEffect(() => {
     setConversations(prev => {
       if (prev.length === 0) return prev;
-      return prev.map(c => ({
-        ...c,
-        isFinished: (() => {
-          const phoneKey = normalizePhoneKey(c.phone);
-          const finishedAt = finishedAtByPhone.get(phoneKey);
-          return Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime());
-        })(),
-        isArchived: archivedPhones.has(c.phone),
-        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
-      }));
+      // Só cria objetos novos para as conversas que REALMENTE mudaram — assim
+      // os cards memoizados das demais não são redesenhados.
+      let changed = false;
+      const next = prev.map(c => {
+        const phoneKey = normalizePhoneKey(c.phone);
+        const finishedAt = finishedAtByPhone.get(phoneKey);
+        const isFinished = Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime());
+        const isArchived = archivedPhones.has(c.phone);
+        const isAwaitingPayment = awaitingPaymentPhones.has(c.phone);
+        if (c.isFinished === isFinished && c.isArchived === isArchived && c.isAwaitingPayment === isAwaitingPayment) return c;
+        changed = true;
+        return { ...c, isFinished, isArchived, isAwaitingPayment };
+      });
+      return changed ? next : prev;
     });
   }, [finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones]);
 
@@ -2694,22 +2708,24 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         open={showBulkFinishDialog}
         onOpenChange={setShowBulkFinishDialog}
         onFinish={async (reason, extras) => {
-          for (const phone of bulkFinishPhones) {
-            // A mesma opção de finalização escolhida vale para todas as conversas.
-            const conv = conversations.find(c => c.phone === phone);
-            await finishConversation(phone, reason, selectedSellerId || undefined, {
-              ...(extras || {}),
-              whatsappNumberId: conv?.whatsapp_number_id || null,
-            });
-            // Deactivate followups
-            supabase.from('chat_payment_followups')
-              .update({ is_active: false, completed_at: new Date().toISOString() } as any)
-              .eq('phone', phone)
-              .eq('is_active', true)
-              .then(() => {});
+          // A mesma opção de finalização escolhida vale para todas as conversas.
+          // Uma única gravação em lote (em vez de uma por conversa) + um único
+          // re-render da lista.
+          const phoneSet = new Set(bulkFinishPhones);
+          try {
+            await finishConversationsBulk(
+              bulkFinishPhones.map((phone) => ({ phone })),
+              reason,
+              selectedSellerId || undefined,
+              (extras || {}) as any,
+            );
+          } catch (e) {
+            console.error('[bulk-finish] failed', e);
+            toast.error('Não foi possível finalizar algumas conversas');
+            return;
           }
           setConversations(prev => prev.map(c =>
-            bulkFinishPhones.includes(c.phone) ? { ...c, isFinished: true } : c
+            phoneSet.has(c.phone) && !c.isFinished ? { ...c, isFinished: true } : c
           ));
           setShowBulkFinishDialog(false);
           toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);

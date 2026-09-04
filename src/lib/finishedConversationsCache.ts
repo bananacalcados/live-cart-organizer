@@ -30,10 +30,18 @@ function isFresh(at: number) {
   return Date.now() - at < TTL_MS;
 }
 
+// Notificação COALESCIDA: várias escritas seguidas (finalização em massa,
+// rajada de eventos realtime) viram UM único re-render dos assinantes em vez
+// de um por telefone — cada re-render remonta a lista inteira de conversas.
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 function notify() {
-  listeners.forEach((cb) => {
-    try { cb(); } catch { /* noop */ }
-  });
+  if (notifyTimer) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    listeners.forEach((cb) => {
+      try { cb(); } catch { /* noop */ }
+    });
+  }, 40);
 }
 
 export function subscribeFinishedCache(cb: () => void): () => void {
@@ -55,6 +63,16 @@ export function setFinishedLocal(phone: string, finishedAt: string | null) {
   const key = finishedPhoneKey(phone);
   if (!key) return;
   entries.set(key, { finishedAt, at: Date.now() });
+  notify();
+}
+
+/** Versão em lote de setFinishedLocal (uma única notificação). */
+export function setFinishedLocalMany(phones: string[], finishedAt: string | null) {
+  const now = Date.now();
+  for (const phone of phones) {
+    const key = finishedPhoneKey(phone);
+    if (key) entries.set(key, { finishedAt, at: now });
+  }
   notify();
 }
 

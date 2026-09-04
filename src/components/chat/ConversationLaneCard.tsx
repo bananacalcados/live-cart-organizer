@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Users, Radio, Timer, Pin, CheckCircle2, Check } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -19,8 +19,10 @@ interface ConversationLaneCardProps {
   graceMsLeft?: number;
   /** Conversa foi movida manualmente para esta linha. */
   manualMark?: boolean;
-  /** Menu de ações (ex.: Transferir etapa), renderizado no canto do card. */
+  /** Menu de ações compacto, renderizado no canto do card (ao lado da hora). */
   menu?: ReactNode;
+  /** Botão destacado no rodapé do card (ex.: "Mover de linha"). */
+  footerMenu?: ReactNode;
   /** Botão "Finalizar" no rodapé do card (oculto quando ausente). */
   onFinish?: () => void;
   onClick: () => void;
@@ -47,7 +49,7 @@ const getInitials = (name?: string) => {
 };
 
 /** Card compacto de conversa usado nas Linhas do WhatsApp do PDV (mesma linguagem visual da lista). */
-export function ConversationLaneCard({
+function ConversationLaneCardInner({
   conv,
   selected,
   photoUrl,
@@ -58,6 +60,7 @@ export function ConversationLaneCard({
   graceMsLeft,
   manualMark,
   menu,
+  footerMenu,
   onFinish,
   onClick,
   selectable,
@@ -170,19 +173,31 @@ export function ConversationLaneCard({
           </span>
         )}
       </div>
-      {onFinish && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onFinish();
-          }}
-          className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-border/60 bg-background/60 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-[#00a884]/50 hover:bg-[#00a884]/10 hover:text-[#017561] dark:hover:text-[#25d366]"
-          title="Finalizar conversa"
-        >
-          <CheckCircle2 className="h-3 w-3" /> Finalizar conversa
-        </button>
+      {(onFinish || footerMenu) && (
+        <div className="mt-1.5 flex items-stretch gap-1">
+          {footerMenu}
+          {onFinish && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFinish();
+              }}
+              className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border/60 bg-background/60 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-[#00a884]/50 hover:bg-[#00a884]/10 hover:text-[#017561] dark:hover:text-[#25d366]"
+              title="Finalizar conversa"
+            >
+              <CheckCircle2 className="h-3 w-3" /> Finalizar
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
 }
+
+/**
+ * Versão memoizada: a lista pode ter centenas de cards e a tela-mãe re-renderiza
+ * a cada clique (abrir/fechar conversa, mensagens, etc.). Com memo, só os cards
+ * cujas props mudaram são redesenhados.
+ */
+export const ConversationLaneCard = memo(ConversationLaneCardInner);

@@ -7,6 +7,7 @@ import {
   peekFinishedMap,
   resolveFinishedConversations,
   setFinishedLocal,
+  setFinishedLocalMany,
   subscribeFinishedCache,
 } from '@/lib/finishedConversationsCache';
 
@@ -218,6 +219,64 @@ export function useConversationEnrichment() {
     }
   }, []);
 
+  /**
+   * Finalização EM LOTE: um único upsert com todas as conversas e uma única
+   * notificação do cache (em vez de N idas ao banco + N re-renders).
+   * Não dispara conversão/CAPI (uso: finalizar selecionadas nas Linhas).
+   */
+  const finishConversationsBulk = useCallback(async (
+    items: { phone: string; whatsappNumberId?: string | null }[],
+    reason?: string,
+    sellerId?: string,
+    extras?: {
+      saleValue?: number;
+      saleCurrency?: string;
+      triggerId?: string | null;
+      purchased?: boolean;
+      supportReason?: string;
+      supportSatisfactory?: boolean;
+      duvidaText?: string;
+    }
+  ) => {
+    const phones = Array.from(new Set(items.map(i => i.phone).filter(Boolean)));
+    if (phones.length === 0) return;
+    const finishedAtIso = new Date().toISOString();
+    setFinishedLocalMany(phones, finishedAtIso);
+
+    const rows = phones.map(phone => ({
+      phone,
+      finished_at: finishedAtIso,
+      finish_reason: reason || null,
+      seller_id: sellerId || null,
+      sale_value: extras?.saleValue ?? null,
+      sale_currency: extras?.saleCurrency ?? 'BRL',
+      trigger_id: extras?.triggerId ?? null,
+      purchased: extras?.purchased ?? null,
+      support_reason: extras?.supportReason ?? null,
+      support_satisfactory: extras?.supportSatisfactory ?? null,
+      duvida_text: extras?.duvidaText ?? null,
+    }));
+
+    // Lotes de 100 para não estourar o payload.
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const { error } = await supabase
+        .from('chat_finished_conversations')
+        .upsert(chunk as any, { onConflict: 'phone' });
+      if (error) {
+        setFinishedLocalMany(chunk.map(r => r.phone), null);
+        throw error;
+      }
+    }
+
+    // Desativa follow-ups de pagamento de todas de uma vez (em segundo plano).
+    supabase.from('chat_payment_followups')
+      .update({ is_active: false, completed_at: finishedAtIso } as any)
+      .in('phone', phones)
+      .eq('is_active', true)
+      .then(() => {});
+  }, []);
+
   const reopenConversation = useCallback(async (phone: string) => {
     const phoneKey = normalizePhoneKey(phone);
     const prevFinishedAt = phoneKey ? peekFinishedMap().get(phoneKey) : undefined;
@@ -333,6 +392,7 @@ export function useConversationEnrichment() {
   return {
     enrichConversations,
     finishConversation,
+    finishConversationsBulk,
     reopenConversation,
     archiveConversation,
     unarchiveConversation,
