@@ -220,6 +220,26 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     };
   }, [eventId, load, loadActivity]);
 
+  // Identidade conhecida na base (clientes da live, CRM, cadastros, leads, contatos) — 1 RPC indexada, com cache.
+  const [identities, setIdentities] = useState<Map<string, KnownIdentity | null>>(new Map());
+  const rowKeys = useMemo(
+    () => [...new Set(rows.map((r) => suffix8(r.real_phone || r.phone || r.entered_phone)).filter((k) => k.length === 8))],
+    [rows],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    if (rowKeys.length === 0) {
+      setIdentities(new Map());
+      return;
+    }
+    resolveIdentities(rowKeys).then((m) => {
+      if (!cancelled) setIdentities(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rowKeys]);
+
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
     for (const r of rows) {
@@ -232,10 +252,13 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       const lastIn = act?.lastIn ? +new Date(act.lastIn) : 0;
       const lastOut = act?.lastOut ? +new Date(act.lastOut) : 0;
       const unread = lastIn > 0 && lastIn > lastOut && lastIn > (seen[key] || 0);
+      const known = identities.get(key);
+      const leadName = r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null;
       const contact: NewContact = {
         key,
         phone,
-        name: r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null,
+        name: known?.name || leadName,
+        instagramHandle: known?.handle || null,
         talked: !!r.phone,
         createdAt: r.created_at,
         unread,
@@ -250,6 +273,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       ? list.filter(
           (c) =>
             (c.name || "").toLowerCase().includes(q) ||
+            (c.instagramHandle || "").toLowerCase().includes(q.replace(/^@/, "")) ||
             c.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")),
         )
       : list;
@@ -258,7 +282,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       if (a.unread !== b.unread) return a.unread ? -1 : 1;
       return +new Date(b.createdAt) - +new Date(a.createdAt);
     });
-  }, [rows, excludeKeys, search, activity, seen]);
+  }, [rows, excludeKeys, search, activity, seen, identities]);
 
   return { contacts, loading, reload: load };
 }
