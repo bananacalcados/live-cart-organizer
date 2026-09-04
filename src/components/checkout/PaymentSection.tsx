@@ -478,8 +478,30 @@ function CardPaymentForm({
   const [installments, setInstallments] = useState("1");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const processingRef = useRef(false);
   const attemptIdRef = useRef<string | null>(null);
+  const cardNameRef = useRef<HTMLInputElement>(null);
+  const cardNumberRef = useRef<HTMLInputElement>(null);
+  const expiryRef = useRef<HTMLInputElement>(null);
+  const cvvRef = useRef<HTMLInputElement>(null);
+
+  // ── Validação visível dos campos do cartão ────────────────────────────
+  const isCardNameValid = cardName.trim().length >= 2;
+  const isCardNumberValid = cardNumber.replace(/\D/g, "").length >= 13;
+  const expiryDigits = expiry.replace(/\D/g, "");
+  const isExpiryValid =
+    expiryDigits.length === 4 && Number(expiryDigits.slice(0, 2)) >= 1 && Number(expiryDigits.slice(0, 2)) <= 12;
+  const isCvvValid = cvv.replace(/\D/g, "").length >= 3;
+  const missingFields = [
+    !isCardNameValid && "nome no cartão",
+    !isCardNumberValid && "número do cartão",
+    !isExpiryValid && "validade",
+    !isCvvValid && "CVV",
+  ].filter(Boolean) as string[];
+  const formComplete = missingFields.length === 0;
+  const errClass = (ok: boolean) =>
+    !ok && showFieldErrors ? "border-destructive focus-visible:ring-destructive" : "";
 
   // Propagate processing state to parent for full-screen overlay
   useEffect(() => {
