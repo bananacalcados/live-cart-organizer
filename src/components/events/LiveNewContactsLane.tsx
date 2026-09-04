@@ -34,11 +34,48 @@ export interface NewContact {
   key: string;
   phone: string;
   name: string | null;
+  /** @ do Instagram já conhecido na base (clientes da live / CRM). */
+  instagramHandle: string | null;
   talked: boolean;
   createdAt: string;
   /** Há mensagem da cliente mais recente que a última resposta nossa e que a última abertura do chat. */
   unread: boolean;
   lastIncomingAt: string | null;
+}
+
+interface KnownIdentity {
+  name: string | null;
+  handle: string | null;
+}
+
+/**
+ * Cache (por sessão) de identidades já resolvidas na base — evita repetir a
+ * consulta a cada atualização em tempo real. `null` = consultado e não encontrado.
+ */
+const identityCache = new Map<string, KnownIdentity | null>();
+
+/** Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas. */
+async function resolveIdentities(keys: string[]): Promise<Map<string, KnownIdentity | null>> {
+  const missing = [...new Set(keys)].filter((k) => k.length === 8 && !identityCache.has(k));
+  if (missing.length > 0) {
+    for (let i = 0; i < missing.length; i += 300) {
+      const batch = missing.slice(i, i + 300);
+      const { data, error } = await supabase.rpc("live_resolve_contact_identities", { p_suffixes: batch });
+      if (error) {
+        console.warn("[LiveNewContacts] identidade:", error.message);
+        break;
+      }
+      const found = new Set<string>();
+      for (const r of (data || []) as { suffix8: string; name: string | null; instagram_handle: string | null }[]) {
+        identityCache.set(r.suffix8, { name: r.name, handle: r.instagram_handle });
+        found.add(r.suffix8);
+      }
+      for (const k of batch) if (!found.has(k)) identityCache.set(k, null);
+    }
+  }
+  const out = new Map<string, KnownIdentity | null>();
+  for (const k of keys) out.set(k, identityCache.get(k) ?? null);
+  return out;
 }
 
 /** Última vez que o chat deste contato foi aberto neste aparelho (por evento). */
