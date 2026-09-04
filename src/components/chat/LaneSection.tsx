@@ -14,10 +14,14 @@ interface LaneSectionProps {
   hint?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** id do elemento (para rolagem via atalhos/contadores). */
+  id?: string;
+  /** Quando muda para um novo valor, força a linha a abrir (ex.: atalho de teclado). */
+  expandSignal?: number;
 }
 
 /** Linha (etapa) genérica: título com contador + conteúdo recolhível, lembrado no aparelho. */
-export function LaneSection({ storageKey, title, count, tone, icon, hint, children, className }: LaneSectionProps) {
+export function LaneSection({ storageKey, title, count, tone, icon, hint, children, className, id, expandSignal }: LaneSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -27,6 +31,16 @@ export function LaneSection({ storageKey, title, count, tone, icon, hint, childr
       /* ignore */
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!expandSignal) return;
+    setCollapsed(false);
+    try {
+      localStorage.setItem(storageKey, "0");
+    } catch {
+      /* ignore */
+    }
+  }, [expandSignal, storageKey]);
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -41,7 +55,7 @@ export function LaneSection({ storageKey, title, count, tone, icon, hint, childr
   };
 
   return (
-    <section className={cn("rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5", className)}>
+    <section id={id} className={cn("scroll-mt-2 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5", className)}>
       <button type="button" onClick={toggle} className="flex w-full items-center gap-2 px-1 py-0.5 text-left">
         {collapsed ? <ChevronRight className="h-3.5 w-3.5 opacity-60" /> : <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
         {icon}
