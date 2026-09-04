@@ -372,7 +372,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
   },
 
   dismissMany: (saleIds) => {
-    const ids = Array.from(new Set(saleIds.map(String))).filter(Boolean);
+    const ids: string[] = Array.from(new Set<string>(saleIds.map((v) => String(v)))).filter(Boolean);
     if (ids.length === 0) return;
     set((s) => {
       const dismissed = new Set(s._dismissed);
