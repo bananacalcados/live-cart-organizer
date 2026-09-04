@@ -248,6 +248,12 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
             {stats && (
               <>
                 {" · "}{stats.confirmed} digitaram o telefone{" · "}{stats.matched} chegaram no WhatsApp{" · "}{stats.withFb} com fbc/fbp
+                {stats.matched > 0 && (
+                  <span className="ml-1" title="Como o clique foi casado com a conversa">
+                    (por telefone {stats.byPhone} · por código {stats.byCode} · por tempo/contexto {stats.byTime}
+                    {stats.divergent > 0 && <> · <span className="text-amber-600">{stats.divergent} divergente(s)</span></>})
+                  </span>
+                )}
               </>
             )}
           </p>
