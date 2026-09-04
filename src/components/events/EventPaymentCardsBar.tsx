@@ -428,11 +428,12 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
   };
 
-  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string) =>
-    list.length === 0 ? (
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: React.ReactNode) =>
+    list.length === 0 && !extra ? (
       <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
     ) : (
           <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {extra}
             {list.map((entry) => {
               const order = entry.rep;
               const group = entry.group;
