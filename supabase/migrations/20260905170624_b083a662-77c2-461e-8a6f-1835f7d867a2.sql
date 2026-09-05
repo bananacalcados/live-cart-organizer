@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.notify_live_click_change() FROM PUBLIC, anon, authenticated;
