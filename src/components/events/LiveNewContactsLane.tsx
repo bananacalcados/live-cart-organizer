@@ -202,20 +202,38 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   }, [eventId]);
 
   // Tempo real: novos cliques confirmados e novas mensagens entram na linha sem recarregar a tela.
+  // Só reage a cliques DESTE evento e agrupa rajadas (uma consulta a cada ~1,5s no máximo).
   useEffect(() => {
     if (!eventId) return;
-    let t: ReturnType<typeof setTimeout> | null = null;
-    const bump = () => {
-      if (t) clearTimeout(t);
-      t = setTimeout(() => loadActivity(), 800);
+    let tClicks: ReturnType<typeof setTimeout> | null = null;
+    let tAct: ReturnType<typeof setTimeout> | null = null;
+    const bumpClicks = () => {
+      if (tClicks) return;
+      tClicks = setTimeout(() => {
+        tClicks = null;
+        load();
+      }, 600);
+    };
+    const bumpActivity = () => {
+      if (tAct) clearTimeout(tAct);
+      tAct = setTimeout(() => loadActivity(), 1500);
     };
     const channel = supabase
       .channel(`live-new-contacts-${eventId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_whatsapp_clicks" }, () => load())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, bump)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "live_whatsapp_clicks", filter: `event_id=eq.${eventId}` },
+        bumpClicks,
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "whatsapp_messages", filter: "direction=eq.incoming" },
+        bumpActivity,
+      )
       .subscribe();
     return () => {
-      if (t) clearTimeout(t);
+      if (tClicks) clearTimeout(tClicks);
+      if (tAct) clearTimeout(tAct);
       supabase.removeChannel(channel);
     };
   }, [eventId, load, loadActivity]);
