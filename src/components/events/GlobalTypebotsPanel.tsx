@@ -8,7 +8,12 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, ExternalLink, Copy, Files } from 'lucide-react';
 import { toast } from 'sonner';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { ChoiceStepEditor } from '@/components/events/typebot/ChoiceStepEditor';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { TypebotFlowEditor, normalizeSteps } from '@/components/events/typebot/TypebotStepEditor';
+import { LeadFieldsCatalogPanel } from '@/components/events/typebot/LeadFieldsCatalogPanel';
+import { TypebotNotifySettings, DEFAULT_NOTIFY_MESSAGE } from '@/components/events/typebot/TypebotNotifySettings';
+import { TypebotLeadsTable } from '@/components/events/typebot/TypebotLeadsTable';
 
 interface TB {
   id: string;
@@ -24,6 +29,10 @@ interface TB {
   vip_group_link: string | null;
   event_starts_at: string | null;
   prize_description: string | null;
+  notify_enabled?: boolean;
+  notify_wa_number_id?: string | null;
+  notify_store_id?: string | null;
+  notify_message?: string | null;
 }
 
 const PUBLIC_BASE = 'https://checkout.bananacalcados.com.br';
@@ -72,7 +81,7 @@ export function GlobalTypebotsPanel() {
     } as any).select().single();
     if (error) { toast.error(error.message); return; }
     setTbs([data as any, ...tbs]);
-    setSelected(data as any);
+    selectTB(data as any);
   }
 
   async function duplicateTB(tb: TB) {
@@ -91,10 +100,14 @@ export function GlobalTypebotsPanel() {
       vip_group_link: tb.vip_group_link,
       event_starts_at: tb.event_starts_at,
       prize_description: tb.prize_description,
+      notify_enabled: tb.notify_enabled ?? false,
+      notify_wa_number_id: tb.notify_wa_number_id ?? null,
+      notify_store_id: tb.notify_store_id ?? null,
+      notify_message: tb.notify_message ?? null,
     } as any).select().single();
     if (error) { toast.error(error.message); return; }
     setTbs([data as any, ...tbs]);
-    setSelected(data as any);
+    selectTB(data as any);
     toast.success('Typebot duplicado!');
   }
 
@@ -109,6 +122,12 @@ export function GlobalTypebotsPanel() {
 
   async function saveTB() {
     if (!selected) return;
+    if (selected.notify_enabled && !selected.notify_wa_number_id) {
+      toast.error('Escolha a instância de WhatsApp do PDV para o aviso de lead');
+      return;
+    }
+    const badStep = (selected.flow_json?.steps || []).find((st: any) => st.type === 'ask_field' && !st.field_id);
+    if (badStep) { toast.error('Há uma pergunta "Campo do catálogo" sem campo escolhido'); return; }
     setSaving(true);
     const { error } = await supabase.from('event_typebots').update({
       name: selected.name,
@@ -120,6 +139,10 @@ export function GlobalTypebotsPanel() {
       vip_group_link: selected.vip_group_link,
       event_starts_at: selected.event_starts_at,
       prize_description: selected.prize_description,
+      notify_enabled: !!selected.notify_enabled,
+      notify_wa_number_id: selected.notify_wa_number_id || null,
+      notify_store_id: selected.notify_store_id || null,
+      notify_message: selected.notify_message ?? DEFAULT_NOTIFY_MESSAGE,
     } as any).eq('id', selected.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
@@ -127,29 +150,28 @@ export function GlobalTypebotsPanel() {
     setTbs(tbs.map((t) => (t.id === selected.id ? selected : t)));
   }
 
-  function addStep() {
-    if (!selected) return;
-    const steps = [...(selected.flow_json?.steps || [])];
-    steps.splice(Math.max(steps.length - 1, 0), 0, { id: String(Date.now()), type: 'ask_name', text: 'Pergunta?', placeholder: '' });
-    setSelected({ ...selected, flow_json: { ...selected.flow_json, steps } });
-  }
-  function updateStep(idx: number, patch: any) {
-    if (!selected) return;
-    const steps = [...(selected.flow_json?.steps || [])];
-    steps[idx] = { ...steps[idx], ...patch };
-    setSelected({ ...selected, flow_json: { ...selected.flow_json, steps } });
-  }
-  function removeStep(idx: number) {
-    if (!selected) return;
-    const steps = [...(selected.flow_json?.steps || [])];
-    steps.splice(idx, 1);
-    setSelected({ ...selected, flow_json: { ...selected.flow_json, steps } });
+  function selectTB(tb: TB) {
+    // Converte condições antigas em regras ao abrir no construtor.
+    const steps = normalizeSteps(tb.flow_json?.steps || []);
+    setSelected({ ...tb, flow_json: { ...(tb.flow_json || {}), steps } });
   }
 
   if (loading) return <div className="p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
+  const typebotNames = Object.fromEntries(tbs.map((t) => [t.id, t.name]));
+
   return (
-    <div className="space-y-4">
+    <Tabs defaultValue="bots" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="bots">Typebots ({tbs.length})</TabsTrigger>
+        <TabsTrigger value="fields">Campos</TabsTrigger>
+        <TabsTrigger value="leads">Leads</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="fields"><LeadFieldsCatalogPanel /></TabsContent>
+      <TabsContent value="leads"><TypebotLeadsTable typebotNames={typebotNames} /></TabsContent>
+
+      <TabsContent value="bots" className="space-y-4">
       <Card className="p-4 bg-muted/30">
         <h3 className="font-bold">Typebots reutilizáveis</h3>
         <p className="text-sm text-muted-foreground">
@@ -166,13 +188,16 @@ export function GlobalTypebotsPanel() {
             <Card
               key={tb.id}
               className={`p-3 cursor-pointer ${selected?.id === tb.id ? 'border-primary' : ''}`}
-              onClick={() => setSelected(tb)}
+              onClick={() => selectTB(tb)}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-medium text-sm truncate">{tb.name}</div>
                   <div className="text-xs text-muted-foreground truncate">/typebot/{tb.slug}</div>
-                  <div className="text-xs mt-1">{tb.published ? '🟢 Publicado' : '⚪ Rascunho'}</div>
+                  <div className="text-xs mt-1 flex items-center gap-1">
+                    {tb.published ? '🟢 Publicado' : '⚪ Rascunho'}
+                    {tb.notify_enabled && <Badge variant="secondary" className="text-[9px] px-1">avisa PDV</Badge>}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <Button
@@ -278,61 +303,35 @@ export function GlobalTypebotsPanel() {
               />
             </div>
 
+            <TypebotNotifySettings
+              value={{
+                notify_enabled: !!selected.notify_enabled,
+                notify_wa_number_id: selected.notify_wa_number_id ?? null,
+                notify_store_id: selected.notify_store_id ?? null,
+                notify_message: selected.notify_message ?? null,
+              }}
+              onChange={(patch) => setSelected({ ...selected, ...patch })}
+            />
+
             <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold">Fluxo de perguntas</h3>
-                <Button size="sm" onClick={addStep}><Plus className="h-4 w-4 mr-1" /> Passo</Button>
-              </div>
-              <div className="space-y-2">
-                {(selected.flow_json?.steps || []).map((step: any, idx: number) => (
-                  <Card key={idx} className="p-3 bg-muted/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <select
-                        value={step.type}
-                        onChange={(e) => updateStep(idx, { type: e.target.value })}
-                        className="text-xs bg-background border rounded px-2 py-1"
-                      >
-                        <option value="message">Mensagem</option>
-                        <option value="ask_name">Pergunta: Nome</option>
-                        <option value="ask_phone">Pergunta: WhatsApp</option>
-                        <option value="ask_choice">Pergunta: Escolha única</option>
-                        <option value="ask_multichoice">Pergunta: Múltipla escolha</option>
-                        <option value="final">Final (envia)</option>
-                      </select>
-                      <Button size="icon" variant="ghost" onClick={() => removeStep(idx)}><Trash2 className="h-3 w-3" /></Button>
-                    </div>
-                    <RichTextEditor
-                      value={step.text || ''}
-                      onChange={(html) => updateStep(idx, { text: html })}
-                      minHeight={60}
-                    />
-                    {(step.type === 'ask_name' || step.type === 'ask_phone') && (
-                      <Input
-                        className="mt-2"
-                        value={step.placeholder || ''}
-                        onChange={(e) => updateStep(idx, { placeholder: e.target.value })}
-                        placeholder="Placeholder do input"
-                      />
-                    )}
-                    {(step.type === 'ask_choice' || step.type === 'ask_multichoice') && (
-                      <ChoiceStepEditor
-                        step={step}
-                        isSingle={step.type === 'ask_choice'}
-                        onChange={(patch) => updateStep(idx, patch)}
-                      />
-                    )}
-                  </Card>
-                ))}
-              </div>
+              <TypebotFlowEditor
+                steps={selected.flow_json?.steps || []}
+                onChange={(steps) => setSelected({ ...selected, flow_json: { ...selected.flow_json, steps } })}
+              />
             </div>
 
             <Button onClick={saveTB} disabled={saving} className="w-full">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
             </Button>
+            <div className="border-t pt-4">
+              <h3 className="font-bold mb-2">Leads deste typebot</h3>
+              <TypebotLeadsTable typebotId={selected.id} />
+            </div>
           </Card>
         )}
       </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 
