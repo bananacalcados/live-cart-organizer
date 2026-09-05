@@ -149,6 +149,10 @@ export default function EventCaptureBuilder() {
 
   async function saveTB() {
     if (!selectedTB) return;
+    if (selectedTB.notify_enabled && !selectedTB.notify_wa_number_id) {
+      toast.error('Escolha a instância de WhatsApp do PDV para o aviso de lead');
+      return;
+    }
     setSaving(true);
     const { error } = await supabase.from('event_typebots').update({
       name: selectedTB.name,
@@ -160,6 +164,10 @@ export default function EventCaptureBuilder() {
       vip_group_link: selectedTB.vip_group_link,
       event_starts_at: selectedTB.event_starts_at,
       prize_description: selectedTB.prize_description,
+      notify_enabled: !!selectedTB.notify_enabled,
+      notify_wa_number_id: selectedTB.notify_wa_number_id || null,
+      notify_store_id: selectedTB.notify_store_id || null,
+      notify_message: selectedTB.notify_message ?? DEFAULT_NOTIFY_MESSAGE,
     } as any).eq('id', selectedTB.id);
     setSaving(false);
     if (error) toast.error(error.message);
@@ -382,7 +390,7 @@ export default function EventCaptureBuilder() {
             {tbs.map((tb) => (
               <Card
                 key={tb.id}
-                onClick={() => setSelectedTB(tb)}
+                onClick={() => selectTB(tb)}
                 className={`p-3 cursor-pointer ${selectedTB?.id === tb.id ? 'border-primary' : ''}`}
               >
                 <div className="font-medium text-sm">{tb.name}</div>
