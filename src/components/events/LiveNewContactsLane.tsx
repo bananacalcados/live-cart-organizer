@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import type { ContactLaneMark } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
 import { useEventStore } from "@/stores/eventStore";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 
 interface ClickRow {
   id: string;
