@@ -61,7 +61,17 @@ interface OrderDialogDbProps {
 
 export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
 
-  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
+  const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
+
+  // Garante a base de clientes carregada em QUALQUER tela que abra o modal
+  // (chat, central da live, comentários...). Sem isso o @ não é reconhecido
+  // e o cliente antigo (com telefone) não é reaproveitado.
+  useEffect(() => {
+    if (open && customers.length === 0 && !customersLoading) {
+      void fetchCustomers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [editingHandle, setEditingHandle] = useState(false);
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
