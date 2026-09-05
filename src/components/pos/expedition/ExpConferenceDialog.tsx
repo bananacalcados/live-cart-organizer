@@ -719,7 +719,12 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             storeId={storeId || order.store_id}
             open={showEdit}
             onOpenChange={setShowEdit}
-            onSaved={() => setShowEdit(false)}
+            onSaved={() => {
+              setShowEdit(false);
+              // Recarrega o pedido para que a conferência/NF-e usem os dados corrigidos.
+              onRefresh?.();
+              void loadNfeStatus();
+            }}
           />
         )}
 
