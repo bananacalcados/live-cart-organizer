@@ -280,9 +280,9 @@ Deno.serve(async (req) => {
       const persistedAddress = {
         ...(sa || {}),
         cep: digits(shipping_address.zip) || null,
-        address: firstUsable([custRec?.address, sa.address, pd.customer_address, sa.address1], 3) || null,
+        address: firstUsable([sa.address, pd.customer_address, custRec?.address, sa.address1], 3) || null,
         number: sanitize(String(shipping_address.number || "")) || null,
-        complement: sanitize(String(custRec?.complement || sa.complement || pd.customer_complement || "")) || null,
+        complement: sanitize(String(sa.complement || pd.customer_complement || custRec?.complement || "")) || null,
         neighborhood: firstUsable([shipping_address.neighborhood, shipping_address.address2], 2) || null,
         city: firstUsable([shipping_address.city], 2) || null,
         state: (ufFromProvince(shipping_address.province) || sanitize(String(shipping_address.province || "")).toUpperCase()).slice(0, 2) || null,
