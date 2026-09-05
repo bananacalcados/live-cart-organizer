@@ -13,13 +13,6 @@ import { extractEdgeError } from "@/lib/edgeFunctionError";
  *  - qualquer erro do provedor é propagado com a mensagem real (nada de falha muda).
  */
 
-function fnForProvider(provider?: string | null): string {
-  if (provider === "meta") return "meta-whatsapp-send";
-  if (provider === "uazapi") return "uazapi-send-message";
-  if (provider === "wasender") return "wasender-send-message";
-  return "zapi-send-message";
-}
-
 function extractMessageId(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, any>;
