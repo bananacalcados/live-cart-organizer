@@ -57,25 +57,17 @@ export function LeadFieldsCatalogPanel() {
   }
 
   async function remove(f: LeadFieldDefinition) {
+    if (!confirm(`Excluir o campo "${f.label}"? Se já houver respostas gravadas, ele será apenas desativado.`)) return;
     // Campos com respostas gravadas não são apagados — apenas desativados.
-    const { count } = await supabase
-      .from('event_leads')
-      .select('id', { count: 'exact', head: true })
-      .contains('custom_fields', { [f.key]: null } as any);
-    void count;
     const { data: used } = await supabase
       .from('event_leads')
       .select('id')
-      .not('custom_fields', 'is', null)
-      .filter('custom_fields', 'cs', JSON.stringify({}))
-      .limit(0);
-    void used;
-    if (!confirm(`Excluir o campo "${f.label}"? Se já houver respostas gravadas, ele será apenas desativado.`)) return;
-    const { data: any } = await supabase.rpc('lead_field_has_answers' as any, { p_key: f.key }).then((r: any) => r, () => ({ data: null }));
-    const hasAnswers = any === true;
+      .not(`custom_fields->>${f.key}`, 'is', null)
+      .limit(1);
+    const hasAnswers = (used || []).length > 0;
     if (hasAnswers || f.is_system) {
       const { error } = await supabase.from('lead_field_definitions' as any).update({ is_active: false }).eq('id', f.id);
-      if (error) toast.error(error.message); else toast.success('Campo desativado (já possui respostas)');
+      if (error) toast.error(error.message); else toast.success(hasAnswers ? 'Campo desativado (já possui respostas)' : 'Campo desativado');
     } else {
       const { error } = await supabase.from('lead_field_definitions' as any).delete().eq('id', f.id);
       if (error) toast.error(error.message); else toast.success('Campo excluído');
