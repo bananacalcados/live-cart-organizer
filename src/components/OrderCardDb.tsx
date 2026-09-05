@@ -632,7 +632,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   return (
     <div
       className={`order-card relative ${isDragging ? "dragging" : ""} ${
-        hasUnread ? "ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
+        hasUnread ? "animate-pulse ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
