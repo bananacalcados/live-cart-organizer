@@ -96,17 +96,49 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
 
   findCustomerByInstagram: (handle) => {
     const normalized = normalizeInstagram(handle);
-    return get().customers.find(
+    if (!normalized) return undefined;
+    const matches = get().customers.filter(
       (c) => normalizeInstagram(c.instagram_handle) === normalized
     );
+    if (matches.length <= 1) return matches[0];
+    // Duplicatas legadas: preferir quem já tem telefone, depois o mais antigo
+    return [...matches].sort((a, b) => {
+      const pa = a.whatsapp ? 0 : 1;
+      const pb = b.whatsapp ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    })[0];
   },
 
   findCustomerByWhatsApp: (whatsapp) => {
-    const normalized = whatsapp.replace(/\D/g, '').trim();
-    if (!normalized) return undefined;
-    return get().customers.find(
-      (c) => c.whatsapp && c.whatsapp.replace(/\D/g, '') === normalized
-    );
+    const digits = whatsapp.replace(/\D/g, '').trim();
+    if (digits.length < 10) return undefined;
+    const suffix = digits.slice(-8);
+    const ddd = digits.slice(-10, -8);
+    return get().customers.find((c) => {
+      const d = (c.whatsapp || '').replace(/\D/g, '');
+      return d.length >= 10 && d.slice(-8) === suffix && d.slice(-10, -8) === ddd;
+    });
+  },
+
+  lookupCustomerByInstagram: async (handle) => {
+    const cached = get().findCustomerByInstagram(handle);
+    if (cached) return cached;
+    const db = await dbFindCustomerByInstagram(handle);
+    if (db) {
+      set((state) => state.customers.some(c => c.id === db.id) ? state : { customers: [db, ...state.customers] });
+    }
+    return db;
+  },
+
+  lookupCustomerByWhatsApp: async (whatsapp) => {
+    const cached = get().findCustomerByWhatsApp(whatsapp);
+    if (cached) return cached;
+    const db = await dbFindCustomerByWhatsApp(whatsapp);
+    if (db) {
+      set((state) => state.customers.some(c => c.id === db.id) ? state : { customers: [db, ...state.customers] });
+    }
+    return db;
   },
 
   createOrUpdateCustomer: async (instagramHandle, whatsapp, fullName) => {
@@ -116,26 +148,8 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
     const cleanFullName = (fullName || '').trim() || undefined;
 
     try {
-      // Check local cache first
-      let existing = get().findCustomerByInstagram(instagramHandle);
-      
-      // If not in cache, try DB lookup
-      if (!existing) {
-        const { data: dbCustomer } = await supabase
-          .from('customers')
-          .select('*')
-          .ilike('instagram_handle', formattedHandle)
-          .maybeSingle();
-        
-        if (dbCustomer) {
-          existing = dbCustomer;
-          // Add to local cache
-          set((state) => {
-            const exists = state.customers.some(c => c.id === dbCustomer.id);
-            return exists ? state : { customers: [dbCustomer, ...state.customers] };
-          });
-        }
-      }
+      // Cache local → banco (tolerante a espaços/maiúsculas no @)
+      let existing = await get().lookupCustomerByInstagram(instagramHandle);
 
       if (existing) {
         // Update whatsapp/nome completo if provided and different
