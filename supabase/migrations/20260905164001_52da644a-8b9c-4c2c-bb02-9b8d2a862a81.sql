@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.mark_orders_unread_on_incoming() FROM PUBLIC, anon, authenticated;
