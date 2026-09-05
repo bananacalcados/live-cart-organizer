@@ -64,6 +64,8 @@ interface CustomerStore {
   fetchCustomers: () => Promise<void>;
   findCustomerByInstagram: (handle: string) => DbCustomer | undefined;
   findCustomerByWhatsApp: (whatsapp: string) => DbCustomer | undefined;
+  lookupCustomerByInstagram: (handle: string) => Promise<DbCustomer | null>;
+  lookupCustomerByWhatsApp: (whatsapp: string) => Promise<DbCustomer | null>;
   createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string, fullName?: string) => Promise<DbCustomer | null>;
   banCustomer: (id: string, reason?: string) => Promise<void>;
   unbanCustomer: (id: string) => Promise<void>;
@@ -192,11 +194,7 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
       if (error) {
         // Handle unique constraint violation - customer exists but wasn't found
         if (error.code === '23505') {
-          const { data: existingData } = await supabase
-            .from('customers')
-            .select('*')
-            .ilike('instagram_handle', formattedHandle)
-            .maybeSingle();
+          const existingData = await dbFindCustomerByInstagram(formattedHandle);
           
           if (existingData) {
             set((state) => {
