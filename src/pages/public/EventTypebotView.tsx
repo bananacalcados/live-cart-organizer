@@ -284,7 +284,7 @@ export default function EventTypebotView() {
     let display = raw;
     if (raw) {
       const v = validateAnswer(ftype, raw);
-      if (!v.ok) { toast.error(v.error); return; }
+      if (v.ok === false) { toast.error(v.error); return; }
       value = v.value; display = v.display;
     }
     const key = def?.key || currentStep.field_key || `step_${currentStep.id}`;
