@@ -197,6 +197,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, stage, finishedRange]);
 
+  // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
+  // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
+  useEffect(() => {
+    if (!conferenceOrder) return;
+    const ids = conferenceOrder.group_order_ids?.length ? conferenceOrder.group_order_ids : [conferenceOrder.id];
+    const fresh = orders.filter((o) => ids.includes(o.id));
+    if (!fresh.length) return;
+    setConferenceOrder(fresh.length > 1 ? mergeExpeditionGroup(fresh) : fresh[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders]);
+
   useEffect(() => {
     if (!storeId) return;
     const ch = supabase
@@ -1209,6 +1220,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           order={conferenceOrder}
           open={!!conferenceOrder}
           onOpenChange={(v) => !v && setConferenceOrder(null)}
+          onRefresh={() => load()}
           onFinished={() => {
             setConferenceOrder(null);
             load();
