@@ -263,9 +263,7 @@ Deno.serve(async (req) => {
       const snapStreet = sa.address || pd.customer_address;
       const snapNumber = sa.number || pd.customer_address_number;
       const snapNeigh = sa.neighborhood || sa.address2 || pd.customer_neighborhood;
-      const street = digits(snapZip).length === 8 || usable(snapStreet, 3)
-        ? pickAddr(snapStreet, custRec?.address, 3)
-        : pickAddr(snapStreet, custRec?.address, 3);
+      const street = pickAddr(snapStreet, custRec?.address, 3);
       const number = pickAddr(snapNumber, custRec?.address_number, 1);
       const shipping_address = {
         zip: digits(snapZip).length === 8 ? digits(snapZip) : (digits(custRec?.cep).length === 8 ? digits(custRec.cep) : snapZip),
