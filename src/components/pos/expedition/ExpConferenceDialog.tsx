@@ -30,6 +30,8 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onFinished: () => void;
+  /** Recarrega o pedido no pai (após edições de dados/itens). */
+  onRefresh?: () => void;
 }
 
 interface CheckState {
@@ -38,7 +40,7 @@ interface CheckState {
   has_defect: boolean;
 }
 
-export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished }: Props) {
+export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished, onRefresh }: Props) {
   // Envio unificado: o card representa vários pedidos do mesmo cliente.
   const groupIds = useMemo(
     () => (order.group_order_ids?.length ? order.group_order_ids : [order.id]),
@@ -719,7 +721,12 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             storeId={storeId || order.store_id}
             open={showEdit}
             onOpenChange={setShowEdit}
-            onSaved={() => setShowEdit(false)}
+            onSaved={() => {
+              setShowEdit(false);
+              // Recarrega o pedido para que a conferência/NF-e usem os dados corrigidos.
+              onRefresh?.();
+              void loadNfeStatus();
+            }}
           />
         )}
 

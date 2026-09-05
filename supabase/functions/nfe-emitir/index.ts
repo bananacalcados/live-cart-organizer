@@ -217,9 +217,13 @@ Deno.serve(async (req) => {
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
 
-      // Cliente: vem de pos_customers se houver customer_id, senão usa shipping_address
+      // FONTE DA VERDADE: a VENDA (pos_sales). É nela que a Expedição grava as correções
+      // feitas em "Editar dados do pedido / NF-e". A ficha em pos_customers só COMPLETA
+      // campos que a venda não tem ou tem inutilizáveis (ex.: logradouro "L", bairro "C",
+      // CPF incompleto) — nunca sobrescreve um dado válido da venda.
       const pd = ((sale as any).payment_details || {}) as any;
-      let cpf: string | null = (sale as any).customer_cpf || pd.customer_cpf || null;
+      const saleCpf = digits((sale as any).customer_cpf || pd.customer_cpf);
+      let cpf: string | null = saleCpf.length === 11 ? saleCpf : (saleCpf || null);
       let email: string | null = (sale as any).customer_email || pd.customer_email || null;
       let custRec: any = null;
       if ((sale as any).customer_id) {
@@ -227,7 +231,7 @@ Deno.serve(async (req) => {
           .from("pos_customers")
           .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
           .eq("id", (sale as any).customer_id).maybeSingle();
-        if (c) { cpf = (c as any).cpf || cpf; email = (c as any).email || email; custRec = c; }
+        if (c) custRec = c;
       }
       if (!custRec) {
         const suffix = digits((sale as any).customer_phone || pd.customer_phone || pd.customer_whatsapp).slice(-8);
@@ -237,39 +241,46 @@ Deno.serve(async (req) => {
             .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
             .like("whatsapp", `%${suffix}`)
             .limit(1);
-          const c = (cs || [])[0] || null;
-          if (c) { cpf = (c as any).cpf || cpf; email = (c as any).email || email; custRec = c; }
+          custRec = (cs || [])[0] || null;
         }
+      }
+      if (custRec) {
+        if (saleCpf.length !== 11 && digits(custRec.cpf).length === 11) cpf = digits(custRec.cpf);
+        if (!email && custRec.email) email = custRec.email;
       }
 
       // Normaliza shipping_address (pode vir tanto do PDV {address, number, ...} quanto do checkout {address1, province, zip})
-      // FONTE DA VERDADE: quando há customer_id, o cadastro vivo em pos_customers tem prioridade
-      // sobre o snapshot da venda (que pode estar parcial/desatualizado — ex.: logradouro "L",
-      // bairro "C"). O snapshot só preenche campos que o cadastro não tiver.
+      // Prioridade: snapshot da venda (se utilizável) > ficha do cliente.
       const sa = ((sale as any).shipping_address || {}) as any;
-      const pickAddr = (live: any, snap: any) => {
-        const l = live != null ? String(live).trim() : "";
-        return l ? l : snap;
+      const usable = (v: any, min: number) => {
+        const s = v != null ? String(v).trim() : "";
+        return s.length >= min ? s : "";
       };
-      const liveAddress1 = custRec
-        ? [pickAddr(custRec.address, sa.address || pd.customer_address), pickAddr(custRec.address_number, sa.number || pd.customer_address_number)].filter(Boolean).join(", ")
-        : null;
+      const pickAddr = (snap: any, live: any, min = 1) => usable(snap, min) || usable(live, min) || (snap ?? live ?? null);
+      const snapZip = sa.zip || sa.cep || (sale as any).customer_cep || pd.customer_cep || pd.cep;
+      const snapState = sa.province || sa.state || (sale as any).customer_state || pd.customer_state || pd.state;
+      const snapCity = sa.city || (sale as any).customer_city || pd.customer_city || pd.city;
+      const snapStreet = sa.address || pd.customer_address;
+      const snapNumber = sa.number || pd.customer_address_number;
+      const snapNeigh = sa.neighborhood || sa.address2 || pd.customer_neighborhood;
+      const street = pickAddr(snapStreet, custRec?.address, 3);
+      const number = pickAddr(snapNumber, custRec?.address_number, 1);
       const shipping_address = {
-        zip: pickAddr(custRec?.cep, sa.zip || sa.cep || (sale as any).customer_cep || pd.customer_cep || pd.cep),
-        province: pickAddr(custRec?.state, sa.province || sa.state || (sale as any).customer_state || pd.customer_state || pd.state),
-        city: pickAddr(custRec?.city, sa.city || (sale as any).customer_city || pd.customer_city || pd.city),
-        address1: (liveAddress1 || sa.address1 || [sa.address || pd.customer_address, sa.number || pd.customer_address_number].filter(Boolean).join(", ")),
-        address2: pickAddr(custRec?.neighborhood, sa.neighborhood || sa.address2 || pd.customer_neighborhood || sa.complement || pd.customer_complement),
-        number: pickAddr(custRec?.address_number, sa.number || pd.customer_address_number),
-        neighborhood: pickAddr(custRec?.neighborhood, sa.neighborhood || pd.customer_neighborhood),
+        zip: digits(snapZip).length === 8 ? digits(snapZip) : (digits(custRec?.cep).length === 8 ? digits(custRec.cep) : snapZip),
+        province: pickAddr(snapState, custRec?.state, 2),
+        city: pickAddr(snapCity, custRec?.city, 2),
+        address1: (sa.address1 && !usable(street, 3)) ? sa.address1 : [street, number].filter(Boolean).join(", "),
+        address2: pickAddr(snapNeigh, custRec?.neighborhood, 2) || sa.complement || pd.customer_complement || null,
+        number,
+        neighborhood: pickAddr(snapNeigh, custRec?.neighborhood, 2),
       };
 
       const persistedAddress = {
         ...(sa || {}),
         cep: digits(shipping_address.zip) || null,
-        address: firstUsable([custRec?.address, sa.address, pd.customer_address, sa.address1], 3) || null,
+        address: firstUsable([sa.address, pd.customer_address, custRec?.address, sa.address1], 3) || null,
         number: sanitize(String(shipping_address.number || "")) || null,
-        complement: sanitize(String(custRec?.complement || sa.complement || pd.customer_complement || "")) || null,
+        complement: sanitize(String(sa.complement || pd.customer_complement || custRec?.complement || "")) || null,
         neighborhood: firstUsable([shipping_address.neighborhood, shipping_address.address2], 2) || null,
         city: firstUsable([shipping_address.city], 2) || null,
         state: (ufFromProvince(shipping_address.province) || sanitize(String(shipping_address.province || "")).toUpperCase()).slice(0, 2) || null,
