@@ -13,6 +13,12 @@ import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTempla
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 
+interface UazapiNumberOption {
+  id: string;
+  label: string | null;
+  phone_display: string | null;
+}
+
 /** Monta os valores das variáveis a partir do pedido + campos informados. */
 export function buildTrackingValues(
   order: ExpOrder,
@@ -53,7 +59,7 @@ interface Props {
 export function ExpTrackingSendDialog({ order, open, onOpenChange }: Props) {
   const [templates, setTemplates] = useState<TrackingTemplate[]>([]);
   const [templateId, setTemplateId] = useState("");
-  const [numbers, setNumbers] = useState<any[]>([]);
+  const [numbers, setNumbers] = useState<UazapiNumberOption[]>([]);
   const [numberId, setNumberId] = useState("");
   const [tracking, setTracking] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
@@ -84,9 +90,14 @@ export function ExpTrackingSendDialog({ order, open, onOpenChange }: Props) {
       .from("whatsapp_numbers_safe")
       .select("id, label, phone_display")
       .eq("is_active", true)
+      .eq("provider", "uazapi")
+      .order("is_default", { ascending: false })
+      .order("label")
       .then(({ data }) => {
-        setNumbers(data || []);
-        setNumberId((prev) => prev || (order as any).wa_instance_id || data?.[0]?.id || "");
+        const list = (data || []) as UazapiNumberOption[];
+        setNumbers(list);
+        const boundId = order.wa_number_id;
+        setNumberId(boundId && list.some((number) => number.id === boundId) ? boundId : list[0]?.id || "");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order?.id]);

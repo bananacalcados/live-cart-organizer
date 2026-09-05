@@ -40,6 +40,12 @@ interface CheckState {
   has_defect: boolean;
 }
 
+interface UazapiNumberOption {
+  id: string;
+  label: string | null;
+  phone_display: string | null;
+}
+
 export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished, onRefresh }: Props) {
   // Envio unificado: o card representa vários pedidos do mesmo cliente.
   const groupIds = useMemo(
@@ -144,7 +150,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
-  const [numbers, setNumbers] = useState<any[]>([]);
+  const [numbers, setNumbers] = useState<UazapiNumberOption[]>([]);
   const [numberId, setNumberId] = useState<string>("");
   const [showEdit, setShowEdit] = useState(false);
   const [linkCode, setLinkCode] = useState<string | null>(null);
@@ -178,9 +184,14 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       .from("whatsapp_numbers_safe")
       .select("id, label, phone_display")
       .eq("is_active", true)
+      .eq("provider", "uazapi")
+      .order("is_default", { ascending: false })
+      .order("label")
       .then(({ data }) => {
-        setNumbers(data || []);
-        if (data?.length) setNumberId(data[0].id);
+        const list = (data || []) as UazapiNumberOption[];
+        setNumbers(list);
+        const boundId = order.wa_number_id;
+        setNumberId(boundId && list.some((number) => number.id === boundId) ? boundId : list[0]?.id || "");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id]);

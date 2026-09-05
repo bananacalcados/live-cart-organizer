@@ -13,13 +13,6 @@ import { extractEdgeError } from "@/lib/edgeFunctionError";
  *  - qualquer erro do provedor é propagado com a mensagem real (nada de falha muda).
  */
 
-function fnForProvider(provider?: string | null): string {
-  if (provider === "meta") return "meta-whatsapp-send";
-  if (provider === "uazapi") return "uazapi-send-message";
-  if (provider === "wasender") return "wasender-send-message";
-  return "zapi-send-message";
-}
-
 function extractMessageId(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, any>;
@@ -35,7 +28,11 @@ function extractMessageId(data: unknown): string | null {
   return c != null ? String(c) : null;
 }
 
-/** Envia o texto de rastreio pela instância escolhida. Lança erro legível em caso de falha. */
+/**
+ * Envia o texto de rastreio exclusivamente pela instância UAZAPI escolhida.
+ * A validação antes da chamada impede que um ID antigo ou de outro provedor
+ * seja desviado silenciosamente para Z-API/Meta.
+ */
 export async function sendTrackingWhatsApp(opts: {
   phone: string;
   message: string;
@@ -45,13 +42,18 @@ export async function sendTrackingWhatsApp(opts: {
   if (!phone) throw new Error("Cliente sem WhatsApp");
   if (!opts.numberId) throw new Error("Selecione a instância de WhatsApp");
 
-  const { data: num } = await supabase
+  const { data: num, error: numberError } = await supabase
     .from("whatsapp_numbers_safe")
-    .select("provider")
+    .select("id, label, provider, is_active")
     .eq("id", opts.numberId)
+    .eq("provider", "uazapi")
+    .eq("is_active", true)
     .maybeSingle();
 
-  const { data, error } = await supabase.functions.invoke(fnForProvider((num as any)?.provider), {
+  if (numberError) throw new Error(numberError.message || "Erro ao validar a instância UAZAPI");
+  if (!num) throw new Error("A instância UAZAPI selecionada não existe ou está inativa. Selecione outra instância.");
+
+  const { data, error } = await supabase.functions.invoke("uazapi-send-message", {
     body: { phone, message: opts.message, whatsapp_number_id: opts.numberId },
     headers: { "x-force-instance": "true" },
   });
