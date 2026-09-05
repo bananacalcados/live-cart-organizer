@@ -201,12 +201,12 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     return () => window.removeEventListener("live-contact-seen", onSeen);
   }, [eventId]);
 
-  // Tempo real: novos cliques confirmados e novas mensagens entram na linha sem recarregar a tela.
-  // Só reage a cliques DESTE evento e agrupa rajadas (uma consulta a cada ~1,5s no máximo).
+  // Tempo real: novos cliques confirmados entram na linha sem recarregar a tela.
+  // Usa BROADCAST disparado por trigger no banco (topic live_clicks_<evento>) —
+  // o feed de "postgres_changes" não entrega eventos neste projeto.
   useEffect(() => {
     if (!eventId) return;
     let tClicks: ReturnType<typeof setTimeout> | null = null;
-    let tAct: ReturnType<typeof setTimeout> | null = null;
     const bumpClicks = () => {
       if (tClicks) return;
       tClicks = setTimeout(() => {
@@ -214,27 +214,45 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         load();
       }, 600);
     };
-    const bumpActivity = () => {
-      if (tAct) clearTimeout(tAct);
-      tAct = setTimeout(() => loadActivity(), 1500);
-    };
     const channel = supabase
-      .channel(`live-new-contacts-${eventId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "live_whatsapp_clicks", filter: `event_id=eq.${eventId}` },
-        bumpClicks,
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "whatsapp_messages", filter: "direction=eq.incoming" },
-        bumpActivity,
-      )
+      .channel(`live_clicks_${eventId}`)
+      .on("broadcast", { event: "live_click" }, bumpClicks)
       .subscribe();
     return () => {
       if (tClicks) clearTimeout(tClicks);
-      if (tAct) clearTimeout(tAct);
       supabase.removeChannel(channel);
+    };
+  }, [eventId, load]);
+
+  // Novas mensagens recebidas (broadcast já existente do chat) atualizam a atividade
+  // e também a lista — a primeira mensagem da cliente casa o clique (phone) no banco.
+  useWaMessageBroadcast(
+    (p) => {
+      if (p?.direction && p.direction !== "incoming") return;
+      loadActivity();
+      load();
+    },
+    { debounceMs: 1500 },
+  );
+
+  // Fallback: polling leve a cada 20s (aba visível) + refresh ao voltar para a aba.
+  useEffect(() => {
+    if (!eventId) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        load();
+        loadActivity();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [eventId, load, loadActivity]);
 
