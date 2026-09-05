@@ -61,7 +61,17 @@ interface OrderDialogDbProps {
 
 export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
 
-  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
+  const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
+
+  // Garante a base de clientes carregada em QUALQUER tela que abra o modal
+  // (chat, central da live, comentários...). Sem isso o @ não é reconhecido
+  // e o cliente antigo (com telefone) não é reaproveitado.
+  useEffect(() => {
+    if (open && customers.length === 0 && !customersLoading) {
+      void fetchCustomers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [editingHandle, setEditingHandle] = useState(false);
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
@@ -239,6 +249,42 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       }
     }
   }, [existingCustomer, editingOrder]);
+
+  // Fallback no banco (com debounce) quando o @ digitado não está no cache
+  // local — cobre cadastros legados "@ handle" e cache ainda não carregado.
+  useEffect(() => {
+    if (editingOrder || !open) return;
+    const handle = instagramHandle.trim();
+    if (handle.length < 3 || existingCustomer) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const found = await lookupCustomerByInstagram(handle);
+      if (cancelled || !found) return;
+      // O lookup insere no cache → existingCustomer recalcula e auto-preenche.
+      if (found.whatsapp && !whatsapp.trim()) setWhatsapp(found.whatsapp);
+      if ((found as any).full_name && !fullName.trim()) setFullName((found as any).full_name);
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instagramHandle, existingCustomer, editingOrder, open]);
+
+  // Pedido em edição cujo cliente ficou sem telefone: sugere o telefone do
+  // cadastro homônimo (duplicata legada) para a vendedora só confirmar.
+  useEffect(() => {
+    if (!editingOrder || !open) return;
+    const cust = editingOrder.customer;
+    if (!cust || cust.whatsapp || whatsapp.trim()) return;
+    let cancelled = false;
+    (async () => {
+      const found = await lookupCustomerByInstagram(cust.instagram_handle || "");
+      if (cancelled || !found || found.id === cust.id || !found.whatsapp) return;
+      setWhatsapp(found.whatsapp);
+      if ((found as any).full_name && !fullName.trim()) setFullName((found as any).full_name);
+      toast.info("Telefone recuperado do cadastro anterior desta cliente. Salve para confirmar.");
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingOrder?.id, open]);
 
   const resetForm = () => {
     setInstagramHandle("");
