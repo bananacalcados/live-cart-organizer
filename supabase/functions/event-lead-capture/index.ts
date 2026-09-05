@@ -49,6 +49,7 @@ serve(async (req) => {
       metadata,
       custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
       disqualified,     // true quando o lead não atendeu a condição da pergunta
+      disqualify_reason, // motivo interno da regra que desqualificou
       // Etapa 3 — sinais de clique da Meta capturados no navegador da lead
       fbclid,
       fbp,
@@ -75,6 +76,18 @@ serve(async (req) => {
       ? custom_fields
       : {};
     const isDisq = disqualified === true;
+    const disqReason = isDisq && typeof disqualify_reason === 'string' && disqualify_reason.trim()
+      ? disqualify_reason.trim().slice(0, 200) : null;
+
+    // Sanitiza respostas: chaves no formato do catálogo, valores curtos.
+    const cleanCf: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(cf)) {
+      if (!/^[a-z][a-z0-9_]{0,59}$/.test(k)) continue;
+      if (v === null || v === undefined) continue;
+      if (Array.isArray(v)) cleanCf[k] = v.slice(0, 50).map((x) => String(x).slice(0, 200));
+      else if (typeof v === 'number' || typeof v === 'boolean') cleanCf[k] = v;
+      else cleanCf[k] = String(v).slice(0, 500);
+    }
 
     // Se o lead foi desqualificado e não pediu para gravar, apenas retorna ok sem tocar no banco.
     // (O front controla o `disqualified` — se ele mandar true, é porque o admin marcou "gravar mesmo assim".)
@@ -102,7 +115,7 @@ serve(async (req) => {
     // Upsert lead (event_id+phone unique)
     const { data: existing } = await supabase
       .from('event_leads')
-      .select('id, referral_token, referred_count, prize_unlocked_at, custom_fields')
+      .select('id, referral_token, referred_count, prize_unlocked_at, custom_fields, disqualified, notified_at')
       .eq('event_id', event_id)
       .eq('phone', e164)
       .maybeSingle();
@@ -111,12 +124,12 @@ serve(async (req) => {
     if (existing) {
       lead = existing;
       // Merge custom_fields do lead existente com os novos (novos sobrescrevem)
-      if (Object.keys(cf).length > 0) {
-        const merged = { ...(existing.custom_fields || {}), ...cf };
-        await supabase
-          .from('event_leads')
-          .update({ custom_fields: merged })
-          .eq('id', existing.id);
+      const patch: Record<string, unknown> = {};
+      if (Object.keys(cleanCf).length > 0) patch.custom_fields = { ...(existing.custom_fields || {}), ...cleanCf };
+      if (isDisq) { patch.disqualified = true; patch.disqualify_reason = disqReason; }
+      else if (existing.disqualified) { patch.disqualified = false; patch.disqualify_reason = null; }
+      if (Object.keys(patch).length > 0) {
+        await supabase.from('event_leads').update(patch).eq('id', existing.id);
       }
     } else {
       const { data: inserted, error: insErr } = await supabase
@@ -138,8 +151,9 @@ serve(async (req) => {
           link_tag: (typeof link_tag === 'string' && link_tag.trim()) ? link_tag.trim().slice(0, 120) : null,
           link_slug: (typeof slug === 'string' && slug.trim()) ? slug.trim().slice(0, 120) : null,
           metadata: metadata || {},
-          custom_fields: cf,
+          custom_fields: cleanCf,
           disqualified: isDisq,
+          disqualify_reason: disqReason,
         } as any)
         .select('id, referral_token, referred_count, prize_unlocked_at')
         .single();
@@ -296,8 +310,27 @@ serve(async (req) => {
       console.error('automation trigger error:', e);
     }
 
+    // Aviso no WhatsApp do PDV (abre a conversa do lead) — só typebot, qualificado e ainda não avisado.
+    let notify: any = null;
+    if (source === 'typebot' && typebot_id && !isDisq && !(existing && existing.notified_at)) {
+      try {
+        const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/lead-notify-pdv`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ lead_id: lead.id, typebot_id }),
+        });
+        notify = await r.json().catch(() => null);
+      } catch (e) {
+        console.error('[event-lead-capture] lead-notify-pdv error:', e);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
+      notify,
       event_id,
       already_registered: !!existing,
       lead_id: lead.id,

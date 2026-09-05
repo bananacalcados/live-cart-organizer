@@ -14,10 +14,13 @@ export function ChoiceStepEditor({
   step,
   isSingle,
   onChange,
+  hideCondition = false,
 }: {
   step: any;
   isSingle: boolean;
   onChange: (patch: any) => void;
+  /** Oculta a condição antiga (quando o editor novo de regras cuida dos caminhos). */
+  hideCondition?: boolean;
 }) {
   const options: { label: string; value: string }[] = step.options || [];
   const condition = step.condition || null;
@@ -100,7 +103,7 @@ export function ChoiceStepEditor({
         </div>
       </div>
 
-      {isSingle && options.length > 0 && (
+      {!hideCondition && isSingle && options.length > 0 && (
         <div className="border rounded p-2 bg-background/50">
           <div className="flex items-center gap-2 mb-2">
             <Switch

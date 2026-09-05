@@ -12,6 +12,8 @@ import { Loader2, Plus, Trash2, ExternalLink, Upload, ArrowLeft, Copy } from 'lu
 import { toast } from 'sonner';
 import LeadCohortPanel from '@/components/events/LeadCohortPanel';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { TypebotFlowEditor, normalizeSteps } from '@/components/events/typebot/TypebotStepEditor';
+import { TypebotNotifySettings, DEFAULT_NOTIFY_MESSAGE } from '@/components/events/typebot/TypebotNotifySettings';
 
 interface LP {
   id: string;
@@ -42,6 +44,10 @@ interface TB {
   vip_group_link: string | null;
   event_starts_at: string | null;
   prize_description: string | null;
+  notify_enabled?: boolean;
+  notify_wa_number_id?: string | null;
+  notify_store_id?: string | null;
+  notify_message?: string | null;
 }
 
 const PUBLIC_BASE = 'https://checkout.bananacalcados.com.br';
@@ -115,7 +121,7 @@ export default function EventCaptureBuilder() {
     } as any).select().single();
     if (error) { toast.error(error.message); return; }
     setTbs([data as any, ...tbs]);
-    setSelectedTB(data as any);
+    selectTB(data as any);
   }
 
   async function saveLP() {
@@ -143,6 +149,10 @@ export default function EventCaptureBuilder() {
 
   async function saveTB() {
     if (!selectedTB) return;
+    if (selectedTB.notify_enabled && !selectedTB.notify_wa_number_id) {
+      toast.error('Escolha a instância de WhatsApp do PDV para o aviso de lead');
+      return;
+    }
     setSaving(true);
     const { error } = await supabase.from('event_typebots').update({
       name: selectedTB.name,
@@ -154,6 +164,10 @@ export default function EventCaptureBuilder() {
       vip_group_link: selectedTB.vip_group_link,
       event_starts_at: selectedTB.event_starts_at,
       prize_description: selectedTB.prize_description,
+      notify_enabled: !!selectedTB.notify_enabled,
+      notify_wa_number_id: selectedTB.notify_wa_number_id || null,
+      notify_store_id: selectedTB.notify_store_id || null,
+      notify_message: selectedTB.notify_message ?? DEFAULT_NOTIFY_MESSAGE,
     } as any).eq('id', selectedTB.id);
     setSaving(false);
     if (error) toast.error(error.message);
@@ -202,23 +216,9 @@ export default function EventCaptureBuilder() {
     setSelectedLP({ ...selectedLP, config_json: { ...selectedLP.config_json, blocks } });
   }
 
-  function addStep() {
-    if (!selectedTB) return;
-    const steps = [...(selectedTB.flow_json?.steps || [])];
-    steps.splice(steps.length - 1, 0, { id: String(Date.now()), type: 'ask_name', text: 'Pergunta?', placeholder: '' });
-    setSelectedTB({ ...selectedTB, flow_json: { ...selectedTB.flow_json, steps } });
-  }
-  function updateStep(idx: number, patch: any) {
-    if (!selectedTB) return;
-    const steps = [...(selectedTB.flow_json?.steps || [])];
-    steps[idx] = { ...steps[idx], ...patch };
-    setSelectedTB({ ...selectedTB, flow_json: { ...selectedTB.flow_json, steps } });
-  }
-  function removeStep(idx: number) {
-    if (!selectedTB) return;
-    const steps = [...(selectedTB.flow_json?.steps || [])];
-    steps.splice(idx, 1);
-    setSelectedTB({ ...selectedTB, flow_json: { ...selectedTB.flow_json, steps } });
+  function selectTB(tb: TB) {
+    const steps = normalizeSteps(tb.flow_json?.steps || []);
+    setSelectedTB({ ...tb, flow_json: { ...(tb.flow_json || {}), steps } });
   }
 
   if (loading) return <div className="p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -390,7 +390,7 @@ export default function EventCaptureBuilder() {
             {tbs.map((tb) => (
               <Card
                 key={tb.id}
-                onClick={() => setSelectedTB(tb)}
+                onClick={() => selectTB(tb)}
                 className={`p-3 cursor-pointer ${selectedTB?.id === tb.id ? 'border-primary' : ''}`}
               >
                 <div className="font-medium text-sm">{tb.name}</div>
@@ -454,52 +454,21 @@ export default function EventCaptureBuilder() {
                 />
               </div>
 
+              <TypebotNotifySettings
+                value={{
+                  notify_enabled: !!selectedTB.notify_enabled,
+                  notify_wa_number_id: selectedTB.notify_wa_number_id ?? null,
+                  notify_store_id: selectedTB.notify_store_id ?? null,
+                  notify_message: selectedTB.notify_message ?? null,
+                }}
+                onChange={(patch) => setSelectedTB({ ...selectedTB, ...patch })}
+              />
+
               <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold">Fluxo de perguntas</h3>
-                  <Button size="sm" onClick={addStep}><Plus className="h-4 w-4 mr-1" /> Passo</Button>
-                </div>
-                <div className="space-y-2">
-                  {(selectedTB.flow_json?.steps || []).map((step: any, idx: number) => (
-                    <Card key={idx} className="p-3 bg-muted/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <select
-                          value={step.type}
-                          onChange={(e) => updateStep(idx, { type: e.target.value })}
-                          className="text-xs bg-background border rounded px-2 py-1"
-                        >
-                          <option value="message">Mensagem</option>
-                          <option value="ask_name">Pergunta: Nome</option>
-                          <option value="ask_phone">Pergunta: WhatsApp</option>
-                          <option value="ask_choice">Pergunta: Escolha única</option>
-                          <option value="ask_multichoice">Pergunta: Múltipla escolha</option>
-                          <option value="final">Final (envia)</option>
-                        </select>
-                        <Button size="icon" variant="ghost" onClick={() => removeStep(idx)}><Trash2 className="h-3 w-3" /></Button>
-                      </div>
-                      <RichTextEditor
-                        value={step.text || ''}
-                        onChange={(html) => updateStep(idx, { text: html })}
-                        minHeight={60}
-                      />
-                      {(step.type === 'ask_name' || step.type === 'ask_phone') && (
-                        <Input
-                          className="mt-2"
-                          value={step.placeholder || ''}
-                          onChange={(e) => updateStep(idx, { placeholder: e.target.value })}
-                          placeholder="Placeholder do input"
-                        />
-                      )}
-                      {(step.type === 'ask_choice' || step.type === 'ask_multichoice') && (
-                        <ChoiceStepEditor
-                          step={step}
-                          isSingle={step.type === 'ask_choice'}
-                          onChange={(patch) => updateStep(idx, patch)}
-                        />
-                      )}
-                    </Card>
-                  ))}
-                </div>
+                <TypebotFlowEditor
+                  steps={selectedTB.flow_json?.steps || []}
+                  onChange={(steps) => setSelectedTB({ ...selectedTB, flow_json: { ...selectedTB.flow_json, steps } })}
+                />
               </div>
 
               <Button onClick={saveTB} disabled={saving} className="w-full">
@@ -675,160 +644,4 @@ function BlockEditor({ block, hero, onChange }: { block: any; hero: string | nul
     );
   }
   return null;
-}
-
-const FIELD_KEY_SUGGESTIONS = [
-  'tamanho_calcado', 'numeracao', 'cor_preferida', 'cidade', 'estado',
-  'compra_online', 'faixa_etaria', 'genero', 'ja_e_cliente',
-];
-
-function ChoiceStepEditor({
-  step,
-  isSingle,
-  onChange,
-}: {
-  step: any;
-  isSingle: boolean;
-  onChange: (patch: any) => void;
-}) {
-  const options: { label: string; value: string }[] = step.options || [];
-  const condition = step.condition || null;
-
-  function updateOption(i: number, patch: any) {
-    const next = [...options];
-    next[i] = { ...next[i], ...patch };
-    onChange({ options: next });
-  }
-  function addOption() {
-    onChange({ options: [...options, { label: '', value: '' }] });
-  }
-  function removeOption(i: number) {
-    const next = options.filter((_, j) => j !== i);
-    // remove from allowed_values if present
-    const nextCond = condition
-      ? { ...condition, allowed_values: (condition.allowed_values || []).filter((v: string) => v !== options[i]?.value) }
-      : null;
-    onChange({ options: next, condition: nextCond });
-  }
-  function toggleAllowed(value: string) {
-    const current: string[] = condition?.allowed_values || [];
-    const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
-    onChange({ condition: { ...(condition || { on_fail: 'end_flow' }), allowed_values: next } });
-  }
-
-  return (
-    <div className="mt-3 space-y-3 border-t pt-3">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label className="text-xs">Chave do campo (field_key)</Label>
-          <Input
-            list="tb-field-key-suggestions"
-            value={step.field_key || ''}
-            onChange={(e) => onChange({ field_key: e.target.value.replace(/[^a-z0-9_]/gi, '_').toLowerCase() })}
-            placeholder="ex: tamanho_calcado"
-          />
-          <datalist id="tb-field-key-suggestions">
-            {FIELD_KEY_SUGGESTIONS.map((k) => <option key={k} value={k} />)}
-          </datalist>
-        </div>
-        <div className="flex items-end gap-2">
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={!!step.required}
-              onCheckedChange={(v) => onChange({ required: v })}
-            />
-            <Label className="text-xs">Obrigatória</Label>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-xs">Opções de resposta</Label>
-        <div className="space-y-1 mt-1">
-          {options.map((opt, i) => (
-            <div key={i} className="flex gap-1 items-center">
-              <Input
-                className="flex-1"
-                value={opt.label}
-                onChange={(e) => {
-                  const label = e.target.value;
-                  // auto-fill value if empty
-                  updateOption(i, { label, value: opt.value || label.trim().toLowerCase().replace(/\s+/g, '_') });
-                }}
-                placeholder="Texto exibido (ex: 36)"
-              />
-              <Input
-                className="w-32 font-mono text-xs"
-                value={opt.value}
-                onChange={(e) => updateOption(i, { value: e.target.value })}
-                placeholder="valor salvo"
-              />
-              <Button size="icon" variant="ghost" onClick={() => removeOption(i)}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-          <Button size="sm" variant="outline" onClick={addOption}>
-            <Plus className="h-3 w-3 mr-1" /> opção
-          </Button>
-        </div>
-      </div>
-
-      {isSingle && options.length > 0 && (
-        <div className="border rounded p-2 bg-background/50">
-          <div className="flex items-center gap-2 mb-2">
-            <Switch
-              checked={!!condition}
-              onCheckedChange={(v) =>
-                onChange({
-                  condition: v
-                    ? { allowed_values: [], on_fail: 'end_flow', fail_message: 'Obrigada pelo interesse!', save_lead_when_disqualified: false }
-                    : null,
-                })
-              }
-            />
-            <Label className="text-xs font-semibold">Condição para continuar</Label>
-          </div>
-          {condition && (
-            <div className="space-y-2 text-xs">
-              <div>
-                <div className="text-muted-foreground mb-1">Continuar apenas se a resposta for:</div>
-                <div className="flex flex-wrap gap-1">
-                  {options.map((opt) => {
-                    const active = (condition.allowed_values || []).includes(opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => toggleAllowed(opt.value)}
-                        className={`px-2 py-1 rounded border ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted'}`}
-                      >
-                        {opt.label || opt.value}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Mensagem final quando não continuar</Label>
-                <Textarea
-                  value={condition.fail_message || ''}
-                  onChange={(e) => onChange({ condition: { ...condition, fail_message: e.target.value } })}
-                  rows={2}
-                  placeholder="Ex: Obrigada! Essa promoção é só para clientes de Valadares."
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={!!condition.save_lead_when_disqualified}
-                  onCheckedChange={(v) => onChange({ condition: { ...condition, save_lead_when_disqualified: v } })}
-                />
-                <Label className="text-xs">Gravar lead mesmo assim (marcado como desqualificado)</Label>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }

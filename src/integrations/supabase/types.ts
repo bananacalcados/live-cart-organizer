@@ -5444,6 +5444,7 @@ export type Database = {
           created_at: string
           custom_fields: Json
           disqualified: boolean
+          disqualify_reason: string | null
           event_id: string
           id: string
           instagram: string | null
@@ -5452,6 +5453,9 @@ export type Database = {
           link_tag: string | null
           metadata: Json
           name: string
+          notified_at: string | null
+          notify_error: string | null
+          notify_status: string | null
           phone: string
           phone_suffix: string | null
           prize_unlocked_at: string | null
@@ -5472,6 +5476,7 @@ export type Database = {
           created_at?: string
           custom_fields?: Json
           disqualified?: boolean
+          disqualify_reason?: string | null
           event_id: string
           id?: string
           instagram?: string | null
@@ -5480,6 +5485,9 @@ export type Database = {
           link_tag?: string | null
           metadata?: Json
           name: string
+          notified_at?: string | null
+          notify_error?: string | null
+          notify_status?: string | null
           phone: string
           phone_suffix?: string | null
           prize_unlocked_at?: string | null
@@ -5500,6 +5508,7 @@ export type Database = {
           created_at?: string
           custom_fields?: Json
           disqualified?: boolean
+          disqualify_reason?: string | null
           event_id?: string
           id?: string
           instagram?: string | null
@@ -5508,6 +5517,9 @@ export type Database = {
           link_tag?: string | null
           metadata?: Json
           name?: string
+          notified_at?: string | null
+          notify_error?: string | null
+          notify_status?: string | null
           phone?: string
           phone_suffix?: string | null
           prize_unlocked_at?: string | null
@@ -6112,6 +6124,10 @@ export type Database = {
           id: string
           is_global: boolean
           name: string
+          notify_enabled: boolean
+          notify_message: string | null
+          notify_store_id: string | null
+          notify_wa_number_id: string | null
           prize_description: string | null
           published: boolean
           slug: string
@@ -6129,6 +6145,10 @@ export type Database = {
           id?: string
           is_global?: boolean
           name?: string
+          notify_enabled?: boolean
+          notify_message?: string | null
+          notify_store_id?: string | null
+          notify_wa_number_id?: string | null
           prize_description?: string | null
           published?: boolean
           slug: string
@@ -6146,6 +6166,10 @@ export type Database = {
           id?: string
           is_global?: boolean
           name?: string
+          notify_enabled?: boolean
+          notify_message?: string | null
+          notify_store_id?: string | null
+          notify_wa_number_id?: string | null
           prize_description?: string | null
           published?: boolean
           slug?: string
@@ -9201,6 +9225,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lead_field_definitions: {
+        Row: {
+          created_at: string
+          description: string | null
+          field_type: string
+          id: string
+          is_active: boolean
+          is_system: boolean
+          key: string
+          label: string
+          options: Json
+          required: boolean
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          field_type?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key: string
+          label: string
+          options?: Json
+          required?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          field_type?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key?: string
+          label?: string
+          options?: Json
+          required?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       link_page_catalog_products: {
         Row: {

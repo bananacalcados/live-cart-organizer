@@ -10,6 +10,10 @@ import { Card } from '@/components/ui/card';
 import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { initMetaPixel, trackPageView, trackPixelEvent } from '@/lib/metaPixel';
+import {
+  evaluateRules, legacyConditionToRules, validateAnswer, maskInput, inputPlaceholder, lookupCep,
+  optionsForField, isChoiceType, type StepRule, type LeadFieldDefinition, type LeadFieldType,
+} from '@/lib/leadFields';
 
 interface StepOption { label: string; value: string; }
 interface StepCondition {
@@ -21,13 +25,15 @@ interface StepCondition {
 }
 interface Step {
   id: string;
-  type: 'message' | 'ask_name' | 'ask_phone' | 'ask_choice' | 'ask_multichoice' | 'final';
+  type: 'message' | 'ask_name' | 'ask_phone' | 'ask_field' | 'ask_choice' | 'ask_multichoice' | 'final';
   text: string;
   placeholder?: string;
+  field_id?: string;
   field_key?: string;
   options?: StepOption[];
   required?: boolean;
   condition?: StepCondition | null;
+  rules?: StepRule[];
 }
 
 interface TypebotData {
@@ -60,6 +66,8 @@ export default function EventTypebotView() {
   const [collected, setCollected] = useState<{ name?: string; phone?: string; custom_fields: Record<string, any> }>({ custom_fields: {} });
   const [done, setDone] = useState<any>(null);
   const [ended, setEnded] = useState(false);
+  const [fieldDefs, setFieldDefs] = useState<Map<string, LeadFieldDefinition>>(new Map());
+  const [disqReason, setDisqReason] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -75,6 +83,15 @@ export default function EventTypebotView() {
       if (data) {
         const typed = data as any as TypebotData;
         setTb(typed);
+        const stepsAll: Step[] = typed.flow_json?.steps || [];
+        const ids = stepsAll.filter((st) => st.type === 'ask_field' && st.field_id).map((st) => st.field_id!);
+        if (ids.length) {
+          const { data: defs } = await supabase
+            .from('lead_field_definitions' as any)
+            .select('*')
+            .in('id', ids);
+          setFieldDefs(new Map(((defs || []) as any[]).map((d) => [d.id, { ...d, options: Array.isArray(d.options) ? d.options : [] }])));
+        }
         document.title = typed.name || 'Cadastro';
         const steps: Step[] = typed.flow_json?.steps || [];
         const queue: ChatMsg[] = [{ from: 'bot', text: typed.welcome_message }];
@@ -125,7 +142,7 @@ export default function EventTypebotView() {
 
   async function submitFinal(
     updated: { name?: string; phone?: string; custom_fields: Record<string, any> },
-    opts: { disqualified?: boolean } = {},
+    opts: { disqualified?: boolean; reason?: string | null } = {},
   ) {
     if (!tb) return;
     setSubmitting(true);
@@ -153,6 +170,7 @@ export default function EventTypebotView() {
           source_url: window.location.href,
           custom_fields: updated.custom_fields,
           disqualified: opts.disqualified === true,
+          disqualify_reason: opts.disqualified ? (opts.reason || disqReason || null) : null,
         },
       });
       if (error) throw error;
@@ -230,8 +248,92 @@ export default function EventTypebotView() {
     setInput('');
   }
 
+  /** Regras do passo (novas) ou condição antiga convertida. Retorna true se o fluxo foi desviado. */
+  function applyRules(step: Step, answer: unknown, fieldType: LeadFieldType, updated: typeof collected): boolean {
+    const rules = (step.rules && step.rules.length) ? step.rules : legacyConditionToRules(step.condition);
+    const hit = evaluateRules(rules, answer, fieldType);
+    if (!hit || hit.action === 'continue') return false;
+    if (hit.message) setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: hit.message! }]), 400);
+    if (hit.action === 'skip_to_step' && hit.target_step_id) {
+      const targetIdx = steps.findIndex((s) => s.id === hit.target_step_id);
+      if (targetIdx >= 0) { advanceTo(targetIdx, updated); return true; }
+      return false;
+    }
+    // disqualify
+    setEnded(true);
+    setDisqReason(hit.reason || null);
+    if (hit.save_disqualified !== false) {
+      setTimeout(() => submitFinal(updated, { disqualified: true, reason: hit.reason || null }), 600);
+    }
+    return true;
+  }
+
+  function currentFieldDef(): LeadFieldDefinition | undefined {
+    return currentStep?.type === 'ask_field' ? fieldDefs.get(currentStep.field_id || '') : undefined;
+  }
+
+  async function handleFieldTextAnswer() {
+    if (!currentStep) return;
+    const def = currentFieldDef();
+    const ftype: LeadFieldType = def?.field_type || 'text';
+    const raw = input.trim();
+    if (!raw) {
+      if (currentStep.required || def?.required) { toast.error('Preencha a resposta'); return; }
+    }
+    let value: unknown = null;
+    let display = raw;
+    if (raw) {
+      const v = validateAnswer(ftype, raw);
+      if (v.ok === false) { toast.error(v.error); return; }
+      value = v.value; display = v.display;
+    }
+    const key = def?.key || currentStep.field_key || `step_${currentStep.id}`;
+    const updated = { ...collected, custom_fields: { ...collected.custom_fields, [key]: value } };
+
+    // CEP → completa endereço/bairro/cidade/estado padronizados
+    if (ftype === 'cep' && value) {
+      const addr = await lookupCep(String(value));
+      if (addr) {
+        if (addr.endereco) updated.custom_fields.endereco = addr.endereco;
+        if (addr.bairro) updated.custom_fields.bairro = addr.bairro;
+        if (addr.cidade) updated.custom_fields.cidade = addr.cidade;
+        if (addr.estado) updated.custom_fields.estado = addr.estado;
+        const resumo = [addr.endereco, addr.bairro, addr.cidade && `${addr.cidade}/${addr.estado || ''}`].filter(Boolean).join(' · ');
+        if (resumo) setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: `📍 ${resumo}` }]), 200);
+      }
+    }
+
+    commitAnswer(display || '(em branco)', updated);
+    if (applyRules(currentStep, value, ftype, updated)) return;
+    advanceTo(stepIdx + 1, updated);
+  }
+
+  function handleFieldChoiceSingle(opt: StepOption) {
+    if (!currentStep) return;
+    const def = currentFieldDef();
+    const key = def?.key || currentStep.field_key || `step_${currentStep.id}`;
+    const updated = { ...collected, custom_fields: { ...collected.custom_fields, [key]: opt.value } };
+    commitAnswer(opt.label, updated);
+    if (applyRules(currentStep, opt.value, def?.field_type || 'select', updated)) return;
+    advanceTo(stepIdx + 1, updated);
+  }
+
+  function handleFieldChoiceMulti() {
+    if (!currentStep) return;
+    const def = currentFieldDef();
+    if ((currentStep.required || def?.required) && multiSelected.length === 0) { toast.error('Selecione pelo menos uma opção'); return; }
+    const opts = def ? optionsForField(def) : [];
+    const labels = opts.filter((o) => multiSelected.includes(o.value)).map((o) => o.label).join(', ');
+    const key = def?.key || currentStep.field_key || `step_${currentStep.id}`;
+    const updated = { ...collected, custom_fields: { ...collected.custom_fields, [key]: multiSelected } };
+    commitAnswer(labels || '(nenhuma)', updated);
+    if (applyRules(currentStep, multiSelected, 'multiselect', updated)) return;
+    advanceTo(stepIdx + 1, updated);
+  }
+
   function handleTextAnswer() {
     if (!currentStep) return;
+    if (currentStep.type === 'ask_field') { handleFieldTextAnswer(); return; }
     const value = input.trim();
     if (!value) return;
 
@@ -257,29 +359,7 @@ export default function EventTypebotView() {
     };
     commitAnswer(opt.label, updated);
 
-    // Evaluate condition
-    const cond = currentStep.condition;
-    if (cond && Array.isArray(cond.allowed_values) && cond.allowed_values.length > 0) {
-      const passes = cond.allowed_values.includes(opt.value);
-      if (!passes) {
-        const failMsg = cond.fail_message || 'Obrigada pelo interesse!';
-        setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: failMsg }]), 400);
-        if (cond.on_fail === 'skip_to_step' && cond.skip_to_step_id) {
-          const targetIdx = steps.findIndex((s) => s.id === cond.skip_to_step_id);
-          if (targetIdx >= 0) {
-            advanceTo(targetIdx, updated);
-            return;
-          }
-        }
-        // end_flow (default)
-        setEnded(true);
-        if (cond.save_lead_when_disqualified) {
-          setTimeout(() => submitFinal(updated, { disqualified: true }), 600);
-        }
-        return;
-      }
-    }
-
+    if (applyRules(currentStep, opt.value, 'select', updated)) return;
     advanceTo(stepIdx + 1, updated);
   }
 
@@ -297,6 +377,7 @@ export default function EventTypebotView() {
       custom_fields: { ...collected.custom_fields, [key]: multiSelected },
     };
     commitAnswer(labels || '(nenhuma)', updated);
+    if (applyRules(currentStep, multiSelected, 'multiselect', updated)) return;
     advanceTo(stepIdx + 1, updated);
   }
 
@@ -304,10 +385,17 @@ export default function EventTypebotView() {
     setMultiSelected((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   }
 
+  const curDef = currentStep?.type === 'ask_field' ? fieldDefs.get(currentStep.field_id || '') : undefined;
+  const curFieldType: LeadFieldType = curDef?.field_type || 'text';
+  const isFieldChoice = currentStep?.type === 'ask_field' && !!curDef && isChoiceType(curDef.field_type);
   const showTextInput =
-    currentStep && (currentStep.type === 'ask_name' || currentStep.type === 'ask_phone');
-  const showChoiceSingle = currentStep && currentStep.type === 'ask_choice';
-  const showChoiceMulti = currentStep && currentStep.type === 'ask_multichoice';
+    currentStep && (currentStep.type === 'ask_name' || currentStep.type === 'ask_phone' || (currentStep.type === 'ask_field' && !isFieldChoice));
+  const showChoiceSingle = currentStep && (currentStep.type === 'ask_choice' || (isFieldChoice && curDef!.field_type !== 'multiselect'));
+  const showChoiceMulti = currentStep && (currentStep.type === 'ask_multichoice' || (isFieldChoice && curDef!.field_type === 'multiselect'));
+  const choiceOptions: StepOption[] = currentStep?.type === 'ask_field' && curDef ? optionsForField(curDef) : (currentStep?.options || []);
+  const onChoiceSingle = currentStep?.type === 'ask_field' ? handleFieldChoiceSingle : handleChoiceSingle;
+  const onChoiceMulti = currentStep?.type === 'ask_field' ? handleFieldChoiceMulti : handleChoiceMulti;
+  const inputMode = curFieldType === 'cpf' || curFieldType === 'cep' || curFieldType === 'number' || curFieldType === 'money' || curFieldType === 'phone' ? 'numeric' : undefined;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: bg }}>
@@ -356,9 +444,10 @@ export default function EventTypebotView() {
           <div className="flex gap-2 mt-4">
             <Input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => setInput(currentStep?.type === 'ask_field' ? maskInput(curFieldType, e.target.value) : e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleTextAnswer()}
-              placeholder={currentStep!.placeholder || 'Digite aqui...'}
+              inputMode={inputMode as any}
+              placeholder={currentStep!.placeholder || (currentStep?.type === 'ask_field' ? inputPlaceholder(curFieldType) : 'Digite aqui...')}
               className="bg-white/10 border-white/20 text-white"
               autoFocus
               disabled={submitting}
@@ -369,10 +458,10 @@ export default function EventTypebotView() {
           </div>
         ) : showChoiceSingle ? (
           <div className="flex flex-wrap gap-2 mt-4 justify-center">
-            {(currentStep!.options || []).map((opt) => (
+            {choiceOptions.map((opt) => (
               <Button
                 key={opt.value}
-                onClick={() => handleChoiceSingle(opt)}
+                onClick={() => onChoiceSingle(opt)}
                 disabled={submitting}
                 className="text-slate-900"
                 style={{ background: primary }}
@@ -384,7 +473,7 @@ export default function EventTypebotView() {
         ) : showChoiceMulti ? (
           <div className="mt-4 space-y-2">
             <div className="flex flex-wrap gap-2 justify-center">
-              {(currentStep!.options || []).map((opt) => {
+              {choiceOptions.map((opt) => {
                 const active = multiSelected.includes(opt.value);
                 return (
                   <button
@@ -403,7 +492,7 @@ export default function EventTypebotView() {
               })}
             </div>
             <Button
-              onClick={handleChoiceMulti}
+              onClick={onChoiceMulti}
               disabled={submitting}
               style={{ background: primary }}
               className="w-full text-slate-900"

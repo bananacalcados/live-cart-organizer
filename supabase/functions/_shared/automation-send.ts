@@ -96,7 +96,45 @@ export async function sendAutomationJob(
     return;
   }
 
-  // plain text / media block
+  // plain text / media block — roteia pelo provider real da instância
+  // (uazapi/wasender/zapi enviam pela própria função; Meta segue pela Cloud API).
+  let provider = "meta";
+  if (whatsappNumberId) {
+    try {
+      const { data: num } = await supabase
+        .from("whatsapp_numbers")
+        .select("provider")
+        .eq("id", whatsappNumberId)
+        .maybeSingle();
+      provider = String(num?.provider || "meta");
+    } catch (_e) { /* mantém meta */ }
+  }
+  if (["uazapi", "wasender", "zapi"].includes(provider)) {
+    const fnName = payload.mediaUrl ? `${provider}-send-media` : `${provider}-send-message`;
+    const body = payload.mediaUrl
+      ? { phone, mediaUrl: payload.mediaUrl, mediaType: payload.mediaType || "image", caption: payload.message || "", whatsapp_number_id: whatsappNumberId }
+      : { phone, message: payload.message, whatsapp_number_id: whatsappNumberId };
+    const r = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: { ...headers, "x-force-instance": "true" },
+      body: JSON.stringify(body),
+    });
+    const out: any = await r.json().catch(() => ({}));
+    if (!r.ok || out?.error) {
+      throw new Error(`${provider} send failed (${r.status}): ${String(out?.message || out?.error || "").slice(0, 400)}`);
+    }
+    await supabase.from("whatsapp_messages").insert({
+      phone,
+      message: payload.message || null,
+      media_url: payload.mediaUrl || null,
+      direction: "outgoing",
+      status: "sent",
+      whatsapp_number_id: whatsappNumberId || null,
+      message_id: out?.messageId || null,
+    });
+    return;
+  }
+
   const res = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
     method: "POST",
     headers,
