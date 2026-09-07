@@ -145,7 +145,9 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
           )}
 
           <p className="text-[11px] text-muted-foreground">
-            A forma de pagamento vai junto para a Expedição do PDV e é usada na emissão da NF-e.
+            {isPaidOnSite
+              ? "A cliente finalizou a compra no site: o pedido vai para PAGO e conta no faturamento do evento, mas NÃO cria venda no PDV nem pedido na Expedição (o pedido do site já entra por lá)."
+              : "A forma de pagamento vai junto para a Expedição do PDV e é usada na emissão da NF-e."}
           </p>
         </div>
 
