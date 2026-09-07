@@ -176,6 +176,8 @@ Deno.serve(async (req) => {
         success: true,
         shopify_product_id: shopifyProductId,
         variants_count: respVariants.length,
+        skipped_duplicates: skippedCombos,
+
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
