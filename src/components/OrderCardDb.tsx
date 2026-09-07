@@ -1565,6 +1565,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
                       payment_confirmed_source: null,
                       payment_method_label: null,
                       pos_sale_id: null,
+                      paid_on_site: false,
                       stage: "new",
                     } as any)
                     .eq("id", order.id);
