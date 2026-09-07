@@ -198,7 +198,9 @@ Deno.serve(async (req) => {
       const base = () =>
         supabase
           .from("events")
-          .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id")
+          .select(
+            "id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id, wa_initial_enabled, wa_initial_number_id",
+          )
           .neq("is_active", false);
 
       const [liveRes, latestRes] = await Promise.all([
