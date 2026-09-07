@@ -163,12 +163,13 @@ Deno.serve(async (req) => {
       .eq("id", master_id);
 
     const respVariants = shopifyProduct.variants || [];
-    for (let i = 0; i < variants.length && i < respVariants.length; i++) {
+    for (let i = 0; i < usedVariants.length && i < respVariants.length; i++) {
       await supabase
         .from("product_variants")
         .update({ shopify_variant_id: String(respVariants[i].id) })
-        .eq("id", variants[i].id);
+        .eq("id", usedVariants[i].id);
     }
+
 
     return new Response(
       JSON.stringify({
