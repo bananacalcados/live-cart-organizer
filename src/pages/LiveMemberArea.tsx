@@ -2311,7 +2311,8 @@ export default function LiveMemberArea() {
         </section>
 
         <a
-          href={`https://wa.me/${(event as any)?.support_phone || "5533999999999"}?text=${encodeURIComponent(
+          hidden={!(event as any)?.support_phone}
+          href={`https://wa.me/${(event as any)?.support_phone || ""}?text=${encodeURIComponent(
             "Estou na Live e vim da área de membros, pode me ajudar?",
           )}`}
           target="_blank"

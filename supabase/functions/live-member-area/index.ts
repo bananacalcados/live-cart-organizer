@@ -198,7 +198,9 @@ Deno.serve(async (req) => {
       const base = () =>
         supabase
           .from("events")
-          .select("id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id")
+          .select(
+            "id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id, wa_initial_enabled, wa_initial_number_id",
+          )
           .neq("is_active", false);
 
       const [liveRes, latestRes] = await Promise.all([
@@ -928,16 +930,27 @@ Deno.serve(async (req) => {
     // ---------- actions ----------
     if (action === "bootstrap") {
       const event = await resolveCurrentEvent();
-      // Telefone público da instância de WhatsApp configurada no evento (botão "Falar com uma vendedora").
+      // Telefone público do botão "Falar com uma vendedora".
+      // Prioridade: instância NÃO-API (uazapi) da mensagem inicial, quando a live está
+      // configurada nesse modo; senão, a instância de template API do evento.
       let supportPhone: string | null = null;
-      if (event?.whatsapp_number_id) {
+      const candidateIds = [
+        (event as any)?.wa_initial_enabled ? (event as any)?.wa_initial_number_id : null,
+        (event as any)?.whatsapp_number_id || null,
+        (event as any)?.wa_initial_number_id || null,
+      ].filter(Boolean) as string[];
+      for (const nid of candidateIds) {
         const { data: num } = await supabase
           .from("whatsapp_numbers")
-          .select("phone_display")
-          .eq("id", event.whatsapp_number_id)
+          .select("phone_display, is_active")
+          .eq("id", nid)
           .maybeSingle();
+        if ((num as any)?.is_active === false) continue;
         const digits = String((num as any)?.phone_display || "").replace(/\D/g, "");
-        if (digits.length >= 10) supportPhone = digits.startsWith("55") ? digits : `55${digits}`;
+        if (digits.length >= 10) {
+          supportPhone = digits.startsWith("55") ? digits : `55${digits}`;
+          break;
+        }
       }
       return json({
         ok: true,
