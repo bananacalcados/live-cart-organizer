@@ -60,6 +60,7 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
 
   const selected = MANUAL_PAYMENT_METHODS.find((m) => m.value === method);
   const needsInstallments = !!selected?.installments;
+  const isPaidOnSite = method === PAID_ON_SITE_METHOD;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -74,10 +75,15 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
         stage: "paid",
         payment_method_label: label,
         installments: inst,
-        payment_confirmed_source: "manual",
+        payment_confirmed_source: isPaidOnSite ? "site" : "manual",
+        paid_on_site: isPaidOnSite,
       } as any);
 
-      toast.success(`Pedido marcado como pago (${label}) — enviado à Expedição.`);
+      toast.success(
+        isPaidOnSite
+          ? "Pedido marcado como PAGO (comprou no site) — sem criar pedido na Expedição."
+          : `Pedido marcado como pago (${label}) — enviado à Expedição.`
+      );
       onOpenChange(false);
     } catch (e) {
       console.error(e);
