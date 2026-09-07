@@ -52,6 +52,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Normaliza cor/tamanho (espaços extras/caixa diferente geram "variant already exists" na Shopify)
+    const norm = (s: any) => String(s ?? "").replace(/\s+/g, " ").trim();
+    for (const v of variants as any[]) {
+      v.color = norm(v.color);
+      v.size = norm(v.size);
+    }
+
     // Detecta opções (Cor, Tamanho)
     const hasColor = variants.some((v: any) => v.color);
     const hasSize = variants.some((v: any) => v.size);
@@ -76,7 +83,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    const shopifyVariants = variants.map((v: any) => {
+    // Deduplica combinações Cor+Tamanho repetidas (a Shopify só aceita uma por combinação)
+    const seenCombos = new Set<string>();
+    const skippedCombos: string[] = [];
+    const usedVariants: any[] = [];
+    for (const v of variants as any[]) {
+      const key = `${(v.color || "").toLowerCase()}|${(v.size || "").toLowerCase()}`;
+      if (seenCombos.has(key)) {
+        skippedCombos.push(`${v.color || "Único"} / ${v.size || "Único"} (SKU ${v.sku})`);
+        continue;
+      }
+      seenCombos.add(key);
+      usedVariants.push(v);
+    }
+
+    const shopifyVariants = usedVariants.map((v: any) => {
       const opts: any = {};
       let i = 1;
       if (hasColor) { opts[`option${i}`] = v.color || "Único"; i++; }
@@ -97,6 +118,7 @@ Deno.serve(async (req) => {
         requires_shipping: true,
       };
     });
+
 
     const productPayload = {
       product: {
@@ -141,18 +163,21 @@ Deno.serve(async (req) => {
       .eq("id", master_id);
 
     const respVariants = shopifyProduct.variants || [];
-    for (let i = 0; i < variants.length && i < respVariants.length; i++) {
+    for (let i = 0; i < usedVariants.length && i < respVariants.length; i++) {
       await supabase
         .from("product_variants")
         .update({ shopify_variant_id: String(respVariants[i].id) })
-        .eq("id", variants[i].id);
+        .eq("id", usedVariants[i].id);
     }
+
 
     return new Response(
       JSON.stringify({
         success: true,
         shopify_product_id: shopifyProductId,
         variants_count: respVariants.length,
+        skipped_duplicates: skippedCombos,
+
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
