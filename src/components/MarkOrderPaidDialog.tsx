@@ -25,7 +25,11 @@ import { CheckCircle2, Loader2 } from "lucide-react";
  * `orders.payment_method_label` e propagado para `pos_sales.payment_method`
  * pela rotina de roteamento (usado depois na emissão da NF-e).
  */
+/** Pedido montado na live, mas finalizado pela própria cliente no site (Shopify). */
+export const PAID_ON_SITE_METHOD = "COMPROU NO SITE";
+
 export const MANUAL_PAYMENT_METHODS: { value: string; label: string; installments?: boolean }[] = [
+  { value: PAID_ON_SITE_METHOD, label: "COMPROU NO SITE" },
   { value: "PIX", label: "PIX" },
   { value: "Dinheiro", label: "Dinheiro" },
   { value: "Cartão de Débito", label: "Cartão de Débito" },
@@ -56,6 +60,7 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
 
   const selected = MANUAL_PAYMENT_METHODS.find((m) => m.value === method);
   const needsInstallments = !!selected?.installments;
+  const isPaidOnSite = method === PAID_ON_SITE_METHOD;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -70,10 +75,15 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
         stage: "paid",
         payment_method_label: label,
         installments: inst,
-        payment_confirmed_source: "manual",
+        payment_confirmed_source: isPaidOnSite ? "site" : "manual",
+        paid_on_site: isPaidOnSite,
       } as any);
 
-      toast.success(`Pedido marcado como pago (${label}) — enviado à Expedição.`);
+      toast.success(
+        isPaidOnSite
+          ? "Pedido marcado como PAGO (comprou no site) — sem criar pedido na Expedição."
+          : `Pedido marcado como pago (${label}) — enviado à Expedição.`
+      );
       onOpenChange(false);
     } catch (e) {
       console.error(e);
@@ -135,7 +145,9 @@ export function MarkOrderPaidDialog({ open, onOpenChange, orderId, customerLabel
           )}
 
           <p className="text-[11px] text-muted-foreground">
-            A forma de pagamento vai junto para a Expedição do PDV e é usada na emissão da NF-e.
+            {isPaidOnSite
+              ? "A cliente finalizou a compra no site: o pedido vai para PAGO e conta no faturamento do evento, mas NÃO cria venda no PDV nem pedido na Expedição (o pedido do site já entra por lá)."
+              : "A forma de pagamento vai junto para a Expedição do PDV e é usada na emissão da NF-e."}
           </p>
         </div>
 

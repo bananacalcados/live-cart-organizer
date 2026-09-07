@@ -62,6 +62,8 @@ export interface DbOrder {
   is_paid: boolean;
   paid_at?: string;
   paid_externally?: boolean;
+  /** Pedido da live finalizado pela cliente no site: conta como pago, mas não vai para o PDV/Expedição. */
+  paid_on_site?: boolean;
   discount_type?: DiscountType;
   discount_value?: number;
   free_shipping?: boolean;

@@ -12510,6 +12510,7 @@ export type Database = {
           pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
+          paid_on_site: boolean
           payment_confirmed_source: string | null
           payment_method_label: string | null
           payment_on_delivery: boolean
@@ -12572,6 +12573,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          paid_on_site?: boolean
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean
@@ -12634,6 +12636,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          paid_on_site?: boolean
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean

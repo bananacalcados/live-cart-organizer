@@ -282,7 +282,9 @@ export function OrderFullViewDialog({ open, onOpenChange, order }: OrderFullView
   const isPix = /pix/i.test(payLabel);
   const isBoleto = /boleto/i.test(payLabel);
   const installments = Number(data.installments || 0);
-  const paymentText = payLabel
+  const paymentText = (data as any).paid_on_site
+    ? "Comprou no site (pedido já está na Expedição pela Shopify)"
+    : payLabel
     ? isCard
       ? `Cartão de crédito — ${installments > 1 ? `${installments}x parcelado` : "1x à vista"}`
       : isPix

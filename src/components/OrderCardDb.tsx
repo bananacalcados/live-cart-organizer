@@ -717,7 +717,12 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
             </Badge>
           </button>
         )}
-        {order.paid_externally && (
+        {(order as any).paid_on_site ? (
+          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
+            <ShoppingBag className="h-3 w-3 mr-1" />
+            Comprou no site (sem expedição)
+          </Badge>
+        ) : order.paid_externally && (
           <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
             <Wallet className="h-3 w-3 mr-1" />
             Pago Externo
@@ -1560,6 +1565,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
                       payment_confirmed_source: null,
                       payment_method_label: null,
                       pos_sale_id: null,
+                      paid_on_site: false,
                       stage: "new",
                     } as any)
                     .eq("id", order.id);
