@@ -25,7 +25,11 @@ import { CheckCircle2, Loader2 } from "lucide-react";
  * `orders.payment_method_label` e propagado para `pos_sales.payment_method`
  * pela rotina de roteamento (usado depois na emissão da NF-e).
  */
+/** Pedido montado na live, mas finalizado pela própria cliente no site (Shopify). */
+export const PAID_ON_SITE_METHOD = "COMPROU NO SITE";
+
 export const MANUAL_PAYMENT_METHODS: { value: string; label: string; installments?: boolean }[] = [
+  { value: PAID_ON_SITE_METHOD, label: "COMPROU NO SITE" },
   { value: "PIX", label: "PIX" },
   { value: "Dinheiro", label: "Dinheiro" },
   { value: "Cartão de Débito", label: "Cartão de Débito" },
