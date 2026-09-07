@@ -27,12 +27,16 @@ Deno.serve(async (req) => {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, paid_externally, payment_method_label, installments, payment_on_delivery, expected_payment_method, release_to_expedition, pickup_store_id, pickup_date, pickup_pay_at_store")
+      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, paid_externally, paid_on_site, payment_method_label, installments, payment_on_delivery, expected_payment_method, release_to_expedition, pickup_store_id, pickup_date, pickup_pay_at_store")
       .eq("id", order_id)
       .maybeSingle();
 
     if (!order) return new Response(JSON.stringify({ error: "order not found" }), { status: 404, headers: corsHeaders });
     if (order.pos_sale_id) return new Response(JSON.stringify({ skipped: "already routed" }), { headers: corsHeaders });
+    // Comprou no site: o pedido já existe na Expedição vindo da Shopify.
+    if ((order as any).paid_on_site) {
+      return new Response(JSON.stringify({ skipped: "paid_on_site" }), { headers: corsHeaders });
+    }
 
     // ---- CLAIM ATÔMICO (via RPC): evita corrida entre webhook, polling e frontend ----
     // Claims mais antigos que 5 min são considerados travados e podem ser retomados.
