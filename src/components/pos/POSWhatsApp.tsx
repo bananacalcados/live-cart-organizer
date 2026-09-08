@@ -43,6 +43,7 @@ import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
 import { ExportConversationDialog } from "@/components/chat/ExportConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
+import { PendingCheckoutOrdersBar } from "./PendingCheckoutOrdersBar";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSGenerateBoletoDialog } from "./POSGenerateBoletoDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
@@ -156,6 +157,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showOrdersModal, setShowOrdersModal] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [pendingOrdersRefresh, setPendingOrdersRefresh] = useState(0);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showBoleto, setShowBoleto] = useState(false);
@@ -2207,7 +2209,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </div>
             </div>
 
+            {!selectedConversation?.isGroup && (
+              <PendingCheckoutOrdersBar
+                phone={selectedPhone}
+                sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
+                selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
+                refreshKey={pendingOrdersRefresh}
+              />
+            )}
+
             <div className="relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+
               <AttendantNudgeCard
                 conversations={conversationsFlagged}
                 arrivedCount={waitlist.arrivedCount}
@@ -2511,7 +2523,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       {selectedPhone && (
         <POSWhatsAppCheckoutDialog
           open={showCheckout}
-          onOpenChange={setShowCheckout}
+          onOpenChange={(v) => { setShowCheckout(v); if (!v) setPendingOrdersRefresh((n) => n + 1); }}
           storeId={storeId}
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}

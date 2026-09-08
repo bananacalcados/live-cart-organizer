@@ -1,0 +1,135 @@
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
+import { EditPendingCheckoutDialog } from "./EditPendingCheckoutDialog";
+import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+
+interface PendingSale {
+  id: string;
+  store_id: string;
+  total: number;
+  created_at: string;
+  payment_details: any;
+}
+
+interface Props {
+  phone: string;
+  sendVia: PosSendProvider;
+  selectedNumberId: string | null;
+  /** Recarrega quando um link novo é gerado. */
+  refreshKey?: number;
+}
+
+const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const linkOf = (s: PendingSale) => `https://checkout.bananacalcados.com.br/checkout-loja/${s.store_id}/${s.id}`;
+
+/**
+ * Faixa no topo da conversa com os pedidos que já têm link de checkout
+ * mas ainda não foram pagos. Permite editar o pedido (dados da cliente,
+ * frete, endereço, itens) sem precisar gerar um link novo.
+ */
+export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, refreshKey }: Props) {
+  const [sales, setSales] = useState<PendingSale[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (digits.length < 8) { setSales([]); return; }
+    const suffix = digits.slice(-8);
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("pos_sales")
+      .select("id, store_id, total, created_at, payment_details")
+      .eq("phone_suffix8", suffix)
+      .eq("status", "online_pending")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    setSales((data || []) as PendingSale[]);
+  }, [phone]);
+
+  useEffect(() => { load(); }, [load, refreshKey]);
+
+  const cancelSale = async (id: string) => {
+    if (!window.confirm("Cancelar este pedido sem pagamento? O link deixa de valer.")) return;
+    await supabase.from("pos_sales").update({ status: "cancelled" }).eq("id", id);
+    await supabase.from("chat_awaiting_payment").delete().eq("sale_id", id);
+    toast.success("Pedido cancelado");
+    load();
+  };
+
+  const resend = async (s: PendingSale) => {
+    setSendingId(s.id);
+    try {
+      const link = linkOf(s);
+      const message = `Oi! 🛍️ Atualizei seu pedido (${fmt(Number(s.total || 0))}).\n\nÉ só finalizar por aqui:\n${link}`;
+      const messageId = await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
+      await supabase.from("whatsapp_messages").insert({
+        phone, message, direction: "outgoing", status: "sent",
+        message_id: messageId, whatsapp_number_id: selectedNumberId || null,
+      });
+      toast.success("Link enviado!");
+    } catch {
+      toast.error("Erro ao enviar o link");
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  if (sales.length === 0) return null;
+
+  return (
+    <div className="flex-shrink-0 border-b bg-amber-500/10 px-2 py-1.5 space-y-1.5">
+      {sales.map((s) => (
+        <div key={s.id} className="flex flex-wrap items-center gap-1.5">
+          <Badge className="gap-1 bg-amber-500 text-white text-[10px]">
+            <ShoppingCart className="h-3 w-3" /> Sem pagamento
+          </Badge>
+          <span className="text-xs font-semibold">{fmt(Number(s.total || 0))}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {new Date(s.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px] gap-1" onClick={() => setEditing(s.id)}>
+              <Pencil className="h-3 w-3" /> Editar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[11px] gap-1"
+              onClick={async () => {
+                await navigator.clipboard.writeText(linkOf(s));
+                setCopiedId(s.id);
+                setTimeout(() => setCopiedId(null), 1500);
+              }}
+            >
+              {copiedId === s.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              Copiar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] gap-1 text-[#00a884]" onClick={() => resend(s)} disabled={sendingId === s.id}>
+              {sendingId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              Reenviar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 px-1.5 text-destructive" onClick={() => cancelSale(s.id)} title="Cancelar pedido">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      {editing && (
+        <EditPendingCheckoutDialog
+          open={!!editing}
+          onOpenChange={(v) => { if (!v) setEditing(null); }}
+          saleId={editing}
+          onSaved={load}
+        />
+      )}
+    </div>
+  );
+}
