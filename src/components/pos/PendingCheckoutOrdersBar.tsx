@@ -113,10 +113,34 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
     }
   };
 
-  if (sales.length === 0) return null;
+  if (sales.length === 0 && paidSales.length === 0) return null;
 
   return (
-    <div className="flex-shrink-0 border-b bg-amber-500/10 px-2 py-1.5 space-y-1.5">
+    <div className="flex-shrink-0 border-b px-2 py-1.5 space-y-1.5">
+      {paidSales.map((p) => {
+        const stage = p.expedition_finished_at ? "finalizado" : (p.expedition_stage || "");
+        const info = STAGE_LABEL[stage] || (p.status === "completed" ? "Pedido concluído" : "Pagamento confirmado");
+        return (
+          <div key={p.id} className="flex flex-wrap items-center gap-1.5 rounded-md bg-emerald-500/10 px-1.5 py-1">
+            <Badge className="gap-1 bg-emerald-600 text-white text-[10px]">
+              <Check className="h-3 w-3" /> PAGO
+            </Badge>
+            <span className="text-xs font-semibold">{fmt(Number(p.total || 0))}</span>
+            <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">{info}</span>
+            {p.payment_method && (
+              <span className="text-[10px] text-muted-foreground uppercase">{p.payment_method}</span>
+            )}
+            {p.tracking_code && (
+              <span className="text-[10px] text-muted-foreground">Rastreio: {p.tracking_code}</span>
+            )}
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {new Date(p.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        );
+      })}
+      {sales.length > 0 && (
+        <div className="rounded-md bg-amber-500/10 px-1.5 py-1 space-y-1.5">
       {sales.map((s) => (
         <div key={s.id} className="flex flex-wrap items-center gap-1.5">
           <Badge className="gap-1 bg-amber-500 text-white text-[10px]">
