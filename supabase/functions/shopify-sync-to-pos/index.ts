@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     // status=any + no financial_status filter so we also see cancellations/refunds.
     // Filter by updated_at_min (not created_at_min) so status changes on old
     // orders are caught while keeping the page count tiny on each run.
-    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&updated_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,updated_at,cancelled_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes,landing_site`;
+    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&updated_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,updated_at,cancelled_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes,landing_site,shipping_lines`;
 
     let inserted = 0, skipped = 0, errors = 0, pages = 0, cancelled = 0;
     const safetyMax = 20;
@@ -156,6 +156,9 @@ Deno.serve(async (req) => {
           const cpfAttr = (o.note_attributes || []).find((a: any) => /cpf/i.test(a?.name || ""));
           const customerCpf = digits(cpfAttr?.value) || null;
           const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
+          // Forma de envio escolhida no site (retirada na loja tem prioridade na Expedição)
+          const shippingTitle = String((o.shipping_lines || [])[0]?.title || "").trim();
+          const isPickupShipping = /retirad|retirar|pickup/i.test(shippingTitle);
 
           // Full address breakdown (street/number/complement/neighborhood)
           const notesAttrs = o.note_attributes || [];
@@ -217,6 +220,8 @@ Deno.serve(async (req) => {
               discount,
               total,
               shipping_cost: shippingCost,
+              shipping_carrier: isPickupShipping ? "Retirada na loja" : shippingTitle || null,
+              is_store_pickup: isPickupShipping,
               customer_id: customerId,
               customer_name: customerName,
               customer_phone: customerPhone,
