@@ -268,10 +268,28 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
                         <span className="w-6 text-center text-xs">{i.quantity}</span>
                         <button type="button" className="h-6 w-6 rounded bg-muted flex items-center justify-center" onClick={() => setQty(i.id, 1)}><Plus className="h-3 w-3" /></button>
                       </div>
+                      <Input
+                        className="h-7 w-20 text-right text-xs"
+                        value={String(i.unit_price)}
+                        onChange={(e) => setPrice(i.id, e.target.value.replace(/[^\d.,]/g, ""))}
+                        inputMode="decimal"
+                      />
                       <span className="w-20 text-right text-xs font-bold">{fmt(Number(i.unit_price) * i.quantity)}</span>
                       <button type="button" onClick={() => setRemoved((p) => [...p, i.id])}><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                     </div>
                   ))}
+
+                  {storeId && (
+                    <div className="rounded border border-dashed p-2">
+                      <POSTinyProductPicker
+                        storeId={storeId}
+                        label="Adicionar produto"
+                        value=""
+                        onSelect={addProduct}
+                        placeholder="Buscar por nome, SKU ou código de barras..."
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Cliente */}
