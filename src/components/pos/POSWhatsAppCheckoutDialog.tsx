@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts } from "@/lib/shopify";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { materializePosCustomer } from "@/lib/posCustomerResolve";
@@ -25,6 +24,7 @@ interface CartItem {
   price: number;
   quantity: number;
   imageUrl: string | null;
+  stock?: number;
 }
 
 interface Props {
@@ -69,31 +69,63 @@ export function POSWhatsAppCheckoutDialog({
     loadProducts();
   }, [debouncedSearch, open]);
 
+  // Catálogo interno (pos_products) é a fonte da verdade: mostra TODAS as
+  // variações com estoque em QUALQUER loja (estoque compartilhado).
   const loadProducts = async () => {
     setLoading(true);
-    const query = debouncedSearch.trim() ? `title:*${debouncedSearch}*` : undefined;
-    const shopifyProducts = await fetchProducts(50, query);
-    const items: CartItem[] = [];
-    for (const sp of shopifyProducts) {
-      const node = sp.node;
-      const fallbackImg = node.images.edges[0]?.node.url || null;
-      for (const ve of node.variants.edges) {
-        const v = ve.node;
-        if (!v.availableForSale) continue;
-        const variantParts = v.selectedOptions.filter((o: any) => o.value !== "Default Title").map((o: any) => o.value);
-        items.push({
-          id: `${node.id}::${v.id}`,
-          title: node.title,
-          variantLabel: variantParts.join(" / "),
-          sku: v.sku || "",
-          price: parseFloat(v.price.amount),
+    try {
+      const term = debouncedSearch.trim();
+      let q = supabase
+        .from("pos_products")
+        .select("name, variant, size, color, sku, barcode, price, stock, image_url")
+        .gt("stock", 0)
+        .order("name", { ascending: true })
+        .limit(1000);
+
+      if (term) {
+        const isCode = /^\d{6,14}$/.test(term);
+        if (isCode) {
+          q = q.or(`barcode.eq.${term},sku.eq.${term}`);
+        } else {
+          for (const w of term.split(/\s+/).filter(Boolean).slice(0, 4)) {
+            q = q.ilike("name", `%${w}%`);
+          }
+        }
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      // Agrupa a mesma variação vendida em lojas diferentes (soma estoque)
+      const map = new Map<string, CartItem & { stock: number }>();
+      for (const r of (data || []) as any[]) {
+        const key = (r.barcode || r.sku || `${r.name}|${r.variant}`).toString();
+        const variantLabel = [r.color, r.size].filter(Boolean).join(" / ") || (r.variant || "");
+        const baseTitle = (r.name || "").split(" - ")[0] || r.name || "";
+        const existing = map.get(key);
+        if (existing) {
+          existing.stock += Number(r.stock || 0);
+          if (!existing.imageUrl && r.image_url) existing.imageUrl = r.image_url;
+          continue;
+        }
+        map.set(key, {
+          id: key,
+          title: baseTitle,
+          variantLabel,
+          sku: r.barcode || r.sku || "",
+          price: parseFloat(r.price || "0"),
           quantity: 1,
-          imageUrl: v.image?.url || fallbackImg,
+          imageUrl: r.image_url || null,
+          stock: Number(r.stock || 0),
         });
       }
+
+      setProducts(Array.from(map.values()));
+    } catch {
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
-    setProducts(items);
-    setLoading(false);
   };
 
   const addToCart = (item: CartItem) => {
@@ -312,7 +344,7 @@ export function POSWhatsAppCheckoutDialog({
                       {item.imageUrl && <img src={item.imageUrl} alt="" className="h-10 w-10 rounded object-cover" />}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{item.title}</p>
-                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}</p>}
+                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}{typeof item.stock === "number" ? ` · ${item.stock} em estoque` : ""}</p>}
                       </div>
                       <span className="text-xs font-bold text-primary shrink-0">{fmt(item.price)}</span>
                       <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
