@@ -9,14 +9,15 @@ const stripAccents = (value: string) =>
 
 export const isValadaresOrder = (order: any): boolean => {
   const addr = order?.shipping_address || {};
-  const city = stripAccents(String(addr.city || ""));
-  const province = stripAccents(String(addr.province || addr.state || ""));
+  const city = stripAccents(String(addr.city || order?.customer_city || ""));
+  const province = stripAccents(String(addr.province || addr.state || order?.customer_state || ""));
   if (!city.includes("governador valadares") && city !== "valadares") return false;
   // Sem UF informada ainda consideramos Valadares (cidade é única no Brasil).
   return !province || province.includes("mg") || province.includes("minas");
 };
 
-export const isSedexOrder = (order: any): boolean => Boolean(order?.priority_sedex);
+export const isSedexOrder = (order: any): boolean =>
+  Boolean(order?.priority_sedex || order?.is_sedex);
 
 /** 0 = SEDEX, 1 = Valadares, 2 = demais. */
 export const expeditionPriorityRank = (order: any): number => {

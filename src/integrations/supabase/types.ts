@@ -15190,6 +15190,7 @@ export type Database = {
           invoice_number: string | null
           invoice_pdf_url: string | null
           is_conditional: boolean
+          is_sedex: boolean
           is_store_pickup: boolean
           link_page_catalog_product_id: string | null
           link_page_id: string | null
@@ -15292,6 +15293,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          is_sedex?: boolean
           is_store_pickup?: boolean
           link_page_catalog_product_id?: string | null
           link_page_id?: string | null
@@ -15394,6 +15396,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           is_conditional?: boolean
+          is_sedex?: boolean
           is_store_pickup?: boolean
           link_page_catalog_product_id?: string | null
           link_page_id?: string | null
