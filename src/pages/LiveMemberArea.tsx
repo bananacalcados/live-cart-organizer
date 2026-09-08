@@ -2164,7 +2164,7 @@ export default function LiveMemberArea() {
                 <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-3 text-primary font-semibold text-sm">
                   <CheckCircle2 className="h-5 w-5" /> Pagamento confirmado!
                 </div>
-              ) : order.confirmed_at ? (
+              ) : order.confirmed_at || state?.order_ready ? (
                 <div className="space-y-3">
                   {mm && (
                     <div className="rounded-xl bg-destructive/10 text-destructive py-3 px-3 text-center space-y-0.5">
