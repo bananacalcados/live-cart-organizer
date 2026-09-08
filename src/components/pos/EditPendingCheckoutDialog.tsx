@@ -151,14 +151,31 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
       const cleanCpf = onlyDigits(cpf);
       const cleanCep = onlyDigits(cep);
 
-      if (removed.length) {
-        await supabase.from("pos_sale_items").delete().in("id", removed);
+      const removedExisting = removed.filter((id) => !id.startsWith("new-"));
+      if (removedExisting.length) {
+        await supabase.from("pos_sale_items").delete().in("id", removedExisting);
       }
-      for (const i of visibleItems) {
+      for (const i of visibleItems.filter((i) => !i.isNew)) {
         await supabase
           .from("pos_sale_items")
-          .update({ quantity: i.quantity, total_price: Number(i.unit_price) * i.quantity })
+          .update({ unit_price: Number(i.unit_price), quantity: i.quantity, total_price: Number(i.unit_price) * i.quantity })
           .eq("id", i.id);
+      }
+      const newRows = visibleItems.filter((i) => i.isNew);
+      if (newRows.length) {
+        const { error: insErr } = await supabase.from("pos_sale_items").insert(
+          newRows.map((i) => ({
+            sale_id: saleId,
+            sku: i.sku || null,
+            barcode: i.barcode || null,
+            product_name: i.product_name,
+            variant_name: i.variant_name,
+            unit_price: Number(i.unit_price),
+            quantity: i.quantity,
+            total_price: Number(i.unit_price) * i.quantity,
+          })) as any,
+        );
+        if (insErr) throw insErr;
       }
 
       const payment_details = {
