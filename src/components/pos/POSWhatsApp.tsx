@@ -25,6 +25,7 @@ import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { ProductWaitlistDialog } from "@/components/chat/ProductWaitlistDialog";
 import { ProductArrivalCard } from "@/components/chat/ProductArrivalCard";
 import { BlockContactButton } from "@/components/chat/BlockContactButton";
+import { EraseContactButton } from "@/components/chat/EraseContactButton";
 import { useProductWaitlist } from "@/hooks/useProductWaitlist";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
@@ -2178,6 +2179,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     phone={selectedPhone}
                     whatsappNumberId={messageBoundNumberId ?? selectedSendNumberId}
                     customerName={selectedConversation?.customerName}
+                  />
+                )}
+                {selectedConversation && !selectedConversation.isGroup && (
+                  <EraseContactButton
+                    phone={selectedPhone}
+                    instagramHandle={(selectedConversation as { instagram?: string | null })?.instagram ?? null}
+                    customerName={selectedConversation?.customerName}
+                    onErased={() => {
+                      const erased = selectedPhone;
+                      setConversations(prev => prev.filter(c => c.phone !== erased));
+                      setSelectedPhone(null);
+                      setMessages([]);
+                    }}
                   />
                 )}
                 <Button

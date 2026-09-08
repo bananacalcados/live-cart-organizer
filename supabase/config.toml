@@ -319,3 +319,9 @@ verify_jwt = false
 
 [functions.instagram-token-refresh]
 verify_jwt = false
+
+[functions.fiscal-recover-by-identifier]
+verify_jwt = false
+
+[functions.contact-erase]
+verify_jwt = false
