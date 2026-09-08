@@ -960,6 +960,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             <Badge className={`${stageStyles[stage].chip} text-white text-sm font-bold`}>
                               {ORIGIN_LABEL[o.origin]}
                             </Badge>
+                            {isSedexOrder(o) && (
+                              <Badge className="bg-orange-500 text-white text-sm font-black">SEDEX</Badge>
+                            )}
+                            {isValadaresOrder(o) && (
+                              <Badge className="bg-emerald-600 text-white text-sm font-black">
+                                VALADARES, MG
+                              </Badge>
+                            )}
                             {o.is_test && (
                               <Badge className="bg-fuchsia-600 text-white text-sm font-black">TESTE</Badge>
                             )}
