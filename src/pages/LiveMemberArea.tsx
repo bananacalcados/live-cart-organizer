@@ -78,6 +78,9 @@ interface MemberState {
   payDetails?: any;
   onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
   onboardingComplete?: boolean;
+  /** Pedido já veio 100% preenchido da Live: vai direto para o pagamento. */
+  order_ready?: boolean;
+
   order: {
     id: string;
     stage: string;
