@@ -77,8 +77,9 @@ Deno.serve(async (req) => {
       const msg = me?.error?.message || `HTTP ${meRes.status}`;
       console.error(`[ig-token-refresh] ${label} token INVÁLIDO:`, msg);
       await supabase.from("whatsapp_numbers").update({
-        connection_status: "token_expired",
-        last_error: `Token do Instagram expirado/inválido: ${msg}`.slice(0, 500),
+        is_online: false,
+        last_health_check: new Date().toISOString(),
+        health_check_error: `Token do Instagram expirado/inválido: ${msg}`.slice(0, 500),
       }).eq("id", row.id);
       results.push({ id: row.id, account: label, status: "expired", error: msg, usingGlobal });
       continue;
@@ -93,8 +94,9 @@ Deno.serve(async (req) => {
       const msg = rf?.error?.message || `HTTP ${rfRes.status}`;
       console.warn(`[ig-token-refresh] ${label} válido, mas não renovou:`, msg);
       await supabase.from("whatsapp_numbers").update({
-        connection_status: "connected",
-        last_error: null,
+        is_online: true,
+        last_health_check: new Date().toISOString(),
+        health_check_error: null,
       }).eq("id", row.id);
       results.push({ id: row.id, account: label, status: "valid_not_refreshed", error: msg, usingGlobal });
       continue;
@@ -105,8 +107,9 @@ Deno.serve(async (req) => {
     // até então usava o token global — assim ela deixa de depender do secret).
     await supabase.from("whatsapp_numbers").update({
       access_token: rf.access_token,
-      connection_status: "connected",
-      last_error: null,
+      is_online: true,
+      last_health_check: new Date().toISOString(),
+      health_check_error: null,
       instagram_username: me.username || row.instagram_username,
     }).eq("id", row.id);
     console.log(`[ig-token-refresh] ${label} renovado até ${expiresAt}`);

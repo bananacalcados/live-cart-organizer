@@ -316,3 +316,6 @@ verify_jwt = false
 
 [functions.shipment-tracking-public]
 verify_jwt = false
+
+[functions.instagram-token-refresh]
+verify_jwt = false
