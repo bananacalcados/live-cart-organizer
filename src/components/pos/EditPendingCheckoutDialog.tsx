@@ -75,6 +75,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
       if (cancelled || !sale) { setLoading(false); return; }
       const details = ((sale as any).payment_details || {}) as Record<string, any>;
       setPd(details);
+      setStoreId((sale as any).store_id || "");
       setItems((rows || []) as SaleItemRow[]);
       setRemoved([]);
       setName((sale as any).customer_name || details.customer_name || "");
