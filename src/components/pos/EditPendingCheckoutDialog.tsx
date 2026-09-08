@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { POSTinyProductPicker } from "./POSTinyProductPicker";
 
 interface SaleItemRow {
   id: string;
@@ -15,6 +16,10 @@ interface SaleItemRow {
   variant_name: string | null;
   unit_price: number;
   quantity: number;
+  /** Item ainda não gravado no banco (adicionado agora). */
+  isNew?: boolean;
+  sku?: string | null;
+  barcode?: string | null;
 }
 
 interface Props {
@@ -38,6 +43,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
   const [items, setItems] = useState<SaleItemRow[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
   const [pd, setPd] = useState<Record<string, any>>({});
+  const [storeId, setStoreId] = useState<string>("");
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -69,6 +75,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
       if (cancelled || !sale) { setLoading(false); return; }
       const details = ((sale as any).payment_details || {}) as Record<string, any>;
       setPd(details);
+      setStoreId((sale as any).store_id || "");
       setItems((rows || []) as SaleItemRow[]);
       setRemoved([]);
       setName((sale as any).customer_name || details.customer_name || "");
@@ -115,6 +122,27 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
   const setQty = (id: string, delta: number) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)));
 
+  const setPrice = (id: string, value: string) =>
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, unit_price: parseNum(value) } : i)));
+
+  const addProduct = (p: { product_name: string; sku: string; unit_price: number; size?: string; barcode?: string }) => {
+    if (!p.product_name) return;
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        product_name: p.product_name,
+        variant_name: p.size || null,
+        unit_price: Number(p.unit_price) || 0,
+        quantity: 1,
+        isNew: true,
+        sku: p.sku || null,
+        barcode: p.barcode || null,
+      },
+    ]);
+  };
+
+
   const handleSave = async () => {
     if (visibleItems.length === 0) { toast.error("O pedido precisa ter ao menos um produto"); return; }
     setSaving(true);
@@ -123,14 +151,31 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
       const cleanCpf = onlyDigits(cpf);
       const cleanCep = onlyDigits(cep);
 
-      if (removed.length) {
-        await supabase.from("pos_sale_items").delete().in("id", removed);
+      const removedExisting = removed.filter((id) => !id.startsWith("new-"));
+      if (removedExisting.length) {
+        await supabase.from("pos_sale_items").delete().in("id", removedExisting);
       }
-      for (const i of visibleItems) {
+      for (const i of visibleItems.filter((i) => !i.isNew)) {
         await supabase
           .from("pos_sale_items")
-          .update({ quantity: i.quantity, total_price: Number(i.unit_price) * i.quantity })
+          .update({ unit_price: Number(i.unit_price), quantity: i.quantity, total_price: Number(i.unit_price) * i.quantity })
           .eq("id", i.id);
+      }
+      const newRows = visibleItems.filter((i) => i.isNew);
+      if (newRows.length) {
+        const { error: insErr } = await supabase.from("pos_sale_items").insert(
+          newRows.map((i) => ({
+            sale_id: saleId,
+            sku: i.sku || null,
+            barcode: i.barcode || null,
+            product_name: i.product_name,
+            variant_name: i.variant_name,
+            unit_price: Number(i.unit_price),
+            quantity: i.quantity,
+            total_price: Number(i.unit_price) * i.quantity,
+          })) as any,
+        );
+        if (insErr) throw insErr;
       }
 
       const payment_details = {
@@ -223,10 +268,28 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
                         <span className="w-6 text-center text-xs">{i.quantity}</span>
                         <button type="button" className="h-6 w-6 rounded bg-muted flex items-center justify-center" onClick={() => setQty(i.id, 1)}><Plus className="h-3 w-3" /></button>
                       </div>
+                      <Input
+                        className="h-7 w-20 text-right text-xs"
+                        value={String(i.unit_price)}
+                        onChange={(e) => setPrice(i.id, e.target.value.replace(/[^\d.,]/g, ""))}
+                        inputMode="decimal"
+                      />
                       <span className="w-20 text-right text-xs font-bold">{fmt(Number(i.unit_price) * i.quantity)}</span>
                       <button type="button" onClick={() => setRemoved((p) => [...p, i.id])}><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                     </div>
                   ))}
+
+                  {storeId && (
+                    <div className="rounded border border-dashed p-2">
+                      <POSTinyProductPicker
+                        storeId={storeId}
+                        label="Adicionar produto"
+                        value=""
+                        onSelect={addProduct}
+                        placeholder="Buscar por nome, SKU ou código de barras..."
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Cliente */}
