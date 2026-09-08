@@ -1124,14 +1124,22 @@ export default function StoreCheckout() {
         is_custom_amount: isCustom,
       });
 
-      // Pre-fill customer name/phone
-      if (customerName && customerName !== "Cliente") {
-        setCustomerForm(prev => ({
-          ...prev,
-          fullName: customerName,
-          whatsapp: customerPhone ? formatPhone(customerPhone) : "",
-        }));
-      }
+      // Pré-preenche o que a vendedora já deixou salvo no pedido
+      setCustomerForm(prev => ({
+        ...prev,
+        fullName: customerName && customerName !== "Cliente" ? customerName : prev.fullName,
+        whatsapp: customerPhone ? formatPhone(customerPhone) : prev.whatsapp,
+        email: paymentDetails.customer_email || prev.email,
+        cpf: paymentDetails.customer_cpf ? formatCPF(paymentDetails.customer_cpf) : prev.cpf,
+        cep: paymentDetails.customer_cep ? formatCEP(paymentDetails.customer_cep) : prev.cep,
+        address: paymentDetails.customer_address || prev.address,
+        addressNumber: paymentDetails.customer_address_number || prev.addressNumber,
+        complement: paymentDetails.customer_complement || prev.complement,
+        neighborhood: paymentDetails.customer_neighborhood || prev.neighborhood,
+        city: paymentDetails.customer_city || prev.city,
+        state: paymentDetails.customer_state || prev.state,
+      }));
+
 
       // Link avulso com dados preenchidos pela vendedora: pré-popular tudo e
       // pular direto para o pagamento se os dados essenciais existirem.
