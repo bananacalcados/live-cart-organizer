@@ -737,7 +737,14 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
             Brinde{order.gift_description ? `: ${order.gift_description}` : ""}
           </Badge>
         )}
+        {(order as any).is_sedex && (
+          <Badge variant="secondary" className="text-[10px] bg-destructive/15 text-destructive border-destructive/40 font-bold">
+            <Truck className="h-3 w-3 mr-1" />
+            SEDEX
+          </Badge>
+        )}
         <CustomerPrizeBadges phone={order.customer?.whatsapp} />
+
         {order.free_shipping && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <Truck className="h-3 w-3 mr-1" />
