@@ -53,24 +53,36 @@ const linkOf = (s: PendingSale) => `https://checkout.bananacalcados.com.br/check
  */
 export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, refreshKey }: Props) {
   const [sales, setSales] = useState<PendingSale[]>([]);
+  const [paidSales, setPaidSales] = useState<PaidSale[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const digits = (phone || "").replace(/\D/g, "");
-    if (digits.length < 8) { setSales([]); return; }
+    if (digits.length < 8) { setSales([]); setPaidSales([]); return; }
     const suffix = digits.slice(-8);
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase
-      .from("pos_sales")
-      .select("id, store_id, total, created_at, payment_details")
-      .eq("phone_suffix8", suffix)
-      .eq("status", "online_pending")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    setSales((data || []) as PendingSale[]);
+    const [pending, paid] = await Promise.all([
+      supabase
+        .from("pos_sales")
+        .select("id, store_id, total, created_at, payment_details")
+        .eq("phone_suffix8", suffix)
+        .eq("status", "online_pending")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("pos_sales")
+        .select("id, total, created_at, status, sale_type, payment_method, expedition_stage, expedition_finished_at, tracking_code")
+        .eq("phone_suffix8", suffix)
+        .in("status", ["paid", "completed"])
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+    setSales((pending.data || []) as PendingSale[]);
+    setPaidSales((paid.data || []) as PaidSale[]);
   }, [phone]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
