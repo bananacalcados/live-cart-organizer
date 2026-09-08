@@ -792,6 +792,30 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
         </div>
       )}
 
+      {/* Toggle SEDEX — prioridade na Expedição */}
+      <div className="mb-3">
+        <Button
+          variant={(order as any).is_sedex ? "default" : "outline"}
+          size="sm"
+          className={`w-full text-xs gap-1.5 h-7 ${(order as any).is_sedex ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : 'border-destructive/40 text-destructive hover:bg-destructive/10'}`}
+          disabled={togglingSedex}
+          onClick={async (e) => {
+            e.stopPropagation();
+            setTogglingSedex(true);
+            try {
+              const next = !(order as any).is_sedex;
+              await updateOrder(order.id, { is_sedex: next } as any);
+              toast.success(next ? 'Pedido marcado como SEDEX (prioridade na Expedição)' : 'SEDEX removido');
+            } catch { toast.error('Erro ao atualizar'); }
+            setTogglingSedex(false);
+          }}
+        >
+          <Truck className="h-3 w-3" />
+          {(order as any).is_sedex ? '⚡ SEDEX — prioridade' : 'Marcar como SEDEX'}
+        </Button>
+      </div>
+
+
       {/* Envio manual da MENSAGEM INICIAL configurada, via Instagram Direct */}
       {order.customer?.instagram_handle && (order.stage === 'awaiting_confirmation' || order.stage === 'incomplete_order' || order.stage === 'new' || order.stage === 'no_response') && (
         <div className="mb-3">
