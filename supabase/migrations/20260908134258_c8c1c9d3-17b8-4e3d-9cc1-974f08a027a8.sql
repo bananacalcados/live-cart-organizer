@@ -1,0 +1,3 @@
+CREATE OR REPLACE VIEW public.whatsapp_numbers_safe WITH (security_invoker = off) AS
+ SELECT id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, created_at, updated_at, provider, zapi_instance_id, ai_paused, is_online, last_health_check, wasender_session_id, wasender_phone_number, uazapi_instance_name, uazapi_owner, uazapi_proxy_mode, uazapi_proxy_managed_country, uazapi_proxy_managed_state, uazapi_proxy_managed_city, instagram_account_id, instagram_username, health_check_error
+ FROM public.whatsapp_numbers;

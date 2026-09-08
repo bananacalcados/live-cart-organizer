@@ -102,8 +102,12 @@ serve(async (req) => {
 
     if (!res.ok) {
       console.error('Messenger send error:', data);
+      const code = data?.error?.code;
+      const friendly = code === 190
+        ? 'Acesso do Instagram vencido. Renove o token em Admin > Contas do Instagram.'
+        : (data?.error?.message || 'Failed to send');
       return new Response(
-        JSON.stringify({ error: 'Failed to send', details: data }),
+        JSON.stringify({ error: friendly, code, details: data }),
         { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

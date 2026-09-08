@@ -21667,6 +21667,7 @@ export type Database = {
           ai_paused: boolean | null
           business_account_id: string | null
           created_at: string | null
+          health_check_error: string | null
           id: string | null
           instagram_account_id: string | null
           instagram_username: string | null
@@ -21693,6 +21694,7 @@ export type Database = {
           ai_paused?: boolean | null
           business_account_id?: string | null
           created_at?: string | null
+          health_check_error?: string | null
           id?: string | null
           instagram_account_id?: string | null
           instagram_username?: string | null
@@ -21719,6 +21721,7 @@ export type Database = {
           ai_paused?: boolean | null
           business_account_id?: string | null
           created_at?: string | null
+          health_check_error?: string | null
           id?: string | null
           instagram_account_id?: string | null
           instagram_username?: string | null
