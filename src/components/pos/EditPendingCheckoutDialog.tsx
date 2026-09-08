@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { POSTinyProductPicker } from "./POSTinyProductPicker";
 
 interface SaleItemRow {
   id: string;
@@ -15,6 +16,10 @@ interface SaleItemRow {
   variant_name: string | null;
   unit_price: number;
   quantity: number;
+  /** Item ainda não gravado no banco (adicionado agora). */
+  isNew?: boolean;
+  sku?: string | null;
+  barcode?: string | null;
 }
 
 interface Props {
