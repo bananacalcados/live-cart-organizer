@@ -783,6 +783,36 @@ Deno.serve(async (req) => {
       retry_count: 0,
     }).eq("id", doc.id);
 
+    // Rejeição "já foi emitida com o identificador interno": a nota EXISTE na BrasilNFe.
+    // Recupera XML/DANFE automaticamente em vez de travar a expedição.
+    if (!ok && msgLow.includes("identificador interno")) {
+      try {
+        const rec = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/fiscal-recover-by-identifier`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            sale_id: order.source === "sale" ? order.source_id : null,
+            order_id: order.source === "order" ? order.source_id : null,
+            modelo: 55,
+          }),
+        });
+        const recJson = await rec.json().catch(() => ({}));
+        if (recJson?.ok) {
+          const d = (recJson.documents || [])[0] || {};
+          return new Response(JSON.stringify({
+            ok: true, recovered: true, document_id: d.document_id || doc.id,
+            numero: d.numero ?? null, chave_acesso: d.chave ?? null,
+            message: "Nota já estava emitida na BrasilNFe — XML e DANFE recuperados",
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+        }
+      } catch (e) {
+        console.error("[nfe-emitir] auto-recover falhou", e);
+      }
+    }
+
     const httpResp = ok ? 200 : (sefazOffline ? 202 : 422);
     return new Response(JSON.stringify({
       ok, contingencia: sefazOffline, document_id: doc.id, numero: numeroRet,

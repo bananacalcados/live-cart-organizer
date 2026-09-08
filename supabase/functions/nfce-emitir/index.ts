@@ -361,6 +361,32 @@ Deno.serve(async (req) => {
       retry_count: 0,
     }).eq("id", doc.id);
 
+    // Rejeição 200 "já foi emitida com o identificador interno": a nota EXISTE na
+    // BrasilNFe — recupera XML/DANFE em vez de deixar a expedição travada.
+    if (!ok && msgLow.includes("identificador interno")) {
+      try {
+        const rec = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/fiscal-recover-by-identifier`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ sale_id, modelo: 65 }),
+        });
+        const recJson = await rec.json().catch(() => ({}));
+        if (recJson?.ok) {
+          const d = (recJson.documents || [])[0] || {};
+          return new Response(JSON.stringify({
+            ok: true, recovered: true, document_id: d.document_id || doc.id,
+            numero: d.numero ?? null, chave_acesso: d.chave ?? null,
+            message: "Nota já estava emitida na BrasilNFe — XML e DANFE recuperados",
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+        }
+      } catch (e) {
+        console.error("[nfce-emitir] auto-recover falhou", e);
+      }
+    }
+
     // Resposta: 200 em sucesso, 202 em contingência (venda concluída, será reemitida), 422 em rejeição definitiva
     const httpResp = ok ? 200 : (sefazOffline ? 202 : 422);
     return new Response(JSON.stringify({
