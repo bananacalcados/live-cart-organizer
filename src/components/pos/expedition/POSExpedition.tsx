@@ -807,6 +807,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               </Button>
               <span className="text-sm font-semibold text-pos-muted-text">
                 {filtered.length} de {orders.length} pedido(s)
+                {priorityCount > 0 ? ` · ${priorityCount} prioritário(s)` : ""}
               </span>
             </div>
           </div>
