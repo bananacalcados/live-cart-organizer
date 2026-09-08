@@ -571,7 +571,17 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                 <Badge className={statusColors[order.expedition_status] || 'bg-muted'}>
                   {currentStep?.label || order.expedition_status}
                 </Badge>
-                {order.is_from_live && (
+                {order.priority_sedex && (
+                  <Badge className="bg-orange-600 text-white gap-1 font-bold">
+                    <Zap className="h-3 w-3" /> SEDEX
+                  </Badge>
+                )}
+                {isValadaresOrder(order) && (
+                  <Badge className="bg-emerald-600 text-white gap-1 font-bold">
+                    <MapPin className="h-3 w-3" /> VALADARES, MG
+                  </Badge>
+                )}
+
                   <Badge className="bg-red-500 text-white gap-1">
                     <Radio className="h-3 w-3" /> LIVE
                   </Badge>
