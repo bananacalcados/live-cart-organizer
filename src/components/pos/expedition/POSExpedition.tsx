@@ -355,7 +355,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   }, [filtered, stage]);
 
   const priorityCount = useMemo(
-    () => filtered.filter((o) => expeditionPriorityRank(o) < 2).length,
+    () => filtered.filter((o) => expeditionPriorityRank(o) < 3).length,
     [filtered],
   );
 
