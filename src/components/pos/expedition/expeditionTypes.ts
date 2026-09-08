@@ -79,6 +79,8 @@ export interface ExpOrder {
   tracking_carrier: string | null;
   courier_name: string | null;
   pickup_store_id: string | null;
+  /** Nome da loja de retirada, quando houver. */
+  pickup_store_name?: string | null;
   has_gift?: boolean | null;
   gift_description?: string | null;
   gift_added_at?: string | null;
@@ -277,7 +279,7 @@ export async function fetchExpeditionOrders(
   const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
 
 
-  const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
+  const [itemsRes, sellersRes, eventsRes, ordersRes, storesRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
     sellerIds.length
       ? supabase.from("pos_sellers").select("id, name").in("id", sellerIds as string[])
@@ -291,7 +293,12 @@ export async function fetchExpeditionOrders(
           .select("id, delivery_method, is_pickup, pickup_store_id")
           .in("id", orderIds as string[])
       : Promise.resolve({ data: [] as any[] }),
+    // Nome da loja de retirada (etiqueta RETIRADA — LOJA X)
+    supabase.from("pos_stores").select("id, name"),
   ]);
+  const storeNameMap = new Map(
+    (((storesRes as any)?.data || []) as any[]).map((s: any) => [s.id, s.name]),
+  );
 
   const itemsBySale = new Map<string, ExpItem[]>();
   for (const it of (itemsRes.data || []) as any[]) {
@@ -360,7 +367,10 @@ export async function fetchExpeditionOrders(
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
       instagram: s.payment_details?.instagram || null,
       pickup_date: s.pickup_date || null,
-      is_store_pickup: !!s.is_store_pickup,
+      is_store_pickup: !!s.is_store_pickup || !!src?.is_pickup,
+      pickup_store_id: s.pickup_store_id || src?.pickup_store_id || null,
+      pickup_store_name:
+        storeNameMap.get(s.pickup_store_id || src?.pickup_store_id || "") || null,
       delivery_method:
         s.shipping_carrier ||
         (src?.is_pickup ? "Retirada na loja" : src?.delivery_method) ||

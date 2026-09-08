@@ -33,7 +33,7 @@ import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
-import { expeditionPriorityRank, isValadaresOrder, isSedexOrder } from "@/lib/expeditionPriority";
+import { expeditionPriorityRank, isValadaresOrder, isSedexOrder, isStorePickupOrder } from "@/lib/expeditionPriority";
 
 
 
@@ -355,7 +355,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   }, [filtered, stage]);
 
   const priorityCount = useMemo(
-    () => filtered.filter((o) => expeditionPriorityRank(o) < 2).length,
+    () => filtered.filter((o) => expeditionPriorityRank(o) < 3).length,
     [filtered],
   );
 
@@ -963,6 +963,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             </Badge>
                             {isSedexOrder(o) && (
                               <Badge className="bg-orange-500 text-white text-sm font-black">SEDEX</Badge>
+                            )}
+                            {isStorePickupOrder(o) && (
+                              <Badge className="bg-violet-600 text-white text-sm font-black">
+                                <Store className="h-4 w-4 mr-1" />
+                                RETIRADA
+                                {o.pickup_store_name ? ` — ${o.pickup_store_name.toUpperCase()}` : " NA LOJA"}
+                                {o.pickup_date
+                                  ? ` · ${new Date(`${String(o.pickup_date).slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`
+                                  : ""}
+                              </Badge>
                             )}
                             {isValadaresOrder(o) && (
                               <Badge className="bg-emerald-600 text-white text-sm font-black">

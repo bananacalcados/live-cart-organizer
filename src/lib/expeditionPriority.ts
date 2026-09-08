@@ -19,11 +19,21 @@ export const isValadaresOrder = (order: any): boolean => {
 export const isSedexOrder = (order: any): boolean =>
   Boolean(order?.priority_sedex || order?.is_sedex);
 
-/** 0 = SEDEX, 1 = Valadares, 2 = demais. */
+/** Retirada em loja física (marcada na Live, no site ou manualmente). */
+export const isStorePickupOrder = (order: any): boolean => {
+  if (order?.is_store_pickup || order?.pickup_store_id || order?.pickup_date) return true;
+  const method = stripAccents(
+    String(order?.shipping_carrier || order?.delivery_method || order?.shipping_method || ""),
+  );
+  return method.includes("retirad") || method.includes("pickup");
+};
+
+/** 0 = SEDEX, 1 = Retirada na loja, 2 = Valadares, 3 = demais. */
 export const expeditionPriorityRank = (order: any): number => {
   if (isSedexOrder(order)) return 0;
-  if (isValadaresOrder(order)) return 1;
-  return 2;
+  if (isStorePickupOrder(order)) return 1;
+  if (isValadaresOrder(order)) return 2;
+  return 3;
 };
 
 /** Ordena mantendo a data (mais recente primeiro) dentro de cada prioridade. */
