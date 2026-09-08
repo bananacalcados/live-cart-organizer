@@ -365,7 +365,10 @@ export async function fetchExpeditionOrders(
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
       instagram: s.payment_details?.instagram || null,
       pickup_date: s.pickup_date || null,
-      is_store_pickup: !!s.is_store_pickup,
+      is_store_pickup: !!s.is_store_pickup || !!src?.is_pickup,
+      pickup_store_id: s.pickup_store_id || src?.pickup_store_id || null,
+      pickup_store_name:
+        storeNameMap.get(s.pickup_store_id || src?.pickup_store_id || "") || null,
       delivery_method:
         s.shipping_carrier ||
         (src?.is_pickup ? "Retirada na loja" : src?.delivery_method) ||
