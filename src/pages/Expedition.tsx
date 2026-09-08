@@ -70,7 +70,9 @@ export default function Expedition() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setOrders(data || []);
+      // SEDEX primeiro, depois Governador Valadares/MG, depois o restante por data.
+      setOrders(sortByExpeditionPriority(data || []));
+
     } catch (error) {
       console.error('Error fetching expedition orders:', error);
     } finally {
