@@ -439,6 +439,14 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
     setLoadingFreight(false);
   };
 
+  // Endereço já preenchido pela vendedora: cota o frete assim que a etapa abre,
+  // senão o botão "Ir para Pagamento" fica travado esperando uma seleção.
+  useEffect(() => {
+    const d = form.cep.replace(/\D/g, "");
+    if (d.length === 8) quoteFreight(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
     setShowAllFreight(false);
