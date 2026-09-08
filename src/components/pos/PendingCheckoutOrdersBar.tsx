@@ -15,6 +15,26 @@ interface PendingSale {
   payment_details: any;
 }
 
+interface PaidSale {
+  id: string;
+  total: number;
+  created_at: string;
+  status: string;
+  sale_type: string | null;
+  payment_method: string | null;
+  expedition_stage: string | null;
+  expedition_finished_at: string | null;
+  tracking_code: string | null;
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  novo: "Na expedição — aguardando separação",
+  preparacao: "Na expedição — em preparação",
+  separacao: "Na expedição — em separação",
+  conferencia: "Na expedição — em conferência",
+  finalizado: "Expedido",
+};
+
 interface Props {
   phone: string;
   sendVia: PosSendProvider;
@@ -33,24 +53,43 @@ const linkOf = (s: PendingSale) => `https://checkout.bananacalcados.com.br/check
  */
 export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, refreshKey }: Props) {
   const [sales, setSales] = useState<PendingSale[]>([]);
+  const [paidSales, setPaidSales] = useState<PaidSale[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const digits = (phone || "").replace(/\D/g, "");
-    if (digits.length < 8) { setSales([]); return; }
+    if (digits.length < 8) { setSales([]); setPaidSales([]); return; }
     const suffix = digits.slice(-8);
+    // Alguns cadastros antigos gravaram o telefone truncado (11 dígitos).
+    const truncated = digits.length > 11 ? digits.slice(0, 11) : null;
+    const phoneOr = [
+      `phone_suffix8.eq.${suffix}`,
+      `customer_phone.eq.${digits}`,
+      ...(truncated ? [`customer_phone.eq.${truncated}`, `phone_suffix8.eq.${truncated.slice(-8)}`] : []),
+    ].join(",");
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase
-      .from("pos_sales")
-      .select("id, store_id, total, created_at, payment_details")
-      .eq("phone_suffix8", suffix)
-      .eq("status", "online_pending")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    setSales((data || []) as PendingSale[]);
+    const [pending, paid] = await Promise.all([
+      supabase
+        .from("pos_sales")
+        .select("id, store_id, total, created_at, payment_details")
+        .or(phoneOr)
+        .eq("status", "online_pending")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("pos_sales")
+        .select("id, total, created_at, status, sale_type, payment_method, expedition_stage, expedition_finished_at, tracking_code")
+        .or(phoneOr)
+        .in("status", ["paid", "completed"])
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+    setSales((pending.data || []) as PendingSale[]);
+    setPaidSales((paid.data || []) as PaidSale[]);
   }, [phone]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
@@ -81,10 +120,34 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
     }
   };
 
-  if (sales.length === 0) return null;
+  if (sales.length === 0 && paidSales.length === 0) return null;
 
   return (
-    <div className="flex-shrink-0 border-b bg-amber-500/10 px-2 py-1.5 space-y-1.5">
+    <div className="flex-shrink-0 border-b px-2 py-1.5 space-y-1.5">
+      {paidSales.map((p) => {
+        const stage = p.expedition_finished_at ? "finalizado" : (p.expedition_stage || "");
+        const info = STAGE_LABEL[stage] || (p.status === "completed" ? "Pedido concluído" : "Pagamento confirmado");
+        return (
+          <div key={p.id} className="flex flex-wrap items-center gap-1.5 rounded-md bg-emerald-500/10 px-1.5 py-1">
+            <Badge className="gap-1 bg-emerald-600 text-white text-[10px]">
+              <Check className="h-3 w-3" /> PAGO
+            </Badge>
+            <span className="text-xs font-semibold">{fmt(Number(p.total || 0))}</span>
+            <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">{info}</span>
+            {p.payment_method && (
+              <span className="text-[10px] text-muted-foreground uppercase">{p.payment_method}</span>
+            )}
+            {p.tracking_code && (
+              <span className="text-[10px] text-muted-foreground">Rastreio: {p.tracking_code}</span>
+            )}
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {new Date(p.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        );
+      })}
+      {sales.length > 0 && (
+        <div className="rounded-md bg-amber-500/10 px-1.5 py-1 space-y-1.5">
       {sales.map((s) => (
         <div key={s.id} className="flex flex-wrap items-center gap-1.5">
           <Badge className="gap-1 bg-amber-500 text-white text-[10px]">
@@ -121,6 +184,9 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
           </div>
         </div>
       ))}
+        </div>
+      )}
+
 
       {editing && (
         <EditPendingCheckoutDialog
