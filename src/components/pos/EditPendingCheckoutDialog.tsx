@@ -122,6 +122,27 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
   const setQty = (id: string, delta: number) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)));
 
+  const setPrice = (id: string, value: string) =>
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, unit_price: parseNum(value) } : i)));
+
+  const addProduct = (p: { product_name: string; sku: string; unit_price: number; size?: string; barcode?: string }) => {
+    if (!p.product_name) return;
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        product_name: p.product_name,
+        variant_name: p.size || null,
+        unit_price: Number(p.unit_price) || 0,
+        quantity: 1,
+        isNew: true,
+        sku: p.sku || null,
+        barcode: p.barcode || null,
+      },
+    ]);
+  };
+
+
   const handleSave = async () => {
     if (visibleItems.length === 0) { toast.error("O pedido precisa ter ao menos um produto"); return; }
     setSaving(true);
