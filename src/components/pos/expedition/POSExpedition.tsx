@@ -1085,6 +1085,22 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             </Button>
                           )}
 
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            className={`border-2 text-base font-black ${
+                              isSedexOrder(o)
+                                ? "border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90"
+                                : "border-orange-500 text-orange-600"
+                            }`}
+                            onClick={() => toggleSedex(o)}
+                            title="Prioridade de embalagem e envio"
+                          >
+                            <Truck className="h-5 w-5 mr-1" />
+                            {isSedexOrder(o) ? "SEDEX MARCADO" : "MARCAR SEDEX"}
+                          </Button>
+
+
                           {o.resolved_phone && (
                             <Button
                               size="lg"
