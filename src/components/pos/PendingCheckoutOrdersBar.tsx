@@ -15,6 +15,26 @@ interface PendingSale {
   payment_details: any;
 }
 
+interface PaidSale {
+  id: string;
+  total: number;
+  created_at: string;
+  status: string;
+  sale_type: string | null;
+  payment_method: string | null;
+  expedition_stage: string | null;
+  expedition_finished_at: string | null;
+  tracking_code: string | null;
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  novo: "Na expedição — aguardando separação",
+  preparacao: "Na expedição — em preparação",
+  separacao: "Na expedição — em separação",
+  conferencia: "Na expedição — em conferência",
+  finalizado: "Expedido",
+};
+
 interface Props {
   phone: string;
   sendVia: PosSendProvider;
