@@ -115,6 +115,8 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
+  const [togglingSedex, setTogglingSedex] = useState(false);
+
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [sendingIgDm, setSendingIgDm] = useState(false);
