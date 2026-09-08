@@ -2207,7 +2207,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </div>
             </div>
 
+            {!selectedConversation?.isGroup && (
+              <PendingCheckoutOrdersBar
+                phone={selectedPhone}
+                sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
+                selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
+                refreshKey={pendingOrdersRefresh}
+              />
+            )}
+
             <div className="relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+
               <AttendantNudgeCard
                 conversations={conversationsFlagged}
                 arrivedCount={waitlist.arrivedCount}
