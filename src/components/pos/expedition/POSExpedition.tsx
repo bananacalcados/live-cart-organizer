@@ -336,18 +336,38 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       map.set(key, arr);
     }
     const entries = [...map.entries()];
-    if (stage === "preparacao") {
-      // Clientes com mais de 1 pedido primeiro (para não esquecer de unificar o envio)
-      entries.sort((a, b) => {
+    const rankOf = (list: ExpOrder[]) => Math.min(...list.map((o) => expeditionPriorityRank(o)));
+    entries.sort((a, b) => {
+      // Prioridade de embalagem: SEDEX primeiro, depois Governador Valadares/MG.
+      const ra = rankOf(a[1]);
+      const rb = rankOf(b[1]);
+      if (ra !== rb) return ra - rb;
+      if (stage === "preparacao") {
+        // Clientes com mais de 1 pedido primeiro (para não esquecer de unificar o envio)
         const am = a[1].length > 1 ? 1 : 0;
         const bm = b[1].length > 1 ? 1 : 0;
         if (am !== bm) return bm - am;
         if (am === 1 && b[1].length !== a[1].length) return b[1].length - a[1].length;
-        return 0;
-      });
-    }
+      }
+      return 0;
+    });
     return entries;
   }, [filtered, stage]);
+
+  const priorityCount = useMemo(
+    () => filtered.filter((o) => expeditionPriorityRank(o) < 2).length,
+    [filtered],
+  );
+
+  const toggleSedex = async (o: ExpOrder) => {
+    const next = !isSedexOrder(o);
+    setOrders((prev) => prev.map((p) => (p.id === o.id ? { ...p, is_sedex: next } : p)));
+    const { error } = await supabase.from("pos_sales").update({ is_sedex: next } as any).eq("id", o.id);
+    if (error) {
+      setOrders((prev) => prev.map((p) => (p.id === o.id ? { ...p, is_sedex: !next } : p)));
+      toast.error("Não foi possível alterar o SEDEX");
+    }
+  };
 
 
   const advance = async (o: ExpOrder, target?: ExpStage) => {
