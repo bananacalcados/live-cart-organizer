@@ -218,7 +218,7 @@ export function POSWhatsAppLanes({
       const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
       const manualMarkFirst = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
       const silentDispatch =
-        !!conv.isDispatchOnly &&
+        conv.lastIsMassDispatch === true &&
         conv.hasIncoming === false &&
         !manualMarkFirst &&
         !liveStageMap[conv.phone] &&

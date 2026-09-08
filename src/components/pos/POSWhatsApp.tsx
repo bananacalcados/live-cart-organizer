@@ -955,6 +955,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         // Quando o RPC não informa, assumimos que houve mensagem do cliente
         // (nunca esconder uma conversa por falta de dado).
         hasIncoming: (row as any).has_incoming === false ? false : true,
+        lastIsMassDispatch: (row as any).last_is_mass_dispatch === true,
         channel: (row as any).channel || null,
       });
     }
