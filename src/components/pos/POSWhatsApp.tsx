@@ -2096,7 +2096,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               )}
 
               {/* Ações */}
-              <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto">
+              <div className="flex flex-wrap items-center justify-end gap-0.5 flex-shrink-0 ml-auto">
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout" disabled={requiresInstanceSelection}>
                   <CreditCard className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Checkout</span>
@@ -2160,22 +2160,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   title="Arquivar Conversa"
                   onClick={async () => {
                     if (selectedPhone) {
-          const conv = conversations.find(c => c.phone === selectedPhone);
-          if (conv?.isArchived) {
-            await unarchiveConversation(selectedPhone);
-            toast.success("Conversa desarquivada");
-          } else {
-            await archiveConversation(selectedPhone, selectedSellerId || undefined);
-            toast.success("Conversa arquivada");
-            setSelectedPhone(null);
-            setMessages([]);
-          }
-        }
-      }}
-    >
-      <Archive className="h-3.5 w-3.5" />
-      <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
-    </Button>
+                      const conv = conversations.find(c => c.phone === selectedPhone);
+                      if (conv?.isArchived) {
+                        await unarchiveConversation(selectedPhone);
+                        toast.success("Conversa desarquivada");
+                      } else {
+                        await archiveConversation(selectedPhone, selectedSellerId || undefined);
+                        toast.success("Conversa arquivada");
+                        setSelectedPhone(null);
+                        setMessages([]);
+                      }
+                    }
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
+                </Button>
                 {selectedConversation && !selectedConversation.isGroup && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
                   <BlockContactButton
                     phone={selectedPhone}
