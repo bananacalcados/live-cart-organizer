@@ -426,20 +426,24 @@ export default function LiveMemberArea() {
   const needsConfirm = (data: any) => {
     const o = data?.order;
     if (!o || o.is_paid || !o.products?.length) return false;
+    // Pedido já preenchido pela equipe: nada de confirmar de novo.
+    if (data?.order_ready) return false;
     // O servidor é a fonte da verdade: só pede confirmação de novo se os itens mudaram.
     if (typeof o.needs_confirm === "boolean") return o.needs_confirm;
     if (o.confirmed_at) return false;
     return readAnswered()[o.id] !== itemsSignature(o);
   };
   const needsOnboarding = (data: any) =>
-    !!data?.order && !data.order.is_paid && !data.onboardingComplete;
+    !!data?.order && !data.order.is_paid && !data.onboardingComplete && !data.order_ready;
 
   /** Decide em que etapa a cliente deve cair depois de carregar o estado. */
   const routeFor = (data: any): Step => {
+    if (data?.order_ready) return "area";
     if (needsConfirm(data)) return "confirm";
     if (data?.order?.confirmed_at && needsOnboarding(data)) return "onboarding";
     return "area";
   };
+
 
   /** Primeira etapa do onboarding ainda pendente. */
   const firstPendingOnboard = (data: any): OnboardStep => {
