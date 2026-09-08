@@ -952,6 +952,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         hasUnansweredMessage: row.direction === 'incoming',
         whatsapp_number_id: rowNumberId,
         isDispatchOnly: row.is_dispatch_only || false,
+        // Quando o RPC não informa, assumimos que houve mensagem do cliente
+        // (nunca esconder uma conversa por falta de dado).
+        hasIncoming: (row as any).has_incoming === false ? false : true,
         channel: (row as any).channel || null,
       });
     }
