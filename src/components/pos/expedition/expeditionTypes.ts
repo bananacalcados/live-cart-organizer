@@ -79,6 +79,8 @@ export interface ExpOrder {
   tracking_carrier: string | null;
   courier_name: string | null;
   pickup_store_id: string | null;
+  /** Nome da loja de retirada, quando houver. */
+  pickup_store_name?: string | null;
   has_gift?: boolean | null;
   gift_description?: string | null;
   gift_added_at?: string | null;
