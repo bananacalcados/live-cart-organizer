@@ -43,6 +43,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
   const [items, setItems] = useState<SaleItemRow[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
   const [pd, setPd] = useState<Record<string, any>>({});
+  const [storeId, setStoreId] = useState<string>("");
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
