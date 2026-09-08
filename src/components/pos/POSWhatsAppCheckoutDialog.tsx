@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts } from "@/lib/shopify";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { materializePosCustomer } from "@/lib/posCustomerResolve";
@@ -25,6 +24,7 @@ interface CartItem {
   price: number;
   quantity: number;
   imageUrl: string | null;
+  stock?: number;
 }
 
 interface Props {
@@ -344,7 +344,7 @@ export function POSWhatsAppCheckoutDialog({
                       {item.imageUrl && <img src={item.imageUrl} alt="" className="h-10 w-10 rounded object-cover" />}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{item.title}</p>
-                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}</p>}
+                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}{typeof item.stock === "number" ? ` · ${item.stock} em estoque` : ""}</p>}
                       </div>
                       <span className="text-xs font-bold text-primary shrink-0">{fmt(item.price)}</span>
                       <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
