@@ -443,7 +443,41 @@ export function POSWhatsAppLanes({
               {items.length === 0 ? (
                 <p className="px-1 py-1.5 text-[11px] text-muted-foreground/70">Nenhuma conversa aqui.</p>
               ) : (
+                <>
+                {selectMode && (() => {
+                  const laneKeys = items.filter((c) => !c.isGroup).map(convKey);
+                  const laneChecked = laneKeys.filter((k) => checked.has(k)).length;
+                  const allLaneChecked = laneKeys.length > 0 && laneChecked === laneKeys.length;
+                  if (laneKeys.length === 0) return null;
+                  return (
+                    <div className="mb-1 flex items-center gap-2 px-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={allLaneChecked ? "secondary" : "default"}
+                        className="h-7 gap-1 text-[11px]"
+                        onClick={() =>
+                          setChecked((prev) => {
+                            const next = new Set(prev);
+                            if (allLaneChecked) laneKeys.forEach((k) => next.delete(k));
+                            else laneKeys.forEach((k) => next.add(k));
+                            return next;
+                          })
+                        }
+                      >
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        {allLaneChecked ? `Desmarcar esta linha (${laneKeys.length})` : `Marcar todos desta linha (${laneKeys.length})`}
+                      </Button>
+                      {laneChecked > 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {laneChecked} de {laneKeys.length} marcados — clique nos cards para desmarcar
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex snap-x gap-2 overflow-x-auto pb-1.5 pt-0.5">
+
                   {visible.map((conv) => {
                     const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
                     return (
@@ -480,7 +514,9 @@ export function POSWhatsAppLanes({
                     </button>
                   )}
                 </div>
+                </>
               )}
+
             </LaneSection>
           );
         })}
