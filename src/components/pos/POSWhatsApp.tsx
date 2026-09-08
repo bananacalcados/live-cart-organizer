@@ -2124,6 +2124,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <Package className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Aguarda</span>
                 </Button>
+                {selectedConversation && (
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => setShowExportDialog(true)} title="Exportar conversa em PDF">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Exportar PDF</span>
+                  </Button>
+                )}
+                {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Template</span>
+                  </Button>
+                )}
                 <CreateSupportTicketDialog
                   phone={selectedPhone}
                   customerName={selectedConversation?.customerName}
@@ -2138,84 +2150,69 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     onClearManual={() => laneMarks.clearLane(selectedPhone)}
                   />
                 )}
-
-                {/* Mais ações — agrupa botões secundários para não espremer o cabeçalho */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground" title="Mais ações">
-                      <MoreVertical className="h-3.5 w-3.5" />
-                      <span className="hidden xl:inline">Mais</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
-                    {selectedConversation && (
-                      <DropdownMenuItem className="gap-2 text-xs" onSelect={() => setShowExportDialog(true)}>
-                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        Exportar PDF
-                      </DropdownMenuItem>
-                    )}
-                    {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
-                      <DropdownMenuItem className="gap-2 text-xs" onSelect={() => setShowSendTemplate(true)}>
-                        <FileText className="h-3.5 w-3.5 text-violet-600" />
-                        Template Meta
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem className="gap-2 text-xs" onSelect={() => setShowTransferDialog(true)}>
-                      <ArrowRightLeft className="h-3.5 w-3.5 text-blue-500" />
-                      Transferir
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 text-xs" onSelect={async () => {
-                      if (selectedPhone) {
-                        const conv = conversations.find(c => c.phone === selectedPhone);
-                        if (conv?.isArchived) {
-                          await unarchiveConversation(selectedPhone);
-                          toast.success("Conversa desarquivada");
-                        } else {
-                          await archiveConversation(selectedPhone, selectedSellerId || undefined);
-                          toast.success("Conversa arquivada");
-                          setSelectedPhone(null);
-                          setMessages([]);
-                        }
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-blue-500 hover:text-blue-400"
+                  title="Transferir Conversa"
+                  onClick={() => setShowTransferDialog(true)}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Transferir</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-amber-600"
+                  title="Arquivar Conversa"
+                  onClick={async () => {
+                    if (selectedPhone) {
+                      const conv = conversations.find(c => c.phone === selectedPhone);
+                      if (conv?.isArchived) {
+                        await unarchiveConversation(selectedPhone);
+                        toast.success("Conversa desarquivada");
+                      } else {
+                        await archiveConversation(selectedPhone, selectedSellerId || undefined);
+                        toast.success("Conversa arquivada");
+                        setSelectedPhone(null);
+                        setMessages([]);
                       }
-                    }}>
-                      <Archive className="h-3.5 w-3.5 text-amber-600" />
-                      {conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}
-                    </DropdownMenuItem>
-                    {selectedConversation && !selectedConversation.isGroup && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
-                      <DropdownMenuItem className="gap-2 text-xs" onSelect={(e) => e.preventDefault()}>
-                        <BlockContactButton
-                          phone={selectedPhone}
-                          whatsappNumberId={messageBoundNumberId ?? selectedSendNumberId}
-                          customerName={selectedConversation?.customerName}
-                          showLabel={false}
-                          className="h-auto px-0 text-xs text-foreground hover:bg-transparent"
-                        />
-                      </DropdownMenuItem>
-                    )}
-                    {selectedConversation && !selectedConversation.isGroup && (
-                      <DropdownMenuItem className="gap-2 text-xs" onSelect={(e) => e.preventDefault()}>
-                        <EraseContactButton
-                          phone={selectedPhone}
-                          instagramHandle={(selectedConversation as { instagram?: string | null })?.instagram ?? null}
-                          customerName={selectedConversation?.customerName}
-                          showLabel={false}
-                          className="h-auto px-0 text-xs text-foreground hover:bg-transparent"
-                          onErased={() => {
-                            const erased = selectedPhone;
-                            setConversations(prev => prev.filter(c => c.phone !== erased));
-                            setSelectedPhone(null);
-                            setMessages([]);
-                          }}
-                        />
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="gap-2 text-xs text-destructive focus:text-destructive" onSelect={() => setShowFinishDialog(true)}>
-                      <PhoneOff className="h-3.5 w-3.5" />
-                      Finalizar conversa
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    }
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
+                </Button>
+                {selectedConversation && !selectedConversation.isGroup && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
+                  <BlockContactButton
+                    phone={selectedPhone}
+                    whatsappNumberId={messageBoundNumberId ?? selectedSendNumberId}
+                    customerName={selectedConversation?.customerName}
+                  />
+                )}
+                {selectedConversation && !selectedConversation.isGroup && (
+                  <EraseContactButton
+                    phone={selectedPhone}
+                    instagramHandle={(selectedConversation as { instagram?: string | null })?.instagram ?? null}
+                    customerName={selectedConversation?.customerName}
+                    onErased={() => {
+                      const erased = selectedPhone;
+                      setConversations(prev => prev.filter(c => c.phone !== erased));
+                      setSelectedPhone(null);
+                      setMessages([]);
+                    }}
+                  />
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                  title="Finalizar Conversa"
+                  onClick={() => setShowFinishDialog(true)}
+                >
+                  <PhoneOff className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Finalizar</span>
+                </Button>
               </div>
             </div>
 
