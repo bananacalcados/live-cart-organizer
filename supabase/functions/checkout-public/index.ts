@@ -204,6 +204,17 @@ serve(async (req) => {
         if (clean.customer_id !== undefined && clean.customer_id !== null && !isUuid(clean.customer_id)) {
           delete clean.customer_id;
         }
+        // payment_details é MESCLADO (nunca sobrescrito): o checkout envia
+        // patches parciais e não pode apagar frete grátis / dados da vendedora.
+        if (clean.payment_details && typeof clean.payment_details === "object") {
+          const { data: existing } = await supabase
+            .from("pos_sales")
+            .select("payment_details")
+            .eq("id", saleId)
+            .maybeSingle();
+          const prev = (existing?.payment_details as Record<string, unknown> | null) || {};
+          clean.payment_details = { ...prev, ...(clean.payment_details as Record<string, unknown>) };
+        }
         let q = supabase.from("pos_sales").update(clean).eq("id", saleId);
         if (isUuid(storeId)) q = q.eq("store_id", storeId);
         const { error } = await q;
