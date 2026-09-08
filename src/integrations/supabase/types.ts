@@ -22404,6 +22404,7 @@ export type Database = {
           has_outgoing: boolean
           is_dispatch_only: boolean
           is_group: boolean
+          last_is_mass_dispatch: boolean
           last_message: string
           last_message_at: string
           phone: string

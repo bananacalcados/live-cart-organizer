@@ -170,6 +170,11 @@ export function POSWhatsAppLanes({
     setSelectMode(false);
     setChecked(new Set());
   };
+  // Disparos em massa (API) que o cliente ainda não respondeu ficam fora das
+  // linhas por padrão — só poluem a fila. Meta Ads e qualquer conversa com
+  // mensagem recebida continuam sempre visíveis.
+  const [showSilentDispatch, setShowSilentDispatch] = useState(false);
+
   // Cards extras liberados por linha via "Mostrar mais".
   const [extraVisible, setExtraVisible] = useState<Partial<Record<ChatLane, number>>>({});
 
@@ -203,6 +208,7 @@ export function POSWhatsAppLanes({
     const manual = new Set<string>();
     const prev = previousLaneRef.current;
 
+    let hiddenDispatch = 0;
     for (const conv of conversations) {
       if (conv.isArchived) continue;
       if (q) {
@@ -210,6 +216,17 @@ export function POSWhatsAppLanes({
         if (!hay.includes(q)) continue;
       }
       const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
+      const manualMarkFirst = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
+      const silentDispatch =
+        conv.lastIsMassDispatch === true &&
+        conv.hasIncoming === false &&
+        !manualMarkFirst &&
+        !liveStageMap[conv.phone] &&
+        !hasActiveSupport?.(conv.phone);
+      if (silentDispatch) {
+        hiddenDispatch++;
+        if (!showSilentDispatch) continue;
+      }
       // Marcação manual vale mesmo para finalizadas: mover tira da linha Finalizadas
       // (o servidor apaga a marcação quando a conversa é finalizada de novo).
       const manualLane = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
@@ -244,8 +261,8 @@ export function POSWhatsAppLanes({
     out.groups.sort(desc);
     out.finished.sort(desc);
     out.finished = out.finished.slice(0, FINISHED_LIMIT);
-    return { out, graceLeft, manual };
-  }, [conversations, now, q, contactNames, liveStageMap, hasActiveSupport, finishedAtByPhone, getManualLane]);
+    return { out, graceLeft, manual, hiddenDispatch };
+  }, [conversations, now, q, contactNames, liveStageMap, hasActiveSupport, finishedAtByPhone, getManualLane, showSilentDispatch]);
 
   // Etapa 3 — contadores no topo + atalhos de teclado.
   const searchRef = useRef<HTMLInputElement>(null);
@@ -373,6 +390,16 @@ export function POSWhatsAppLanes({
           <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
             {totalActive} em atendimento
           </span>
+          {lanes.hiddenDispatch > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSilentDispatch((v) => !v)}
+              className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-muted/50"
+              title="Disparos em massa que o cliente ainda não respondeu"
+            >
+              {showSilentDispatch ? "Ocultar" : "Ver"} {lanes.hiddenDispatch} disparo{lanes.hiddenDispatch !== 1 ? "s" : ""} sem resposta
+            </button>
+          )}
           {CHAT_LANE_ORDER.map((lane, i) => {
             const meta = CHAT_LANE_META[lane];
             const n = lanes.out[lane].length;
