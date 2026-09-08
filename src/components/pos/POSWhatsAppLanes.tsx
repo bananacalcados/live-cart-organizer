@@ -514,7 +514,9 @@ export function POSWhatsAppLanes({
                     </button>
                   )}
                 </div>
+                </>
               )}
+
             </LaneSection>
           );
         })}
