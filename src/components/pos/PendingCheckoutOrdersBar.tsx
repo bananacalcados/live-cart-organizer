@@ -62,12 +62,19 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
     const digits = (phone || "").replace(/\D/g, "");
     if (digits.length < 8) { setSales([]); setPaidSales([]); return; }
     const suffix = digits.slice(-8);
+    // Alguns cadastros antigos gravaram o telefone truncado (11 dígitos).
+    const truncated = digits.length > 11 ? digits.slice(0, 11) : null;
+    const phoneOr = [
+      `phone_suffix8.eq.${suffix}`,
+      `customer_phone.eq.${digits}`,
+      ...(truncated ? [`customer_phone.eq.${truncated}`, `phone_suffix8.eq.${truncated.slice(-8)}`] : []),
+    ].join(",");
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const [pending, paid] = await Promise.all([
       supabase
         .from("pos_sales")
         .select("id, store_id, total, created_at, payment_details")
-        .eq("phone_suffix8", suffix)
+        .or(phoneOr)
         .eq("status", "online_pending")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
@@ -75,7 +82,7 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
       supabase
         .from("pos_sales")
         .select("id, total, created_at, status, sale_type, payment_method, expedition_stage, expedition_finished_at, tracking_code")
-        .eq("phone_suffix8", suffix)
+        .or(phoneOr)
         .in("status", ["paid", "completed"])
         .gte("created_at", since)
         .order("created_at", { ascending: false })
