@@ -14,6 +14,7 @@ import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
+import { sortByExpeditionPriority } from '@/lib/expeditionPriority';
 import { ExpeditionPickingList } from '@/components/expedition/ExpeditionPickingList';
 import { ExpeditionPackingStation } from '@/components/expedition/ExpeditionPackingStation';
 import { ExpeditionFreightQuote } from '@/components/expedition/ExpeditionFreightQuote';
@@ -70,7 +71,9 @@ export default function Expedition() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setOrders(data || []);
+      // SEDEX primeiro, depois Governador Valadares/MG, depois o restante por data.
+      setOrders(sortByExpeditionPriority(data || []));
+
     } catch (error) {
       console.error('Error fetching expedition orders:', error);
     } finally {

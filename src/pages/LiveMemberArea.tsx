@@ -78,6 +78,9 @@ interface MemberState {
   payDetails?: any;
   onboarding?: { address: boolean; shipping: boolean; cpf: boolean; email: boolean };
   onboardingComplete?: boolean;
+  /** Pedido já veio 100% preenchido da Live: vai direto para o pagamento. */
+  order_ready?: boolean;
+
   order: {
     id: string;
     stage: string;
@@ -423,20 +426,24 @@ export default function LiveMemberArea() {
   const needsConfirm = (data: any) => {
     const o = data?.order;
     if (!o || o.is_paid || !o.products?.length) return false;
+    // Pedido já preenchido pela equipe: nada de confirmar de novo.
+    if (data?.order_ready) return false;
     // O servidor é a fonte da verdade: só pede confirmação de novo se os itens mudaram.
     if (typeof o.needs_confirm === "boolean") return o.needs_confirm;
     if (o.confirmed_at) return false;
     return readAnswered()[o.id] !== itemsSignature(o);
   };
   const needsOnboarding = (data: any) =>
-    !!data?.order && !data.order.is_paid && !data.onboardingComplete;
+    !!data?.order && !data.order.is_paid && !data.onboardingComplete && !data.order_ready;
 
   /** Decide em que etapa a cliente deve cair depois de carregar o estado. */
   const routeFor = (data: any): Step => {
+    if (data?.order_ready) return "area";
     if (needsConfirm(data)) return "confirm";
     if (data?.order?.confirmed_at && needsOnboarding(data)) return "onboarding";
     return "area";
   };
+
 
   /** Primeira etapa do onboarding ainda pendente. */
   const firstPendingOnboard = (data: any): OnboardStep => {
@@ -2157,7 +2164,7 @@ export default function LiveMemberArea() {
                 <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-3 text-primary font-semibold text-sm">
                   <CheckCircle2 className="h-5 w-5" /> Pagamento confirmado!
                 </div>
-              ) : order.confirmed_at ? (
+              ) : order.confirmed_at || state?.order_ready ? (
                 <div className="space-y-3">
                   {mm && (
                     <div className="rounded-xl bg-destructive/10 text-destructive py-3 px-3 text-center space-y-0.5">

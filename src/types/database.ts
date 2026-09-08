@@ -64,6 +64,9 @@ export interface DbOrder {
   paid_externally?: boolean;
   /** Pedido da live finalizado pela cliente no site: conta como pago, mas não vai para o PDV/Expedição. */
   paid_on_site?: boolean;
+  /** Pedido marcado como SEDEX: prioridade de embalagem/envio na Expedição. */
+  is_sedex?: boolean;
+
   discount_type?: DiscountType;
   discount_value?: number;
   free_shipping?: boolean;

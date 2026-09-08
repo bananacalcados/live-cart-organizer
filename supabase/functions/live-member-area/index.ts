@@ -385,10 +385,26 @@ Deno.serve(async (req) => {
       return Math.min(st, Math.max(0, Math.round(raw * 100) / 100));
     }
 
-    /** A cliente escolheu o frete na área de membros? */
-    function shippingChosen(order: any) {
-      return (order?.shipping_info as any)?.source === "member_area";
+    /**
+     * Frete já definido pela EQUIPE no modal do pedido da Live (frete grátis,
+     * valor de frete, retirada/mototáxi). Nesses casos a cliente não precisa
+     * escolher forma de envio de novo na área de membros.
+     */
+    function teamShippingDefined(order: any) {
+      const info: any = order?.shipping_info || null;
+      return !!(
+        info?.method ||
+        order?.free_shipping === true ||
+        Number(order?.shipping_cost || 0) > 0 ||
+        order?.delivery_method
+      );
     }
+
+    /** A cliente escolheu o frete na área de membros (ou a equipe já definiu)? */
+    function shippingChosen(order: any) {
+      return (order?.shipping_info as any)?.source === "member_area" || teamShippingDefined(order);
+    }
+
 
     /** Frete considerado no total: só depois que a cliente escolhe a forma de envio. */
     function orderShipping(order: any) {
@@ -805,23 +821,52 @@ Deno.serve(async (req) => {
         address: noAddressNeeded
           ? !!reg?.cep
           : !!(reg?.cep && reg?.address && reg?.address_number),
-        shipping: !!shippingMethod,
+        shipping: !!shippingMethod || shippingChosen(order),
         cpf: !!reg?.cpf,
         email: isUsableEmail(reg?.email),
       };
 
+      const onboardingComplete =
+        onboarding.name &&
+        onboarding.address &&
+        onboarding.shipping &&
+        onboarding.cpf &&
+        onboarding.email;
+
+      /**
+       * Pedido PRONTO: a equipe já preencheu tudo no modal da Live (nome, CPF,
+       * e-mail, endereço e forma de envio). Nesse caso a cliente não passa pela
+       * confirmação do pedido nem pelo passo a passo de dados — cai direto no
+       * pagamento.
+       */
+      const orderReady =
+        !!order && !order.is_paid && (order.products || []).length > 0 && !!onboardingComplete;
+
+      // Auto-confirmação: evita que o pedido pronto fique pendente no Kanban.
+      if (orderReady && !order.customer_confirmed_at) {
+        const nowIso = new Date().toISOString();
+        const expires = new Date(Date.now() + PAYMENT_WINDOW_MIN * 60_000).toISOString();
+        await supabase
+          .from("orders")
+          .update({
+            customer_confirmed_at: nowIso,
+            confirmed_items_signature: itemsSignature(order),
+            payment_window_expires_at: order.payment_window_expires_at || expires,
+          })
+          .eq("id", order.id);
+        order.customer_confirmed_at = nowIso;
+        order.confirmed_items_signature = itemsSignature(order);
+        order.payment_window_expires_at = order.payment_window_expires_at || expires;
+      }
 
       return {
         ok: true,
         token: session.token,
         event,
         onboarding,
-        onboardingComplete:
-          onboarding.name &&
-          onboarding.address &&
-          onboarding.shipping &&
-          onboarding.cpf &&
-          onboarding.email,
+        onboardingComplete,
+        order_ready: orderReady,
+
 
 
         name: session.name || customer?.instagram_handle || null,

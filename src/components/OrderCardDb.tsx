@@ -115,6 +115,8 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
+  const [togglingSedex, setTogglingSedex] = useState(false);
+
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [sendingIgDm, setSendingIgDm] = useState(false);
@@ -737,7 +739,14 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
             Brinde{order.gift_description ? `: ${order.gift_description}` : ""}
           </Badge>
         )}
+        {(order as any).is_sedex && (
+          <Badge variant="secondary" className="text-[10px] bg-destructive/15 text-destructive border-destructive/40 font-bold">
+            <Truck className="h-3 w-3 mr-1" />
+            SEDEX
+          </Badge>
+        )}
         <CustomerPrizeBadges phone={order.customer?.whatsapp} />
+
         {order.free_shipping && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <Truck className="h-3 w-3 mr-1" />
@@ -784,6 +793,30 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
           </Button>
         </div>
       )}
+
+      {/* Toggle SEDEX — prioridade na Expedição */}
+      <div className="mb-3">
+        <Button
+          variant={(order as any).is_sedex ? "default" : "outline"}
+          size="sm"
+          className={`w-full text-xs gap-1.5 h-7 ${(order as any).is_sedex ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : 'border-destructive/40 text-destructive hover:bg-destructive/10'}`}
+          disabled={togglingSedex}
+          onClick={async (e) => {
+            e.stopPropagation();
+            setTogglingSedex(true);
+            try {
+              const next = !(order as any).is_sedex;
+              await updateOrder(order.id, { is_sedex: next } as any);
+              toast.success(next ? 'Pedido marcado como SEDEX (prioridade na Expedição)' : 'SEDEX removido');
+            } catch { toast.error('Erro ao atualizar'); }
+            setTogglingSedex(false);
+          }}
+        >
+          <Truck className="h-3 w-3" />
+          {(order as any).is_sedex ? '⚡ SEDEX — prioridade' : 'Marcar como SEDEX'}
+        </Button>
+      </div>
+
 
       {/* Envio manual da MENSAGEM INICIAL configurada, via Instagram Direct */}
       {order.customer?.instagram_handle && (order.stage === 'awaiting_confirmation' || order.stage === 'incomplete_order' || order.stage === 'new' || order.stage === 'no_response') && (

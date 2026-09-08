@@ -6916,6 +6916,7 @@ export type Database = {
           is_from_live: boolean
           notes: string | null
           picking_list_id: string | null
+          priority_sedex: boolean
           shipping_address: Json | null
           shopify_created_at: string | null
           shopify_order_id: string
@@ -6964,6 +6965,7 @@ export type Database = {
           is_from_live?: boolean
           notes?: string | null
           picking_list_id?: string | null
+          priority_sedex?: boolean
           shipping_address?: Json | null
           shopify_created_at?: string | null
           shopify_order_id: string
@@ -7012,6 +7014,7 @@ export type Database = {
           is_from_live?: boolean
           notes?: string | null
           picking_list_id?: string | null
+          priority_sedex?: boolean
           shipping_address?: Json | null
           shopify_created_at?: string | null
           shopify_order_id?: string
@@ -12497,6 +12500,7 @@ export type Database = {
           is_delivery: boolean | null
           is_paid: boolean
           is_pickup: boolean | null
+          is_sedex: boolean
           last_customer_message_at: string | null
           last_sent_message_at: string | null
           max_installments_override: number | null
@@ -12560,6 +12564,7 @@ export type Database = {
           is_delivery?: boolean | null
           is_paid?: boolean
           is_pickup?: boolean | null
+          is_sedex?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           max_installments_override?: number | null
@@ -12623,6 +12628,7 @@ export type Database = {
           is_delivery?: boolean | null
           is_paid?: boolean
           is_pickup?: boolean | null
+          is_sedex?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           max_installments_override?: number | null

@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw, FileText, Printer, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw, FileText, Printer, Loader2, Zap, MapPin } from 'lucide-react';
 import { CancelFiscalDocDialog } from '@/components/fiscal/CancelFiscalDocDialog';
+import { isValadaresOrder } from '@/lib/expeditionPriority';
+
 
 interface Props {
   orders: any[];
@@ -571,7 +573,18 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                 <Badge className={statusColors[order.expedition_status] || 'bg-muted'}>
                   {currentStep?.label || order.expedition_status}
                 </Badge>
+                {order.priority_sedex && (
+                  <Badge className="bg-orange-600 text-white gap-1 font-bold">
+                    <Zap className="h-3 w-3" /> SEDEX
+                  </Badge>
+                )}
+                {isValadaresOrder(order) && (
+                  <Badge className="bg-emerald-600 text-white gap-1 font-bold">
+                    <MapPin className="h-3 w-3" /> VALADARES, MG
+                  </Badge>
+                )}
                 {order.is_from_live && (
+
                   <Badge className="bg-red-500 text-white gap-1">
                     <Radio className="h-3 w-3" /> LIVE
                   </Badge>
