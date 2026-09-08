@@ -581,6 +581,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                     <MapPin className="h-3 w-3" /> VALADARES, MG
                   </Badge>
                 )}
+                {order.is_from_live && (
 
                   <Badge className="bg-red-500 text-white gap-1">
                     <Radio className="h-3 w-3" /> LIVE
