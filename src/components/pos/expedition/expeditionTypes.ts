@@ -93,6 +93,8 @@ export interface ExpOrder {
   /** Retirada na loja agendada (data prevista). */
   pickup_date?: string | null;
   is_store_pickup?: boolean | null;
+  /** Prioridade de envio SEDEX (marcada na Live ou aqui na Expedição). */
+  is_sedex?: boolean | null;
   items: ExpItem[];
   /**
    * Preenchido apenas quando o card representa um ENVIO UNIFICADO
