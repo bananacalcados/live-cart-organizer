@@ -23,6 +23,9 @@ interface IgAccount {
   is_active: boolean;
   is_default: boolean;
   created_at: string;
+  is_online: boolean | null;
+  last_health_check: string | null;
+  health_check_error: string | null;
 }
 
 export function InstagramAccountManager() {
@@ -31,6 +34,7 @@ export function InstagramAccountManager() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formLabel, setFormLabel] = useState("");
@@ -41,7 +45,7 @@ export function InstagramAccountManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers_safe")
-      .select("id, label, phone_display, instagram_account_id, instagram_username, is_active, is_default, created_at")
+      .select("id, label, phone_display, instagram_account_id, instagram_username, is_active, is_default, created_at, is_online, last_health_check, health_check_error")
       .eq("provider", "instagram")
       .order("created_at", { ascending: true });
     if (error) {
@@ -50,6 +54,35 @@ export function InstagramAccountManager() {
       setAccounts((data || []) as IgAccount[]);
     }
     setLoading(false);
+  };
+
+  /** Valida e renova (60 dias) os tokens — de uma conta ou de todas. */
+  const refreshTokens = async (id?: string, silent = false) => {
+    setChecking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-token-refresh", {
+        body: id ? { id } : {},
+      });
+      if (error) throw error;
+      const results: Array<{ account: string; status: string; error?: string }> = data?.results || [];
+      const expired = results.filter((r) => r.status === "expired");
+      if (!silent) {
+        if (expired.length) {
+          toast({
+            title: "Acesso vencido",
+            description: `${expired.map((r) => r.account).join(", ")}: cole um token novo para voltar a enviar.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Acesso OK", description: `${results.length} conta(s) verificada(s) e renovada(s).` });
+        }
+      }
+      await fetchAccounts();
+    } catch (e: any) {
+      if (!silent) toast({ title: "Erro", description: e?.message || "Falha ao verificar tokens.", variant: "destructive" });
+    } finally {
+      setChecking(false);
+    }
   };
 
   useEffect(() => { fetchAccounts(); }, []);
@@ -92,8 +125,12 @@ export function InstagramAccountManager() {
           : "Conta atualizada.",
       });
       setDialogOpen(false);
+      const savedId = data?.account?.id as string | undefined;
+      const hadToken = !!formToken.trim();
       resetForm();
-      fetchAccounts();
+      // Token novo: já valida e estende para 60 dias.
+      if (hadToken && savedId) await refreshTokens(savedId, true);
+      else fetchAccounts();
     } catch (e: any) {
       toast({ title: "Erro ao salvar", description: e?.message || "Verifique o token e tente novamente.", variant: "destructive" });
     } finally {
@@ -158,8 +195,8 @@ export function InstagramAccountManager() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={fetchAccounts}>
-              <RefreshCw className="h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" onClick={() => refreshTokens()} disabled={checking} title="Valida e renova os acessos por mais 60 dias (também roda sozinho todo dia)">
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${checking ? "animate-spin" : ""}`} /> Verificar / renovar acesso
             </Button>
             <Button variant="outline" size="sm" onClick={handleRegisterPrimary} disabled={saving} title="Registra a conta que já estava conectada internamente (via token global) como uma instância identificável">
               <Instagram className="h-3.5 w-3.5 mr-1" /> Registrar conta principal
@@ -235,9 +272,24 @@ export function InstagramAccountManager() {
                   <TableCell>{acc.instagram_username ? `@${acc.instagram_username}` : "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{acc.instagram_account_id || "—"}</TableCell>
                   <TableCell>
-                    <Badge variant={acc.is_active ? "default" : "secondary"}>
-                      {acc.is_active ? "Ativa" : "Inativa"}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex gap-1">
+                        <Badge variant={acc.is_active ? "default" : "secondary"}>
+                          {acc.is_active ? "Ativa" : "Inativa"}
+                        </Badge>
+                        {acc.is_online === false && (
+                          <Badge variant="destructive">Acesso vencido</Badge>
+                        )}
+                        {acc.is_online === true && (
+                          <Badge variant="outline">Acesso OK</Badge>
+                        )}
+                      </div>
+                      {acc.is_online === false && (
+                        <span className="text-[11px] text-destructive">
+                          Cole um token novo em "Editar" para voltar a enviar.
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(acc)}>Editar</Button>
