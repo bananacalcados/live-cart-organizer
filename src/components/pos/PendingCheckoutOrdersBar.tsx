@@ -177,6 +177,9 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
           </div>
         </div>
       ))}
+        </div>
+      )}
+
 
       {editing && (
         <EditPendingCheckoutDialog
