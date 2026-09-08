@@ -277,7 +277,7 @@ export async function fetchExpeditionOrders(
   const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
 
 
-  const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
+  const [itemsRes, sellersRes, eventsRes, ordersRes, storesRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
     sellerIds.length
       ? supabase.from("pos_sellers").select("id, name").in("id", sellerIds as string[])
@@ -291,7 +291,12 @@ export async function fetchExpeditionOrders(
           .select("id, delivery_method, is_pickup, pickup_store_id")
           .in("id", orderIds as string[])
       : Promise.resolve({ data: [] as any[] }),
+    // Nome da loja de retirada (etiqueta RETIRADA — LOJA X)
+    supabase.from("pos_stores").select("id, name"),
   ]);
+  const storeNameMap = new Map(
+    (((storesRes as any)?.data || []) as any[]).map((s: any) => [s.id, s.name]),
+  );
 
   const itemsBySale = new Map<string, ExpItem[]>();
   for (const it of (itemsRes.data || []) as any[]) {
