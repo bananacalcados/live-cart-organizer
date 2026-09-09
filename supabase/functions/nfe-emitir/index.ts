@@ -125,8 +125,19 @@ async function lookupIbge(city: string, uf: string, cepIbge?: string | null): Pr
     const arr = await r.json();
     const norm = (s: string) => sanitize(s).toUpperCase().replace(/\s+/g, "");
     const target = norm(city);
-    const hit = arr.find((m: any) => norm(m.nome) === target)
+    let hit = arr.find((m: any) => norm(m.nome) === target)
       || arr.find((m: any) => norm(m.nome).startsWith(target) || target.startsWith(norm(m.nome)));
+    // Fallback: o campo cidade às vezes vem com bairro + município colados
+    // ("Monte Sinai Itabirito"). Pega o município cujo nome está CONTIDO no texto
+    // (o mais longo vence, para não casar "Belo" dentro de "Belo Horizonte").
+    if (!hit) {
+      const candidates = arr.filter((m: any) => {
+        const n = norm(m.nome);
+        return n.length >= 4 && target.includes(n);
+      });
+      candidates.sort((a: any, b: any) => norm(b.nome).length - norm(a.nome).length);
+      hit = candidates[0];
+    }
     return hit?.codigo_ibge ? String(hit.codigo_ibge) : null;
   } catch { return null; }
 }
