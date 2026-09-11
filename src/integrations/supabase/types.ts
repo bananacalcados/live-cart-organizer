@@ -3083,6 +3083,7 @@ export type Database = {
           finished_at: string
           finished_by: string | null
           id: string
+          instance_key: string | null
           phone: string
           purchased: boolean | null
           sale_currency: string | null
@@ -3091,6 +3092,7 @@ export type Database = {
           support_reason: string | null
           support_satisfactory: boolean | null
           trigger_id: string | null
+          whatsapp_number_id: string | null
         }
         Insert: {
           created_at?: string
@@ -3099,6 +3101,7 @@ export type Database = {
           finished_at?: string
           finished_by?: string | null
           id?: string
+          instance_key?: string | null
           phone: string
           purchased?: boolean | null
           sale_currency?: string | null
@@ -3107,6 +3110,7 @@ export type Database = {
           support_reason?: string | null
           support_satisfactory?: boolean | null
           trigger_id?: string | null
+          whatsapp_number_id?: string | null
         }
         Update: {
           created_at?: string
@@ -3115,6 +3119,7 @@ export type Database = {
           finished_at?: string
           finished_by?: string | null
           id?: string
+          instance_key?: string | null
           phone?: string
           purchased?: boolean | null
           sale_currency?: string | null
@@ -3123,6 +3128,7 @@ export type Database = {
           support_reason?: string | null
           support_satisfactory?: boolean | null
           trigger_id?: string | null
+          whatsapp_number_id?: string | null
         }
         Relationships: [
           {
@@ -23337,10 +23343,12 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: undefined
       }
-      reopen_finished_conversation: {
-        Args: { p_phone: string }
-        Returns: number
-      }
+      reopen_finished_conversation:
+        | { Args: { p_phone: string }; Returns: number }
+        | {
+            Args: { p_phone: string; p_whatsapp_number_id?: string }
+            Returns: number
+          }
       reopen_physical_prize: {
         Args: { p_prize_id: string; p_reason?: string }
         Returns: Json
@@ -23379,6 +23387,7 @@ export type Database = {
         Args: { p_keys: string[] }
         Returns: {
           finished_at: string
+          instance_key: string
           phone_key: string
         }[]
       }
