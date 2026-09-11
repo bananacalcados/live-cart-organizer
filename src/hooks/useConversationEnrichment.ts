@@ -30,8 +30,13 @@ export function useConversationEnrichment() {
 
   useEffect(() => subscribeFinishedCache(() => setFinishedVersion(v => v + 1)), []);
 
+  /** Mapa com chaves compostas `telefone8|instância`. */
   const finishedAtByPhone = useMemo(() => peekFinishedMap(), [finishedVersion]);
-  const finishedPhones = useMemo(() => new Set(finishedAtByPhone.keys()), [finishedAtByPhone]);
+  /** Telefones com alguma conversa finalizada (em qualquer instância). */
+  const finishedPhones = useMemo(
+    () => new Set(Array.from(finishedAtByPhone.keys()).map(k => k.split('|')[0])),
+    [finishedAtByPhone]
+  );
 
   /** Resolve (sob demanda) apenas os telefones informados. */
   const ensureFinished = useCallback((phones: (string | null | undefined)[]) => {
