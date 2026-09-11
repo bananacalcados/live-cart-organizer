@@ -139,6 +139,12 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             {p.payment_method && (
               <span className="text-[10px] text-muted-foreground uppercase">{p.payment_method}</span>
             )}
+            {p.payment_details?.manual_payment?.pix_key && (
+              <span className="text-[10px] text-muted-foreground">Chave: {p.payment_details.manual_payment.pix_key}</span>
+            )}
+            {p.payment_details?.manual_payment && (
+              <span className="text-[10px] text-muted-foreground italic">confirmado manualmente</span>
+            )}
             {p.tracking_code && (
               <span className="text-[10px] text-muted-foreground">Rastreio: {p.tracking_code}</span>
             )}
