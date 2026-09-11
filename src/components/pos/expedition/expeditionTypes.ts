@@ -370,6 +370,7 @@ export async function fetchExpeditionOrders(
       pickup_store_id: s.pickup_store_id || src?.pickup_store_id || null,
       pickup_store_name:
         storeNameMap.get(s.pickup_store_id || src?.pickup_store_id || "") || null,
+      store_name: storeNameMap.get(s.store_id) || null,
       delivery_method:
         s.shipping_carrier ||
         (src?.is_pickup ? "Retirada na loja" : src?.delivery_method) ||
