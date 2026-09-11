@@ -3016,7 +3016,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             return;
           }
           setConversations(prev => prev.map(c =>
-            phoneSet.has(c.phone) && !c.isFinished ? { ...c, isFinished: true } : c
+            finishedSet.has(`${c.phone}|${c.whatsapp_number_id ?? ''}`) && !c.isFinished ? { ...c, isFinished: true } : c
           ));
           setShowBulkFinishDialog(false);
           toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);
