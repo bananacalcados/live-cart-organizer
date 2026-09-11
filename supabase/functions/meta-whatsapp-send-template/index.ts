@@ -435,9 +435,10 @@ serve(async (req) => {
             // Auto-close conversation from dispatch
             await supabase.from('chat_finished_conversations').upsert({
               phone: formattedPhone,
+              whatsapp_number_id: whatsappNumberId || null,
               finished_at: new Date().toISOString(),
               finish_reason: 'disparo_msg',
-            } as any, { onConflict: 'phone' });
+            } as any, { onConflict: 'phone,instance_key' });
 
             results.push({ id: item.id, success: true, messageId });
           } else {
@@ -607,9 +608,10 @@ serve(async (req) => {
       // Auto-close conversation from dispatch
       await supabase.from('chat_finished_conversations').upsert({
         phone: formattedPhone,
+        whatsapp_number_id: whatsappNumberDbId || null,
         finished_at: new Date().toISOString(),
         finish_reason: 'disparo_msg',
-      } as any, { onConflict: 'phone' });
+      } as any, { onConflict: 'phone,instance_key' });
     } catch (saveErr) {
       console.error('Failed to save template message to DB:', saveErr);
     }

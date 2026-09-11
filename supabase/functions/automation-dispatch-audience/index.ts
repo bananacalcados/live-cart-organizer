@@ -712,9 +712,10 @@ serve(async (req) => {
               }).then(() => {});
               supabase.from('chat_finished_conversations').upsert({
                 phone: formattedPhone,
+                whatsapp_number_id: sendNumberId || null,
                 finished_at: new Date().toISOString(),
                 finish_reason: 'disparo_msg',
-              } as any, { onConflict: 'phone' }).then(() => {});
+              } as any, { onConflict: 'phone,instance_key' }).then(() => {});
 
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
