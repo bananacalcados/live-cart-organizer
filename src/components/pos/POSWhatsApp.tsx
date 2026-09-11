@@ -1808,7 +1808,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
   const handleBulkFinishPhones = useCallback((phones: string[]) => {
-    setBulkFinishPhones(phones);
+    // Cada telefone é finalizado na instância da conversa correspondente.
+    setBulkFinishPhones(phones.map(p => {
+      const conv = conversationsRef.current.find(c => c.phone === p);
+      return { phone: p, numberId: conv?.whatsapp_number_id ?? null };
+    }));
     setShowBulkFinishDialog(true);
   }, []);
   const handleBulkMessagePhones = useCallback((phones: string[]) => {
