@@ -322,7 +322,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
         `${link}`;
 
       const { error } = await supabase.functions.invoke("zapi-send-message", {
-        body: { phone, message },
+        body: { phone, message, linkPreview: false },
       });
       if (error) throw error;
 
