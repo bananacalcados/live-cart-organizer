@@ -248,13 +248,24 @@ export function useConversationEnrichment() {
       duvidaText?: string;
     }
   ) => {
-    const phones = Array.from(new Set(items.map(i => i.phone).filter(Boolean)));
-    if (phones.length === 0) return;
+    // Uma entrada por (telefone + instância): finalizar em uma instância NÃO
+    // pode finalizar as conversas do mesmo número em outras instâncias.
+    const seen = new Set<string>();
+    const targets = items.filter(i => {
+      if (!i.phone) return false;
+      const k = `${i.phone}|${i.whatsappNumberId ?? ''}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (targets.length === 0) return;
+    const phones = Array.from(new Set(targets.map(i => i.phone)));
     const finishedAtIso = new Date().toISOString();
-    setFinishedLocalMany(phones, finishedAtIso);
+    setFinishedLocalMany(targets.map(i => ({ phone: i.phone, instanceId: i.whatsappNumberId ?? null })), finishedAtIso);
 
-    const rows = phones.map(phone => ({
+    const rows = targets.map(({ phone, whatsappNumberId }) => ({
       phone,
+      whatsapp_number_id: whatsappNumberId ?? null,
       finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
