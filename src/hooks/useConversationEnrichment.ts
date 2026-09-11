@@ -4,7 +4,9 @@ import { Conversation, ConversationStatus } from '@/components/chat/ChatTypes';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import {
   finishedPhoneKey,
+  getFinishedAtFor,
   peekFinishedMap,
+  peekResolvedPhones,
   resolveFinishedConversations,
   setFinishedLocal,
   setFinishedLocalMany,
