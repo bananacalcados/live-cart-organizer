@@ -74,7 +74,10 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
+  /** Qual link os botões usam: checkout do pedido ou área de membros autenticada. */
+  const [linkMode, setLinkMode] = useState<"checkout" | "member">("checkout");
 
   // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
   // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
@@ -249,12 +252,37 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
     }
   };
 
+  /** Link autenticado da Área de Membros para o telefone da cliente. */
+  const buildMemberAreaLink = async (): Promise<string> => {
+    const phone = normalizeBRPhone(form.whatsapp || order.customer?.whatsapp || "");
+    if (!phone) throw new Error("WhatsApp do cliente não informado");
+    const { data, error } = await supabase.functions.invoke("issue-member-magic-link", {
+      body: { phone },
+    });
+    if (error) throw error;
+    const url = (data as { url?: string } | null)?.url;
+    if (!url) throw new Error("Não foi possível gerar o link da área de membros");
+    return url;
+  };
+
   const handleCopyLink = async () => {
+    setCopying(true);
     try {
-      await navigator.clipboard.writeText(paymentLink);
-      toast.success("Link de pagamento copiado!");
-    } catch {
-      window.prompt("Copie o link de pagamento:", paymentLink);
+      const link = linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast.success(
+          linkMode === "member"
+            ? "Link da área de membros (já autenticado) copiado!"
+            : "Link de pagamento copiado!",
+        );
+      } catch {
+        window.prompt("Copie o link:", link);
+      }
+    } catch (e: any) {
+      toast.error(`Erro ao gerar link: ${e?.message || e}`);
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -269,18 +297,36 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
       // Save first to ensure pre-fill works
       await handleSave();
 
+      // 1) Mensagem inicial configurada na Live (instância não-API / uazapi),
+      //    com rodízio de variações e tokens {checkout_link} / {member_area_link}.
+      const { data: waData, error: waError } = await supabase.functions.invoke(
+        "event-order-wa-initial-send",
+        { body: { orderId: order.id } },
+      );
+      const waErrMsg =
+        (waError as any)?.message || (waData as { error?: string } | null)?.error || null;
+      if (!waErrMsg) {
+        toast.success("Mensagem da Live enviada no WhatsApp!");
+        return;
+      }
+
+      // 2) Fallback: envia o link escolhido em mensagem simples.
+      console.warn("[CustomerFicha] mensagem inicial indisponível:", waErrMsg);
+      const link = linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
       const greet = form.full_name?.split(" ")[0] || (order.customer?.instagram_handle || "");
       const message =
         `Olá ${greet}! 🍌\n\n` +
-        `Sua ficha está pré-preenchida. Para concluir, é só revisar e finalizar o pagamento aqui:\n\n` +
-        `${paymentLink}`;
+        (linkMode === "member"
+          ? `Seus pedidos estão aqui, é só abrir e pagar:\n\n`
+          : `Sua ficha está pré-preenchida. Para concluir, é só revisar e finalizar o pagamento aqui:\n\n`) +
+        `${link}`;
 
       const { error } = await supabase.functions.invoke("zapi-send-message", {
         body: { phone, message },
       });
       if (error) throw error;
 
-      toast.success("Link de pagamento enviado no WhatsApp!");
+      toast.success("Link enviado no WhatsApp (mensagem padrão)");
     } catch (e: any) {
       console.error(e);
       toast.error(`Erro ao enviar link: ${e?.message || e}`);
@@ -382,17 +428,63 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 border-t px-4 py-3 shrink-0">
-        <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
-          <Copy className="h-4 w-4 mr-2" /> Copiar link
-        </Button>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+      <div className="border-t px-3 py-3 shrink-0 space-y-2">
+        {/* Tipo de link usado ao copiar/enviar */}
+        <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setLinkMode("checkout")}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+              linkMode === "checkout"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Link do checkout
+          </button>
+          <button
+            type="button"
+            onClick={() => setLinkMode("member")}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+              linkMode === "member"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Área de membros
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 min-w-[110px]"
+            onClick={handleCopyLink}
+            disabled={!isRealOrder || copying}
+          >
+            {copying ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Copy className="h-4 w-4 mr-1.5" />}
+            Copiar link
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-1 min-w-[100px]"
+            onClick={handleSave}
+            disabled={saving || loading || !isRealOrder}
+          >
+            {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
             Salvar
           </Button>
-          <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
-            {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+          <Button
+            size="sm"
+            className="flex-1 basis-full min-w-[160px]"
+            onClick={handleSendPaymentLink}
+            disabled={sending || loading || !isRealOrder}
+          >
+            {sending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
             Enviar link Pagamento
           </Button>
         </div>
