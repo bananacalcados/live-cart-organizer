@@ -36,14 +36,27 @@ export interface FetchConversationsParams {
 }
 
 /**
- * Busca TODAS as conversas das instâncias informadas em UMA rota, paginando
- * por trás dos panos para contornar o corte de 1000 linhas da API.
+ * Busca TODAS as conversas das instâncias informadas em UMA ÚNICA chamada:
+ * `get_conversations_multi_json` devolve um JSON (não sofre o corte de 1000
+ * linhas por resposta da API). Se a função JSON não estiver disponível, cai
+ * para a versão paginada como rede de segurança.
  */
 export async function fetchConversationRows(params: FetchConversationsParams): Promise<{ rows: ConversationRow[]; error: Error | null }> {
   const pageSize = Math.min(1000, Math.max(100, params.pageSize ?? 1000));
   const maxPages = params.maxPages ?? 10;
-  const rows: ConversationRow[] = [];
 
+  const { data: jsonData, error: jsonError } = await (supabase.rpc as any)("get_conversations_multi_json", {
+    p_number_ids: params.numberIds,
+    p_dispatch_only: params.dispatchOnly,
+    p_include_unassigned: params.includeUnassigned ?? false,
+    p_limit: pageSize * maxPages,
+  });
+  if (!jsonError && Array.isArray(jsonData)) {
+    return { rows: jsonData as ConversationRow[], error: null };
+  }
+  if (jsonError) console.warn("[fetchConversationRows] JSON RPC falhou, usando paginação:", jsonError.message);
+
+  const rows: ConversationRow[] = [];
   for (let page = 0; page < maxPages; page++) {
     const { data, error } = await supabase.rpc("get_conversations_multi", {
       p_number_ids: params.numberIds,
