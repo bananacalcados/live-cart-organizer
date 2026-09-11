@@ -1444,7 +1444,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const buildSendHooks = () => ({
     onBeforeSend: async (phone: string) => {
-      await reopenConversation(phone);
+      await reopenConversation(phone, selectedConvNumberId ?? null);
     },
     onAfterSend: async (phone: string) => {
       if (selectedSellerId) {
