@@ -47,6 +47,8 @@ export interface ExpItem {
 export interface ExpOrder {
   id: string;
   store_id: string;
+  /** Nome da loja de origem da venda (usado no modo "todas as lojas"). */
+  store_name?: string | null;
   created_at: string;
   total: number;
   discount: number;
