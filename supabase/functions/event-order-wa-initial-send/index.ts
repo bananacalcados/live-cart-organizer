@@ -163,7 +163,8 @@ Deno.serve(async (req) => {
       sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: numberId }),
+        // linkPreview: false → WhatsApp envia o link SEM a miniatura/cartão de preview.
+        body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: numberId, linkPreview: false }),
       });
     }
     const sendResult = await sendResp.json().catch(() => ({}));
