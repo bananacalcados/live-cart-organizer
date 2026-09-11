@@ -219,11 +219,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Mover para outra linha. Se a conversa estava Finalizada, reabre primeiro
   // (para todas as atendentes) — senão a marcação manual seria ignorada.
   const moveConversationLane = useCallback(async (phone: string, numberId: string | null | undefined, lane: ManualChatLane) => {
-    const wasFinished = finishedAtByPhone.has(laneAutoKey(phone));
+    const wasFinished = Boolean(getFinishedAtFor(finishedAtByPhone, phone, numberId));
     if (wasFinished) {
       try {
-        await reopenConversation(phone);
-        setConversations(prev => prev.map(c => laneAutoKey(c.phone) === laneAutoKey(phone) ? { ...c, isFinished: false } : c));
+        await reopenConversation(phone, numberId ?? null);
+        setConversations(prev => prev.map(c => (laneAutoKey(c.phone) === laneAutoKey(phone) && (c.whatsapp_number_id ?? null) === (numberId ?? null)) ? { ...c, isFinished: false } : c));
       } catch (e) {
         console.warn("[moveConversationLane] reopen failed", e);
         toast.error("Não foi possível reabrir a conversa finalizada");
