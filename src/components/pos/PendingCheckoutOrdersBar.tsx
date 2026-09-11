@@ -190,6 +190,17 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
       )}
 
 
+      {markingPaid && (
+        <MarkCheckoutPaidDialog
+          open={!!markingPaid}
+          onOpenChange={(v) => { if (!v) setMarkingPaid(null); }}
+          saleId={markingPaid.id}
+          customerLabel={markingPaid.payment_details?.customer_name || null}
+          total={Number(markingPaid.total || 0)}
+          onDone={load}
+        />
+      )}
+
       {editing && (
         <EditPendingCheckoutDialog
           open={!!editing}
