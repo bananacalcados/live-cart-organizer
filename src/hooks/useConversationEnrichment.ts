@@ -176,11 +176,11 @@ export function useConversationEnrichment() {
       support_reason: extras?.supportReason ?? null,
       support_satisfactory: extras?.supportSatisfactory ?? null,
       duvida_text: extras?.duvidaText ?? null,
-    } as any, { onConflict: 'phone' });
+    } as any, { onConflict: 'phone,instance_key' });
 
 
     if (error && phoneKey) {
-      setFinishedLocal(phone, null);
+      setFinishedLocal(phone, instanceId, null);
       throw error;
     }
 
