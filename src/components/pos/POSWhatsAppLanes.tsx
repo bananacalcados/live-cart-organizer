@@ -16,6 +16,7 @@ import {
   msUntilFollowup,
   type ChatLane,
 } from "@/lib/chat/conversationLanes";
+import { getFinishedAtFor } from "@/lib/finishedConversationsCache";
 
 interface POSWhatsAppLanesProps {
   storeId: string;
