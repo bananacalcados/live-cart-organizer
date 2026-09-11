@@ -20486,6 +20486,81 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversations: {
+        Row: {
+          channel: string | null
+          instance_key: string
+          is_group: boolean
+          last_direction: string | null
+          last_incoming_at: string | null
+          last_is_mass_dispatch: boolean
+          last_message: string | null
+          last_message_at: string
+          last_message_id: string | null
+          last_outgoing_at: string | null
+          last_status: string | null
+          nm_last_direction: string | null
+          nm_last_message: string | null
+          nm_last_message_at: string | null
+          nm_last_message_id: string | null
+          nm_last_outgoing_at: string | null
+          nm_last_status: string | null
+          phone: string
+          sender_name: string | null
+          unread_count: number
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          instance_key?: string
+          is_group?: boolean
+          last_direction?: string | null
+          last_incoming_at?: string | null
+          last_is_mass_dispatch?: boolean
+          last_message?: string | null
+          last_message_at: string
+          last_message_id?: string | null
+          last_outgoing_at?: string | null
+          last_status?: string | null
+          nm_last_direction?: string | null
+          nm_last_message?: string | null
+          nm_last_message_at?: string | null
+          nm_last_message_id?: string | null
+          nm_last_outgoing_at?: string | null
+          nm_last_status?: string | null
+          phone: string
+          sender_name?: string | null
+          unread_count?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          instance_key?: string
+          is_group?: boolean
+          last_direction?: string | null
+          last_incoming_at?: string | null
+          last_is_mass_dispatch?: boolean
+          last_message?: string | null
+          last_message_at?: string
+          last_message_id?: string | null
+          last_outgoing_at?: string | null
+          last_status?: string | null
+          nm_last_direction?: string | null
+          nm_last_message?: string | null
+          nm_last_message_at?: string | null
+          nm_last_message_id?: string | null
+          nm_last_outgoing_at?: string | null
+          nm_last_status?: string | null
+          phone?: string
+          sender_name?: string | null
+          unread_count?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_group_member_activity: {
         Row: {
           activity_type: string
@@ -22420,6 +22495,31 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_conversations_multi: {
+        Args: {
+          p_dispatch_only?: boolean
+          p_include_unassigned?: boolean
+          p_limit?: number
+          p_number_ids?: string[]
+          p_offset?: number
+        }
+        Returns: {
+          channel: string
+          direction: string
+          has_incoming: boolean
+          has_outgoing: boolean
+          is_dispatch_only: boolean
+          is_group: boolean
+          last_is_mass_dispatch: boolean
+          last_message: string
+          last_message_at: string
+          phone: string
+          sender_name: string
+          status: string
+          unread_count: number
+          whatsapp_number_id: string
+        }[]
+      }
       get_customer_active_prizes: {
         Args: { p_include_history?: boolean; p_phone: string }
         Returns: {
@@ -23645,6 +23745,11 @@ export type Database = {
           slug: string
         }[]
       }
+      wa_conv_rebuild: {
+        Args: { p_number_id: string; p_phone: string }
+        Returns: undefined
+      }
+      wa_conv_reconcile: { Args: { p_since?: string }; Returns: number }
       wa_status_rank: { Args: { s: string }; Returns: number }
       zoppy_origin_class: { Args: { p_zoppy_id: string }; Returns: string }
     }

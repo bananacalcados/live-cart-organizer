@@ -3,9 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 /**
- * Payload broadcasted by the AFTER INSERT trigger on whatsapp_messages.
- * Kept intentionally minimal to reduce DB CPU. Clients should refetch
- * the actual rows they need from the DB using these identifiers.
+ * Payload broadcasted by the AFTER INSERT / AFTER UPDATE triggers on
+ * whatsapp_messages. Kept intentionally minimal to reduce DB CPU. Clients
+ * should refetch the actual rows they need from the DB using these identifiers.
+ *
+ * `event` distingue mensagem NOVA (`wa_msg_insert`) de mudança de status/mídia
+ * numa mensagem existente (`wa_msg_update`, ✓✓). Listas de conversas devem
+ * ignorar updates — só o chat aberto precisa reagir a eles.
  */
 export type WaMessageInsertPayload = {
   id: string;
@@ -13,6 +17,9 @@ export type WaMessageInsertPayload = {
   whatsapp_number_id: string | null;
   direction: string | null;
   created_at: string;
+  event?: "wa_msg_insert" | "wa_msg_update";
+  status?: string | null;
+  message_id?: string | null;
 };
 
 // Singleton channel + listener registry so many components can listen to the
@@ -20,29 +27,25 @@ export type WaMessageInsertPayload = {
 let sharedChannel: RealtimeChannel | null = null;
 const listeners = new Set<(payload: WaMessageInsertPayload) => void>();
 
+function dispatch(payload: WaMessageInsertPayload) {
+  listeners.forEach((fn) => {
+    try {
+      fn(payload);
+    } catch (e) {
+      console.error("[wa_msg_inserts] listener error", e);
+    }
+  });
+}
+
 function ensureChannel() {
   if (sharedChannel) return;
   sharedChannel = supabase
     .channel("wa_msg_inserts")
     .on("broadcast", { event: "wa_msg_insert" }, (msg: any) => {
-      const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
-      listeners.forEach((fn) => {
-        try {
-          fn(payload);
-        } catch (e) {
-          console.error("[wa_msg_inserts] listener error", e);
-        }
-      });
+      dispatch({ ...((msg?.payload ?? {}) as WaMessageInsertPayload), event: "wa_msg_insert" });
     })
     .on("broadcast", { event: "wa_msg_update" }, (msg: any) => {
-      const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
-      listeners.forEach((fn) => {
-        try {
-          fn(payload);
-        } catch (e) {
-          console.error("[wa_msg_inserts] listener error", e);
-        }
-      });
+      dispatch({ ...((msg?.payload ?? {}) as WaMessageInsertPayload), event: "wa_msg_update" });
     })
     .subscribe();
 }
@@ -68,6 +71,13 @@ export interface UseWaMessageBroadcastOptions {
    * debounce only delays the UI refresh by up to `debounceMs`.
    */
   debounceMs?: number;
+  /**
+   * Filtro aplicado ANTES do debounce. Eventos que não passam são descartados
+   * sem agendar nada — assim uma mensagem de outra loja (ou um ✓✓ de status)
+   * não dispara recarga da lista nem "engole" um evento relevante dentro da
+   * janela de debounce. Não precisa ser memoizado (usa ref).
+   */
+  filter?: (payload: WaMessageInsertPayload) => boolean;
 }
 
 /**
@@ -78,17 +88,21 @@ export function useWaMessageBroadcast(
   handler: (payload: WaMessageInsertPayload) => void,
   options: UseWaMessageBroadcastOptions = {}
 ) {
-  const { debounceMs = 0 } = options;
+  const { debounceMs = 0, filter } = options;
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
   const debounceRef = useRef(debounceMs);
   debounceRef.current = debounceMs;
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let lastPayload: WaMessageInsertPayload | null = null;
 
     const fn = (p: WaMessageInsertPayload) => {
+      const f = filterRef.current;
+      if (f && !f(p)) return;
       const ms = debounceRef.current;
       if (!ms || ms <= 0) {
         handlerRef.current(p);

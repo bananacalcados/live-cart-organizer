@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { fetchConversationRows } from "@/lib/chat/fetchConversations";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -500,13 +501,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   // Load store-specific WhatsApp numbers
+  const [storeNumbersLoaded, setStoreNumbersLoaded] = useState(false);
   useEffect(() => {
+    setStoreNumbersLoaded(false);
     const loadStoreNumbers = async () => {
       const { data } = await supabase
         .from('pos_store_whatsapp_numbers')
         .select('whatsapp_number_id')
         .eq('store_id', storeId);
       setStoreNumberIds((data || []).map((d: any) => d.whatsapp_number_id));
+      setStoreNumbersLoaded(true);
     };
     loadStoreNumbers();
   }, [storeId]);
@@ -981,43 +985,81 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return { convs, phoneMessages };
   }, [chatContacts, crmMap]);
 
+  // Coalescência das recargas: nunca há duas consultas da lista em paralelo.
+  // Se algo pedir recarga enquanto uma está em andamento, ela é enfileirada e
+  // executada UMA vez ao final (com os filtros mais recentes).
+  const listLoadInFlightRef = useRef(false);
+  const listReloadPendingRef = useRef(false);
+  // Linhas cruas da última consulta (resumo por telefone+instância).
+  const [listRows, setListRows] = useState<{ regular: any[]; dispatch: any[] } | null>(null);
+
   // Load conversations via RPC (summaries, not raw messages)
   useEffect(() => {
+    // Espera as instâncias da loja: sem isso, a 1ª carga saía com "todas as
+    // instâncias do sistema" (dezenas de milhares de linhas) e era descartada.
+    if (!storeNumbersLoaded) return;
+    if (listLoadInFlightRef.current) {
+      listReloadPendingRef.current = true;
+      return;
+    }
+    listLoadInFlightRef.current = true;
     const loadConversations = async () => {
       // Determine which number IDs to query (store-specific filtering)
       const needsDispatch = statusFilter === 'dispatch';
 
-      // IMPORTANT — porque a lista "perdia" conversas (ex.: chats que sumiam):
-      // chamar get_conversations(NULL) traz as conversas de TODAS as instâncias
-      // do sistema ordenadas pela mais recente, e o PostgREST CORTA o resultado
-      // em 1000 linhas. Numa loja com várias instâncias, as 1000 mais recentes
-      // são dominadas por outras instâncias/lojas de alto volume, então conversas
-      // mais antigas desta loja caem fora do corte e somem da lista.
+      // Fase 2 — UMA chamada por recarga (antes eram até 7):
+      // `get_conversations_multi` recebe TODAS as instâncias da loja de uma vez e
+      // lê a tabela-resumo `whatsapp_conversations` (1 linha por telefone+instância,
+      // mantida por trigger) em vez de agregar ~90 mil mensagens. A busca é
+      // paginada por trás dos panos, então o corte de 1000 linhas da API não
+      // esconde mais conversas de instâncias com muito volume.
       //
-      // Correção: além da consulta global (que preserva DMs do Instagram e chats
-      // sem instância), consultamos CADA instância da loja separadamente. Cada
-      // instância tem bem menos de 1000 conversas, então nada é cortado. Os
-      // resultados são unidos e deduplicados por (telefone + instância).
-      const buildCalls = (dispatchOnly: boolean) => {
-        const calls: any[] = [];
-        if (storeNumberIds.length === 1) {
-          calls.push(supabase.rpc('get_conversations', { p_number_id: storeNumberIds[0], p_dispatch_only: dispatchOnly }));
-        } else {
-          // Consulta global (mantém comportamento atual: IG DMs / sem instância)
-          calls.push(supabase.rpc('get_conversations', { p_number_id: null, p_dispatch_only: dispatchOnly }));
-          // Uma consulta por instância da loja (garante a lista completa da loja)
-          for (const id of storeNumberIds) {
-            calls.push(supabase.rpc('get_conversations', { p_number_id: id, p_dispatch_only: dispatchOnly }));
-          }
+      // Regras preservadas do comportamento anterior:
+      //  - 1 instância na loja  → só ela (sem conversas "sem instância");
+      //  - várias instâncias    → todas elas + conversas sem instância apenas se a
+      //                           loja tiver provider zapi (legado);
+      //  - nenhuma configurada  → todas as instâncias do sistema.
+      const scope = storeNumberIds.length === 0
+        ? { numberIds: null as string[] | null, includeUnassigned: true }
+        : storeNumberIds.length === 1
+          ? { numberIds: storeNumberIds, includeUnassigned: false }
+          : { numberIds: storeNumberIds, includeUnassigned: storeNumbers.some(n => n.provider === 'zapi') };
+
+      const [regular, dispatch] = await Promise.all([
+        fetchConversationRows({ ...scope, dispatchOnly: false }),
+        needsDispatch ? fetchConversationRows({ ...scope, dispatchOnly: true }) : Promise.resolve({ rows: [], error: null }),
+      ]);
+
+      if (regular.error) { console.error('Error loading conversations:', regular.error); return; }
+      // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
+      // acontece no effect abaixo SEM nova ida ao servidor.
+      setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[] });
+    };
+
+    loadConversations()
+      .catch((e) => console.error('Error loading conversations:', e))
+      .finally(() => {
+        listLoadInFlightRef.current = false;
+        if (listReloadPendingRef.current) {
+          listReloadPendingRef.current = false;
+          setWaMsgTick((t) => t + 1);
         }
-        return calls;
-      };
+      });
+    // NOTA: `selectedPhone`, `chatContacts`, `crmMap` etc. NÃO entram aqui de
+    // propósito — mudar nome/CRM/filtro local NÃO refaz a consulta da lista;
+    // só o effect de derivação abaixo roda de novo (em memória).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeNumbersLoaded, storeNumberIds, storeNumbers, statusFilter, waMsgTick]);
 
-      const regularResults = await Promise.all(buildCalls(false));
-      const dispatchResults = needsDispatch ? await Promise.all(buildCalls(true)) : [];
+  // Deriva a lista exibida a partir das linhas cruas em memória. Roda quando
+  // chegam linhas novas OU quando muda algo local (nomes, CRM, filtros de
+  // instância, status de finalização/arquivo...) — sem consulta ao servidor.
+  useEffect(() => {
+    if (!listRows) return;
+    {
+      const regularResults: Array<{ data: any[] }> = [{ data: listRows.regular }];
+      const dispatchResults: Array<{ data: any[] }> = listRows.dispatch.length ? [{ data: listRows.dispatch }] : [];
 
-      const firstErr = regularResults.find((r: any) => r.error);
-      if (firstErr?.error) { console.error('Error loading conversations:', firstErr.error); return; }
 
       // ── TEMP DEBUG (Novas/Não-lidas investigation) ──────────────────────
       // Ative no console: window.__debugPhoneSuffix = '88191295'
@@ -1147,31 +1189,94 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         console.log('[NOVAS-DEBUG] signature idêntica → setConversations SUPRIMIDO');
       }
       if (dbgOn) console.groupEnd();
-    };
-
-    loadConversations();
-    // NOTA: `selectedPhone` NÃO entra nas dependências de propósito — abrir/fechar
-    // o modal de uma conversa não precisa refazer as ~7 consultas da lista inteira
-    // (o broadcast em tempo real + o polling de segurança já cobrem novidades).
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, mapRowsToConvs, waMsgTick, sellerViewerId]);
+  }, [listRows, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, mapRowsToConvs, sellerViewerId]);
 
-  // Bump conversation list when any new WA message arrives (messages of the open chat
-  // are handled internally by useChatMessages above).
-  useWaMessageBroadcast(() => {
-    setWaMsgTick((t) => t + 1);
-  }, { debounceMs: 800 });
-
-  // Polling de SEGURANÇA da lista de conversas (a cada 20s). Rede de segurança
-  // para quando o broadcast em tempo real é perdido (rede/carga): garante que
-  // um card que já está no banco apareça sozinho em segundos, sem precisar
-  // atualizar a página. Não pisca a tela: o refetch é silencioso e a guarda de
-  // assinatura acima evita re-render quando nada mudou.
-  useEffect(() => {
-    const interval = setInterval(() => {
+  // Refs para o filtro do broadcast (não precisam re-assinar o canal).
+  const storeNumberIdsRef = useRef<string[]>(storeNumberIds);
+  storeNumberIdsRef.current = storeNumberIds;
+  const listDirtyWhileHiddenRef = useRef(false);
+  // Throttle das recargas por broadcast: no máximo 1 a cada 5 s (com disparo
+  // final garantido). Em horário de pico chegam várias mensagens por segundo
+  // nas instâncias da loja; sem isso a lista recarregava quase continuamente.
+  const BROADCAST_RELOAD_MIN_MS = 5000;
+  const lastBroadcastReloadRef = useRef(0);
+  const broadcastReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestListReload = useCallback(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      listDirtyWhileHiddenRef.current = true;
+      return;
+    }
+    const since = Date.now() - lastBroadcastReloadRef.current;
+    if (since >= BROADCAST_RELOAD_MIN_MS) {
+      lastBroadcastReloadRef.current = Date.now();
       setWaMsgTick((t) => t + 1);
-    }, 20000);
-    return () => clearInterval(interval);
+      return;
+    }
+    if (broadcastReloadTimerRef.current) return; // já há um disparo final agendado
+    broadcastReloadTimerRef.current = setTimeout(() => {
+      broadcastReloadTimerRef.current = null;
+      lastBroadcastReloadRef.current = Date.now();
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        listDirtyWhileHiddenRef.current = true;
+        return;
+      }
+      setWaMsgTick((t) => t + 1);
+    }, BROADCAST_RELOAD_MIN_MS - since);
+  }, []);
+  useEffect(() => () => {
+    if (broadcastReloadTimerRef.current) clearTimeout(broadcastReloadTimerRef.current);
+  }, []);
+
+  // Bump conversation list when a NEW WA message arrives for one of THIS store's
+  // instances (messages of the open chat are handled by useChatMessages above).
+  //
+  // Fase 2 — filtro no cliente:
+  //  - `wa_msg_update` (✓✓ status / mídia) NÃO recarrega a lista: só o chat
+  //    aberto reage a isso; a contagem de não lidas se acerta no poll de 60 s.
+  //  - mensagem de instância de OUTRA loja é ignorada (antes, qualquer mensagem
+  //    do sistema inteiro recarregava a lista de todas as lojas).
+  //  - aba oculta: não recarrega; marca como "sujo" e recarrega ao voltar.
+  //  - no máximo 1 recarga a cada 5 s (throttle acima).
+  useWaMessageBroadcast(() => {
+    requestListReload();
+  }, {
+    debounceMs: 800,
+    filter: (p) => {
+      if (p.event === 'wa_msg_update') return false;
+      const ids = storeNumberIdsRef.current;
+      if (ids.length === 0) return true; // loja sem instâncias configuradas vê tudo
+      if (!p.whatsapp_number_id) return true; // sem instância (IG/legado): decide no filtro da lista
+      return ids.includes(p.whatsapp_number_id);
+    },
+  });
+
+  // Polling de SEGURANÇA da lista de conversas (a cada 60 s; antes 20 s). Rede
+  // de segurança para quando o broadcast em tempo real é perdido (rede/carga).
+  // Pausado enquanto a aba está oculta; ao voltar, recarrega imediatamente se
+  // algo chegou nesse meio-tempo. Não pisca a tela: o refetch é silencioso e a
+  // guarda de assinatura acima evita re-render quando nada mudou.
+  useEffect(() => {
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        listDirtyWhileHiddenRef.current = true;
+        return;
+      }
+      setWaMsgTick((t) => t + 1);
+    };
+    const interval = setInterval(tick, 60000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && listDirtyWhileHiddenRef.current) {
+        listDirtyWhileHiddenRef.current = false;
+        setWaMsgTick((t) => t + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
 
