@@ -93,7 +93,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [shipCustomer, setShipCustomer] = useState<ShippingCustomerForm>(EMPTY_CUSTOMER);
   const [savingCustomer, setSavingCustomer] = useState(false);
-  const [nfeDoc, setNfeDoc] = useState<{ id: string; status: string; chave: string | null; danfe_url: string | null; xml_content: string | null; rejeicao_motivo: string | null } | null>(null);
+  const [nfeDoc, setNfeDoc] = useState<{ id: string; status: string; chave: string | null; danfe_url: string | null; xml_content: string | null; rejection_message: string | null } | null>(null);
   const [emittingNfe, setEmittingNfe] = useState(false);
   const [nfeObs, setNfeObs] = useState<string>("");
   const [trackingCode, setTrackingCode] = useState("");
@@ -217,27 +217,27 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     if (nfeId) {
       const { data: doc } = await supabase
         .from("fiscal_documents")
-        .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+        .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
         .eq("id", nfeId).maybeSingle();
       if (doc) {
         setNfeDoc({
           id: (doc as any).id, status: (doc as any).status,
           chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
-          xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+          xml_content: (doc as any).xml_content, rejection_message: (doc as any).rejection_message,
         });
       }
     } else if (psid) {
       // Fallback: procura NF-e vinculada à venda-espelho
       const { data: doc } = await supabase
         .from("fiscal_documents")
-        .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+        .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
         .eq("pos_sale_id", psid).eq("modelo", 55)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (doc) {
         setNfeDoc({
           id: (doc as any).id, status: (doc as any).status,
           chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
-          xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+          xml_content: (doc as any).xml_content, rejection_message: (doc as any).rejection_message,
         });
         // Persiste vínculo para próximas aberturas
         await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: (doc as any).id } as any).eq("id", ev.id);
@@ -722,7 +722,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                     : "border-amber-400/40 bg-amber-500/5 text-amber-200")}>
                   <p className="font-semibold">NF-e status: {nfeDoc.status}</p>
                   {nfeDoc.chave && <p className="text-[11px] opacity-80">Chave: {nfeDoc.chave}</p>}
-                  {nfeDoc.rejeicao_motivo && <p className="text-[11px] mt-1">{nfeDoc.rejeicao_motivo}</p>}
+                  {nfeDoc.rejection_message && <p className="text-[11px] mt-1">{nfeDoc.rejection_message}</p>}
                   {nfeDoc.danfe_url && (
                     <a href={nfeDoc.danfe_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] underline mt-1">
                       <ExternalLink className="h-3 w-3" /> Abrir DANFE
@@ -764,23 +764,27 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                         if (error) throw new Error(error.message);
                         const docId = (data as any)?.document_id || (data as any)?.documentId;
                         if (docId) {
-                          const { data: doc } = await supabase
+                          const { data: doc, error: docErr } = await supabase
                             .from("fiscal_documents")
-                            .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+                            .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
                             .eq("id", docId).maybeSingle();
+                          if (docErr) throw new Error(`NF-e emitida, mas falhou ao ler o documento: ${docErr.message}`);
                           if (doc) {
                             setNfeDoc({
                               id: (doc as any).id, status: (doc as any).status,
                               chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
-                              xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+                              xml_content: (doc as any).xml_content, rejection_message: (doc as any).rejection_message,
                             });
                             await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: docId } as any).eq("id", selected.id);
                             const ok = ((doc as any).status || "").toLowerCase().startsWith("autor");
-                            if (ok) toast.success("NF-e da reposição autorizada.");
-                            else toast.error(`NF-e ${(doc as any).status}: ${(doc as any).rejeicao_motivo || ""}`);
+                            if (ok) toast.success((data as any)?.reused ? "NF-e da reposição já estava autorizada." : "NF-e da reposição autorizada.");
+                            else if ((doc as any).status === "pending_sefaz") toast.warning("SEFAZ indisponível — NF-e em fila de contingência.");
+                            else toast.error(`NF-e ${(doc as any).status}: ${(doc as any).rejection_message || (data as any)?.error || ""}`, { duration: 12000 });
+                          } else {
+                            toast.warning("Emissão enviada, mas não foi possível localizar o documento.");
                           }
                         } else {
-                          toast.warning("Emissão enviada, mas não foi possível localizar o documento.");
+                          toast.error((data as any)?.error || (data as any)?.rejection_message || "Emissão enviada, mas não foi possível localizar o documento.", { duration: 12000 });
                         }
                       } catch (e: any) {
                         toast.error(e?.message || "Falha ao emitir NF-e");
