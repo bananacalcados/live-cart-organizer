@@ -380,7 +380,9 @@ export function useConversationEnrichment() {
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
       let status = computeStatus(msgs);
       const phoneKey = normalizePhoneKey(conv.phone);
-      const finishedAt = finishedAtByPhone.get(phoneKey);
+      // Finalização é por instância: só conta o registro desta instância
+      // (ou um registro legado, sem instância, que vale para todas).
+      const finishedAt = getFinishedAtFor(finishedAtByPhone, conv.phone, conv.whatsapp_number_id);
       const isFinished = Boolean(
         finishedAt && new Date(conv.lastMessageAt).getTime() <= new Date(finishedAt).getTime()
       );
