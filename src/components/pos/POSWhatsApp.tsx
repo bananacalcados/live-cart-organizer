@@ -139,8 +139,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     [archiveLoader.messages, messages],
   );
   const [newMessage, setNewMessage] = useState("");
+  // Termo de busca JÁ com debounce (os campos de busca guardam o texto localmente
+  // e só propagam aqui após uma pausa na digitação — a tela-mãe não redesenha a cada tecla).
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  // Envio em andamento POR conversa (telefone+instância). Antes era um único booleano
+  // global: enviar no chat A travava o botão de enviar do chat B aberto em seguida.
+  const [sendingByConv, setSendingByConv] = useState<Record<string, boolean>>({});
+  const sendingRef = useRef<Set<string>>(new Set());
+  // Conversa realmente aberta AGORA (fonte da verdade síncrona, sem esperar render).
+  // Impede que a mensagem otimista / rascunho de um chat "vaze" para outro chat
+  // aberto logo em seguida enquanto o envio anterior ainda está em andamento.
+  const activeConvRef = useRef<{ phone: string | null; numberId: string | null }>({ phone: null, numberId: null });
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all");
@@ -317,7 +326,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   // Helpers consumed by ConversationList
   const livePhoneKey = (p: string) => String(p || "").replace(/\D/g, "").slice(-8);
-  const isLiveCustomer = (phone: string) => !!liveStageMap[livePhoneKey(phone)];
+  const isLiveCustomer = useCallback((phone: string) => !!liveStageMap[livePhoneKey(phone)], [liveStageMap]);
   const liveStageByPhone = useMemo(() => {
     const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }> = {};
     for (const c of conversations) {
@@ -438,19 +447,20 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   //    (o que misturava/escondia conversas entre vendedoras).
   const sellerViewerId = sellerLinkedUserId || selectedSellerId || null;
 
-  // Auto-attribute the current conversation to whoever is sending (first interaction wins)
-  const autoAssignCurrentConversation = useCallback(() => {
-    if (!selectedPhone) return;
+  // Auto-attribute a conversation to whoever is sending (first interaction wins).
+  // Recebe a conversa-ALVO explicitamente (capturada no início do envio), e não a
+  // "selecionada agora" — assim um envio concluído após trocar de chat atribui o chat certo.
+  const autoAssignConversation = useCallback((phone: string, whatsappNumberId: string | null) => {
     const userId = sellerViewerId || currentUserId;
     if (!userId) return;
     assignConversation({
-      phone: selectedPhone,
-      whatsappNumberId: selectedConvNumberId,
+      phone,
+      whatsappNumberId,
       userId,
       name: selectedSellerName || null,
       onlyIfUnassigned: true,
     });
-  }, [selectedPhone, selectedConvNumberId, sellerViewerId, currentUserId, selectedSellerName, assignConversation]);
+  }, [sellerViewerId, currentUserId, selectedSellerName, assignConversation]);
 
   // ── Notificações de PIX/checkout pendente (abas estilo navegador) ──────────
   const pixInit = usePixNotificationStore((s) => s.init);
@@ -606,6 +616,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       setSelectedConvChannel(null);
     }
   }, [selectedPhone]);
+
+  // Mantém a referência síncrona da conversa aberta alinhada ao estado
+  // (cobre fechamentos via setSelectedPhone(null), troca de instância no modal etc.).
+  useEffect(() => {
+    activeConvRef.current = { phone: selectedPhone, numberId: selectedConvNumberId ?? null };
+  }, [selectedPhone, selectedConvNumberId]);
 
   // Load chat contacts (apenas dos telefones visíveis) + photos + group names
   useEffect(() => {
@@ -1134,8 +1150,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     };
 
     loadConversations();
+    // NOTA: `selectedPhone` NÃO entra nas dependências de propósito — abrir/fechar
+    // o modal de uma conversa não precisa refazer as ~7 consultas da lista inteira
+    // (o broadcast em tempo real + o polling de segurança já cobrem novidades).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, mapRowsToConvs, waMsgTick, sellerViewerId]);
+  }, [chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, mapRowsToConvs, waMsgTick, sellerViewerId]);
 
   // Bump conversation list when any new WA message arrives (messages of the open chat
   // are handled internally by useChatMessages above).
@@ -1246,7 +1265,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const normalizePhoneKey = (phone: string | null | undefined) => String(phone || '').replace(/\D/g, '').slice(-8);
 
-  const handleSelectConversation = async (phone: string, whatsappNumberId?: string | null) => {
+  const handleSelectConversationImpl = async (phone: string, whatsappNumberId?: string | null) => {
     const conversationKey = `${phone}__${whatsappNumberId || 'none'}`;
     const selectedConversation = mergedConversations.find((conversation) => {
       const key = conversation.conversationKey || `${conversation.phone}__${conversation.whatsapp_number_id || 'none'}`;
@@ -1254,8 +1273,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     }) || null;
     const conversationChannel = selectedConversation?.channel || null;
 
+    // Atualiza a referência síncrona ANTES de qualquer await: um envio ainda em
+    // andamento no chat anterior passa a saber, na hora, que não é mais o chat aberto.
+    activeConvRef.current = { phone, numberId: whatsappNumberId ?? null };
     setTeamChatActive(false);
     setQuotedMessage(null);
+    setNewMessage("");
     setSelectedPhone(phone);
     setSelectedConvNumberId(whatsappNumberId ?? null);
     setSelectedConvKey(conversationKey);
@@ -1290,6 +1313,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       } as any, { onConflict: 'phone' });
     }
   };
+  // Versão ESTÁVEL (mesma referência entre renders) para os filhos memoizados:
+  // a implementação real (que muda a cada render) fica numa ref.
+  const selectConvImplRef = useRef(handleSelectConversationImpl);
+  selectConvImplRef.current = handleSelectConversationImpl;
+  const handleSelectConversation = useCallback(
+    (phone: string, whatsappNumberId?: string | null) => selectConvImplRef.current(phone, whatsappNumberId),
+    [],
+  );
 
   // Build SendRoute compatible with useChatSender
   const buildSendRoute = (): SendRoute | null => {
@@ -1322,124 +1353,212 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     },
   });
 
-  // Insere a mensagem recém-enviada na lista local imediatamente (otimista),
-  // garantindo que TUDO que enviamos (texto/áudio/mídia) apareça na hora,
-  // mesmo antes do refresh do banco.
+  // ── Envio com "alvo travado" ─────────────────────────────────────────────
+  // Todo envio captura a conversa-ALVO (telefone+instância) no instante do clique.
+  // A partir daí, qualquer efeito visual (mensagem otimista, rascunho restaurado,
+  // refresh do histórico) só é aplicado se essa conversa AINDA for a aberta —
+  // caso a atendente tenha trocado de chat no meio do envio, nada é desenhado
+  // no chat errado (o histórico do chat certo mostra a mensagem ao ser reaberto).
+  type SendTarget = { phone: string; numberId: string | null };
+  const convKeyOf = (phone: string | null, numberId: string | null | undefined) => `${phone ?? ''}__${numberId || 'none'}`;
+  const isActiveConv = (t: SendTarget) =>
+    activeConvRef.current.phone === t.phone && (activeConvRef.current.numberId || null) === (t.numberId || null);
+  const markSending = (key: string, on: boolean) => {
+    if (on) sendingRef.current.add(key); else sendingRef.current.delete(key);
+    setSendingByConv((prev) => {
+      if (!!prev[key] === on) return prev;
+      const next = { ...prev };
+      if (on) next[key] = true; else delete next[key];
+      return next;
+    });
+  };
+
+  // Insere a mensagem otimista IMEDIATAMENTE (com relógio de "enviando"), sem
+  // esperar a resposta do provedor. Devolve o id local para atualizar/remover depois.
   const appendOptimistic = (
+    target: SendTarget,
     text: string,
-    extra?: { media_type?: string; media_url?: string; message_id?: string | null },
-  ) => {
+    extra: { media_type?: string; media_url?: string; whatsapp_number_id?: string | null },
+  ): string => {
+    const id = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    if (!isActiveConv(target)) return id;
     setMessages((prev) => [
       ...prev,
       {
-        id: `optimistic-${Date.now()}`,
-        phone: selectedPhone!,
+        id,
+        phone: target.phone,
         message: text,
         direction: "outgoing",
-        status: "sent",
+        status: "sending",
         created_at: new Date().toISOString(),
-        whatsapp_number_id: buildSendRoute()?.numberId ?? selectedConvNumberId ?? undefined,
-        message_id: extra?.message_id ?? undefined,
+        whatsapp_number_id: extra.whatsapp_number_id ?? target.numberId ?? undefined,
         sender_name: selectedSellerName || undefined,
-        ...(extra?.media_type ? { media_type: extra.media_type } : {}),
-        ...(extra?.media_url ? { media_url: extra.media_url } : {}),
+        ...(extra.media_type ? { media_type: extra.media_type } : {}),
+        ...(extra.media_url ? { media_url: extra.media_url } : {}),
       } as Message,
     ]);
+    return id;
+  };
+  const patchOptimistic = (target: SendTarget, id: string, patch: Partial<Message>) => {
+    if (!isActiveConv(target)) return;
+    setMessages((prev) => prev.map((m) => (m.id === id ? ({ ...m, ...patch } as Message) : m)));
+  };
+  const removeOptimistic = (target: SendTarget, id: string) => {
+    if (!isActiveConv(target)) return;
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  };
+  const refreshIfActive = (target: SendTarget) => {
+    if (isActiveConv(target)) refreshMessages();
+  };
+  const notifyFailureElsewhere = (target: SendTarget, preview: string) => {
+    if (isActiveConv(target)) return;
+    toast.error(`Envio falhou para ${target.phone}`, { description: preview.slice(0, 120), duration: 8000 });
   };
 
-  const handleSendMessage = async (overrideText?: string) => {
+  /** Devolve `false` quando o envio NÃO foi aceito (o composer mantém o rascunho). */
+  const handleSendMessage = async (overrideText?: string): Promise<boolean> => {
     const source = overrideText !== undefined ? overrideText : newMessage;
-    if (!source.trim() || !selectedPhone || isSending) return;
+    const phone = selectedPhone;
+    if (!source.trim() || !phone) return false;
+    const target: SendTarget = { phone, numberId: selectedConvNumberId ?? null };
+    const key = convKeyOf(target.phone, target.numberId);
+    if (sendingRef.current.has(key)) {
+      toast.info("Aguarde: a mensagem anterior desta conversa ainda está sendo enviada.");
+      return false;
+    }
     const messageText = source.trim();
     const route = buildSendRoute();
     if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");
-      return;
+      return false;
     }
-    setIsSending(true);
+    const quotedId = quotedMessage?.message_id || null;
+    markSending(key, true);
     setNewMessage("");
+    setQuotedMessage(null);
+    const optimisticId = appendOptimistic(target, messageText, { whatsapp_number_id: route.numberId });
     try {
       const result = await sender.sendText({
-        phone: selectedPhone,
+        phone: target.phone,
         message: messageText,
         route,
-        quotedMessageId: quotedMessage?.message_id || null,
+        quotedMessageId: quotedId,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
         hooks: buildSendHooks(),
       });
       if (!result.success) {
-        setNewMessage(messageText);
-        return;
+        removeOptimistic(target, optimisticId);
+        // Devolve o texto ao composer SÓ se ainda estamos no mesmo chat.
+        if (isActiveConv(target)) setNewMessage(messageText);
+        else notifyFailureElsewhere(target, messageText);
+        return false;
       }
-      setQuotedMessage(null);
-      appendOptimistic(messageText, { message_id: result.messageId });
-      autoAssignCurrentConversation();
-      loadMessages(selectedPhone, selectedConvNumberId);
+      patchOptimistic(target, optimisticId, { status: "sent", message_id: result.messageId ?? undefined });
+      autoAssignConversation(target.phone, target.numberId);
+      refreshIfActive(target);
+      return true;
+    } catch (e) {
+      console.error("[handleSendMessage] unexpected", e);
+      removeOptimistic(target, optimisticId);
+      if (isActiveConv(target)) setNewMessage(messageText);
+      else notifyFailureElsewhere(target, messageText);
+      return false;
     } finally {
-      setIsSending(false);
+      markSending(key, false);
     }
   };
 
   const handleSendAudio = async (audioUrl: string) => {
-    if (!selectedPhone) return;
+    const phone = selectedPhone;
+    if (!phone) return;
+    const target: SendTarget = { phone, numberId: selectedConvNumberId ?? null };
+    const key = convKeyOf(target.phone, target.numberId);
+    if (sendingRef.current.has(key)) {
+      toast.info("Aguarde: a mensagem anterior desta conversa ainda está sendo enviada.");
+      return;
+    }
     const route = buildSendRoute();
     if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");
       return;
     }
-    setIsSending(true);
+    const quotedId = quotedMessage?.message_id || null;
+    markSending(key, true);
+    setQuotedMessage(null);
+    const optimisticId = appendOptimistic(target, "[áudio]", { media_type: "audio", media_url: audioUrl, whatsapp_number_id: route.numberId });
     try {
       const result = await sender.sendAudio({
-        phone: selectedPhone,
+        phone: target.phone,
         mediaUrl: audioUrl,
         route,
-        quotedMessageId: quotedMessage?.message_id || null,
+        quotedMessageId: quotedId,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
         hooks: buildSendHooks(),
       });
       if (result.success) {
-        setQuotedMessage(null);
-        appendOptimistic("[áudio]", { media_type: "audio", media_url: audioUrl, message_id: result.messageId });
-        autoAssignCurrentConversation();
-        loadMessages(selectedPhone, selectedConvNumberId);
+        patchOptimistic(target, optimisticId, { status: "sent", message_id: result.messageId ?? undefined });
+        autoAssignConversation(target.phone, target.numberId);
+        refreshIfActive(target);
         toast.success("Áudio enviado!");
+      } else {
+        removeOptimistic(target, optimisticId);
+        notifyFailureElsewhere(target, "[áudio]");
       }
+    } catch (e) {
+      console.error("[handleSendAudio] unexpected", e);
+      removeOptimistic(target, optimisticId);
     } finally {
-      setIsSending(false);
+      markSending(key, false);
     }
   };
 
   const handleSendMedia = async (mediaUrl: string, mediaType: string, caption?: string) => {
-    if (!selectedPhone) return;
+    const phone = selectedPhone;
+    if (!phone) return;
+    const target: SendTarget = { phone, numberId: selectedConvNumberId ?? null };
+    const key = convKeyOf(target.phone, target.numberId);
+    if (sendingRef.current.has(key)) {
+      toast.info("Aguarde: a mensagem anterior desta conversa ainda está sendo enviada.");
+      return;
+    }
     const route = buildSendRoute();
     if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");
       return;
     }
-    setIsSending(true);
+    const quotedId = quotedMessage?.message_id || null;
+    markSending(key, true);
+    setQuotedMessage(null);
+    const label = caption || `[${mediaType}]`;
+    const optimisticId = appendOptimistic(target, label, { media_type: mediaType, media_url: mediaUrl, whatsapp_number_id: route.numberId });
     try {
       const result = await sender.sendMedia({
-        phone: selectedPhone,
+        phone: target.phone,
         mediaUrl,
         mediaType,
         caption,
         route,
-        quotedMessageId: quotedMessage?.message_id || null,
+        quotedMessageId: quotedId,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
         hooks: buildSendHooks(),
       });
       if (result.success) {
-        setQuotedMessage(null);
-        appendOptimistic(caption || `[${mediaType}]`, { media_type: mediaType, media_url: mediaUrl, message_id: result.messageId });
-        autoAssignCurrentConversation();
-        loadMessages(selectedPhone, selectedConvNumberId);
+        patchOptimistic(target, optimisticId, { status: "sent", message_id: result.messageId ?? undefined });
+        autoAssignConversation(target.phone, target.numberId);
+        refreshIfActive(target);
         toast.success("Mídia enviada!");
+      } else {
+        removeOptimistic(target, optimisticId);
+        notifyFailureElsewhere(target, label);
       }
+    } catch (e) {
+      console.error("[handleSendMedia] unexpected", e);
+      removeOptimistic(target, optimisticId);
     } finally {
-      setIsSending(false);
+      markSending(key, false);
     }
   };
 
@@ -1557,12 +1676,70 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     } catch { toast.error("Erro ao salvar"); }
   };
 
-  const selectedConversation = mergedConversations.find(c => c.conversationKey === selectedConvKey)
-    || mergedConversations.find(c => normalizePhoneKey(c.phone) === normalizePhoneKey(selectedPhone))
-    || null;
+  const selectedConversation = useMemo(
+    () =>
+      (selectedPhone
+        ? mergedConversations.find(c => c.conversationKey === selectedConvKey)
+          || mergedConversations.find(c => normalizePhoneKey(c.phone) === normalizePhoneKey(selectedPhone))
+        : null) || null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mergedConversations, selectedConvKey, selectedPhone],
+  );
   const selectedChannel = getSelectedChannel();
   const requiresInstanceSelection = selectedChannel !== "instagram" && selectedChannel !== "messenger" && !selectedSendNumber;
-  const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+  const totalUnread = useMemo(() => conversations.reduce((sum, c) => sum + c.unreadCount, 0), [conversations]);
+  const isSendingCurrent = !!sendingByConv[convKeyOf(selectedPhone, selectedConvNumberId)];
+
+  // Lista visível (filtro de instâncias escolhido pela atendente) — memoizada para
+  // que a lista/linhas (memoizadas) não sejam redesenhadas a cada render da tela-mãe.
+  const visibleConversations = useMemo(
+    () => (multiInstanceFilter.length > 0
+      ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+      : mergedConversationsFlagged),
+    [mergedConversationsFlagged, multiInstanceFilter],
+  );
+
+  // Callbacks ESTÁVEIS para a lista clássica (memoizada).
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const handleBulkFinishPhones = useCallback((phones: string[]) => {
+    setBulkFinishPhones(phones);
+    setShowBulkFinishDialog(true);
+  }, []);
+  const handleBulkMessagePhones = useCallback((phones: string[]) => {
+    const recs = phones.map(p => {
+      const conv = conversationsRef.current.find(c => c.phone === p);
+      return { phone: p, whatsappNumberId: conv?.whatsapp_number_id || null };
+    });
+    setBulkMessageRecipients(recs);
+    setShowBulkMessageDialog(true);
+  }, []);
+  const handleBulkMarkRead = useCallback(async (phones: string[]) => {
+    if (!phones.length) return;
+    try {
+      const { error } = await supabase
+        .from('whatsapp_messages')
+        .update({ status: 'read' })
+        .in('phone', phones)
+        .eq('direction', 'incoming')
+        .or('status.is.null,status.neq.read');
+      if (error) throw error;
+      toast.success(`${phones.length} conversa(s) marcada(s) como lida`);
+    } catch (e) {
+      console.error('bulk mark read error', e);
+      toast.error('Erro ao marcar como lida');
+    }
+  }, []);
+  const toggleSupportFilter = useCallback(() => setSupportFilterActive(prev => !prev), []);
+  const toggleLiveFilter = useCallback(() => setLiveFilterActive(p => !p), []);
+  const openTeamChat = useCallback(() => {
+    setTeamChatActive(true);
+    activeConvRef.current = { phone: null, numberId: null };
+    setSelectedPhone(null);
+    setSelectedConvKey(null);
+    setSelectedConvNumberId(null);
+    setSelectedConvChannel(null);
+  }, []);
 
   const statusLabels: Record<string, string> = {
     pending: "Pendente",
@@ -1667,10 +1844,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   ) : null;
 
   // Add Live order panel above customer info when applicable
-  const liveOrderRef = selectedPhone
-    ? liveStageByPhone[selectedPhone]
-      || Object.entries(liveStageByPhone).find(([phone]) => normalizePhoneKey(phone) === normalizePhoneKey(selectedPhone))?.[1]
-    : null;
+  const liveOrderRef = useMemo(
+    () => (selectedPhone
+      ? liveStageByPhone[selectedPhone]
+        || Object.entries(liveStageByPhone).find(([phone]) => normalizePhoneKey(phone) === normalizePhoneKey(selectedPhone))?.[1]
+      : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedPhone, liveStageByPhone],
+  );
   const fullCustomerInfoPanel = (
     <>
       {liveOrderRef && (
@@ -1830,9 +2011,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           <div className="flex-1 min-w-0 min-h-0">
             <POSWhatsAppLanes
               storeId={storeId}
-              conversations={multiInstanceFilter.length > 0
-                ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
-                : mergedConversationsFlagged}
+              conversations={visibleConversations}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               onSelectConversation={handleSelectConversation}
@@ -1880,9 +2059,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
-            conversations={multiInstanceFilter.length > 0
-              ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
-              : mergedConversationsFlagged}
+            conversations={visibleConversations}
             productArrivedCount={waitlist.arrivedCount}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -1903,54 +2080,23 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             selectedConversationKey={selectedConvKey}
             getAssignedName={getAssignedName}
             cashbackMap={cashbackMap}
-            onBulkFinish={(phones) => {
-              setBulkFinishPhones(phones);
-              setShowBulkFinishDialog(true);
-            }}
-            onBulkMessage={(phones) => {
-              const recs = phones.map(p => {
-                const conv = conversations.find(c => c.phone === p);
-                return { phone: p, whatsappNumberId: conv?.whatsapp_number_id || null };
-              });
-              setBulkMessageRecipients(recs);
-              setShowBulkMessageDialog(true);
-            }}
-            onBulkMarkRead={async (phones) => {
-              if (!phones.length) return;
-              try {
-                const { error } = await supabase
-                  .from('whatsapp_messages')
-                  .update({ status: 'read' })
-                  .in('phone', phones)
-                  .eq('direction', 'incoming')
-                  .or('status.is.null,status.neq.read');
-                if (error) throw error;
-                toast.success(`${phones.length} conversa(s) marcada(s) como lida`);
-              } catch (e) {
-                console.error('bulk mark read error', e);
-                toast.error('Erro ao marcar como lida');
-              }
-            }}
+            onBulkFinish={handleBulkFinishPhones}
+            onBulkMessage={handleBulkMessagePhones}
+            onBulkMarkRead={handleBulkMarkRead}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
-            onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
+            onSupportFilterToggle={toggleSupportFilter}
             supportCount={supportCount}
             contactTagsMap={contactTagsMap}
             selectedTagFilters={selectedTagFilters}
             onSelectedTagFiltersChange={setSelectedTagFilters}
             liveFilterActive={liveFilterActive}
-            onLiveFilterToggle={() => setLiveFilterActive(p => !p)}
+            onLiveFilterToggle={toggleLiveFilter}
             liveCount={liveCount}
             isLiveCustomer={isLiveCustomer}
             liveStageMap={liveStageByPhone}
             teamChatActive={teamChatActive}
-            onTeamChatClick={() => {
-              setTeamChatActive(true);
-              setSelectedPhone(null);
-              setSelectedConvKey(null);
-              setSelectedConvNumberId(null);
-              setSelectedConvChannel(null);
-            }}
+            onTeamChatClick={openTeamChat}
           />
         </div>
         )}
@@ -2243,7 +2389,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 onSendMedia={handleSendMedia}
                 onDeleteMessage={handleDeleteMessage}
                 onEditMessage={handleEditMessage}
-                isSending={isSending}
+                isSending={isSendingCurrent}
                 hideTagsBar
                 quotedMessage={quotedMessage}
                 onQuoteMessage={setQuotedMessage}

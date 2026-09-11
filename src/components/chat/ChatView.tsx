@@ -77,7 +77,8 @@ interface ChatViewProps {
   conversation: Conversation | null;
   newMessage: string;
   onNewMessageChange: (message: string) => void;
-  onSendMessage: (overrideText?: string) => void;
+  /** Pode devolver `false` (ou Promise<false>) quando o envio NÃO foi aceito — o rascunho é mantido. */
+  onSendMessage: (overrideText?: string) => void | boolean | Promise<void | boolean>;
   onSendAudio?: (audioUrl: string) => void;
   onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
   onDeleteMessage?: (msg: Message) => Promise<void>;
@@ -129,51 +130,62 @@ export function ChatView({
   archive,
 }: ChatViewProps) {
   /**
-   * Rascunho LOCAL do composer. Antes, cada tecla atualizava o estado do
-   * componente pai (POSWhatsApp/Chat/Dashboard), re-renderizando a lista de
-   * conversas e todo o histórico a cada caractere — o que deixava a digitação
-   * travada. Agora o texto vive aqui e é sincronizado com o pai com debounce
-   * (e imediatamente antes de enviar).
+   * Rascunho LOCAL do composer. O texto vive SOMENTE aqui enquanto a atendente
+   * digita — o componente pai (POSWhatsApp/Chat/Dashboard) não é atualizado a
+   * cada tecla nem com debounce (antes, a cada 250 ms a tela-mãe inteira era
+   * redesenhada). O pai só recebe o texto no momento do envio; mudanças vindas
+   * de fora (restaurar rascunho após falha, limpar ao trocar de chat) continuam
+   * sendo aplicadas pelo efeito abaixo.
    */
   const [draft, setDraft] = useState(newMessage);
   const draftRef = useRef(newMessage);
-  const syncTimerRef = useRef<number | null>(null);
+  const lastPropRef = useRef(newMessage);
 
-  // Mudanças vindas de fora (limpeza pós-envio, resposta rápida etc.)
+  // Mudanças vindas de fora (restauração pós-falha, limpeza ao trocar de chat etc.)
   useEffect(() => {
+    if (newMessage === lastPropRef.current) return;
+    lastPropRef.current = newMessage;
     if (newMessage !== draftRef.current) {
       draftRef.current = newMessage;
       setDraft(newMessage);
     }
   }, [newMessage]);
 
+  // Ao trocar de conversa, o rascunho não deve "seguir" para o outro chat.
+  const convIdentity = `${conversation?.phone ?? ''}__${conversation?.whatsapp_number_id ?? ''}`;
+  const prevConvIdentityRef = useRef(convIdentity);
+  useEffect(() => {
+    if (prevConvIdentityRef.current === convIdentity) return;
+    prevConvIdentityRef.current = convIdentity;
+    draftRef.current = "";
+    setDraft("");
+  }, [convIdentity]);
+
   const updateDraft = useCallback((value: string) => {
     draftRef.current = value;
     setDraft(value);
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = window.setTimeout(() => {
-      syncTimerRef.current = null;
-      onNewMessageChange(draftRef.current);
-    }, 250);
-  }, [onNewMessageChange]);
-
-  const flushDraft = useCallback(() => {
-    if (syncTimerRef.current) {
-      window.clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = null;
-    }
-    onNewMessageChange(draftRef.current);
-    return draftRef.current;
-  }, [onNewMessageChange]);
-
-  const handleSendClick = useCallback(() => {
-    const text = flushDraft();
-    onSendMessage(text);
-  }, [flushDraft, onSendMessage]);
-
-  useEffect(() => () => {
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
   }, []);
+
+  const handleSendClick = useCallback(async () => {
+    const text = draftRef.current;
+    if (!text.trim()) return;
+    // Limpa o composer NA HORA (sensação de envio instantâneo); se o pai recusar
+    // o envio (instância não escolhida, envio anterior em andamento...), restaura.
+    draftRef.current = "";
+    setDraft("");
+    onNewMessageChange("");
+    let accepted: void | boolean = true;
+    try {
+      accepted = await onSendMessage(text);
+    } catch {
+      accepted = false;
+    }
+    if (accepted === false && !draftRef.current) {
+      draftRef.current = text;
+      setDraft(text);
+    }
+  }, [onNewMessageChange, onSendMessage]);
+
 
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
     useSpellAssist(draft);

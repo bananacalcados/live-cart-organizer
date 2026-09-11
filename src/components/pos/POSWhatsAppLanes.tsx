@@ -6,6 +6,7 @@ import { LaneSection } from "@/components/chat/LaneSection";
 import { ConversationLaneCard } from "@/components/chat/ConversationLaneCard";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
 import type { ManualChatLane } from "@/hooks/useChatConversationLanes";
+import { useDebouncedSearchInput } from "@/hooks/useDebouncedSearchInput";
 import type { Conversation } from "@/components/chat/ChatTypes";
 import {
   CHAT_LANE_META,
@@ -200,6 +201,9 @@ export function POSWhatsAppLanes({
   // usada para manter o card no lugar durante os 5 min após a nossa resposta.
   const previousLaneRef = useRef<Map<string, ChatLane>>(new Map());
 
+  // O input responde a cada tecla localmente; o filtro das linhas (pesado) só roda
+  // após uma pausa na digitação (valor `searchQuery` vindo do pai com debounce).
+  const [searchInput, setSearchInput] = useDebouncedSearchInput(searchQuery, onSearchChange, 250);
   const q = searchQuery.trim().toLowerCase();
 
   const lanes = useMemo(() => {
@@ -323,8 +327,8 @@ export function POSWhatsAppLanes({
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchRef}
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Buscar por nome, telefone ou mensagem…  (atalho: /)"
               className="h-8 pl-7 text-xs"
             />
