@@ -154,6 +154,9 @@ export async function findMisspellings(
     if (trailingIncomplete && end === text.length) continue; // ainda digitando
     if (word.length < 3) continue; // muito curto p/ valer a pena
     if (/\d/.test(word)) continue;
+    // Formas com hífen ("comprá-lo", "envie-me") ficam fora: as regras de clíticos
+    // foram removidas do dicionário (eram 70% do tamanho) e são raras no chat.
+    if (word.includes("-")) continue;
     if (word === word.toUpperCase() && word.length > 1) continue; // sigla (ex: PIX)
     if (ALLOWLIST.has(word.toLowerCase())) continue;
 

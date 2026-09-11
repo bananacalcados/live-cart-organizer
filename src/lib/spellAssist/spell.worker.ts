@@ -23,7 +23,6 @@ type OutMsg =
 
 const ctx = self as unknown as { postMessage: (m: OutMsg) => void; onmessage: ((e: MessageEvent<InMsg>) => void) | null };
 
-console.log("[spell.worker] booted");
 let spell: NspellLike | null = null;
 let loading: Promise<NspellLike | null> | null = null;
 
@@ -35,9 +34,7 @@ function load(affUrl: string, dicUrl: string) {
           fetch(affUrl).then((r) => r.text()),
           fetch(dicUrl).then((r) => r.text()),
         ]);
-        console.log("[spell.worker] fetched", aff.length, dic.length); const t0 = Date.now();
         spell = (nspell as unknown as (aff: string, dic: string) => NspellLike)(aff, dic);
-        console.log("[spell.worker] parsed in", Date.now() - t0, "ms");
         ctx.postMessage({ type: "ready", ok: true });
         return spell;
       } catch (err) {
