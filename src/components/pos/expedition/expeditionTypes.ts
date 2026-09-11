@@ -343,6 +343,7 @@ export async function fetchExpeditionOrders(
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
     const phone = salePhone(s);
     const suf = phone ? phone.slice(-8) : "";
+    const storeIsOnlineOnly = isOnlineOnlyStore(storeNameMap.get(s.store_id) || "");
     const saleSeller = storeIsOnlineOnly ? null : s.seller_id ? sellerMap.get(s.seller_id) || null : null;
     const linkSeller = storeIsOnlineOnly ? null : s.payment_details?.seller_name || null;
     const chatSeller = storeIsOnlineOnly ? null : suf ? attendantBySuffix.get(suf) || null : null;
