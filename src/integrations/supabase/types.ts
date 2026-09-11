@@ -22520,6 +22520,15 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_conversations_multi_json: {
+        Args: {
+          p_dispatch_only?: boolean
+          p_include_unassigned?: boolean
+          p_limit?: number
+          p_number_ids?: string[]
+        }
+        Returns: Json
+      }
       get_customer_active_prizes: {
         Args: { p_include_history?: boolean; p_phone: string }
         Returns: {
