@@ -301,15 +301,21 @@ export function useConversationEnrichment() {
       .then(() => {});
   }, []);
 
-  const reopenConversation = useCallback(async (phone: string) => {
+  /** Reabre a conversa APENAS na instância informada (null = todas). */
+  const reopenConversation = useCallback(async (phone: string, whatsappNumberId?: string | null) => {
     const phoneKey = normalizePhoneKey(phone);
-    const prevFinishedAt = phoneKey ? peekFinishedMap().get(phoneKey) : undefined;
-    if (phoneKey) setFinishedLocal(phone, null);
+    const prevFinishedAt = phoneKey
+      ? getFinishedAtFor(peekFinishedMap(), phone, whatsappNumberId ?? null)
+      : undefined;
+    if (phoneKey) setFinishedLocal(phone, whatsappNumberId ?? null, null);
 
-    const { error } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
+    const { error } = await (supabase.rpc as any)('reopen_finished_conversation', {
+      p_phone: phone,
+      p_whatsapp_number_id: whatsappNumberId ?? null,
+    });
 
     if (error && phoneKey) {
-      setFinishedLocal(phone, prevFinishedAt ?? null);
+      setFinishedLocal(phone, whatsappNumberId ?? null, prevFinishedAt ?? null);
       throw error;
     }
   }, []);
