@@ -57,6 +57,7 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
   const [sales, setSales] = useState<PendingSale[]>([]);
   const [paidSales, setPaidSales] = useState<PaidSale[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = useState<PendingSale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
