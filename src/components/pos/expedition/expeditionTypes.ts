@@ -203,11 +203,18 @@ export const trackingLink = (code: string) =>
 export const brl = (v: number | null | undefined) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/**
+ * Carrega os pedidos da Expedição.
+ * `storeId = "all"` traz os pedidos de TODAS as lojas (expedir tudo de um lugar só).
+ * A loja de origem de cada venda nunca é alterada: as ações continuam gravando
+ * na própria venda, então a conclusão fica registrada na loja original.
+ */
 export async function fetchExpeditionOrders(
   storeId: string,
   stage: ExpStage,
   finishedRange?: { from?: string; to?: string },
 ): Promise<ExpOrder[]> {
+  const allStores = storeId === "all";
   const SALE_COLS =
     "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method, pickup_date, is_store_pickup, is_sedex";
 
