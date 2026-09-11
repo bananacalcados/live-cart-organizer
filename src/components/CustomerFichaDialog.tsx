@@ -428,17 +428,63 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 border-t px-4 py-3 shrink-0">
-        <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
-          <Copy className="h-4 w-4 mr-2" /> Copiar link
-        </Button>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+      <div className="border-t px-3 py-3 shrink-0 space-y-2">
+        {/* Tipo de link usado ao copiar/enviar */}
+        <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setLinkMode("checkout")}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+              linkMode === "checkout"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Link do checkout
+          </button>
+          <button
+            type="button"
+            onClick={() => setLinkMode("member")}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+              linkMode === "member"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Área de membros
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 min-w-[110px]"
+            onClick={handleCopyLink}
+            disabled={!isRealOrder || copying}
+          >
+            {copying ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Copy className="h-4 w-4 mr-1.5" />}
+            Copiar link
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex-1 min-w-[100px]"
+            onClick={handleSave}
+            disabled={saving || loading || !isRealOrder}
+          >
+            {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
             Salvar
           </Button>
-          <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
-            {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+          <Button
+            size="sm"
+            className="flex-1 basis-full min-w-[160px]"
+            onClick={handleSendPaymentLink}
+            disabled={sending || loading || !isRealOrder}
+          >
+            {sending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
             Enviar link Pagamento
           </Button>
         </div>
