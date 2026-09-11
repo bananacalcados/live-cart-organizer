@@ -159,11 +159,13 @@ export function useConversationEnrichment() {
     // Escrita otimista direto no cache compartilhado — enrichConversations lê
     // dele para decidir isFinished, então precisa ser atualizado antes do
     // round-trip ou a conversa "volta" na próxima atualização da lista.
-    if (phoneKey) setFinishedLocal(phone, finishedAtIso);
+    const instanceId = extras?.whatsappNumberId ?? null;
+    if (phoneKey) setFinishedLocal(phone, instanceId, finishedAtIso);
 
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
+      whatsapp_number_id: instanceId,
       finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
