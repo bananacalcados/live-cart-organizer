@@ -283,9 +283,12 @@ export function useConversationEnrichment() {
       const chunk = rows.slice(i, i + 100);
       const { error } = await supabase
         .from('chat_finished_conversations')
-        .upsert(chunk as any, { onConflict: 'phone' });
+        .upsert(chunk as any, { onConflict: 'phone,instance_key' });
       if (error) {
-        setFinishedLocalMany(chunk.map(r => r.phone), null);
+        setFinishedLocalMany(
+          chunk.map(r => ({ phone: r.phone, instanceId: r.whatsapp_number_id ?? null })),
+          null,
+        );
         throw error;
       }
     }
