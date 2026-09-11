@@ -764,10 +764,11 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                         if (error) throw new Error(error.message);
                         const docId = (data as any)?.document_id || (data as any)?.documentId;
                         if (docId) {
-                          const { data: doc } = await supabase
+                          const { data: doc, error: docErr } = await supabase
                             .from("fiscal_documents")
                             .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
                             .eq("id", docId).maybeSingle();
+                          if (docErr) throw new Error(`NF-e emitida, mas falhou ao ler o documento: ${docErr.message}`);
                           if (doc) {
                             setNfeDoc({
                               id: (doc as any).id, status: (doc as any).status,
@@ -776,11 +777,14 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                             });
                             await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: docId } as any).eq("id", selected.id);
                             const ok = ((doc as any).status || "").toLowerCase().startsWith("autor");
-                            if (ok) toast.success("NF-e da reposição autorizada.");
-                            else toast.error(`NF-e ${(doc as any).status}: ${(doc as any).rejection_message || ""}`);
+                            if (ok) toast.success((data as any)?.reused ? "NF-e da reposição já estava autorizada." : "NF-e da reposição autorizada.");
+                            else if ((doc as any).status === "pending_sefaz") toast.warning("SEFAZ indisponível — NF-e em fila de contingência.");
+                            else toast.error(`NF-e ${(doc as any).status}: ${(doc as any).rejection_message || (data as any)?.error || ""}`, { duration: 12000 });
+                          } else {
+                            toast.warning("Emissão enviada, mas não foi possível localizar o documento.");
                           }
                         } else {
-                          toast.warning("Emissão enviada, mas não foi possível localizar o documento.");
+                          toast.error((data as any)?.error || (data as any)?.rejection_message || "Emissão enviada, mas não foi possível localizar o documento.", { duration: 12000 });
                         }
                       } catch (e: any) {
                         toast.error(e?.message || "Falha ao emitir NF-e");
