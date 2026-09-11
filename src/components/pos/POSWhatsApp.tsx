@@ -5,6 +5,7 @@ import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
 import { useChatConversationLanes, type ManualChatLane } from "@/hooks/useChatConversationLanes";
 import { CHAT_LANE_META, laneAutoKey } from "@/lib/chat/conversationLanes";
+import { getFinishedAtFor } from "@/lib/finishedConversationsCache";
 import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
