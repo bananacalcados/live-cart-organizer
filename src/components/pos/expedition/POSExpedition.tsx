@@ -217,10 +217,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     if (!storeId) return;
     const ch = supabase
-      .channel(`pos-expedition-${storeId}`)
+      .channel(`pos-expedition-${allStores ? "all" : storeId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
+        allStores
+          ? { event: "*", schema: "public", table: "pos_sales" }
+          : { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
         () => load(),
       )
       .subscribe();
@@ -228,7 +230,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage]);
+  }, [storeId, allStores, stage]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
