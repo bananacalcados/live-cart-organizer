@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/dialog";
 import { WhatsAppChat } from "./WhatsAppChat";
 import { Order } from "@/types/order";
-import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
@@ -71,8 +71,11 @@ export function WhatsAppChatDialog({
     },
   } as unknown as DbOrder;
 
+  // Com a ficha aberta ao lado, o modal expande para acomodar chat + ficha lado a lado.
   const dialogClass = wide
-    ? "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
+    ? fichaOpen
+      ? "max-w-[1400px] sm:max-w-[1400px] w-[98vw] h-[90vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
+      : "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
     : "max-w-md sm:max-w-md w-[95vw] h-[600px] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block";
 
   return (
@@ -82,7 +85,12 @@ export function WhatsAppChatDialog({
           <div className="flex h-full w-full bg-background">
             {withSidebar && (
               <aside className="flex w-16 shrink-0 flex-col items-stretch gap-1 border-r border-border/50 bg-card px-1.5 py-3">
-                <SidebarButton icon={IdCard} label="Ficha" onClick={() => setFichaOpen(true)} />
+                <SidebarButton
+                  icon={IdCard}
+                  label="Ficha"
+                  tone={fichaOpen ? "accent" : "default"}
+                  onClick={() => setFichaOpen((v) => !v)}
+                />
                 <SidebarButton
                   icon={ClipboardList}
                   label="Pedido"
@@ -114,15 +122,35 @@ export function WhatsAppChatDialog({
               </aside>
             )}
             <div className="min-w-0 flex-1 h-full">
-              <WhatsAppChat order={order} onBack={() => onOpenChange(false)} />
+              <WhatsAppChat
+                order={order}
+                onBack={() => onOpenChange(false)}
+                onOpenFicha={withSidebar ? () => setFichaOpen((v) => !v) : undefined}
+              />
             </div>
+            {withSidebar && fichaOpen && (
+              <div className="hidden sm:block w-[420px] shrink-0 h-full border-l border-border/60 bg-card">
+                <CustomerFichaPanel
+                  order={fichaOrder}
+                  onClose={() => setFichaOpen(false)}
+                />
+              </div>
+            )}
           </div>
+          {/* Mobile: ficha vira sobreposição de tela cheia dentro do modal */}
+          {withSidebar && fichaOpen && (
+            <div className="absolute inset-0 z-10 sm:hidden bg-card">
+              <CustomerFichaPanel
+                order={fichaOrder}
+                onClose={() => setFichaOpen(false)}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
       {withSidebar && (
         <>
-          <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
           <OrderDetailsDialog
             open={detailsOpen}
             onOpenChange={setDetailsOpen}

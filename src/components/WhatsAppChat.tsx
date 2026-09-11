@@ -70,6 +70,8 @@ interface WhatsAppChatProps {
   conversationNumberId?: string | null;
   /** Na Central da Live, mantém somente o histórico de Direct do Instagram. */
   hideInstagramComments?: boolean;
+  /** Quando definido, o botão "Ficha" abre um painel externo (lado a lado) em vez do modal interno. */
+  onOpenFicha?: () => void;
 }
 
 // Status icon now uses shared component
@@ -107,7 +109,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
@@ -1337,7 +1339,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           size="icon"
           className="text-white hover:bg-white/10 h-8 w-8"
           title="Ver dados do cliente"
-          onClick={() => setFichaOpen(true)}
+          onClick={() => (onOpenFicha ? onOpenFicha() : setFichaOpen(true))}
         >
           <UserCog className="h-4 w-4" />
         </Button>
