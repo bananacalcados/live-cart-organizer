@@ -2153,7 +2153,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               }}
               onBulkFinish={(convs) => {
                 if (convs.length === 0) return;
-                setBulkFinishPhones(Array.from(new Set(convs.map(c => c.phone))));
+                {
+                  const seen = new Set<string>();
+                  const targets: { phone: string; numberId: string | null }[] = [];
+                  for (const c of convs) {
+                    const k = `${c.phone}|${c.whatsapp_number_id ?? ''}`;
+                    if (seen.has(k)) continue;
+                    seen.add(k);
+                    targets.push({ phone: c.phone, numberId: c.whatsapp_number_id ?? null });
+                  }
+                  setBulkFinishPhones(targets);
+                }
                 setShowBulkFinishDialog(true);
               }}
             />
