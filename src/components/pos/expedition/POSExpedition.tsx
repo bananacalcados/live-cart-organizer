@@ -87,6 +87,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  /** Expedir os pedidos de TODAS as lojas a partir desta tela (a loja de origem de cada pedido é preservada). */
+  const [allStores, setAllStores] = useState(false);
+  const effectiveStore = allStores ? "all" : storeId;
   const [filterOrigin, setFilterOrigin] = useState<string>("all");
   const [filterAvulso, setFilterAvulso] = useState<string>("all");
   const [filterShipping, setFilterShipping] = useState<string>("all");
@@ -100,7 +103,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   useEffect(() => {
     setSelected(new Set());
-  }, [stage, storeId]);
+  }, [stage, storeId, allStores]);
 
   const runTestAction = async (action: "create" | "purge") => {
     if (action === "purge" && !confirm("Excluir TODOS os pedidos de teste?")) return;
@@ -125,13 +128,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   };
 
   const loadCounts = async () => {
-    const base = () =>
-      supabase
+    const base = () => {
+      let q = supabase
         .from("pos_sales")
         .select("expedition_stage")
-        .eq("store_id", storeId)
         .in("sale_type", ["live", "online"])
         .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+      if (!allStores) q = q.eq("store_id", storeId);
+      return q;
+    };
     let { data, error } = await base()
       .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
       .or(PAID_FILTER);
@@ -183,7 +188,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!storeId) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(storeId, stage, finishedRange);
+      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
       await loadCounts();
     } catch (e: any) {
@@ -196,7 +201,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage, finishedRange]);
+  }, [storeId, allStores, stage, finishedRange]);
 
   // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
   // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
@@ -212,10 +217,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     if (!storeId) return;
     const ch = supabase
-      .channel(`pos-expedition-${storeId}`)
+      .channel(`pos-expedition-${allStores ? "all" : storeId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
+        allStores
+          ? { event: "*", schema: "public", table: "pos_sales" }
+          : { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
         () => load(),
       )
       .subscribe();
@@ -223,7 +230,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage]);
+  }, [storeId, allStores, stage]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -557,7 +564,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <Truck className="h-8 w-8 text-exp-prep" /> EXPEDIÇÃO
             </h2>
             <p className="text-base font-semibold text-pos-muted-text">
-              Envios online e de lives {storeName ? `— ${storeName}` : ""}
+              Envios online e de lives{" "}
+              {allStores ? "— TODAS AS LOJAS" : storeName ? `— ${storeName}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -581,6 +589,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             >
               <Filter className="h-5 w-5" />
               <span className="ml-2 font-bold">Filtros</span>
+            </Button>
+            <Button
+              variant={allStores ? "default" : "outline"}
+              size="lg"
+              onClick={() => setAllStores((v) => !v)}
+              title="Expedir os pedidos de todas as lojas aqui (cada pedido continua registrado na loja de origem)"
+              className={allStores ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
+            >
+              <Store className="h-5 w-5" />
+              <span className="ml-2 font-bold">
+                {allStores ? "TODAS AS LOJAS" : "Expedir de todas as lojas"}
+              </span>
             </Button>
             <Button
               variant="outline"
@@ -961,6 +981,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             <Badge className={`${stageStyles[stage].chip} text-white text-sm font-bold`}>
                               {ORIGIN_LABEL[o.origin]}
                             </Badge>
+                            {allStores && o.store_name && (
+                              <Badge variant="outline" className="text-sm font-black border-violet-500 text-violet-600">
+                                <Store className="h-4 w-4 mr-1" />
+                                {o.store_name.toUpperCase()}
+                              </Badge>
+                            )}
                             {isSedexOrder(o) && (
                               <Badge className="bg-orange-500 text-white text-sm font-black">SEDEX</Badge>
                             )}

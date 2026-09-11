@@ -47,6 +47,8 @@ export interface ExpItem {
 export interface ExpOrder {
   id: string;
   store_id: string;
+  /** Nome da loja de origem da venda (usado no modo "todas as lojas"). */
+  store_name?: string | null;
   created_at: string;
   total: number;
   discount: number;
@@ -203,11 +205,18 @@ export const trackingLink = (code: string) =>
 export const brl = (v: number | null | undefined) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/**
+ * Carrega os pedidos da Expedição.
+ * `storeId = "all"` traz os pedidos de TODAS as lojas (expedir tudo de um lugar só).
+ * A loja de origem de cada venda nunca é alterada: as ações continuam gravando
+ * na própria venda, então a conclusão fica registrada na loja original.
+ */
 export async function fetchExpeditionOrders(
   storeId: string,
   stage: ExpStage,
   finishedRange?: { from?: string; to?: string },
 ): Promise<ExpOrder[]> {
+  const allStores = storeId === "all";
   const SALE_COLS =
     "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method, pickup_date, is_store_pickup, is_sedex";
 
@@ -215,11 +224,11 @@ export async function fetchExpeditionOrders(
     let q = supabase
       .from("pos_sales")
       .select(SALE_COLS)
-      .eq("store_id", storeId)
       .eq("expedition_stage", stage)
       .in("sale_type", ["live", "online"])
       .order("created_at", { ascending: stage !== "concluido" })
-      .limit(400);
+      .limit(allStores ? 800 : 400);
+    if (!allStores) q = q.eq("store_id", storeId);
     // Filtragem server-side por data de conclusão da expedição.
     // Só aplicamos quando há intervalo definido — senão excluíria os
     // pedidos ainda não concluídos (expedition_finished_at = null).
@@ -259,18 +268,9 @@ export async function fetchExpeditionOrders(
 
 
   // Loja 100% online (Site/Live) não tem vendedora humana: nenhuma venda dela
-  // pode ser atribuída a vendedora/atendente.
-  let storeIsOnlineOnly = false;
-  try {
-    const { data: storeRow } = await supabase
-      .from("pos_stores")
-      .select("name")
-      .eq("id", storeId)
-      .maybeSingle();
-    storeIsOnlineOnly = isOnlineOnlyStore((storeRow as any)?.name);
-  } catch {
-    /* best-effort */
-  }
+  // pode ser atribuída a vendedora/atendente. Avaliado pela loja DE ORIGEM de
+  // cada venda (importante no modo "todas as lojas").
+
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
@@ -345,6 +345,7 @@ export async function fetchExpeditionOrders(
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
     const phone = salePhone(s);
     const suf = phone ? phone.slice(-8) : "";
+    const storeIsOnlineOnly = isOnlineOnlyStore(storeNameMap.get(s.store_id) || "");
     const saleSeller = storeIsOnlineOnly ? null : s.seller_id ? sellerMap.get(s.seller_id) || null : null;
     const linkSeller = storeIsOnlineOnly ? null : s.payment_details?.seller_name || null;
     const chatSeller = storeIsOnlineOnly ? null : suf ? attendantBySuffix.get(suf) || null : null;
@@ -371,6 +372,7 @@ export async function fetchExpeditionOrders(
       pickup_store_id: s.pickup_store_id || src?.pickup_store_id || null,
       pickup_store_name:
         storeNameMap.get(s.pickup_store_id || src?.pickup_store_id || "") || null,
+      store_name: storeNameMap.get(s.store_id) || null,
       delivery_method:
         s.shipping_carrier ||
         (src?.is_pickup ? "Retirada na loja" : src?.delivery_method) ||
