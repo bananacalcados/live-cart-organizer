@@ -124,8 +124,9 @@ export function useConversationEnrichment() {
         const row = payload.new ?? payload.old;
         const phone = row?.phone;
         if (!phone) return;
-        if (payload.eventType === 'DELETE') setFinishedLocal(phone, null);
-        else setFinishedLocal(phone, row.finished_at ?? new Date().toISOString());
+        const inst = row?.whatsapp_number_id ?? null;
+        if (payload.eventType === 'DELETE') setFinishedLocal(phone, inst, null);
+        else setFinishedLocal(phone, inst, row.finished_at ?? new Date().toISOString());
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => debounce('archived', loadArchived))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => debounce('awaiting', loadAwaitingPayment))
