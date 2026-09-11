@@ -74,7 +74,10 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
+  /** Qual link os botões usam: checkout do pedido ou área de membros autenticada. */
+  const [linkMode, setLinkMode] = useState<"checkout" | "member">("checkout");
 
   // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
   // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
