@@ -266,18 +266,9 @@ export async function fetchExpeditionOrders(
 
 
   // Loja 100% online (Site/Live) não tem vendedora humana: nenhuma venda dela
-  // pode ser atribuída a vendedora/atendente.
-  let storeIsOnlineOnly = false;
-  try {
-    const { data: storeRow } = await supabase
-      .from("pos_stores")
-      .select("name")
-      .eq("id", storeId)
-      .maybeSingle();
-    storeIsOnlineOnly = isOnlineOnlyStore((storeRow as any)?.name);
-  } catch {
-    /* best-effort */
-  }
+  // pode ser atribuída a vendedora/atendente. Avaliado pela loja DE ORIGEM de
+  // cada venda (importante no modo "todas as lojas").
+
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
