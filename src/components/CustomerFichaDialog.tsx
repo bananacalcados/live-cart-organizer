@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Send, Save, Copy, Search } from "lucide-react";
+import { Loader2, Send, Save, Copy, Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
+import { cn } from "@/lib/utils";
 
 /** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
 function isRegUsable(r: any): boolean {
@@ -27,6 +28,13 @@ interface CustomerFichaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: DbOrder;
+}
+
+export interface CustomerFichaPanelProps {
+  order: DbOrder;
+  /** Chamado ao clicar no X (modo painel lateral). */
+  onClose?: () => void;
+  className?: string;
 }
 
 type Form = {
@@ -57,7 +65,11 @@ const EMPTY: Form = {
   state: "",
 };
 
-export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFichaDialogProps) {
+/**
+ * Conteúdo da ficha do cliente SEM o Dialog — usado tanto no modal clássico
+ * quanto no painel lateral lado a lado com o chat (WhatsAppChatDialog).
+ */
+export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaPanelProps) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,7 +85,6 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}?step=3`;
 
   useEffect(() => {
-    if (!open) return;
     (async () => {
       setLoading(true);
       try {
@@ -137,7 +148,7 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
         setLoading(false);
       }
     })();
-  }, [open, order.id, order.customer_id, order.customer?.whatsapp]);
+  }, [order.id, order.customer_id, order.customer?.whatsapp]);
 
 
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -279,16 +290,23 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            Ficha do Cliente — {order.customer?.instagram_handle || "Sem @"}
-          </DialogTitle>
-        </DialogHeader>
+    <div className={cn("flex h-full min-h-0 flex-col", className)}>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-3 shrink-0">
+        <h2 className="text-sm font-semibold truncate">
+          Ficha do Cliente — {order.customer?.instagram_handle || "Sem @"}
+        </h2>
+        {onClose && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} title="Fechar ficha">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
 
+      {/* Body */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
         {!isRealOrder && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">
             Esta conversa ainda não tem pedido. Crie o pedido para salvar a ficha e gerar o link de
             pagamento.
           </p>
@@ -299,7 +317,7 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="md:col-span-2">
               <Label>Nome completo</Label>
               <Input value={form.full_name} onChange={handleChange("full_name")} />
@@ -361,22 +379,33 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             </div>
           </div>
         )}
+      </div>
 
-        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2">
-          <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
-            <Copy className="h-4 w-4 mr-2" /> Copiar link
+      {/* Footer */}
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 border-t px-4 py-3 shrink-0">
+        <Button variant="outline" onClick={handleCopyLink} disabled={!isRealOrder}>
+          <Copy className="h-4 w-4 mr-2" /> Copiar link
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
+            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar
           </Button>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSave} disabled={saving || loading || !isRealOrder}>
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              Salvar
-            </Button>
-            <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
-              {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-              Enviar link Pagamento
-            </Button>
-          </div>
-        </DialogFooter>
+          <Button onClick={handleSendPaymentLink} disabled={sending || loading || !isRealOrder}>
+            {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+            Enviar link Pagamento
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFichaDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        {open && <CustomerFichaPanel order={order} className="max-h-[90vh]" />}
       </DialogContent>
     </Dialog>
   );
