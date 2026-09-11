@@ -77,7 +77,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const [copying, setCopying] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
   /** Qual link os botões usam: checkout do pedido ou área de membros autenticada. */
-  const [linkMode, setLinkMode] = useState<"checkout" | "member">("checkout");
+  const [linkMode, setLinkMode] = useState<"checkout" | "member">("member");
 
   // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
   // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
@@ -433,18 +433,6 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
         <div className="flex items-center gap-1 rounded-md bg-muted p-1">
           <button
             type="button"
-            onClick={() => setLinkMode("checkout")}
-            className={cn(
-              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-              linkMode === "checkout"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Link do checkout
-          </button>
-          <button
-            type="button"
             onClick={() => setLinkMode("member")}
             className={cn(
               "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
@@ -454,6 +442,18 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             )}
           >
             Área de membros
+          </button>
+          <button
+            type="button"
+            onClick={() => setLinkMode("checkout")}
+            className={cn(
+              "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+              linkMode === "checkout"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Link do checkout
           </button>
         </div>
 
