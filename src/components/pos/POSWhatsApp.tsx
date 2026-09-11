@@ -2139,16 +2139,16 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 let ok = 0;
                 for (const conv of convs) {
                   try {
-                    const wasFinished = finishedAtByPhone.has(laneAutoKey(conv.phone));
-                    if (wasFinished) await reopenConversation(conv.phone);
+                    const wasFinished = Boolean(getFinishedAtFor(finishedAtByPhone, conv.phone, conv.whatsapp_number_id));
+                    if (wasFinished) await reopenConversation(conv.phone, conv.whatsapp_number_id ?? null);
                     await laneMarks.setLane(conv.phone, conv.whatsapp_number_id, lane);
                     ok++;
                   } catch (e) {
                     console.warn("[bulkMoveLane] failed", conv.phone, e);
                   }
                 }
-                const phones = new Set(convs.map(c => laneAutoKey(c.phone)));
-                setConversations(prev => prev.map(c => phones.has(laneAutoKey(c.phone)) ? { ...c, isFinished: false } : c));
+                const moved = new Set(convs.map(c => `${laneAutoKey(c.phone)}|${c.whatsapp_number_id ?? ''}`));
+                setConversations(prev => prev.map(c => moved.has(`${laneAutoKey(c.phone)}|${c.whatsapp_number_id ?? ''}`) ? { ...c, isFinished: false } : c));
                 toast.success(`${ok} conversa${ok !== 1 ? "s" : ""} movida${ok !== 1 ? "s" : ""} para ${CHAT_LANE_META[lane].title}`);
               }}
               onBulkFinish={(convs) => {
