@@ -2984,8 +2984,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
             setSelectedPhone(null);
             setMessages([]);
-            setShowFinishDialog(false);
-            toast.success("Conversa finalizada");
           }
         }}
       />
