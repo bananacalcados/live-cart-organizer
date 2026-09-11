@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import {
-  Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
+  Search, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
   Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye, PackageCheck,
   Globe, Loader2
 } from "lucide-react";
@@ -8,15 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { format, isToday, isYesterday } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./ChatTypes";
 import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { TeamChatPinnedItem } from "./TeamChatPinnedItem";
+import { ConversationRow, formatConversationTime, getInitials } from "./ConversationRow";
+import { useDebouncedSearchInput } from "@/hooks/useDebouncedSearchInput";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -63,8 +62,16 @@ interface ConversationListProps {
   cashbackMap?: Map<string, { totalAvailable: number }>;
 }
 
+// Defaults com identidade estável (um `= {}` inline criaria um objeto novo a cada
+// render e anularia a memoização das linhas).
+const EMPTY_RECORD: Record<string, never> = Object.freeze({}) as Record<string, never>;
 
-export function ConversationList({
+/**
+ * Lista clássica de conversas. Memoizada: a tela-mãe do WhatsApp redesenha por
+ * muitos motivos (envio, dados do cliente, diálogos...) e a lista só precisa
+ * acompanhar quando as conversas/filtros realmente mudam.
+ */
+export const ConversationList = memo(function ConversationList({
   conversations,
   searchQuery,
   onSearchChange,
@@ -76,9 +83,9 @@ export function ConversationList({
   statusFilter,
   onStatusFilterChange,
   metaNumbers,
-  igUsernameById = {},
-  contactPhotos = {},
-  contactNames = {},
+  igUsernameById = EMPTY_RECORD,
+  contactPhotos = EMPTY_RECORD,
+  contactNames = EMPTY_RECORD,
   selectedPhone,
   selectedConversationKey,
   onBulkFinish,
@@ -88,7 +95,7 @@ export function ConversationList({
   onLiveFilterToggle,
   liveCount,
   isLiveCustomer,
-  liveStageMap = {},
+  liveStageMap = EMPTY_RECORD,
   teamChatActive,
   onTeamChatClick,
   productArrivedCount = 0,
@@ -99,6 +106,8 @@ export function ConversationList({
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [visibleLimit, setVisibleLimit] = useState(60);
+  // Campo de busca com resposta imediata; o filtro (no pai) só roda após pausa.
+  const [searchInput, setSearchInput] = useDebouncedSearchInput(searchQuery, onSearchChange, 250);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Busca global no banco (todas as instâncias, inclusive finalizadas/arquivadas)
@@ -116,8 +125,8 @@ export function ConversationList({
   const [globalResults, setGlobalResults] = useState<GlobalResult[] | null>(null);
   const [globalLoading, setGlobalLoading] = useState(false);
 
-  const runGlobalSearch = async () => {
-    const q = searchQuery.trim();
+  const runGlobalSearch = async (term?: string) => {
+    const q = (term ?? searchQuery).trim();
     if (q.length < 3) return;
     setGlobalLoading(true);
     try {
@@ -138,17 +147,6 @@ export function ConversationList({
   }, [searchQuery]);
 
 
-  const formatConversationTime = (date: Date) => {
-    if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
-    if (isYesterday(date)) return 'Ontem';
-    return format(date, 'dd/MM', { locale: ptBR });
-  };
-
-  const getInitials = (name?: string) => {
-    if (!name) return "?";
-    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  };
-
   // Helper: clear all "rail/live" specials when picking a native pill
   const pickNativePill = (status: ConversationStatusFilter, chat: ChatFilter) => {
     if (liveFilterActive && onLiveFilterToggle) onLiveFilterToggle();
@@ -163,100 +161,119 @@ export function ConversationList({
     onStatusFilterChange(statusFilter === status ? 'all' : status);
   };
 
-  // Apply filters
-  const filteredConversations = conversations
-    .filter(c => {
+  // Apply filters — memoizado: uma única passagem, só recalcula quando a lista
+  // ou algum filtro muda (antes: 5 passagens a cada render da tela).
+  const filteredConversations = useMemo(() => {
+    const q = searchQuery.trim();
+    const qLower = q.toLowerCase();
+    const cleanedQuery = q.replace(/\D/g, '');
+    return conversations.filter(c => {
       if (chatFilter === 'contacts' && c.isGroup) return false;
       if (chatFilter === 'groups' && !c.isGroup) return false;
-      return true;
-    })
-    .filter(c => {
-      if (instanceFilter === 'all') return true;
-      return c.whatsapp_number_id === instanceFilter;
-    })
-    .filter(c => {
+      if (instanceFilter !== 'all' && c.whatsapp_number_id !== instanceFilter) return false;
+
       if (statusFilter === 'all') {
-        return !c.isArchived && !c.isFinished && !c.isDispatchOnly;
+        if (c.isArchived || c.isFinished || c.isDispatchOnly) return false;
+      } else if (statusFilter === 'dispatch') {
+        if (!(c.isDispatchOnly && !c.isArchived)) return false;
+      } else if (statusFilter === 'archived') {
+        if (!c.isArchived) return false;
+      } else if (statusFilter === 'awaiting_payment') {
+        if (!(c.isAwaitingPayment && !c.isArchived)) return false;
+      } else if (statusFilter === 'awaiting_product') {
+        if (!(c.isAwaitingProduct && !c.isArchived)) return false;
+      } else if (statusFilter === 'finished') {
+        if (!(c.isFinished && !c.isArchived)) return false;
+      } else if (statusFilter === 'ai_transferred') {
+        if (!(c.isAiTransferred && !c.isFinished && !c.isArchived)) return false;
+      } else {
+        if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
+        if (c.conversationStatus !== statusFilter) return false;
       }
-      if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
-      if (statusFilter === 'archived') return c.isArchived;
-      if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
-      if (statusFilter === 'awaiting_product') return c.isAwaitingProduct && !c.isArchived;
-      if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
-      if (statusFilter === 'ai_transferred') return c.isAiTransferred && !c.isFinished && !c.isArchived;
-      if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
-      return c.conversationStatus === statusFilter;
-    })
-    .filter(c => {
+
       if (liveFilterActive && isLiveCustomer) {
         // Finalized/archived conversations must leave the live filter too.
         if (c.isFinished || c.isArchived) return false;
-        return isLiveCustomer(c.phone);
+        if (!isLiveCustomer(c.phone)) return false;
       }
-      return true;
-    })
-    .filter(c => {
-      const cleanedQuery = searchQuery.replace(/\D/g, '');
-      const nameMatch = c.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (q === '') return true;
+      const nameMatch = !!c.customerName?.toLowerCase().includes(qLower);
       const phoneMatch = cleanedQuery.length > 0 ? c.phone.includes(cleanedQuery) : false;
-      return nameMatch || phoneMatch || (searchQuery === '');
+      return nameMatch || phoneMatch;
     });
+  }, [conversations, chatFilter, instanceFilter, statusFilter, liveFilterActive, isLiveCustomer, searchQuery]);
 
-  const groupsCount = conversations.filter(c => c.isGroup && !c.isArchived && !c.isFinished).length;
-  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'not_started').length;
-  // "Não lidas" = number of conversations awaiting our reply (chats, not messages).
-  // `conversations` is already scoped to the store's accessible instances, so this
-  // badge automatically reflects only the unread count for the current PDV.
-  // Conversations marked as "waiting for product restock" are intentionally
-  // excluded so they don't inflate the unanswered/open metrics.
-  const unreadCount = conversations.filter(c =>
-    !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_reply'
-  ).length;
-
-  // Rail counts
-  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_customer').length;
-  const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
-  // "Espera Produtos": clients waiting for a restock note (kept out of open metrics).
-  const awaitingProductCount = conversations.filter(c => c.isAwaitingProduct && !c.isArchived).length;
-  // Finalizadas intentionally has no count badge — its purpose is to declutter
-  // the chat list, not to track how many are finished.
-  const archivedCount = conversations.filter(c => c.isArchived).length;
-  const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
+  // Contadores das abas/pílulas — uma única passagem, memoizada.
+  const counts = useMemo(() => {
+    let groupsCount = 0, newCount = 0, unreadCount = 0, followUpCount = 0, aiCount = 0,
+      awaitingProductCount = 0, archivedCount = 0, dispatchCount = 0;
+    const instanceCounts: Record<string, number> = { all: 0 };
+    for (const c of conversations) {
+      if (c.isArchived) { archivedCount++; continue; }
+      if (c.isDispatchOnly) dispatchCount++;
+      if (c.isAwaitingProduct) awaitingProductCount++;
+      if (c.isGroup && !c.isFinished) groupsCount++;
+      if (c.isAiTransferred && !c.isFinished) aiCount++;
+      const open = !c.isFinished && !c.isDispatchOnly;
+      if (open) {
+        instanceCounts.all++;
+        if (c.whatsapp_number_id) instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
+        if (!c.isAwaitingProduct) {
+          if (c.conversationStatus === 'not_started') newCount++;
+          // "Não lidas" = conversas aguardando NOSSA resposta (chats, não mensagens).
+          // Conversas em "espera de produto" ficam fora para não inflar as métricas.
+          else if (c.conversationStatus === 'awaiting_reply') unreadCount++;
+          else if (c.conversationStatus === 'awaiting_customer') followUpCount++;
+        }
+      }
+    }
+    return { groupsCount, newCount, unreadCount, followUpCount, aiCount, awaitingProductCount, archivedCount, dispatchCount, instanceCounts };
+  }, [conversations]);
+  const { groupsCount, newCount, unreadCount, followUpCount, aiCount, awaitingProductCount, archivedCount, dispatchCount, instanceCounts } = counts;
 
   // Instance tabs — count matches what 'all' filter renders (open conversations only)
-  const openConvs = conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly);
-  const instanceCounts: Record<string, number> = { all: openConvs.length };
-  for (const c of openConvs) {
-    if (c.whatsapp_number_id) {
-      instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
+  const instanceTabs = useMemo(() => {
+    const tabs: { value: string; label: string; count: number }[] = [
+      { value: 'all', label: 'Todas', count: instanceCounts['all'] || 0 },
+    ];
+    for (const num of metaNumbers) {
+      tabs.push({ value: num.id, label: num.label, count: instanceCounts[num.id] || 0 });
     }
-  }
-  const instanceTabs: { value: string; label: string; count: number }[] = [
-    { value: 'all', label: 'Todas', count: instanceCounts['all'] || 0 },
-  ];
-  for (const num of metaNumbers) {
-    instanceTabs.push({ value: num.id, label: num.label, count: instanceCounts[num.id] || 0 });
-  }
+    return tabs;
+  }, [instanceCounts, metaNumbers]);
 
-  const togglePhone = (phone: string) => {
+  const togglePhone = useCallback((phone: string) => {
     setSelectedPhones(prev => {
       const next = new Set(prev);
       if (next.has(phone)) next.delete(phone); else next.add(phone);
       return next;
     });
-  };
+  }, []);
   const toggleAll = () => {
     if (selectedPhones.size === filteredConversations.length) setSelectedPhones(new Set());
     else setSelectedPhones(new Set(filteredConversations.map(c => c.phone)));
   };
   const exitSelectMode = () => { setSelectMode(false); setSelectedPhones(new Set()); };
 
+  // Callbacks ESTÁVEIS para as linhas memoizadas (a versão mais recente fica em ref).
+  const rowLatestRef = useRef({ selectMode, onSelectConversation, togglePhone });
+  rowLatestRef.current = { selectMode, onSelectConversation, togglePhone };
+  const handleRowSelect = useCallback((conv: Conversation) => {
+    const { selectMode: sm, onSelectConversation: sel, togglePhone: tp } = rowLatestRef.current;
+    if (sm) tp(conv.phone);
+    else sel(conv.phone, conv.whatsapp_number_id);
+  }, []);
+
   // Reset visible window when filters change so users always start from the top
   useEffect(() => {
     setVisibleLimit(60);
   }, [chatFilter, statusFilter, instanceFilter, searchQuery, liveFilterActive]);
 
-  const visibleConversations = filteredConversations.slice(0, visibleLimit);
+  const visibleConversations = useMemo(
+    () => filteredConversations.slice(0, visibleLimit),
+    [filteredConversations, visibleLimit],
+  );
   const hasMore = filteredConversations.length > visibleConversations.length;
 
   // Infinite scroll sentinel
@@ -351,15 +368,15 @@ export function ConversationList({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#3b4a52] dark:text-[#8696a0]" />
             <Input
               placeholder="Pesquisar"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') runGlobalSearch(); }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') runGlobalSearch(searchInput); }}
               className="pl-9 h-8 sm:h-9 bg-white/80 dark:bg-[#0b1419] border-0 rounded-full text-sm"
             />
           </div>
-          {searchQuery.trim().length >= 3 && (
+          {searchInput.trim().length >= 3 && (
             <button
-              onClick={runGlobalSearch}
+              onClick={() => runGlobalSearch(searchInput)}
               disabled={globalLoading}
               className="mt-1.5 w-full flex items-center justify-center gap-1.5 rounded-full bg-[#075e54] text-white text-[11px] font-semibold py-1.5 hover:bg-[#064a42] disabled:opacity-60 transition-colors"
             >
@@ -520,138 +537,26 @@ export function ConversationList({
             </div>
           ) : (
             <div>
-              {visibleConversations.map((conv) => (
-                <button
-                  key={conv.conversationKey || conv.phone}
-                  onClick={() => {
-                    if (selectMode) togglePhone(conv.phone);
-                    else onSelectConversation(conv.phone, conv.whatsapp_number_id);
-                  }}
-                  className={cn(
-                    "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#dde2e7] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#cfd6dc]/60 dark:border-[#1f2c34]",
-                    conv.hasUnansweredMessage && "animate-pulse bg-[#c7e9c0]/40 dark:bg-[#005c4b]/20",
-                    (selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone) && "bg-[#cfd6dc] dark:bg-[#2a3942]",
-                    selectMode && selectedPhones.has(conv.phone) && "bg-[#00a884]/15"
-                  )}
-                >
-                  {selectMode && (
-                    <Checkbox
-                      checked={selectedPhones.has(conv.phone)}
-                      className="h-4 w-4 flex-shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                      onCheckedChange={() => togglePhone(conv.phone)}
-                    />
-                  )}
-
-                  <Avatar className="h-12 w-12 flex-shrink-0">
-                    {contactPhotos[conv.phone] ? <AvatarImage src={contactPhotos[conv.phone]} /> : null}
-                    <AvatarFallback className={cn(
-                      "text-white text-sm font-bold",
-                      conv.isGroup ? "bg-[#00a884]" : "bg-[#9aa6ad] text-white"
-                    )}>
-                      {conv.isGroup ? <Users className="h-6 w-6" /> : getInitials(conv.customerName)}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-[15px] text-[#0b1419] dark:text-[#e9edef] truncate">
-                            {conv.customerName || contactNames[conv.phone] || conv.phone}
-                          </span>
-                          {conv.hasOtherInstances && (
-                            <span className="text-[9px] text-orange-500 flex-shrink-0" title={conv.otherInstanceLabels?.join(', ') || 'Outra instância'}>
-                              🔗 {conv.otherInstanceLabels?.length ? `+${conv.otherInstanceLabels.length}` : ''}
-                            </span>
-                          )}
-                          {(() => {
-                            const cb = cashbackMap?.get(conv.phone);
-                            if (!cb || cb.totalAvailable <= 0) return null;
-                            return (
-                              <span
-                                className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-400/40"
-                                title={`Cashback disponível: R$ ${cb.totalAvailable.toFixed(2).replace('.', ',')}`}
-                              >
-                                💰 R$ {cb.totalAvailable.toFixed(2).replace('.', ',')}
-                              </span>
-                            );
-                          })()}
-                        </div>
-
-                        {(conv.customerName || contactNames[conv.phone]) && (
-                          <span className="text-[11px] text-[#475360] dark:text-[#667781] truncate">{conv.phone}</span>
-                        )}
-                        {liveStageMap[conv.phone] && (
-                          <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-[1px] rounded text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-400 border border-fuchsia-400/40">
-                            <Radio className="h-2.5 w-2.5" />
-                            LIVE · {liveStageMap[conv.phone].stageTitle}
-                            {liveStageMap[conv.phone].eventName ? ` · ${liveStageMap[conv.phone].eventName}` : ''}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                        <span className={cn(
-                          "text-xs",
-                          conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#475360] dark:text-[#667781]"
-                        )}>
-                          {formatConversationTime(conv.lastMessageAt)}
-                        </span>
-                        {(() => {
-                          const attendant = getAssignedName?.(conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || 'none'}`);
-                          if (!attendant) return null;
-                          return (
-                            <span
-                              className="inline-flex items-center gap-0.5 max-w-[110px] px-1.5 py-[1px] rounded-full text-[9px] font-semibold bg-[#00a884]/15 text-[#017561] dark:text-[#25d366] border border-[#00a884]/30 truncate"
-                              title={`Atendente: ${attendant}`}
-                            >
-                              👤 <span className="truncate">{attendant}</span>
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm text-[#475360] dark:text-[#8696a0] truncate flex-1">
-                        {conv.lastMessage}
-                      </p>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {conv.isAiTransferred && (
-                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-400/40 hover:bg-orange-500/30">
-                            🤖 IA transferiu
-                          </Badge>
-                        )}
-                        {conv.channel === 'instagram' && (() => {
-                          const igUser = conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] : null;
-                          return (
-                            <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-600 dark:text-pink-400 border-pink-400/30 hover:bg-pink-500/30 max-w-[130px] truncate" title={igUser ? `Instagram @${igUser}` : 'Instagram'}>
-                              📷 {igUser ? `@${igUser}` : 'Instagram'}
-                            </Badge>
-                          );
-                        })()}
-                        {conv.channel === 'messenger' && (
-                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-400/30 hover:bg-blue-500/30">
-                            💬 Messenger
-                          </Badge>
-                        )}
-                        {!conv.channel && (conv.instanceLabel || conv.isGroup) && (
-                          <Badge variant="outline" className={cn(
-                            "text-[8px] px-1 py-0 leading-tight",
-                            conv.whatsapp_number_id ? "text-blue-600 border-blue-400" : "text-green-600 border-green-400"
-                          )}>
-                            {conv.instanceLabel || 'WhatsApp'}
-                          </Badge>
-                        )}
-                        {conv.unreadCount > 0 && (
-                          <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
-                            {conv.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+              {visibleConversations.map((conv) => {
+                const convKey = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
+                return (
+                  <ConversationRow
+                    key={conv.conversationKey || conv.phone}
+                    conv={conv}
+                    photo={contactPhotos[conv.phone]}
+                    fallbackName={contactNames[conv.phone]}
+                    selected={selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone}
+                    selectMode={selectMode}
+                    checked={selectMode && selectedPhones.has(conv.phone)}
+                    liveStage={liveStageMap[conv.phone] || null}
+                    cashbackAvailable={cashbackMap?.get(conv.phone)?.totalAvailable}
+                    attendant={getAssignedName?.(convKey) ?? null}
+                    igUser={conv.channel === 'instagram' && conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] ?? null : null}
+                    onSelect={handleRowSelect}
+                    onToggle={togglePhone}
+                  />
+                );
+              })}
               {hasMore && (
                 <div
                   ref={sentinelRef}
@@ -671,4 +576,4 @@ export function ConversationList({
       </div>
     </div>
   );
-}
+});
