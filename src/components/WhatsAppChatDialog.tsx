@@ -74,7 +74,7 @@ export function WhatsAppChatDialog({
   // Com a ficha aberta ao lado, o modal expande para acomodar chat + ficha lado a lado.
   const dialogClass = wide
     ? fichaOpen
-      ? "max-w-[1400px] sm:max-w-[1400px] w-[98vw] h-[90vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
+      ? "max-w-[1400px] sm:max-w-[1400px] w-[98vw] h-[90vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button.absolute]:hidden"
       : "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
     : "max-w-md sm:max-w-md w-[95vw] h-[600px] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block";
 
