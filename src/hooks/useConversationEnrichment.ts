@@ -45,7 +45,7 @@ export function useConversationEnrichment() {
 
   // Fallback: força re-resolução dos telefones já conhecidos.
   const loadFinished = useCallback(async () => {
-    await resolveFinishedConversations(Array.from(peekFinishedMap().keys()), true);
+    await resolveFinishedConversations(peekResolvedPhones(), true);
   }, []);
 
 
