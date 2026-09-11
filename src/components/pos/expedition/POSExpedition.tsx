@@ -128,13 +128,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   };
 
   const loadCounts = async () => {
-    const base = () =>
-      supabase
+    const base = () => {
+      let q = supabase
         .from("pos_sales")
         .select("expedition_stage")
-        .eq("store_id", storeId)
         .in("sale_type", ["live", "online"])
         .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+      if (!allStores) q = q.eq("store_id", storeId);
+      return q;
+    };
     let { data, error } = await base()
       .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
       .or(PAID_FILTER);
