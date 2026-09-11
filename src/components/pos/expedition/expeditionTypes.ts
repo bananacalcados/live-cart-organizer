@@ -222,11 +222,11 @@ export async function fetchExpeditionOrders(
     let q = supabase
       .from("pos_sales")
       .select(SALE_COLS)
-      .eq("store_id", storeId)
       .eq("expedition_stage", stage)
       .in("sale_type", ["live", "online"])
       .order("created_at", { ascending: stage !== "concluido" })
-      .limit(400);
+      .limit(allStores ? 800 : 400);
+    if (!allStores) q = q.eq("store_id", storeId);
     // Filtragem server-side por data de conclusão da expedição.
     // Só aplicamos quando há intervalo definido — senão excluíria os
     // pedidos ainda não concluídos (expedition_finished_at = null).
