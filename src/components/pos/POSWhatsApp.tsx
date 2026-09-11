@@ -3002,10 +3002,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           // A mesma opção de finalização escolhida vale para todas as conversas.
           // Uma única gravação em lote (em vez de uma por conversa) + um único
           // re-render da lista.
-          const phoneSet = new Set(bulkFinishPhones);
+          const finishedSet = new Set(bulkFinishPhones.map(t => `${t.phone}|${t.numberId ?? ''}`));
           try {
             await finishConversationsBulk(
-              bulkFinishPhones.map((phone) => ({ phone })),
+              bulkFinishPhones.map((t) => ({ phone: t.phone, whatsappNumberId: t.numberId })),
               reason,
               selectedSellerId || undefined,
               (extras || {}) as any,
