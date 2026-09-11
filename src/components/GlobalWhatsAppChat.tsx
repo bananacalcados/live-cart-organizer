@@ -410,7 +410,7 @@ export function GlobalWhatsAppChat() {
           }}
           onBack={() => setSelectedPhone(null)}
           onFinish={async () => {
-            if (selectedPhone) await finishConversation(selectedPhone);
+            if (selectedPhone) await finishConversation(selectedPhone, undefined, undefined, { whatsappNumberId: selectedConvNumberId ?? null });
             setSelectedPhone(null);
             toast.success("Conversa finalizada");
           }}
