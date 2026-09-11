@@ -112,22 +112,22 @@ export function LiveLinksBar({ eventId }: Props) {
 
   return (
     <div className="container py-2">
-      <div className="rounded-lg border border-white/20 bg-black p-5 space-y-5 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
+      <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-5">
         {/* Link para o Instagram */}
         <div>
-          <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-white/90 drop-shadow-sm">
+          <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
             <Link2 className="h-5 w-5" /> Link para colocar no Instagram
           </p>
           {primaryUrl ? (
             <>
-              <p className="mt-2 break-all text-2xl font-black text-yellow-400 drop-shadow-md">{primaryUrl}</p>
-              <p className="text-sm font-medium text-white/80">{primaryLabel}</p>
+              <p className="mt-2 break-all text-2xl font-black text-yellow-500">{primaryUrl}</p>
+              <p className="text-sm font-medium text-foreground/80">{primaryLabel}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" className="gap-2 font-bold bg-yellow-400 text-black hover:bg-yellow-300" onClick={() => copy(primaryUrl, "primary")}>
+                <Button size="sm" className="gap-2 font-bold" onClick={() => copy(primaryUrl, "primary")}>
                   {copied === "primary" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied === "primary" ? "COPIADO!" : "COPIAR LINK"}
                 </Button>
-                <Button asChild size="sm" variant="outline" className="gap-2 border-white/30 text-white hover:bg-white/10 hover:text-white">
+                <Button asChild size="sm" variant="outline" className="gap-2">
                   <a href={primaryUrl} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-4 w-4" /> Abrir
                   </a>
@@ -135,19 +135,19 @@ export function LiveLinksBar({ eventId }: Props) {
               </div>
             </>
           ) : (
-            <p className="mt-2 text-base text-white/70">
+            <p className="mt-2 text-base text-muted-foreground">
               Configure o link da Live → WhatsApp nas configurações da Live para ele aparecer aqui.
             </p>
           )}
 
           {redirectSlug && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/20 pt-3">
-              <span className="text-sm text-white/80">Redirecionador direto pra live:</span>
-              <span className="text-sm font-bold break-all text-yellow-400">{`${PUBLIC_HOST}/ao-vivo/${redirectSlug}`}</span>
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <span className="text-sm text-muted-foreground">Redirecionador direto pra live:</span>
+              <span className="text-sm font-bold break-all text-yellow-600">{`${PUBLIC_HOST}/ao-vivo/${redirectSlug}`}</span>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1 text-sm text-white hover:bg-white/10 hover:text-white"
+                className="h-8 gap-1 text-sm"
                 onClick={() => copy(`${PUBLIC_HOST}/ao-vivo/${redirectSlug}`, "redirect")}
               >
                 {copied === "redirect" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -158,11 +158,11 @@ export function LiveLinksBar({ eventId }: Props) {
         </div>
 
         {/* Colar link da live do Instagram */}
-        <div className="border-t border-white/20 pt-4">
-          <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-white/90 drop-shadow-sm">
+        <div className="border-t border-border pt-4">
+          <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
             <Instagram className="h-5 w-5" /> Cole aqui o link da live do Instagram
           </p>
-          <p className="mt-2 text-base text-white/80">
+          <p className="mt-2 text-base text-muted-foreground">
             É o link que o Instagram fornece na transmissão. Ao salvar, os redirecionadores
             passam a levar direto pra essa live.
           </p>
@@ -171,14 +171,13 @@ export function LiveLinksBar({ eventId }: Props) {
               placeholder="https://www.instagram.com/usuario/live/..."
               value={igUrl}
               onChange={(e) => setIgUrl(e.target.value)}
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus-visible:ring-yellow-400"
             />
-            <Button onClick={saveIgUrl} disabled={saving || igUrl.trim() === savedIgUrl.trim()} className="bg-yellow-400 text-black hover:bg-yellow-300 font-bold">
+            <Button onClick={saveIgUrl} disabled={saving || igUrl.trim() === savedIgUrl.trim()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
             </Button>
           </div>
           {savedIgUrl && (
-            <p className="mt-2 break-all text-sm font-semibold text-yellow-300">
+            <p className="mt-2 break-all text-sm font-semibold text-emerald-600">
               Link ativo: {savedIgUrl}
             </p>
           )}
