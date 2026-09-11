@@ -76,7 +76,7 @@ export const ConversationRow = memo(function ConversationRow({
       <Avatar className="h-12 w-12 flex-shrink-0">
         {photo ? <AvatarImage src={photo} /> : null}
         <AvatarFallback className={cn("text-white text-sm font-bold", conv.isGroup ? "bg-[#00a884]" : "bg-[#9aa6ad] text-white")}>
-          {conv.isGroup ? <Users className="h-6 w-6" /> : getInitials(conv.customerName)}
+          {conv.isGroup ? <Users className="h-6 w-6" /> : getInitials(displayName)}
         </AvatarFallback>
       </Avatar>
 
