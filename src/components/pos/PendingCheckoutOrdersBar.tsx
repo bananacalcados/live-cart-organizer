@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
+import { BadgeCheck, Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
 import { EditPendingCheckoutDialog } from "./EditPendingCheckoutDialog";
+import { MarkCheckoutPaidDialog } from "./MarkCheckoutPaidDialog";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 
 interface PendingSale {
@@ -22,6 +23,7 @@ interface PaidSale {
   status: string;
   sale_type: string | null;
   payment_method: string | null;
+  payment_details: any;
   expedition_stage: string | null;
   expedition_finished_at: string | null;
   tracking_code: string | null;
@@ -55,6 +57,7 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
   const [sales, setSales] = useState<PendingSale[]>([]);
   const [paidSales, setPaidSales] = useState<PaidSale[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = useState<PendingSale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
@@ -81,7 +84,7 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
         .limit(5),
       supabase
         .from("pos_sales")
-        .select("id, total, created_at, status, sale_type, payment_method, expedition_stage, expedition_finished_at, tracking_code")
+        .select("id, total, created_at, status, sale_type, payment_method, payment_details, expedition_stage, expedition_finished_at, tracking_code")
         .or(phoneOr)
         .in("status", ["paid", "completed"])
         .gte("created_at", since)
@@ -137,6 +140,12 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             {p.payment_method && (
               <span className="text-[10px] text-muted-foreground uppercase">{p.payment_method}</span>
             )}
+            {p.payment_details?.manual_payment?.pix_key && (
+              <span className="text-[10px] text-muted-foreground">Chave: {p.payment_details.manual_payment.pix_key}</span>
+            )}
+            {p.payment_details?.manual_payment && (
+              <span className="text-[10px] text-muted-foreground italic">confirmado manualmente</span>
+            )}
             {p.tracking_code && (
               <span className="text-[10px] text-muted-foreground">Rastreio: {p.tracking_code}</span>
             )}
@@ -158,6 +167,14 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             {new Date(s.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </span>
           <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => setMarkingPaid(s)}
+              title="Confirmar manualmente que este link foi pago"
+            >
+              <BadgeCheck className="h-3 w-3" /> Marcar como pago
+            </Button>
             <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px] gap-1" onClick={() => setEditing(s.id)}>
               <Pencil className="h-3 w-3" /> Editar
             </Button>
@@ -187,6 +204,17 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
         </div>
       )}
 
+
+      {markingPaid && (
+        <MarkCheckoutPaidDialog
+          open={!!markingPaid}
+          onOpenChange={(v) => { if (!v) setMarkingPaid(null); }}
+          saleId={markingPaid.id}
+          customerLabel={markingPaid.payment_details?.customer_name || null}
+          total={Number(markingPaid.total || 0)}
+          onDone={load}
+        />
+      )}
 
       {editing && (
         <EditPendingCheckoutDialog
