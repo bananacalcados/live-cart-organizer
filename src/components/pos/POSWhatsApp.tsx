@@ -5,6 +5,7 @@ import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
 import { useChatConversationLanes, type ManualChatLane } from "@/hooks/useChatConversationLanes";
 import { CHAT_LANE_META, laneAutoKey } from "@/lib/chat/conversationLanes";
+import { getFinishedAtFor } from "@/lib/finishedConversationsCache";
 import { POSWhatsAppViewModeDialog, readViewMode, saveViewMode, type POSWhatsAppViewMode } from "./POSWhatsAppViewModeDialog";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
@@ -192,7 +193,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
   const [sellerLinkedUserId, setSellerLinkedUserId] = useState<string | null>(() => sessionStorage.getItem(sellerLinkedKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
-  const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
+  const [bulkFinishPhones, setBulkFinishPhones] = useState<{ phone: string; numberId: string | null }[]>([]);
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
   const [bulkMessageRecipients, setBulkMessageRecipients] = useState<BulkRecipient[]>([]);
   const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
@@ -219,11 +220,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Mover para outra linha. Se a conversa estava Finalizada, reabre primeiro
   // (para todas as atendentes) — senão a marcação manual seria ignorada.
   const moveConversationLane = useCallback(async (phone: string, numberId: string | null | undefined, lane: ManualChatLane) => {
-    const wasFinished = finishedAtByPhone.has(laneAutoKey(phone));
+    const wasFinished = Boolean(getFinishedAtFor(finishedAtByPhone, phone, numberId));
     if (wasFinished) {
       try {
-        await reopenConversation(phone);
-        setConversations(prev => prev.map(c => laneAutoKey(c.phone) === laneAutoKey(phone) ? { ...c, isFinished: false } : c));
+        await reopenConversation(phone, numberId ?? null);
+        setConversations(prev => prev.map(c => (laneAutoKey(c.phone) === laneAutoKey(phone) && (c.whatsapp_number_id ?? null) === (numberId ?? null)) ? { ...c, isFinished: false } : c));
       } catch (e) {
         console.warn("[moveConversationLane] reopen failed", e);
         toast.error("Não foi possível reabrir a conversa finalizada");
@@ -1289,8 +1290,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // os cards memoizados das demais não são redesenhados.
       let changed = false;
       const next = prev.map(c => {
-        const phoneKey = normalizePhoneKey(c.phone);
-        const finishedAt = finishedAtByPhone.get(phoneKey);
+        const finishedAt = getFinishedAtFor(finishedAtByPhone, c.phone, c.whatsapp_number_id);
         const isFinished = Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime());
         const isArchived = archivedPhones.has(c.phone);
         const isAwaitingPayment = awaitingPaymentPhones.has(c.phone);
@@ -1444,7 +1444,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const buildSendHooks = () => ({
     onBeforeSend: async (phone: string) => {
-      await reopenConversation(phone);
+      await reopenConversation(phone, selectedConvNumberId ?? null);
     },
     onAfterSend: async (phone: string) => {
       if (selectedSellerId) {
@@ -1808,7 +1808,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
   const handleBulkFinishPhones = useCallback((phones: string[]) => {
-    setBulkFinishPhones(phones);
+    // Cada telefone é finalizado na instância da conversa correspondente.
+    setBulkFinishPhones(phones.map(p => {
+      const conv = conversationsRef.current.find(c => c.phone === p);
+      return { phone: p, numberId: conv?.whatsapp_number_id ?? null };
+    }));
     setShowBulkFinishDialog(true);
   }, []);
   const handleBulkMessagePhones = useCallback((phones: string[]) => {
@@ -2139,21 +2143,31 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 let ok = 0;
                 for (const conv of convs) {
                   try {
-                    const wasFinished = finishedAtByPhone.has(laneAutoKey(conv.phone));
-                    if (wasFinished) await reopenConversation(conv.phone);
+                    const wasFinished = Boolean(getFinishedAtFor(finishedAtByPhone, conv.phone, conv.whatsapp_number_id));
+                    if (wasFinished) await reopenConversation(conv.phone, conv.whatsapp_number_id ?? null);
                     await laneMarks.setLane(conv.phone, conv.whatsapp_number_id, lane);
                     ok++;
                   } catch (e) {
                     console.warn("[bulkMoveLane] failed", conv.phone, e);
                   }
                 }
-                const phones = new Set(convs.map(c => laneAutoKey(c.phone)));
-                setConversations(prev => prev.map(c => phones.has(laneAutoKey(c.phone)) ? { ...c, isFinished: false } : c));
+                const moved = new Set(convs.map(c => `${laneAutoKey(c.phone)}|${c.whatsapp_number_id ?? ''}`));
+                setConversations(prev => prev.map(c => moved.has(`${laneAutoKey(c.phone)}|${c.whatsapp_number_id ?? ''}`) ? { ...c, isFinished: false } : c));
                 toast.success(`${ok} conversa${ok !== 1 ? "s" : ""} movida${ok !== 1 ? "s" : ""} para ${CHAT_LANE_META[lane].title}`);
               }}
               onBulkFinish={(convs) => {
                 if (convs.length === 0) return;
-                setBulkFinishPhones(Array.from(new Set(convs.map(c => c.phone))));
+                {
+                  const seen = new Set<string>();
+                  const targets: { phone: string; numberId: string | null }[] = [];
+                  for (const c of convs) {
+                    const k = `${c.phone}|${c.whatsapp_number_id ?? ''}`;
+                    if (seen.has(k)) continue;
+                    seen.add(k);
+                    targets.push({ phone: c.phone, numberId: c.whatsapp_number_id ?? null });
+                  }
+                  setBulkFinishPhones(targets);
+                }
                 setShowBulkFinishDialog(true);
               }}
             />
@@ -2906,7 +2920,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             
             // Immediately update conversations state so UI reflects the change
             setConversations(prev => prev.map(c =>
-              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+              c.phone === selectedPhone && (c.whatsapp_number_id ?? null) === (selectedConvNumberId ?? null) ? { ...c, isFinished: true } : c
             ));
             
             // Auto-send Review+Referral link when reason is 'compra' AND client actually purchased.
@@ -2992,10 +3006,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           // A mesma opção de finalização escolhida vale para todas as conversas.
           // Uma única gravação em lote (em vez de uma por conversa) + um único
           // re-render da lista.
-          const phoneSet = new Set(bulkFinishPhones);
+          const finishedSet = new Set(bulkFinishPhones.map(t => `${t.phone}|${t.numberId ?? ''}`));
           try {
             await finishConversationsBulk(
-              bulkFinishPhones.map((phone) => ({ phone })),
+              bulkFinishPhones.map((t) => ({ phone: t.phone, whatsappNumberId: t.numberId })),
               reason,
               selectedSellerId || undefined,
               (extras || {}) as any,
@@ -3006,7 +3020,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             return;
           }
           setConversations(prev => prev.map(c =>
-            phoneSet.has(c.phone) && !c.isFinished ? { ...c, isFinished: true } : c
+            finishedSet.has(`${c.phone}|${c.whatsapp_number_id ?? ''}`) && !c.isFinished ? { ...c, isFinished: true } : c
           ));
           setShowBulkFinishDialog(false);
           toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);

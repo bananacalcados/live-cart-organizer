@@ -4,7 +4,9 @@ import { Conversation, ConversationStatus } from '@/components/chat/ChatTypes';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import {
   finishedPhoneKey,
+  getFinishedAtFor,
   peekFinishedMap,
+  peekResolvedPhones,
   resolveFinishedConversations,
   setFinishedLocal,
   setFinishedLocalMany,
@@ -28,8 +30,13 @@ export function useConversationEnrichment() {
 
   useEffect(() => subscribeFinishedCache(() => setFinishedVersion(v => v + 1)), []);
 
+  /** Mapa com chaves compostas `telefone8|instância`. */
   const finishedAtByPhone = useMemo(() => peekFinishedMap(), [finishedVersion]);
-  const finishedPhones = useMemo(() => new Set(finishedAtByPhone.keys()), [finishedAtByPhone]);
+  /** Telefones com alguma conversa finalizada (em qualquer instância). */
+  const finishedPhones = useMemo(
+    () => new Set(Array.from(finishedAtByPhone.keys()).map(k => k.split('|')[0])),
+    [finishedAtByPhone]
+  );
 
   /** Resolve (sob demanda) apenas os telefones informados. */
   const ensureFinished = useCallback((phones: (string | null | undefined)[]) => {
@@ -38,7 +45,7 @@ export function useConversationEnrichment() {
 
   // Fallback: força re-resolução dos telefones já conhecidos.
   const loadFinished = useCallback(async () => {
-    await resolveFinishedConversations(Array.from(peekFinishedMap().keys()), true);
+    await resolveFinishedConversations(peekResolvedPhones(), true);
   }, []);
 
 
@@ -117,8 +124,9 @@ export function useConversationEnrichment() {
         const row = payload.new ?? payload.old;
         const phone = row?.phone;
         if (!phone) return;
-        if (payload.eventType === 'DELETE') setFinishedLocal(phone, null);
-        else setFinishedLocal(phone, row.finished_at ?? new Date().toISOString());
+        const inst = row?.whatsapp_number_id ?? null;
+        if (payload.eventType === 'DELETE') setFinishedLocal(phone, inst, null);
+        else setFinishedLocal(phone, inst, row.finished_at ?? new Date().toISOString());
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => debounce('archived', loadArchived))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => debounce('awaiting', loadAwaitingPayment))
@@ -151,11 +159,13 @@ export function useConversationEnrichment() {
     // Escrita otimista direto no cache compartilhado — enrichConversations lê
     // dele para decidir isFinished, então precisa ser atualizado antes do
     // round-trip ou a conversa "volta" na próxima atualização da lista.
-    if (phoneKey) setFinishedLocal(phone, finishedAtIso);
+    const instanceId = extras?.whatsappNumberId ?? null;
+    if (phoneKey) setFinishedLocal(phone, instanceId, finishedAtIso);
 
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
+      whatsapp_number_id: instanceId,
       finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
@@ -166,11 +176,11 @@ export function useConversationEnrichment() {
       support_reason: extras?.supportReason ?? null,
       support_satisfactory: extras?.supportSatisfactory ?? null,
       duvida_text: extras?.duvidaText ?? null,
-    } as any, { onConflict: 'phone' });
+    } as any, { onConflict: 'phone,instance_key' });
 
 
     if (error && phoneKey) {
-      setFinishedLocal(phone, null);
+      setFinishedLocal(phone, instanceId, null);
       throw error;
     }
 
@@ -238,13 +248,24 @@ export function useConversationEnrichment() {
       duvidaText?: string;
     }
   ) => {
-    const phones = Array.from(new Set(items.map(i => i.phone).filter(Boolean)));
-    if (phones.length === 0) return;
+    // Uma entrada por (telefone + instância): finalizar em uma instância NÃO
+    // pode finalizar as conversas do mesmo número em outras instâncias.
+    const seen = new Set<string>();
+    const targets = items.filter(i => {
+      if (!i.phone) return false;
+      const k = `${i.phone}|${i.whatsappNumberId ?? ''}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (targets.length === 0) return;
+    const phones = Array.from(new Set(targets.map(i => i.phone)));
     const finishedAtIso = new Date().toISOString();
-    setFinishedLocalMany(phones, finishedAtIso);
+    setFinishedLocalMany(targets.map(i => ({ phone: i.phone, instanceId: i.whatsappNumberId ?? null })), finishedAtIso);
 
-    const rows = phones.map(phone => ({
+    const rows = targets.map(({ phone, whatsappNumberId }) => ({
       phone,
+      whatsapp_number_id: whatsappNumberId ?? null,
       finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
@@ -262,9 +283,12 @@ export function useConversationEnrichment() {
       const chunk = rows.slice(i, i + 100);
       const { error } = await supabase
         .from('chat_finished_conversations')
-        .upsert(chunk as any, { onConflict: 'phone' });
+        .upsert(chunk as any, { onConflict: 'phone,instance_key' });
       if (error) {
-        setFinishedLocalMany(chunk.map(r => r.phone), null);
+        setFinishedLocalMany(
+          chunk.map(r => ({ phone: r.phone, instanceId: r.whatsapp_number_id ?? null })),
+          null,
+        );
         throw error;
       }
     }
@@ -277,15 +301,21 @@ export function useConversationEnrichment() {
       .then(() => {});
   }, []);
 
-  const reopenConversation = useCallback(async (phone: string) => {
+  /** Reabre a conversa APENAS na instância informada (null = todas). */
+  const reopenConversation = useCallback(async (phone: string, whatsappNumberId?: string | null) => {
     const phoneKey = normalizePhoneKey(phone);
-    const prevFinishedAt = phoneKey ? peekFinishedMap().get(phoneKey) : undefined;
-    if (phoneKey) setFinishedLocal(phone, null);
+    const prevFinishedAt = phoneKey
+      ? getFinishedAtFor(peekFinishedMap(), phone, whatsappNumberId ?? null)
+      : undefined;
+    if (phoneKey) setFinishedLocal(phone, whatsappNumberId ?? null, null);
 
-    const { error } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
+    const { error } = await (supabase.rpc as any)('reopen_finished_conversation', {
+      p_phone: phone,
+      p_whatsapp_number_id: whatsappNumberId ?? null,
+    });
 
     if (error && phoneKey) {
-      setFinishedLocal(phone, prevFinishedAt ?? null);
+      setFinishedLocal(phone, whatsappNumberId ?? null, prevFinishedAt ?? null);
       throw error;
     }
   }, []);
@@ -350,7 +380,9 @@ export function useConversationEnrichment() {
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
       let status = computeStatus(msgs);
       const phoneKey = normalizePhoneKey(conv.phone);
-      const finishedAt = finishedAtByPhone.get(phoneKey);
+      // Finalização é por instância: só conta o registro desta instância
+      // (ou um registro legado, sem instância, que vale para todas).
+      const finishedAt = getFinishedAtFor(finishedAtByPhone, conv.phone, conv.whatsapp_number_id);
       const isFinished = Boolean(
         finishedAt && new Date(conv.lastMessageAt).getTime() <= new Date(finishedAt).getTime()
       );

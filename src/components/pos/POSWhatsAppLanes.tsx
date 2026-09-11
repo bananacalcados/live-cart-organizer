@@ -16,6 +16,7 @@ import {
   msUntilFollowup,
   type ChatLane,
 } from "@/lib/chat/conversationLanes";
+import { getFinishedAtFor } from "@/lib/finishedConversationsCache";
 
 interface POSWhatsAppLanesProps {
   storeId: string;
@@ -240,7 +241,8 @@ export function POSWhatsAppLanes({
         now,
         isLive: !!liveStageMap[conv.phone],
         hasSupport: !!hasActiveSupport?.(conv.phone),
-        finishedAt: finishedAtByPhone?.get(laneAutoKey(conv.phone)) || null,
+        // Finalização é por instância (telefone + número de WhatsApp).
+        finishedAt: getFinishedAtFor(finishedAtByPhone ?? new Map(), conv.phone, conv.whatsapp_number_id) || null,
         manualLane,
         previousLane: prev.get(key) || null,
       });
