@@ -19,6 +19,7 @@ import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
+import { LiveLinksBar } from "@/components/events/LiveLinksBar";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
@@ -266,7 +267,10 @@ const Index = () => {
         {!liveCompact && currentEventId && <EventInnerDashboard eventId={currentEventId} />}
 
         {currentEventId && currentEvent && (
-          <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
+          <>
+            <LiveLinksBar eventId={currentEventId} />
+            <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
+          </>
         )}
 
         {!liveCompact && (
