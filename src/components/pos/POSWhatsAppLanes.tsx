@@ -236,10 +236,13 @@ export function POSWhatsAppLanes({
       // (o servidor apaga a marcação quando a conversa é finalizada de novo).
       const manualLane = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
       if (manualLane) manual.add(key);
+      const isLive = !!liveStageMap[conv.phone];
       const lane = classifyConversationLane({
         conv,
         now,
-        isLive: !!liveStageMap[conv.phone],
+        // Pedidos da Live agora também caem nas linhas normais (Novas / Não lidas / Follow Up);
+        // a linha exclusiva da Live é preenchida em paralelo, logo abaixo.
+        isLive: false,
         hasSupport: !!hasActiveSupport?.(conv.phone),
         // Finalização é por instância (telefone + número de WhatsApp).
         finishedAt: getFinishedAtFor(finishedAtByPhone ?? new Map(), conv.phone, conv.whatsapp_number_id) || null,
@@ -253,6 +256,10 @@ export function POSWhatsAppLanes({
       const left = msUntilFollowup(conv, now);
       if (left > 0 && (lane === "new" || lane === "unread")) graceLeft.set(key, left);
       out[lane].push(conv);
+      // Linha exclusiva da Live: mesma conversa aparece nas duas linhas.
+      // Finalizar em qualquer uma finaliza nas duas (mesma conversa/instância).
+      if (isLive && lane !== "live" && lane !== "finished" && !conv.isGroup) out.live.push(conv);
+
     }
 
     // Ordenação: Novas / Não lidas / Follow Up — mais antigas primeiro (quem espera há mais tempo);
