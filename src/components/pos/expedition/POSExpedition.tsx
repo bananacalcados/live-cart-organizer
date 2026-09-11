@@ -564,7 +564,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <Truck className="h-8 w-8 text-exp-prep" /> EXPEDIÇÃO
             </h2>
             <p className="text-base font-semibold text-pos-muted-text">
-              Envios online e de lives {storeName ? `— ${storeName}` : ""}
+              Envios online e de lives{" "}
+              {allStores ? "— TODAS AS LOJAS" : storeName ? `— ${storeName}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
