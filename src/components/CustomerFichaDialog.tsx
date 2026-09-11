@@ -249,12 +249,37 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
     }
   };
 
+  /** Link autenticado da Área de Membros para o telefone da cliente. */
+  const buildMemberAreaLink = async (): Promise<string> => {
+    const phone = normalizeBRPhone(form.whatsapp || order.customer?.whatsapp || "");
+    if (!phone) throw new Error("WhatsApp do cliente não informado");
+    const { data, error } = await supabase.functions.invoke("issue-member-magic-link", {
+      body: { phone },
+    });
+    if (error) throw error;
+    const url = (data as { url?: string } | null)?.url;
+    if (!url) throw new Error("Não foi possível gerar o link da área de membros");
+    return url;
+  };
+
   const handleCopyLink = async () => {
+    setCopying(true);
     try {
-      await navigator.clipboard.writeText(paymentLink);
-      toast.success("Link de pagamento copiado!");
-    } catch {
-      window.prompt("Copie o link de pagamento:", paymentLink);
+      const link = linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast.success(
+          linkMode === "member"
+            ? "Link da área de membros (já autenticado) copiado!"
+            : "Link de pagamento copiado!",
+        );
+      } catch {
+        window.prompt("Copie o link:", link);
+      }
+    } catch (e: any) {
+      toast.error(`Erro ao gerar link: ${e?.message || e}`);
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -269,18 +294,36 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
       // Save first to ensure pre-fill works
       await handleSave();
 
+      // 1) Mensagem inicial configurada na Live (instância não-API / uazapi),
+      //    com rodízio de variações e tokens {checkout_link} / {member_area_link}.
+      const { data: waData, error: waError } = await supabase.functions.invoke(
+        "event-order-wa-initial-send",
+        { body: { orderId: order.id } },
+      );
+      const waErrMsg =
+        (waError as any)?.message || (waData as { error?: string } | null)?.error || null;
+      if (!waErrMsg) {
+        toast.success("Mensagem da Live enviada no WhatsApp!");
+        return;
+      }
+
+      // 2) Fallback: envia o link escolhido em mensagem simples.
+      console.warn("[CustomerFicha] mensagem inicial indisponível:", waErrMsg);
+      const link = linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
       const greet = form.full_name?.split(" ")[0] || (order.customer?.instagram_handle || "");
       const message =
         `Olá ${greet}! 🍌\n\n` +
-        `Sua ficha está pré-preenchida. Para concluir, é só revisar e finalizar o pagamento aqui:\n\n` +
-        `${paymentLink}`;
+        (linkMode === "member"
+          ? `Seus pedidos estão aqui, é só abrir e pagar:\n\n`
+          : `Sua ficha está pré-preenchida. Para concluir, é só revisar e finalizar o pagamento aqui:\n\n`) +
+        `${link}`;
 
       const { error } = await supabase.functions.invoke("zapi-send-message", {
         body: { phone, message },
       });
       if (error) throw error;
 
-      toast.success("Link de pagamento enviado no WhatsApp!");
+      toast.success("Link enviado no WhatsApp (mensagem padrão)");
     } catch (e: any) {
       console.error(e);
       toast.error(`Erro ao enviar link: ${e?.message || e}`);
