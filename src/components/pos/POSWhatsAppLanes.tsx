@@ -236,7 +236,11 @@ export function POSWhatsAppLanes({
       // (o servidor apaga a marcação quando a conversa é finalizada de novo).
       const manualLane = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
       if (manualLane) manual.add(key);
-      const isLive = !!liveStageMap[conv.phone];
+      // "Pedido da Live" é um marcador, não uma etapa de atendimento: seja pelo pedido
+      // (liveStageMap) ou por marcação manual na linha da Live, a conversa continua
+      // sendo classificada normalmente em Novas / Não lidas / Follow Up.
+      const isLive = !!liveStageMap[conv.phone] || manualLane === "live";
+      const effectiveManual = manualLane === "live" ? null : manualLane;
       const lane = classifyConversationLane({
         conv,
         now,
@@ -246,7 +250,7 @@ export function POSWhatsAppLanes({
         hasSupport: !!hasActiveSupport?.(conv.phone),
         // Finalização é por instância (telefone + número de WhatsApp).
         finishedAt: getFinishedAtFor(finishedAtByPhone ?? new Map(), conv.phone, conv.whatsapp_number_id) || null,
-        manualLane,
+        manualLane: effectiveManual,
         previousLane: prev.get(key) || null,
       });
       // Atualiza memória: só guardamos linhas "de origem" reais.
@@ -259,6 +263,7 @@ export function POSWhatsAppLanes({
       // Linha exclusiva da Live: mesma conversa aparece nas duas linhas.
       // Finalizar em qualquer uma finaliza nas duas (mesma conversa/instância).
       if (isLive && lane !== "live" && lane !== "finished" && !conv.isGroup) out.live.push(conv);
+
 
     }
 
