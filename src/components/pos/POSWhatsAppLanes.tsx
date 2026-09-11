@@ -317,13 +317,23 @@ export function POSWhatsAppLanes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, onSearchChange]);
 
-  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished" && l !== "groups").reduce((n, l) => n + lanes.out[l].length, 0);
+  const totalActive = CHAT_LANE_ORDER.filter((l) => l !== "finished" && l !== "groups" && l !== "live").reduce((n, l) => n + lanes.out[l].length, 0);
 
   // Conversas selecionadas (apenas as visíveis nas linhas, sem grupos).
-  const allVisible = useMemo(
-    () => CHAT_LANE_ORDER.flatMap((l) => lanes.out[l]).filter((c) => !c.isGroup),
-    [lanes],
-  );
+  // A mesma conversa pode aparecer em duas linhas (normal + Live): deduplicamos.
+  const allVisible = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Conversation[] = [];
+    for (const c of CHAT_LANE_ORDER.flatMap((l) => lanes.out[l])) {
+      if (c.isGroup) continue;
+      const k = convKey(c);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      list.push(c);
+    }
+    return list;
+  }, [lanes]);
+
   const selectedConvs = useMemo(() => allVisible.filter((c) => checked.has(convKey(c))), [allVisible, checked]);
   const selectedFinishable = selectedConvs.filter((c) => !lanes.out.finished.includes(c));
   const canBulk = !!(onBulkMoveLane || onBulkFinish);
