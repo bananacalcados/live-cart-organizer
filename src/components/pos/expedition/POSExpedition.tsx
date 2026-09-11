@@ -591,6 +591,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <span className="ml-2 font-bold">Filtros</span>
             </Button>
             <Button
+              variant={allStores ? "default" : "outline"}
+              size="lg"
+              onClick={() => setAllStores((v) => !v)}
+              title="Expedir os pedidos de todas as lojas aqui (cada pedido continua registrado na loja de origem)"
+              className={allStores ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
+            >
+              <Store className="h-5 w-5" />
+              <span className="ml-2 font-bold">
+                {allStores ? "TODAS AS LOJAS" : "Expedir de todas as lojas"}
+              </span>
+            </Button>
+            <Button
               variant="outline"
               size="lg"
               onClick={() => runTestAction("create")}
