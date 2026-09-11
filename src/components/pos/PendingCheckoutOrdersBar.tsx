@@ -160,6 +160,14 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             {new Date(s.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </span>
           <div className="ml-auto flex items-center gap-1">
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => setMarkingPaid(s)}
+              title="Confirmar manualmente que este link foi pago"
+            >
+              <BadgeCheck className="h-3 w-3" /> Marcar como pago
+            </Button>
             <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px] gap-1" onClick={() => setEditing(s.id)}>
               <Pencil className="h-3 w-3" /> Editar
             </Button>
