@@ -1754,7 +1754,7 @@ export default function ChatPage() {
             });
             // Immediately update conversations state so UI reflects the change
             setConversations(prev => prev.map(c =>
-              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+              c.phone === selectedPhone && (c.whatsapp_number_id ?? null) === (selectedConvNumberId ?? null) ? { ...c, isFinished: true } : c
             ));
             toast.success('Conversa finalizada!');
             setShowFinishDialog(false);
