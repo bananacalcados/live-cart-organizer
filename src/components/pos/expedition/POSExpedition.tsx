@@ -87,6 +87,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  /** Expedir os pedidos de TODAS as lojas a partir desta tela (a loja de origem de cada pedido é preservada). */
+  const [allStores, setAllStores] = useState(false);
+  const effectiveStore = allStores ? "all" : storeId;
   const [filterOrigin, setFilterOrigin] = useState<string>("all");
   const [filterAvulso, setFilterAvulso] = useState<string>("all");
   const [filterShipping, setFilterShipping] = useState<string>("all");
