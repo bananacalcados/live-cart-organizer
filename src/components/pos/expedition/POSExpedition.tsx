@@ -188,7 +188,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!storeId) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(storeId, stage, finishedRange);
+      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
       await loadCounts();
     } catch (e: any) {
