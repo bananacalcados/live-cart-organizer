@@ -70,6 +70,8 @@ interface WhatsAppChatProps {
   conversationNumberId?: string | null;
   /** Na Central da Live, mantém somente o histórico de Direct do Instagram. */
   hideInstagramComments?: boolean;
+  /** Quando definido, o botão "Ficha" abre um painel externo (lado a lado) em vez do modal interno. */
+  onOpenFicha?: () => void;
 }
 
 // Status icon now uses shared component
