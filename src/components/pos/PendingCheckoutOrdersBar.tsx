@@ -83,7 +83,7 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
         .limit(5),
       supabase
         .from("pos_sales")
-        .select("id, total, created_at, status, sale_type, payment_method, expedition_stage, expedition_finished_at, tracking_code")
+        .select("id, total, created_at, status, sale_type, payment_method, payment_details, expedition_stage, expedition_finished_at, tracking_code")
         .or(phoneOr)
         .in("status", ["paid", "completed"])
         .gte("created_at", since)
