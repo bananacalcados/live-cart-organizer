@@ -1289,8 +1289,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // os cards memoizados das demais não são redesenhados.
       let changed = false;
       const next = prev.map(c => {
-        const phoneKey = normalizePhoneKey(c.phone);
-        const finishedAt = finishedAtByPhone.get(phoneKey);
+        const finishedAt = getFinishedAtFor(finishedAtByPhone, c.phone, c.whatsapp_number_id);
         const isFinished = Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime());
         const isArchived = archivedPhones.has(c.phone);
         const isAwaitingPayment = awaitingPaymentPhones.has(c.phone);
