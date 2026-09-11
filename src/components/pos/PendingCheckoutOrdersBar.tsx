@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
+import { BadgeCheck, Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
 import { EditPendingCheckoutDialog } from "./EditPendingCheckoutDialog";
+import { MarkCheckoutPaidDialog } from "./MarkCheckoutPaidDialog";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 
 interface PendingSale {
@@ -22,6 +23,7 @@ interface PaidSale {
   status: string;
   sale_type: string | null;
   payment_method: string | null;
+  payment_details: any;
   expedition_stage: string | null;
   expedition_finished_at: string | null;
   tracking_code: string | null;
