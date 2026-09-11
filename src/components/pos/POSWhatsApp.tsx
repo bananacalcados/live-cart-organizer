@@ -2913,15 +2913,21 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         onOpenChange={setShowFinishDialog}
         onFinish={async (reason, extras) => {
           if (selectedPhone) {
-            await finishConversation(selectedPhone, reason, selectedSellerId || undefined, {
-              ...extras,
-              whatsappNumberId: selectedConvNumberId || null,
-            });
-            
-            // Immediately update conversations state so UI reflects the change
+            // Resposta IMEDIATA: fecha o diálogo e marca como finalizada na
+            // hora; a gravação segue em segundo plano (o cache já é otimista).
             setConversations(prev => prev.map(c =>
               c.phone === selectedPhone && (c.whatsapp_number_id ?? null) === (selectedConvNumberId ?? null) ? { ...c, isFinished: true } : c
             ));
+            setShowFinishDialog(false);
+            toast.success("Conversa finalizada");
+
+            finishConversation(selectedPhone, reason, selectedSellerId || undefined, {
+              ...extras,
+              whatsappNumberId: selectedConvNumberId || null,
+            }).catch((e) => {
+              console.error('[finish] failed', e);
+              toast.error('Não foi possível finalizar a conversa');
+            });
             
             // Auto-send Review+Referral link when reason is 'compra' AND client actually purchased.
             const conv = conversations.find(c => c.phone === selectedPhone);
@@ -2978,8 +2984,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
             setSelectedPhone(null);
             setMessages([]);
-            setShowFinishDialog(false);
-            toast.success("Conversa finalizada");
           }
         }}
       />
