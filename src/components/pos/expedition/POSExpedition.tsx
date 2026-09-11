@@ -201,7 +201,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, stage, finishedRange]);
+  }, [storeId, allStores, stage, finishedRange]);
 
   // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
   // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
