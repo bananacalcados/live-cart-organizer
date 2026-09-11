@@ -2916,7 +2916,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             
             // Immediately update conversations state so UI reflects the change
             setConversations(prev => prev.map(c =>
-              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+              c.phone === selectedPhone && (c.whatsapp_number_id ?? null) === (selectedConvNumberId ?? null) ? { ...c, isFinished: true } : c
             ));
             
             // Auto-send Review+Referral link when reason is 'compra' AND client actually purchased.
