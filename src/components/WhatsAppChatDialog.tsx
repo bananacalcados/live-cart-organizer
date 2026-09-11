@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/dialog";
 import { WhatsAppChat } from "./WhatsAppChat";
 import { Order } from "@/types/order";
-import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
