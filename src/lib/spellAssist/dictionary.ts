@@ -2,9 +2,14 @@
  * Engine de ortografia offline (sem IA) baseado em nspell + dicionário Hunspell pt-BR.
  *
  * - O nspell roda num WEB WORKER (`spell.worker.ts`): o parse do dicionário
- *   (~5 MB) leva vários segundos de CPU e, na thread principal, congelava a tela
- *   do chat (abrir conversa / 1ª tecla). Aqui a thread principal só troca
- *   mensagens com o worker.
+ *   leva segundos de CPU e, na thread principal, congelava a tela do chat
+ *   (abrir conversa / 1ª tecla). Aqui a thread principal só troca mensagens
+ *   com o worker.
+ * - `public/dict/pt/index.aff` é uma versão ENXUTA do VERO: as regras de
+ *   clíticos com hífen ("comprá-lo-ia", "envie-me"…) foram removidas — eram
+ *   ~81% das regras e ~70% das 10,5 milhões de formas expandidas (que levavam
+ *   minutos e ~600 MB no navegador). Agora: ~2,8 M formas, ~3,5 s no worker.
+ *   Por isso palavras com hífen não são verificadas.
  * - O worker é criado LAZY (1x por sessão) — no aquecimento ocioso ou na 1ª
  *   verificação — e o dicionário é baixado dentro dele.
  * - Allowlist de gírias/marcas para reduzir falsos positivos do dicionário.
