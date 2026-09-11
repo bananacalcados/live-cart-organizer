@@ -23343,12 +23343,10 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: undefined
       }
-      reopen_finished_conversation:
-        | { Args: { p_phone: string }; Returns: number }
-        | {
-            Args: { p_phone: string; p_whatsapp_number_id?: string }
-            Returns: number
-          }
+      reopen_finished_conversation: {
+        Args: { p_phone: string; p_whatsapp_number_id?: string }
+        Returns: number
+      }
       reopen_physical_prize: {
         Args: { p_prize_id: string; p_reason?: string }
         Returns: Json
