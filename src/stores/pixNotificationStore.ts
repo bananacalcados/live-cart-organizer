@@ -408,6 +408,17 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             const prev = existing.find((t) => t.saleId === oid);
             const amount = amountOf(o);
 
+            const evt = eventById.get(String(o.event_id));
+            const eventName = (evt?.name as string) || null;
+            // Instância configurada na Live: mensagem inicial (uazapi) > instância do evento.
+            const liveNumberId =
+              (evt?.wa_initial_number_id as string) || (evt?.whatsapp_number_id as string) || prev?.numberId || null;
+            const liveInstanceLabel = liveNumberId ? instanceLabelById.get(String(liveNumberId)) ?? null : null;
+            const igRaw = String(lead?.instagram || "").trim().replace(/^@/, "");
+            const instagram = igRaw ? `@${igRaw}` : null;
+            const leadName = String(lead?.name || "").trim();
+            const displayName = leadName || instagram || prev?.name || "Cliente";
+
             if (o._paid) {
               if (isInitial) baseline.add(oid);
               const isFresh = prev?.fresh || (!baseline.has(oid) && !isInitial);
