@@ -1935,6 +1935,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     completed: "Concluído",
     refunded: "Estornado",
     canceled: "Cancelado",
+    online_pending: "Checkout não finalizado",
   };
 
   const getInitials = (name?: string) => {
