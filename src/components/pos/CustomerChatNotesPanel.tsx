@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Loader2, Plus, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,9 +17,10 @@ interface CustomerChatNotesPanelProps {
   phone: string;
   storeId: string;
   authorName?: string | null;
+  queueSummary?: ReactNode;
 }
 
-export function CustomerChatNotesPanel({ phone, storeId, authorName }: CustomerChatNotesPanelProps) {
+export function CustomerChatNotesPanel({ phone, storeId, authorName, queueSummary }: CustomerChatNotesPanelProps) {
   const currentUserId = useCurrentUserId();
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [draft, setDraft] = useState("");
@@ -83,6 +84,7 @@ export function CustomerChatNotesPanel({ phone, storeId, authorName }: CustomerC
 
   return (
     <aside className="hidden h-full w-52 shrink-0 flex-col border-r border-border/60 bg-card lg:flex">
+      {queueSummary}
       <div className="flex items-center gap-2 border-b border-border/60 px-3 py-3">
         <StickyNote className="h-4 w-4 text-amber-500" />
         <span className="text-xs font-bold uppercase">Notas</span>

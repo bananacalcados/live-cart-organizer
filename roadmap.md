@@ -6,4 +6,5 @@
 - [~] Botão EXCLUIR CONTATO no chat do PDV — código pronto; falta publicar a função `contact-erase` (deploy tool não enxergou a pasta nova)
 - [ ] NF-e Lourdes: função `fiscal-recover-by-identifier` pronta; BrasilNFe ObterNotasFiscais retorna 524 — retentar; depois botão de recuperação no painel fiscal + corrigir nfce-retry-pending (não apagar doc antes de reemitir)
 - [x] PIX no chat: não duplicar código quando houver botão Copiar, adicionar atalho na lateral da Live e reproduzir o botão no histórico
-- [ ] Painéis laterais nos chats da Live e do PDV + notas persistentes por cliente
+- [x] Painéis laterais nos chats da Live e do PDV + notas persistentes por cliente
+- [x] PDV: fila compacta fixa acima das notas; ocultar notas nas ferramentas; botão voltar; produtos completos no checkout
