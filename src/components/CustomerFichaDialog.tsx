@@ -10,6 +10,7 @@ import { DbOrder } from "@/types/database";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
+import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 
 /** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
 function isRegUsable(r: any): boolean {
