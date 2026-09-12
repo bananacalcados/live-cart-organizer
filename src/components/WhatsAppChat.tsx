@@ -693,7 +693,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       let q = supabase
         .from('whatsapp_messages_archive' as any)
         .select('*')
-        .in('phone', phoneVariations);
+        .in('phone', isIgMode && igUserId ? [igUserId] : phoneVariations);
       q = convNumberId ? q.eq('whatsapp_number_id', convNumberId) : q.is('whatsapp_number_id', null);
       if (hideInstagramComments) q = q.not('message', 'like', '💬 Comentário%');
       if (oldest) q = q.lt('created_at', oldest);
