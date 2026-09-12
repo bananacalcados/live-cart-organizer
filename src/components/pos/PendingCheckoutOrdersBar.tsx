@@ -208,6 +208,12 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             >
               <BadgeCheck className="h-3 w-3" /> Marcar como pago
             </Button>
+            <ChatPixButton
+              orderId={s.id}
+              variant="button"
+              className="h-6 px-2 text-[11px] gap-1"
+              channel={pixChannel}
+            />
             <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px] gap-1" onClick={() => setEditing(s.id)}>
               <Pencil className="h-3 w-3" /> Editar
             </Button>
