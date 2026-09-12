@@ -414,9 +414,9 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             const liveNumberId =
               (evt?.wa_initial_number_id as string) || (evt?.whatsapp_number_id as string) || prev?.numberId || null;
             const liveInstanceLabel = liveNumberId ? instanceLabelById.get(String(liveNumberId)) ?? null : null;
-            const igRaw = String(lead?.instagram || "").trim().replace(/^@/, "");
+            const igRaw = String(lead?.instagram_handle || "").trim().replace(/^@/, "");
             const instagram = igRaw ? `@${igRaw}` : null;
-            const leadName = String(lead?.name || "").trim();
+            const leadName = String(lead?.full_name || "").trim();
             const displayName = leadName || instagram || prev?.name || "Cliente";
 
             if (o._paid) {
