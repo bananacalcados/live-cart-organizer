@@ -111,13 +111,19 @@ const TabsRow = memo(function TabsRow({ label, count, tabs, tone }: { label: str
           return (
             <button
               key={tab.saleId}
-              onClick={() => (selectMode ? toggle(tab.saleId) : requestOpen(tab.phone, tab.numberId))}
+              onClick={() => {
+                if (selectMode) return toggle(tab.saleId);
+                if (!tab.phone) return;
+                requestOpen(tab.phone, tab.numberId);
+              }}
               title={
                 selectMode
                   ? "Selecionar para fechar"
-                  : paid
-                    ? "Pagamento confirmado — abrir conversa"
-                    : "Aguardando pagamento — abrir conversa"
+                  : !tab.phone
+                    ? "Sem WhatsApp cadastrado para este pedido"
+                    : paid
+                      ? `Abrir conversa${tab.instanceLabel ? ` em ${tab.instanceLabel}` : ""} — pagamento confirmado`
+                      : `Abrir conversa${tab.instanceLabel ? ` em ${tab.instanceLabel}` : ""} — aguardando pagamento`
               }
               className={cn(
                 "group relative flex items-center gap-2 max-w-[250px] min-w-[160px] px-3 py-1.5 rounded-t-lg border border-b-0 text-left transition-colors shrink-0",
@@ -160,10 +166,23 @@ const TabsRow = memo(function TabsRow({ label, count, tabs, tone }: { label: str
                 <span className={cn("text-[11px]", paid ? "text-white/90" : "text-zinc-400")}>
                   {paid ? "PAGO • " : "Aguardando • "}R$ {tab.amount.toFixed(2)}
                 </span>
+                {tab.instagram && tab.instagram !== tab.name && (
+                  <span className={cn("truncate text-[10px]", paid ? "text-white/85" : "text-zinc-300")}>
+                    {tab.instagram}
+                  </span>
+                )}
+                {tab.eventName && (
+                  <span className={cn("truncate text-[10px]", paid ? "text-white/80" : "text-fuchsia-300")}>
+                    {tab.eventName}
+                  </span>
+                )}
                 {(tab.storeName || tab.instanceLabel) && (
                   <span className={cn("truncate text-[10px]", paid ? "text-white/80" : "text-zinc-400")}>
                     {[tab.storeName, tab.instanceLabel].filter(Boolean).join(" · ")}
                   </span>
+                )}
+                {!tab.phone && (
+                  <span className="truncate text-[10px] text-amber-300">Sem WhatsApp cadastrado</span>
                 )}
                 {tab.orderNumber && (
                   <span className={cn("truncate text-[10px]", paid ? "text-white/70" : "text-zinc-500")}>
