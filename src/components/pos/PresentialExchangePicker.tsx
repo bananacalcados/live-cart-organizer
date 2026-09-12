@@ -505,7 +505,12 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
           </DialogTitle>
         </DialogHeader>
 
-        {phase === "store" && (
+        {phase === "store" && initialSaleId && loadingOrder && (
+          <div className="flex items-center justify-center gap-2 py-10 text-pos-white/70 text-sm">
+            <Loader2 className="h-5 w-5 animate-spin" /> Puxando os dados da venda…
+          </div>
+        )}
+        {phase === "store" && !(initialSaleId && loadingOrder) && (
           <div className="space-y-4 pt-2">
             <p className="text-sm text-pos-white/60">Selecione a loja onde o cliente está.</p>
             <div className="grid grid-cols-2 gap-2">
