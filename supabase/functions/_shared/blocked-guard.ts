@@ -122,7 +122,7 @@ export async function loadBlockedSuffixes(
     while (true) {
       const { data, error } = await supabase
         .from("customers_unified")
-        .select("phone_e164, phone, ddd, phone_suffix8")
+        .select("phone_e164, ddd, phone_suffix8")
         .eq("opt_out_mass_dispatch", true)
         .range(from, from + pageSize - 1);
       if (error) {
@@ -131,8 +131,8 @@ export async function loadBlockedSuffixes(
       }
       if (!data || data.length === 0) break;
       for (const r of data) {
-        const row = r as { phone_e164?: string; phone?: string; ddd?: string; phone_suffix8?: string };
-        const key = phoneKey(row.phone_e164 || row.phone) ||
+        const row = r as { phone_e164?: string; ddd?: string; phone_suffix8?: string };
+        const key = phoneKey(row.phone_e164) ||
           ((row.ddd && row.phone_suffix8) ? `${row.ddd}${row.phone_suffix8}` : "");
         if (key) set.add(key);
       }
