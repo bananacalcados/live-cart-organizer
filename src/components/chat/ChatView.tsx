@@ -59,6 +59,7 @@ import { useSpellAssist } from "@/hooks/useSpellAssist";
 import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
+import { PixCopyMessage } from "./PixCopyMessage";
 
 /** Format a raw BR phone (digits only) for friendly display in group sender labels. */
 function formatPhoneDisplay(raw: string): string {
@@ -1110,7 +1111,7 @@ export function ChatView({
                         </div>
                       </div>
                     ) : (
-                      !isCarousel && displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
+                      !isCarousel && displayMsg && <PixCopyMessage message={displayMsg} />
                     )}
                     {msg.status === 'failed' && (msg as any).error_message && (
                       <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">

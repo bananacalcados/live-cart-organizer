@@ -11,6 +11,7 @@ import { normalizeBRPhone } from "@/lib/phoneUtils";
 import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
 import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { ChatPixButton } from "@/components/ChatPixButton";
 
 /** CEP visual: 00000-000. */
 function formatCep(value?: string | null): string {
@@ -527,6 +528,11 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <ChatPixButton
+            orderId={isRealOrder ? order.id : null}
+            variant="button"
+            className="flex-1 min-w-[100px]"
+          />
           <Button
             variant="outline"
             size="sm"

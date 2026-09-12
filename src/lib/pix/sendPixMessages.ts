@@ -103,7 +103,10 @@ export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResu
       `*Pix → Pix Copia e Cola* e cole o código. 👇`;
     try {
       const mid = await channel.sendCopyButton!(text, "Copiar código PIX", code);
-      await channel.persist({ message: `${text}\n\n[Botão: Copiar código PIX]`, message_id: mid });
+      await channel.persist({
+        message: `${text}\n\n[Botão: Copiar código PIX]\n[PIX_CODE:${code}]`,
+        message_id: mid,
+      });
       usedCopyButton = true;
     } catch (e) {
       console.warn("[sendPix] botão copiar falhou, caindo para texto:", e);
@@ -118,9 +121,12 @@ export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResu
     await channel.persist({ message: intro, message_id: mid });
   }
 
-  // 3) Código isolado (sempre) — puro, sem texto em volta
-  const codeMid = await channel.sendText(code);
-  await channel.persist({ message: code, message_id: codeMid });
+  // 3) Sem botão nativo, envia o código isolado para facilitar a cópia manual.
+  // Quando há botão Copiar, o código já está no próprio botão e não deve ser duplicado no chat.
+  if (!usedCopyButton) {
+    const codeMid = await channel.sendText(code);
+    await channel.persist({ message: code, message_id: codeMid });
+  }
 
   return { sentQr, usedCopyButton };
 }
