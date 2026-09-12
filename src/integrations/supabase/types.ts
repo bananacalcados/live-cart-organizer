@@ -3843,7 +3843,7 @@ export type Database = {
         Row: {
           author_name: string | null
           author_user_id: string
-          company_id: string | null
+          company_id: string
           created_at: string
           id: string
           note: string
@@ -3855,7 +3855,7 @@ export type Database = {
         Insert: {
           author_name?: string | null
           author_user_id: string
-          company_id?: string | null
+          company_id: string
           created_at?: string
           id?: string
           note: string
@@ -3867,7 +3867,7 @@ export type Database = {
         Update: {
           author_name?: string | null
           author_user_id?: string
-          company_id?: string | null
+          company_id?: string
           created_at?: string
           id?: string
           note?: string
@@ -22065,6 +22065,10 @@ export type Database = {
       campaigns_overview_stats: {
         Args: { p_end: string; p_start: string }
         Returns: Json
+      }
+      can_access_company: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
       }
       chargeback_gate: {
         Args: {
