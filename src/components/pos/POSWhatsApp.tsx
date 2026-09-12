@@ -234,6 +234,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
+  const sideToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
@@ -2286,7 +2287,23 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         ) : selectedPhone ? (() => {
           const chatPanel = (
           <>
-          <CustomerChatNotesPanel phone={selectedPhone} storeId={storeId} authorName={selectedSellerName} />
+          {!sideToolOpen && (
+            <CustomerChatNotesPanel
+              phone={selectedPhone}
+              storeId={storeId}
+              authorName={selectedSellerName}
+              queueSummary={(
+                <AttendantNudgeCard
+                  conversations={conversationsFlagged}
+                  variant="compact"
+                  arrivedCount={waitlist.arrivedCount}
+                  onShowAwaiting={() => setStatusFilter("awaiting_reply")}
+                  onShowFollowups={() => setStatusFilter("awaiting_customer")}
+                  onShowArrived={() => setStatusFilter("awaiting_product")}
+                />
+              )}
+            />
+          )}
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
             <ProductArrivalCard
               arrived={waitlist.arrived}
@@ -2545,13 +2562,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
             <div className="relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
-              <AttendantNudgeCard
-                conversations={conversationsFlagged}
-                arrivedCount={waitlist.arrivedCount}
-                onShowAwaiting={() => setStatusFilter("awaiting_reply")}
-                onShowFollowups={() => setStatusFilter("awaiting_customer")}
-                onShowArrived={() => setStatusFilter("awaiting_product")}
-              />
               <ChatView
                 messages={chatMessages}
                 archive={{
@@ -2805,9 +2815,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </DialogContent>
             </Dialog>
           </div>
-          {(showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel) && (
-            <aside className="absolute inset-0 z-30 bg-card md:static md:z-auto md:h-full md:w-[460px] md:shrink-0 md:border-l md:border-border/60">
-              <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-40" onClick={closeSideTools} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>
+          {sideToolOpen && (
+            <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[min(620px,58vw)] md:shrink-0 md:border-l md:border-border/60">
+              <div className="flex h-11 shrink-0 items-center border-b border-border/60 px-2">
+                <Button variant="ghost" size="sm" className="gap-1.5" onClick={closeSideTools}>
+                  <ArrowLeft className="h-4 w-4" /> Voltar ao chat
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1">
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { setShowCheckout(false); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={setShowPix} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={setShowBoleto} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
@@ -2815,6 +2830,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={setShowWaitlistDialog} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
               {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={setShowExportDialog} conversation={selectedConversation} />}
               {showSupportPanel && <CreateSupportTicketDialog embedded open onOpenChange={setShowSupportPanel} phone={selectedPhone} customerName={selectedConversation?.customerName} onCreated={() => { setShowSupportPanel(false); if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }} />}
+              </div>
             </aside>
           )}
           </>

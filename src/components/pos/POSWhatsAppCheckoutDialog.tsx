@@ -26,6 +26,7 @@ interface CartItem {
   quantity: number;
   imageUrl: string | null;
   stock?: number;
+  size?: string;
 }
 
 interface Props {
@@ -102,8 +103,7 @@ export function POSWhatsAppCheckoutDialog({
       const map = new Map<string, CartItem & { stock: number }>();
       for (const r of (data || []) as any[]) {
         const key = (r.barcode || r.sku || `${r.name}|${r.variant}`).toString();
-        const variantLabel = [r.color, r.size].filter(Boolean).join(" / ") || (r.variant || "");
-        const baseTitle = (r.name || "").split(" - ")[0] || r.name || "";
+        const variantLabel = [r.color, r.variant].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" · ");
         const existing = map.get(key);
         if (existing) {
           existing.stock += Number(r.stock || 0);
@@ -112,13 +112,14 @@ export function POSWhatsAppCheckoutDialog({
         }
         map.set(key, {
           id: key,
-          title: baseTitle,
+          title: r.name || "Produto sem nome",
           variantLabel,
           sku: r.barcode || r.sku || "",
           price: parseFloat(r.price || "0"),
           quantity: 1,
           imageUrl: r.image_url || null,
           stock: Number(r.stock || 0),
+          size: r.size || "",
         });
       }
 
@@ -345,8 +346,10 @@ export function POSWhatsAppCheckoutDialog({
                     <div key={item.id} className="flex items-center gap-2 p-2 rounded hover:bg-muted/50 cursor-pointer" onClick={() => addToCart(item)}>
                       {item.imageUrl && <img src={item.imageUrl} alt="" className="h-10 w-10 rounded object-cover" />}
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{item.title}</p>
-                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}{typeof item.stock === "number" ? ` · ${item.stock} em estoque` : ""}</p>}
+                        <p className="break-words text-sm font-semibold leading-snug">{item.title}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {[item.variantLabel, item.size ? `Numeração ${item.size}` : "", typeof item.stock === "number" ? `${item.stock} em estoque` : ""].filter(Boolean).join(" · ")}
+                        </p>
                       </div>
                       <span className="text-xs font-bold text-primary shrink-0">{fmt(item.price)}</span>
                       <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -365,10 +368,10 @@ export function POSWhatsAppCheckoutDialog({
                     {cart.map(item => (
                       <div key={item.id} className="p-2 bg-muted/30 rounded space-y-1">
                         <div className="flex items-start justify-between">
-                          <p className="text-xs font-medium flex-1">{item.title}</p>
+                          <p className="break-words pr-2 text-xs font-semibold leading-snug flex-1">{item.title}</p>
                           <button onClick={() => removeFromCart(item.id)}><X className="h-3 w-3 text-destructive" /></button>
                         </div>
-                        {item.variantLabel && <p className="text-[10px] text-muted-foreground">{item.variantLabel}</p>}
+                        {(item.variantLabel || item.size) && <p className="text-[10px] text-muted-foreground">{[item.variantLabel, item.size ? `Numeração ${item.size}` : ""].filter(Boolean).join(" · ")}</p>}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1">
                             <button onClick={() => updateQty(item.id, -1)} className="h-5 w-5 rounded bg-muted flex items-center justify-center"><Minus className="h-3 w-3" /></button>

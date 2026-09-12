@@ -32,8 +32,9 @@ interface AttendantNudgeCardProps {
   /**
    * "floating" (padrão): card discreto e recolhível flutuando no canto do chat.
    * "inline": painel centralizado e chamativo, usado na área vazia (nenhuma conversa aberta).
+   * "compact": resumo fixo e estreito para a lateral de notas.
    */
-  variant?: "floating" | "inline";
+  variant?: "floating" | "inline" | "compact";
 }
 
 /**
@@ -128,6 +129,56 @@ export function AttendantNudgeCard({
       : responseRate >= 50
         ? "text-amber-600 dark:text-amber-400"
         : "text-red-600 dark:text-red-400";
+
+  if (variant === "compact") {
+    return (
+      <section className="shrink-0 border-b border-border/60 bg-muted/20 p-2">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <Bell className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 text-xs font-bold">Sua fila</span>
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-black text-primary-foreground">
+            {total}
+          </span>
+        </div>
+
+        {awaitingCount > 0 && (
+          <div className="mb-1.5 grid grid-cols-2 gap-1">
+            <div className="rounded-md bg-muted/70 px-1.5 py-1">
+              <p className="text-[9px] text-muted-foreground">Maior espera</p>
+              <p className={`truncate text-xs font-black ${waitTone}`}>{longestWaitLabel}</p>
+            </div>
+            <div className="rounded-md bg-muted/70 px-1.5 py-1">
+              <p className="text-[9px] text-muted-foreground">Resposta</p>
+              <p className={`text-xs font-black ${rateTone}`}>{responseRate}%</p>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1">
+          {arrivedCount > 0 && (
+            <button type="button" onClick={onShowArrived} className="flex w-full items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300">
+              <PackageCheck className="h-3.5 w-3.5 shrink-0" />
+              <span>{arrivedCount} {arrivedCount === 1 ? "produto chegou" : "produtos chegaram"}</span>
+            </button>
+          )}
+          {showAwaiting && awaitingCount > 0 && (
+            <button type="button" onClick={onShowAwaiting} className="flex w-full items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-amber-700 hover:bg-amber-500/15 dark:text-amber-300">
+              <MessageCircleReply className="h-3.5 w-3.5 shrink-0" />
+              <span>{awaitingCount} aguardando resposta</span>
+            </button>
+          )}
+          {showFollowups && followupCount > 0 && (
+            <button type="button" onClick={onShowFollowups} className="flex w-full items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-700 hover:bg-sky-500/15 dark:text-sky-300">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>{followupCount} em follow-up</span>
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (variant === "inline") {
     return (
