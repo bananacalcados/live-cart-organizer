@@ -244,10 +244,15 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .update(dbUpdates)
         .eq('id', orderId)
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (!data) throw new Error('Pedido não retornado após atualização');
+      if (!data) {
+        // O pedido não existe mais (foi excluído ou unificado em outro).
+        set((state) => ({ orders: state.orders.filter((o) => o.id !== orderId) }));
+        toast.error('Este pedido não existe mais (foi excluído ou unificado). Crie um novo pedido.');
+        throw new Error('ORDER_NOT_FOUND');
+      }
 
       // Check if is_paid just transitioned to true and keep stage consistent
       const prevOrder = get().orders.find((o) => o.id === orderId);
