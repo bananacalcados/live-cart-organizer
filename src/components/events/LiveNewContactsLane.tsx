@@ -55,13 +55,26 @@ interface KnownIdentity {
  */
 const identityCache = new Map<string, KnownIdentity | null>();
 
-/** Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas. */
-async function resolveIdentities(keys: string[]): Promise<Map<string, KnownIdentity | null>> {
+/**
+ * Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas.
+ * `phonesByKey` permite à RPC também usar o nome do perfil do WhatsApp (push name)
+ * das mensagens recebidas quando não há cadastro com nome.
+ */
+async function resolveIdentities(
+  keys: string[],
+  phonesByKey?: Map<string, string[]>,
+): Promise<Map<string, KnownIdentity | null>> {
   const missing = [...new Set(keys)].filter((k) => k.length === 8 && !identityCache.has(k));
   if (missing.length > 0) {
     for (let i = 0; i < missing.length; i += 300) {
       const batch = missing.slice(i, i + 300);
-      const { data, error } = await supabase.rpc("live_resolve_contact_identities", { p_suffixes: batch });
+      const phones = [
+        ...new Set(batch.flatMap((k) => phonesByKey?.get(k) || []).filter(Boolean)),
+      ];
+      const { data, error } = await supabase.rpc("live_resolve_contact_identities", {
+        p_suffixes: batch,
+        p_phones: phones.length > 0 ? phones : null,
+      });
       if (error) {
         console.warn("[LiveNewContacts] identidade:", error.message);
         break;
