@@ -4,10 +4,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
-import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendText, posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { parseChargebackBlock, chargebackBlockMessage } from "@/lib/chargebackBlock";
+import {
+  sendPixMessages,
+  getPixIncludeQrPref,
+  setPixIncludeQrPref,
+  type PixSendChannel,
+} from "@/lib/pix/sendPixMessages";
 
 interface Props {
   open: boolean;
@@ -33,6 +40,7 @@ export function POSWhatsAppPixDialog({
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [includeQr, setIncludeQr] = useState<boolean>(() => getPixIncludeQrPref());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll for payment
@@ -150,34 +158,58 @@ export function POSWhatsAppPixDialog({
     if (!pixCode) return;
     setSending(true);
     try {
-      // Código copia e cola PURO, sem emojis/markdown/whitespace ao redor.
-      // Bancos rejeitam o Copia e Cola se vier junto de texto (precisa começar em "0002...").
-      const code = pixCode.trim();
-
-      // 1ª mensagem: contexto (valor + descrição) apontando que o código vem a seguir.
-      const intro = `💰 *PIX - R$ ${parseFloat(amount).toFixed(2)}*${description ? `\n📝 ${description}` : ''}\n\n👇 O código *copia e cola* vem na *próxima mensagem*. Toque nela, copie tudo e cole no app do seu banco.`;
-      await posSendText({ provider: sendVia, phone, message: intro, numberId: selectedNumberId });
-
-      // 2ª mensagem: SOMENTE o código PIX, isolado, para copiar sem lixo em volta.
-      const messageId = await posSendText({ provider: sendVia, phone, message: code, numberId: selectedNumberId });
-
-      await supabase.from("whatsapp_messages").insert([
-        {
-          phone, message: intro, direction: "outgoing", status: "sent",
-          whatsapp_number_id: selectedNumberId || null,
+      const channel: PixSendChannel = {
+        provider: sendVia,
+        sendText: (message) => posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId }),
+        sendImage: (mediaUrl, caption) =>
+          posSendMedia({ provider: sendVia, phone, mediaUrl, mediaType: "image", caption, numberId: selectedNumberId }),
+        sendCopyButton: sendVia === "uazapi"
+          ? (message, title, code) =>
+              posSendButtons({
+                provider: sendVia,
+                phone,
+                message,
+                buttons: [{ id: "copy_pix", title, copyCode: code }],
+                numberId: selectedNumberId,
+              })
+          : undefined,
+        persist: async (row) => {
+          await supabase.from("whatsapp_messages").insert({
+            phone,
+            message: row.message,
+            direction: "outgoing",
+            status: "sent",
+            media_type: row.media_type || null,
+            media_url: row.media_url || null,
+            message_id: row.message_id || null,
+            whatsapp_number_id: selectedNumberId || null,
+          });
         },
-        {
-          phone, message: code, direction: "outgoing", status: "sent",
-          message_id: messageId,
-          whatsapp_number_id: selectedNumberId || null,
-        },
-      ]);
-      toast.success("PIX enviado (código isolado p/ copiar)!");
-    } catch {
-      toast.error("Erro ao enviar");
+      };
+      const res = await sendPixMessages({
+        channel,
+        code: pixCode,
+        amount: parseFloat(amount),
+        description,
+        includeQr,
+        qrBase64: pixQrBase64,
+        qrKey: saleId || "pix",
+      });
+      toast.success(
+        res.usedCopyButton
+          ? `PIX enviado com botão Copiar${res.sentQr ? " + QR code" : ""}!`
+          : `PIX enviado${res.sentQr ? " com QR code" : ""} (código isolado p/ copiar).`,
+      );
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao enviar");
     } finally {
       setSending(false);
     }
+  };
+
+  const toggleQr = (v: boolean) => {
+    setIncludeQr(v);
+    setPixIncludeQrPref(v);
   };
 
 
@@ -226,6 +258,15 @@ export function POSWhatsAppPixDialog({
             )}
             <div>
               <div className="p-3 bg-muted/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixCode}</div>
+              <div className="flex items-center justify-between gap-3 mt-2 rounded-md border px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium">Enviar também o QR code</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {sendVia === "uazapi" ? "Sem isso vai o botão Copiar + a chave." : "Sem isso vai a instrução + a chave."}
+                  </p>
+                </div>
+                <Switch checked={includeQr} onCheckedChange={toggleQr} disabled={!pixQrBase64} />
+              </div>
               <div className="flex gap-2 mt-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={async () => {
                   await navigator.clipboard.writeText(pixCode.trim());

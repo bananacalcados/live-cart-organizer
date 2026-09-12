@@ -41,10 +41,16 @@ serve(async (req) => {
     const { token } = await resolveUazapiCredentials(whatsapp_number_id);
     const number = formatUazapiNumber(phone);
 
-    // Quick reply buttons → choices são apenas os títulos.
-    const choices = (buttons as Array<{ id?: string; title?: string }>).map(
-      (b, i) => b.title || `Opção ${i + 1}`,
-    );
+    // Quick reply → só o título. Botão de copiar → "título|copy:código".
+    // Botão de link → "título|url:https://...".
+    const choices = (
+      buttons as Array<{ id?: string; title?: string; copyCode?: string; url?: string }>
+    ).map((b, i) => {
+      const title = b.title || `Opção ${i + 1}`;
+      if (b.copyCode) return `${title}|copy:${b.copyCode}`;
+      if (b.url) return `${title}|url:${b.url}`;
+      return title;
+    });
 
     const payload: Record<string, unknown> = {
       number,
