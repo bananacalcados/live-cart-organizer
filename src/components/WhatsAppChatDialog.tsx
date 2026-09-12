@@ -96,7 +96,8 @@ export function WhatsAppChatDialog({
 
   const renderPanel = () => {
     const close = () => setActivePanel(null);
-    if (activePanel === "ficha") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "historico") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
     if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
     if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
     if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
