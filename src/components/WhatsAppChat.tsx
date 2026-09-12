@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone, Archive } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone, Archive, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -193,6 +193,76 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     : (conversationNumberId
         ? (numbers.find((n) => n.id === conversationNumberId) || null)
         : hookBoundNumber);
+
+  // ── Instagram Direct por esta mesma janela ──
+  // Só é possível quando o pedido tem o @ da cliente E esse @ já tem um ID de
+  // Direct conhecido (instagram_user_links ou uma DM anterior). Nesse caso as
+  // contas de Instagram entram no seletor "Enviar por qual número" e, quando
+  // escolhidas, o chat passa a mostrar/enviar pela conversa do Direct.
+  const igHandleClean = (order.instagramHandle || '').trim().replace(/^@/, '').toLowerCase();
+  const [igUserId, setIgUserId] = useState<string | null>(null);
+  const [igUserIdResolved, setIgUserIdResolved] = useState(false);
+  const [igDefaultNumberId, setIgDefaultNumberId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setIgUserId(null);
+    setIgUserIdResolved(false);
+    setIgDefaultNumberId(null);
+    if (!igHandleClean) { setIgUserIdResolved(true); return; }
+    (async () => {
+      let userId: string | null = null;
+      const { data: link } = await supabase
+        .from('instagram_user_links')
+        .select('ig_user_id')
+        .ilike('username', igHandleClean)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      userId = link?.ig_user_id || null;
+      // Instância onde essa pessoa já conversou por Direct (para pré-selecionar).
+      let lastNumberId: string | null = null;
+      if (userId) {
+        const { data: m } = await supabase
+          .from('whatsapp_messages')
+          .select('whatsapp_number_id')
+          .eq('channel', 'instagram')
+          .eq('phone', userId)
+          .not('whatsapp_number_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastNumberId = (m as any)?.whatsapp_number_id || null;
+      } else {
+        const { data: m } = await supabase
+          .from('whatsapp_messages')
+          .select('phone, whatsapp_number_id')
+          .eq('channel', 'instagram')
+          .ilike('sender_name', `@${igHandleClean}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (m?.phone && /^\d+$/.test(m.phone)) {
+          userId = m.phone;
+          lastNumberId = (m as any)?.whatsapp_number_id || null;
+        }
+      }
+      if (cancelled) return;
+      setIgUserId(userId);
+      setIgDefaultNumberId(lastNumberId);
+      setIgUserIdResolved(true);
+    })();
+    return () => { cancelled = true; };
+  }, [igHandleClean]);
+
+  const isIgMode = (boundNumber?.provider || 'meta') === 'instagram' && !!igUserId;
+  const igNumbers = numbers.filter((n) => n.is_active && (n.provider || 'meta') === 'instagram');
+  // Segurança: uma troca para Instagram salva anteriormente só vale se ainda
+  // conseguimos identificar a cliente no Direct — senão volta para o WhatsApp.
+  useEffect(() => {
+    if (!igUserIdResolved || igUserId || !overrideNumberId) return;
+    const ov = numbers.find((n) => n.id === overrideNumberId);
+    if (ov && (ov.provider || 'meta') === 'instagram') setOverrideNumberId(null);
+  }, [igUserIdResolved, igUserId, overrideNumberId, numbers, setOverrideNumberId]);
 
 
 
@@ -553,6 +623,25 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const loadSeqRef = useRef(0);
   const loadMessages = async () => {
     const seq = ++loadSeqRef.current;
+
+    // Modo Instagram: a conversa é o Direct (phone = ID do IG da cliente) na
+    // conta de Instagram escolhida — nunca mistura com o WhatsApp.
+    if (isIgMode && igUserId && overrideNumberId) {
+      let igQuery = supabase
+        .from('whatsapp_messages')
+        .select('*')
+        .eq('phone', igUserId)
+        .eq('whatsapp_number_id', overrideNumberId);
+      if (hideInstagramComments) igQuery = igQuery.not('message', 'like', '💬 Comentário%');
+      const { data: igData, error: igErr } = await igQuery.order('created_at', { ascending: true });
+      if (seq !== loadSeqRef.current) return;
+      activeNumberIdRef.current = overrideNumberId;
+      if (igErr) console.error('Error loading Instagram messages:', igErr);
+      else setMessages((igData as Message[]) || []);
+      setIsLoading(false);
+      return;
+    }
+
     // Quando o operador troca a instância manualmente, o histórico deve ser o
     // daquela instância. Sem override, resolve pela última mensagem da conversa.
     let convNumberId: string | null = overrideNumberId || conversationNumberId;
@@ -611,7 +700,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       let q = supabase
         .from('whatsapp_messages_archive' as any)
         .select('*')
-        .in('phone', phoneVariations);
+        .in('phone', isIgMode && igUserId ? [igUserId] : phoneVariations);
       q = convNumberId ? q.eq('whatsapp_number_id', convNumberId) : q.is('whatsapp_number_id', null);
       if (hideInstagramComments) q = q.not('message', 'like', '💬 Comentário%');
       if (oldest) q = q.lt('created_at', oldest);
@@ -644,7 +733,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages]);
+  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages, isIgMode, igUserId]);
 
   const displayMessages = archivedMessages.length > 0 ? [...archivedMessages, ...messages] : messages;
 
@@ -652,7 +741,10 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
   // Payload carries minimal info — we filter by phone, then refetch.
   useWaMessageBroadcast((payload) => {
-    if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
+    if (!payload?.phone) return;
+    const matchesWa = phoneVariations.includes(payload.phone);
+    const matchesIg = !!igUserId && payload.phone === igUserId;
+    if (!matchesWa && !matchesIg) return;
     loadMessagesRef.current();
     if (payload.direction === 'incoming') {
       setHasUnreadMessages(order.id, false);
@@ -706,6 +798,11 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const handleSend = async () => {
     if (isSending || isUploading) return;
 
+    // Destino e "telefone" gravado: no modo Instagram é o ID do Direct da cliente.
+    const targetId = isIgMode && igUserId ? igUserId : phone;
+    const storedPhone = isIgMode && igUserId ? igUserId : normalizedPhone;
+    if (isIgMode && !targetId) { toast.error('Esta cliente ainda não tem conversa no Direct.'); return; }
+
     // Send media if selected
     if (selectedMedia) {
       setIsUploading(true);
@@ -719,7 +816,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       const tempId = `temp-${Date.now()}`;
       const tempMessage: Message = {
         id: tempId,
-        phone: normalizedPhone,
+        phone: storedPhone,
         message: newMessage.trim() || '',
         direction: 'outgoing',
         message_id: null,
@@ -731,12 +828,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       setMessages((prev) => [...prev, tempMessage]);
 
       setIsSending(true);
-      const result = await sendMessage(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      const result = await sendMessage(targetId, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       setIsSending(false);
 
       if (result.success) {
         await supabase.from('whatsapp_messages').insert({
-          phone: normalizedPhone,
+          phone: storedPhone,
           message: newMessage.trim() || `[${selectedMedia.type}]`,
           direction: 'outgoing',
           status: 'sent',
@@ -772,7 +869,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
       id: tempId,
-      phone: normalizedPhone,
+      phone: storedPhone,
       message: messageText,
       direction: 'outgoing',
       message_id: null,
@@ -782,12 +879,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     setMessages((prev) => [...prev, tempMessage]);
 
     setIsSending(true);
-    const result = await sendMessage(phone, messageText);
+    const result = await sendMessage(targetId, messageText);
     setIsSending(false);
 
     if (result.success) {
       await supabase.from('whatsapp_messages').insert({
-        phone: normalizedPhone,
+        phone: storedPhone,
         message: messageText,
         direction: 'outgoing',
         status: 'sent',
@@ -1245,7 +1342,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
               className="h-8 px-2 gap-1.5 text-xs font-medium text-white/80 hover:bg-white/10 max-w-[160px]"
               title="Trocar instância desta conversa"
             >
-              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              {isIgMode ? <Instagram className="h-3.5 w-3.5 shrink-0" /> : <Smartphone className="h-3.5 w-3.5 shrink-0" />}
               <span className="truncate">
                 {(boundNumber?.label) || 'Instância'}
               </span>
@@ -1273,6 +1370,48 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                   </span>
                 </DropdownMenuItem>
               ))}
+            {igNumbers.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs flex items-center gap-1.5">
+                  <Instagram className="h-3 w-3" /> Instagram (Direct)
+                </DropdownMenuLabel>
+                {!igHandleClean && (
+                  <div className="px-2 pb-1.5 text-[11px] text-muted-foreground">
+                    Pedido sem @ do Instagram — cadastre o @ para conversar por Direct.
+                  </div>
+                )}
+                {igHandleClean && igUserIdResolved && !igUserId && (
+                  <div className="px-2 pb-1.5 text-[11px] text-muted-foreground">
+                    @{igHandleClean} ainda não mandou Direct — o Instagram só permite responder quem já escreveu.
+                  </div>
+                )}
+                {igNumbers.map((n) => {
+                  const enabled = !!igUserId;
+                  const isCurrent = effectiveNumberId === n.id && isIgMode;
+                  const isPreferred = igDefaultNumberId === n.id;
+                  return (
+                    <DropdownMenuItem
+                      key={n.id}
+                      disabled={!enabled}
+                      className="flex-col items-start gap-0.5 cursor-pointer"
+                      onClick={() => {
+                        if (!enabled) return;
+                        setOverrideNumberId(n.id);
+                        toast.success(`Conversa agora envia pelo Direct de ${n.label}`);
+                      }}
+                    >
+                      <span className="font-medium text-sm">
+                        {n.label} {isCurrent ? '✓' : ''}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {n.phone_display} · instagram{isPreferred ? ' · histórico com @' + igHandleClean : ''}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
             {overrideNumberId && (
               <>
                 <DropdownMenuSeparator />
@@ -1389,13 +1528,13 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       </div>
 
       {/* WhatsApp Number Selector */}
-      <div className="px-3 py-1.5 bg-[#064E46] flex items-center gap-2">
-        <Phone className="h-3.5 w-3.5 text-white/70" />
+      <div className={cn("px-3 py-1.5 flex items-center gap-2", isIgMode ? "bg-[#7a2f6b]" : "bg-[#064E46]")}>
+        {isIgMode ? <Instagram className="h-3.5 w-3.5 text-white/70" /> : <Phone className="h-3.5 w-3.5 text-white/70" />}
         {boundNumber ? (
           <div className="h-7 text-xs flex-1 bg-white/10 border border-white/20 text-white rounded px-2 flex items-center gap-2">
-            <span className="opacity-70">Vinculado a esta conversa:</span>
+            <span className="opacity-70">{isIgMode ? 'Direct do Instagram:' : 'Vinculado a esta conversa:'}</span>
             <span className="font-medium truncate">{boundNumber.label}</span>
-            <span className="opacity-60">({boundNumber.phone_display})</span>
+            <span className="opacity-60">{isIgMode ? `→ @${igHandleClean}` : `(${boundNumber.phone_display})`}</span>
           </div>
         ) : (
           <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
