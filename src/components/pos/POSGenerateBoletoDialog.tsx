@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { posSendMedia, posSendText } from "@/lib/pos/posWhatsappSend";
 import { FileText, Loader2, Send, ExternalLink, RefreshCw } from "lucide-react";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface Props {
   open: boolean;
@@ -18,6 +19,7 @@ interface Props {
   storeId?: string | null;
   sendVia: "meta" | "zapi" | "uazapi" | "wasender";
   selectedNumberId?: string | null;
+  embedded?: boolean;
 }
 
 interface BoletoResult {
@@ -39,7 +41,7 @@ function tomorrowIso(): string {
 }
 
 export function POSGenerateBoletoDialog({
-  open, onOpenChange, phone, customerName, storeId, sendVia, selectedNumberId,
+  open, onOpenChange, phone, customerName, storeId, sendVia, selectedNumberId, embedded = false,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -206,8 +208,8 @@ export function POSGenerateBoletoDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-2xl max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-orange-500" />
@@ -360,7 +362,7 @@ export function POSGenerateBoletoDialog({
             </DialogFooter>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }

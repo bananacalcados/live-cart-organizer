@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { materializePosCustomer } from "@/lib/posCustomerResolve";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 
 interface CartItem {
@@ -36,10 +37,11 @@ interface Props {
   /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
   sendVia: PosSendProvider;
   selectedNumberId: string | null;
+  embedded?: boolean;
 }
 
 export function POSWhatsAppCheckoutDialog({
-  open, onOpenChange, storeId, phone, customerName, sendVia, selectedNumberId,
+  open, onOpenChange, storeId, phone, customerName, sendVia, selectedNumberId, embedded = false,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -291,8 +293,8 @@ export function POSWhatsAppCheckoutDialog({
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full p-4" : "max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-primary" />
@@ -490,7 +492,7 @@ export function POSWhatsAppCheckoutDialog({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }

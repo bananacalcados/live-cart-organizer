@@ -11,6 +11,7 @@ import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { posSendMedia, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface Props {
   storeId: string;
@@ -20,6 +21,7 @@ interface Props {
   selectedNumberId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  embedded?: boolean;
 }
 
 interface ProductItem {
@@ -36,7 +38,7 @@ interface ProductItem {
   color: string | null;
 }
 
-export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumberId, open, onOpenChange }: Props) {
+export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumberId, open, onOpenChange, embedded = false }: Props) {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -231,8 +233,8 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full p-0 gap-0" : "max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0"}>
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle className="flex items-center gap-2 text-base">
             <ShoppingBag className="h-5 w-5 text-[#00a884]" />
@@ -365,7 +367,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }
