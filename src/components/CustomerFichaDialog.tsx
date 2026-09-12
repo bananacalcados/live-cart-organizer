@@ -453,12 +453,16 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
                   onChange={handleCepChange}
                   onBlur={(e) => lookupCep(e.target.value)}
                   placeholder="00000-000"
+                  inputMode="numeric"
                   maxLength={9}
+                  className={cn(cepInvalid && "border-destructive focus-visible:ring-destructive")}
+                  aria-invalid={cepInvalid}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {fetchingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </div>
               </div>
+              {cepInvalid && <p className="mt-1 text-xs text-destructive">CEP incompleto — 8 números.</p>}
             </div>
             <div>
               <Label>Cidade</Label>
