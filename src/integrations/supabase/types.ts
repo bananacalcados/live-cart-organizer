@@ -23125,25 +23125,15 @@ export type Database = {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: boolean
       }
-      live_resolve_contact_identities:
-        | {
-            Args: { p_suffixes: string[] }
-            Returns: {
-              instagram_handle: string
-              name: string
-              source: string
-              suffix8: string
-            }[]
-          }
-        | {
-            Args: { p_phones?: string[]; p_suffixes: string[] }
-            Returns: {
-              instagram_handle: string
-              name: string
-              source: string
-              suffix8: string
-            }[]
-          }
+      live_resolve_contact_identities: {
+        Args: { p_phones?: string[]; p_suffixes: string[] }
+        Returns: {
+          instagram_handle: string
+          name: string
+          source: string
+          suffix8: string
+        }[]
+      }
       live_zap_after_match: {
         Args: {
           p_click: Database["public"]["Tables"]["live_whatsapp_clicks"]["Row"]
