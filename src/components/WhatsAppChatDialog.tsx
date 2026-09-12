@@ -19,7 +19,7 @@ import { OrderDialogDb } from "./OrderDialogDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { LiveCustomerHistoryPanel } from "./events/LiveCustomerHistoryPanel";
 
-type LivePanel = "ficha" | "details" | "edit" | "crossell" | "gift" | "support" | null;
+type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "gift" | "support" | null;
 
 interface WhatsAppChatDialogProps {
   open: boolean;
