@@ -9,7 +9,8 @@ import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
-import { IdCard, ClipboardList, Headphones, Images } from "lucide-react";
+import { IdCard, ClipboardList, Headphones, Images, Gift } from "lucide-react";
+import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
 import type { DbOrder } from "@/types/database";
 
@@ -62,6 +63,7 @@ export function WhatsAppChatDialog({
   const [fichaOpen, setFichaOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [crossellOpen, setCrossellOpen] = useState(false);
+  const [giftOpen, setGiftOpen] = useState(false);
 
   const fichaOrder = {
     id: order.id,
@@ -73,7 +75,7 @@ export function WhatsAppChatDialog({
 
   // Com a ficha aberta ao lado, o modal expande para acomodar chat + ficha lado a lado.
   const dialogClass = wide
-    ? fichaOpen
+    ? (fichaOpen || giftOpen)
       ? "max-w-[1400px] sm:max-w-[1400px] w-[98vw] h-[90vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button.absolute]:hidden"
       : "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
     : "max-w-md sm:max-w-md w-[95vw] h-[600px] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block";
@@ -105,6 +107,15 @@ export function WhatsAppChatDialog({
                     setCrossellOpen(true);
                   }}
                 />
+                <SidebarButton
+                  icon={Gift}
+                  label="Brinde"
+                  tone={giftOpen ? "accent" : "default"}
+                  onClick={() => {
+                    setGiftOpen((v) => !v);
+                    if (!giftOpen) setFichaOpen(false);
+                  }}
+                />
                 <CreateSupportTicketDialog
                   phone={order.whatsapp}
                   customerName={order.instagramHandle || undefined}
@@ -128,6 +139,15 @@ export function WhatsAppChatDialog({
                 onOpenFicha={withSidebar ? () => setFichaOpen((v) => !v) : undefined}
               />
             </div>
+            {withSidebar && giftOpen && (
+              <div className="hidden sm:block w-[380px] shrink-0 h-full border-l border-border/60 bg-card">
+                <OrderGiftPanel
+                  orderId={order.id}
+                  customerLabel={order.instagramHandle || order.whatsapp || undefined}
+                  onClose={() => setGiftOpen(false)}
+                />
+              </div>
+            )}
             {withSidebar && fichaOpen && (
               <div className="hidden sm:block w-[420px] shrink-0 h-full border-l border-border/60 bg-card">
                 <CustomerFichaPanel
@@ -138,6 +158,15 @@ export function WhatsAppChatDialog({
             )}
           </div>
           {/* Mobile: ficha vira sobreposição de tela cheia dentro do modal */}
+          {withSidebar && giftOpen && (
+            <div className="absolute inset-0 z-10 sm:hidden bg-card">
+              <OrderGiftPanel
+                orderId={order.id}
+                customerLabel={order.instagramHandle || order.whatsapp || undefined}
+                onClose={() => setGiftOpen(false)}
+              />
+            </div>
+          )}
           {withSidebar && fichaOpen && (
             <div className="absolute inset-0 z-10 sm:hidden bg-card">
               <CustomerFichaPanel
