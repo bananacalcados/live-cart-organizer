@@ -47,6 +47,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface OrderDialogDbProps {
   open: boolean;
@@ -751,8 +752,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const isBanned = editingOrder?.customer?.is_banned || existingCustomer?.is_banned;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={!embedded}>
-      <DialogContent className={embedded ? "relative flex h-full max-h-none w-full max-w-none flex-col border-0 shadow-none [&>button.absolute]:hidden" : "max-w-2xl max-h-[85vh] flex flex-col"} forceMount={embedded ? true : undefined}>
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-2xl max-h-[85vh] flex flex-col"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Instagram className="h-5 w-5 text-accent" />
@@ -1449,7 +1450,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Button>
           </div>
         </div>
-      </DialogContent>
+      </EmbeddedDialogContent>
 
       {/* Confirmação: cliente com chargeback (Etapa 5) */}
       <AlertDialog open={showChargebackConfirm} onOpenChange={setShowChargebackConfirm}>
@@ -1477,7 +1478,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Dialog>
+    </EmbeddedDialog>
 
   );
 }

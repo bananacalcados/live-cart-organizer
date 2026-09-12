@@ -35,6 +35,7 @@ export function CustomerChatNotesPanel({ phone, storeId, authorName }: CustomerC
       .from("customer_chat_notes")
       .select("id,note,author_name,created_at")
       .eq("phone_suffix8", suffix8)
+      .eq("store_id", storeId)
       .order("created_at", { ascending: false });
     if (error) console.error("[CustomerChatNotes] load", error);
     setNotes((data || []) as NoteRow[]);
