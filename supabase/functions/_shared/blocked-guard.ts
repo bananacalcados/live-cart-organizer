@@ -114,8 +114,39 @@ export async function loadBlockedSuffixes(
     console.error("[blocked-guard] exceção ao carregar opt-outs:", e);
   }
 
+  // Opt-out manual no CRM (chave "Bloqueado p/ disparos" na ficha do cliente):
+  // customers_unified.opt_out_mass_dispatch = true suprime disparos E automações.
+  try {
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("customers_unified")
+        .select("phone_e164, phone, ddd, phone_suffix8")
+        .eq("opt_out_mass_dispatch", true)
+        .range(from, from + pageSize - 1);
+      if (error) {
+        console.error("[blocked-guard] erro ao ler customers_unified opt-out:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      for (const r of data) {
+        const row = r as { phone_e164?: string; phone?: string; ddd?: string; phone_suffix8?: string };
+        const key = phoneKey(row.phone_e164 || row.phone) ||
+          ((row.ddd && row.phone_suffix8) ? `${row.ddd}${row.phone_suffix8}` : "");
+        if (key) set.add(key);
+      }
+      if (data.length < pageSize) break;
+      from += pageSize;
+      if (from > 200000) break;
+    }
+  } catch (e) {
+    console.error("[blocked-guard] exceção ao carregar opt-out do CRM:", e);
+  }
+
   return set;
 }
+
 
 
 /** True se o telefone está bloqueado (match por DDD + 8 dígitos finais). */
