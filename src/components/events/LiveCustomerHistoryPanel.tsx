@@ -31,6 +31,8 @@ const statusLabels: Record<string, string> = {
   refunded: "Estornado",
   awaiting_payment: "Aguardando pagamento",
   cart: "Pedido aberto",
+  new: "Pedido aberto",
+  online_pending: "Checkout não finalizado",
 };
 
 const cleanHandle = (value?: string | null) => String(value || "").replace(/^@/, "").trim().toLowerCase();
