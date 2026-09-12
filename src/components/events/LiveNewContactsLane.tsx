@@ -157,6 +157,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         .select("id, created_at, entered_phone, phone, real_phone, superseded, lead:event_leads(name)")
         .in("link_id", linkIds)
         .not("entered_phone", "is", null)
+        .not("phone", "is", null) // só quem falou no WhatsApp vira card
         .order("created_at", { ascending: false })
         .limit(500);
       setRows(((data || []) as unknown as ClickRow[]).filter((r) => !r.superseded));
