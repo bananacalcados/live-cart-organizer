@@ -1340,6 +1340,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       });
     },
   };
+  if (pixChannelRef) pixChannelRef.current = pixChannel;
   const handlePixSent = () => {
     updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
     void loadMessages();
