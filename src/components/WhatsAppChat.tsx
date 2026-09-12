@@ -74,6 +74,8 @@ interface WhatsAppChatProps {
   hideInstagramComments?: boolean;
   /** Quando definido, o botão "Ficha" abre um painel externo (lado a lado) em vez do modal interno. */
   onOpenFicha?: () => void;
+  /** Recebe o canal de envio desta conversa (usado pela ficha lateral para enviar o PIX). */
+  pixChannelRef?: React.MutableRefObject<PixSendChannel | null>;
 }
 
 // Status icon now uses shared component
@@ -111,7 +113,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha, pixChannelRef }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
