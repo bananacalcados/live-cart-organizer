@@ -153,6 +153,12 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         { event: "*", schema: "public", table: "chat_awaiting_payment" },
         scheduleRefresh,
       )
+      .on(
+        // Pedidos de Live (tabela orders) também viram cards na barra.
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        scheduleRefresh,
+      )
       .subscribe();
 
     // Rede de segurança: confirma status real periodicamente (cobre o caminho
