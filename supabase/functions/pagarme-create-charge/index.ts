@@ -1387,6 +1387,32 @@ serve(async (req) => {
       }
     };
 
+    // ── Guarda de CPF: barra a cobrança ANTES de qualquer gateway ──
+    // Com CPF inválido o Pagar.me devolve "validation_error | customer | Invalid CPF",
+    // o Mercado Pago sequer registra a tentativa e a AppMax deixa um pedido pendente
+    // (que aparece como boleto no painel deles). Melhor recusar com o motivo real.
+    {
+      const cpfDigits = String(chargeParams.customer?.cpf || "").replace(/\D/g, "");
+      if (!isValidCpfDigits(cpfDigits)) {
+        const motivo = cpfDigits.length === 11
+          ? `CPF inválido (${cpfDigits}) — os dígitos não conferem.`
+          : "CPF ausente ou incompleto.";
+        const errorMsg = `${motivo} Corrija o CPF na ficha do cliente e envie o link de pagamento novamente.`;
+        console.error(`[CPF-GUARD] Pedido ${params.orderId} bloqueado antes da cascata: ${motivo}`);
+        if (paymentAttemptId) {
+          await supabase.from("pos_checkout_attempts")
+            .update({ status: "failed", gateway: null, error_message: errorMsg } as any)
+            .eq("transaction_id", paymentAttemptId)
+            .eq("status", "processing")
+            .then(() => {});
+        }
+        return new Response(
+          JSON.stringify({ success: false, gateway: "validation", declineCategory: "customer_data", stopCascade: true, error: errorMsg }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
     let mpAccountIdForOrder: string | null = null;
