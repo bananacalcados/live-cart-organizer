@@ -87,6 +87,15 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Auto-correção: se a linha perdeu o instagram_account_id (webhook não
+    // consegue vincular as DMs à instância), restaura a partir do /me.
+    const discoveredAccountId = me?.user_id ? String(me.user_id) : (me?.id ? String(me.id) : null);
+    const healPatch: Record<string, unknown> = {};
+    if (!row.instagram_account_id && discoveredAccountId) {
+      healPatch.instagram_account_id = discoveredAccountId;
+      console.warn(`[ig-token-refresh] ${label} sem instagram_account_id — restaurado para ${discoveredAccountId}`);
+    }
+
     // 2) Renova (estende por mais 60 dias)
     const rfRes = await fetch(
       `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`,
@@ -96,11 +105,12 @@ Deno.serve(async (req) => {
       const msg = rf?.error?.message || `HTTP ${rfRes.status}`;
       console.warn(`[ig-token-refresh] ${label} válido, mas não renovou:`, msg);
       await supabase.from("whatsapp_numbers").update({
+        ...healPatch,
         is_online: true,
         last_health_check: new Date().toISOString(),
         health_check_error: null,
       }).eq("id", row.id);
-      results.push({ id: row.id, account: label, status: "valid_not_refreshed", error: msg, usingGlobal });
+      results.push({ id: row.id, account: label, status: "valid_not_refreshed", error: msg, usingGlobal, healed: healPatch });
       continue;
     }
 
@@ -108,6 +118,7 @@ Deno.serve(async (req) => {
     // Guarda o token renovado na linha (inclusive para a conta principal, que
     // até então usava o token global — assim ela deixa de depender do secret).
     await supabase.from("whatsapp_numbers").update({
+      ...healPatch,
       access_token: rf.access_token,
       is_online: true,
       last_health_check: new Date().toISOString(),
@@ -115,7 +126,7 @@ Deno.serve(async (req) => {
       instagram_username: me.username || row.instagram_username,
     }).eq("id", row.id);
     console.log(`[ig-token-refresh] ${label} renovado até ${expiresAt}`);
-    results.push({ id: row.id, account: label, status: "refreshed", expires_at: expiresAt, usingGlobal });
+    results.push({ id: row.id, account: label, status: "refreshed", expires_at: expiresAt, usingGlobal, healed: healPatch });
   }
 
   return new Response(JSON.stringify({ success: true, results }), {
