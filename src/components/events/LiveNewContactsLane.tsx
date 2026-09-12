@@ -128,8 +128,9 @@ function formatPhone(phone?: string | null): string {
 }
 
 /**
- * Contatos que digitaram o WhatsApp no link redirecionador DESTE evento e
- * ainda não têm pedido criado (inclui quem confirmou e nunca mandou mensagem).
+ * Contatos que digitaram o WhatsApp no link redirecionador DESTE evento,
+ * mandaram mensagem (clique casado) e ainda não têm pedido criado.
+ * Quem clicou e não falou não vira card (fica só como lead de retomada).
  * Dedup por DDD + 8 dígitos; mais recente primeiro.
  */
 export function useLiveNewContacts(eventId: string | null | undefined, excludeKeys: Set<string>, search?: string) {
@@ -157,6 +158,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         .select("id, created_at, entered_phone, phone, real_phone, superseded, lead:event_leads(name)")
         .in("link_id", linkIds)
         .not("entered_phone", "is", null)
+        .not("phone", "is", null) // só quem falou no WhatsApp vira card
         .order("created_at", { ascending: false })
         .limit(500);
       setRows(((data || []) as unknown as ClickRow[]).filter((r) => !r.superseded));
@@ -312,7 +314,10 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
     for (const r of rows) {
-      const phone = r.real_phone || r.phone || r.entered_phone || "";
+      // Só quem realmente falou no WhatsApp (clique casado com mensagem).
+      // Quem clicou e digitou o telefone mas nunca mandou mensagem não vira card.
+      if (!r.phone) continue;
+      const phone = r.real_phone || r.phone || "";
       const key = suffix8(phone);
       if (!key || key.length < 8) continue;
       if (excludeKeys.has(key)) continue;
