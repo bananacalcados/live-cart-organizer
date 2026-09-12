@@ -425,8 +425,8 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
               const tab: PixTab = {
                 saleId: oid,
                 phone: (lead?.phone as string) || prev?.phone || "",
-                numberId: prev?.numberId || null,
-                name: (lead?.name as string) || prev?.name || "Cliente",
+                numberId: liveNumberId,
+                name: displayName,
                 amount,
                 type: "live",
                 status: "paid",
