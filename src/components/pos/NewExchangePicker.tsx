@@ -82,6 +82,8 @@ interface ReposRow {
 interface Props {
   open: boolean;
   sellerId?: string;
+  /** Atalho: abre já na venda informada (pula escolha de loja e busca). */
+  initialSaleId?: string;
   onCancel: () => void;
   onDone: () => void;
 }
@@ -92,7 +94,7 @@ function orderName(notes: string | null, ext: string | null): string | null {
   return ext ? `#${ext}` : null;
 }
 
-export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
+export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone }: Props) {
   const [phase, setPhase] = useState<"store" | "list" | "config">("store");
   const [storeId, setStoreId] = useState<string>("");
 
