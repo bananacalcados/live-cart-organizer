@@ -194,6 +194,69 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         ? (numbers.find((n) => n.id === conversationNumberId) || null)
         : hookBoundNumber);
 
+  // ── Instagram Direct por esta mesma janela ──
+  // Só é possível quando o pedido tem o @ da cliente E esse @ já tem um ID de
+  // Direct conhecido (instagram_user_links ou uma DM anterior). Nesse caso as
+  // contas de Instagram entram no seletor "Enviar por qual número" e, quando
+  // escolhidas, o chat passa a mostrar/enviar pela conversa do Direct.
+  const igHandleClean = (order.instagramHandle || '').trim().replace(/^@/, '').toLowerCase();
+  const [igUserId, setIgUserId] = useState<string | null>(null);
+  const [igUserIdResolved, setIgUserIdResolved] = useState(false);
+  const [igDefaultNumberId, setIgDefaultNumberId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setIgUserId(null);
+    setIgUserIdResolved(false);
+    setIgDefaultNumberId(null);
+    if (!igHandleClean) { setIgUserIdResolved(true); return; }
+    (async () => {
+      let userId: string | null = null;
+      const { data: link } = await supabase
+        .from('instagram_user_links')
+        .select('ig_user_id')
+        .ilike('username', igHandleClean)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      userId = link?.ig_user_id || null;
+      // Instância onde essa pessoa já conversou por Direct (para pré-selecionar).
+      let lastNumberId: string | null = null;
+      if (userId) {
+        const { data: m } = await supabase
+          .from('whatsapp_messages')
+          .select('whatsapp_number_id')
+          .eq('channel', 'instagram')
+          .eq('phone', userId)
+          .not('whatsapp_number_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastNumberId = (m as any)?.whatsapp_number_id || null;
+      } else {
+        const { data: m } = await supabase
+          .from('whatsapp_messages')
+          .select('phone, whatsapp_number_id')
+          .eq('channel', 'instagram')
+          .ilike('sender_name', `@${igHandleClean}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (m?.phone && /^\d+$/.test(m.phone)) {
+          userId = m.phone;
+          lastNumberId = (m as any)?.whatsapp_number_id || null;
+        }
+      }
+      if (cancelled) return;
+      setIgUserId(userId);
+      setIgDefaultNumberId(lastNumberId);
+      setIgUserIdResolved(true);
+    })();
+    return () => { cancelled = true; };
+  }, [igHandleClean]);
+
+  const isIgMode = (boundNumber?.provider || 'meta') === 'instagram' && !!igUserId;
+  const igNumbers = numbers.filter((n) => n.is_active && (n.provider || 'meta') === 'instagram');
+
 
 
   // Instância dos DISPAROS por API (template Meta): definida pelo evento/live,
