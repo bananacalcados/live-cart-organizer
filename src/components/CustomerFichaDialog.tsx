@@ -428,7 +428,18 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             </div>
             <div>
               <Label>WhatsApp</Label>
-              <Input value={form.whatsapp} onChange={handleChange("whatsapp")} />
+              <Input
+                value={form.whatsapp}
+                onChange={handlePhoneChange}
+                inputMode="numeric"
+                maxLength={16}
+                placeholder="(00) 00000-0000"
+                className={cn(phoneInvalid && "border-destructive focus-visible:ring-destructive")}
+                aria-invalid={phoneInvalid}
+              />
+              {phoneInvalid && (
+                <p className="mt-1 text-xs text-destructive">Número incompleto — informe DDD + número.</p>
+              )}
             </div>
             <div className="md:col-span-2">
               <Label>Email</Label>
