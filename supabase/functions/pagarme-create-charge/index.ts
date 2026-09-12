@@ -49,7 +49,26 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "unknown";
+type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "customer_data" | "unknown";
+
+/**
+ * Valida os dígitos verificadores do CPF.
+ * CPF errado faz o Pagar.me responder "validation_error | customer | Invalid CPF"
+ * e a AppMax criar um pedido pendente (que aparece como boleto no painel deles).
+ * Por isso a cobrança é barrada ANTES de qualquer gateway.
+ */
+function isValidCpfDigits(value?: string | null): boolean {
+  const cpf = String(value ?? "").replace(/\D/g, "");
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(cpf[i]) * (len + 1 - i);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+}
 
 interface ChargeResult {
   success: boolean;
@@ -620,6 +639,24 @@ async function chargePagarme(
   console.log("Pagar.me charge full response:", JSON.stringify(chargeData).substring(0, 2000));
 
   if (chargeData?.id && linkGatewayId) await linkGatewayId("pagarme", String(chargeData.id));
+
+  // Erro de VALIDAÇÃO (HTTP 422): dados do cliente inválidos (CPF, e-mail, telefone).
+  // Não adianta tentar outro gateway — o mesmo dado vai falhar lá. Mostra o motivo real.
+  if (chargeData?.errors && typeof chargeData.errors === "object") {
+    const entries = Object.entries(chargeData.errors as Record<string, string[]>);
+    const flat = entries.map(([field, msgs]) => `${field}: ${(msgs || []).join(", ")}`).join(" | ");
+    const lower = flat.toLowerCase();
+    let friendly = `Dados do cliente inválidos (${flat}).`;
+    if (lower.includes("document") || lower.includes("cpf")) {
+      friendly = "CPF do cliente inválido. Corrija o CPF na ficha do cliente e envie o link de novo.";
+    } else if (lower.includes("email")) {
+      friendly = "E-mail do cliente inválido. Corrija o e-mail na ficha do cliente.";
+    } else if (lower.includes("phone")) {
+      friendly = "Telefone do cliente inválido. Corrija o telefone na ficha do cliente.";
+    }
+    console.error("[pagarme] validation_error:", flat);
+    return { success: false, gateway: "pagarme", error: friendly, stopCascade: true, declineCategory: "customer_data" };
+  }
 
   if (chargeData.status === "paid") {
     return { success: true, gateway: "pagarme", transactionId: chargeData.id };
@@ -1349,6 +1386,32 @@ serve(async (req) => {
         console.error("[GATEWAY-LINK] exceção (não bloqueia cobrança):", e);
       }
     };
+
+    // ── Guarda de CPF: barra a cobrança ANTES de qualquer gateway ──
+    // Com CPF inválido o Pagar.me devolve "validation_error | customer | Invalid CPF",
+    // o Mercado Pago sequer registra a tentativa e a AppMax deixa um pedido pendente
+    // (que aparece como boleto no painel deles). Melhor recusar com o motivo real.
+    {
+      const cpfDigits = String(chargeParams.customer?.cpf || "").replace(/\D/g, "");
+      if (!isValidCpfDigits(cpfDigits)) {
+        const motivo = cpfDigits.length === 11
+          ? `CPF inválido (${cpfDigits}) — os dígitos não conferem.`
+          : "CPF ausente ou incompleto.";
+        const errorMsg = `${motivo} Corrija o CPF na ficha do cliente e envie o link de pagamento novamente.`;
+        console.error(`[CPF-GUARD] Pedido ${params.orderId} bloqueado antes da cascata: ${motivo}`);
+        if (paymentAttemptId) {
+          await supabase.from("pos_checkout_attempts")
+            .update({ status: "failed", gateway: null, error_message: errorMsg } as any)
+            .eq("transaction_id", paymentAttemptId)
+            .eq("status", "processing")
+            .then(() => {});
+        }
+        return new Response(
+          JSON.stringify({ success: false, gateway: "validation", declineCategory: "customer_data", stopCascade: true, error: errorMsg }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];

@@ -10,6 +10,7 @@ import { DbOrder } from "@/types/database";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
+import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 
 /** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
 function isRegUsable(r: any): boolean {
@@ -107,7 +108,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
         };
         const fromRow = (r: any): Form => ({
           full_name: clean(r?.full_name),
-          cpf: clean(r?.cpf),
+          cpf: formatCpf(clean(r?.cpf)),
           email: clean(r?.email),
           whatsapp: clean(r?.whatsapp),
           cep: clean(r?.cep),
@@ -157,6 +158,14 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
+  // CPF: máscara automática (000.000.000-00) + aviso quando o número é inválido.
+  // CPF errado é a causa nº 1 de recusa do gateway ("validation_error | customer | Invalid CPF").
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, cpf: formatCpf(e.target.value) }));
+
+  const cpfDigits = onlyDigitsCpf(form.cpf);
+  const cpfInvalid = cpfDigits.length > 0 && !isValidCpf(cpfDigits);
+
   const lookupCep = async (rawCep: string) => {
     const digits = rawCep.replace(/\D/g, "");
     if (digits.length !== 8) return;
@@ -192,6 +201,10 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const handleSave = async () => {
     if (!isRealOrder) {
       toast.error("Crie o pedido desta conversa antes de salvar a ficha");
+      return;
+    }
+    if (cpfInvalid) {
+      toast.error("CPF inválido — corrija antes de salvar (o cartão é recusado com CPF errado).");
       return;
     }
     setSaving(true);
@@ -370,7 +383,20 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             </div>
             <div>
               <Label>CPF</Label>
-              <Input value={form.cpf} onChange={handleChange("cpf")} />
+              <Input
+                value={form.cpf}
+                onChange={handleCpfChange}
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="000.000.000-00"
+                className={cn(cpfInvalid && "border-destructive focus-visible:ring-destructive")}
+                aria-invalid={cpfInvalid}
+              />
+              {cpfInvalid && (
+                <p className="mt-1 text-xs text-destructive">
+                  CPF inválido — confira os números (o pagamento no cartão é recusado com CPF errado).
+                </p>
+              )}
             </div>
             <div>
               <Label>WhatsApp</Label>
