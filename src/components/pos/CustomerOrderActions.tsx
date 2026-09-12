@@ -119,6 +119,7 @@ export function CustomerOrderActions({
         </DialogContent>
       </Dialog>
 
+      {shippingOpen && (
       <NewExchangePicker
         open={shippingOpen}
         sellerId={sellerId || undefined}
@@ -126,7 +127,9 @@ export function CustomerOrderActions({
         onCancel={() => setShippingOpen(false)}
         onDone={() => { setShippingOpen(false); onChanged?.(); }}
       />
+      )}
 
+      {presentialOpen && (
       <PresentialExchangePicker
         open={presentialOpen}
         sellerId={sellerId || undefined}
@@ -135,6 +138,7 @@ export function CustomerOrderActions({
         onCancel={() => setPresentialOpen(false)}
         onDone={() => { setPresentialOpen(false); onChanged?.(); }}
       />
+      )}
     </div>
   );
 }
