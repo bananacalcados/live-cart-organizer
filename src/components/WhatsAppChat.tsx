@@ -616,6 +616,25 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const loadSeqRef = useRef(0);
   const loadMessages = async () => {
     const seq = ++loadSeqRef.current;
+
+    // Modo Instagram: a conversa é o Direct (phone = ID do IG da cliente) na
+    // conta de Instagram escolhida — nunca mistura com o WhatsApp.
+    if (isIgMode && igUserId && overrideNumberId) {
+      let igQuery = supabase
+        .from('whatsapp_messages')
+        .select('*')
+        .eq('phone', igUserId)
+        .eq('whatsapp_number_id', overrideNumberId);
+      if (hideInstagramComments) igQuery = igQuery.not('message', 'like', '💬 Comentário%');
+      const { data: igData, error: igErr } = await igQuery.order('created_at', { ascending: true });
+      if (seq !== loadSeqRef.current) return;
+      activeNumberIdRef.current = overrideNumberId;
+      if (igErr) console.error('Error loading Instagram messages:', igErr);
+      else setMessages((igData as Message[]) || []);
+      setIsLoading(false);
+      return;
+    }
+
     // Quando o operador troca a instância manualmente, o histórico deve ser o
     // daquela instância. Sem override, resolve pela última mensagem da conversa.
     let convNumberId: string | null = overrideNumberId || conversationNumberId;
