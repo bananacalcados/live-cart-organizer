@@ -4,10 +4,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
-import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendText, posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { parseChargebackBlock, chargebackBlockMessage } from "@/lib/chargebackBlock";
+import {
+  sendPixMessages,
+  getPixIncludeQrPref,
+  setPixIncludeQrPref,
+  type PixSendChannel,
+} from "@/lib/pix/sendPixMessages";
 
 interface Props {
   open: boolean;
