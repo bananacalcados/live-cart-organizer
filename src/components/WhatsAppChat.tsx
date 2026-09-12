@@ -9,6 +9,7 @@ import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
 import { ChatPixButton } from "./ChatPixButton";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
