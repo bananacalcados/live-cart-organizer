@@ -49,7 +49,26 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "unknown";
+type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "customer_data" | "unknown";
+
+/**
+ * Valida os dígitos verificadores do CPF.
+ * CPF errado faz o Pagar.me responder "validation_error | customer | Invalid CPF"
+ * e a AppMax criar um pedido pendente (que aparece como boleto no painel deles).
+ * Por isso a cobrança é barrada ANTES de qualquer gateway.
+ */
+function isValidCpfDigits(value?: string | null): boolean {
+  const cpf = String(value ?? "").replace(/\D/g, "");
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(cpf[i]) * (len + 1 - i);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+}
 
 interface ChargeResult {
   success: boolean;
