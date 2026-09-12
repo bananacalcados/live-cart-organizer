@@ -108,7 +108,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
         };
         const fromRow = (r: any): Form => ({
           full_name: clean(r?.full_name),
-          cpf: clean(r?.cpf),
+          cpf: formatCpf(clean(r?.cpf)),
           email: clean(r?.email),
           whatsapp: clean(r?.whatsapp),
           cep: clean(r?.cep),
