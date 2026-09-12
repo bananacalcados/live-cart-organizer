@@ -379,7 +379,20 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             </div>
             <div>
               <Label>CPF</Label>
-              <Input value={form.cpf} onChange={handleChange("cpf")} />
+              <Input
+                value={form.cpf}
+                onChange={handleCpfChange}
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="000.000.000-00"
+                className={cn(cpfInvalid && "border-destructive focus-visible:ring-destructive")}
+                aria-invalid={cpfInvalid}
+              />
+              {cpfInvalid && (
+                <p className="mt-1 text-xs text-destructive">
+                  CPF inválido — confira os números (o pagamento no cartão é recusado com CPF errado).
+                </p>
+              )}
             </div>
             <div>
               <Label>WhatsApp</Label>
