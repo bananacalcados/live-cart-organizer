@@ -640,6 +640,24 @@ async function chargePagarme(
 
   if (chargeData?.id && linkGatewayId) await linkGatewayId("pagarme", String(chargeData.id));
 
+  // Erro de VALIDAÇÃO (HTTP 422): dados do cliente inválidos (CPF, e-mail, telefone).
+  // Não adianta tentar outro gateway — o mesmo dado vai falhar lá. Mostra o motivo real.
+  if (chargeData?.errors && typeof chargeData.errors === "object") {
+    const entries = Object.entries(chargeData.errors as Record<string, string[]>);
+    const flat = entries.map(([field, msgs]) => `${field}: ${(msgs || []).join(", ")}`).join(" | ");
+    const lower = flat.toLowerCase();
+    let friendly = `Dados do cliente inválidos (${flat}).`;
+    if (lower.includes("document") || lower.includes("cpf")) {
+      friendly = "CPF do cliente inválido. Corrija o CPF na ficha do cliente e envie o link de novo.";
+    } else if (lower.includes("email")) {
+      friendly = "E-mail do cliente inválido. Corrija o e-mail na ficha do cliente.";
+    } else if (lower.includes("phone")) {
+      friendly = "Telefone do cliente inválido. Corrija o telefone na ficha do cliente.";
+    }
+    console.error("[pagarme] validation_error:", flat);
+    return { success: false, gateway: "pagarme", error: friendly, stopCascade: true, declineCategory: "customer_data" };
+  }
+
   if (chargeData.status === "paid") {
     return { success: true, gateway: "pagarme", transactionId: chargeData.id };
   }
