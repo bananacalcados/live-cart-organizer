@@ -243,7 +243,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
   const waitlist = useProductWaitlist();
 
-  const closeSideTools = useCallback(() => {
+  const resetSideTools = useCallback(() => {
     setShowCheckout(false);
     setShowPix(false);
     setShowBoleto(false);
@@ -251,11 +251,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
     setShowSupportPanel(false);
-    setShowOrdersModal(true);
   }, []);
 
+  // Voltar ao chat = ferramentas fechadas e ficha completa como painel padrão.
+  const closeSideTools = useCallback(() => {
+    resetSideTools();
+    setShowOrdersModal(true);
+  }, [resetSideTools]);
+
   const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
-    closeSideTools();
+    resetSideTools();
+    setShowOrdersModal(tool === "customer");
     if (tool === "checkout") setShowCheckout(true);
     if (tool === "pix") setShowPix(true);
     if (tool === "boleto") setShowBoleto(true);
@@ -263,8 +269,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
     if (tool === "support") setShowSupportPanel(true);
-    if (tool === "customer") setShowOrdersModal(true);
-  }, [closeSideTools]);
+  }, [resetSideTools]);
+
 
   useEffect(() => {
     if (!selectedConvKey) {
@@ -2609,7 +2615,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 </Button>
               </div>}
               <div className="min-h-0 flex-1">
-              {showOrdersModal && <POSCustomerOrdersPanel
+              {showOrdersModal && !auxiliaryToolOpen && <POSCustomerOrdersPanel
                 phone={selectedPhone}
                 customerName={selectedConversation?.customerName}
                 photoUrl={contactPhotos[selectedPhone]}
@@ -2619,13 +2625,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
                 renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
               />}
-              {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { setShowCheckout(false); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
-              {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={setShowPix} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
-              {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={setShowBoleto} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
-              {showCatalog && <POSProductCatalogSender embedded open onOpenChange={setShowCatalog} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
-              {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={setShowWaitlistDialog} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
-              {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={setShowExportDialog} conversation={selectedConversation} />}
-              {showSupportPanel && <CreateSupportTicketDialog embedded open onOpenChange={setShowSupportPanel} phone={selectedPhone} customerName={selectedConversation?.customerName} onCreated={() => { setShowSupportPanel(false); if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }} />}
+              {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showCatalog && <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
+              {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} conversation={selectedConversation} />}
+              {showSupportPanel && <CreateSupportTicketDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} onCreated={() => { closeSideTools(); if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }} />}
               </div>
             </aside>
           )}
