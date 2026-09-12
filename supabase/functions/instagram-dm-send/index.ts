@@ -36,19 +36,7 @@ Deno.serve(async (req) => {
         console.error("[ig-dm-send] erro ao resolver token da conta:", e);
       }
     }
-    if (!token) {
-      const { data: igRow } = await supabase
-        .from("whatsapp_numbers")
-        .select("access_token")
-        .eq("provider", "instagram")
-        .eq("is_active", true)
-        .not("access_token", "is", null)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (igRow?.access_token) token = igRow.access_token;
-    }
-    if (!token) token = globalIgToken();
+    if (!token) token = await preferredIgToken(supabase);
     if (!token) {
       return new Response(JSON.stringify({ error: "Nenhum token de Instagram configurado" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
