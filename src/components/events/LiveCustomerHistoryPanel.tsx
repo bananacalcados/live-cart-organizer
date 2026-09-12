@@ -118,6 +118,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           createdAt: item.created_at,
           channelLabel: "Live",
           modality: "Online",
+          paymentState: item.is_paid || item.paid_externally ? "paid" : "unpaid",
           items: (item.products || []).map((product) => ({ name: product.title || "Produto", variant: product.variant || undefined, quantity: product.quantity })),
         }));
         const salesHistory: POSCustomerOrder[] = posSales.map((sale) => ({
