@@ -369,7 +369,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
           const [{ data: leads }, { data: evts }] = await Promise.all([
             leadIds.length
-              ? supabase.from("event_leads").select("id, name, phone, instagram").in("id", leadIds)
+              ? supabase.from("customers").select("id, full_name, whatsapp, instagram_handle").in("id", leadIds)
               : Promise.resolve({ data: [] as any[] }),
             eventIds.length
               ? supabase
