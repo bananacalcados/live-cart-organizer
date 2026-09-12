@@ -273,9 +273,85 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   const cepInvalid = cepDigits.length > 0 && cepDigits.length < 8;
 
 
+  /** Conversa sem pedido: salva a ficha no cadastro unificado (CRM) da cliente. */
+  const handleSaveWithoutOrder = async () => {
+    if (cpfInvalid) {
+      toast.error("CPF inválido — corrija antes de salvar.");
+      return;
+    }
+    if (phoneInvalid) {
+      toast.error("WhatsApp incompleto — informe DDD + número.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const ig = String(order.customer?.instagram_handle || "")
+        .replace(/^@/, "")
+        .trim()
+        .toLowerCase();
+      const phone = normalizeBRPhone(form.whatsapp || order.customer?.whatsapp || "");
+      const phone8 = String(phone || form.whatsapp || "").replace(/\D/g, "").slice(-8);
+      if (!ig && phone8.length !== 8) {
+        toast.error("Informe ao menos o WhatsApp da cliente para salvar a ficha.");
+        return;
+      }
+
+      const values = {
+        name: form.full_name.trim() || null,
+        cpf: form.cpf.replace(/\D/g, "") || null,
+        email: form.email.trim() || null,
+        cep: form.cep.replace(/\D/g, "") || null,
+        address: form.address.trim() || null,
+        address_number: form.address_number.trim() || null,
+        complement: form.complement.trim() || null,
+        neighborhood: form.neighborhood.trim() || null,
+        city: form.city.trim() || null,
+        state: form.state.trim().toUpperCase() || null,
+      };
+
+      const orParts: string[] = [];
+      if (ig) orParts.push(`instagram_handle.ilike.${ig}`);
+      if (phone8.length === 8) orParts.push(`phone_suffix8.eq.${phone8}`);
+      const { data: existing, error: findErr } = await supabase
+        .from("customers_unified")
+        .select("id")
+        .or(orParts.join(","))
+        .limit(1)
+        .maybeSingle();
+      if (findErr) throw findErr;
+
+      if (existing) {
+        const { error } = await supabase
+          .from("customers_unified")
+          .update({
+            ...values,
+            ...(ig ? { instagram_handle: ig } : {}),
+            ...(phone ? { phone_e164: phone, phone_suffix8: phone8 } : {}),
+          })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("customers_unified").insert({
+          instagram_handle: ig || null,
+          phone_e164: phone || null,
+          phone_suffix8: phone8.length === 8 ? phone8 : null,
+          ...values,
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Ficha salva no cadastro da cliente — será aproveitada quando o pedido for criado");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Erro ao salvar ficha: ${e?.message || e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!isRealOrder) {
-      toast.error("Crie o pedido desta conversa antes de salvar a ficha");
+      await handleSaveWithoutOrder();
       return;
     }
     if (cpfInvalid) {
