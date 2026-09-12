@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
+import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
+import { useExchangeRegistry, invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
+import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+import { CustomerExchangeBadge } from "@/components/pos/CustomerExchangeBadge";
+import { CustomerOrderActions } from "@/components/pos/CustomerOrderActions";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3 } from "lucide-react";
 import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
@@ -88,6 +93,8 @@ interface CrmCustomerData {
   cpf?: string;
   address?: string;
   email?: string;
+  /** customers_unified.id (via crm_customers_v) — usado para chargeback/trocas. */
+  unifiedId?: string;
   cashback?: {
     totalAvailable: number;
     count: number;
@@ -108,6 +115,8 @@ interface CrmCustomerData {
     storeName?: string;
     channelLabel?: string;
     modality?: "Presencial" | "Online";
+    /** pos_sale = venda registrada no PDV (permite troca/devolução e chargeback). */
+    kind?: "pos_sale" | "expedition";
     items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
 }
@@ -166,6 +175,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
+
+  // Chargebacks e trocas/devoluções do cliente (selo no modal + ações por venda)
+  const { byPhone: cbByPhone, byCpf: cbByCpf, refresh: refreshChargebacks } = useChargebackRegistry();
+  const { byPhone: exByPhone, byCpf: exByCpf, bySale: exBySale, refresh: refreshExchanges } = useExchangeRegistry();
+  const customerChargebacks = useMemo(() => {
+    const seen = new Set<string>();
+    return [...cbByPhone(selectedPhone), ...cbByCpf(crmData?.cpf)].filter((c) =>
+      seen.has(c.id) ? false : (seen.add(c.id), true),
+    );
+  }, [cbByPhone, cbByCpf, selectedPhone, crmData?.cpf]);
+  const customerExchanges = useMemo(() => {
+    const seen = new Set<string>();
+    return [...exByPhone(selectedPhone), ...exByCpf(crmData?.cpf)].filter((e) =>
+      seen.has(e.id) ? false : (seen.add(e.id), true),
+    );
+  }, [exByPhone, exByCpf, selectedPhone, crmData?.cpf]);
+  const refreshRiskRegistries = useCallback(() => {
+    invalidateExchangeRegistry();
+    void refreshChargebacks();
+    void refreshExchanges();
+  }, [refreshChargebacks, refreshExchanges]);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [pendingOrdersRefresh, setPendingOrdersRefresh] = useState(0);
@@ -841,6 +871,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         storeName: "Site (Online)",
         channelLabel: "Site",
         modality: "Online" as const,
+        kind: "expedition" as const,
         items: [] as { name: string; variant?: string; size?: string; quantity?: number }[],
       }));
 
@@ -890,6 +921,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           storeName: (s.store_id && storeNameById.get(s.store_id)) || undefined,
           channelLabel: typeLabel,
           modality,
+          kind: "pos_sale" as const,
           items: itemsBySale.get(s.id) || [],
         };
       });
@@ -927,6 +959,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         cpf: resolvedCpf,
         address: resolvedAddress,
         email: resolvedEmail,
+        unifiedId: zoppyCustomer?.id || undefined,
         cashback: resolvedCashback,
         orders: allOrders,
       });
@@ -2534,6 +2567,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                         <span className="text-xs font-normal text-muted-foreground">@{crmData.instagram}</span>
                       )}
                     </div>
+                    {(customerChargebacks.length > 0 || customerExchanges.length > 0) && (
+                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                        {customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}
+                        {customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}
+                      </div>
+                    )}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="max-h-[75vh] overflow-y-auto p-5 space-y-5">
@@ -2700,6 +2739,25 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                                 <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                                   <Truck className="h-3 w-3" /> {o.trackingCode}
                                 </span>
+                              )}
+                              {o.kind === "pos_sale" && (
+                                <CustomerOrderActions
+                                  saleId={o.id}
+                                  saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`}
+                                  saleTotal={o.totalPrice}
+                                  sellerId={selectedSellerId}
+                                  sellerName={selectedSellerName}
+                                  customer={{
+                                    name: selectedConversation?.customerName || crmData?.name,
+                                    phone: selectedPhone,
+                                    cpf: crmData?.cpf,
+                                    email: crmData?.email,
+                                    unifiedId: crmData?.unifiedId,
+                                  }}
+                                  chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)}
+                                  exchanges={exBySale(o.id)}
+                                  onChanged={refreshRiskRegistries}
+                                />
                               )}
                             </div>
                             {o.totalPrice != null && (

@@ -82,6 +82,8 @@ interface ReposRow {
 interface Props {
   open: boolean;
   sellerId?: string;
+  /** Atalho: abre já na venda informada (pula escolha de loja e busca). */
+  initialSaleId?: string;
   onCancel: () => void;
   onDone: () => void;
 }
@@ -92,7 +94,7 @@ function orderName(notes: string | null, ext: string | null): string | null {
   return ext ? `#${ext}` : null;
 }
 
-export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
+export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone }: Props) {
   const [phase, setPhase] = useState<"store" | "list" | "config">("store");
   const [storeId, setStoreId] = useState<string>("");
 
@@ -177,6 +179,32 @@ export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
   useEffect(() => {
     if (open && phase === "list") loadSales();
   }, [open, phase, loadSales]);
+
+  // Atalho vindo do modal do cliente (chat do PDV): carrega a venda e vai direto à configuração.
+  useEffect(() => {
+    if (!open || !initialSaleId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingOrder(initialSaleId);
+      const { data, error } = await supabase
+        .from("pos_sales")
+        .select("id, store_id, external_order_id, notes, customer_name, customer_phone, customer_cpf, total, created_at")
+        .eq("id", initialSaleId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error("Venda não encontrada para troca/devolução");
+        setLoadingOrder(null);
+        return;
+      }
+      setStoreId((data as any).store_id || "");
+      const { store_id: _s, ...s } = data as any;
+      await selectSale(s as Sale);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialSaleId]);
+
 
   const selectSale = async (s: Sale) => {
     setLoadingOrder(s.id);
@@ -383,7 +411,12 @@ export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
         </DialogHeader>
 
         {/* ETAPA: escolher loja */}
-        {phase === "store" && (
+        {phase === "store" && initialSaleId && loadingOrder && (
+          <div className="flex items-center justify-center gap-2 py-10 text-pos-white/70 text-sm">
+            <Loader2 className="h-5 w-5 animate-spin" /> Puxando os dados da venda…
+          </div>
+        )}
+        {phase === "store" && !(initialSaleId && loadingOrder) && (
           <div className="space-y-4 pt-2">
             <p className="text-sm text-pos-white/60">Selecione a loja da venda original.</p>
             <div className="grid grid-cols-3 gap-2">
