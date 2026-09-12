@@ -158,6 +158,14 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
+  // CPF: máscara automática (000.000.000-00) + aviso quando o número é inválido.
+  // CPF errado é a causa nº 1 de recusa do gateway ("validation_error | customer | Invalid CPF").
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, cpf: formatCpf(e.target.value) }));
+
+  const cpfDigits = onlyDigitsCpf(form.cpf);
+  const cpfInvalid = cpfDigits.length > 0 && !isValidCpf(cpfDigits);
+
   const lookupCep = async (rawCep: string) => {
     const digits = rawCep.replace(/\D/g, "");
     if (digits.length !== 8) return;
