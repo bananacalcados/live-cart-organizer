@@ -726,7 +726,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages]);
+  }, [normalizedPhone, order.id, overrideNumberId, conversationNumberId, hideInstagramComments, setHasUnreadMessages, isIgMode, igUserId]);
 
   const displayMessages = archivedMessages.length > 0 ? [...archivedMessages, ...messages] : messages;
 
@@ -734,7 +734,10 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
   // Payload carries minimal info — we filter by phone, then refetch.
   useWaMessageBroadcast((payload) => {
-    if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
+    if (!payload?.phone) return;
+    const matchesWa = phoneVariations.includes(payload.phone);
+    const matchesIg = !!igUserId && payload.phone === igUserId;
+    if (!matchesWa && !matchesIg) return;
     loadMessagesRef.current();
     if (payload.direction === 'incoming') {
       setHasUnreadMessages(order.id, false);
