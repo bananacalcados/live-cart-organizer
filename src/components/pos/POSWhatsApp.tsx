@@ -79,6 +79,7 @@ import { PixPendingTabsBar } from "./PixPendingTabsBar";
 import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
+import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
 
 interface Props {
   storeId: string;
@@ -234,7 +235,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
-  const sideToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
+  const sideToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel || showOrdersModal;
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
@@ -248,9 +249,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
     setShowSupportPanel(false);
+    setShowOrdersModal(false);
   }, []);
 
-  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support") => {
+  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
     closeSideTools();
     if (tool === "checkout") setShowCheckout(true);
     if (tool === "pix") setShowPix(true);
@@ -259,6 +261,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
     if (tool === "support") setShowSupportPanel(true);
+    if (tool === "customer") setShowOrdersModal(true);
   }, [closeSideTools]);
 
   useEffect(() => {
@@ -2337,7 +2340,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setShowCrmPanel(true); setShowOrdersModal(true); }}
+                  onClick={() => { setShowCrmPanel(true); openSideTool("customer"); }}
                   className="flex flex-col min-w-0 flex-1 items-start text-left rounded-md px-1 py-0.5 hover:bg-muted/60 transition"
                   title="Ver pedidos do cliente"
                 >
@@ -2587,8 +2590,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               />
             </div>
 
-            {/* Modal de dados do cliente (aberto pelo cabeçalho) */}
-            <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
+            {/* A ficha completa do cliente é exibida no painel lateral abaixo. */}
+            {false && <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
               <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] p-0 overflow-hidden gap-0">
                 <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-[#00a884]/10 to-transparent">
                   <DialogTitle className="text-lg flex items-center gap-3">
@@ -2813,16 +2816,26 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   </div>
                 </div>
               </DialogContent>
-            </Dialog>
+            </Dialog>}
           </div>
           {sideToolOpen && (
-            <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[min(620px,58vw)] md:shrink-0 md:border-l md:border-border/60">
+            <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[440px] md:max-w-[44vw] md:shrink-0 md:border-l md:border-border/60">
               <div className="flex h-11 shrink-0 items-center border-b border-border/60 px-2">
                 <Button variant="ghost" size="sm" className="gap-1.5" onClick={closeSideTools}>
                   <ArrowLeft className="h-4 w-4" /> Voltar ao chat
                 </Button>
               </div>
               <div className="min-h-0 flex-1">
+              {showOrdersModal && <POSCustomerOrdersPanel
+                phone={selectedPhone}
+                customerName={selectedConversation?.customerName}
+                photoUrl={contactPhotos[selectedPhone]}
+                data={crmData}
+                statusLabels={statusLabels}
+                riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
+                liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
+              />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { setShowCheckout(false); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={setShowPix} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={setShowBoleto} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
