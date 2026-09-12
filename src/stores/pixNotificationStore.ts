@@ -424,7 +424,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
               const isFresh = prev?.fresh || (!baseline.has(oid) && !isInitial);
               const tab: PixTab = {
                 saleId: oid,
-                phone: (lead?.phone as string) || prev?.phone || "",
+                phone: (lead?.whatsapp as string) || prev?.phone || "",
                 numberId: liveNumberId,
                 name: displayName,
                 amount,
@@ -449,7 +449,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             } else {
               next.push({
                 saleId: oid,
-                phone: (lead?.phone as string) || prev?.phone || "",
+                phone: (lead?.whatsapp as string) || prev?.phone || "",
                 numberId: liveNumberId,
                 name: displayName,
                 amount,
