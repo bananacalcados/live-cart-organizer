@@ -17,6 +17,8 @@ export type PosSendProvider = "meta" | "zapi" | "uazapi" | "wasender";
 export interface PosSendButton {
   id: string;
   title: string;
+  /** Botão nativo "copiar" (só uazapi): copia este código ao toque. */
+  copyCode?: string;
 }
 
 function normalizeProvider(p?: string | null): PosSendProvider {
