@@ -80,6 +80,7 @@ import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
 import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
+import { isSalePaid } from "@/lib/salePaymentState";
 
 interface Props {
   storeId: string;
@@ -836,7 +837,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
         supabase
           .from("pos_sales")
-          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id, paid_at, shipped_at")
           .eq("phone_suffix8", suffix)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -958,6 +959,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           channelLabel: typeLabel,
           modality,
           kind: "pos_sale" as const,
+          paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
+          shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
         };
       });
@@ -1932,6 +1935,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     completed: "Concluído",
     refunded: "Estornado",
     canceled: "Cancelado",
+    online_pending: "Checkout não finalizado",
   };
 
   const getInitials = (name?: string) => {

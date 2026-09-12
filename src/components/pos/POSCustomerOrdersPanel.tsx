@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
+import { AlertTriangle, Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,6 +14,9 @@ export interface POSCustomerOrder {
   channelLabel?: string;
   modality?: "Presencial" | "Online";
   kind?: "pos_sale" | "expedition";
+  /** "paid" = pagamento confirmado, "unpaid" = sem pagamento (checkout/pedido em aberto) */
+  paymentState?: "paid" | "unpaid" | "unknown";
+  shipped?: boolean;
   items?: { name: string; variant?: string; size?: string; quantity?: number }[];
 }
 
@@ -60,6 +63,8 @@ export function POSCustomerOrdersPanel({
   liveOrderPanel,
   renderOrderActions,
 }: Props) {
+  const unpaidCount = (data?.orders || []).filter((order) => order.paymentState === "unpaid").length;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="shrink-0 border-b bg-primary/5 px-4 py-3">
@@ -118,10 +123,21 @@ export function POSCustomerOrdersPanel({
             <ShoppingBag className="h-4 w-4 text-pos-orange" />
             <h3 className="text-sm font-bold">Pedidos {data?.orders.length ? `(${data.orders.length})` : ""}</h3>
           </div>
+          {unpaidCount > 0 ? (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {unpaidCount === 1
+                ? "1 pedido sem pagamento confirmado"
+                : `${unpaidCount} pedidos sem pagamento confirmado`}
+            </div>
+          ) : null}
           {data?.orders.length ? (
             <div className="space-y-2">
               {data.orders.map((order) => (
-                <div key={order.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                <div
+                  key={order.id}
+                  className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
+                >
                   <div className="flex items-start gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
                       <Package className="h-5 w-5" />
@@ -129,8 +145,18 @@ export function POSCustomerOrdersPanel({
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
+                        {order.paymentState === "unpaid" ? (
+                          <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
+                        ) : order.paymentState === "paid" ? (
+                          <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
+                        ) : null}
                         <Badge variant="outline" className="text-[10px]">{statusLabels[order.status || ""] || order.status}</Badge>
                         {order.modality ? <Badge variant="secondary" className="text-[10px]">{order.modality}</Badge> : null}
+                        {order.paymentState === "unpaid" ? (
+                          <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
+                            {order.shipped ? "Enviado sem pagamento" : "Não enviado"}
+                          </Badge>
+                        ) : null}
                       </div>
                       {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
                       {order.items?.length ? (
@@ -144,9 +170,19 @@ export function POSCustomerOrdersPanel({
                         </ul>
                       ) : null}
                       {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
-                      {renderOrderActions(order)}
+                      {order.paymentState === "unpaid" ? (
+                        <p className="text-[11px] font-semibold text-destructive">
+                          Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
+                        </p>
+                      ) : (
+                        renderOrderActions(order)
+                      )}
                     </div>
-                    {order.totalPrice != null ? <span className="whitespace-nowrap font-bold text-emerald-600">R$ {order.totalPrice.toFixed(2)}</span> : null}
+                    {order.totalPrice != null ? (
+                      <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
+                        R$ {order.totalPrice.toFixed(2)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               ))}
