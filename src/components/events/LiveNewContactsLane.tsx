@@ -20,6 +20,7 @@ import type { ContactLaneMark } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
 import { useEventStore } from "@/stores/eventStore";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { buildPhoneVariations } from "@/lib/phoneUtils";
 
 interface ClickRow {
   id: string;
