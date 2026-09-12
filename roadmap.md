@@ -8,3 +8,4 @@
 - [x] PIX no chat: não duplicar código quando houver botão Copiar, adicionar atalho na lateral da Live e reproduzir o botão no histórico
 - [x] Painéis laterais nos chats da Live e do PDV + notas persistentes por cliente
 - [x] PDV: fila compacta fixa acima das notas; ocultar notas nas ferramentas; botão voltar; produtos completos no checkout
+- [x] PDV: ficha completa em painel lateral e largura original do chat preservada com ferramentas abertas

@@ -79,6 +79,7 @@ import { PixPendingTabsBar } from "./PixPendingTabsBar";
 import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
+import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
 
 interface Props {
   storeId: string;
@@ -234,7 +235,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
-  const sideToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
+  const sideToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel || showOrdersModal;
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
@@ -248,9 +249,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
     setShowSupportPanel(false);
+    setShowOrdersModal(false);
   }, []);
 
-  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support") => {
+  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
     closeSideTools();
     if (tool === "checkout") setShowCheckout(true);
     if (tool === "pix") setShowPix(true);
@@ -259,6 +261,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
     if (tool === "support") setShowSupportPanel(true);
+    if (tool === "customer") setShowOrdersModal(true);
   }, [closeSideTools]);
 
   useEffect(() => {
@@ -2236,7 +2239,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         ) : (
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
-          (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
+          sideToolOpen ? "hidden" : (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
             conversations={visibleConversations}
@@ -2337,7 +2340,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setShowCrmPanel(true); setShowOrdersModal(true); }}
+                  onClick={() => { setShowCrmPanel(true); openSideTool("customer"); }}
                   className="flex flex-col min-w-0 flex-1 items-start text-left rounded-md px-1 py-0.5 hover:bg-muted/60 transition"
                   title="Ver pedidos do cliente"
                 >
@@ -2587,242 +2590,26 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               />
             </div>
 
-            {/* Modal de dados do cliente (aberto pelo cabeçalho) */}
-            <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
-              <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] p-0 overflow-hidden gap-0">
-                <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-[#00a884]/10 to-transparent">
-                  <DialogTitle className="text-lg flex items-center gap-3">
-                    <Avatar className="h-11 w-11">
-                      {selectedPhone && contactPhotos[selectedPhone] ? <AvatarImage src={contactPhotos[selectedPhone]} /> : null}
-                      <AvatarFallback className="bg-[#00a884]/20 text-[#00a884] font-bold">
-                        {getInitials(selectedConversation?.customerName || crmData?.name || selectedPhone || undefined)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                      <span className="font-bold">{selectedConversation?.customerName || crmData?.name || "Cliente"}</span>
-                      {crmData?.instagram && (
-                        <span className="text-xs font-normal text-muted-foreground">@{crmData.instagram}</span>
-                      )}
-                    </div>
-                    {(customerChargebacks.length > 0 || customerExchanges.length > 0) && (
-                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                        {customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}
-                        {customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}
-                      </div>
-                    )}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="max-h-[75vh] overflow-y-auto p-5 space-y-5">
-                  {liveOrderRef && (
-                    <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} />
-                  )}
-
-                  {/* Dados de contato */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00a884]/15 text-[#00a884]">
-                        <Phone className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">WhatsApp</p>
-                        <p className="text-sm font-bold text-foreground break-all">{selectedPhone || "—"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600">
-                        <CreditCard className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">CPF</p>
-                        <p className="text-sm font-bold text-foreground break-all">{crmData?.cpf || "Não informado"}</p>
-                      </div>
-                    </div>
-                    {crmData?.email && (
-                      <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600">
-                          <Mail className="h-4 w-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">E-mail</p>
-                          <p className="text-sm font-bold text-foreground break-all">{crmData.email}</p>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5 sm:col-span-2">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
-                        <MapPin className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Endereço</p>
-                        <p className="text-sm font-medium text-foreground">{crmData?.address || "Não informado"}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cashback disponível */}
-                  {crmData?.cashback && crmData.cashback.totalAvailable > 0 && (
-                    <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4">
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2">
-                          <Coins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                            Cashback disponível
-                          </h3>
-                        </div>
-                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                          R$ {crmData.cashback.totalAvailable.toFixed(2).replace(".", ",")}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Código</p>
-                          <p className="text-sm font-mono font-bold text-foreground break-all">{crmData.cashback.couponCode}</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Compra mínima</p>
-                          <p className="text-sm font-bold text-foreground">R$ {crmData.cashback.minPurchase.toFixed(2).replace(".", ",")}</p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Gerado em</p>
-                          <p className="text-sm font-medium text-foreground">
-                            {new Date(crmData.cashback.generatedAt).toLocaleDateString("pt-BR")}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Válido até</p>
-                          <p className="text-sm font-medium text-foreground">
-                            {new Date(crmData.cashback.expiresAt).toLocaleDateString("pt-BR")}
-                          </p>
-                        </div>
-                      </div>
-                      {crmData.cashback.count > 1 && (
-                        <p className="mt-3 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
-                          O cliente possui {crmData.cashback.count} cupons ativos (valor total acima; dados do mais recente).
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-
-                  {crmData?.tags && crmData.tags.length > 0 && (
-                    <div className="flex gap-1.5 flex-wrap">
-                      {crmData.tags.map((t) => (
-                        <Badge key={t} variant="secondary" className="bg-[#00a884]/15 text-[#00a884] border-0">{t}</Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Pedidos */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <ShoppingBag className="h-4 w-4 text-pos-orange" />
-                      <h3 className="text-sm font-bold text-foreground">
-                        Pedidos {crmData?.orders?.length ? `(${crmData.orders.length})` : ""}
-                      </h3>
-                    </div>
-                    {crmData?.orders && crmData.orders.length > 0 ? (
-                      <div className="space-y-2">
-                        {crmData.orders.map((o) => (
-                          <div key={o.id} className="flex items-start gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pos-orange/15 text-pos-orange">
-                              <Package className="h-5 w-5" />
-                            </span>
-                            <div className="flex-1 min-w-0 space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono font-bold text-sm">{o.orderName || "—"}</span>
-                                <Badge variant="outline" className="text-[10px]">{statusLabels[o.status || ""] || o.status}</Badge>
-                                {o.modality && (
-                                  <Badge
-                                    className={`text-[10px] border-0 ${o.modality === "Presencial" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}
-                                  >
-                                    {o.modality}
-                                  </Badge>
-                                )}
-                              </div>
-                              {/* Data + Loja/Canal */}
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                                {o.createdAt && (
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {new Date(o.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                                    {" "}
-                                    {new Date(o.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                )}
-                                {(o.storeName || o.channelLabel) && (
-                                  <span className="flex items-center gap-1">
-                                    <Store className="h-3 w-3" />
-                                    {o.storeName || o.channelLabel}
-                                  </span>
-                                )}
-                              </div>
-                              {/* Produtos comprados */}
-                              {o.items && o.items.length > 0 && (
-                                <ul className="mt-1 space-y-0.5">
-                                  {o.items.map((it, idx) => (
-                                    <li key={idx} className="text-xs text-foreground/80 flex items-start gap-1">
-                                      <span className="text-pos-orange">•</span>
-                                      <span className="min-w-0">
-                                        {it.quantity && it.quantity > 1 ? `${it.quantity}x ` : ""}
-                                        {it.name}
-                                        {it.variant ? ` — ${it.variant}` : ""}
-                                        {it.size ? ` (${it.size})` : ""}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              {o.trackingCode && (
-                                <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Truck className="h-3 w-3" /> {o.trackingCode}
-                                </span>
-                              )}
-                              {o.kind === "pos_sale" && (
-                                <CustomerOrderActions
-                                  saleId={o.id}
-                                  saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`}
-                                  saleTotal={o.totalPrice}
-                                  sellerId={selectedSellerId}
-                                  sellerName={selectedSellerName}
-                                  customer={{
-                                    name: selectedConversation?.customerName || crmData?.name,
-                                    phone: selectedPhone,
-                                    cpf: crmData?.cpf,
-                                    email: crmData?.email,
-                                    unifiedId: crmData?.unifiedId,
-                                  }}
-                                  chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)}
-                                  exchanges={exBySale(o.id)}
-                                  onChanged={refreshRiskRegistries}
-                                />
-                              )}
-                            </div>
-                            {o.totalPrice != null && (
-                              <span className="text-base font-bold text-[#00a884] whitespace-nowrap">
-                                R$ {o.totalPrice.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-6 rounded-xl border border-dashed">
-                        Nenhum pedido encontrado para este cliente.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
+
           {sideToolOpen && (
-            <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[min(620px,58vw)] md:shrink-0 md:border-l md:border-border/60">
+            <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[35%] lg:w-[30%] md:shrink-0 md:border-l md:border-border/60">
               <div className="flex h-11 shrink-0 items-center border-b border-border/60 px-2">
                 <Button variant="ghost" size="sm" className="gap-1.5" onClick={closeSideTools}>
                   <ArrowLeft className="h-4 w-4" /> Voltar ao chat
                 </Button>
               </div>
               <div className="min-h-0 flex-1">
+              {showOrdersModal && <POSCustomerOrdersPanel
+                phone={selectedPhone}
+                customerName={selectedConversation?.customerName}
+                photoUrl={contactPhotos[selectedPhone]}
+                data={crmData}
+                statusLabels={statusLabels}
+                riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
+                liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
+              />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { setShowCheckout(false); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={setShowPix} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={setShowBoleto} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
@@ -2839,7 +2626,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           // Visão em Linhas: o chat abre em janela por cima das linhas.
           return (
             <Dialog open onOpenChange={(o) => { if (!o) { setSelectedPhone(null); setSelectedConvKey(null); } }}>
-              <DialogContent className="max-w-5xl sm:max-w-5xl w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:hidden">
+              <DialogContent className={cn(
+                "w-[96vw] h-[88vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button]:hidden",
+                sideToolOpen ? "max-w-[1480px] sm:max-w-[1480px]" : "max-w-5xl sm:max-w-5xl",
+              )}>
                 <div className="flex h-full w-full min-h-0 bg-background">{chatPanel}</div>
               </DialogContent>
             </Dialog>
