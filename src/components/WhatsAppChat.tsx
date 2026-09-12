@@ -256,6 +256,13 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   const isIgMode = (boundNumber?.provider || 'meta') === 'instagram' && !!igUserId;
   const igNumbers = numbers.filter((n) => n.is_active && (n.provider || 'meta') === 'instagram');
+  // Segurança: uma troca para Instagram salva anteriormente só vale se ainda
+  // conseguimos identificar a cliente no Direct — senão volta para o WhatsApp.
+  useEffect(() => {
+    if (!igUserIdResolved || igUserId || !overrideNumberId) return;
+    const ov = numbers.find((n) => n.id === overrideNumberId);
+    if (ov && (ov.provider || 'meta') === 'instagram') setOverrideNumberId(null);
+  }, [igUserIdResolved, igUserId, overrideNumberId, numbers, setOverrideNumberId]);
 
 
 
