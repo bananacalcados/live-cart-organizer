@@ -5,4 +5,4 @@
 - [x] Instagram: token expirado → renovação diária + status no admin (falta usuário colar tokens novos)
 - [~] Botão EXCLUIR CONTATO no chat do PDV — código pronto; falta publicar a função `contact-erase` (deploy tool não enxergou a pasta nova)
 - [ ] NF-e Lourdes: função `fiscal-recover-by-identifier` pronta; BrasilNFe ObterNotasFiscais retorna 524 — retentar; depois botão de recuperação no painel fiscal + corrigir nfce-retry-pending (não apagar doc antes de reemitir)
-- [ ] PIX no chat: não duplicar código quando houver botão Copiar, adicionar atalho na lateral da Live e reproduzir o botão no histórico
+- [x] PIX no chat: não duplicar código quando houver botão Copiar, adicionar atalho na lateral da Live e reproduzir o botão no histórico
