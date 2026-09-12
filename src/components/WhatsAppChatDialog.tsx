@@ -88,7 +88,7 @@ export function WhatsAppChatDialog({
   } as unknown as DbOrder);
 
   useEffect(() => {
-    if (open) setActivePanel("ficha");
+    if (open) setActivePanel("historico");
   }, [open, order.id]);
 
   const togglePanel = (panel: Exclude<LivePanel, null>) => setActivePanel((current) => current === panel ? null : panel);
