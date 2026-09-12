@@ -1521,13 +1521,13 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       </div>
 
       {/* WhatsApp Number Selector */}
-      <div className="px-3 py-1.5 bg-[#064E46] flex items-center gap-2">
-        <Phone className="h-3.5 w-3.5 text-white/70" />
+      <div className={cn("px-3 py-1.5 flex items-center gap-2", isIgMode ? "bg-[#7a2f6b]" : "bg-[#064E46]")}>
+        {isIgMode ? <Instagram className="h-3.5 w-3.5 text-white/70" /> : <Phone className="h-3.5 w-3.5 text-white/70" />}
         {boundNumber ? (
           <div className="h-7 text-xs flex-1 bg-white/10 border border-white/20 text-white rounded px-2 flex items-center gap-2">
-            <span className="opacity-70">Vinculado a esta conversa:</span>
+            <span className="opacity-70">{isIgMode ? 'Direct do Instagram:' : 'Vinculado a esta conversa:'}</span>
             <span className="font-medium truncate">{boundNumber.label}</span>
-            <span className="opacity-60">({boundNumber.phone_display})</span>
+            <span className="opacity-60">{isIgMode ? `→ @${igHandleClean}` : `(${boundNumber.phone_display})`}</span>
           </div>
         ) : (
           <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
