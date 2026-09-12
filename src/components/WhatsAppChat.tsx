@@ -1291,6 +1291,56 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const stageTemplates = getTemplatesByStage(order.stage);
   const allTemplates = templates;
 
+  // Canal de envio do PIX do pedido: usa exatamente a instância/provider desta
+  // conversa (WhatsApp ou Direct do Instagram) e grava no histórico como as demais.
+  const pixProvider = getProvider();
+  const pixChannel: PixSendChannel = {
+    provider: pixProvider,
+    sendText: async (message) => {
+      const r = await sendMessage(phone, message, 'text');
+      if (!r.success) throw new Error(r.error || 'Erro ao enviar');
+      return r.messageId || null;
+    },
+    sendImage: async (mediaUrl, caption) => {
+      const r = await sendMessage(phone, caption, 'image', mediaUrl, caption);
+      if (!r.success) throw new Error(r.error || 'Erro ao enviar imagem');
+      return r.messageId || null;
+    },
+    sendCopyButton: pixProvider === 'uazapi'
+      ? async (message, buttonTitle, code) => {
+          const { data, error } = await supabase.functions.invoke('uazapi-send-buttons', {
+            body: {
+              phone,
+              message,
+              buttons: [{ id: 'copy_pix', title: buttonTitle, copyCode: code }],
+              whatsapp_number_id: effectiveNumberId,
+            },
+            headers: forceInstanceHeaders(),
+          });
+          if (error) throw error;
+          if (!data?.success) throw new Error(data?.error || 'Falha no botão');
+          return data?.messageId ? String(data.messageId) : null;
+        }
+      : undefined,
+    persist: async (row) => {
+      await supabase.from('whatsapp_messages').insert({
+        phone: normalizedPhone,
+        message: row.message,
+        direction: 'outgoing',
+        status: 'sent',
+        media_type: row.media_type || null,
+        media_url: row.media_url || null,
+        message_id: row.message_id || null,
+        whatsapp_number_id: effectiveNumberId || null,
+        sender_user_id: currentUserId || null,
+      });
+    },
+  };
+  const handlePixSent = () => {
+    updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+    void loadMessages();
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Hidden file inputs */}
