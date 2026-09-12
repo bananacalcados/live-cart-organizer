@@ -143,8 +143,18 @@ export function POSCustomerOrdersPanel({
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
+                        {order.paymentState === "unpaid" ? (
+                          <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
+                        ) : order.paymentState === "paid" ? (
+                          <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
+                        ) : null}
                         <Badge variant="outline" className="text-[10px]">{statusLabels[order.status || ""] || order.status}</Badge>
                         {order.modality ? <Badge variant="secondary" className="text-[10px]">{order.modality}</Badge> : null}
+                        {order.paymentState === "unpaid" ? (
+                          <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
+                            {order.shipped ? "Enviado sem pagamento" : "Não enviado"}
+                          </Badge>
+                        ) : null}
                       </div>
                       {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
                       {order.items?.length ? (
