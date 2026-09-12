@@ -862,7 +862,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
       id: tempId,
-      phone: normalizedPhone,
+      phone: storedPhone,
       message: messageText,
       direction: 'outgoing',
       message_id: null,
@@ -872,12 +872,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     setMessages((prev) => [...prev, tempMessage]);
 
     setIsSending(true);
-    const result = await sendMessage(phone, messageText);
+    const result = await sendMessage(targetId, messageText);
     setIsSending(false);
 
     if (result.success) {
       await supabase.from('whatsapp_messages').insert({
-        phone: normalizedPhone,
+        phone: storedPhone,
         message: messageText,
         direction: 'outgoing',
         status: 'sent',
