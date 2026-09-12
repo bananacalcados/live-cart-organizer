@@ -167,6 +167,49 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           }
         }
 
+        // 3. Ficha salva SEM pedido fica no cadastro unificado (CRM) — preenche
+        //    tanto conversas sem pedido quanto pedidos cujo cadastro ainda é parcial.
+        const stillEmpty = !isRegUsable(base as any);
+        if (stillEmpty) {
+          const ig = String(order.customer?.instagram_handle || "")
+            .replace(/^@/, "")
+            .trim()
+            .toLowerCase();
+          const phone8 = String(order.customer?.whatsapp || "").replace(/\D/g, "").slice(-8);
+          const orParts: string[] = [];
+          if (ig) orParts.push(`instagram_handle.ilike.${ig}`);
+          if (phone8.length === 8) orParts.push(`phone_suffix8.eq.${phone8}`);
+          if (orParts.length) {
+            const { data: cu } = await supabase
+              .from("customers_unified")
+              .select(
+                "name,cpf,email,phone_e164,cep,address,address_number,complement,neighborhood,city,state",
+              )
+              .or(orParts.join(","))
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (cu) {
+              const p = fromRow({
+                full_name: cu.name,
+                cpf: cu.cpf,
+                email: cu.email,
+                whatsapp: cu.phone_e164,
+                cep: cu.cep,
+                address: cu.address,
+                address_number: cu.address_number,
+                complement: cu.complement,
+                neighborhood: cu.neighborhood,
+                city: cu.city,
+                state: cu.state,
+              });
+              (Object.keys(base) as (keyof Form)[]).forEach((k) => {
+                if (!base[k] && p[k]) base[k] = p[k];
+              });
+            }
+          }
+        }
+
         if (!base.whatsapp) base.whatsapp = formatBRPhone(order.customer?.whatsapp || "");
         setForm(base);
       } catch (e) {
@@ -230,9 +273,85 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   const cepInvalid = cepDigits.length > 0 && cepDigits.length < 8;
 
 
+  /** Conversa sem pedido: salva a ficha no cadastro unificado (CRM) da cliente. */
+  const handleSaveWithoutOrder = async () => {
+    if (cpfInvalid) {
+      toast.error("CPF inválido — corrija antes de salvar.");
+      return;
+    }
+    if (phoneInvalid) {
+      toast.error("WhatsApp incompleto — informe DDD + número.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const ig = String(order.customer?.instagram_handle || "")
+        .replace(/^@/, "")
+        .trim()
+        .toLowerCase();
+      const phone = normalizeBRPhone(form.whatsapp || order.customer?.whatsapp || "");
+      const phone8 = String(phone || form.whatsapp || "").replace(/\D/g, "").slice(-8);
+      if (!ig && phone8.length !== 8) {
+        toast.error("Informe ao menos o WhatsApp da cliente para salvar a ficha.");
+        return;
+      }
+
+      const values = {
+        name: form.full_name.trim() || null,
+        cpf: form.cpf.replace(/\D/g, "") || null,
+        email: form.email.trim() || null,
+        cep: form.cep.replace(/\D/g, "") || null,
+        address: form.address.trim() || null,
+        address_number: form.address_number.trim() || null,
+        complement: form.complement.trim() || null,
+        neighborhood: form.neighborhood.trim() || null,
+        city: form.city.trim() || null,
+        state: form.state.trim().toUpperCase() || null,
+      };
+
+      const orParts: string[] = [];
+      if (ig) orParts.push(`instagram_handle.ilike.${ig}`);
+      if (phone8.length === 8) orParts.push(`phone_suffix8.eq.${phone8}`);
+      const { data: existing, error: findErr } = await supabase
+        .from("customers_unified")
+        .select("id")
+        .or(orParts.join(","))
+        .limit(1)
+        .maybeSingle();
+      if (findErr) throw findErr;
+
+      if (existing) {
+        const { error } = await supabase
+          .from("customers_unified")
+          .update({
+            ...values,
+            ...(ig ? { instagram_handle: ig } : {}),
+            ...(phone ? { phone_e164: phone, phone_suffix8: phone8 } : {}),
+          })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("customers_unified").insert({
+          instagram_handle: ig || null,
+          phone_e164: phone || null,
+          phone_suffix8: phone8.length === 8 ? phone8 : null,
+          ...values,
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Ficha salva no cadastro da cliente — será aproveitada quando o pedido for criado");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Erro ao salvar ficha: ${e?.message || e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!isRealOrder) {
-      toast.error("Crie o pedido desta conversa antes de salvar a ficha");
+      await handleSaveWithoutOrder();
       return;
     }
     if (cpfInvalid) {
@@ -398,8 +517,9 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
         {!isRealOrder && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">
-            Esta conversa ainda não tem pedido. Crie o pedido para salvar a ficha e gerar o link de
-            pagamento.
+            Esta conversa ainda não tem pedido. Você já pode salvar a ficha — os dados ficam no
+            cadastro da cliente e serão aproveitados quando o pedido for criado. O link de pagamento
+            só fica disponível após criar o pedido.
           </p>
         )}
 
@@ -552,7 +672,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             size="sm"
             className="flex-1 min-w-[100px]"
             onClick={handleSave}
-            disabled={saving || loading || !isRealOrder}
+            disabled={saving || loading}
           >
             {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
             Salvar
