@@ -14,6 +14,9 @@ export interface POSCustomerOrder {
   channelLabel?: string;
   modality?: "Presencial" | "Online";
   kind?: "pos_sale" | "expedition";
+  /** "paid" = pagamento confirmado, "unpaid" = sem pagamento (checkout/pedido em aberto) */
+  paymentState?: "paid" | "unpaid" | "unknown";
+  shipped?: boolean;
   items?: { name: string; variant?: string; size?: string; quantity?: number }[];
 }
 
