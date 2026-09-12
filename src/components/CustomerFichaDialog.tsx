@@ -517,8 +517,9 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
         {!isRealOrder && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">
-            Esta conversa ainda não tem pedido. Crie o pedido para salvar a ficha e gerar o link de
-            pagamento.
+            Esta conversa ainda não tem pedido. Você já pode salvar a ficha — os dados ficam no
+            cadastro da cliente e serão aproveitados quando o pedido for criado. O link de pagamento
+            só fica disponível após criar o pedido.
           </p>
         )}
 
@@ -671,7 +672,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             size="sm"
             className="flex-1 min-w-[100px]"
             onClick={handleSave}
-            disabled={saving || loading || !isRealOrder}
+            disabled={saving || loading}
           >
             {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
             Salvar
