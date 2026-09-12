@@ -192,10 +192,19 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = formatCep(e.target.value);
     setForm((p) => ({ ...p, cep: value }));
     if (value.replace(/\D/g, "").length === 8) lookupCep(value);
   };
+
+  // WhatsApp: máscara automática (11) 96913-0022, aceitando 10 ou 11 dígitos.
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, whatsapp: formatBRPhone(e.target.value) }));
+
+  const phoneDigits = form.whatsapp.replace(/\D/g, "");
+  const phoneInvalid = phoneDigits.length > 0 && phoneDigits.length < 10;
+  const cepDigits = form.cep.replace(/\D/g, "");
+  const cepInvalid = cepDigits.length > 0 && cepDigits.length < 8;
 
 
   const handleSave = async () => {
