@@ -9,6 +9,8 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
 import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
+import { useExchangeRegistry, type ExchangeRecord } from "@/hooks/useExchangeRegistry";
+import { CustomerExchangeBadge } from "@/components/pos/CustomerExchangeBadge";
 
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
@@ -132,6 +134,7 @@ interface CommentRowProps {
   leadTag?: LeadTag;
   score?: ParticipantScore;
   chargebacks?: ChargebackRecord[];
+  exchanges?: ExchangeRecord[];
   onOpenOrder: (username: string) => void;
   onOpenInstagram: (username: string) => void;
   onOpenWhatsapp: (username: string) => void;
@@ -146,6 +149,7 @@ const CommentRow = memo(function CommentRow({
   leadTag,
   score,
   chargebacks,
+  exchanges,
   onOpenOrder,
   onOpenInstagram,
   onOpenWhatsapp,
@@ -172,6 +176,9 @@ const CommentRow = memo(function CommentRow({
           </button>
           {chargebacks && chargebacks.length > 0 && (
             <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />
+          )}
+          {exchanges && exchanges.length > 0 && (
+            <CustomerExchangeBadge exchanges={exchanges} size="sm" />
           )}
 
           {scoreMeta && (
@@ -931,6 +938,18 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     [cbByHandle, cbByPhone, whatsappByHandle],
   );
 
+  // Trocas/devoluções do @ (por cadastro unificado ou pelo WhatsApp vinculado)
+  const { byHandle: exByHandle, byPhone: exByPhone } = useExchangeRegistry();
+  const exchangesForHandle = useCallback(
+    (handle: string): ExchangeRecord[] => {
+      const direct = exByHandle(handle);
+      if (direct.length) return direct;
+      const wa = whatsappByHandle.get(handle);
+      return wa ? exByPhone(wa) : [];
+    },
+    [exByHandle, exByPhone, whatsappByHandle],
+  );
+
 
 
 
@@ -1034,6 +1053,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   leadTag={leadTagByHandle.get(handle)}
                   score={scoreByHandle.get(handle)}
                   chargebacks={chargebacksForHandle(handle)}
+                  exchanges={exchangesForHandle(handle)}
                   onOpenOrder={openForHandle}
                   onOpenInstagram={openInstagramChat}
                   onOpenWhatsapp={openWhatsappChat}

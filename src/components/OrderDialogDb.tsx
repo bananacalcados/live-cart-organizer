@@ -24,6 +24,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
+import { useExchangeRegistry } from "@/hooks/useExchangeRegistry";
+import { CustomerExchangeBadge, exchangeSummary } from "@/components/pos/CustomerExchangeBadge";
 
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
@@ -185,6 +187,15 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   }, [whatsapp, instagramHandle, editingOrder, existingCustomer, cbByPhone, cbByHandle]);
 
   useEffect(() => { setChargebackConfirmed(false); }, [whatsapp, instagramHandle]);
+
+  // Trocas/devoluções anteriores do cliente (telefone ou @) — aviso com o motivo
+  const { byPhone: exByPhone, byHandle: exByHandle } = useExchangeRegistry();
+  const orderExchanges = useMemo(() => {
+    const phone = whatsapp || editingOrder?.customer?.whatsapp || existingCustomer?.whatsapp || "";
+    const byPhone = exByPhone(phone);
+    if (byPhone.length) return byPhone;
+    return exByHandle(instagramHandle || editingOrder?.customer?.instagram_handle || "");
+  }, [whatsapp, instagramHandle, editingOrder, existingCustomer, exByPhone, exByHandle]);
 
 
   // Check if there's an active order for this customer in current event
@@ -782,6 +793,28 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                   <strong>CLIENTE COM CHARGEBACK!</strong> Este telefone/@ já pediu estorno em uma compra anterior.
                 </span>
                 <CustomerChargebackBadge chargebacks={orderChargebacks} size="sm" className="shrink-0" />
+              </AlertDescription>
+            </Alert>
+          )}
+          {orderExchanges.length > 0 && (
+            <Alert className="border-amber-500 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-sm text-amber-800 dark:text-amber-200">
+                <div className="flex items-center justify-between gap-3">
+                  <span>
+                    <strong>CLIENTE COM {orderExchanges.some((e) => e.tipo === "devolucao") ? "DEVOLUÇÃO" : "TROCA"}!</strong>{" "}
+                    Já pediu {orderExchanges.length === 1 ? "1 troca/devolução" : `${orderExchanges.length} trocas/devoluções`} em compras anteriores.
+                  </span>
+                  <CustomerExchangeBadge exchanges={orderExchanges} size="sm" className="shrink-0" />
+                </div>
+                <ul className="mt-1 space-y-0.5 text-xs">
+                  {orderExchanges.slice(0, 3).map((e) => (
+                    <li key={e.id}>
+                      • {exchangeSummary(e)} — {new Date(e.created_at).toLocaleDateString("pt-BR")}
+                    </li>
+                  ))}
+                  {orderExchanges.length > 3 && <li>• +{orderExchanges.length - 3} outra(s)</li>}
+                </ul>
               </AlertDescription>
             </Alert>
           )}
