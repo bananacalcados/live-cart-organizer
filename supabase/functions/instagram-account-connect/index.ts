@@ -59,10 +59,13 @@ Deno.serve(async (req) => {
     let username: string | null = null;
 
     // Descobre account_id + username via Graph API.
-    // - token novo (accessToken) → conta secundária (guarda o token)
+    // - token novo (accessToken) → guarda o token E re-identifica a conta
+    //   (inclusive ao EDITAR uma linha existente — antes a edição pulava a
+    //   descoberta e gravava instagram_account_id = NULL, o que fazia o webhook
+    //   perder o vínculo das DMs com a instância).
     // - useGlobalToken → conta principal (usa o token global, não guarda token)
     const discoverToken = accessToken || (useGlobalToken ? globalToken : "");
-    if (discoverToken && !rowId) {
+    if (discoverToken) {
       if (useGlobalToken && !globalToken) {
         return new Response(
           JSON.stringify({ error: "Nenhum token global (META_PAGE_ACCESS_TOKEN) configurado." }),
@@ -96,16 +99,32 @@ Deno.serve(async (req) => {
     if (label) payload.label = label;
     if (typeof body.isDefault === "boolean") payload.is_default = isDefault;
     if (accessToken) {
-      // Conta secundária: guarda o token próprio.
+      // Guarda o token próprio. Só grava a identificação quando ela foi
+      // descoberta — NUNCA sobrescreve com NULL.
       payload.access_token = accessToken;
+    }
+    if (accountId) {
       payload.instagram_account_id = accountId;
-      payload.instagram_username = username;
+      if (username) payload.instagram_username = username;
       payload.phone_display = username ? `@${username}` : (label || "Instagram");
-    } else if (useGlobalToken && accountId) {
-      // Conta principal: NÃO guarda token (usa o global), só identifica a conta.
-      payload.instagram_account_id = accountId;
-      payload.instagram_username = username;
-      payload.phone_display = username ? `@${username}` : (label || "Instagram");
+    }
+
+    // Ao editar uma linha com token novo, garante que o token pertence à MESMA
+    // conta já cadastrada (evita trocar o token da conta errada sem perceber).
+    if (rowId && accountId) {
+      const { data: current } = await supabase
+        .from("whatsapp_numbers")
+        .select("instagram_account_id, instagram_username")
+        .eq("id", rowId)
+        .maybeSingle();
+      if (current?.instagram_account_id && current.instagram_account_id !== accountId) {
+        return new Response(
+          JSON.stringify({
+            error: `Este token é da conta @${username ?? "?"}, mas a instância selecionada é @${current.instagram_username ?? "?"}. Edite a conta correta.`,
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     let saved;
