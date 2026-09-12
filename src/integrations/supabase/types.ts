@@ -3839,6 +3839,60 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_chat_notes: {
+        Row: {
+          author_name: string | null
+          author_user_id: string
+          company_id: string | null
+          created_at: string
+          id: string
+          note: string
+          phone: string
+          phone_suffix8: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_name?: string | null
+          author_user_id: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          note: string
+          phone: string
+          phone_suffix8: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string | null
+          author_user_id?: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string
+          phone?: string
+          phone_suffix8?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_chat_notes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_chat_notes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_list_memberships: {
         Row: {
           added_at: string
