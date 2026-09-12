@@ -13,6 +13,7 @@ import { EventCrossellDialog } from "./events/EventCrossellDialog";
 import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag, X } from "lucide-react";
 import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { DbOrder } from "@/types/database";
 import { OrderDialogDb } from "./OrderDialogDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
