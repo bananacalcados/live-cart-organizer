@@ -40,6 +40,7 @@ import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
 import type { FollowupTemplate } from "./events/EventFollowupTemplates";
+import { PixCopyMessage } from "./chat/PixCopyMessage";
 
 interface Message {
   id: string;
@@ -1693,7 +1694,11 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                       }}
                     >
                       <MessageMedia msg={msg} />
-                      {displayMsg && <p className="whitespace-pre-wrap break-words pr-12">{displayMsg}</p>}
+                      {displayMsg && (
+                        <div className="pr-12">
+                          <PixCopyMessage message={displayMsg} />
+                        </div>
+                      )}
                       {msg.status === 'failed' && msg.error_message && (
                         <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[11px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
                           ⚠️ {msg.error_message}
