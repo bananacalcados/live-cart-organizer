@@ -23126,7 +23126,7 @@ export type Database = {
         Returns: boolean
       }
       live_resolve_contact_identities: {
-        Args: { p_suffixes: string[] }
+        Args: { p_phones?: string[]; p_suffixes: string[] }
         Returns: {
           instagram_handle: string
           name: string

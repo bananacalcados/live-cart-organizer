@@ -20,6 +20,7 @@ import type { ContactLaneMark } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
 import { useEventStore } from "@/stores/eventStore";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { buildPhoneVariations } from "@/lib/phoneUtils";
 
 interface ClickRow {
   id: string;
@@ -55,13 +56,26 @@ interface KnownIdentity {
  */
 const identityCache = new Map<string, KnownIdentity | null>();
 
-/** Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas. */
-async function resolveIdentities(keys: string[]): Promise<Map<string, KnownIdentity | null>> {
+/**
+ * Uma única chamada indexada (RPC) para todas as chaves ainda não conhecidas.
+ * `phonesByKey` permite à RPC também usar o nome do perfil do WhatsApp (push name)
+ * das mensagens recebidas quando não há cadastro com nome.
+ */
+async function resolveIdentities(
+  keys: string[],
+  phonesByKey?: Map<string, string[]>,
+): Promise<Map<string, KnownIdentity | null>> {
   const missing = [...new Set(keys)].filter((k) => k.length === 8 && !identityCache.has(k));
   if (missing.length > 0) {
     for (let i = 0; i < missing.length; i += 300) {
       const batch = missing.slice(i, i + 300);
-      const { data, error } = await supabase.rpc("live_resolve_contact_identities", { p_suffixes: batch });
+      const phones = [
+        ...new Set(batch.flatMap((k) => phonesByKey?.get(k) || []).filter(Boolean)),
+      ];
+      const { data, error } = await supabase.rpc("live_resolve_contact_identities", {
+        p_suffixes: batch,
+        p_phones: phones.length > 0 ? phones : null,
+      });
       if (error) {
         console.warn("[LiveNewContacts] identidade:", error.message);
         break;
@@ -263,19 +277,37 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     () => [...new Set(rows.map((r) => suffix8(r.real_phone || r.phone || r.entered_phone)).filter((k) => k.length === 8))],
     [rows],
   );
+  // Telefones completos por chave — permitem buscar o nome do perfil do WhatsApp.
+  const phonesByKey = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of rows) {
+      for (const raw of [r.real_phone, r.phone, r.entered_phone]) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length < 10) continue;
+        const k = digits.slice(-8);
+        const list = m.get(k) || [];
+        for (const variation of buildPhoneVariations(digits)) {
+          if (!list.includes(variation)) list.push(variation);
+        }
+        m.set(k, list);
+      }
+    }
+    return m;
+  }, [rows]);
+
   useEffect(() => {
     let cancelled = false;
     if (rowKeys.length === 0) {
       setIdentities(new Map());
       return;
     }
-    resolveIdentities(rowKeys).then((m) => {
+    resolveIdentities(rowKeys, phonesByKey).then((m) => {
       if (!cancelled) setIdentities(m);
     });
     return () => {
       cancelled = true;
     };
-  }, [rowKeys]);
+  }, [rowKeys, phonesByKey]);
 
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
