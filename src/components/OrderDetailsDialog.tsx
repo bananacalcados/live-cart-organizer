@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface OrderDetailsDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ interface OrderDetailsDialogProps {
   orderId: string;
   fallbackWhatsapp?: string;
   fallbackInstagram?: string;
+  embedded?: boolean;
 }
 
 interface Registration {
@@ -131,6 +133,7 @@ export function OrderDetailsDialog({
   orderId,
   fallbackWhatsapp,
   fallbackInstagram,
+  embedded = false,
 }: OrderDetailsDialogProps) {
   const [loading, setLoading] = useState(false);
   const [reg, setReg] = useState<Registration | null>(null);
@@ -261,8 +264,8 @@ export function OrderDetailsDialog({
     : "—";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-lg max-h-[90vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
@@ -435,7 +438,7 @@ export function OrderDetailsDialog({
             </section>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { HeadphonesIcon } from 'lucide-react';
+import { EmbeddedDialog, EmbeddedDialogContent } from '@/components/chat/EmbeddedDialog';
 
 interface CreateSupportTicketDialogProps {
   /** Pre-fill customer phone */
@@ -20,6 +21,9 @@ interface CreateSupportTicketDialogProps {
   trigger?: React.ReactNode;
   /** Callback after ticket is created */
   onCreated?: () => void;
+  embedded?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function CreateSupportTicketDialog({
@@ -28,8 +32,13 @@ export function CreateSupportTicketDialog({
   orderName,
   trigger,
   onCreated,
+  embedded = false,
+  open: controlledOpen,
+  onOpenChange,
 }: CreateSupportTicketDialogProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => { setInternalOpen(value); onOpenChange?.(value); };
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -73,16 +82,16 @@ export function CreateSupportTicketDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={setOpen}>
+      {!embedded && <DialogTrigger asChild>
         {trigger || (
           <Button variant="ghost" size="sm" className="gap-1 text-xs">
             <HeadphonesIcon className="h-3.5 w-3.5" />
             Criar Suporte
           </Button>
         )}
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
+      </DialogTrigger>}
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HeadphonesIcon className="h-5 w-5" />
@@ -133,7 +142,7 @@ export function CreateSupportTicketDialog({
             {isCreating ? 'Criando...' : 'Criar Ticket'}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }
