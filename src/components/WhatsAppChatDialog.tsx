@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,7 @@ export function WhatsAppChatDialog({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [crossellOpen, setCrossellOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
+  const pixChannelRef = useRef<PixSendChannel | null>(null);
 
   const fichaOrder = {
     id: order.id,
@@ -137,6 +139,7 @@ export function WhatsAppChatDialog({
                 order={order}
                 onBack={() => onOpenChange(false)}
                 onOpenFicha={withSidebar ? () => setFichaOpen((v) => !v) : undefined}
+                pixChannelRef={pixChannelRef}
               />
             </div>
             {withSidebar && giftOpen && (
@@ -153,6 +156,7 @@ export function WhatsAppChatDialog({
                 <CustomerFichaPanel
                   order={fichaOrder}
                   onClose={() => setFichaOpen(false)}
+                  getPixChannel={() => pixChannelRef.current}
                 />
               </div>
             )}
@@ -172,6 +176,7 @@ export function WhatsAppChatDialog({
               <CustomerFichaPanel
                 order={fichaOrder}
                 onClose={() => setFichaOpen(false)}
+                getPixChannel={() => pixChannelRef.current}
               />
             </div>
           )}

@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { BadgeCheck, Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
 import { EditPendingCheckoutDialog } from "./EditPendingCheckoutDialog";
 import { MarkCheckoutPaidDialog } from "./MarkCheckoutPaidDialog";
-import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendText, posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { ChatPixButton } from "@/components/ChatPixButton";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 
 interface PendingSale {
   id: string;
@@ -97,6 +99,37 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
+  // Canal desta conversa: permite enviar o PIX do pedido (atrelado ao link)
+  // com botão "Copiar código PIX" quando a instância for uazapi.
+  const pixChannel: PixSendChannel = {
+    provider: sendVia,
+    sendText: (message) => posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId }),
+    sendImage: (mediaUrl, caption) =>
+      posSendMedia({ provider: sendVia, phone, mediaUrl, mediaType: "image", caption, numberId: selectedNumberId }),
+    sendCopyButton: sendVia === "uazapi"
+      ? (message, title, code) =>
+          posSendButtons({
+            provider: sendVia,
+            phone,
+            message,
+            buttons: [{ id: "copy_pix", title, copyCode: code }],
+            numberId: selectedNumberId,
+          })
+      : undefined,
+    persist: async (row) => {
+      await supabase.from("whatsapp_messages").insert({
+        phone,
+        message: row.message,
+        direction: "outgoing",
+        status: "sent",
+        media_type: row.media_type || null,
+        media_url: row.media_url || null,
+        message_id: row.message_id || null,
+        whatsapp_number_id: selectedNumberId || null,
+      });
+    },
+  };
+
   const cancelSale = async (id: string) => {
     if (!window.confirm("Cancelar este pedido sem pagamento? O link deixa de valer.")) return;
     await supabase.from("pos_sales").update({ status: "cancelled" }).eq("id", id);
@@ -175,6 +208,12 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
             >
               <BadgeCheck className="h-3 w-3" /> Marcar como pago
             </Button>
+            <ChatPixButton
+              orderId={s.id}
+              variant="button"
+              className="h-6 px-2 text-[11px] gap-1"
+              channel={pixChannel}
+            />
             <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px] gap-1" onClick={() => setEditing(s.id)}>
               <Pencil className="h-3 w-3" /> Editar
             </Button>
