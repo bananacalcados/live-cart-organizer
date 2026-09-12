@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     }
 
     // Token
-    let token = globalIgToken();
+    let token = await preferredIgToken(supabase);
     if (whatsapp_number_id) {
       try {
         const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);

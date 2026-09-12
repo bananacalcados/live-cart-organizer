@@ -34,8 +34,8 @@ serve(async (req) => {
 
     // Token por conta: quando a conversa está vinculada a uma instância de
     // Instagram (whatsapp_number_id), usamos o token daquela conta específica.
-    // Fallback: token global META_PAGE_ACCESS_TOKEN (conta original).
-    let pageAccessToken = globalIgToken();
+    // Fallback: token de uma conta de IG ativa; o secret global é último recurso.
+    let pageAccessToken = "";
     if (channel === 'instagram' && whatsapp_number_id) {
       try {
         const supabase = createClient(
