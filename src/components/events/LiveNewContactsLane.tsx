@@ -276,19 +276,37 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     () => [...new Set(rows.map((r) => suffix8(r.real_phone || r.phone || r.entered_phone)).filter((k) => k.length === 8))],
     [rows],
   );
+  // Telefones completos por chave — permitem buscar o nome do perfil do WhatsApp.
+  const phonesByKey = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of rows) {
+      for (const raw of [r.real_phone, r.phone, r.entered_phone]) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length < 10) continue;
+        const k = digits.slice(-8);
+        const list = m.get(k) || [];
+        for (const variation of buildPhoneVariations(digits)) {
+          if (!list.includes(variation)) list.push(variation);
+        }
+        m.set(k, list);
+      }
+    }
+    return m;
+  }, [rows]);
+
   useEffect(() => {
     let cancelled = false;
     if (rowKeys.length === 0) {
       setIdentities(new Map());
       return;
     }
-    resolveIdentities(rowKeys).then((m) => {
+    resolveIdentities(rowKeys, phonesByKey).then((m) => {
       if (!cancelled) setIdentities(m);
     });
     return () => {
       cancelled = true;
     };
-  }, [rowKeys]);
+  }, [rowKeys, phonesByKey]);
 
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
