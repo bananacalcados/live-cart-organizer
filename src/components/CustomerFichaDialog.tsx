@@ -93,7 +93,7 @@ const EMPTY: Form = {
  * Conteúdo da ficha do cliente SEM o Dialog — usado tanto no modal clássico
  * quanto no painel lateral lado a lado com o chat (WhatsAppChatDialog).
  */
-export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaPanelProps) {
+export function CustomerFichaPanel({ order, onClose, className, getPixChannel }: CustomerFichaPanelProps) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -535,6 +535,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             orderId={isRealOrder ? order.id : null}
             variant="button"
             className="flex-1 min-w-[100px]"
+            channel={getPixChannel?.() ?? null}
           />
           <Button
             variant="outline"
