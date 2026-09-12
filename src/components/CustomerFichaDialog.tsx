@@ -12,6 +12,25 @@ import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
 import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 
+/** CEP visual: 00000-000. */
+function formatCep(value?: string | null): string {
+  const d = String(value ?? "").replace(/\D/g, "").slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+/** Telefone BR visual: (11) 96913-0022 (ou (11) 3691-0022 com 10 dígitos). */
+function formatBRPhone(value?: string | null): string {
+  let d = String(value ?? "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2); // DDI colado no cadastro
+  d = d.slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  const ddd = d.slice(0, 2);
+  const rest = d.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  const split = rest.length > 8 ? 5 : 4;
+  return `(${ddd}) ${rest.slice(0, split)}-${rest.slice(split)}`;
+}
+
 /** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
 function isRegUsable(r: any): boolean {
   const txt = (v: any) => String(v || "").trim();
@@ -110,8 +129,8 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
           full_name: clean(r?.full_name),
           cpf: formatCpf(clean(r?.cpf)),
           email: clean(r?.email),
-          whatsapp: clean(r?.whatsapp),
-          cep: clean(r?.cep),
+          whatsapp: formatBRPhone(clean(r?.whatsapp)),
+          cep: formatCep(clean(r?.cep)),
           address: clean(r?.address),
           address_number: clean(r?.address_number),
           complement: clean(r?.complement),
@@ -144,7 +163,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
           }
         }
 
-        if (!base.whatsapp) base.whatsapp = order.customer?.whatsapp || "";
+        if (!base.whatsapp) base.whatsapp = formatBRPhone(order.customer?.whatsapp || "");
         setForm(base);
       } catch (e) {
         console.error("[CustomerFicha] load error:", e);
@@ -192,10 +211,19 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = formatCep(e.target.value);
     setForm((p) => ({ ...p, cep: value }));
     if (value.replace(/\D/g, "").length === 8) lookupCep(value);
   };
+
+  // WhatsApp: máscara automática (11) 96913-0022, aceitando 10 ou 11 dígitos.
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((p) => ({ ...p, whatsapp: formatBRPhone(e.target.value) }));
+
+  const phoneDigits = form.whatsapp.replace(/\D/g, "");
+  const phoneInvalid = phoneDigits.length > 0 && phoneDigits.length < 10;
+  const cepDigits = form.cep.replace(/\D/g, "");
+  const cepInvalid = cepDigits.length > 0 && cepDigits.length < 8;
 
 
   const handleSave = async () => {
@@ -400,7 +428,18 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
             </div>
             <div>
               <Label>WhatsApp</Label>
-              <Input value={form.whatsapp} onChange={handleChange("whatsapp")} />
+              <Input
+                value={form.whatsapp}
+                onChange={handlePhoneChange}
+                inputMode="numeric"
+                maxLength={16}
+                placeholder="(00) 00000-0000"
+                className={cn(phoneInvalid && "border-destructive focus-visible:ring-destructive")}
+                aria-invalid={phoneInvalid}
+              />
+              {phoneInvalid && (
+                <p className="mt-1 text-xs text-destructive">Número incompleto — informe DDD + número.</p>
+              )}
             </div>
             <div className="md:col-span-2">
               <Label>Email</Label>
@@ -414,12 +453,16 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
                   onChange={handleCepChange}
                   onBlur={(e) => lookupCep(e.target.value)}
                   placeholder="00000-000"
+                  inputMode="numeric"
                   maxLength={9}
+                  className={cn(cepInvalid && "border-destructive focus-visible:ring-destructive")}
+                  aria-invalid={cepInvalid}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {fetchingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </div>
               </div>
+              {cepInvalid && <p className="mt-1 text-xs text-destructive">CEP incompleto — 8 números.</p>}
             </div>
             <div>
               <Label>Cidade</Label>
