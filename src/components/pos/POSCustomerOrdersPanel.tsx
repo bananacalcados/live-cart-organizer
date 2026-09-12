@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
+import { AlertTriangle, Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
