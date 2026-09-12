@@ -12,6 +12,25 @@ import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
 import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 
+/** CEP visual: 00000-000. */
+function formatCep(value?: string | null): string {
+  const d = String(value ?? "").replace(/\D/g, "").slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+/** Telefone BR visual: (11) 96913-0022 (ou (11) 3691-0022 com 10 dígitos). */
+function formatBRPhone(value?: string | null): string {
+  let d = String(value ?? "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2); // DDI colado no cadastro
+  d = d.slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  const ddd = d.slice(0, 2);
+  const rest = d.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  const split = rest.length > 8 ? 5 : 4;
+  return `(${ddd}) ${rest.slice(0, split)}-${rest.slice(split)}`;
+}
+
 /** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
 function isRegUsable(r: any): boolean {
   const txt = (v: any) => String(v || "").trim();
