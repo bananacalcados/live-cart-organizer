@@ -2590,6 +2590,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               />
             </div>
 
+          </div>
+
           {sideToolOpen && (
             <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[440px] md:max-w-[44vw] md:shrink-0 md:border-l md:border-border/60">
               <div className="flex h-11 shrink-0 items-center border-b border-border/60 px-2">
