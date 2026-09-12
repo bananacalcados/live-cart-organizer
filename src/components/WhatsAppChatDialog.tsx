@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import {
   Dialog,
   DialogContent,
