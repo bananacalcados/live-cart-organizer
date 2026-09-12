@@ -195,6 +195,32 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
 
   useEffect(() => { if (open && phase === "list") loadSales(); }, [open, phase, loadSales]);
 
+  // Atalho vindo do modal do cliente (chat do PDV): carrega a venda e vai direto à configuração.
+  useEffect(() => {
+    if (!open || !initialSaleId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingOrder(initialSaleId);
+      const { data, error } = await supabase
+        .from("pos_sales")
+        .select("id, store_id, external_order_id, notes, customer_name, customer_phone, customer_cpf, total, created_at")
+        .eq("id", initialSaleId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error("Venda não encontrada para troca/devolução");
+        setLoadingOrder(null);
+        return;
+      }
+      setStoreId((data as any).store_id || "");
+      const { store_id: _s, ...s } = data as any;
+      await selectSale(s as Sale);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialSaleId]);
+
+
   const selectSale = async (s: Sale) => {
     setLoadingOrder(s.id);
     try {
