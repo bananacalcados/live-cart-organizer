@@ -3,7 +3,7 @@ import {
   Search, Plus, Minus, ShoppingCart, Loader2, Copy, Check,
   Link2, X, Send,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";

@@ -3,8 +3,6 @@ import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, G
 import { Badge } from "@/components/ui/badge";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import {
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
