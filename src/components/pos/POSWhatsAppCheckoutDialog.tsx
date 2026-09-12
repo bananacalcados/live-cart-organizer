@@ -334,9 +334,9 @@ export function POSWhatsAppCheckoutDialog({
               <Input placeholder="Buscar produto..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
             </div>
 
-            <div className="flex flex-1 overflow-hidden gap-3 min-h-0">
+            <div className={embedded ? "flex flex-1 flex-col overflow-y-auto gap-3 min-h-0" : "flex flex-1 overflow-hidden gap-3 min-h-0"}>
               {/* Product List */}
-              <ScrollArea className="flex-1 border rounded-lg">
+              <ScrollArea className={embedded ? "h-[260px] shrink-0 border rounded-lg" : "flex-1 border rounded-lg"}>
                 <div className="p-2 space-y-1">
                   {loading ? (
                     <div className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
@@ -359,11 +359,11 @@ export function POSWhatsAppCheckoutDialog({
               </ScrollArea>
 
               {/* Cart */}
-              <div className="w-[280px] border rounded-lg p-3 flex flex-col gap-2 shrink-0">
+              <div className={embedded ? "w-full border rounded-lg p-3 flex flex-col gap-2 shrink-0" : "w-[280px] border rounded-lg p-3 flex flex-col gap-2 shrink-0"}>
                 <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1">
                   <ShoppingCart className="h-3 w-3" /> Carrinho ({cart.reduce((s, c) => s + c.quantity, 0)})
                 </h4>
-                <ScrollArea className="flex-1 min-h-0">
+                <ScrollArea className={embedded ? "max-h-[220px]" : "flex-1 min-h-0"}>
                   <div className="space-y-2">
                     {cart.map(item => (
                       <div key={item.id} className="p-2 bg-muted/30 rounded space-y-1">
