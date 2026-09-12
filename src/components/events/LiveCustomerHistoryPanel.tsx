@@ -8,6 +8,7 @@ import { CustomerExchangeBadge } from "@/components/pos/CustomerExchangeBadge";
 import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import { invalidateExchangeRegistry, useExchangeRegistry } from "@/hooks/useExchangeRegistry";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { isSalePaid } from "@/lib/salePaymentState";
 import type { DbOrder } from "@/types/database";
 
 interface Props {
