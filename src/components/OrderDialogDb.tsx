@@ -3,8 +3,6 @@ import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, G
 import { Badge } from "@/components/ui/badge";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
 import {
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -47,6 +45,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface OrderDialogDbProps {
   open: boolean;
@@ -59,9 +58,10 @@ interface OrderDialogDbProps {
   prefillWhatsapp?: string;
   /** Nome do lead, usado como identificador quando não há @ do Instagram */
   prefillName?: string;
+  embedded?: boolean;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
@@ -750,8 +750,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const isBanned = editingOrder?.customer?.is_banned || existingCustomer?.is_banned;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-2xl max-h-[85vh] flex flex-col"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Instagram className="h-5 w-5 text-accent" />
@@ -1448,7 +1448,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             </Button>
           </div>
         </div>
-      </DialogContent>
+      </EmbeddedDialogContent>
 
       {/* Confirmação: cliente com chargeback (Etapa 5) */}
       <AlertDialog open={showChargebackConfirm} onOpenChange={setShowChargebackConfirm}>
@@ -1476,7 +1476,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Dialog>
+    </EmbeddedDialog>
 
   );
 }

@@ -74,6 +74,9 @@ interface WhatsAppChatProps {
   hideInstagramComments?: boolean;
   /** Quando definido, o botão "Ficha" abre um painel externo (lado a lado) em vez do modal interno. */
   onOpenFicha?: () => void;
+  onOpenDetails?: () => void;
+  onOpenEditOrder?: () => void;
+  onOpenSupport?: () => void;
   /** Recebe o canal de envio desta conversa (usado pela ficha lateral para enviar o PIX). */
   pixChannelRef?: React.MutableRefObject<PixSendChannel | null>;
 }
@@ -113,7 +116,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha, pixChannelRef }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha, onOpenDetails, onOpenEditOrder, onOpenSupport, pixChannelRef }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
@@ -1488,7 +1491,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           className="text-white hover:bg-white/10 h-8 w-8"
           title="Editar pedido (produtos)"
           disabled={!dbOrder}
-          onClick={() => setEditOrderOpen(true)}
+          onClick={() => (onOpenEditOrder ? onOpenEditOrder() : setEditOrderOpen(true))}
         >
           <ShoppingBag className="h-4 w-4" />
         </Button>
@@ -1543,21 +1546,27 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           size="icon"
           className="text-white hover:bg-white/10 h-8 w-8"
           title="Ver todas as informações do pedido"
-          onClick={() => setDetailsOpen(true)}
+          onClick={() => (onOpenDetails ? onOpenDetails() : setDetailsOpen(true))}
         >
           <ClipboardList className="h-4 w-4" />
         </Button>
 
 
-        <CreateSupportTicketDialog
-          phone={phone}
-          customerName={contactName}
-          trigger={
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-8 w-8" title="Criar Suporte">
-              <HeadphonesIcon className="h-4 w-4" />
-            </Button>
-          }
-        />
+        {onOpenSupport ? (
+          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-8 w-8" title="Criar Suporte" onClick={onOpenSupport}>
+            <HeadphonesIcon className="h-4 w-4" />
+          </Button>
+        ) : (
+          <CreateSupportTicketDialog
+            phone={phone}
+            customerName={contactName}
+            trigger={
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-8 w-8" title="Criar Suporte">
+                <HeadphonesIcon className="h-4 w-4" />
+              </Button>
+            }
+          />
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2057,14 +2066,14 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
 
       <OrderDetailsDialog
-        open={detailsOpen}
+        open={!onOpenDetails && detailsOpen}
         onOpenChange={setDetailsOpen}
         orderId={order.id}
         fallbackWhatsapp={order.whatsapp}
         fallbackInstagram={order.instagramHandle}
       />
 
-      {dbOrder && (
+      {dbOrder && !onOpenEditOrder && (
         <OrderDialogDb
           open={editOrderOpen}
           onOpenChange={setEditOrderOpen}

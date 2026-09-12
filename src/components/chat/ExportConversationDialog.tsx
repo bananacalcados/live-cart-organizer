@@ -4,8 +4,6 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -21,11 +19,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Conversation } from "./ChatTypes";
 import { exportConversationPdf, ExportMessage } from "@/lib/chat/exportConversationPdf";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface ExportConversationDialogProps {
   conversation: Conversation;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  embedded?: boolean;
 }
 
 type PeriodMode = "all" | "day" | "range";
@@ -34,6 +34,7 @@ export function ExportConversationDialog({
   conversation,
   open,
   onOpenChange,
+  embedded = false,
 }: ExportConversationDialogProps) {
   const [mode, setMode] = useState<PeriodMode>("all");
   const [singleDay, setSingleDay] = useState<Date | undefined>();
@@ -128,8 +129,8 @@ export function ExportConversationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !loading && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-md">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={(o) => !loading && onOpenChange(o)}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "sm:max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -227,8 +228,8 @@ export function ExportConversationDialog({
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }
 

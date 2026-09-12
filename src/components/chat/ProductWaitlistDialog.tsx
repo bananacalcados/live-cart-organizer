@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,6 +8,7 @@ import { Search, PackageCheck, Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { toast } from "sonner";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface PosProductRow {
   id: string;
@@ -30,6 +31,7 @@ interface Props {
   storeId?: string | null;
   sellerName?: string | null;
   onSaved?: () => void;
+  embedded?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export function ProductWaitlistDialog({
   storeId,
   sellerName,
   onSaved,
+  embedded = false,
 }: Props) {
   const currentUserId = useCurrentUserId();
   const [query, setQuery] = useState("");
@@ -147,8 +150,8 @@ export function ProductWaitlistDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden gap-0">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full p-0 gap-0" : "max-w-lg p-0 overflow-hidden gap-0"}>
         <DialogHeader className="px-4 py-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
             <PackageCheck className="h-5 w-5 text-amber-500" />
@@ -257,7 +260,7 @@ export function ProductWaitlistDialog({
             Anotar aguardando
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }

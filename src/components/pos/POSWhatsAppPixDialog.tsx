@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { QrCode, Loader2, Copy, Check, Send } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { posSendText, posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { parseChargebackBlock, chargebackBlockMessage } from "@/lib/chargebackBlock";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 import {
   sendPixMessages,
   getPixIncludeQrPref,
@@ -25,10 +26,11 @@ interface Props {
   /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
   sendVia: PosSendProvider;
   selectedNumberId: string | null;
+  embedded?: boolean;
 }
 
 export function POSWhatsAppPixDialog({
-  open, onOpenChange, storeId, phone, customerName, sendVia, selectedNumberId,
+  open, onOpenChange, storeId, phone, customerName, sendVia, selectedNumberId, embedded = false,
 }: Props) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -225,8 +227,8 @@ export function POSWhatsAppPixDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleReset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-sm">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={(v) => { if (!v) handleReset(); onOpenChange(v); }}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-sm"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5 text-emerald-500" />
@@ -320,7 +322,7 @@ export function POSWhatsAppPixDialog({
             </Button>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
   );
 }

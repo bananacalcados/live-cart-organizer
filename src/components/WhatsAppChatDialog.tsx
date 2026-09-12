@@ -10,10 +10,15 @@ import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
-import { IdCard, ClipboardList, Headphones, Images, Gift } from "lucide-react";
+import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag, X } from "lucide-react";
 import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { DbOrder } from "@/types/database";
+import { OrderDialogDb } from "./OrderDialogDb";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
+
+type LivePanel = "ficha" | "details" | "edit" | "crossell" | "gift" | "support" | null;
 
 interface WhatsAppChatDialogProps {
   open: boolean;
@@ -61,11 +66,9 @@ export function WhatsAppChatDialog({
   showSidebar,
 }: WhatsAppChatDialogProps) {
   const withSidebar = showSidebar ?? wide;
-  const [fichaOpen, setFichaOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [crossellOpen, setCrossellOpen] = useState(false);
-  const [giftOpen, setGiftOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<LivePanel>(null);
   const pixChannelRef = useRef<PixSendChannel | null>(null);
+  const dbOrder = useDbOrderStore((state) => state.orders.find((item) => item.id === order.id) || null);
 
   const fichaOrder = {
     id: order.id,
@@ -75,9 +78,23 @@ export function WhatsAppChatDialog({
     },
   } as unknown as DbOrder;
 
-  // Com a ficha aberta ao lado, o modal expande para acomodar chat + ficha lado a lado.
+  const togglePanel = (panel: Exclude<LivePanel, null>) => setActivePanel((current) => current === panel ? null : panel);
+  const panelOpen = activePanel !== null;
+
+  const renderPanel = () => {
+    const close = () => setActivePanel(null);
+    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
+    if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
+    if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
+    if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} />;
+    if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
+    return null;
+  };
+
+  // Com uma ferramenta aberta ao lado, o modal expande para acomodar chat + painel.
   const dialogClass = wide
-    ? (fichaOpen || giftOpen)
+    ? panelOpen
       ? "max-w-[1400px] sm:max-w-[1400px] w-[98vw] h-[90vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block [&>button.absolute]:hidden"
       : "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
     : "max-w-md sm:max-w-md w-[95vw] h-[600px] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block";
@@ -92,118 +109,58 @@ export function WhatsAppChatDialog({
                 <SidebarButton
                   icon={IdCard}
                   label="Ficha"
-                  tone={fichaOpen ? "accent" : "default"}
-                  onClick={() => setFichaOpen((v) => !v)}
+                   tone={activePanel === "ficha" ? "accent" : "default"}
+                   onClick={() => togglePanel("ficha")}
                 />
                 <SidebarButton
                   icon={ClipboardList}
                   label="Pedido"
-                  onClick={() => setDetailsOpen(true)}
+                   tone={activePanel === "details" ? "accent" : "default"}
+                   onClick={() => togglePanel("details")}
                 />
+                <SidebarButton icon={ShoppingBag} label="Editar" tone={activePanel === "edit" ? "accent" : "default"} onClick={() => togglePanel("edit")} />
                 <SidebarButton
                   icon={Images}
                   label="Crossell"
-                  tone="accent"
+                   tone={activePanel === "crossell" ? "accent" : "default"}
                   onClick={() => {
                     if (!order.whatsapp) return;
-                    setCrossellOpen(true);
+                     togglePanel("crossell");
                   }}
                 />
                 <SidebarButton
                   icon={Gift}
                   label="Brinde"
-                  tone={giftOpen ? "accent" : "default"}
-                  onClick={() => {
-                    setGiftOpen((v) => !v);
-                    if (!giftOpen) setFichaOpen(false);
-                  }}
+                   tone={activePanel === "gift" ? "accent" : "default"}
+                   onClick={() => togglePanel("gift")}
                 />
-                <CreateSupportTicketDialog
-                  phone={order.whatsapp}
-                  customerName={order.instagramHandle || undefined}
-                  trigger={
-                    <button
-                      type="button"
-                      title="Suporte"
-                      className="flex w-full flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Headphones className="h-5 w-5" />
-                      <span className="leading-tight">Suporte</span>
-                    </button>
-                  }
-                />
+                <SidebarButton icon={Headphones} label="Suporte" tone={activePanel === "support" ? "accent" : "default"} onClick={() => togglePanel("support")} />
               </aside>
             )}
             <div className="min-w-0 flex-1 h-full">
               <WhatsAppChat
                 order={order}
                 onBack={() => onOpenChange(false)}
-                onOpenFicha={withSidebar ? () => setFichaOpen((v) => !v) : undefined}
+                 onOpenFicha={withSidebar ? () => togglePanel("ficha") : undefined}
+                 onOpenDetails={withSidebar ? () => togglePanel("details") : undefined}
+                 onOpenEditOrder={withSidebar ? () => togglePanel("edit") : undefined}
+                 onOpenSupport={withSidebar ? () => togglePanel("support") : undefined}
                 pixChannelRef={pixChannelRef}
               />
             </div>
-            {withSidebar && giftOpen && (
-              <div className="hidden sm:block w-[380px] shrink-0 h-full border-l border-border/60 bg-card">
-                <OrderGiftPanel
-                  orderId={order.id}
-                  customerLabel={order.instagramHandle || order.whatsapp || undefined}
-                  onClose={() => setGiftOpen(false)}
-                />
-              </div>
-            )}
-            {withSidebar && fichaOpen && (
-              <div className="hidden sm:block w-[420px] shrink-0 h-full border-l border-border/60 bg-card">
-                <CustomerFichaPanel
-                  order={fichaOrder}
-                  onClose={() => setFichaOpen(false)}
-                  getPixChannel={() => pixChannelRef.current}
-                />
-              </div>
-            )}
+             {withSidebar && panelOpen && <div className="relative hidden sm:block w-[480px] shrink-0 h-full border-l border-border/60 bg-card">
+               {activePanel !== "ficha" && activePanel !== "gift" && <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-20" onClick={() => setActivePanel(null)} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>}
+               {renderPanel()}
+             </div>}
           </div>
           {/* Mobile: ficha vira sobreposição de tela cheia dentro do modal */}
-          {withSidebar && giftOpen && (
-            <div className="absolute inset-0 z-10 sm:hidden bg-card">
-              <OrderGiftPanel
-                orderId={order.id}
-                customerLabel={order.instagramHandle || order.whatsapp || undefined}
-                onClose={() => setGiftOpen(false)}
-              />
-            </div>
-          )}
-          {withSidebar && fichaOpen && (
-            <div className="absolute inset-0 z-10 sm:hidden bg-card">
-              <CustomerFichaPanel
-                order={fichaOrder}
-                onClose={() => setFichaOpen(false)}
-                getPixChannel={() => pixChannelRef.current}
-              />
-            </div>
-          )}
+           {withSidebar && panelOpen && <div className="absolute inset-0 z-10 sm:hidden bg-card">
+             {activePanel !== "ficha" && activePanel !== "gift" && <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-20" onClick={() => setActivePanel(null)} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>}
+             {renderPanel()}
+           </div>}
         </DialogContent>
       </Dialog>
 
-      {withSidebar && (
-        <>
-          <OrderDetailsDialog
-            open={detailsOpen}
-            onOpenChange={setDetailsOpen}
-            orderId={order.id}
-            fallbackWhatsapp={order.whatsapp}
-            fallbackInstagram={order.instagramHandle}
-          />
-          {order.whatsapp && (
-            <EventCrossellDialog
-              open={crossellOpen}
-              onOpenChange={setCrossellOpen}
-              phone={order.whatsapp}
-              customerName={order.instagramHandle || undefined}
-              order={order}
-            />
-          )}
-
-        </>
-      )}
     </>
   );
 }

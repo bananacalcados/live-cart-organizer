@@ -33,6 +33,7 @@ import { ShopifyImagePicker } from "@/components/events/ShopifyImagePicker";
 import type { DbOrderProduct } from "@/types/database";
 import type { Order } from "@/types/order";
 import { toast } from "sonner";
+import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
 interface EventCrossellDialogProps {
   open: boolean;
@@ -41,6 +42,7 @@ interface EventCrossellDialogProps {
   customerName?: string;
   /** Pedido de contexto para variáveis (nome, @, valores, checkout). */
   order?: Order;
+  embedded?: boolean;
 }
 
 interface VariableOption {
@@ -93,7 +95,7 @@ interface CardState {
   uploading: boolean;
 }
 
-export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order }: EventCrossellDialogProps) {
+export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order, embedded = false }: EventCrossellDialogProps) {
   const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
   const { numbers } = useWhatsAppNumberStore();
 
@@ -356,8 +358,8 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
 
   return (
 
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl sm:max-w-3xl w-[95vw] h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full p-0 gap-0" : "max-w-3xl sm:max-w-3xl w-[95vw] h-[85vh] p-0 gap-0 flex flex-col overflow-hidden"}>
         <DialogHeader className="p-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Images className="h-5 w-5 text-primary" />
@@ -578,7 +580,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
+      </EmbeddedDialogContent>
 
       {/* Seletor de imagem via Shopify */}
       <Dialog
@@ -595,7 +597,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
           <ShopifyImagePicker onPick={handleShopifyImagePick} />
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </EmbeddedDialog>
   );
 }
 

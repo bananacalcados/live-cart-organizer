@@ -78,6 +78,7 @@ import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 import { PixPendingTabsBar } from "./PixPendingTabsBar";
 import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
+import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
 
 interface Props {
   storeId: string;
@@ -232,10 +233,36 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
+  const [showSupportPanel, setShowSupportPanel] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
   const waitlist = useProductWaitlist();
+
+  const closeSideTools = useCallback(() => {
+    setShowCheckout(false);
+    setShowPix(false);
+    setShowBoleto(false);
+    setShowCatalog(false);
+    setShowWaitlistDialog(false);
+    setShowExportDialog(false);
+    setShowSupportPanel(false);
+  }, []);
+
+  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support") => {
+    closeSideTools();
+    if (tool === "checkout") setShowCheckout(true);
+    if (tool === "pix") setShowPix(true);
+    if (tool === "boleto") setShowBoleto(true);
+    if (tool === "catalog") setShowCatalog(true);
+    if (tool === "waitlist") setShowWaitlistDialog(true);
+    if (tool === "export") setShowExportDialog(true);
+    if (tool === "support") setShowSupportPanel(true);
+  }, [closeSideTools]);
+
+  useEffect(() => {
+    closeSideTools();
+  }, [selectedConvKey, closeSideTools]);
 
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
@@ -2258,6 +2285,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
         ) : selectedPhone ? (() => {
           const chatPanel = (
+          <>
+          <CustomerChatNotesPanel phone={selectedPhone} storeId={storeId} authorName={selectedSellerName} />
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
             <ProductArrivalCard
               arrived={waitlist.arrived}
@@ -2395,28 +2424,28 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
               {/* Ações */}
               <div className="flex flex-wrap items-center justify-end gap-0.5 min-w-0 flex-1 basis-full sm:basis-auto ml-auto">
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout" disabled={requiresInstanceSelection}>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => openSideTool("checkout")} title="Gerar Link Checkout" disabled={requiresInstanceSelection}>
                   <CreditCard className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Checkout</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => setShowPix(true)} title="Gerar PIX" disabled={requiresInstanceSelection}>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => openSideTool("pix")} title="Gerar PIX" disabled={requiresInstanceSelection}>
                   <QrCode className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">PIX</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-orange-500" onClick={() => setShowBoleto(true)} title="Gerar Boleto" disabled={requiresInstanceSelection}>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-orange-500" onClick={() => openSideTool("boleto")} title="Gerar Boleto" disabled={requiresInstanceSelection}>
                   <FileText className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Boleto</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo" disabled={requiresInstanceSelection}>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => openSideTool("catalog")} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-amber-600 hover:text-amber-500" onClick={() => setShowWaitlistDialog(true)} title="Aguardando produto">
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-amber-600 hover:text-amber-500" onClick={() => openSideTool("waitlist")} title="Aguardando produto">
                   <Package className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Aguarda</span>
                 </Button>
                 {selectedConversation && (
-                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => setShowExportDialog(true)} title="Exportar conversa em PDF">
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => openSideTool("export")} title="Exportar conversa em PDF">
                     <FileText className="h-3.5 w-3.5" />
                     <span className="hidden xl:inline">Exportar PDF</span>
                   </Button>
@@ -2427,11 +2456,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     <span className="hidden xl:inline">Template</span>
                   </Button>
                 )}
-                <CreateSupportTicketDialog
-                  phone={selectedPhone}
-                  customerName={selectedConversation?.customerName}
-                  onCreated={() => { if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }}
-                />
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => openSideTool("support")} title="Criar Suporte">
+                  <HeadphonesIcon className="h-3.5 w-3.5" /><span className="hidden xl:inline">Criar Suporte</span>
+                </Button>
                 {viewMode === "lanes" && !selectedConversation?.isGroup && (
                   <TransferLaneMenu
                     currentLane={getManualLane(selectedPhone, selectedConvNumberId)}
@@ -2778,6 +2805,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </DialogContent>
             </Dialog>
           </div>
+          {(showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel) && (
+            <aside className="absolute inset-0 z-30 bg-card md:static md:z-auto md:h-full md:w-[460px] md:shrink-0 md:border-l md:border-border/60">
+              <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-40" onClick={closeSideTools} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>
+              {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { setShowCheckout(false); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={setShowPix} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={setShowBoleto} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showCatalog && <POSProductCatalogSender embedded open onOpenChange={setShowCatalog} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={setShowWaitlistDialog} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
+              {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={setShowExportDialog} conversation={selectedConversation} />}
+              {showSupportPanel && <CreateSupportTicketDialog embedded open onOpenChange={setShowSupportPanel} phone={selectedPhone} customerName={selectedConversation?.customerName} onCreated={() => { setShowSupportPanel(false); if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }} />}
+            </aside>
+          )}
+          </>
           );
           if (viewMode !== "lanes") return chatPanel;
           // Visão em Linhas: o chat abre em janela por cima das linhas.
@@ -2812,84 +2852,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         )}
       </div>
       </>
-      )}
-
-      {/* Product Catalog Sender */}
-      {selectedPhone && (
-        <POSProductCatalogSender
-          storeId={storeId}
-          phone={selectedPhone}
-          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
-          open={showCatalog}
-          onOpenChange={setShowCatalog}
-        />
-      )}
-
-      {/* Aguardando produto (espera de reposição) */}
-      {selectedPhone && (
-        <ProductWaitlistDialog
-          open={showWaitlistDialog}
-          onOpenChange={setShowWaitlistDialog}
-          phone={selectedPhone}
-          customerName={selectedConversation?.customerName}
-          whatsappNumberId={selectedConvNumberId}
-          storeId={storeId === "expedition" ? null : storeId}
-          sellerName={selectedSellerName}
-          onSaved={() => waitlist.refresh()}
-        />
-      )}
-
-
-
-      {/* Checkout Dialog */}
-      {selectedPhone && (
-        <POSWhatsAppCheckoutDialog
-          open={showCheckout}
-          onOpenChange={(v) => { setShowCheckout(v); if (!v) setPendingOrdersRefresh((n) => n + 1); }}
-          storeId={storeId}
-          phone={selectedPhone}
-          customerName={selectedConversation?.customerName}
-          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
-        />
-      )}
-
-      {/* Exportar conversa em PDF */}
-      {selectedConversation && (
-        <ExportConversationDialog
-          conversation={selectedConversation}
-          open={showExportDialog}
-          onOpenChange={setShowExportDialog}
-        />
-      )}
-
-
-
-      {/* PIX Dialog */}
-      {selectedPhone && (
-        <POSWhatsAppPixDialog
-          open={showPix}
-          onOpenChange={setShowPix}
-          storeId={storeId}
-          phone={selectedPhone}
-          customerName={selectedConversation?.customerName}
-          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
-        />
-      )}
-
-      {/* Boleto Dialog */}
-      {selectedPhone && (
-        <POSGenerateBoletoDialog
-          open={showBoleto}
-          onOpenChange={setShowBoleto}
-          storeId={storeId}
-          phone={selectedPhone}
-          customerName={selectedConversation?.customerName}
-          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
-        />
       )}
 
       {/* Send Template Dialog */}
