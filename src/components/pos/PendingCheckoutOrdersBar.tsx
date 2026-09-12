@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { BadgeCheck, Check, Copy, Loader2, Pencil, Send, ShoppingCart, X } from "lucide-react";
 import { EditPendingCheckoutDialog } from "./EditPendingCheckoutDialog";
 import { MarkCheckoutPaidDialog } from "./MarkCheckoutPaidDialog";
-import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendText, posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { ChatPixButton } from "@/components/ChatPixButton";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 
 interface PendingSale {
   id: string;
