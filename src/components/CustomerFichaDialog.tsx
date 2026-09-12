@@ -163,7 +163,7 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
           }
         }
 
-        if (!base.whatsapp) base.whatsapp = order.customer?.whatsapp || "";
+        if (!base.whatsapp) base.whatsapp = formatBRPhone(order.customer?.whatsapp || "");
         setForm(base);
       } catch (e) {
         console.error("[CustomerFicha] load error:", e);
