@@ -243,7 +243,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Espera de produtos: clientes aguardando reposição de uma variação específica.
   const waitlist = useProductWaitlist();
 
-  const closeSideTools = useCallback(() => {
+  const resetSideTools = useCallback(() => {
     setShowCheckout(false);
     setShowPix(false);
     setShowBoleto(false);
@@ -251,11 +251,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
     setShowSupportPanel(false);
-    setShowOrdersModal(true);
   }, []);
 
+  // Voltar ao chat = ferramentas fechadas e ficha completa como painel padrão.
+  const closeSideTools = useCallback(() => {
+    resetSideTools();
+    setShowOrdersModal(true);
+  }, [resetSideTools]);
+
   const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
-    closeSideTools();
+    resetSideTools();
+    setShowOrdersModal(tool === "customer");
     if (tool === "checkout") setShowCheckout(true);
     if (tool === "pix") setShowPix(true);
     if (tool === "boleto") setShowBoleto(true);
@@ -263,8 +269,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
     if (tool === "support") setShowSupportPanel(true);
-    if (tool === "customer") setShowOrdersModal(true);
-  }, [closeSideTools]);
+  }, [resetSideTools]);
+
 
   useEffect(() => {
     if (!selectedConvKey) {
