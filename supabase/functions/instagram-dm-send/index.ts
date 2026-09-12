@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
+import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
 
 
 const corsHeaders = {
