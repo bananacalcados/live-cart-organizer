@@ -436,8 +436,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
                 isLive: true,
                 storeId: orderStore,
                 storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
-                instanceLabel: null,
+                instanceLabel: liveInstanceLabel,
                 orderNumber: null,
+                eventName,
+                instagram,
               };
               next.push(tab);
               if (isFresh && !alerted.has(oid)) {
@@ -448,8 +450,8 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
               next.push({
                 saleId: oid,
                 phone: (lead?.phone as string) || prev?.phone || "",
-                numberId: prev?.numberId || null,
-                name: (lead?.name as string) || prev?.name || "Cliente",
+                numberId: liveNumberId,
+                name: displayName,
                 amount,
                 type: "live",
                 status: "pending",
@@ -457,8 +459,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
                 isLive: true,
                 storeId: orderStore,
                 storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
-                instanceLabel: null,
+                instanceLabel: liveInstanceLabel,
                 orderNumber: null,
+                eventName,
+                instagram,
               });
             }
           }
