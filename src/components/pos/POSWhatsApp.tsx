@@ -958,6 +958,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           channelLabel: typeLabel,
           modality,
           kind: "pos_sale" as const,
+          paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
+          shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
         };
       });
