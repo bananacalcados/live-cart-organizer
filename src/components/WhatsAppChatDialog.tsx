@@ -127,6 +127,12 @@ export function WhatsAppChatDialog({
                    onClick={() => togglePanel("ficha")}
                 />
                 <SidebarButton
+                  icon={History}
+                  label="Histórico"
+                   tone={activePanel === "historico" ? "accent" : "default"}
+                   onClick={() => togglePanel("historico")}
+                />
+                <SidebarButton
                   icon={ClipboardList}
                   label="Pedido"
                    tone={activePanel === "details" ? "accent" : "default"}
