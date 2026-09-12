@@ -1381,7 +1381,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           {aiPaused ? '▶ Retomar IA' : '⏸ Pausar IA'}
         </Button>
 
-        <ChatPixButton orderId={order.id} variant="icon-light" />
+        <ChatPixButton orderId={order.id} variant="icon-light" channel={pixChannel} onSent={handlePixSent} />
 
         {/* Trocar a instância usada nesta conversa */}
         <DropdownMenu onOpenChange={(o) => { if (o && numbers.length === 0) fetchNumbers(); }}>
