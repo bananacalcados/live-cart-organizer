@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
+import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     }
 
     // Token
-    let token = globalIgToken();
+    let token = await preferredIgToken(supabase);
     if (whatsapp_number_id) {
       try {
         const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);

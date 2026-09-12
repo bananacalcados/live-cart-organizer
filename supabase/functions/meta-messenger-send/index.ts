@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
+import { resolveIgAccountByNumberId, globalIgToken, preferredIgToken } from "../_shared/instagram-account.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,8 +34,8 @@ serve(async (req) => {
 
     // Token por conta: quando a conversa está vinculada a uma instância de
     // Instagram (whatsapp_number_id), usamos o token daquela conta específica.
-    // Fallback: token global META_PAGE_ACCESS_TOKEN (conta original).
-    let pageAccessToken = globalIgToken();
+    // Fallback: token de uma conta de IG ativa; o secret global é último recurso.
+    let pageAccessToken = "";
     if (channel === 'instagram' && whatsapp_number_id) {
       try {
         const supabase = createClient(
@@ -45,9 +45,19 @@ serve(async (req) => {
         const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
         if (acct.accessToken) pageAccessToken = acct.accessToken;
       } catch (e) {
-        console.error('Error resolving IG account token, falling back to global:', e);
+        console.error('Error resolving IG account token:', e);
       }
     }
+    if (!pageAccessToken && channel === 'instagram') {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        pageAccessToken = await preferredIgToken(supabase);
+      } catch { /* ignora */ }
+    }
+    if (!pageAccessToken) pageAccessToken = globalIgToken();
 
     if (!pageAccessToken) {
       return new Response(

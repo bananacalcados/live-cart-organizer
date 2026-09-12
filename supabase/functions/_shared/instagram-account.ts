@@ -28,6 +28,29 @@ export function globalIgToken(): string {
   return Deno.env.get("META_PAGE_ACCESS_TOKEN") || "";
 }
 
+/**
+ * Token de fallback "inteligente": prefere o token de uma conta de Instagram
+ * ativa cadastrada (renovado diariamente pelo instagram-token-refresh) e só
+ * usa o secret global META_PAGE_ACCESS_TOKEN como último recurso — ele é
+ * legado e costuma ficar desatualizado/inválido.
+ */
+// deno-lint-ignore no-explicit-any
+export async function preferredIgToken(supabase: any): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("whatsapp_numbers")
+      .select("access_token")
+      .eq("provider", "instagram")
+      .eq("is_active", true)
+      .not("access_token", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.access_token) return data.access_token;
+  } catch { /* ignora e cai no global */ }
+  return globalIgToken();
+}
+
 /** Resolve a conta a partir do ID profissional do IG (entry.id do webhook). */
 export async function resolveIgAccountByAccountId(
   supabase: any,

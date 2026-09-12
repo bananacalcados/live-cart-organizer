@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
+import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
 
 
 const corsHeaders = {
@@ -23,18 +23,22 @@ Deno.serve(async (req) => {
     let { mediaUrl } = body;
 
     // Token por conta: se a conversa estiver vinculada a uma instância de
-    // Instagram, usa o token daquela conta; senão cai no token global.
-    let token = globalIgToken();
+    // Instagram, usa o token daquela conta. Sem instância (ex.: resposta a
+    // comentário), usa o token de uma conta de Instagram ativa cadastrada —
+    // o secret global META_PAGE_ACCESS_TOKEN fica só como último recurso,
+    // pois costuma ficar desatualizado em relação aos tokens por conta.
+    let token = "";
     if (whatsapp_number_id) {
       try {
         const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
         if (acct.accessToken) token = acct.accessToken;
       } catch (e) {
-        console.error("[ig-dm-send] erro ao resolver token da conta, usando global:", e);
+        console.error("[ig-dm-send] erro ao resolver token da conta:", e);
       }
     }
+    if (!token) token = await preferredIgToken(supabase);
     if (!token) {
-      return new Response(JSON.stringify({ error: "META_PAGE_ACCESS_TOKEN not configured" }), {
+      return new Response(JSON.stringify({ error: "Nenhum token de Instagram configurado" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
