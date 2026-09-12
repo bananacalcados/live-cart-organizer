@@ -9,7 +9,8 @@ import { Order } from "@/types/order";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
-import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag, X } from "lucide-react";
+import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag, X, History } from "lucide-react";
+import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { OrderDialogDb } from "./OrderDialogDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { LiveCustomerHistoryPanel } from "./events/LiveCustomerHistoryPanel";
 
-type LivePanel = "ficha" | "details" | "edit" | "crossell" | "gift" | "support" | null;
+type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "gift" | "support" | null;
 
 interface WhatsAppChatDialogProps {
   open: boolean;
@@ -87,7 +88,7 @@ export function WhatsAppChatDialog({
   } as unknown as DbOrder);
 
   useEffect(() => {
-    if (open) setActivePanel("ficha");
+    if (open) setActivePanel("historico");
   }, [open, order.id]);
 
   const togglePanel = (panel: Exclude<LivePanel, null>) => setActivePanel((current) => current === panel ? null : panel);
@@ -95,7 +96,8 @@ export function WhatsAppChatDialog({
 
   const renderPanel = () => {
     const close = () => setActivePanel(null);
-    if (activePanel === "ficha") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "historico") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
     if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
     if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
     if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
@@ -123,6 +125,12 @@ export function WhatsAppChatDialog({
                   label="Ficha"
                    tone={activePanel === "ficha" ? "accent" : "default"}
                    onClick={() => togglePanel("ficha")}
+                />
+                <SidebarButton
+                  icon={History}
+                  label="Histórico"
+                   tone={activePanel === "historico" ? "accent" : "default"}
+                   onClick={() => togglePanel("historico")}
                 />
                 <SidebarButton
                   icon={ClipboardList}
