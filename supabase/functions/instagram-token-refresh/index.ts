@@ -69,8 +69,10 @@ Deno.serve(async (req) => {
     }
 
     // 1) Valida token atual
+    // user_id = ID profissional do IG (== entry.id do webhook). Usado para
+    // auto-corrigir instagram_account_id caso esteja vazio.
     const meRes = await fetch(
-      `https://graph.instagram.com/v23.0/me?fields=id,username&access_token=${encodeURIComponent(token)}`,
+      `https://graph.instagram.com/v23.0/me?fields=user_id,id,username&access_token=${encodeURIComponent(token)}`,
     );
     const me = await meRes.json().catch(() => ({}));
     if (!meRes.ok) {
