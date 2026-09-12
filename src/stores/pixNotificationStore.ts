@@ -45,6 +45,8 @@ export interface PixTab {
   storeName?: string | null; // nome da loja (exibido no card)
   instanceLabel?: string | null; // rótulo da instância do WhatsApp do pedido
   orderNumber?: string | null; // nº do pedido (nota/tiny/externo), se houver
+  eventName?: string | null; // nome da Live (ex.: LIVE-PEROLA-10/09)
+  instagram?: string | null; // @ do Instagram do cliente, quando houver
 }
 
 const PAID_STATUSES = new Set(["paid", "online_paid", "approved", "completed"]);
