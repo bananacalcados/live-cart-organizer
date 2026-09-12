@@ -168,9 +168,19 @@ export function POSCustomerOrdersPanel({
                         </ul>
                       ) : null}
                       {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
-                      {renderOrderActions(order)}
+                      {order.paymentState === "unpaid" ? (
+                        <p className="text-[11px] font-semibold text-destructive">
+                          Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
+                        </p>
+                      ) : (
+                        renderOrderActions(order)
+                      )}
                     </div>
-                    {order.totalPrice != null ? <span className="whitespace-nowrap font-bold text-emerald-600">R$ {order.totalPrice.toFixed(2)}</span> : null}
+                    {order.totalPrice != null ? (
+                      <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
+                        R$ {order.totalPrice.toFixed(2)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               ))}
