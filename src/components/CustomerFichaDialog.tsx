@@ -203,6 +203,10 @@ export function CustomerFichaPanel({ order, onClose, className }: CustomerFichaP
       toast.error("Crie o pedido desta conversa antes de salvar a ficha");
       return;
     }
+    if (cpfInvalid) {
+      toast.error("CPF inválido — corrija antes de salvar (o cartão é recusado com CPF errado).");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
