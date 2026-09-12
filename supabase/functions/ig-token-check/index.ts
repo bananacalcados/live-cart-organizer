@@ -13,6 +13,16 @@ Deno.serve(async () => {
     .eq("provider", "instagram");
 
   const results: any[] = [];
+  const globalToken = Deno.env.get("META_PAGE_ACCESS_TOKEN") || "";
+  if (globalToken) {
+    const gRes = await fetch(
+      `https://graph.instagram.com/v23.0/me?fields=user_id,username&access_token=${encodeURIComponent(globalToken)}`,
+    );
+    const g = await gRes.json().catch(() => ({}));
+    results.push({ account: "GLOBAL_SECRET", http: gRes.status, valid: gRes.ok, error: g?.error?.message ?? null, code: g?.error?.code ?? null, username: g?.username ?? null });
+  } else {
+    results.push({ account: "GLOBAL_SECRET", status: "empty" });
+  }
   for (const row of rows || []) {
     if (!row.access_token) {
       results.push({ account: row.instagram_username, status: "no_token" });
