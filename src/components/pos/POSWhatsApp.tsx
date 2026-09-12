@@ -80,6 +80,7 @@ import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
 import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
+import { isSalePaid } from "@/lib/salePaymentState";
 
 interface Props {
   storeId: string;
