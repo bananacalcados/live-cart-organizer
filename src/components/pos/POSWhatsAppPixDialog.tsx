@@ -40,6 +40,7 @@ export function POSWhatsAppPixDialog({
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [includeQr, setIncludeQr] = useState<boolean>(() => getPixIncludeQrPref());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll for payment
