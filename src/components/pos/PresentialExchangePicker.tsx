@@ -98,6 +98,8 @@ interface Props {
   open: boolean;
   sellerId?: string;
   sellerName?: string;
+  /** Atalho: abre já na venda informada (pula escolha de loja e busca). */
+  initialSaleId?: string;
   onCancel: () => void;
   onDone: () => void;
 }
@@ -108,7 +110,7 @@ function orderName(notes: string | null, ext: string | null): string | null {
   return ext ? `#${ext}` : null;
 }
 
-export function PresentialExchangePicker({ open, sellerId, sellerName, onCancel, onDone }: Props) {
+export function PresentialExchangePicker({ open, sellerId, sellerName, initialSaleId, onCancel, onDone }: Props) {
   const [phase, setPhase] = useState<"store" | "list" | "config">("store");
   const [storeId, setStoreId] = useState<string>("");
 
