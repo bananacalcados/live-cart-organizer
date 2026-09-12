@@ -63,6 +63,8 @@ export function POSCustomerOrdersPanel({
   liveOrderPanel,
   renderOrderActions,
 }: Props) {
+  const unpaidCount = (data?.orders || []).filter((order) => order.paymentState === "unpaid").length;
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="shrink-0 border-b bg-primary/5 px-4 py-3">
