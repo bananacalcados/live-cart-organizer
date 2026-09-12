@@ -132,6 +132,8 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           channelLabel: sale.sale_type,
           modality: sale.sale_type === "pos" ? "Presencial" : "Online",
           kind: "pos_sale",
+          paymentState: isSalePaid(sale) ? "paid" : "unpaid",
+          shipped: !!(sale as any).shipped_at || ["shipped", "delivered"].includes(String(sale.status || "")),
           items: saleItems.get(sale.id) || [],
         }));
         const expeditionHistory: POSCustomerOrder[] = expedition.map((item) => ({
