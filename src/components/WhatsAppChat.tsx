@@ -1335,7 +1335,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
               className="h-8 px-2 gap-1.5 text-xs font-medium text-white/80 hover:bg-white/10 max-w-[160px]"
               title="Trocar instância desta conversa"
             >
-              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              {isIgMode ? <Instagram className="h-3.5 w-3.5 shrink-0" /> : <Smartphone className="h-3.5 w-3.5 shrink-0" />}
               <span className="truncate">
                 {(boundNumber?.label) || 'Instância'}
               </span>
@@ -1363,6 +1363,48 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                   </span>
                 </DropdownMenuItem>
               ))}
+            {igNumbers.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs flex items-center gap-1.5">
+                  <Instagram className="h-3 w-3" /> Instagram (Direct)
+                </DropdownMenuLabel>
+                {!igHandleClean && (
+                  <div className="px-2 pb-1.5 text-[11px] text-muted-foreground">
+                    Pedido sem @ do Instagram — cadastre o @ para conversar por Direct.
+                  </div>
+                )}
+                {igHandleClean && igUserIdResolved && !igUserId && (
+                  <div className="px-2 pb-1.5 text-[11px] text-muted-foreground">
+                    @{igHandleClean} ainda não mandou Direct — o Instagram só permite responder quem já escreveu.
+                  </div>
+                )}
+                {igNumbers.map((n) => {
+                  const enabled = !!igUserId;
+                  const isCurrent = effectiveNumberId === n.id && isIgMode;
+                  const isPreferred = igDefaultNumberId === n.id;
+                  return (
+                    <DropdownMenuItem
+                      key={n.id}
+                      disabled={!enabled}
+                      className="flex-col items-start gap-0.5 cursor-pointer"
+                      onClick={() => {
+                        if (!enabled) return;
+                        setOverrideNumberId(n.id);
+                        toast.success(`Conversa agora envia pelo Direct de ${n.label}`);
+                      }}
+                    >
+                      <span className="font-medium text-sm">
+                        {n.label} {isCurrent ? '✓' : ''}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {n.phone_display} · instagram{isPreferred ? ' · histórico com @' + igHandleClean : ''}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
             {overrideNumberId && (
               <>
                 <DropdownMenuSeparator />
