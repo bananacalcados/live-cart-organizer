@@ -12,6 +12,7 @@ import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 import { cn } from "@/lib/utils";
 import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { ChatPixButton } from "@/components/ChatPixButton";
+import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 
 /** CEP visual: 00000-000. */
 function formatCep(value?: string | null): string {
@@ -56,6 +57,8 @@ export interface CustomerFichaPanelProps {
   /** Chamado ao clicar no X (modo painel lateral). */
   onClose?: () => void;
   className?: string;
+  /** Canal de envio da conversa aberta ao lado — habilita "Enviar PIX na conversa". */
+  getPixChannel?: () => PixSendChannel | null;
 }
 
 type Form = {
