@@ -312,7 +312,10 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   const contacts: NewContact[] = useMemo(() => {
     const byKey = new Map<string, NewContact>();
     for (const r of rows) {
-      const phone = r.real_phone || r.phone || r.entered_phone || "";
+      // Só quem realmente falou no WhatsApp (clique casado com mensagem).
+      // Quem clicou e digitou o telefone mas nunca mandou mensagem não vira card.
+      if (!r.phone) continue;
+      const phone = r.real_phone || r.phone || "";
       const key = suffix8(phone);
       if (!key || key.length < 8) continue;
       if (excludeKeys.has(key)) continue;
