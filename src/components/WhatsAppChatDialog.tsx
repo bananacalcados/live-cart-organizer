@@ -10,7 +10,7 @@ import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
-import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag } from "lucide-react";
+import { IdCard, ClipboardList, Headphones, Images, Gift, ShoppingBag, X } from "lucide-react";
 import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
 import type { DbOrder } from "@/types/database";
@@ -147,10 +147,16 @@ export function WhatsAppChatDialog({
                 pixChannelRef={pixChannelRef}
               />
             </div>
-             {withSidebar && panelOpen && <div className="hidden sm:block w-[480px] shrink-0 h-full border-l border-border/60 bg-card">{renderPanel()}</div>}
+             {withSidebar && panelOpen && <div className="relative hidden sm:block w-[480px] shrink-0 h-full border-l border-border/60 bg-card">
+               {activePanel !== "ficha" && activePanel !== "gift" && <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-20" onClick={() => setActivePanel(null)} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>}
+               {renderPanel()}
+             </div>}
           </div>
           {/* Mobile: ficha vira sobreposição de tela cheia dentro do modal */}
-           {withSidebar && panelOpen && <div className="absolute inset-0 z-10 sm:hidden bg-card">{renderPanel()}</div>}
+           {withSidebar && panelOpen && <div className="absolute inset-0 z-10 sm:hidden bg-card">
+             {activePanel !== "ficha" && activePanel !== "gift" && <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-20" onClick={() => setActivePanel(null)} aria-label="Fechar painel"><X className="h-4 w-4" /></Button>}
+             {renderPanel()}
+           </div>}
         </DialogContent>
       </Dialog>
 
