@@ -369,17 +369,22 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
           const [{ data: leads }, { data: evts }] = await Promise.all([
             leadIds.length
-              ? supabase.from("event_leads").select("id, name, phone").in("id", leadIds)
+              ? supabase.from("event_leads").select("id, name, phone, instagram").in("id", leadIds)
               : Promise.resolve({ data: [] as any[] }),
             eventIds.length
-              ? supabase.from("events").select("id, default_store_id, store_ids").in("id", eventIds)
+              ? supabase
+                  .from("events")
+                  .select("id, name, default_store_id, store_ids, wa_initial_number_id, whatsapp_number_id")
+                  .in("id", eventIds)
               : Promise.resolve({ data: [] as any[] }),
           ]);
           const leadById = new Map<string, any>((leads || []).map((l: any) => [String(l.id), l]));
           const storeByEvent = new Map<string, string | null>();
+          const eventById = new Map<string, any>();
           (evts || []).forEach((e: any) => {
             const s = (e.default_store_id as string) || (Array.isArray(e.store_ids) ? e.store_ids[0] : null) || null;
             storeByEvent.set(String(e.id), s ? String(s) : null);
+            eventById.set(String(e.id), e);
           });
 
           const amountOf = (o: any): number => {
