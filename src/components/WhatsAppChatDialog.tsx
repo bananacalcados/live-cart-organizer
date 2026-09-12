@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import {
   Dialog,
@@ -6,7 +6,6 @@ import {
 } from "@/components/ui/dialog";
 import { WhatsAppChat } from "./WhatsAppChat";
 import { Order } from "@/types/order";
-import { CustomerFichaPanel } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { EventCrossellDialog } from "./events/EventCrossellDialog";
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { DbOrder } from "@/types/database";
 import { OrderDialogDb } from "./OrderDialogDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
+import { LiveCustomerHistoryPanel } from "./events/LiveCustomerHistoryPanel";
 
 type LivePanel = "ficha" | "details" | "edit" | "crossell" | "gift" | "support" | null;
 
@@ -66,24 +66,36 @@ export function WhatsAppChatDialog({
   showSidebar,
 }: WhatsAppChatDialogProps) {
   const withSidebar = showSidebar ?? wide;
-  const [activePanel, setActivePanel] = useState<LivePanel>(null);
+  const [activePanel, setActivePanel] = useState<LivePanel>("ficha");
   const pixChannelRef = useRef<PixSendChannel | null>(null);
   const dbOrder = useDbOrderStore((state) => state.orders.find((item) => item.id === order.id) || null);
 
-  const fichaOrder = {
+  const fichaOrder = dbOrder || ({
     id: order.id,
+    event_id: "",
+    customer_id: "",
+    products: order.products || [],
+    stage: order.stage || "cart",
+    is_paid: false,
+    has_unread_messages: false,
+    created_at: order.createdAt?.toISOString?.() || new Date().toISOString(),
+    updated_at: order.updatedAt?.toISOString?.() || new Date().toISOString(),
     customer: {
       instagram_handle: order.instagramHandle || "",
       whatsapp: order.whatsapp || "",
     },
-  } as unknown as DbOrder;
+  } as unknown as DbOrder);
+
+  useEffect(() => {
+    if (open) setActivePanel("ficha");
+  }, [open, order.id]);
 
   const togglePanel = (panel: Exclude<LivePanel, null>) => setActivePanel((current) => current === panel ? null : panel);
   const panelOpen = activePanel !== null;
 
   const renderPanel = () => {
     const close = () => setActivePanel(null);
-    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
+    if (activePanel === "ficha") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
     if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
     if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
     if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
