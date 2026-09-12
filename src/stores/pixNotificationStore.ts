@@ -45,6 +45,8 @@ export interface PixTab {
   storeName?: string | null; // nome da loja (exibido no card)
   instanceLabel?: string | null; // rótulo da instância do WhatsApp do pedido
   orderNumber?: string | null; // nº do pedido (nota/tiny/externo), se houver
+  eventName?: string | null; // nome da Live (ex.: LIVE-PEROLA-10/09)
+  instagram?: string | null; // @ do Instagram do cliente, quando houver
 }
 
 const PAID_STATUSES = new Set(["paid", "online_paid", "approved", "completed"]);
@@ -367,17 +369,22 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
           const [{ data: leads }, { data: evts }] = await Promise.all([
             leadIds.length
-              ? supabase.from("event_leads").select("id, name, phone").in("id", leadIds)
+              ? supabase.from("customers").select("id, full_name, whatsapp, instagram_handle").in("id", leadIds)
               : Promise.resolve({ data: [] as any[] }),
             eventIds.length
-              ? supabase.from("events").select("id, default_store_id, store_ids").in("id", eventIds)
+              ? supabase
+                  .from("events")
+                  .select("id, name, default_store_id, store_ids, wa_initial_number_id, whatsapp_number_id")
+                  .in("id", eventIds)
               : Promise.resolve({ data: [] as any[] }),
           ]);
           const leadById = new Map<string, any>((leads || []).map((l: any) => [String(l.id), l]));
           const storeByEvent = new Map<string, string | null>();
+          const eventById = new Map<string, any>();
           (evts || []).forEach((e: any) => {
             const s = (e.default_store_id as string) || (Array.isArray(e.store_ids) ? e.store_ids[0] : null) || null;
             storeByEvent.set(String(e.id), s ? String(s) : null);
+            eventById.set(String(e.id), e);
           });
 
           const amountOf = (o: any): number => {
@@ -401,14 +408,25 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             const prev = existing.find((t) => t.saleId === oid);
             const amount = amountOf(o);
 
+            const evt = eventById.get(String(o.event_id));
+            const eventName = (evt?.name as string) || null;
+            // Instância configurada na Live: mensagem inicial (uazapi) > instância do evento.
+            const liveNumberId =
+              (evt?.wa_initial_number_id as string) || (evt?.whatsapp_number_id as string) || prev?.numberId || null;
+            const liveInstanceLabel = liveNumberId ? instanceLabelById.get(String(liveNumberId)) ?? null : null;
+            const igRaw = String(lead?.instagram_handle || "").trim().replace(/^@/, "");
+            const instagram = igRaw ? `@${igRaw}` : null;
+            const leadName = String(lead?.full_name || "").trim();
+            const displayName = leadName || instagram || prev?.name || "Cliente";
+
             if (o._paid) {
               if (isInitial) baseline.add(oid);
               const isFresh = prev?.fresh || (!baseline.has(oid) && !isInitial);
               const tab: PixTab = {
                 saleId: oid,
-                phone: (lead?.phone as string) || prev?.phone || "",
-                numberId: prev?.numberId || null,
-                name: (lead?.name as string) || prev?.name || "Cliente",
+                phone: (lead?.whatsapp as string) || prev?.phone || "",
+                numberId: liveNumberId,
+                name: displayName,
                 amount,
                 type: "live",
                 status: "paid",
@@ -418,8 +436,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
                 isLive: true,
                 storeId: orderStore,
                 storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
-                instanceLabel: null,
+                instanceLabel: liveInstanceLabel,
                 orderNumber: null,
+                eventName,
+                instagram,
               };
               next.push(tab);
               if (isFresh && !alerted.has(oid)) {
@@ -429,9 +449,9 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             } else {
               next.push({
                 saleId: oid,
-                phone: (lead?.phone as string) || prev?.phone || "",
-                numberId: prev?.numberId || null,
-                name: (lead?.name as string) || prev?.name || "Cliente",
+                phone: (lead?.whatsapp as string) || prev?.phone || "",
+                numberId: liveNumberId,
+                name: displayName,
                 amount,
                 type: "live",
                 status: "pending",
@@ -439,8 +459,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
                 isLive: true,
                 storeId: orderStore,
                 storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
-                instanceLabel: null,
+                instanceLabel: liveInstanceLabel,
                 orderNumber: null,
+                eventName,
+                instagram,
               });
             }
           }
