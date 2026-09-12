@@ -153,6 +153,12 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         { event: "*", schema: "public", table: "chat_awaiting_payment" },
         scheduleRefresh,
       )
+      .on(
+        // Pedidos de Live (tabela orders) também viram cards na barra.
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        scheduleRefresh,
+      )
       .subscribe();
 
     // Rede de segurança: confirma status real periodicamente (cobre o caminho
@@ -321,6 +327,126 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
           next.push(prev); // mantém paga até o operador descartar
         }
         // Caso contrário: sumiu da fila e não foi pago (cancelado) → remove.
+      }
+
+      // ================= Pedidos de Live (tabela orders) =================
+      // Entram na barra com tag LIVE: os EM ABERTO (últimos 14 dias, estágios
+      // de cobrança) e os PAGOS nas últimas 72h. Assim o operador acompanha e
+      // cobra os pedidos da Live sem sair do chat.
+      try {
+        const OPEN_LIVE_STAGES = ["new", "awaiting_payment", "awaiting_confirmation", "contacted", "incomplete_order"];
+        const openSince = new Date(Date.now() - 14 * 864e5).toISOString();
+        const paidSince = new Date(Date.now() - 72 * 36e5).toISOString();
+
+        const [{ data: openOrders }, { data: paidOrders }] = await Promise.all([
+          supabase
+            .from("orders")
+            .select("id, event_id, customer_id, stage, products, shipping_cost, free_shipping, created_at")
+            .in("stage", OPEN_LIVE_STAGES)
+            .eq("is_paid", false)
+            .is("merged_into_order_id", null)
+            .gte("created_at", openSince)
+            .limit(300),
+          supabase
+            .from("orders")
+            .select("id, event_id, customer_id, products, shipping_cost, free_shipping, created_at, paid_at")
+            .eq("is_paid", true)
+            .gte("paid_at", paidSince)
+            .order("paid_at", { ascending: false })
+            .limit(60),
+        ]);
+
+        const liveRows: any[] = [
+          ...(openOrders || []).map((o: any) => ({ ...o, _paid: false })),
+          ...(paidOrders || []).map((o: any) => ({ ...o, _paid: true })),
+        ].filter((o: any) => !dismissed.has(String(o.id)) && !saleById.has(String(o.id)));
+
+        if (liveRows.length > 0) {
+          const leadIds = Array.from(new Set(liveRows.map((o) => String(o.customer_id)).filter(Boolean)));
+          const eventIds = Array.from(new Set(liveRows.map((o) => String(o.event_id)).filter(Boolean)));
+
+          const [{ data: leads }, { data: evts }] = await Promise.all([
+            leadIds.length
+              ? supabase.from("event_leads").select("id, name, phone").in("id", leadIds)
+              : Promise.resolve({ data: [] as any[] }),
+            eventIds.length
+              ? supabase.from("events").select("id, default_store_id, store_ids").in("id", eventIds)
+              : Promise.resolve({ data: [] as any[] }),
+          ]);
+          const leadById = new Map<string, any>((leads || []).map((l: any) => [String(l.id), l]));
+          const storeByEvent = new Map<string, string | null>();
+          (evts || []).forEach((e: any) => {
+            const s = (e.default_store_id as string) || (Array.isArray(e.store_ids) ? e.store_ids[0] : null) || null;
+            storeByEvent.set(String(e.id), s ? String(s) : null);
+          });
+
+          const amountOf = (o: any): number => {
+            const items = Array.isArray(o.products) ? o.products : [];
+            const itemsTotal = items.reduce(
+              (acc: number, p: any) => acc + (Number(p?.price) || 0) * (Number(p?.quantity) || 1),
+              0,
+            );
+            const ship = o.free_shipping ? 0 : Number(o.shipping_cost) || 0;
+            return itemsTotal + ship;
+          };
+
+          for (const o of liveRows) {
+            const oid = String(o.id);
+            const orderStore = storeByEvent.get(String(o.event_id)) ?? null;
+            // Mesmo escopo por loja das outras abas.
+            if (scoped && orderStore && orderStore !== storeId) continue;
+            if (scoped && !orderStore) continue;
+
+            const lead = leadById.get(String(o.customer_id));
+            const prev = existing.find((t) => t.saleId === oid);
+            const amount = amountOf(o);
+
+            if (o._paid) {
+              if (isInitial) baseline.add(oid);
+              const isFresh = prev?.fresh || (!baseline.has(oid) && !isInitial);
+              const tab: PixTab = {
+                saleId: oid,
+                phone: (lead?.phone as string) || prev?.phone || "",
+                numberId: prev?.numberId || null,
+                name: (lead?.name as string) || prev?.name || "Cliente",
+                amount,
+                type: "live",
+                status: "paid",
+                createdAt: (o.paid_at as string) || (o.created_at as string) || new Date().toISOString(),
+                paidAt: prev?.paidAt || Date.now(),
+                fresh: isFresh,
+                isLive: true,
+                storeId: orderStore,
+                storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
+                instanceLabel: null,
+                orderNumber: null,
+              };
+              next.push(tab);
+              if (isFresh && !alerted.has(oid)) {
+                alerted.add(oid);
+                newlyPaid = newlyPaid || tab;
+              }
+            } else {
+              next.push({
+                saleId: oid,
+                phone: (lead?.phone as string) || prev?.phone || "",
+                numberId: prev?.numberId || null,
+                name: (lead?.name as string) || prev?.name || "Cliente",
+                amount,
+                type: "live",
+                status: "pending",
+                createdAt: (o.created_at as string) || new Date().toISOString(),
+                isLive: true,
+                storeId: orderStore,
+                storeName: orderStore ? storeNameById.get(String(orderStore)) ?? null : null,
+                instanceLabel: null,
+                orderNumber: null,
+              });
+            }
+          }
+        }
+      } catch (liveErr) {
+        console.error("[pix-notifications] live orders error:", liveErr);
       }
 
       // Ordena: pagos primeiro, depois por mais antigo.
