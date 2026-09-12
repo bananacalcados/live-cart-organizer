@@ -34,7 +34,7 @@ export function PixCopyMessage({ message }: PixCopyMessageProps) {
         <Button
           type="button"
           variant="ghost"
-          className="h-9 w-full justify-center gap-2 text-primary hover:bg-background/30 hover:text-primary"
+          className="h-9 w-full justify-center gap-2 font-bold text-black hover:bg-background/30 hover:text-black dark:text-black"
           onClick={copyCode}
           disabled={!code}
           title={code ? "Copiar código PIX" : "Botão enviado ao cliente"}
