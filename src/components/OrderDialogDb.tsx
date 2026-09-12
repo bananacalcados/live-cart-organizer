@@ -59,9 +59,10 @@ interface OrderDialogDbProps {
   prefillWhatsapp?: string;
   /** Nome do lead, usado como identificador quando não há @ do Instagram */
   prefillName?: string;
+  embedded?: boolean;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
@@ -750,8 +751,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const isBanned = editingOrder?.customer?.is_banned || existingCustomer?.is_banned;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={!embedded}>
+      <DialogContent className={embedded ? "relative flex h-full max-h-none w-full max-w-none flex-col border-0 shadow-none [&>button.absolute]:hidden" : "max-w-2xl max-h-[85vh] flex flex-col"} forceMount={embedded ? true : undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Instagram className="h-5 w-5 text-accent" />

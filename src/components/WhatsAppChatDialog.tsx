@@ -15,6 +15,7 @@ import { OrderGiftPanel } from "./events/OrderGiftPanel";
 import { cn } from "@/lib/utils";
 import type { DbOrder } from "@/types/database";
 import { OrderDialogDb } from "./OrderDialogDb";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 
 type LivePanel = "ficha" | "details" | "edit" | "crossell" | "gift" | "support" | null;
 
@@ -66,6 +67,7 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [activePanel, setActivePanel] = useState<LivePanel>(null);
   const pixChannelRef = useRef<PixSendChannel | null>(null);
+  const dbOrder = useDbOrderStore((state) => state.orders.find((item) => item.id === order.id) || null);
 
   const fichaOrder = {
     id: order.id,
@@ -77,6 +79,17 @@ export function WhatsAppChatDialog({
 
   const togglePanel = (panel: Exclude<LivePanel, null>) => setActivePanel((current) => current === panel ? null : panel);
   const panelOpen = activePanel !== null;
+
+  const renderPanel = () => {
+    const close = () => setActivePanel(null);
+    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
+    if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
+    if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
+    if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
+    if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} />;
+    if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
+    return null;
+  };
 
   // Com uma ferramenta aberta ao lado, o modal expande para acomodar chat + painel.
   const dialogClass = wide
