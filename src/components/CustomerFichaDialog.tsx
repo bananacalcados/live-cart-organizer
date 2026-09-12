@@ -167,6 +167,49 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           }
         }
 
+        // 3. Ficha salva SEM pedido fica no cadastro unificado (CRM) — preenche
+        //    tanto conversas sem pedido quanto pedidos cujo cadastro ainda é parcial.
+        const stillEmpty = !isRegUsable(base as any);
+        if (stillEmpty) {
+          const ig = String(order.customer?.instagram_handle || "")
+            .replace(/^@/, "")
+            .trim()
+            .toLowerCase();
+          const phone8 = String(order.customer?.whatsapp || "").replace(/\D/g, "").slice(-8);
+          const orParts: string[] = [];
+          if (ig) orParts.push(`instagram_handle.ilike.${ig}`);
+          if (phone8.length === 8) orParts.push(`phone_suffix8.eq.${phone8}`);
+          if (orParts.length) {
+            const { data: cu } = await supabase
+              .from("customers_unified")
+              .select(
+                "name,cpf,email,phone_e164,cep,address,address_number,complement,neighborhood,city,state",
+              )
+              .or(orParts.join(","))
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (cu) {
+              const p = fromRow({
+                full_name: cu.name,
+                cpf: cu.cpf,
+                email: cu.email,
+                whatsapp: cu.phone_e164,
+                cep: cu.cep,
+                address: cu.address,
+                address_number: cu.address_number,
+                complement: cu.complement,
+                neighborhood: cu.neighborhood,
+                city: cu.city,
+                state: cu.state,
+              });
+              (Object.keys(base) as (keyof Form)[]).forEach((k) => {
+                if (!base[k] && p[k]) base[k] = p[k];
+              });
+            }
+          }
+        }
+
         if (!base.whatsapp) base.whatsapp = formatBRPhone(order.customer?.whatsapp || "");
         setForm(base);
       } catch (e) {
