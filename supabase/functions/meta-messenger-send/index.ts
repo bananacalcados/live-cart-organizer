@@ -45,9 +45,19 @@ serve(async (req) => {
         const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
         if (acct.accessToken) pageAccessToken = acct.accessToken;
       } catch (e) {
-        console.error('Error resolving IG account token, falling back to global:', e);
+        console.error('Error resolving IG account token:', e);
       }
     }
+    if (!pageAccessToken && channel === 'instagram') {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        pageAccessToken = await preferredIgToken(supabase);
+      } catch { /* ignora */ }
+    }
+    if (!pageAccessToken) pageAccessToken = globalIgToken();
 
     if (!pageAccessToken) {
       return new Response(
