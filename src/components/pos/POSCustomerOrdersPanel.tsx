@@ -121,10 +121,21 @@ export function POSCustomerOrdersPanel({
             <ShoppingBag className="h-4 w-4 text-pos-orange" />
             <h3 className="text-sm font-bold">Pedidos {data?.orders.length ? `(${data.orders.length})` : ""}</h3>
           </div>
+          {unpaidCount > 0 ? (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {unpaidCount === 1
+                ? "1 pedido sem pagamento confirmado"
+                : `${unpaidCount} pedidos sem pagamento confirmado`}
+            </div>
+          ) : null}
           {data?.orders.length ? (
             <div className="space-y-2">
               {data.orders.map((order) => (
-                <div key={order.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                <div
+                  key={order.id}
+                  className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
+                >
                   <div className="flex items-start gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
                       <Package className="h-5 w-5" />
