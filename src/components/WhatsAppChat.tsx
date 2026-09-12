@@ -791,6 +791,11 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const handleSend = async () => {
     if (isSending || isUploading) return;
 
+    // Destino e "telefone" gravado: no modo Instagram é o ID do Direct da cliente.
+    const targetId = isIgMode && igUserId ? igUserId : phone;
+    const storedPhone = isIgMode && igUserId ? igUserId : normalizedPhone;
+    if (isIgMode && !targetId) { toast.error('Esta cliente ainda não tem conversa no Direct.'); return; }
+
     // Send media if selected
     if (selectedMedia) {
       setIsUploading(true);
@@ -804,7 +809,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       const tempId = `temp-${Date.now()}`;
       const tempMessage: Message = {
         id: tempId,
-        phone: normalizedPhone,
+        phone: storedPhone,
         message: newMessage.trim() || '',
         direction: 'outgoing',
         message_id: null,
@@ -816,12 +821,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       setMessages((prev) => [...prev, tempMessage]);
 
       setIsSending(true);
-      const result = await sendMessage(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      const result = await sendMessage(targetId, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       setIsSending(false);
 
       if (result.success) {
         await supabase.from('whatsapp_messages').insert({
-          phone: normalizedPhone,
+          phone: storedPhone,
           message: newMessage.trim() || `[${selectedMedia.type}]`,
           direction: 'outgoing',
           status: 'sent',
