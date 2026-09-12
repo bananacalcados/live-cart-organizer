@@ -128,8 +128,9 @@ function formatPhone(phone?: string | null): string {
 }
 
 /**
- * Contatos que digitaram o WhatsApp no link redirecionador DESTE evento e
- * ainda não têm pedido criado (inclui quem confirmou e nunca mandou mensagem).
+ * Contatos que digitaram o WhatsApp no link redirecionador DESTE evento,
+ * mandaram mensagem (clique casado) e ainda não têm pedido criado.
+ * Quem clicou e não falou não vira card (fica só como lead de retomada).
  * Dedup por DDD + 8 dígitos; mais recente primeiro.
  */
 export function useLiveNewContacts(eventId: string | null | undefined, excludeKeys: Set<string>, search?: string) {
