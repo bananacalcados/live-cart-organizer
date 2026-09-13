@@ -22934,6 +22934,21 @@ export type Database = {
       }
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
+      get_relatorio_grade_live: {
+        Args: { p_live_id: string; p_status?: string }
+        Returns: {
+          cor: string
+          grade_cheia: boolean
+          grades: number
+          produto_nome: string
+          status: string
+          tamanhos_estouro: string[]
+          tamanhos_fora_da_grade: Json
+          total_vendido: number
+          vender_mais: Json
+          vendidos: Json
+        }[]
+      }
       get_rfm_summary: { Args: never; Returns: Json }
       get_sale_installment_override: {
         Args: { p_sale_id: string }
