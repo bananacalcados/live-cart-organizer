@@ -390,14 +390,14 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
           </div>
 
           {/* Painel de grades */}
-          <div className="rounded-lg border overflow-hidden flex-1 flex flex-col min-h-[240px]">
-            <div className="grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+          <div className="rounded-lg border flex-1 min-h-0 flex flex-col">
+            <div className="grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground shrink-0">
               <span>Produto · cor</span>
               <span>Status</span>
               <span>Vendidos</span>
               <span>Vender mais</span>
             </div>
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
               {!eventId ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">
                   Selecione uma live para ver o painel de grades.
