@@ -356,15 +356,15 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
           Relatório
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             Relatório de Grades da Live
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 flex-1 overflow-hidden flex flex-col">
+        <div className="space-y-4 py-2 flex-1 min-h-0 flex flex-col">
           {/* Filtro de pagamento + atualização */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as PaymentFilter)}>
