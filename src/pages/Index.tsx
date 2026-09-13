@@ -236,7 +236,7 @@ const Index = () => {
               </div>
               <div className="flex items-center gap-2">
                 <LiveActiveToggleButton eventId={currentEventId} />
-                <OrderReportDialog orders={orders} />
+                <OrderReportDialog orders={orders} eventId={currentEventId} />
                 <Button
                   variant="outline"
                   size="sm"
