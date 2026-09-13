@@ -63,7 +63,9 @@ export function POSCustomerOrdersPanel({
   liveOrderPanel,
   renderOrderActions,
 }: Props) {
-  const unpaidCount = (data?.orders || []).filter((order) => order.paymentState === "unpaid").length;
+  const paidOrders = (data?.orders || []).filter((order) => order.paymentState === "paid");
+  const unpaidOrders = (data?.orders || []).filter((order) => order.paymentState === "unpaid");
+  const unpaidCount = unpaidOrders.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
@@ -121,76 +123,103 @@ export function POSCustomerOrdersPanel({
         <section>
           <div className="mb-3 flex items-center gap-2">
             <ShoppingBag className="h-4 w-4 text-pos-orange" />
-            <h3 className="text-sm font-bold">Pedidos {data?.orders.length ? `(${data.orders.length})` : ""}</h3>
+            <h3 className="text-sm font-bold">Pedidos pagos {paidOrders.length ? `(${paidOrders.length})` : ""}</h3>
           </div>
           {unpaidCount > 0 ? (
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {unpaidCount === 1
                 ? "1 pedido sem pagamento confirmado"
-                : `${unpaidCount} pedidos sem pagamento confirmado`}
+                : `${unpaidCount} pedido(s) não pago(s) estão listados abaixo e não entram nas ações`}
             </div>
           ) : null}
-          {data?.orders.length ? (
+          {paidOrders.length ? (
             <div className="space-y-2">
-              {data.orders.map((order) => (
-                <div
-                  key={order.id}
-                  className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
-                      <Package className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
-                        {order.paymentState === "unpaid" ? (
-                          <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
-                        ) : order.paymentState === "paid" ? (
-                          <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
-                        ) : null}
-                        <Badge variant="outline" className="text-[10px]">{statusLabels[order.status || ""] || order.status}</Badge>
-                        {order.modality ? <Badge variant="secondary" className="text-[10px]">{order.modality}</Badge> : null}
-                        {order.paymentState === "unpaid" ? (
-                          <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
-                            {order.shipped ? "Enviado sem pagamento" : "Não enviado"}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
-                      {order.items?.length ? (
-                        <ul className="space-y-0.5">
-                          {order.items.map((item, index) => (
-                            <li key={index} className="flex items-start gap-1 text-xs text-foreground/80">
-                              <span className="text-pos-orange">•</span>
-                              <span>{item.quantity && item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}{item.variant ? ` — ${item.variant}` : ""}{item.size ? ` (${item.size})` : ""}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
-                      {order.paymentState === "unpaid" ? (
-                        <p className="text-[11px] font-semibold text-destructive">
-                          Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
-                        </p>
-                      ) : (
-                        renderOrderActions(order)
-                      )}
-                    </div>
-                    {order.totalPrice != null ? (
-                      <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
-                        R$ {order.totalPrice.toFixed(2)}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
+              {paidOrders.map((order) => (
+                <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} />
               ))}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">Nenhum pedido encontrado para este cliente.</p>
+            <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">Nenhum pedido pago encontrado para este cliente.</p>
           )}
+
+          {unpaidCount > 0 ? (
+            <div className="mt-6">
+              <div className="mb-3 flex items-center gap-2">
+                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-bold text-muted-foreground">Não pagos / checkout em aberto {unpaidOrders.length ? `(${unpaidOrders.length})` : ""}</h3>
+              </div>
+              <div className="space-y-2 opacity-90">
+                {unpaidOrders.map((order) => (
+                  <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function OrderCard({
+  order,
+  statusLabels,
+  renderOrderActions,
+}: {
+  order: POSCustomerOrder;
+  statusLabels: Record<string, string>;
+  renderOrderActions: (order: POSCustomerOrder) => ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
+          <Package className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
+            {order.paymentState === "unpaid" ? (
+              <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
+            ) : order.paymentState === "paid" ? (
+              <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
+            ) : null}
+            <Badge variant="outline" className="text-[10px]">{statusLabels[order.status || ""] || order.status}</Badge>
+            {order.modality ? <Badge variant="secondary" className="text-[10px]">{order.modality}</Badge> : null}
+            {order.paymentState === "unpaid" ? (
+              <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
+                {order.shipped ? "Enviado sem pagamento" : "Não enviado"}
+              </Badge>
+            ) : null}
+          </div>
+          {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
+          {order.items?.length ? (
+            <ul className="space-y-0.5">
+              {order.items.map((item, index) => (
+                <li key={index} className="flex items-start gap-1 text-xs text-foreground/80">
+                  <span className="text-pos-orange">•</span>
+                  <span>{item.quantity && item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}{item.variant ? ` — ${item.variant}` : ""}{item.size ? ` (${item.size})` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
+          {order.paymentState === "unpaid" ? (
+            <p className="text-[11px] font-semibold text-destructive">
+              Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
+            </p>
+          ) : (
+            renderOrderActions(order)
+          )}
+        </div>
+        {order.totalPrice != null ? (
+          <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
+            R$ {order.totalPrice.toFixed(2)}
+          </span>
+        ) : null}
       </div>
     </div>
   );
