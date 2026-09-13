@@ -162,6 +162,69 @@ export function POSCustomerOrdersPanel({
   );
 }
 
+function OrderCard({
+  order,
+  statusLabels,
+  renderOrderActions,
+}: {
+  order: POSCustomerOrder;
+  statusLabels: Record<string, string>;
+  renderOrderActions: (order: POSCustomerOrder) => ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
+          <Package className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
+            {order.paymentState === "unpaid" ? (
+              <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
+            ) : order.paymentState === "paid" ? (
+              <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
+            ) : null}
+            <Badge variant="outline" className="text-[10px]">{statusLabels[order.status || ""] || order.status}</Badge>
+            {order.modality ? <Badge variant="secondary" className="text-[10px]">{order.modality}</Badge> : null}
+            {order.paymentState === "unpaid" ? (
+              <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
+                {order.shipped ? "Enviado sem pagamento" : "Não enviado"}
+              </Badge>
+            ) : null}
+          </div>
+          {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
+          {order.items?.length ? (
+            <ul className="space-y-0.5">
+              {order.items.map((item, index) => (
+                <li key={index} className="flex items-start gap-1 text-xs text-foreground/80">
+                  <span className="text-pos-orange">•</span>
+                  <span>{item.quantity && item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}{item.variant ? ` — ${item.variant}` : ""}{item.size ? ` (${item.size})` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
+          {order.paymentState === "unpaid" ? (
+            <p className="text-[11px] font-semibold text-destructive">
+              Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
+            </p>
+          ) : (
+            renderOrderActions(order)
+          )}
+        </div>
+        {order.totalPrice != null ? (
+          <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
+            R$ {order.totalPrice.toFixed(2)}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function Info({ icon, label, value, className }: { icon: ReactNode; label: string; value: string; className?: string }) {
   return (
     <div className={`flex items-start gap-3 rounded-lg border bg-muted/30 p-3 ${className || ""}`}>
