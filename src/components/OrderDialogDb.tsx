@@ -758,6 +758,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           // Apply discount, shipping, and extras if set during creation
           if (newOrder) {
             const extraUpdates: Record<string, unknown> = {};
+            if (phoneLast4.length === 4) extraUpdates.phone_last4 = phoneLast4;
+
             if (discountType) {
               extraUpdates.discount_type = discountType;
               extraUpdates.discount_value = discountValue ?? 0;
