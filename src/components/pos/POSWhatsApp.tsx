@@ -2463,10 +2463,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <CreditCard className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Checkout</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => openSideTool("pix")} title="Gerar PIX" disabled={requiresInstanceSelection}>
-                  <QrCode className="h-3.5 w-3.5" />
-                  <span className="hidden xl:inline">PIX</span>
-                </Button>
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-orange-500" onClick={() => openSideTool("boleto")} title="Gerar Boleto" disabled={requiresInstanceSelection}>
                   <FileText className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Boleto</span>

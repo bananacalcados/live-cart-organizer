@@ -1261,10 +1261,6 @@ export default function ChatPage() {
                     <CreditCard className="h-3.5 w-3.5" />
                     <span className="hidden xl:inline">Checkout</span>
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-400" onClick={() => setShowPix(true)} title="Gerar PIX">
-                    <QrCode className="h-3.5 w-3.5" />
-                    <span className="hidden xl:inline">PIX</span>
-                  </Button>
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#8696a0]" onClick={() => setShowCatalog(true)} title="Catálogo Shopify">
                     <ShoppingBag className="h-3.5 w-3.5" />
                     <span className="hidden xl:inline">Catálogo</span>

@@ -67,25 +67,6 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
                 </div>
               </button>
 
-              <button
-                onClick={() => setMode("custom-link")}
-                className="text-left bg-white border border-teal-200/60 rounded-2xl p-6 shadow-[var(--shadow-pos-card,0_4px_12px_rgba(0,0,0,0.06))] hover:shadow-xl hover:-translate-y-0.5 transition-all group"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-500 text-white shadow-md">
-                    <Receipt className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-bold text-neutral-800">Criar link avulso</h3>
-                      <ChevronRight className="h-5 w-5 text-neutral-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition" />
-                    </div>
-                    <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                      Cobre apenas um valor (ex.: diferença), sem produto vinculado e sem frete
-                    </p>
-                  </div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
