@@ -373,7 +373,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="flex items-center justify-between border-t pt-3">
               <div className="text-sm">
