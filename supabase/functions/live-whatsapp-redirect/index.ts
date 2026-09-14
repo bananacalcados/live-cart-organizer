@@ -77,18 +77,19 @@ serve(async (req) => {
 
       const { data: click } = await supabase
         .from("live_whatsapp_clicks")
-        .select("id, link_id, code, entered_phone")
+        .select("id, link_id, code, entered_phone, event_id")
         .eq("id", clickId)
         .maybeSingle();
       if (!click) return json({ error: "not_found" }, 404);
 
       const { data: link } = await supabase
         .from("live_whatsapp_links")
-        .select("id, target_phone, message_text, is_active")
+        .select("id, event_id, target_phone, message_text, is_active")
         .eq("id", click.link_id)
         .maybeSingle();
       if (!link) return json({ error: "not_found" }, 404);
       if (!link.is_active) return json({ error: "paused" }, 200);
+
 
       const targetPhone = String(link.target_phone || "").replace(/\D/g, "");
       if (!targetPhone) return json({ error: "link sem telefone de destino" }, 500);
@@ -124,10 +125,26 @@ serve(async (req) => {
           });
       }
 
+      // Vinculação pelos 4 últimos dígitos: se houver exatamente um pedido desta
+      // live com o mesmo final, grava o telefone no cadastro e identifica o @.
+      let handle: string | null = null;
+      const eventId = click.event_id || link.event_id || null;
+      if (saved && eventId) {
+        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_by_last4", {
+          p_event_id: eventId,
+          p_phone_e164: norm.e164,
+        });
+        if (linkErr) console.error("[live-whatsapp-redirect] link by last4 error:", linkErr);
+        const h = (linkRes as any)?.instagram_handle;
+        if ((linkRes as any)?.ok && h) handle = String(h).replace(/^@/, "");
+      }
+
       const baseText = (link.message_text || "Oii, vim da Live, pode me ajudar?").trim();
-      const text = saved ? `${baseText} #${code}` : baseText;
+      const withHandle = handle ? `${baseText} — @${handle}` : baseText;
+      const text = saved ? `${withHandle} #${code}` : withHandle;
       const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;
-      return json({ wa_url: waUrl, text, code: saved ? code : null, target_phone: targetPhone, phone: norm.e164 });
+      return json({ wa_url: waUrl, text, code: saved ? code : null, target_phone: targetPhone, phone: norm.e164, instagram_handle: handle });
+
     }
 
     // ─────────────────────────── PASSO 1: registrar o clique ───────────────────────────

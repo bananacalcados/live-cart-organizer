@@ -47,6 +47,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
+/** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
+const normHandle = (v?: string | null) =>
+  String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
+
+/** 4 últimos dígitos de um telefone. */
+const last4Of = (v?: string | null) => {
+  const d = String(v ?? "").replace(/\D/g, "");
+  return d.length >= 4 ? d.slice(-4) : "";
+};
+
 interface OrderDialogDbProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,7 +90,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [fullName, setFullName] = useState("");
+  /** 4 últimos dígitos informados na live (vinculação automática do WhatsApp). */
+  const [phoneLast4, setPhoneLast4] = useState("");
+  /** @ que originou o telefone atual — evita telefone "grudado" de outro @. */
+  const [phoneOwnerHandle, setPhoneOwnerHandle] = useState("");
+  const [last4Conflict, setLast4Conflict] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
@@ -206,9 +222,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
   useEffect(() => {
     setEditingHandle(false);
+    if (!open) {
+      // Fecha → zera tudo, para que o próximo pedido nunca herde telefone/@.
+      if (!editingOrder) resetForm();
+      return;
+    }
     if (editingOrder) {
-      setInstagramHandle(editingOrder.customer?.instagram_handle || "");
-      setWhatsapp(editingOrder.customer?.whatsapp || "");
+      const handle = editingOrder.customer?.instagram_handle || "";
+      const phone = editingOrder.customer?.whatsapp || "";
+      setInstagramHandle(handle);
+      setWhatsapp(phone);
+      setPhoneOwnerHandle(normHandle(handle));
+      setPhoneLast4((editingOrder as any).phone_last4 || last4Of(phone));
       setFullName((editingOrder.customer as any)?.full_name || "");
       setCartLink(editingOrder.cart_link || "");
       setNotes(editingOrder.notes || "");
@@ -228,38 +253,59 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setPixCode("");
     } else {
       resetForm();
-      if (prefillName && open) setFullName(prefillName);
-      if (prefillInstagram && open) {
+      if (prefillName) setFullName(prefillName);
+      if (prefillInstagram) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
       }
-      if (prefillWhatsapp && open) {
+      if (prefillWhatsapp) {
         const normalized = normalizeBRPhone(prefillWhatsapp);
         setWhatsapp(normalized);
+        setPhoneLast4(last4Of(normalized));
         const known = findCustomerByWhatsApp(normalized);
         if (known?.instagram_handle) {
           setInstagramHandle(known.instagram_handle.replace(/^@/, ""));
+          setPhoneOwnerHandle(normHandle(known.instagram_handle));
         } else if (!prefillInstagram) {
           const slug = (prefillName || "")
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .toLowerCase().trim().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
           setInstagramHandle(slug || normalized);
+          setPhoneOwnerHandle(normHandle(slug || normalized));
+        } else {
+          setPhoneOwnerHandle(normHandle(prefillInstagram));
         }
       }
     }
   }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillName]);
 
 
+  // Telefone nunca acompanha a troca de @: se o @ muda e o telefone atual veio
+  // de OUTRO @, limpa telefone e final de 4 dígitos.
+  useEffect(() => {
+    if (editingOrder || !open) return;
+    const current = normHandle(instagramHandle);
+    if (!phoneOwnerHandle || !current || current === phoneOwnerHandle) return;
+    setWhatsapp("");
+    setPhoneLast4("");
+    setPhoneOwnerHandle("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instagramHandle, editingOrder, open]);
+
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {
     if (existingCustomer && !editingOrder) {
       if (existingCustomer.whatsapp) {
         setWhatsapp(existingCustomer.whatsapp);
+        setPhoneLast4(last4Of(existingCustomer.whatsapp));
+        setPhoneOwnerHandle(normHandle(existingCustomer.instagram_handle || instagramHandle));
       }
       if ((existingCustomer as any).full_name && !fullName.trim()) {
         setFullName((existingCustomer as any).full_name);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingCustomer, editingOrder]);
+
 
   // Fallback no banco (com debounce) quando o @ digitado não está no cache
   // local — cobre cadastros legados "@ handle" e cache ainda não carregado.
@@ -300,6 +346,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const resetForm = () => {
     setInstagramHandle("");
     setWhatsapp("");
+    setPhoneLast4("");
+    setPhoneOwnerHandle("");
+    setLast4Conflict(null);
+
     setFullName("");
     setCartLink("");
     setNotes("");
@@ -319,6 +369,29 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setPickupStoreId("");
     setIsDelivery(false);
   };
+
+  // Outro pedido desta live com o MESMO final de 4 dígitos → vinculação manual.
+  useEffect(() => {
+    if (!open || !eventId || phoneLast4.length !== 4) { setLast4Conflict(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, customer:customers(instagram_handle, full_name)")
+        .eq("event_id", eventId)
+        .eq("phone_last4", phoneLast4)
+        .neq("stage", "cancelled")
+        .limit(5);
+      if (cancelled) return;
+      const other = (data || []).filter((o: any) => o.id !== editingOrder?.id);
+      if (!other.length) { setLast4Conflict(null); return; }
+      const c: any = other[0].customer;
+      setLast4Conflict(c?.instagram_handle || c?.full_name || "outro pedido");
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [open, eventId, phoneLast4, editingOrder?.id]);
+
+
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
     setLocalProducts((prev) => {
@@ -613,7 +686,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         // Update existing order
         const orderUpdates: Partial<DbOrder> = {
+          phone_last4: phoneLast4.length === 4 ? phoneLast4 : null,
           cart_link: cartLink || null,
+
           notes: notes || null,
           stage,
           products: localProducts,
@@ -683,6 +758,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           // Apply discount, shipping, and extras if set during creation
           if (newOrder) {
             const extraUpdates: Record<string, unknown> = {};
+            if (phoneLast4.length === 4) extraUpdates.phone_last4 = phoneLast4;
+
             if (discountType) {
               extraUpdates.discount_type = discountType;
               extraUpdates.discount_value = discountValue ?? 0;
@@ -711,6 +788,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             if (Object.keys(extraUpdates).length > 0) {
               await updateOrder(newOrder.id, extraUpdates as Partial<DbOrder>);
             }
+
+            // Vinculação retroativa: cliente pode ter clicado no link ANTES do
+            // pedido existir. Só considera cliques desta live, do mesmo dia.
+            if (phoneLast4.length === 4 && !normalizedWa) {
+              const { data: bf } = await supabase.rpc("live_backfill_order_phone", {
+                p_order_id: newOrder.id,
+              });
+              if ((bf as any)?.ok) {
+                toast.success("Pedido vinculado ao WhatsApp da cliente pelo final informado.");
+                await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+              } else if ((bf as any)?.ambiguous) {
+                toast.warning("Mais de um WhatsApp com esse final nesta live — vincule manualmente.");
+              }
+            }
+
+
 
             if (prefillCommentId) {
               await supabase
@@ -894,7 +987,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 id="whatsapp"
                 placeholder="5511999999999"
                 value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
+                onChange={(e) => {
+                  setWhatsapp(e.target.value);
+                  setPhoneOwnerHandle(normHandle(instagramHandle));
+                  const l4 = last4Of(e.target.value);
+                  if (l4) setPhoneLast4(l4);
+                }}
+
                 onBlur={() => {
                   if (whatsapp.trim()) {
                     const digits = whatsapp.replace(/\D/g, '');
@@ -937,10 +1036,58 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="phoneLast4" className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              4 últimos dígitos do WhatsApp (falados na live)
+            </Label>
+            <Input
+              id="phoneLast4"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="0000"
+              className="w-32 text-lg font-mono tracking-widest"
+              value={phoneLast4}
+              onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Quando a cliente entrar pelo link da live e digitar o WhatsApp
+              completo, o pedido é vinculado sozinho por esse final.
+            </p>
+          </div>
+
+          {!!last4Conflict && (
+            <Alert className="border-2 border-destructive bg-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDescription className="text-base font-semibold text-destructive">
+                Atenção: já existe o pedido de <strong>{last4Conflict}</strong> nesta
+                live com o final <strong>{phoneLast4}</strong>. A vinculação com o
+                WhatsApp terá que ser feita manualmente. O pedido pode ser salvo
+                normalmente.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!editingOrder && existingCustomerByWhatsApp &&
+            normHandle(existingCustomerByWhatsApp.instagram_handle) !== normHandle(instagramHandle) && (
+            <Alert className="border-2 border-destructive bg-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDescription className="text-base font-semibold text-destructive">
+                Confira: este WhatsApp já está cadastrado em{" "}
+                <strong>{existingCustomerByWhatsApp.instagram_handle}</strong>
+                {(existingCustomerByWhatsApp as any).full_name
+                  ? ` (${(existingCustomerByWhatsApp as any).full_name})`
+                  : ""}
+                , e não em <strong>@{normHandle(instagramHandle) || "—"}</strong>.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
             <Label htmlFor="fullName" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Nome completo do cliente
             </Label>
+
             <Input
               id="fullName"
               placeholder="Maria Aparecida da Silva"
