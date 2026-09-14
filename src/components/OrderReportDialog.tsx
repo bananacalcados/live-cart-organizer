@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
@@ -21,7 +21,9 @@ import { DbOrder } from "@/types/database";
 interface OrderReportDialogProps {
   orders: DbOrder[];
   eventId?: string | null;
+  trigger?: React.ReactNode;
 }
+
 
 type PaymentFilter = "pago" | "nao_pago" | "ambos";
 
@@ -52,8 +54,9 @@ interface ReportProduct {
   }[];
 }
 
-export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
+export function OrderReportDialog({ orders, eventId, trigger }: OrderReportDialogProps) {
   const [open, setOpen] = useState(false);
+
   const [filterDuplicates, setFilterDuplicates] = useState(false);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
@@ -269,11 +272,14 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Relatório
-        </Button>
+        {trigger || (
+          <Button variant="outline" size="sm" className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Relatório
+          </Button>
+        )}
       </DialogTrigger>
+
       <DialogContent className="max-w-6xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">

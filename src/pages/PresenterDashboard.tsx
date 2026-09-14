@@ -10,14 +10,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
-  MessageCircle, CheckCheck, MessageSquareX, Send
+  MessageCircle, CheckCheck, MessageSquareX, Send, Target
 } from "lucide-react";
+
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
-import { LiveGradePanel } from "@/components/events/LiveGradePanel";
+import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
+
 
 
 interface PresenterAlert {
@@ -302,7 +304,7 @@ export default function PresenterDashboard() {
       </div>
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <Card className="bg-green-600 border-green-700 dark:bg-green-900/30 dark:border-green-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
             <DollarSign className="h-8 w-8 text-white dark:text-green-400" />
@@ -339,7 +341,23 @@ export default function PresenterDashboard() {
             </div>
           </CardContent>
         </Card>
+        <OrderReportDialog
+          orders={orders as any}
+          eventId={eventId}
+          trigger={(
+            <Card className="bg-rose-600 border-rose-700 dark:bg-rose-900/30 dark:border-rose-700/50 shadow-md cursor-pointer hover:bg-rose-700 dark:hover:bg-rose-900/50 transition-colors">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Target className="h-8 w-8 text-white dark:text-rose-400" />
+                <div>
+                  <p className="text-xs font-semibold text-rose-50 dark:text-rose-300">Grades · Foco</p>
+                  <p className="text-xl font-bold text-white dark:text-rose-100">Abrir</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        />
       </div>
+
 
       {/* Comentários da Live — logo abaixo do painel de métricas */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
@@ -364,28 +382,10 @@ export default function PresenterDashboard() {
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
           </TabsTrigger>
-          <TabsTrigger value="grades" className="gap-1 data-[state=active]:bg-primary/20">
-            <TrendingUp className="h-4 w-4" /> Grades · Foco de Venda
-          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="grades">
-          <Card className="bg-muted-foreground/5 border-muted-foreground/15">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-primary" /> Relatório de Grades da Live
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Os tamanhos em destaque são o que falta vender para fechar a grade — foque neles.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <LiveGradePanel eventId={eventId} className="h-[calc(100vh-420px)] min-h-[360px]" />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="live">
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Alerts Column */}
             <div>
