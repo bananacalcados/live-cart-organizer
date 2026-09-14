@@ -47,6 +47,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
+/** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
+const normHandle = (v?: string | null) =>
+  String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
+
+/** 4 últimos dígitos de um telefone. */
+const last4Of = (v?: string | null) => {
+  const d = String(v ?? "").replace(/\D/g, "");
+  return d.length >= 4 ? d.slice(-4) : "";
+};
+
 interface OrderDialogDbProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
