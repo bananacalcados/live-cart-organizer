@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
