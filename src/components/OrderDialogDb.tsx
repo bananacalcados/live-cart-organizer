@@ -346,6 +346,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const resetForm = () => {
     setInstagramHandle("");
     setWhatsapp("");
+    setPhoneLast4("");
+    setPhoneOwnerHandle("");
+    setLast4Conflict(null);
+
     setFullName("");
     setCartLink("");
     setNotes("");
