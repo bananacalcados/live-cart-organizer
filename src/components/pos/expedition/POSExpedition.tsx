@@ -847,8 +847,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                   setFilterExpFrom("");
                   setFilterExpTo("");
                   setFilterTest("hide");
+                  setSearch("");
+                  setProductSearch("");
                 }}
               >
+
                 <X className="h-4 w-4 mr-1" /> Limpar filtros
               </Button>
               <span className="text-sm font-semibold text-pos-muted-text">
