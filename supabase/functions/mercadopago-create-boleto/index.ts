@@ -290,6 +290,16 @@ serve(async (req) => {
         console.error(`[mp-boleto] divergência de linha digitável! MP=${mpDigitable} calc=${computed}`);
       }
     }
+    // Sem linha digitável E sem link oficial não existe boleto pagável: falha explícita
+    // em vez de enviar ao cliente um PDF que o banco vai recusar.
+    if (!digitableLine && !mpBoletoUrl) {
+      await supabase.from("pos_boletos")
+        .update({ status: "error", error_message: "MP não retornou linha digitável nem link do boleto" })
+        .eq("id", boletoId);
+      throw new Error("Mercado Pago não devolveu um boleto pagável. Tente novamente.");
+    }
+
+
 
     // 3) Opcional: PIX gêmeo
     let pixPaymentId: string | null = null;
