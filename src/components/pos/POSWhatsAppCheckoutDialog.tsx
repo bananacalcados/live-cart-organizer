@@ -355,7 +355,7 @@ export function POSWhatsAppCheckoutDialog({
                       <div className="flex-1 min-w-0">
                         <p className="break-words text-sm font-semibold leading-snug">{item.title}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {[item.variantLabel, item.size ? `Numeração ${item.size}` : "", typeof item.stock === "number" ? `${item.stock} em estoque` : ""].filter(Boolean).join(" · ")}
+                          {[item.variantLabel, item.size ? `Numeração ${item.size}` : "", typeof item.stock === "number" ? (item.stock > 0 ? `${item.stock} em estoque` : "sem estoque") : ""].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                       <span className="text-xs font-bold text-primary shrink-0">{fmt(item.price)}</span>
