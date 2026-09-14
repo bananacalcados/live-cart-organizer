@@ -21,7 +21,9 @@ import { DbOrder } from "@/types/database";
 interface OrderReportDialogProps {
   orders: DbOrder[];
   eventId?: string | null;
+  trigger?: React.ReactNode;
 }
+
 
 type PaymentFilter = "pago" | "nao_pago" | "ambos";
 
