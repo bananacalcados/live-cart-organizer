@@ -68,6 +68,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+
   const [expanded, setExpanded] = useState<string | null>(focusSaleId || null);
   useEffect(() => { if (focusSaleId) setExpanded(focusSaleId); }, [focusSaleId]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -103,7 +105,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   useEffect(() => {
     setSelected(new Set());
+    setProductSearch("");
   }, [stage, storeId, allStores]);
+
 
   const runTestAction = async (action: "create" | "purge") => {
     if (action === "purge" && !confirm("Excluir TODOS os pedidos de teste?")) return;
@@ -234,6 +238,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const pq = productSearch.trim().toLowerCase();
     return orders.filter((o) => {
       if (filterTest === "hide" && o.is_test) return false;
       if (filterTest === "only" && !o.is_test) return false;
@@ -324,6 +329,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           }
         }
       }
+      // --- Filtro dedicado por produto (nome, SKU, variação, tamanho) ---
+      if (pq) {
+        const matchesProduct = o.items.some((i) =>
+          (i.product_name || "").toLowerCase().includes(pq) ||
+          (i.sku || "").toLowerCase().includes(pq) ||
+          (i.variant_name || "").toLowerCase().includes(pq) ||
+          (i.size || "").toLowerCase().includes(pq)
+        );
+        if (!matchesProduct) return false;
+      }
       if (!q) return true;
       return (
         (o.customer_name || "").toLowerCase().includes(q) ||
@@ -332,7 +347,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
       );
     });
-  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+  }, [orders, search, productSearch, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
@@ -568,16 +584,28 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               {allStores ? "— TODAS AS LOJAS" : storeName ? `— ${storeName}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-muted-text" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar cliente, produto, rastreio..."
-                className="pl-9 h-12 w-72 text-base"
+                className="pl-9 h-12 w-64 text-base"
               />
             </div>
+            {stage === "concluido" && (
+              <div className="relative">
+                <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-muted-text" />
+                <Input
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Filtrar por produto..."
+                  className="pl-9 h-12 w-64 text-base border-exp-done/50 focus-visible:ring-exp-done"
+                />
+              </div>
+            )}
+
             <Button variant="outline" size="lg" onClick={load} disabled={loading}>
               <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
             </Button>
@@ -821,8 +849,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                   setFilterExpFrom("");
                   setFilterExpTo("");
                   setFilterTest("hide");
+                  setSearch("");
+                  setProductSearch("");
                 }}
               >
+
                 <X className="h-4 w-4 mr-1" /> Limpar filtros
               </Button>
               <span className="text-sm font-semibold text-pos-muted-text">
