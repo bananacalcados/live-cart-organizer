@@ -498,6 +498,70 @@ export function POSGenerateBoletoDialog({
           </DialogTitle>
         </DialogHeader>
 
+        {/* ── Boletos já gerados para este cliente ─────────────────────── */}
+        {(history.length > 0 || loadingHistory) && (
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold"
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-orange-500" />
+                Boletos já gerados{history.length ? ` (${history.length})` : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">{showHistory ? "ocultar" : "ver"}</span>
+            </button>
+            {showHistory && (
+              <div className="max-h-[220px] space-y-1 overflow-y-auto border-t p-2">
+                {loadingHistory && <div className="p-2 text-xs text-muted-foreground">Carregando...</div>}
+                {history.map((b) => (
+                  <div key={b.id} className="rounded border p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">{fmt(Number(b.amount))}</span>
+                      <span className="text-muted-foreground">
+                        Venc. {new Date(b.due_date + "T00:00:00").toLocaleDateString("pt-BR")} ·{" "}
+                        {b.status === "paid" ? "pago" : b.status === "cancelled" ? "cancelado" : "aguardando"}
+                      </span>
+                    </div>
+                    {b.description && <div className="mt-0.5 truncate text-muted-foreground">{b.description}</div>}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={openingPdf === b.id}
+                        onClick={() => openBoletoPdf(b.id)}
+                      >
+                        {openingPdf === b.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ExternalLink className="mr-1 h-3 w-3" />}
+                        Ver / baixar PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={sending}
+                        onClick={() =>
+                          sendBoleto({
+                            boletoId: b.id,
+                            amount: Number(b.amount),
+                            dueDate: b.due_date,
+                            boletoUrl: b.mp_boleto_url,
+                          })
+                        }
+                      >
+                        <Send className="mr-1 h-3 w-3" /> Enviar no WhatsApp
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+
+
         {!result ? (
           <div className="grid gap-3 min-w-0">
             {/* ── Produtos do pedido ─────────────────────────────── */}
