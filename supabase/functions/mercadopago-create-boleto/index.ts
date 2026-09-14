@@ -523,6 +523,8 @@ serve(async (req) => {
         digitableLine,
         digitableLineFormatted: digitableLine ? formatDigitableLine(digitableLine) : null,
         pdfUrl: signed?.signedUrl || null,
+        pdfPublicUrl,
+
         pixQrCode,
         pixQrBase64,
         amount: chargeAmount,
