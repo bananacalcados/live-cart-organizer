@@ -105,7 +105,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   useEffect(() => {
     setSelected(new Set());
+    setProductSearch("");
   }, [stage, storeId, allStores]);
+
 
   const runTestAction = async (action: "create" | "purge") => {
     if (action === "purge" && !confirm("Excluir TODOS os pedidos de teste?")) return;
