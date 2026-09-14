@@ -73,7 +73,7 @@ export function POSWhatsAppCheckoutDialog({
   }, [debouncedSearch, open]);
 
   // Catálogo interno (pos_products) é a fonte da verdade: mostra TODAS as
-  // variações com estoque em QUALQUER loja (estoque compartilhado).
+  // variações do catálogo, COM ou SEM estoque (venda sob encomenda).
   const loadProducts = async () => {
     setLoading(true);
     try {
@@ -81,9 +81,8 @@ export function POSWhatsAppCheckoutDialog({
       let q = supabase
         .from("pos_products")
         .select("name, variant, size, color, sku, barcode, price, stock, image_url")
-        .gt("stock", 0)
         .order("name", { ascending: true })
-        .limit(1000);
+        .limit(2000);
 
       if (term) {
         const isCode = /^\d{6,14}$/.test(term);
@@ -123,7 +122,15 @@ export function POSWhatsAppCheckoutDialog({
         });
       }
 
-      setProducts(Array.from(map.values()));
+      // Com estoque primeiro; sem estoque continua disponível para seleção
+      setProducts(
+        Array.from(map.values()).sort((a, b) => {
+          const sa = (a as any).stock > 0 ? 0 : 1;
+          const sb = (b as any).stock > 0 ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+          return a.title.localeCompare(b.title, "pt-BR");
+        })
+      );
     } catch {
       setProducts([]);
     } finally {
@@ -348,7 +355,7 @@ export function POSWhatsAppCheckoutDialog({
                       <div className="flex-1 min-w-0">
                         <p className="break-words text-sm font-semibold leading-snug">{item.title}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {[item.variantLabel, item.size ? `Numeração ${item.size}` : "", typeof item.stock === "number" ? `${item.stock} em estoque` : ""].filter(Boolean).join(" · ")}
+                          {[item.variantLabel, item.size ? `Numeração ${item.size}` : "", typeof item.stock === "number" ? (item.stock > 0 ? `${item.stock} em estoque` : "sem estoque") : ""].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                       <span className="text-xs font-bold text-primary shrink-0">{fmt(item.price)}</span>
