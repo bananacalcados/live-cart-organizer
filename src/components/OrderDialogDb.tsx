@@ -967,7 +967,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 id="whatsapp"
                 placeholder="5511999999999"
                 value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
+                onChange={(e) => {
+                  setWhatsapp(e.target.value);
+                  setPhoneOwnerHandle(normHandle(instagramHandle));
+                  const l4 = last4Of(e.target.value);
+                  if (l4) setPhoneLast4(l4);
+                }}
+
                 onBlur={() => {
                   if (whatsapp.trim()) {
                     const digits = whatsapp.replace(/\D/g, '');
