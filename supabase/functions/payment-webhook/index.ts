@@ -236,6 +236,30 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       .maybeSingle();
     console.log(`[mercadopago] boleto ${boletoId} -> ${newStatus} (row=${!!bol})`);
 
+    // Pedido do PDV vinculado ao boleto: ao pagar, vira venda paga (entra na Expedição).
+    if (newStatus === "paid") {
+      const { data: linkedSales } = await supabase
+        .from("pos_sales")
+        .select("id, status")
+        .eq("mercadopago_payment_id", mpIdStr)
+        .limit(1);
+      const linked = linkedSales?.[0];
+      if (linked && linked.status !== "paid" && linked.status !== "completed") {
+        const { error: saleErr } = await supabase
+          .from("pos_sales")
+          .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+            payment_gateway: "mercadopago",
+            payment_method: "Boleto",
+            notes: `🔔 Boleto pago (MP ${mpIdStr})`,
+          })
+          .eq("id", linked.id);
+        if (saleErr) console.error("[mercadopago] falha ao marcar venda do boleto como paga:", saleErr);
+        else console.log(`[mercadopago] pos_sale ${linked.id} paga via boleto`);
+      }
+    }
+
     // 🎡 Baixa o prêmio da roleta reservado para este boleto.
     if (newStatus === "paid") {
       try {
