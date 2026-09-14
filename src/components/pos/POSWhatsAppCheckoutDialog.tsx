@@ -78,29 +78,42 @@ export function POSWhatsAppCheckoutDialog({
     setLoading(true);
     try {
       const term = debouncedSearch.trim();
-      let q = supabase
-        .from("pos_products")
-        .select("name, variant, size, color, sku, barcode, price, stock, image_url")
-        .order("name", { ascending: true })
-        .limit(2000);
+      const pageSize = 1000;
+      const rows: any[] = [];
 
-      if (term) {
-        const isCode = /^\d{6,14}$/.test(term);
-        if (isCode) {
-          q = q.or(`barcode.eq.${term},sku.eq.${term}`);
-        } else {
-          for (const w of term.split(/\s+/).filter(Boolean).slice(0, 4)) {
-            q = q.ilike("name", `%${w}%`);
+      // O backend devolve no máximo 1.000 registros por chamada. Como cada
+      // variação existe em várias lojas, uma busca ampla podia ser cortada no
+      // meio de uma grade e esconder tamanhos. Pagina até trazer tudo.
+      for (let from = 0; ; from += pageSize) {
+        let q = supabase
+          .from("pos_products")
+          .select("name, variant, size, color, sku, barcode, price, stock, image_url, store_id")
+          .order("name", { ascending: true })
+          .order("barcode", { ascending: true })
+          .order("store_id", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (term) {
+          const isCode = /^\d{6,14}$/.test(term);
+          if (isCode) {
+            q = q.or(`barcode.eq.${term},sku.eq.${term}`);
+          } else {
+            for (const w of term.split(/\s+/).filter(Boolean).slice(0, 4)) {
+              q = q.ilike("name", `%${w}%`);
+            }
           }
         }
-      }
 
-      const { data, error } = await q;
-      if (error) throw error;
+        const { data, error } = await q;
+        if (error) throw error;
+        const page = data || [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
 
       // Agrupa a mesma variação vendida em lojas diferentes (soma estoque)
       const map = new Map<string, CartItem & { stock: number }>();
-      for (const r of (data || []) as any[]) {
+      for (const r of rows) {
         const key = (r.barcode || r.sku || `${r.name}|${r.variant}`).toString();
         const variantLabel = [r.color, r.variant].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" · ");
         const existing = map.get(key);
