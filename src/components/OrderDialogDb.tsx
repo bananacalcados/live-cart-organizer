@@ -789,6 +789,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               await updateOrder(newOrder.id, extraUpdates as Partial<DbOrder>);
             }
 
+            // Vinculação retroativa: cliente pode ter clicado no link ANTES do
+            // pedido existir. Só considera cliques desta live, do mesmo dia.
+            if (phoneLast4.length === 4 && !normalizedWa) {
+              const { data: bf } = await supabase.rpc("live_backfill_order_phone", {
+                p_order_id: newOrder.id,
+              });
+              if ((bf as any)?.ok) {
+                toast.success("Pedido vinculado ao WhatsApp da cliente pelo final informado.");
+                await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+              } else if ((bf as any)?.ambiguous) {
+                toast.warning("Mais de um WhatsApp com esse final nesta live — vincule manualmente.");
+              }
+            }
+
+
+
             if (prefillCommentId) {
               await supabase
                 .from("live_comments")
