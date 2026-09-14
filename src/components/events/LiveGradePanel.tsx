@@ -179,30 +179,32 @@ export function LiveGradePanel({
                 <div
                   key={`${row.produto_nome}-${row.cor}-${idx}`}
                   className={cn(
-                    "grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] items-start gap-3 border-t px-3 py-2 text-sm",
+                    "grid grid-cols-[minmax(0,2fr)_160px_minmax(0,2fr)_minmax(0,2fr)] items-start gap-3 border-t px-3 py-3 text-base",
                     style.row,
                   )}
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{row.produto_nome}</div>
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="whitespace-normal break-words text-base font-semibold leading-tight">
+                      {row.produto_nome}
+                    </div>
+                    <div className="whitespace-normal break-words text-sm text-muted-foreground">
                       {row.cor} · {row.total_vendido} pares
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", style.pill)}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn("rounded-full border px-2 py-0.5 text-sm font-semibold", style.pill)}>
                       {style.label}
                     </span>
                     {row.status !== "sem_grade" && (
-                      <span className="font-mono text-xs text-muted-foreground">{row.grades}g</span>
+                      <span className="font-mono text-sm text-muted-foreground">{row.grades}g</span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {(row.vendidos ?? []).map((v) => (
                       <span
                         key={`v-${v.tam}`}
                         className={cn(
-                          "rounded bg-muted/60 px-1.5 py-0.5 font-mono text-xs text-muted-foreground",
+                          "rounded bg-muted/60 px-2 py-0.5 font-mono text-sm font-medium text-muted-foreground",
                           (v.estouro || estouro.has(v.tam)) && "bg-amber-500/15 text-amber-600",
                         )}
                       >
@@ -210,21 +212,21 @@ export function LiveGradePanel({
                       </span>
                     ))}
                     {(row.tamanhos_fora_da_grade ?? []).length > 0 && (
-                      <span className="font-mono text-[11px] text-muted-foreground/80">
+                      <span className="font-mono text-sm text-muted-foreground/80">
                         fora: {row.tamanhos_fora_da_grade.map((f) => `${f.tam}×${f.qtd}`).join(" ")}
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {row.status === "sem_grade" ? (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">—</span>
                     ) : row.grade_cheia || (row.vender_mais ?? []).length === 0 ? (
-                      <span className="text-xs font-medium text-emerald-600">Grade cheia</span>
+                      <span className="text-base font-bold text-emerald-600">Grade cheia</span>
                     ) : (
                       row.vender_mais.map((v) => (
                         <span
                           key={`m-${v.tam}`}
-                          className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-primary"
+                          className="rounded bg-primary/15 px-2 py-1 font-mono text-lg font-extrabold text-foreground"
                         >
                           {v.tam}×{v.qtd}
                         </span>
