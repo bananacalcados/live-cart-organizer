@@ -29,6 +29,7 @@ interface Props {
 interface BoletoResult {
   boletoId: string;
   pdfUrl: string | null;
+  publicPdfUrl?: string | null;
   boletoUrl: string | null;
   barcode: string | null;
   digitableLine: string | null;
@@ -37,6 +38,17 @@ interface BoletoResult {
   amount: number;
   dueDate: string;
 }
+
+interface BoletoHistoryItem {
+  id: string;
+  created_at: string;
+  amount: number;
+  due_date: string;
+  status: string;
+  description: string | null;
+  mp_boleto_url: string | null;
+}
+
 
 interface CartItem {
   id: string;
