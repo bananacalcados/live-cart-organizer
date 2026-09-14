@@ -54,8 +54,9 @@ interface ReportProduct {
   }[];
 }
 
-export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
+export function OrderReportDialog({ orders, eventId, trigger }: OrderReportDialogProps) {
   const [open, setOpen] = useState(false);
+
   const [filterDuplicates, setFilterDuplicates] = useState(false);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
