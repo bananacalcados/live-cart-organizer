@@ -300,7 +300,8 @@ export function POSGenerateBoletoDialog({
 
       setResult({
         boletoId: data.boletoId,
-        pdfUrl: data.pdfUrl,
+        pdfUrl: data.pdfPublicUrl || data.pdfUrl,
+        publicPdfUrl: data.pdfPublicUrl ?? null,
         boletoUrl: data.boletoUrl,
         barcode: data.barcode,
         digitableLine: data.digitableLine ?? null,
@@ -309,6 +310,8 @@ export function POSGenerateBoletoDialog({
         amount: data.amount,
         dueDate: data.dueDate,
       });
+      loadHistory();
+
       toast.success("Boleto gerado com sucesso");
     } catch (e: any) {
       console.error(e);
