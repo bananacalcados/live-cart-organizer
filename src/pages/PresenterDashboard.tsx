@@ -15,6 +15,7 @@ import {
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
+import { LiveGradePanel } from "@/components/events/LiveGradePanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 
@@ -363,7 +364,26 @@ export default function PresenterDashboard() {
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
           </TabsTrigger>
+          <TabsTrigger value="grades" className="gap-1 data-[state=active]:bg-primary/20">
+            <TrendingUp className="h-4 w-4" /> Grades · Foco de Venda
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="grades">
+          <Card className="bg-muted-foreground/5 border-muted-foreground/15">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" /> Relatório de Grades da Live
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Os tamanhos em destaque são o que falta vender para fechar a grade — foque neles.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <LiveGradePanel eventId={eventId} className="h-[calc(100vh-420px)] min-h-[360px]" />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="live">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { FileDown, Filter, AlertTriangle, Users, Package, X, Search, RefreshCw } from "lucide-react";
+import { useState, useMemo } from "react";
+import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
+import { LiveGradePanel } from "@/components/events/LiveGradePanel";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { DbOrder } from "@/types/database";
 
@@ -28,24 +25,7 @@ interface OrderReportDialogProps {
 
 type PaymentFilter = "pago" | "nao_pago" | "ambos";
 
-type LinhaGrade = {
-  produto_nome: string;
-  cor: string;
-  total_vendido: number;
-  grades: number;
-  status: "lucro" | "empate" | "prejuizo" | "sem_grade";
-  vendidos: { tam: string; qtd: number; estouro: boolean }[];
-  vender_mais: { tam: string; qtd: number }[];
-  tamanhos_estouro: string[];
-  grade_cheia: boolean;
-  tamanhos_fora_da_grade: { tam: string; qtd: number }[];
-};
 
-const PAYMENT_OPTIONS: { id: PaymentFilter; label: string }[] = [
-  { id: "pago", label: "PAGOS" },
-  { id: "nao_pago", label: "NÃO PAGOS" },
-  { id: "ambos", label: "AMBOS" },
-];
 
 // Colunas (stages) considerados "pagos"/pós-pagamento que podem entrar no relatório
 const REPORT_STAGES: { id: string; label: string }[] = [
@@ -58,16 +38,6 @@ const REPORT_STAGES: { id: string; label: string }[] = [
 ];
 const ALL_REPORT_STAGE_IDS = REPORT_STAGES.map((s) => s.id);
 
-const STATUS_STYLES: Record<LinhaGrade["status"], { label: string; pill: string; row?: string }> = {
-  lucro: { label: "Lucro", pill: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" },
-  empate: { label: "Empate", pill: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
-  prejuizo: {
-    label: "Prejuízo",
-    pill: "bg-destructive/15 text-destructive border-destructive/30",
-    row: "bg-destructive/5",
-  },
-  sem_grade: { label: "Fora da grade", pill: "bg-muted text-muted-foreground border-border" },
-};
 
 interface ReportProduct {
   id: string;
@@ -95,60 +65,10 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
   // Filtro de pagamento (controla painel + exportação)
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("pago");
 
-  const [gradeRows, setGradeRows] = useState<LinhaGrade[]>([]);
-  const [loadingGrade, setLoadingGrade] = useState(false);
-  const [gradeError, setGradeError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
   const toggleStage = (id: string) =>
     setSelectedStages((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
-
-  const loadGrade = useCallback(async () => {
-    if (!eventId) return;
-    setLoadingGrade(true);
-    setGradeError(null);
-    const { data, error } = await (supabase as any).rpc("get_relatorio_grade_live", {
-      p_live_id: eventId,
-      p_status: paymentFilter,
-    });
-    if (error) {
-      setGradeError(error.message);
-      setGradeRows([]);
-    } else {
-      setGradeRows((data as LinhaGrade[]) ?? []);
-      setUpdatedAt(new Date());
-    }
-    setLoadingGrade(false);
-  }, [eventId, paymentFilter]);
-
-  useEffect(() => {
-    if (!open || !eventId) return;
-    loadGrade();
-  }, [open, eventId, loadGrade]);
-
-  // Tempo real: recarrega a RPC com debounce a cada mudança nos pedidos da live
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!open || !eventId) return;
-    const channel = supabase
-      .channel(`grade-report-${eventId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `event_id=eq.${eventId}` },
-        () => {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => loadGrade(), 500);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [open, eventId, loadGrade]);
 
   // Filter orders
   const filteredOrders = useMemo(() => {
@@ -339,8 +259,6 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
     link.click();
   };
 
-  const totalPares = gradeRows.reduce((sum, r) => sum + (r.total_vendido || 0), 0);
-  const totalGrades = gradeRows.reduce((sum, r) => sum + (r.grades || 0), 0);
 
   return (
     <Dialog
@@ -365,126 +283,13 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-2 flex-1 min-h-0 flex flex-col">
-          {/* Filtro de pagamento + atualização */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as PaymentFilter)}>
-              <TabsList>
-                {PAYMENT_OPTIONS.map((opt) => (
-                  <TabsTrigger key={opt.id} value={opt.id} className="text-xs">
-                    {opt.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {updatedAt && (
-                <span>
-                  atualizado às{" "}
-                  {updatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
-              <Button variant="ghost" size="sm" onClick={loadGrade} disabled={!eventId || loadingGrade}>
-                <RefreshCw className={cn("h-4 w-4", loadingGrade && "animate-spin")} />
-              </Button>
-            </div>
-          </div>
-
-          {/* Painel de grades */}
-          <div className="rounded-lg border flex-1 min-h-0 flex flex-col">
-            <div className="grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground shrink-0">
-              <span>Produto · cor</span>
-              <span>Status</span>
-              <span>Vendidos</span>
-              <span>Vender mais</span>
-            </div>
-            <ScrollArea className="flex-1 min-h-0">
-              {!eventId ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  Selecione uma live para ver o painel de grades.
-                </div>
-              ) : loadingGrade && gradeRows.length === 0 ? (
-                <div className="p-3 space-y-2">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : gradeError ? (
-                <div className="p-6 text-center text-sm text-destructive">{gradeError}</div>
-              ) : gradeRows.length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  Nenhum par no filtro atual
-                </div>
-              ) : (
-                gradeRows.map((row, idx) => {
-                  const style = STATUS_STYLES[row.status] ?? STATUS_STYLES.sem_grade;
-                  const estouro = new Set(row.tamanhos_estouro ?? []);
-                  return (
-                    <div
-                      key={`${row.produto_nome}-${row.cor}-${idx}`}
-                      className={cn(
-                        "grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 border-t items-start text-sm",
-                        style.row,
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{row.produto_nome}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {row.cor} · {row.total_vendido} pares
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", style.pill)}>
-                          {style.label}
-                        </span>
-                        {row.status !== "sem_grade" && (
-                          <span className="font-mono text-xs text-muted-foreground">{row.grades}g</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {(row.vendidos ?? []).map((v) => (
-                          <span
-                            key={`v-${v.tam}`}
-                            className={cn(
-                              "font-mono text-xs rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground",
-                              (v.estouro || estouro.has(v.tam)) && "bg-amber-500/15 text-amber-600",
-                            )}
-                          >
-                            {v.tam}×{v.qtd}
-                          </span>
-                        ))}
-                        {(row.tamanhos_fora_da_grade ?? []).length > 0 && (
-                          <span className="font-mono text-[11px] text-muted-foreground/80">
-                            fora: {row.tamanhos_fora_da_grade.map((f) => `${f.tam}×${f.qtd}`).join(" ")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {row.status === "sem_grade" ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : row.grade_cheia || (row.vender_mais ?? []).length === 0 ? (
-                          <span className="text-xs font-medium text-emerald-600">Grade cheia</span>
-                        ) : (
-                          row.vender_mais.map((v) => (
-                            <span
-                              key={`m-${v.tam}`}
-                              className="font-mono text-xs font-semibold rounded px-1.5 py-0.5 bg-primary/15 text-primary"
-                            >
-                              {v.tam}×{v.qtd}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </ScrollArea>
-            {gradeRows.length > 0 && (
-              <div className="px-3 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
-                {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s)
-              </div>
-            )}
-          </div>
+          <LiveGradePanel
+            eventId={eventId}
+            active={open}
+            paymentFilter={paymentFilter}
+            onPaymentFilterChange={setPaymentFilter}
+            className="flex-1"
+          />
 
           <Separator />
 
