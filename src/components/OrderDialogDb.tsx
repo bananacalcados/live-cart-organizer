@@ -1016,10 +1016,58 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="phoneLast4" className="flex items-center gap-2">
+              <Phone className="h-4 w-4" />
+              4 últimos dígitos do WhatsApp (falados na live)
+            </Label>
+            <Input
+              id="phoneLast4"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="0000"
+              className="w-32 text-lg font-mono tracking-widest"
+              value={phoneLast4}
+              onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Quando a cliente entrar pelo link da live e digitar o WhatsApp
+              completo, o pedido é vinculado sozinho por esse final.
+            </p>
+          </div>
+
+          {!!last4Conflict && (
+            <Alert className="border-2 border-destructive bg-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDescription className="text-base font-semibold text-destructive">
+                Atenção: já existe o pedido de <strong>{last4Conflict}</strong> nesta
+                live com o final <strong>{phoneLast4}</strong>. A vinculação com o
+                WhatsApp terá que ser feita manualmente. O pedido pode ser salvo
+                normalmente.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!editingOrder && existingCustomerByWhatsApp &&
+            normHandle(existingCustomerByWhatsApp.instagram_handle) !== normHandle(instagramHandle) && (
+            <Alert className="border-2 border-destructive bg-destructive/10">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDescription className="text-base font-semibold text-destructive">
+                Confira: este WhatsApp já está cadastrado em{" "}
+                <strong>{existingCustomerByWhatsApp.instagram_handle}</strong>
+                {(existingCustomerByWhatsApp as any).full_name
+                  ? ` (${(existingCustomerByWhatsApp as any).full_name})`
+                  : ""}
+                , e não em <strong>@{normHandle(instagramHandle) || "—"}</strong>.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
             <Label htmlFor="fullName" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Nome completo do cliente
             </Label>
+
             <Input
               id="fullName"
               placeholder="Maria Aparecida da Silva"
