@@ -173,6 +173,9 @@ export function POSGenerateBoletoDialog({
       if (found) return prev.map((c) => (c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c));
       return [...prev, { ...item, quantity: 1 }];
     });
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setProducts([]);
   };
   const updateQty = (id: string, delta: number) =>
     setCart((prev) => prev.map((c) => (c.id === id ? { ...c, quantity: Math.max(1, c.quantity + delta) } : c)));
@@ -387,7 +390,7 @@ export function POSGenerateBoletoDialog({
 
   return (
     <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
-      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full w-full min-w-0 overflow-y-auto overflow-x-hidden p-4" : "max-w-2xl max-h-[92vh] overflow-y-auto"}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full w-full max-w-full min-w-0 overflow-y-auto overflow-x-hidden p-3 [&_*]:min-w-0" : "max-w-2xl max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-orange-500" />
@@ -398,7 +401,7 @@ export function POSGenerateBoletoDialog({
         {!result ? (
           <div className="grid gap-3 min-w-0">
             {/* ── Produtos do pedido ─────────────────────────────── */}
-            <div className="rounded-lg border p-3 space-y-2">
+            <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border p-3 space-y-2">
               <div className="text-sm font-semibold">Produtos do pedido</div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -436,12 +439,16 @@ export function POSGenerateBoletoDialog({
               {hasCart && (
                 <div className="space-y-1">
                   {cart.map((c) => (
-                    <div key={c.id} className="flex flex-wrap items-center gap-2 rounded border p-2">
-                      <div className="min-w-0 flex-1">
+                    <div key={c.id} className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 rounded border p-2">
+                      <div className="min-w-0 self-center">
                         <div className="truncate text-sm font-medium">{c.title}</div>
                         <div className="truncate text-xs text-muted-foreground">{c.variantLabel}</div>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setCart((p) => p.filter((x) => x.id !== c.id))}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                      <div className="col-span-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
+                       <div className="flex shrink-0 items-center gap-1">
                         <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQty(c.id, -1)}>
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -449,18 +456,19 @@ export function POSGenerateBoletoDialog({
                         <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQty(c.id, 1)}>
                           <Plus className="h-3 w-3" />
                         </Button>
+                       </div>
+                       <div className="min-w-0">
+                         <Label className="sr-only">Preço do produto</Label>
+                         <Input
+                           className="h-8 w-full min-w-0"
+                           value={String(c.price).replace(".", ",")}
+                           onChange={(e) => updatePrice(c.id, parseNum(e.target.value))}
+                         />
+                       </div>
                       </div>
-                      <Input
-                        className="h-8 w-20 min-w-0"
-                        value={String(c.price).replace(".", ",")}
-                        onChange={(e) => updatePrice(c.id, parseNum(e.target.value))}
-                      />
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCart((p) => p.filter((x) => x.id !== c.id))}>
-                        <X className="h-3 w-3" />
-                      </Button>
                     </div>
                   ))}
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className={embedded ? "grid grid-cols-1 gap-2 pt-1" : "grid grid-cols-2 gap-2 pt-1"}>
                     <div>
                       <Label className="text-xs">Frete (R$)</Label>
                       <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0,00" />
@@ -478,8 +486,8 @@ export function POSGenerateBoletoDialog({
               )}
             </div>
 
-            <div className={embedded ? "grid grid-cols-1 gap-3 min-w-0" : "grid grid-cols-2 gap-3"}>
-              <div className="col-span-2">
+            <div className={embedded ? "grid w-full min-w-0 grid-cols-1 gap-3 [&>*]:col-span-1 [&>*]:w-full [&>*]:max-w-full" : "grid grid-cols-2 gap-3"}>
+              <div className={embedded ? "col-span-1" : "col-span-2"}>
                 <Label>Nome completo *</Label>
                 <Input value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
               </div>
@@ -499,7 +507,7 @@ export function POSGenerateBoletoDialog({
                 <Label>E-mail *</Label>
                 <Input type="email" value={form.customer_email} onChange={(e) => set("customer_email", e.target.value)} />
               </div>
-              <div className="col-span-2">
+              <div className={embedded ? "col-span-1" : "col-span-2"}>
                 <Label>WhatsApp</Label>
                 <Input value={maskPhoneBR(form.customer_phone)} onChange={(e) => set("customer_phone", digitsOnly(e.target.value))} />
               </div>
@@ -512,7 +520,7 @@ export function POSGenerateBoletoDialog({
                 <Label>Estado *</Label>
                 <Input maxLength={2} value={form.address_state} onChange={(e) => set("address_state", e.target.value.toUpperCase())} />
               </div>
-              <div className="col-span-2">
+              <div className={embedded ? "col-span-1" : "col-span-2"}>
                 <Label>Rua *</Label>
                 <Input value={form.address_street} onChange={(e) => set("address_street", e.target.value)} />
               </div>
@@ -548,23 +556,23 @@ export function POSGenerateBoletoDialog({
                 <Input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} />
               </div>
 
-              <div className="col-span-2">
+              <div className={embedded ? "col-span-1" : "col-span-2"}>
                 <Label>Descrição</Label>
                 <Textarea rows={2} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Ex: Pedido #1234 - Tênis" />
               </div>
 
-              <div className="col-span-2 flex items-center justify-between rounded-lg border p-3">
-                <div>
+              <div className={`${embedded ? "col-span-1" : "col-span-2"} flex min-w-0 items-center justify-between gap-3 rounded-lg border p-3`}>
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">Incluir QR Code PIX no boleto</div>
                   <div className="text-xs text-muted-foreground">Cliente escolhe pagar por boleto ou PIX (mesmo valor)</div>
                 </div>
-                <Switch checked={form.include_pix} onCheckedChange={(v) => set("include_pix", v)} />
+                <Switch className="shrink-0" checked={form.include_pix} onCheckedChange={(v) => set("include_pix", v)} />
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className={embedded ? "flex w-full flex-col gap-2 sm:flex-col" : undefined}>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={generate} disabled={loading}>
+              <Button className={embedded ? "w-full" : undefined} onClick={generate} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
                 Gerar boleto
               </Button>
