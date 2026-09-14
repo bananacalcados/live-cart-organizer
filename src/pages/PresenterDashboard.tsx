@@ -304,7 +304,7 @@ export default function PresenterDashboard() {
       </div>
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <Card className="bg-green-600 border-green-700 dark:bg-green-900/30 dark:border-green-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
             <DollarSign className="h-8 w-8 text-white dark:text-green-400" />
@@ -341,7 +341,23 @@ export default function PresenterDashboard() {
             </div>
           </CardContent>
         </Card>
+        <OrderReportDialog
+          orders={orders as any}
+          eventId={eventId}
+          trigger={(
+            <Card className="bg-rose-600 border-rose-700 dark:bg-rose-900/30 dark:border-rose-700/50 shadow-md cursor-pointer hover:bg-rose-700 dark:hover:bg-rose-900/50 transition-colors">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Target className="h-8 w-8 text-white dark:text-rose-400" />
+                <div>
+                  <p className="text-xs font-semibold text-rose-50 dark:text-rose-300">Grades · Foco</p>
+                  <p className="text-xl font-bold text-white dark:text-rose-100">Abrir</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        />
       </div>
+
 
       {/* Comentários da Live — logo abaixo do painel de métricas */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
