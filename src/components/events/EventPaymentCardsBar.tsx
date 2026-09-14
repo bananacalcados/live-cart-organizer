@@ -744,6 +744,18 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             </LiveLaneSection>
 
             <LiveLaneSection
+              id="unread"
+              eventId={eventId}
+              title="Não lidas"
+              count={laneUnread.length}
+              tone="text-emerald-500"
+              icon={<MessageSquare className="h-3.5 w-3.5 text-emerald-500" />}
+            >
+              {renderRow(laneUnread, false, "Nenhuma cliente com pedido esperando resposta.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+
               id="awaiting"
               eventId={eventId}
               title="Aguardando pagamento"
