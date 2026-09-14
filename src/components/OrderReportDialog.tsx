@@ -272,11 +272,14 @@ export function OrderReportDialog({ orders, eventId, trigger }: OrderReportDialo
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <FileDown className="h-4 w-4" />
-          Relatório
-        </Button>
+        {trigger || (
+          <Button variant="outline" size="sm" className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Relatório
+          </Button>
+        )}
       </DialogTrigger>
+
       <DialogContent className="max-w-6xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
