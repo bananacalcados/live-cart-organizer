@@ -29,6 +29,7 @@ interface Props {
 interface BoletoResult {
   boletoId: string;
   pdfUrl: string | null;
+  publicPdfUrl?: string | null;
   boletoUrl: string | null;
   barcode: string | null;
   digitableLine: string | null;
@@ -37,6 +38,17 @@ interface BoletoResult {
   amount: number;
   dueDate: string;
 }
+
+interface BoletoHistoryItem {
+  id: string;
+  created_at: string;
+  amount: number;
+  due_date: string;
+  status: string;
+  description: string | null;
+  mp_boleto_url: string | null;
+}
+
 
 interface CartItem {
   id: string;
@@ -65,6 +77,13 @@ export function POSGenerateBoletoDialog({
   const [result, setResult] = useState<BoletoResult | null>(null);
   const [status, setStatus] = useState<string>("pending");
   const [checking, setChecking] = useState(false);
+
+  // ── Boletos já gerados para este cliente ──────────────────────────────
+  const [history, setHistory] = useState<BoletoHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [openingPdf, setOpeningPdf] = useState<string | null>(null);
+
 
   // ── Produtos do pedido ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,6 +125,28 @@ export function POSGenerateBoletoDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  /** Boletos já gerados para este telefone (ver / baixar / reenviar). */
+  const loadHistory = async () => {
+    if (!phone) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-boleto-pdf", {
+        body: { action: "list", phone },
+      });
+      if (error) throw error;
+      setHistory((data?.boletos || []) as BoletoHistoryItem[]);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, phone]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -300,7 +341,8 @@ export function POSGenerateBoletoDialog({
 
       setResult({
         boletoId: data.boletoId,
-        pdfUrl: data.pdfUrl,
+        pdfUrl: data.pdfPublicUrl || data.pdfUrl,
+        publicPdfUrl: data.pdfPublicUrl ?? null,
         boletoUrl: data.boletoUrl,
         barcode: data.barcode,
         digitableLine: data.digitableLine ?? null,
@@ -309,6 +351,8 @@ export function POSGenerateBoletoDialog({
         amount: data.amount,
         dueDate: data.dueDate,
       });
+      loadHistory();
+
       toast.success("Boleto gerado com sucesso");
     } catch (e: any) {
       console.error(e);
@@ -318,58 +362,114 @@ export function POSGenerateBoletoDialog({
     }
   };
 
-  const sendToClient = async () => {
-    if (!result?.pdfUrl) {
-      toast.error("PDF ainda não disponível");
-      return;
-    }
+  /** Garante um link público e estável do PDF (usado para enviar e para baixar de novo). */
+  const ensurePublicPdf = async (boletoId: string): Promise<string> => {
+    const { data, error } = await supabase.functions.invoke("pos-boleto-pdf", {
+      body: { action: "url", boletoId },
+    });
+    if (error) throw new Error(error.message || "Não foi possível preparar o PDF do boleto");
+    if (!data?.ok || !data?.publicUrl) throw new Error(data?.error || "PDF do boleto indisponível");
+    return data.publicUrl as string;
+  };
+
+  const persistMessage = async (message: string, mediaUrl?: string | null, messageId?: string | null) => {
+    try {
+      await supabase.from("whatsapp_messages").insert({
+        phone,
+        message,
+        direction: "outgoing",
+        status: "sent",
+        media_type: mediaUrl ? "document" : null,
+        media_url: mediaUrl || null,
+        message_id: messageId || null,
+        whatsapp_number_id: selectedNumberId || null,
+      } as any);
+    } catch { /* histórico não deve quebrar o envio */ }
+  };
+
+  const sendBoleto = async (b: {
+    boletoId: string;
+    amount: number;
+    dueDate: string;
+    digitableLine?: string | null;
+    digitableLineFormatted?: string | null;
+    barcode?: string | null;
+    boletoUrl?: string | null;
+    pixQrCode?: string | null;
+  }) => {
     setSending(true);
     try {
+      const pdfUrl = await ensurePublicPdf(b.boletoId);
+
       const captionLines = [
         `📄 *Boleto Banana Calçados*`,
-        `Valor: R$ ${result.amount.toFixed(2).replace(".", ",")}`,
-        `Vencimento: ${new Date(result.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}`,
+        `Valor: R$ ${Number(b.amount).toFixed(2).replace(".", ",")}`,
+        `Vencimento: ${new Date(String(b.dueDate) + "T00:00:00").toLocaleDateString("pt-BR")}`,
       ];
-      const line = result.digitableLineFormatted || result.digitableLine || result.barcode;
+      const line = b.digitableLineFormatted || b.digitableLine || b.barcode;
       if (line) captionLines.push(`\n*Linha digitável (digite no app do banco):*\n${line}`);
-      if (result.boletoUrl) captionLines.push(`\n2ª via / imprimir:\n${result.boletoUrl}`);
+      if (b.boletoUrl) captionLines.push(`\n2ª via / imprimir:\n${b.boletoUrl}`);
       const caption = captionLines.join("\n");
 
-      await posSendMedia({
+      const mid = await posSendMedia({
         provider: sendVia,
         phone,
-        mediaUrl: result.pdfUrl,
+        mediaUrl: pdfUrl,
         mediaType: "document",
+        fileName: "boleto.pdf",
         caption,
         numberId: selectedNumberId ?? null,
       });
+      await persistMessage(caption, pdfUrl, mid);
 
-      if (result.digitableLine) {
-        await posSendText({
+      if (b.digitableLine) {
+        const tid = await posSendText({
           provider: sendVia,
           phone,
-          message: result.digitableLine,
+          message: b.digitableLine,
           numberId: selectedNumberId ?? null,
         });
+        await persistMessage(b.digitableLine, null, tid);
       }
 
-      if (result.pixQrCode) {
-        await posSendText({
+      if (b.pixQrCode) {
+        const msg = `⚡ *Se preferir, pague via PIX (mesmo valor, confirmação na hora):*\n\n${b.pixQrCode}`;
+        const pid = await posSendText({
           provider: sendVia,
           phone,
-          message: `⚡ *Se preferir, pague via PIX (mesmo valor, confirmação na hora):*\n\n${result.pixQrCode}`,
+          message: msg,
           numberId: selectedNumberId ?? null,
         });
+        await persistMessage(msg, null, pid);
       }
 
       toast.success("Boleto enviado no WhatsApp");
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || "Erro ao enviar");
+      toast.error(e?.message || "Erro ao enviar o boleto");
     } finally {
       setSending(false);
     }
   };
+
+  const sendToClient = async () => {
+    if (!result) return;
+    await sendBoleto(result);
+  };
+
+  /** Abre o PDF de um boleto já gerado (link público estável). */
+  const openBoletoPdf = async (boletoId: string) => {
+    setOpeningPdf(boletoId);
+    try {
+      const url = await ensurePublicPdf(boletoId);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível abrir o PDF");
+    } finally {
+      setOpeningPdf(null);
+    }
+  };
+
 
   const checkStatus = async () => {
     if (!result?.boletoId) return;
@@ -397,6 +497,70 @@ export function POSGenerateBoletoDialog({
             Gerar Boleto (Mercado Pago)
           </DialogTitle>
         </DialogHeader>
+
+        {/* ── Boletos já gerados para este cliente ─────────────────────── */}
+        {(history.length > 0 || loadingHistory) && (
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold"
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-orange-500" />
+                Boletos já gerados{history.length ? ` (${history.length})` : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">{showHistory ? "ocultar" : "ver"}</span>
+            </button>
+            {showHistory && (
+              <div className="max-h-[220px] space-y-1 overflow-y-auto border-t p-2">
+                {loadingHistory && <div className="p-2 text-xs text-muted-foreground">Carregando...</div>}
+                {history.map((b) => (
+                  <div key={b.id} className="rounded border p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold">{fmt(Number(b.amount))}</span>
+                      <span className="text-muted-foreground">
+                        Venc. {new Date(b.due_date + "T00:00:00").toLocaleDateString("pt-BR")} ·{" "}
+                        {b.status === "paid" ? "pago" : b.status === "cancelled" ? "cancelado" : "aguardando"}
+                      </span>
+                    </div>
+                    {b.description && <div className="mt-0.5 truncate text-muted-foreground">{b.description}</div>}
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={openingPdf === b.id}
+                        onClick={() => openBoletoPdf(b.id)}
+                      >
+                        {openingPdf === b.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ExternalLink className="mr-1 h-3 w-3" />}
+                        Ver / baixar PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={sending}
+                        onClick={() =>
+                          sendBoleto({
+                            boletoId: b.id,
+                            amount: Number(b.amount),
+                            dueDate: b.due_date,
+                            boletoUrl: b.mp_boleto_url,
+                          })
+                        }
+                      >
+                        <Send className="mr-1 h-3 w-3" /> Enviar no WhatsApp
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+
 
         {!result ? (
           <div className="grid gap-3 min-w-0">

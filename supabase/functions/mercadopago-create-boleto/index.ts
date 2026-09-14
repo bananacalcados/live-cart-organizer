@@ -485,6 +485,21 @@ serve(async (req) => {
       .from("boletos")
       .createSignedUrl(pdfPath, 60 * 60 * 24 * 7); // 7 dias
 
+    // 5b) Espelho PÚBLICO do PDF — os provedores de WhatsApp (uazapi/zapi) precisam
+    // baixar o arquivo por URL pública; URL assinada do bucket privado costuma falhar.
+    let pdfPublicUrl: string | null = null;
+    try {
+      const publicPath = `boletos/${boletoId}.pdf`;
+      const { error: mirrorErr } = await supabase.storage
+        .from("whatsapp-media")
+        .upload(publicPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+      if (mirrorErr) console.warn("[boleto] espelho público falhou:", mirrorErr);
+      else pdfPublicUrl = supabase.storage.from("whatsapp-media").getPublicUrl(publicPath).data.publicUrl;
+    } catch (e) {
+      console.warn("[boleto] espelho público erro:", e);
+    }
+
+
     // 6) Atualiza registro
     await supabase.from("pos_boletos")
       .update({
@@ -508,6 +523,8 @@ serve(async (req) => {
         digitableLine,
         digitableLineFormatted: digitableLine ? formatDigitableLine(digitableLine) : null,
         pdfUrl: signed?.signedUrl || null,
+        pdfPublicUrl,
+
         pixQrCode,
         pixQrBase64,
         amount: chargeAmount,
