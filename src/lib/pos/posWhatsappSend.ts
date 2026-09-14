@@ -74,7 +74,6 @@ export async function posSendText(opts: {
       body: { phone, message, whatsapp_number_id: numberId },
     });
     assertNoError(error, data);
-    assertNoError(error, data);
   return extractMessageId(data);
   }
   const fn =
@@ -97,10 +96,11 @@ export async function posSendMedia(opts: {
   mediaUrl: string;
   mediaType: "image" | "video" | "audio" | "document";
   caption?: string;
+  fileName?: string;
   numberId?: string | null;
 }): Promise<string | null> {
   const provider = normalizeProvider(opts.provider);
-  const { phone, mediaUrl, mediaType, caption, numberId } = opts;
+  const { phone, mediaUrl, mediaType, caption, fileName, numberId } = opts;
 
   if (provider === "meta") {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-send", {
@@ -113,7 +113,6 @@ export async function posSendMedia(opts: {
       },
     });
     assertNoError(error, data);
-    assertNoError(error, data);
   return extractMessageId(data);
   }
   const fn =
@@ -123,7 +122,7 @@ export async function posSendMedia(opts: {
         ? "wasender-send-media"
         : "zapi-send-media";
   const { data, error } = await supabase.functions.invoke(fn, {
-    body: { phone, mediaUrl, mediaType, caption, whatsapp_number_id: numberId },
+    body: { phone, mediaUrl, mediaType, caption, fileName, whatsapp_number_id: numberId },
   });
   assertNoError(error, data);
   return extractMessageId(data);
@@ -157,7 +156,6 @@ export async function posSendButtons(opts: {
       },
     });
     assertNoError(error, data);
-    assertNoError(error, data);
   return extractMessageId(data);
   }
 
@@ -165,7 +163,6 @@ export async function posSendButtons(opts: {
     const { data, error } = await supabase.functions.invoke("uazapi-send-buttons", {
       body: { phone, message, buttons, imageUrl, whatsapp_number_id: numberId },
     });
-    assertNoError(error, data);
     assertNoError(error, data);
   return extractMessageId(data);
   }
@@ -176,7 +173,6 @@ export async function posSendButtons(opts: {
     const { data, error } = await supabase.functions.invoke("wasender-send-message", {
       body: { phone, message: `${message}\n\n${lines}`, whatsapp_number_id: numberId },
     });
-    assertNoError(error, data);
     assertNoError(error, data);
   return extractMessageId(data);
   }
