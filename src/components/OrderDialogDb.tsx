@@ -686,7 +686,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         // Update existing order
         const orderUpdates: Partial<DbOrder> = {
+          phone_last4: phoneLast4.length === 4 ? phoneLast4 : null,
           cart_link: cartLink || null,
+
           notes: notes || null,
           stage,
           products: localProducts,
