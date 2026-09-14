@@ -12,6 +12,6 @@ export function EmbeddedDialog({ embedded, open, onOpenChange, children }: {
 }
 
 export function EmbeddedDialogContent({ embedded, className, children, ...props }: ComponentProps<typeof DialogContent> & { embedded?: boolean }) {
-  if (embedded) return <div className={cn("flex h-full min-h-0 flex-col overflow-hidden bg-card", className)}>{children}</div>;
+  if (embedded) return <div className={cn("flex h-full w-full max-w-full min-h-0 min-w-0 flex-col overflow-hidden bg-card", className)}>{children}</div>;
   return <DialogContent className={className} {...props}>{children}</DialogContent>;
 }
