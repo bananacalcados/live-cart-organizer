@@ -634,9 +634,15 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   return (
     <div
       className={`order-card relative ${isDragging ? "dragging" : ""} ${
-        hasUnread ? "animate-pulse ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
+        hasUnread ? "ring-2 ring-emerald-500 bg-emerald-500/10" : ""
       }`}
     >
+      {hasUnread && (
+        <span className="absolute -top-2 left-3 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white shadow">
+          Não lida
+        </span>
+      )}
+
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
