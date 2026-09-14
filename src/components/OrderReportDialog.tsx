@@ -95,60 +95,10 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
   // Filtro de pagamento (controla painel + exportação)
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("pago");
 
-  const [gradeRows, setGradeRows] = useState<LinhaGrade[]>([]);
-  const [loadingGrade, setLoadingGrade] = useState(false);
-  const [gradeError, setGradeError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-
   const toggleStage = (id: string) =>
     setSelectedStages((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
-
-  const loadGrade = useCallback(async () => {
-    if (!eventId) return;
-    setLoadingGrade(true);
-    setGradeError(null);
-    const { data, error } = await (supabase as any).rpc("get_relatorio_grade_live", {
-      p_live_id: eventId,
-      p_status: paymentFilter,
-    });
-    if (error) {
-      setGradeError(error.message);
-      setGradeRows([]);
-    } else {
-      setGradeRows((data as LinhaGrade[]) ?? []);
-      setUpdatedAt(new Date());
-    }
-    setLoadingGrade(false);
-  }, [eventId, paymentFilter]);
-
-  useEffect(() => {
-    if (!open || !eventId) return;
-    loadGrade();
-  }, [open, eventId, loadGrade]);
-
-  // Tempo real: recarrega a RPC com debounce a cada mudança nos pedidos da live
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!open || !eventId) return;
-    const channel = supabase
-      .channel(`grade-report-${eventId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `event_id=eq.${eventId}` },
-        () => {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => loadGrade(), 500);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [open, eventId, loadGrade]);
 
   // Filter orders
   const filteredOrders = useMemo(() => {
