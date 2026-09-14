@@ -68,6 +68,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+
   const [expanded, setExpanded] = useState<string | null>(focusSaleId || null);
   useEffect(() => { if (focusSaleId) setExpanded(focusSaleId); }, [focusSaleId]);
   const [busyId, setBusyId] = useState<string | null>(null);
