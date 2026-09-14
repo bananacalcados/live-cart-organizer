@@ -80,7 +80,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [fullName, setFullName] = useState("");
+  /** 4 últimos dígitos informados na live (vinculação automática do WhatsApp). */
+  const [phoneLast4, setPhoneLast4] = useState("");
+  /** @ que originou o telefone atual — evita telefone "grudado" de outro @. */
+  const [phoneOwnerHandle, setPhoneOwnerHandle] = useState("");
+  const [last4Conflict, setLast4Conflict] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
