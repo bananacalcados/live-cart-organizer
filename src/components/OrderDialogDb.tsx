@@ -212,9 +212,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
   useEffect(() => {
     setEditingHandle(false);
+    if (!open) {
+      // Fecha → zera tudo, para que o próximo pedido nunca herde telefone/@.
+      if (!editingOrder) resetForm();
+      return;
+    }
     if (editingOrder) {
-      setInstagramHandle(editingOrder.customer?.instagram_handle || "");
-      setWhatsapp(editingOrder.customer?.whatsapp || "");
+      const handle = editingOrder.customer?.instagram_handle || "";
+      const phone = editingOrder.customer?.whatsapp || "";
+      setInstagramHandle(handle);
+      setWhatsapp(phone);
+      setPhoneOwnerHandle(normHandle(handle));
+      setPhoneLast4((editingOrder as any).phone_last4 || last4Of(phone));
       setFullName((editingOrder.customer as any)?.full_name || "");
       setCartLink(editingOrder.cart_link || "");
       setNotes(editingOrder.notes || "");
@@ -234,38 +243,59 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setPixCode("");
     } else {
       resetForm();
-      if (prefillName && open) setFullName(prefillName);
-      if (prefillInstagram && open) {
+      if (prefillName) setFullName(prefillName);
+      if (prefillInstagram) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
       }
-      if (prefillWhatsapp && open) {
+      if (prefillWhatsapp) {
         const normalized = normalizeBRPhone(prefillWhatsapp);
         setWhatsapp(normalized);
+        setPhoneLast4(last4Of(normalized));
         const known = findCustomerByWhatsApp(normalized);
         if (known?.instagram_handle) {
           setInstagramHandle(known.instagram_handle.replace(/^@/, ""));
+          setPhoneOwnerHandle(normHandle(known.instagram_handle));
         } else if (!prefillInstagram) {
           const slug = (prefillName || "")
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .toLowerCase().trim().replace(/[^a-z0-9]+/g, ".").replace(/^\.|\.$/g, "");
           setInstagramHandle(slug || normalized);
+          setPhoneOwnerHandle(normHandle(slug || normalized));
+        } else {
+          setPhoneOwnerHandle(normHandle(prefillInstagram));
         }
       }
     }
   }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillName]);
 
 
+  // Telefone nunca acompanha a troca de @: se o @ muda e o telefone atual veio
+  // de OUTRO @, limpa telefone e final de 4 dígitos.
+  useEffect(() => {
+    if (editingOrder || !open) return;
+    const current = normHandle(instagramHandle);
+    if (!phoneOwnerHandle || !current || current === phoneOwnerHandle) return;
+    setWhatsapp("");
+    setPhoneLast4("");
+    setPhoneOwnerHandle("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instagramHandle, editingOrder, open]);
+
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {
     if (existingCustomer && !editingOrder) {
       if (existingCustomer.whatsapp) {
         setWhatsapp(existingCustomer.whatsapp);
+        setPhoneLast4(last4Of(existingCustomer.whatsapp));
+        setPhoneOwnerHandle(normHandle(existingCustomer.instagram_handle || instagramHandle));
       }
       if ((existingCustomer as any).full_name && !fullName.trim()) {
         setFullName((existingCustomer as any).full_name);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingCustomer, editingOrder]);
+
 
   // Fallback no banco (com debounce) quando o @ digitado não está no cache
   // local — cobre cadastros legados "@ handle" e cache ainda não carregado.
