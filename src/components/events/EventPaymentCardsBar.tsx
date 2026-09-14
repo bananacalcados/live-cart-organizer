@@ -431,7 +431,11 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     },
     [lanes, search],
   );
-  const laneAwaiting = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
+  const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
+  // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
+  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isConversationUnread(e.rep)), [laneAwaitingAll]);
+  const laneAwaiting = useMemo(() => laneAwaitingAll.filter((e) => !isConversationUnread(e.rep)), [laneAwaitingAll]);
+
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
   const laneCancelled = useMemo(() => laneFilter(cancelledEntries), [laneFilter, cancelledEntries]);
 
