@@ -122,7 +122,15 @@ export function POSWhatsAppCheckoutDialog({
         });
       }
 
-      setProducts(Array.from(map.values()));
+      // Com estoque primeiro; sem estoque continua disponível para seleção
+      setProducts(
+        Array.from(map.values()).sort((a, b) => {
+          const sa = (a as any).stock > 0 ? 0 : 1;
+          const sb = (b as any).stock > 0 ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+          return a.title.localeCompare(b.title, "pt-BR");
+        })
+      );
     } catch {
       setProducts([]);
     } finally {
