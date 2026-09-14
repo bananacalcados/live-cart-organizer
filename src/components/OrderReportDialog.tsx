@@ -14,8 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
 import { LiveGradePanel } from "@/components/events/LiveGradePanel";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { DbOrder } from "@/types/database";
@@ -28,11 +26,6 @@ interface OrderReportDialogProps {
 type PaymentFilter = "pago" | "nao_pago" | "ambos";
 
 
-const PAYMENT_OPTIONS: { id: PaymentFilter; label: string }[] = [
-  { id: "pago", label: "PAGOS" },
-  { id: "nao_pago", label: "NÃO PAGOS" },
-  { id: "ambos", label: "AMBOS" },
-];
 
 // Colunas (stages) considerados "pagos"/pós-pagamento que podem entrar no relatório
 const REPORT_STAGES: { id: string; label: string }[] = [
