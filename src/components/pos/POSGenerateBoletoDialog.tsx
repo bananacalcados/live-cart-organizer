@@ -321,58 +321,114 @@ export function POSGenerateBoletoDialog({
     }
   };
 
-  const sendToClient = async () => {
-    if (!result?.pdfUrl) {
-      toast.error("PDF ainda não disponível");
-      return;
-    }
+  /** Garante um link público e estável do PDF (usado para enviar e para baixar de novo). */
+  const ensurePublicPdf = async (boletoId: string): Promise<string> => {
+    const { data, error } = await supabase.functions.invoke("pos-boleto-pdf", {
+      body: { action: "url", boletoId },
+    });
+    if (error) throw new Error(error.message || "Não foi possível preparar o PDF do boleto");
+    if (!data?.ok || !data?.publicUrl) throw new Error(data?.error || "PDF do boleto indisponível");
+    return data.publicUrl as string;
+  };
+
+  const persistMessage = async (message: string, mediaUrl?: string | null, messageId?: string | null) => {
+    try {
+      await supabase.from("whatsapp_messages").insert({
+        phone,
+        message,
+        direction: "outgoing",
+        status: "sent",
+        media_type: mediaUrl ? "document" : null,
+        media_url: mediaUrl || null,
+        message_id: messageId || null,
+        whatsapp_number_id: selectedNumberId || null,
+      } as any);
+    } catch { /* histórico não deve quebrar o envio */ }
+  };
+
+  const sendBoleto = async (b: {
+    boletoId: string;
+    amount: number;
+    dueDate: string;
+    digitableLine?: string | null;
+    digitableLineFormatted?: string | null;
+    barcode?: string | null;
+    boletoUrl?: string | null;
+    pixQrCode?: string | null;
+  }) => {
     setSending(true);
     try {
+      const pdfUrl = await ensurePublicPdf(b.boletoId);
+
       const captionLines = [
         `📄 *Boleto Banana Calçados*`,
-        `Valor: R$ ${result.amount.toFixed(2).replace(".", ",")}`,
-        `Vencimento: ${new Date(result.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}`,
+        `Valor: R$ ${Number(b.amount).toFixed(2).replace(".", ",")}`,
+        `Vencimento: ${new Date(String(b.dueDate) + "T00:00:00").toLocaleDateString("pt-BR")}`,
       ];
-      const line = result.digitableLineFormatted || result.digitableLine || result.barcode;
+      const line = b.digitableLineFormatted || b.digitableLine || b.barcode;
       if (line) captionLines.push(`\n*Linha digitável (digite no app do banco):*\n${line}`);
-      if (result.boletoUrl) captionLines.push(`\n2ª via / imprimir:\n${result.boletoUrl}`);
+      if (b.boletoUrl) captionLines.push(`\n2ª via / imprimir:\n${b.boletoUrl}`);
       const caption = captionLines.join("\n");
 
-      await posSendMedia({
+      const mid = await posSendMedia({
         provider: sendVia,
         phone,
-        mediaUrl: result.pdfUrl,
+        mediaUrl: pdfUrl,
         mediaType: "document",
+        fileName: "boleto.pdf",
         caption,
         numberId: selectedNumberId ?? null,
       });
+      await persistMessage(caption, pdfUrl, mid);
 
-      if (result.digitableLine) {
-        await posSendText({
+      if (b.digitableLine) {
+        const tid = await posSendText({
           provider: sendVia,
           phone,
-          message: result.digitableLine,
+          message: b.digitableLine,
           numberId: selectedNumberId ?? null,
         });
+        await persistMessage(b.digitableLine, null, tid);
       }
 
-      if (result.pixQrCode) {
-        await posSendText({
+      if (b.pixQrCode) {
+        const msg = `⚡ *Se preferir, pague via PIX (mesmo valor, confirmação na hora):*\n\n${b.pixQrCode}`;
+        const pid = await posSendText({
           provider: sendVia,
           phone,
-          message: `⚡ *Se preferir, pague via PIX (mesmo valor, confirmação na hora):*\n\n${result.pixQrCode}`,
+          message: msg,
           numberId: selectedNumberId ?? null,
         });
+        await persistMessage(msg, null, pid);
       }
 
       toast.success("Boleto enviado no WhatsApp");
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || "Erro ao enviar");
+      toast.error(e?.message || "Erro ao enviar o boleto");
     } finally {
       setSending(false);
     }
   };
+
+  const sendToClient = async () => {
+    if (!result) return;
+    await sendBoleto(result);
+  };
+
+  /** Abre o PDF de um boleto já gerado (link público estável). */
+  const openBoletoPdf = async (boletoId: string) => {
+    setOpeningPdf(boletoId);
+    try {
+      const url = await ensurePublicPdf(boletoId);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível abrir o PDF");
+    } finally {
+      setOpeningPdf(null);
+    }
+  };
+
 
   const checkStatus = async () => {
     if (!result?.boletoId) return;
