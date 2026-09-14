@@ -50,6 +50,7 @@ export interface ExpOrder {
   /** Nome da loja de origem da venda (usado no modo "todas as lojas"). */
   store_name?: string | null;
   created_at: string;
+  paid_at: string | null;
   total: number;
   discount: number;
   subtotal: number;
@@ -75,6 +76,7 @@ export interface ExpOrder {
   expedition_stage: ExpStage;
   expedition_group_id: string | null;
   expedition_finished_at: string | null;
+
   shipping_carrier: string | null;
   shipping_cost: number | null;
   tracking_code: string | null;
