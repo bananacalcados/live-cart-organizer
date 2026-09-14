@@ -387,7 +387,7 @@ export function POSGenerateBoletoDialog({
 
   return (
     <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
-      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-2xl max-h-[92vh] overflow-y-auto"}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full w-full min-w-0 overflow-y-auto overflow-x-hidden p-4" : "max-w-2xl max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-orange-500" />
@@ -396,7 +396,7 @@ export function POSGenerateBoletoDialog({
         </DialogHeader>
 
         {!result ? (
-          <div className="grid gap-3">
+          <div className="grid gap-3 min-w-0">
             {/* ── Produtos do pedido ─────────────────────────────── */}
             <div className="rounded-lg border p-3 space-y-2">
               <div className="text-sm font-semibold">Produtos do pedido</div>
@@ -436,7 +436,7 @@ export function POSGenerateBoletoDialog({
               {hasCart && (
                 <div className="space-y-1">
                   {cart.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 rounded border p-2">
+                    <div key={c.id} className="flex flex-wrap items-center gap-2 rounded border p-2">
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{c.title}</div>
                         <div className="truncate text-xs text-muted-foreground">{c.variantLabel}</div>
@@ -451,7 +451,7 @@ export function POSGenerateBoletoDialog({
                         </Button>
                       </div>
                       <Input
-                        className="h-8 w-24"
+                        className="h-8 w-20 min-w-0"
                         value={String(c.price).replace(".", ",")}
                         onChange={(e) => updatePrice(c.id, parseNum(e.target.value))}
                       />
@@ -478,7 +478,7 @@ export function POSGenerateBoletoDialog({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className={embedded ? "grid grid-cols-1 gap-3 min-w-0" : "grid grid-cols-2 gap-3"}>
               <div className="col-span-2">
                 <Label>Nome completo *</Label>
                 <Input value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
