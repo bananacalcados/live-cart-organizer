@@ -16,9 +16,10 @@ import {
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
-import { LiveGradePanel } from "@/components/events/LiveGradePanel";
+import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
+
 
 
 interface PresenterAlert {
