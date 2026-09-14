@@ -95,26 +95,6 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
     );
   }
 
-  if (mode === "custom-link") {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-4 py-2 border-b border-orange-100/60 bg-white/60 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setMode("link-choice")}
-            className="gap-2 text-neutral-700 hover:bg-orange-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-        </div>
-        <div className="flex-1 overflow-auto" style={{ background: "var(--pos-bg, #f5f0e8)" }}>
-          <POSCustomLinkDialog storeId={storeId} sellers={sellers} />
-        </div>
-      </div>
-    );
-  }
 
   if (mode === "events") {
     return (
