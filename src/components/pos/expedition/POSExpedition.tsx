@@ -659,6 +659,20 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           {EXP_STAGES.map((s) => {
             const Icon = stageIcon[s.id];
             const active = stage === s.id;
+            const doneDates = s.id === "concluido"
+              ? (() => {
+                  const fins = orders
+                    .map((o) => o.expedition_finished_at)
+                    .filter(Boolean)
+                    .map((d) => new Date(d!).getTime());
+                  if (!fins.length) return null;
+                  const min = new Date(Math.min(...fins));
+                  const max = new Date(Math.max(...fins));
+                  const sameDay = min.toDateString() === max.toDateString();
+                  const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                  return sameDay ? fmt(min) : `${fmt(min)} → ${fmt(max)}`;
+                })()
+              : null;
             return (
               <button
                 key={s.id}
@@ -675,7 +689,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                     {s.label}
                   </span>
                 </div>
-                {s.id !== "concluido" && (
+                {s.id !== "concluido" ? (
+                  <div className={`mt-1 text-2xl font-black ${active ? "text-white" : stageStyles[s.id].text}`}>
+                    {counts[s.id] || 0}
+                  </div>
+                ) : doneDates ? (
+                  <div className={`mt-1 text-sm font-bold ${active ? "text-white/90" : "text-pos-muted-text"}`}>
+                    {doneDates}
+                  </div>
+                ) : (
                   <div className={`mt-1 text-2xl font-black ${active ? "text-white" : stageStyles[s.id].text}`}>
                     {counts[s.id] || 0}
                   </div>
@@ -683,6 +705,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               </button>
             );
           })}
+
           <button
             onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
