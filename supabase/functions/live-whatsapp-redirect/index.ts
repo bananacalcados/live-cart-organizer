@@ -125,10 +125,26 @@ serve(async (req) => {
           });
       }
 
+      // Vinculação pelos 4 últimos dígitos: se houver exatamente um pedido desta
+      // live com o mesmo final, grava o telefone no cadastro e identifica o @.
+      let handle: string | null = null;
+      const eventId = click.event_id || link.event_id || null;
+      if (saved && eventId) {
+        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_by_last4", {
+          p_event_id: eventId,
+          p_phone_e164: norm.e164,
+        });
+        if (linkErr) console.error("[live-whatsapp-redirect] link by last4 error:", linkErr);
+        const h = (linkRes as any)?.instagram_handle;
+        if ((linkRes as any)?.ok && h) handle = String(h).replace(/^@/, "");
+      }
+
       const baseText = (link.message_text || "Oii, vim da Live, pode me ajudar?").trim();
-      const text = saved ? `${baseText} #${code}` : baseText;
+      const withHandle = handle ? `${baseText} — @${handle}` : baseText;
+      const text = saved ? `${withHandle} #${code}` : withHandle;
       const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;
-      return json({ wa_url: waUrl, text, code: saved ? code : null, target_phone: targetPhone, phone: norm.e164 });
+      return json({ wa_url: waUrl, text, code: saved ? code : null, target_phone: targetPhone, phone: norm.e164, instagram_handle: handle });
+
     }
 
     // ─────────────────────────── PASSO 1: registrar o clique ───────────────────────────
