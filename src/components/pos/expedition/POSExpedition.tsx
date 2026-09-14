@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -1077,13 +1077,27 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           <div className="mt-1 text-base font-semibold text-pos-muted-text flex items-center gap-3 flex-wrap">
                             <span>{o.items.length} item(ns)</span>
                             <span>{brl(o.total)}</span>
-                            <span>{new Date(o.created_at).toLocaleString("pt-BR")}</span>
+                            {stage === "concluido" ? (
+                              <>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  Pago: {o.paid_at ? new Date(o.paid_at).toLocaleString("pt-BR") : "—"}
+                                </span>
+                                <span className="flex items-center gap-1 text-exp-done">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Concluído: {o.expedition_finished_at ? new Date(o.expedition_finished_at).toLocaleString("pt-BR") : "—"}
+                                </span>
+                              </>
+                            ) : (
+                              <span>{new Date(o.created_at).toLocaleString("pt-BR")}</span>
+                            )}
                             {o.delivery_method && (
                               <span className="flex items-center gap-1">
                                 <Truck className="h-4 w-4" /> {o.delivery_method}
                               </span>
                             )}
                           </div>
+
                           <div className="mt-1 text-sm font-bold text-pos-muted-text flex items-center gap-3 flex-wrap">
                             {o.seller_label && (
                               <span className="flex items-center gap-1">
