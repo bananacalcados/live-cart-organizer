@@ -77,18 +77,19 @@ serve(async (req) => {
 
       const { data: click } = await supabase
         .from("live_whatsapp_clicks")
-        .select("id, link_id, code, entered_phone")
+        .select("id, link_id, code, entered_phone, event_id")
         .eq("id", clickId)
         .maybeSingle();
       if (!click) return json({ error: "not_found" }, 404);
 
       const { data: link } = await supabase
         .from("live_whatsapp_links")
-        .select("id, target_phone, message_text, is_active")
+        .select("id, event_id, target_phone, message_text, is_active")
         .eq("id", click.link_id)
         .maybeSingle();
       if (!link) return json({ error: "not_found" }, 404);
       if (!link.is_active) return json({ error: "paused" }, 200);
+
 
       const targetPhone = String(link.target_phone || "").replace(/\D/g, "");
       if (!targetPhone) return json({ error: "link sem telefone de destino" }, 500);
