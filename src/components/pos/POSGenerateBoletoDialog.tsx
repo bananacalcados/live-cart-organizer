@@ -78,6 +78,13 @@ export function POSGenerateBoletoDialog({
   const [status, setStatus] = useState<string>("pending");
   const [checking, setChecking] = useState(false);
 
+  // ── Boletos já gerados para este cliente ──────────────────────────────
+  const [history, setHistory] = useState<BoletoHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [openingPdf, setOpeningPdf] = useState<string | null>(null);
+
+
   // ── Produtos do pedido ────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
