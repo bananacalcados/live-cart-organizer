@@ -370,6 +370,29 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setIsDelivery(false);
   };
 
+  // Outro pedido desta live com o MESMO final de 4 dígitos → vinculação manual.
+  useEffect(() => {
+    if (!open || !eventId || phoneLast4.length !== 4) { setLast4Conflict(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, customer:customers(instagram_handle, full_name)")
+        .eq("event_id", eventId)
+        .eq("phone_last4", phoneLast4)
+        .neq("stage", "cancelled")
+        .limit(5);
+      if (cancelled) return;
+      const other = (data || []).filter((o: any) => o.id !== editingOrder?.id);
+      if (!other.length) { setLast4Conflict(null); return; }
+      const c: any = other[0].customer;
+      setLast4Conflict(c?.instagram_handle || c?.full_name || "outro pedido");
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [open, eventId, phoneLast4, editingOrder?.id]);
+
+
+
   const handleAddLocalProduct = (product: DbOrderProduct) => {
     setLocalProducts((prev) => {
       const existing = prev.find((p) => p.id === product.id);
