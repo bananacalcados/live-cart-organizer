@@ -12563,6 +12563,7 @@ export type Database = {
           is_sedex: boolean
           last_customer_message_at: string | null
           last_sent_message_at: string | null
+          link_status: string
           max_installments_override: number | null
           mercadopago_payment_id: string | null
           merged_at: string | null
@@ -12579,6 +12580,7 @@ export type Database = {
           payment_method_label: string | null
           payment_on_delivery: boolean
           payment_window_expires_at: string | null
+          phone_last4: string | null
           pickup_date: string | null
           pickup_pay_at_store: boolean
           pickup_store_id: string | null
@@ -12627,6 +12629,7 @@ export type Database = {
           is_sedex?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          link_status?: string
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           merged_at?: string | null
@@ -12643,6 +12646,7 @@ export type Database = {
           payment_method_label?: string | null
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
+          phone_last4?: string | null
           pickup_date?: string | null
           pickup_pay_at_store?: boolean
           pickup_store_id?: string | null
@@ -12691,6 +12695,7 @@ export type Database = {
           is_sedex?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          link_status?: string
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           merged_at?: string | null
@@ -12707,6 +12712,7 @@ export type Database = {
           payment_method_label?: string | null
           payment_on_delivery?: boolean
           payment_window_expires_at?: string | null
+          phone_last4?: string | null
           pickup_date?: string | null
           pickup_pay_at_store?: boolean
           pickup_store_id?: string | null
@@ -23135,6 +23141,11 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      live_backfill_order_phone: { Args: { p_order_id: string }; Returns: Json }
+      live_link_order_by_last4: {
+        Args: { p_event_id: string; p_phone_e164: string }
+        Returns: Json
       }
       live_member_rate_limit: {
         Args: { _key: string; _limit: number; _window_seconds: number }
