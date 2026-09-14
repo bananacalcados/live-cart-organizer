@@ -102,7 +102,13 @@ function ConversationLaneCardInner({
           {checked && <Check className="h-3 w-3" />}
         </span>
       )}
+      {conv.hasUnansweredMessage && (
+        <span className="absolute -top-2 right-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
+          Não lida
+        </span>
+      )}
       <div className="flex items-start gap-2">
+
         <Avatar className="h-9 w-9 shrink-0">
           {photoUrl ? <AvatarImage src={photoUrl} /> : null}
           <AvatarFallback className={cn("text-xs font-bold text-white", conv.isGroup ? "bg-[#00a884]" : "bg-[#9aa6ad]")}>
