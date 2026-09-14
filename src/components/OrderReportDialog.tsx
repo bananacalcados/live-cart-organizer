@@ -365,126 +365,13 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-2 flex-1 min-h-0 flex flex-col">
-          {/* Filtro de pagamento + atualização */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as PaymentFilter)}>
-              <TabsList>
-                {PAYMENT_OPTIONS.map((opt) => (
-                  <TabsTrigger key={opt.id} value={opt.id} className="text-xs">
-                    {opt.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {updatedAt && (
-                <span>
-                  atualizado às{" "}
-                  {updatedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
-              <Button variant="ghost" size="sm" onClick={loadGrade} disabled={!eventId || loadingGrade}>
-                <RefreshCw className={cn("h-4 w-4", loadingGrade && "animate-spin")} />
-              </Button>
-            </div>
-          </div>
-
-          {/* Painel de grades */}
-          <div className="rounded-lg border flex-1 min-h-0 flex flex-col">
-            <div className="grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground shrink-0">
-              <span>Produto · cor</span>
-              <span>Status</span>
-              <span>Vendidos</span>
-              <span>Vender mais</span>
-            </div>
-            <ScrollArea className="flex-1 min-h-0">
-              {!eventId ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  Selecione uma live para ver o painel de grades.
-                </div>
-              ) : loadingGrade && gradeRows.length === 0 ? (
-                <div className="p-3 space-y-2">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : gradeError ? (
-                <div className="p-6 text-center text-sm text-destructive">{gradeError}</div>
-              ) : gradeRows.length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  Nenhum par no filtro atual
-                </div>
-              ) : (
-                gradeRows.map((row, idx) => {
-                  const style = STATUS_STYLES[row.status] ?? STATUS_STYLES.sem_grade;
-                  const estouro = new Set(row.tamanhos_estouro ?? []);
-                  return (
-                    <div
-                      key={`${row.produto_nome}-${row.cor}-${idx}`}
-                      className={cn(
-                        "grid grid-cols-[minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)] gap-3 px-3 py-2 border-t items-start text-sm",
-                        style.row,
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{row.produto_nome}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {row.cor} · {row.total_vendido} pares
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", style.pill)}>
-                          {style.label}
-                        </span>
-                        {row.status !== "sem_grade" && (
-                          <span className="font-mono text-xs text-muted-foreground">{row.grades}g</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {(row.vendidos ?? []).map((v) => (
-                          <span
-                            key={`v-${v.tam}`}
-                            className={cn(
-                              "font-mono text-xs rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground",
-                              (v.estouro || estouro.has(v.tam)) && "bg-amber-500/15 text-amber-600",
-                            )}
-                          >
-                            {v.tam}×{v.qtd}
-                          </span>
-                        ))}
-                        {(row.tamanhos_fora_da_grade ?? []).length > 0 && (
-                          <span className="font-mono text-[11px] text-muted-foreground/80">
-                            fora: {row.tamanhos_fora_da_grade.map((f) => `${f.tam}×${f.qtd}`).join(" ")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {row.status === "sem_grade" ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : row.grade_cheia || (row.vender_mais ?? []).length === 0 ? (
-                          <span className="text-xs font-medium text-emerald-600">Grade cheia</span>
-                        ) : (
-                          row.vender_mais.map((v) => (
-                            <span
-                              key={`m-${v.tam}`}
-                              className="font-mono text-xs font-semibold rounded px-1.5 py-0.5 bg-primary/15 text-primary"
-                            >
-                              {v.tam}×{v.qtd}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </ScrollArea>
-            {gradeRows.length > 0 && (
-              <div className="px-3 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
-                {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s)
-              </div>
-            )}
-          </div>
+          <LiveGradePanel
+            eventId={eventId}
+            active={open}
+            paymentFilter={paymentFilter}
+            onPaymentFilterChange={setPaymentFilter}
+            className="flex-1"
+          />
 
           <Separator />
 
