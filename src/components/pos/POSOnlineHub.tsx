@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link2, Calendar, ArrowLeft, ChevronRight, Package, Receipt, Zap } from "lucide-react";
+import { Link2, Calendar, ArrowLeft, ChevronRight, Package, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { POSOnlineSales } from "./POSOnlineSales";
-import { POSCustomLinkDialog } from "./POSCustomLinkDialog";
 import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
 import { SimpleTemplatesPanel } from "@/components/admin/SimpleTemplatesPanel";
 
@@ -22,7 +21,7 @@ interface Props {
   sellers: Seller[];
 }
 
-type Mode = "menu" | "link-choice" | "checkout" | "custom-link" | "events" | "automacao";
+type Mode = "menu" | "link-choice" | "checkout" | "events" | "automacao";
 
 export function POSOnlineHub({ storeId, sellers }: Props) {
   const [mode, setMode] = useState<Mode>("menu");
