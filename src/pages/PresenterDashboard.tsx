@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
-  MessageCircle, CheckCheck, MessageSquareX, Send
+  MessageCircle, CheckCheck, MessageSquareX, Send, Target
 } from "lucide-react";
+
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
