@@ -126,6 +126,28 @@ export function POSGenerateBoletoDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  /** Boletos já gerados para este telefone (ver / baixar / reenviar). */
+  const loadHistory = async () => {
+    if (!phone) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-boleto-pdf", {
+        body: { action: "list", phone },
+      });
+      if (error) throw error;
+      setHistory((data?.boletos || []) as BoletoHistoryItem[]);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, phone]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
     return () => clearTimeout(t);
