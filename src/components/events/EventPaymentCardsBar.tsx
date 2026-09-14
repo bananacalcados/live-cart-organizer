@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, MessageSquare, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
