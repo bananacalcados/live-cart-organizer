@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { FileDown, Filter, AlertTriangle, Users, Package, X, Search, RefreshCw } from "lucide-react";
+import { useState, useMemo } from "react";
+import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
+import { LiveGradePanel } from "@/components/events/LiveGradePanel";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { DbOrder } from "@/types/database";
 
@@ -28,18 +27,6 @@ interface OrderReportDialogProps {
 
 type PaymentFilter = "pago" | "nao_pago" | "ambos";
 
-type LinhaGrade = {
-  produto_nome: string;
-  cor: string;
-  total_vendido: number;
-  grades: number;
-  status: "lucro" | "empate" | "prejuizo" | "sem_grade";
-  vendidos: { tam: string; qtd: number; estouro: boolean }[];
-  vender_mais: { tam: string; qtd: number }[];
-  tamanhos_estouro: string[];
-  grade_cheia: boolean;
-  tamanhos_fora_da_grade: { tam: string; qtd: number }[];
-};
 
 const PAYMENT_OPTIONS: { id: PaymentFilter; label: string }[] = [
   { id: "pago", label: "PAGOS" },
@@ -58,16 +45,6 @@ const REPORT_STAGES: { id: string; label: string }[] = [
 ];
 const ALL_REPORT_STAGE_IDS = REPORT_STAGES.map((s) => s.id);
 
-const STATUS_STYLES: Record<LinhaGrade["status"], { label: string; pill: string; row?: string }> = {
-  lucro: { label: "Lucro", pill: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" },
-  empate: { label: "Empate", pill: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
-  prejuizo: {
-    label: "Prejuízo",
-    pill: "bg-destructive/15 text-destructive border-destructive/30",
-    row: "bg-destructive/5",
-  },
-  sem_grade: { label: "Fora da grade", pill: "bg-muted text-muted-foreground border-border" },
-};
 
 interface ReportProduct {
   id: string;
@@ -289,8 +266,6 @@ export function OrderReportDialog({ orders, eventId }: OrderReportDialogProps) {
     link.click();
   };
 
-  const totalPares = gradeRows.reduce((sum, r) => sum + (r.total_vendido || 0), 0);
-  const totalGrades = gradeRows.reduce((sum, r) => sum + (r.grades || 0), 0);
 
   return (
     <Dialog
