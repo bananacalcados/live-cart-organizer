@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, MessageSquare, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,18 @@ function methodLabel(method: string): string {
   if (method === "credit_card" || method === "card") return "Cartão";
   return method || "—";
 }
+
+/**
+ * Conversa "não lida": a cliente mandou mensagem depois da nossa última resposta.
+ * Quando respondemos, o card volta para "Aguardando pagamento" (follow up).
+ */
+function isConversationUnread(o: DbOrder): boolean {
+  const inAt = o.last_customer_message_at ? +new Date(o.last_customer_message_at) : 0;
+  const outAt = o.last_sent_message_at ? +new Date(o.last_sent_message_at) : 0;
+  if (inAt || outAt) return inAt > outAt;
+  return !!o.has_unread_messages;
+}
+
 
 /** Converte DbOrder para o tipo Order legado usado pelo chat de WhatsApp. */
 function dbOrderToLegacy(dbOrder: DbOrder): Order {
@@ -419,7 +431,11 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     },
     [lanes, search],
   );
-  const laneAwaiting = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
+  const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
+  // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
+  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isConversationUnread(e.rep)), [laneAwaitingAll]);
+  const laneAwaiting = useMemo(() => laneAwaitingAll.filter((e) => !isConversationUnread(e.rep)), [laneAwaitingAll]);
+
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
   const laneCancelled = useMemo(() => laneFilter(cancelledEntries), [laneFilter, cancelledEntries]);
 
@@ -468,8 +484,9 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               const value = isGroup
                 ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
                 : getOrderFinalValue(order);
-              // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
-              const unread = !paidCard && !!order.has_unread_messages;
+              // Destaque verde (sem piscar) quando a cliente falou por último.
+              const unread = !paidCard && isConversationUnread(order);
+
               const isPinned = pinnedIds.has(order.id);
               // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
               const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
@@ -491,7 +508,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
-                    unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
+                    unread && "ring-2 ring-emerald-500 ring-offset-2 ring-offset-background border-l-emerald-500",
                     isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
                     isGroup && !needsUnify && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
                     // Precisa unificar → anel âmbar pulsante para chamar atenção.
@@ -499,11 +516,11 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                   )}
                 >
                   {unread && (
-                    <span className="absolute -top-1.5 -left-1.5 flex h-3.5 w-3.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
-                      <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
+                    <span className="absolute -top-2 left-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
+                      Não lida
                     </span>
                   )}
+
 
                   {/* Fixar conversa (compartilhado com a equipe) */}
                   <button
@@ -727,6 +744,18 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             </LiveLaneSection>
 
             <LiveLaneSection
+              id="unread"
+              eventId={eventId}
+              title="Não lidas"
+              count={laneUnread.length}
+              tone="text-emerald-500"
+              icon={<MessageSquare className="h-3.5 w-3.5 text-emerald-500" />}
+            >
+              {renderRow(laneUnread, false, "Nenhuma cliente com pedido esperando resposta.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+
               id="awaiting"
               eventId={eventId}
               title="Aguardando pagamento"

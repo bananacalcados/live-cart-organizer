@@ -428,20 +428,15 @@ export function LiveContactCards({
         className={cn(
           "group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-y-neutral-700 border-r-neutral-700 border-l-4 bg-neutral-900 px-3 py-2 text-left text-white transition-colors hover:bg-neutral-800",
           isDoubts ? "border-l-neutral-400" : "border-l-sky-400",
-          c.unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
+          c.unread && "border-l-emerald-500 ring-2 ring-emerald-500 ring-offset-2 ring-offset-background",
         )}
       >
         {c.unread && (
-          <>
-            <span className="absolute -left-1.5 -top-1.5 flex h-3.5 w-3.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
-              <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
-            </span>
-            <span className="absolute right-9 top-1.5 rounded-full bg-yellow-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-black">
-              Não lida
-            </span>
-          </>
+          <span className="absolute -left-1.5 -top-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
+            Não lida
+          </span>
         )}
+
         {(onMoveToDoubts || onBackToNew) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

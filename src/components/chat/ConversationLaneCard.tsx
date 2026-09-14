@@ -86,7 +86,7 @@ function ConversationLaneCardInner({
       className={cn(
         "relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "w-[230px] shrink-0 snap-start rounded-lg border border-border/60 bg-card px-2.5 py-2 text-left shadow-sm transition-colors hover:bg-muted/60",
-        conv.hasUnansweredMessage && "animate-pulse border-[#00a884]/50 bg-[#c7e9c0]/30 dark:bg-[#005c4b]/20",
+        conv.hasUnansweredMessage && "border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/60",
         selected && "ring-2 ring-[#00a884]",
         selectable && checked && "ring-2 ring-primary bg-primary/5",
       )}
@@ -102,7 +102,13 @@ function ConversationLaneCardInner({
           {checked && <Check className="h-3 w-3" />}
         </span>
       )}
+      {conv.hasUnansweredMessage && (
+        <span className="absolute -top-2 right-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
+          Não lida
+        </span>
+      )}
       <div className="flex items-start gap-2">
+
         <Avatar className="h-9 w-9 shrink-0">
           {photoUrl ? <AvatarImage src={photoUrl} /> : null}
           <AvatarFallback className={cn("text-xs font-bold text-white", conv.isGroup ? "bg-[#00a884]" : "bg-[#9aa6ad]")}>
