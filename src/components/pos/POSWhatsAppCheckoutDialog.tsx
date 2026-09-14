@@ -73,7 +73,7 @@ export function POSWhatsAppCheckoutDialog({
   }, [debouncedSearch, open]);
 
   // Catálogo interno (pos_products) é a fonte da verdade: mostra TODAS as
-  // variações com estoque em QUALQUER loja (estoque compartilhado).
+  // variações do catálogo, COM ou SEM estoque (venda sob encomenda).
   const loadProducts = async () => {
     setLoading(true);
     try {
@@ -81,9 +81,8 @@ export function POSWhatsAppCheckoutDialog({
       let q = supabase
         .from("pos_products")
         .select("name, variant, size, color, sku, barcode, price, stock, image_url")
-        .gt("stock", 0)
         .order("name", { ascending: true })
-        .limit(1000);
+        .limit(2000);
 
       if (term) {
         const isCode = /^\d{6,14}$/.test(term);
