@@ -236,6 +236,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const pq = productSearch.trim().toLowerCase();
     return orders.filter((o) => {
       if (filterTest === "hide" && o.is_test) return false;
       if (filterTest === "only" && !o.is_test) return false;
@@ -326,6 +327,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           }
         }
       }
+      // --- Filtro dedicado por produto (nome, SKU, variação, tamanho) ---
+      if (pq) {
+        const matchesProduct = o.items.some((i) =>
+          (i.product_name || "").toLowerCase().includes(pq) ||
+          (i.sku || "").toLowerCase().includes(pq) ||
+          (i.variant_name || "").toLowerCase().includes(pq) ||
+          (i.size || "").toLowerCase().includes(pq)
+        );
+        if (!matchesProduct) return false;
+      }
       if (!q) return true;
       return (
         (o.customer_name || "").toLowerCase().includes(q) ||
@@ -334,7 +345,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
       );
     });
-  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+  }, [orders, search, productSearch, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay, filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
+
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
