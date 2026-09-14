@@ -99,6 +99,28 @@ export function PendingCheckoutOrdersBar({ phone, sendVia, selectedNumberId, ref
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
+  // Avisa na hora em que o pagamento (boleto/checkout/PIX) é confirmado.
+  useEffect(() => {
+    if (sales.length === 0) return;
+    const pendingIds = new Set(sales.map((s) => s.id));
+    const channel = supabase
+      .channel(`pending-sales-${Math.random().toString(36).slice(2, 8)}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "pos_sales" },
+        (payload: any) => {
+          const row = payload?.new;
+          if (!row || !pendingIds.has(row.id)) return;
+          if (row.status === "paid" || row.status === "completed") {
+            toast.success("✅ Pagamento confirmado! O pedido foi para a Expedição.");
+            load();
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [sales, load]);
+
   // Canal desta conversa: permite enviar o PIX do pedido (atrelado ao link)
   // com botão "Copiar código PIX" quando a instância for uazapi.
   const pixChannel: PixSendChannel = {
