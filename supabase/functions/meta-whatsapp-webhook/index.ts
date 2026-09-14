@@ -535,7 +535,8 @@ serve(async (req) => {
 
                // Reopen any finished conversation when customer sends a new message
               // Uses suffix matching to handle phone format variations (with/without 9th digit)
-              const { data: reopenCount } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
+              // IMPORTANTE: reabre SOMENTE a instância que recebeu a mensagem.
+              const { data: reopenCount } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone, p_whatsapp_number_id: whatsappNumberDbId || null });
               if (reopenCount && reopenCount > 0) {
                 console.log(`Reopened ${reopenCount} finished conversation(s) for ${phone}`);
               }

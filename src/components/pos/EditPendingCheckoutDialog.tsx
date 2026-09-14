@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
@@ -252,8 +252,10 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
           <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
         ) : (
           <>
-            <ScrollArea className="flex-1 min-h-0 pr-3">
-              <div className="space-y-4">
+            {/* Rolagem nativa: garante que TODOS os campos fiquem acessíveis
+                mesmo quando o pedido tem muitos produtos. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-3">
+              <div className="space-y-4 pb-2">
                 {/* Produtos */}
                 <div className="space-y-2">
                   <Label className="text-xs uppercase text-muted-foreground">Produtos</Label>
@@ -371,7 +373,7 @@ export function EditPendingCheckoutDialog({ open, onOpenChange, saleId, onSaved 
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="flex items-center justify-between border-t pt-3">
               <div className="text-sm">

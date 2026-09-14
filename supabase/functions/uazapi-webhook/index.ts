@@ -736,7 +736,8 @@ serve(async (req) => {
 
     // Reabre conversas finalizadas
     if (!isGroup) {
-      await supabase.rpc("reopen_finished_conversation", { p_phone: phone }).then(
+      // IMPORTANTE: reabre SOMENTE a instância que recebeu a mensagem.
+      await supabase.rpc("reopen_finished_conversation", { p_phone: phone, p_whatsapp_number_id: numberId || null }).then(
         () => {},
         () => {},
       );

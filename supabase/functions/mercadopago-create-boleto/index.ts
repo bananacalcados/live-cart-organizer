@@ -278,7 +278,28 @@ serve(async (req) => {
     const mpBoletoUrl = mpBoletoData?.transaction_details?.external_resource_url || null;
     const mpBarcode = mpBoletoData?.barcode?.content || null;
     // Linha digitável real (47 dígitos) — o cliente digita isso no app do banco.
-    const digitableLine = mpBarcode ? barcodeToDigitableLine(mpBarcode) : null;
+    // FONTE DA VERDADE: a linha digitável oficial devolvida pelo Mercado Pago.
+    // Só caímos no cálculo local (44 -> 47) quando o MP não mandar a linha.
+    const mpDigitable = onlyDigits(mpBoletoData?.transaction_details?.digitable_line || "");
+    const digitableLine = mpDigitable.length === 47
+      ? mpDigitable
+      : (mpBarcode ? barcodeToDigitableLine(mpBarcode) : null);
+    if (mpDigitable.length === 47 && mpBarcode) {
+      const computed = barcodeToDigitableLine(mpBarcode);
+      if (computed && computed !== mpDigitable) {
+        console.error(`[mp-boleto] divergência de linha digitável! MP=${mpDigitable} calc=${computed}`);
+      }
+    }
+    // Sem linha digitável E sem link oficial não existe boleto pagável: falha explícita
+    // em vez de enviar ao cliente um PDF que o banco vai recusar.
+    if (!digitableLine && !mpBoletoUrl) {
+      await supabase.from("pos_boletos")
+        .update({ status: "error", error_message: "MP não retornou linha digitável nem link do boleto" })
+        .eq("id", boletoId);
+      throw new Error("Mercado Pago não devolveu um boleto pagável. Tente novamente.");
+    }
+
+
 
     // 3) Opcional: PIX gêmeo
     let pixPaymentId: string | null = null;
