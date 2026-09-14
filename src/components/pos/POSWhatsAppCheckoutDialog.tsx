@@ -132,16 +132,25 @@ export function POSWhatsAppCheckoutDialog({
           imageUrl: r.image_url || null,
           stock: Number(r.stock || 0),
           size: r.size || "",
-        });
+          color: r.color || "",
+        } as any);
       }
 
-      // Com estoque primeiro; sem estoque continua disponível para seleção
+      // Ordem fixa: produto → cor → numeração crescente (34, 35, 36...).
+      // Sem estoque continua disponível, na posição correta da grade.
+      const sizeNum = (value: string) => {
+        const match = String(value || "").match(/\d+/);
+        return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
+      };
       setProducts(
-        Array.from(map.values()).sort((a, b) => {
-          const sa = (a as any).stock > 0 ? 0 : 1;
-          const sb = (b as any).stock > 0 ? 0 : 1;
-          if (sa !== sb) return sa - sb;
-          return a.title.localeCompare(b.title, "pt-BR");
+        Array.from(map.values()).sort((a: any, b: any) => {
+          const byTitle = a.title.localeCompare(b.title, "pt-BR");
+          if (byTitle !== 0) return byTitle;
+          const byColor = String(a.color || "").localeCompare(String(b.color || ""), "pt-BR");
+          if (byColor !== 0) return byColor;
+          const bySize = sizeNum(a.size) - sizeNum(b.size);
+          if (bySize !== 0) return bySize;
+          return String(a.size || "").localeCompare(String(b.size || ""), "pt-BR");
         })
       );
     } catch {
