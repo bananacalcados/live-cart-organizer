@@ -7,6 +7,7 @@ import { STAGES, OrderStage } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder, DbOrderProduct } from "@/types/database";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { MarkOrderPaidDialog } from "@/components/MarkOrderPaidDialog";
 import { Radio, RefreshCw, Check, X, Pencil, Loader2, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
