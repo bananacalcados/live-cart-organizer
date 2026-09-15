@@ -276,9 +276,9 @@ Deno.serve(async (req) => {
           const candidates = r.data || [];
           const normalized = normalizePhone(phone);
           const exact = candidates.filter((c: any) => normalizePhone(c.whatsapp || "") === normalized);
-          // Nunca misturar DDDs diferentes. O fallback por 8 dígitos permanece
-          // apenas para cadastros legados quando não existe telefone completo.
-          return exact.length ? exact : candidates;
+          // Nunca misturar DDDs diferentes. Cadastros antigos com ou sem DDI
+          // continuam casando porque ambos os lados são normalizados acima.
+          return exact;
         });
       customersMemo.set(suf, p);
       return p;
@@ -1195,7 +1195,10 @@ Deno.serve(async (req) => {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      let { customer } = await loadOrder(event?.id || null, phone, body.magicOrderId || null);
+      let { customer, order: boundOrder } = await loadOrder(event?.id || null, phone, body.magicOrderId || null);
+      if (body.magicOrderId && !boundOrder) {
+        return json({ ok: false, error: "magic_order_mismatch" }, 200);
+      }
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName && !body.magicVerified) return json({ ok: true, needsName: true });
