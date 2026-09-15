@@ -30,7 +30,8 @@ function randomToken(): string {
 }
 
 /**
- * Gera (rotacionando) o link autenticado da Área de Membros para um telefone.
+ * Gera o link autenticado da Área de Membros para um telefone e, quando
+ * informado, prende o token ao pedido exato.
  * Nunca lança: em caso de erro devolve o link público simples.
  */
 export async function issueMagicLink(

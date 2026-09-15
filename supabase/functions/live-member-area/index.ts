@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
 
 
 
-    /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
+    /** Pedido fixado no link ou, para acessos genéricos antigos, o aberto mais recente. */
     async function loadOrder(eventId: string | null, phone: string, pinnedOrderId?: string | null) {
       const customers = await loadCustomers(phone);
       const ids = customers.map((c: any) => c.id);
