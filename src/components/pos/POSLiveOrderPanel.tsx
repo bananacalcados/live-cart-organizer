@@ -84,11 +84,7 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
   const products = (order.products as unknown as DbOrderProduct[]) || [];
   const stageMeta = STAGES.find(s => s.id === order.stage);
 
-  const doMarkPaid = async () => {
-    setBusy("pay");
-    try { await moveOrder(orderId, "paid"); toast.success("Pedido marcado como pago"); }
-    finally { setBusy(null); }
-  };
+  const doMarkPaid = () => setShowMarkPaid(true);
   const doCancel = async () => {
     if (!confirm("Cancelar este pedido? Esta ação remove o card da Live.")) return;
     setBusy("cancel");
