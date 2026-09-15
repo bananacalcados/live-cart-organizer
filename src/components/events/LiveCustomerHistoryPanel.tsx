@@ -112,17 +112,23 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           saleItems.set(item.sale_id, list);
         }
 
-        const liveHistory: POSCustomerOrder[] = liveOrders.map((item) => ({
-          id: item.id,
-          orderName: "Pedido da Live",
-          status: item.is_paid || item.paid_externally ? "paid" : item.stage || "cart",
-          totalPrice: getOrderFinalValue(item),
-          createdAt: item.created_at,
-          channelLabel: "Live",
-          modality: "Online",
-          paymentState: item.is_paid || item.paid_externally ? "paid" : "unpaid",
-          items: (item.products || []).map((product) => ({ name: product.title || "Produto", variant: product.variant || undefined, quantity: product.quantity })),
-        }));
+        // Um pedido da Live que já virou venda (pos_sales) é o MESMO pedido:
+        // mostramos só a venda, para não parecer que a cliente comprou 2x.
+        const saleIdSet = new Set(saleIds);
+        const liveHistory: POSCustomerOrder[] = liveOrders
+          .filter((item) => !((item as any).pos_sale_id && saleIdSet.has((item as any).pos_sale_id)))
+          .map((item) => ({
+            id: item.id,
+            orderName: "Pedido da Live",
+            status: item.is_paid || item.paid_externally ? "paid" : item.stage || "cart",
+            totalPrice: getOrderFinalValue(item),
+            createdAt: item.created_at,
+            channelLabel: "Live",
+            modality: "Online",
+            paymentState: item.is_paid || item.paid_externally ? "paid" : "unpaid",
+            items: (item.products || []).map((product) => ({ name: product.title || "Produto", variant: product.variant || undefined, quantity: product.quantity })),
+          }));
+
         const salesHistory: POSCustomerOrder[] = posSales.map((sale) => ({
           id: sale.id,
           orderName: `${sale.sale_type === "live" ? "Live" : sale.sale_type === "pos" ? "PDV" : "Online"}${sale.tiny_order_number || sale.nfce_number || sale.invoice_number ? ` #${sale.tiny_order_number || sale.nfce_number || sale.invoice_number}` : ""}`,
