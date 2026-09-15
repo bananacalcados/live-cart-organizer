@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
         supabase
           .from("events")
           .select(
-            "id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id, wa_initial_enabled, wa_initial_number_id",
+            "id, name, operation_mode, is_active, is_live_broadcasting, instagram_live_url, whatsapp_number_id, wa_initial_enabled, wa_initial_number_id, created_at",
           )
           .neq("is_active", false);
 
@@ -209,12 +209,12 @@ Deno.serve(async (req) => {
       ]);
       const live = liveRes.data?.[0] || null;
       const latest = latestRes.data?.[0] || null;
-      // Live "no ar" esquecida ligada de dias atrás não pode sequestrar o evento
+      // Live "no ar" esquecida (ligada dias atrás) não pode sequestrar o evento
       // corrente: se existe evento ativo mais novo, ele vence.
-      const value =
-        live && latest && live.id !== latest.id
-          ? latest
-          : live || latest || null;
+      const newer =
+        live && latest && live.id !== latest.id &&
+        new Date(latest.created_at || 0) > new Date(live.created_at || 0);
+      const value = newer ? latest : (live || latest || null);
       EVENT_CACHE = { at: Date.now(), value };
       return value;
     }
