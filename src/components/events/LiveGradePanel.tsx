@@ -70,6 +70,24 @@ export function LiveGradePanel({
   const [loadingGrade, setLoadingGrade] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  /** Soma também os pedidos da live anterior (mesmos produtos vendidos nas duas lives) */
+  const [incluirAnterior, setIncluirAnterior] = useState(true);
+  const [prevLive, setPrevLive] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!eventId) {
+      setPrevLive(null);
+      return;
+    }
+    (async () => {
+      const { data } = await (supabase as any).rpc("get_live_anterior_grade", { p_live_id: eventId });
+      if (!cancelled) setPrevLive((data?.[0] as { id: string; name: string }) ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
   const loadGrade = useCallback(async () => {
     if (!eventId) return;
@@ -78,6 +96,7 @@ export function LiveGradePanel({
     const { data, error } = await (supabase as any).rpc("get_relatorio_grade_live", {
       p_live_id: eventId,
       p_status: filter,
+      p_incluir_anterior: incluirAnterior,
     });
     if (error) {
       setGradeError(error.message);
@@ -87,7 +106,7 @@ export function LiveGradePanel({
       setUpdatedAt(new Date());
     }
     setLoadingGrade(false);
-  }, [eventId, filter]);
+  }, [eventId, filter, incluirAnterior]);
 
   useEffect(() => {
     if (!active || !eventId) return;
@@ -97,23 +116,32 @@ export function LiveGradePanel({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!active || !eventId) return;
+    const bump = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => loadGrade(), 500);
+    };
     const channel = supabase
       .channel(`grade-report-${eventId}-${Math.random().toString(36).slice(2, 8)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders", filter: `event_id=eq.${eventId}` },
-        () => {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => loadGrade(), 500);
-        },
-      )
-      .subscribe();
+        bump,
+      );
+    if (incluirAnterior && prevLive?.id) {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders", filter: `event_id=eq.${prevLive.id}` },
+        bump,
+      );
+    }
+    channel.subscribe();
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [active, eventId, loadGrade]);
+  }, [active, eventId, loadGrade, incluirAnterior, prevLive?.id]);
+
 
   const totalPares = gradeRows.reduce((sum, r) => sum + (r.total_vendido || 0), 0);
   const totalGrades = gradeRows.reduce((sum, r) => sum + (r.grades || 0), 0);
@@ -135,6 +163,18 @@ export function LiveGradePanel({
           <span />
         )}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {prevLive && (
+            <Button
+              variant={incluirAnterior ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setIncluirAnterior((v) => !v)}
+              title={`Somar os pedidos de ${prevLive.name}`}
+            >
+              {incluirAnterior ? "Somando" : "Somar"} live anterior · {prevLive.name}
+            </Button>
+          )}
+
           {updatedAt && (
             <span>
               atualizado às{" "}
