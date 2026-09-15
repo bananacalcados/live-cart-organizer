@@ -1406,7 +1406,7 @@ Deno.serve(async (req) => {
     // Best-effort e sempre 200: nunca pode atrapalhar o pagamento da cliente.
     if (action === "track_payment_step") {
       try {
-        const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+        const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone, session.order_id || null);
         await supabase.from("order_payment_events").insert({
           order_id: String(body?.orderId || order?.id || `member-area:${session.phone}`),
           customer_phone: session.phone,
@@ -1454,7 +1454,7 @@ Deno.serve(async (req) => {
           null;
 
         if (fbp || fbc || ua) {
-          const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+          const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone, session.order_id || null);
           if (order?.id) {
             const { data: reg } = await supabase
               .from("customer_registrations")
@@ -1493,7 +1493,7 @@ Deno.serve(async (req) => {
 
 
     if (action === "confirm_order") {
-      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone, session.order_id || null);
       if (!order) {
         await logFriction("pedido_nao_localizado", "Cliente na área de membros sem pedido vinculado ao telefone informado");
         return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
@@ -1527,7 +1527,7 @@ Deno.serve(async (req) => {
 
 
     if (action === "reject_item") {
-      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone, session.order_id || null);
       if (!order) {
         await logFriction("pedido_nao_localizado", "Cliente na área de membros sem pedido vinculado ao telefone informado");
         return json({ ok: false, error: "Nenhum pedido encontrado" }, 404);
@@ -1591,7 +1591,7 @@ Deno.serve(async (req) => {
 
 
     if (action === "save_details") {
-      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone);
+      const { order } = await loadOrder((await resolveCurrentEvent())?.id || null, session.phone, session.order_id || null);
       if (!order) {
         // Cadastro SEM pedido (cliente que entrou só para se cadastrar/sorteio):
         // `customer_registrations` exige `order_id`, então os dados dela vão
@@ -1757,7 +1757,7 @@ Deno.serve(async (req) => {
     async function shippingChoices(rawCep: string) {
       const cep = String(rawCep || "").replace(/\D/g, "").slice(0, 8);
       const event = await resolveCurrentEvent();
-      const { order } = await loadOrder(event?.id || null, session.phone);
+      const { order } = await loadOrder(event?.id || null, session.phone, session.order_id || null);
       const subtotal = order ? Math.max(0, orderSubtotal(order) - orderDiscount(order)) : 0;
       const itemsCount = (order?.products || []).reduce(
         (s: number, p: any) => s + Number(p.quantity || 1),
@@ -1902,7 +1902,7 @@ Deno.serve(async (req) => {
 
     if (action === "set_shipping") {
       const event = await resolveCurrentEvent();
-      const { order } = await loadOrder(event?.id || null, session.phone);
+      const { order } = await loadOrder(event?.id || null, session.phone, session.order_id || null);
       if (!order) {
         await logFriction("pedido_nao_localizado", "Cliente tentou escolher o envio sem pedido vinculado ao telefone informado");
         return json({ ok: false, error: "Nenhum pedido encontrado" });

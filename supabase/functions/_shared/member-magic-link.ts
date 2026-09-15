@@ -9,9 +9,11 @@ const DEFAULT_TTL_DAYS = 30;
 
 /** Telefone BR normalizado em dígitos com DDI 55. */
 export function normalizeMagicPhone(raw: string | null | undefined): string | null {
-  const d = String(raw || "").replace(/\D/g, "");
-  if (d.length < 10) return null;
-  return d.startsWith("55") ? d : `55${d}`;
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.startsWith("55")) d = d.slice(2);
+  if (d.length === 10) d = `${d.slice(0, 2)}9${d.slice(2)}`;
+  if (d.length !== 11) return null;
+  return `55${d}`;
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -41,6 +43,19 @@ export async function issueMagicLink(
   try {
     const normalized = normalizeMagicPhone(phone);
     if (!normalized) return MEMBER_AREA_URL;
+
+    if (orderId) {
+      const { data: linkedOrder } = await supabase
+        .from("orders")
+        .select("id, customer:customers(whatsapp)")
+        .eq("id", orderId)
+        .maybeSingle();
+      const linkedPhone = normalizeMagicPhone(linkedOrder?.customer?.whatsapp);
+      if (!linkedOrder || linkedPhone !== normalized) {
+        console.error("[member-magic-link] order/phone mismatch", { orderId });
+        return MEMBER_AREA_URL;
+      }
+    }
 
     const token = randomToken();
     const tokenHash = await sha256Hex(token);

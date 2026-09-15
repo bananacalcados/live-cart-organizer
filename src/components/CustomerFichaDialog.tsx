@@ -421,7 +421,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
     const phone = normalizeBRPhone(form.whatsapp || order.customer?.whatsapp || "");
     if (!phone) throw new Error("WhatsApp do cliente não informado");
     const { data, error } = await supabase.functions.invoke("issue-member-magic-link", {
-      body: { phone },
+      body: { phone, orderId: order.id },
     });
     if (error) throw error;
     const url = (data as { url?: string } | null)?.url;
