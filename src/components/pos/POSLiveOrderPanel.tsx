@@ -23,6 +23,7 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
   const [order, setOrder] = useState<DbOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
+  const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
