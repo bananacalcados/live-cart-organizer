@@ -222,6 +222,31 @@ Deno.serve(async (req) => {
 
 
 
+    /**
+     * O desbloqueio pelo código do WhatsApp vale para o TELEFONE, não só para a
+     * aba aberta. Cada clique no link da Área de Membros cria uma sessão nova —
+     * sem isso a cliente era obrigada a pedir um código novo a cada clique.
+     */
+    async function inheritUnlock(session: any) {
+      if (!session) return session;
+      const current = session.otp_verified_until ? new Date(session.otp_verified_until) : null;
+      if (current && current > new Date()) return session;
+      const { data: unlocked } = await supabase
+        .from("live_member_sessions")
+        .select("otp_verified_until")
+        .eq("phone", session.phone)
+        .gt("otp_verified_until", new Date().toISOString())
+        .order("otp_verified_until", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!unlocked?.otp_verified_until) return session;
+      await supabase
+        .from("live_member_sessions")
+        .update({ otp_verified_until: unlocked.otp_verified_until })
+        .eq("id", session.id);
+      return { ...session, otp_verified_until: unlocked.otp_verified_until };
+    }
+
     async function loadSession(token: string) {
       if (!token) return null;
       const { data } = await supabase
@@ -231,8 +256,9 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!data) return null;
       if (new Date(data.expires_at) < new Date()) return null;
-      return data;
+      return await inheritUnlock(data);
     }
+
 
     /**
      * Ponto 5 — Lead → CRM: garante o contato em customers_unified (telefone E.164,
