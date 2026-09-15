@@ -103,7 +103,7 @@ export function LiveQuickActionsDialog({
     setLoadingLink(true);
     try {
       const { data, error } = await supabase.functions.invoke("issue-member-magic-link", {
-        body: { phone },
+        body: { phone, orderId: order?.id || null },
       });
       if (error) throw error;
       const url = (data as any)?.url as string;

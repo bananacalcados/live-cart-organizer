@@ -105,7 +105,7 @@ serve(async (req) => {
       String(v || '').includes('{member_area_link}'),
     );
     const memberAreaLink = usesMemberLink
-      ? await issueMagicLink(supabase, waPhone)
+      ? await issueMagicLink(supabase, waPhone, undefined, orderId || null)
       : 'https://checkout.bananacalcados.com.br/minha-area';
 
     const resolveToken = (token: string): string => {

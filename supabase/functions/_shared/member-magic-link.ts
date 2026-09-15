@@ -9,9 +9,11 @@ const DEFAULT_TTL_DAYS = 30;
 
 /** Telefone BR normalizado em dígitos com DDI 55. */
 export function normalizeMagicPhone(raw: string | null | undefined): string | null {
-  const d = String(raw || "").replace(/\D/g, "");
-  if (d.length < 10) return null;
-  return d.startsWith("55") ? d : `55${d}`;
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.startsWith("55")) d = d.slice(2);
+  if (d.length === 10) d = `${d.slice(0, 2)}9${d.slice(2)}`;
+  if (d.length !== 11) return null;
+  return `55${d}`;
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -28,7 +30,8 @@ function randomToken(): string {
 }
 
 /**
- * Gera (rotacionando) o link autenticado da Área de Membros para um telefone.
+ * Gera o link autenticado da Área de Membros para um telefone e, quando
+ * informado, prende o token ao pedido exato.
  * Nunca lança: em caso de erro devolve o link público simples.
  */
 export async function issueMagicLink(
@@ -36,10 +39,24 @@ export async function issueMagicLink(
   supabase: any,
   phone: string | null | undefined,
   ttlDays = DEFAULT_TTL_DAYS,
+  orderId?: string | null,
 ): Promise<string> {
   try {
     const normalized = normalizeMagicPhone(phone);
     if (!normalized) return MEMBER_AREA_URL;
+
+    if (orderId) {
+      const { data: linkedOrder } = await supabase
+        .from("orders")
+        .select("id, customer:customers(whatsapp)")
+        .eq("id", orderId)
+        .maybeSingle();
+      const linkedPhone = normalizeMagicPhone(linkedOrder?.customer?.whatsapp);
+      if (!linkedOrder || linkedPhone !== normalized) {
+        console.error("[member-magic-link] order/phone mismatch", { orderId });
+        return MEMBER_AREA_URL;
+      }
+    }
 
     const token = randomToken();
     const tokenHash = await sha256Hex(token);
@@ -53,6 +70,7 @@ export async function issueMagicLink(
       phone: normalized,
       token_hash: tokenHash,
       expires_at: expiresAt,
+      order_id: orderId || null,
     });
     if (error) {
       console.error("[member-magic-link] insert failed:", error);
@@ -66,19 +84,24 @@ export async function issueMagicLink(
   }
 }
 
-/** Valida o token do link e devolve o telefone dono dele (ou null). */
+export interface RedeemedMagicLink {
+  phone: string;
+  orderId: string | null;
+}
+
+/** Valida o token e devolve a identidade e o pedido exato gravados no link. */
 export async function redeemMagicLink(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   token: string | null | undefined,
-): Promise<string | null> {
+): Promise<RedeemedMagicLink | null> {
   const raw = String(token || "").trim();
   if (!/^[a-f0-9]{64}$/i.test(raw)) return null;
   try {
     const tokenHash = await sha256Hex(raw.toLowerCase());
     const { data } = await supabase
       .from("member_area_magic_links")
-      .select("id, phone, expires_at, revoked_at")
+      .select("id, phone, order_id, expires_at, revoked_at")
       .eq("token_hash", tokenHash)
       .maybeSingle();
     if (!data || data.revoked_at) return null;
@@ -89,7 +112,7 @@ export async function redeemMagicLink(
       .update({ last_used_at: new Date().toISOString() })
       .eq("id", data.id);
 
-    return data.phone as string;
+    return { phone: data.phone as string, orderId: (data.order_id as string | null) || null };
   } catch (e) {
     console.error("[member-magic-link] redeem error:", e);
     return null;

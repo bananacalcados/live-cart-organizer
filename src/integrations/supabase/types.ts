@@ -10119,6 +10119,7 @@ export type Database = {
           id: string
           last_seen_at: string
           name: string | null
+          order_id: string | null
           otp_verified_until: string | null
           phone: string
           shipping_quote: Json | null
@@ -10131,6 +10132,7 @@ export type Database = {
           id?: string
           last_seen_at?: string
           name?: string | null
+          order_id?: string | null
           otp_verified_until?: string | null
           phone: string
           shipping_quote?: Json | null
@@ -10143,6 +10145,7 @@ export type Database = {
           id?: string
           last_seen_at?: string
           name?: string | null
+          order_id?: string | null
           otp_verified_until?: string | null
           phone?: string
           shipping_quote?: Json | null
@@ -10154,6 +10157,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_member_sessions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -11458,6 +11468,7 @@ export type Database = {
           expires_at: string
           id: string
           last_used_at: string | null
+          order_id: string | null
           phone: string
           revoked_at: string | null
           token_hash: string
@@ -11468,6 +11479,7 @@ export type Database = {
           expires_at?: string
           id?: string
           last_used_at?: string | null
+          order_id?: string | null
           phone: string
           revoked_at?: string | null
           token_hash: string
@@ -11478,12 +11490,21 @@ export type Database = {
           expires_at?: string
           id?: string
           last_used_at?: string | null
+          order_id?: string | null
           phone?: string
           revoked_at?: string | null
           token_hash?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "member_area_magic_links_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mercadopago_accounts: {
         Row: {

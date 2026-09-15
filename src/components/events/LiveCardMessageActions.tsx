@@ -75,7 +75,9 @@ export function LiveCardMessageActions({ eventId, phone, name, orderId, checkout
   const copyMemberLink = async () => {
     setCopying(true);
     try {
-      const { data, error } = await supabase.functions.invoke("issue-member-magic-link", { body: { phone } });
+      const { data, error } = await supabase.functions.invoke("issue-member-magic-link", {
+        body: { phone, orderId: orderId || null },
+      });
       if (error) throw error;
       const url = (data as any)?.url as string;
       if (!url) throw new Error("Link não gerado");

@@ -266,7 +266,7 @@ serve(async (req) => {
       headerVar: metaTemplateHeaderVar,
     });
     const memberAreaLink = usageHaystack.includes('{member_area_link}')
-      ? await issueMagicLink(supabase, memberPhoneForLink)
+      ? await issueMagicLink(supabase, memberPhoneForLink, undefined, order.id)
       : MEMBER_AREA_PUBLIC;
 
     const resolveToken = (token: string): string => {
