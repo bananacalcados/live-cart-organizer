@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
+import { getFinishedAtFor } from "@/lib/finishedConversationsCache";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { STAGES } from "@/types/order";
@@ -213,7 +214,7 @@ export default function ChatPage() {
   const { customers } = useCustomerStore();
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
-  const { enrichConversations, finishConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
 
@@ -395,18 +396,17 @@ export default function ChatPage() {
   useEffect(() => {
     setConversations(prev => {
       if (prev.length === 0) return prev;
-      const normalizePhoneKey = (phone: string) => {
-        const digits = phone.replace(/\D/g, '');
-        return digits ? digits.slice(-8) : '';
-      };
-      return prev.map(c => ({
-        ...c,
-        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
-        isArchived: archivedPhones.has(c.phone),
-        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
-      }));
+      return prev.map(c => {
+        const finishedAt = getFinishedAtFor(finishedAtByPhone, c.phone, c.whatsapp_number_id);
+        return {
+          ...c,
+          isFinished: Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime()),
+          isArchived: archivedPhones.has(c.phone),
+          isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
+        };
+      });
     });
-  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
+  }, [finishedAtByPhone, archivedPhones, awaitingPaymentPhones]);
 
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
