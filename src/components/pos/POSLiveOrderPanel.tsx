@@ -199,6 +199,14 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
       </div>
 
 
+      <MarkOrderPaidDialog
+        open={showMarkPaid}
+        onOpenChange={(o) => { setShowMarkPaid(o); if (!o) load(); }}
+        orderId={orderId}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={total}
+      />
+
       {showEdit && (
         <OrderDialogDb
           open={showEdit}
