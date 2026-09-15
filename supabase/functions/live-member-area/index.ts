@@ -207,7 +207,14 @@ Deno.serve(async (req) => {
         base().eq("is_live_broadcasting", true).order("created_at", { ascending: false }).limit(1),
         base().order("created_at", { ascending: false }).limit(1),
       ]);
-      const value = liveRes.data?.[0] || latestRes.data?.[0] || null;
+      const live = liveRes.data?.[0] || null;
+      const latest = latestRes.data?.[0] || null;
+      // Live "no ar" esquecida ligada de dias atrás não pode sequestrar o evento
+      // corrente: se existe evento ativo mais novo, ele vence.
+      const value =
+        live && latest && live.id !== latest.id
+          ? latest
+          : live || latest || null;
       EVENT_CACHE = { at: Date.now(), value };
       return value;
     }
@@ -279,7 +286,19 @@ Deno.serve(async (req) => {
 
       let order: any = null;
 
-      if (eventId) {
+      // Pedido em aberto MAIS RECENTE em qualquer evento. O carrinho novo da live
+      // de hoje sempre vence um pedido antigo, mesmo que o evento "corrente"
+      // resolvido esteja desatualizado (ex.: live anterior ainda marcada no ar).
+      const { data: any_orders } = await supabase
+        .from("orders")
+        .select("*")
+        .in("customer_id", ids)
+        .not("stage", "in", "(cancelled,delivered)")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      order = any_orders?.[0] || null;
+
+      if (!order && eventId) {
         const { data: orders } = await supabase
           .from("orders")
           .select("*")
@@ -289,18 +308,6 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1);
         order = orders?.[0] || null;
-      }
-
-      if (!order) {
-        // Fallback: pedido em aberto mais recente em QUALQUER evento (inclusive modo manual)
-        const { data: any_orders } = await supabase
-          .from("orders")
-          .select("*")
-          .in("customer_id", ids)
-          .not("stage", "in", "(cancelled,delivered)")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        order = any_orders?.[0] || null;
       }
 
       const customer = order
