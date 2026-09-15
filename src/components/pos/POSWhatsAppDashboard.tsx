@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, Cell } from 'recharts';
 import { ConversationStatusFilter } from '@/components/chat/ChatTypes';
 import { useConversationEnrichment } from '@/hooks/useConversationEnrichment';
+import { getFinishedAtFor } from '@/lib/finishedConversationsCache';
 
 interface Props {
   storeId: string;
@@ -45,7 +46,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   const [agg, setAgg] = useState<AggResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones, ensureFinished } = useConversationEnrichment();
+  const { finishedAtByPhone, archivedPhones, awaitingPaymentPhones, ensureFinished } = useConversationEnrichment();
 
   const periodDays = period === '7d' ? 7 : 30;
   const dateFilter = useMemo(() => {
@@ -101,13 +102,17 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
 
   // ── Status counters from ALL messages across store instances ──
   const statusCounters = useMemo(() => {
-    const phoneMap = new Map<string, { direction: string }[]>();
-    const allPhones = new Set<string>();
+    const conversationMap = new Map<string, { phone: string; whatsappNumberId: string | null; messages: any[] }>();
     for (const msg of messages) {
       if (!isStoreMessage(msg)) continue;
-      allPhones.add(msg.phone);
-      if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, []);
-      phoneMap.get(msg.phone)!.push({ direction: msg.direction });
+      const key = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
+      const conversation = conversationMap.get(key) || {
+        phone: msg.phone,
+        whatsappNumberId: msg.whatsapp_number_id || null,
+        messages: [],
+      };
+      conversation.messages.push(msg);
+      conversationMap.set(key, conversation);
     }
 
     let notStarted = 0;
@@ -115,20 +120,22 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     let awaitingPayment = 0;
     let followUp = 0;
 
-    for (const phone of allPhones) {
-      const phoneKey = String(phone || '').replace(/\D/g, '').slice(-8);
-      if (finishedPhones.has(phoneKey) || archivedPhones.has(phone)) continue;
+    for (const conversation of conversationMap.values()) {
+      const { phone, whatsappNumberId, messages: msgs } = conversation;
+      const lastMsg = msgs[0]; // source is sorted desc
+      const finishedAt = getFinishedAtFor(finishedAtByPhone, phone, whatsappNumberId);
+      const isFinished = Boolean(
+        finishedAt && lastMsg && new Date(lastMsg.created_at).getTime() <= new Date(finishedAt).getTime()
+      );
+      if (isFinished || archivedPhones.has(phone)) continue;
 
-      
       if (awaitingPaymentPhones.has(phone)) {
         awaitingPayment++;
         continue;
       }
 
-      const msgs = phoneMap.get(phone) || [];
       if (msgs.length === 0) continue;
       const hasOutgoing = msgs.some(m => m.direction === 'outgoing');
-      const lastMsg = msgs[0]; // sorted desc
       
       if (!hasOutgoing && lastMsg.direction === 'incoming') notStarted++;
       else if (lastMsg.direction === 'incoming') awaitingReply++;
@@ -136,7 +143,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     }
 
     return { notStarted, awaitingReply, awaitingPayment, followUp };
-  }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones, isStoreMessage]);
+  }, [messages, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, isStoreMessage]);
 
   // ── KPI metrics (aggregated server-side over the full period) ──
   const kpis = useMemo(() => {
