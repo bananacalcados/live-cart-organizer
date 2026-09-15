@@ -15,13 +15,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { phone } = await req.json();
+    const { phone, orderId } = await req.json();
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const url = await issueMagicLink(supabase, phone);
+    const safeOrderId = typeof orderId === "string" && /^[0-9a-f-]{36}$/i.test(orderId) ? orderId : null;
+    const url = await issueMagicLink(supabase, phone, undefined, safeOrderId);
 
     return new Response(JSON.stringify({ url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -36,6 +36,7 @@ export async function issueMagicLink(
   supabase: any,
   phone: string | null | undefined,
   ttlDays = DEFAULT_TTL_DAYS,
+  orderId?: string | null,
 ): Promise<string> {
   try {
     const normalized = normalizeMagicPhone(phone);
@@ -53,6 +54,7 @@ export async function issueMagicLink(
       phone: normalized,
       token_hash: tokenHash,
       expires_at: expiresAt,
+      order_id: orderId || null,
     });
     if (error) {
       console.error("[member-magic-link] insert failed:", error);
@@ -66,19 +68,24 @@ export async function issueMagicLink(
   }
 }
 
-/** Valida o token do link e devolve o telefone dono dele (ou null). */
+export interface RedeemedMagicLink {
+  phone: string;
+  orderId: string | null;
+}
+
+/** Valida o token e devolve a identidade e o pedido exato gravados no link. */
 export async function redeemMagicLink(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   token: string | null | undefined,
-): Promise<string | null> {
+): Promise<RedeemedMagicLink | null> {
   const raw = String(token || "").trim();
   if (!/^[a-f0-9]{64}$/i.test(raw)) return null;
   try {
     const tokenHash = await sha256Hex(raw.toLowerCase());
     const { data } = await supabase
       .from("member_area_magic_links")
-      .select("id, phone, expires_at, revoked_at")
+      .select("id, phone, order_id, expires_at, revoked_at")
       .eq("token_hash", tokenHash)
       .maybeSingle();
     if (!data || data.revoked_at) return null;
@@ -89,7 +96,7 @@ export async function redeemMagicLink(
       .update({ last_used_at: new Date().toISOString() })
       .eq("id", data.id);
 
-    return data.phone as string;
+    return { phone: data.phone as string, orderId: (data.order_id as string | null) || null };
   } catch (e) {
     console.error("[member-magic-link] redeem error:", e);
     return null;

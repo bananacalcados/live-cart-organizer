@@ -546,6 +546,10 @@ export default function LiveMemberArea() {
             applyState(mg);
             return;
           }
+          // Um link explícito nunca pode cair na sessão salva de outra cliente.
+          localStorage.removeItem(TOKEN_KEY);
+          setStep("phone");
+          return;
         }
 
         const token = localStorage.getItem(TOKEN_KEY);

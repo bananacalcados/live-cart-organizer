@@ -142,11 +142,12 @@ Deno.serve(async (req) => {
 
     // Link mágico: ?ml=TOKEN na Área de Membros entra direto, sem telefone/OTP.
     if (action === "magic_enter") {
-      const magicPhone = await redeemMagicLink(supabase, body?.ml || body?.magic);
+      const magicLink = await redeemMagicLink(supabase, body?.ml || body?.magic);
       // 200 de propósito: link expirado/inválido não pode derrubar a página,
       // a cliente cai no fluxo normal de telefone.
-      if (!magicPhone) return json({ ok: false, error: "magic_invalid" }, 200);
-      body.phone = magicPhone;
+      if (!magicLink) return json({ ok: false, error: "magic_invalid" }, 200);
+      body.phone = magicLink.phone;
+      body.magicOrderId = magicLink.orderId;
       body.magicVerified = true;
       action = "enter";
     }
@@ -279,10 +280,30 @@ Deno.serve(async (req) => {
 
 
     /** Pedido "ativo" da cliente: no evento corrente ou, se não houver, o mais recente em qualquer evento. */
-    async function loadOrder(eventId: string | null, phone: string) {
+    async function loadOrder(eventId: string | null, phone: string, pinnedOrderId?: string | null) {
       const customers = await loadCustomers(phone);
       const ids = customers.map((c: any) => c.id);
       if (!ids.length) return { order: null, customer: null };
+
+      // Links novos ficam presos ao pedido que os originou. Além do ID, valida-se
+      // que o pedido pertence a um cadastro com o MESMO telefone completo.
+      if (pinnedOrderId) {
+        const normalized = normalizePhone(phone);
+        const exactCustomers = customers.filter((c: any) => normalizePhone(c.whatsapp || "") === normalized);
+        const exactIds = exactCustomers.map((c: any) => c.id);
+        if (!exactIds.length) return { order: null, customer: null };
+        const { data: pinned } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("id", pinnedOrderId)
+          .in("customer_id", exactIds)
+          .maybeSingle();
+        if (!pinned) return { order: null, customer: null };
+        return {
+          order: pinned,
+          customer: exactCustomers.find((c: any) => c.id === pinned.customer_id) || null,
+        };
+      }
 
       let order: any = null;
 
@@ -601,7 +622,7 @@ Deno.serve(async (req) => {
     async function buildState(session: any, opts: { skipHistory?: boolean } = {}) {
       // Sempre resolve a live corrente (link único global), não a live da sessão.
       const event = await resolveCurrentEvent();
-      const loaded = await loadOrder(event?.id || null, session.phone);
+      const loaded = await loadOrder(event?.id || null, session.phone, session.order_id || null);
       const customer = loaded.customer;
       // O frete NÃO é aplicado automaticamente: a cliente escolhe a forma de envio
       // na etapa de endereço. Aplicar antes cobraria frete duas vezes.
@@ -1167,7 +1188,7 @@ Deno.serve(async (req) => {
       if (!phone) return json({ ok: false, error: "Telefone inválido" }, 400);
 
       const providedName = String(body.name || "").trim();
-      let { customer } = await loadOrder(event?.id || null, phone);
+      let { customer } = await loadOrder(event?.id || null, phone, body.magicOrderId || null);
       let name = customer?.instagram_handle || null;
 
       if (!name && !providedName && !body.magicVerified) return json({ ok: true, needsName: true });
@@ -1339,7 +1360,7 @@ Deno.serve(async (req) => {
 
       const { data: session } = await supabase
         .from("live_member_sessions")
-        .insert({ token, event_id: event?.id || null, phone, name })
+        .insert({ token, event_id: event?.id || null, phone, name, order_id: body.magicOrderId || null })
 
         .select()
         .single();

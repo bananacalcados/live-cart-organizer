@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
     const checkoutLink = order.cart_link || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
 
     const memberAreaLink = variant.text.includes("{member_area_link}")
-      ? await issueMagicLink(supabase, waPhone).catch(() => MEMBER_AREA_PUBLIC)
+      ? await issueMagicLink(supabase, waPhone, undefined, orderId || null).catch(() => MEMBER_AREA_PUBLIC)
       : MEMBER_AREA_PUBLIC;
 
     const tokens: Record<string, string> = {
