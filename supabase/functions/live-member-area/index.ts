@@ -1401,7 +1401,7 @@ Deno.serve(async (req) => {
         .select()
         .single();
 
-      const state = await buildState(session);
+      const state = await buildState(await inheritUnlock(session));
 
       // Rastro do caso mais comum de "não consegui pagar": a cliente entra na
       // área de membros e nenhum pedido do evento casa com o telefone dela
