@@ -163,6 +163,18 @@ export function LiveGradePanel({
           <span />
         )}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {prevLive && (
+            <Button
+              variant={incluirAnterior ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setIncluirAnterior((v) => !v)}
+              title={`Somar os pedidos de ${prevLive.name}`}
+            >
+              {incluirAnterior ? "Somando" : "Somar"} live anterior · {prevLive.name}
+            </Button>
+          )}
+
           {updatedAt && (
             <span>
               atualizado às{" "}
