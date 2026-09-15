@@ -7,6 +7,7 @@ import { STAGES, OrderStage } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder, DbOrderProduct } from "@/types/database";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { MarkOrderPaidDialog } from "@/components/MarkOrderPaidDialog";
 import { Radio, RefreshCw, Check, X, Pencil, Loader2, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
   const [order, setOrder] = useState<DbOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
+  const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
@@ -82,11 +84,7 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
   const products = (order.products as unknown as DbOrderProduct[]) || [];
   const stageMeta = STAGES.find(s => s.id === order.stage);
 
-  const doMarkPaid = async () => {
-    setBusy("pay");
-    try { await moveOrder(orderId, "paid"); toast.success("Pedido marcado como pago"); }
-    finally { setBusy(null); }
-  };
+  const doMarkPaid = () => setShowMarkPaid(true);
   const doCancel = async () => {
     if (!confirm("Cancelar este pedido? Esta ação remove o card da Live.")) return;
     setBusy("cancel");
@@ -200,6 +198,14 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
         )}
       </div>
 
+
+      <MarkOrderPaidDialog
+        open={showMarkPaid}
+        onOpenChange={(o) => { setShowMarkPaid(o); if (!o) load(); }}
+        orderId={orderId}
+        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+        total={total}
+      />
 
       {showEdit && (
         <OrderDialogDb
