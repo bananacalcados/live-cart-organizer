@@ -1,0 +1,1 @@
+UPDATE public.events SET is_live_broadcasting = false WHERE id = '14af49a1-1d52-419d-beb3-440d2dd32a54' AND is_live_broadcasting = true;
