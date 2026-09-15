@@ -272,7 +272,14 @@ Deno.serve(async (req) => {
         .select("id, instagram_handle, whatsapp")
         .not("whatsapp", "is", null)
         .ilike("whatsapp", `%${suf}`)
-        .then((r: any) => r.data || []);
+        .then((r: any) => {
+          const candidates = r.data || [];
+          const normalized = normalizePhone(phone);
+          const exact = candidates.filter((c: any) => normalizePhone(c.whatsapp || "") === normalized);
+          // Nunca misturar DDDs diferentes. O fallback por 8 dígitos permanece
+          // apenas para cadastros legados quando não existe telefone completo.
+          return exact.length ? exact : candidates;
+        });
       customersMemo.set(suf, p);
       return p;
     }
