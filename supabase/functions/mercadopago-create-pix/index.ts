@@ -187,6 +187,41 @@ serve(async (req) => {
         ? subtotal * (discountValue / 100)
         : discountValue;
     }
+
+    // 🚚 Frete do evento: quando o pedido ainda está com frete ZERO e NÃO foi
+    // marcado como frete grátis, aplica a regra do evento (valor fixo /
+    // grátis acima de X) — mesma regra do checkout — e grava no pedido.
+    if (order && !order.free_shipping && shippingAmount <= 0 && order.event_id) {
+      try {
+        const { data: ev } = await supabase
+          .from("events")
+          .select("default_shipping_cost, free_shipping_threshold")
+          .eq("id", order.event_id)
+          .maybeSingle();
+        const fixed = Number(ev?.default_shipping_cost || 0);
+        const freeAbove = Number(ev?.free_shipping_threshold || 0);
+        const baseForRule = Math.max(0, subtotal - discountAmount);
+        if (fixed > 0 && !(freeAbove > 0 && baseForRule >= freeAbove)) {
+          shippingAmount = fixed;
+          await supabase
+            .from("orders")
+            .update({
+              shipping_cost: fixed,
+              free_shipping: false,
+              shipping_info: {
+                source: "event_rule_pix",
+                carrier: "Frete fixo do evento",
+                price: fixed,
+                applied_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", order.id);
+          console.log(`[mp-pix] Frete do evento aplicado ao pedido ${order.id}: R$ ${fixed.toFixed(2)}`);
+        }
+      } catch (shipErr) {
+        console.error("[mp-pix] Falha ao aplicar frete do evento (ignorado):", shipErr);
+      }
+    }
     // 🎡 Prêmio da roleta: abatimento automático (server-side).
     // Aplica o melhor cupom ativo da cliente (%, valor fixo ou frete grátis)
     // e reserva o prêmio para este pedido. Nunca bloqueia a cobrança.
