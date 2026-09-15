@@ -1394,9 +1394,23 @@ Deno.serve(async (req) => {
 
       const token = newToken();
 
+      // Link mágico = identidade já provada (enviamos o link no WhatsApp dela).
+      // Nesse caso a sessão nasce desbloqueada: nada de pedir código de novo.
+      const magicUnlockUntil = body.magicVerified
+        ? new Date(Date.now() + 24 * 60 * 60_000).toISOString()
+        : null;
+
       const { data: session } = await supabase
         .from("live_member_sessions")
-        .insert({ token, event_id: event?.id || null, phone, name, order_id: body.magicOrderId || null })
+        .insert({
+          token,
+          event_id: event?.id || null,
+          phone,
+          name,
+          order_id: body.magicOrderId || null,
+          ...(magicUnlockUntil ? { otp_verified_until: magicUnlockUntil } : {}),
+        })
+
 
         .select()
         .single();
