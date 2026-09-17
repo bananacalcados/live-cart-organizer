@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
+import { requireUser } from "../_shared/require-user.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,9 @@ function json(body: unknown, status = 200) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.response;
   try {
     const { phone, whatsapp_number_id } = await req.json();
     if (!phone) return json({ error: "phone é obrigatório" }, 400);
