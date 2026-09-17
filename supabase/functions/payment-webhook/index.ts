@@ -276,7 +276,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         await supabase.functions.invoke("blocked-buyer-sale-alert", {
           body: {
             adminPhone: "5533991955003",
-            message: `✅ Boleto pago!\nCliente: ${bol.customer_name}\nValor: R$ ${Number(bol.amount).toFixed(2).replace(".", ",")}\nBoleto: ${boletoId}`,
+            message: `✅ Boleto pago!\nCliente: ${bol.customer_name || "(sem nome)"}\nTelefone: ${bol.customer_phone || "-"}\nValor: R$ ${Number(bol.amount).toFixed(2).replace(".", ",")}\nBoleto: ${boletoId}`,
           },
         }).catch(() => {});
       } catch { /* opcional */ }
