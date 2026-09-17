@@ -1035,7 +1035,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, liveBuyerMode, liveBuyerSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
