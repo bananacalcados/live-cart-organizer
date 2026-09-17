@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface CampaignDashboardProps {
   targetGroups: string[];
@@ -236,7 +237,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
           const groupIds = campaignGroups.map(g => g.group_id);
           await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
             method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            headers: await authHeaders(),
             body: JSON.stringify({ syncToDb: true, filterGroupIds: groupIds }),
           });
           await fetchGroupsFromDb();
@@ -346,7 +347,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       const campaignGroupIds = campaignGroups.map(g => g.group_id);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
         method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ syncToDb: true, filterGroupIds: campaignGroupIds }),
       });
       await res.json();

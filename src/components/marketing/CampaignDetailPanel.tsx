@@ -35,6 +35,7 @@ import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
+import { authHeaders } from "@/lib/authHeaders";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
 const isTransientNetworkError = (e: unknown): boolean => {
@@ -570,10 +571,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     try {
       // Trigger first batch — cron will continue remaining batches automatically.
       // Retry on transient network failures ("Load failed") to survive instability.
+      const hdrs = await authHeaders();
       const res = await withNetworkRetry(() =>
         fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
           method: 'POST',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          headers: hdrs,
           body: JSON.stringify({ scheduledMessageId: messageId }),
         }),
       );
@@ -880,7 +882,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`, {
         method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({}),
       });
       const data = await res.json();
@@ -918,7 +920,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const phones = selectedGroupContacts.map(c => c.phone);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
         method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones }),
       });
       const result = await res.json();
@@ -1134,7 +1136,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   } else {
                     const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
                       method: 'POST',
-                      headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                      headers: await authHeaders(),
                       body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
                     });
                     const data = await res.json();

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { authHeaders } from "@/lib/authHeaders";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -55,10 +56,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`,
         {
           method: "POST",
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
+          headers: await authHeaders(),
           body: JSON.stringify({}),
         }
       );
@@ -107,10 +105,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-group-content`,
         {
           method: "POST",
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
+          headers: await authHeaders(),
           body: JSON.stringify({ type, groupName, brandContext }),
         }
       );
@@ -146,10 +141,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
         {
           method: "POST",
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
+          headers: await authHeaders(),
           body: JSON.stringify({ action: "create", groupName, phones }),
         }
       );
@@ -176,10 +168,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
           {
             method: "POST",
-            headers: {
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              "Content-Type": "application/json",
-            },
+            headers: await authHeaders(),
             body: JSON.stringify({
               action: "update-description",
               groupId: newGroupId,
@@ -194,10 +183,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
         {
           method: "POST",
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
+          headers: await authHeaders(),
           body: JSON.stringify({
             action: "set-messages-admins-only",
             groupId: newGroupId,
@@ -222,10 +208,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send-message`,
         {
           method: "POST",
-          headers: {
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            "Content-Type": "application/json",
-          },
+          headers: await authHeaders(),
           body: JSON.stringify({
             phone: createdGroupId,
             message: pinnedMessage,

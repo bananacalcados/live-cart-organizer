@@ -117,8 +117,6 @@ verify_jwt = false
 [functions.zapi-send-media]
 verify_jwt = false
 
-[functions.zapi-get-messages]
-verify_jwt = false
 
 [functions.zapi-webhook]
 verify_jwt = false
