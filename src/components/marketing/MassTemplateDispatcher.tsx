@@ -862,6 +862,11 @@ export function MassTemplateDispatcher() {
       const inVip = vipMemberSuffixes.has(suffix);
       return vipMembershipMode === 'exclude' ? !inVip : inVip;
     };
+    const passesLiveBuyer = (phoneDigits: string) => {
+      if (liveBuyerMode === 'any') return true;
+      const bought = liveBuyerSuffixes.has(phoneDigits.slice(-8));
+      return liveBuyerMode === 'exclude' ? !bought : bought;
+    };
     // Última compra: cutoff em ms; se sem data e mode=include => reprova; se exclude => passa.
     const lpDaysNum = parseInt(lastPurchaseDays || '0', 10);
     const lpCutoffMs = lpDaysNum > 0 ? Date.now() - lpDaysNum * 86400000 : 0;
