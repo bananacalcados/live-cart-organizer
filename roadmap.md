@@ -10,3 +10,4 @@
 - [x] PDV: fila compacta fixa acima das notas; ocultar notas nas ferramentas; botão voltar; produtos completos no checkout
 - [x] PDV: ficha completa em painel lateral e largura original do chat preservada com ferramentas abertas
 - [x] Ficha completa padrão à direita no PDV e na Live, com notas persistentes à esquerda no PDV
+- [x] Botão de cartão mostra as parcelas escolhidas na Área de Membros e nos checkouts do PDV/WhatsApp

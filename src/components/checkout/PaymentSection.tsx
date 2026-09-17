@@ -635,6 +635,9 @@ function CardPaymentForm({
   // devolve as condições reais (ex.: 10x sem juros), o total é o do MP — nunca o
   // total inflado pela tabela de juros local, senão o botão mostra valor errado.
   const displayTotal = isDebit ? amount : (selectedMp ? selectedMp.totalAmount : totalWithInterest);
+  const selectedInstallmentAmount = isDebit
+    ? amount
+    : (selectedMp ? selectedMp.installmentAmount : displayTotal / selectedInstallments);
 
 
   const handleSubmit = async () => {
@@ -959,7 +962,10 @@ function CardPaymentForm({
           className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
           size="lg"
         >
-          <Lock className="h-5 w-5 mr-2" />Pagar R$ {displayTotal.toFixed(2)}
+          <Lock className="h-5 w-5 mr-2" />
+          {isDebit || selectedInstallments === 1
+            ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
+            : `Pagar ${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)}`}
         </Button>
         <p className={`text-center text-sm font-semibold ${formComplete ? "text-muted-foreground" : "text-destructive"}`}>
           {formComplete ? "CLIQUE PRA PAGAR" : "Preencha os dados do cartão acima"}

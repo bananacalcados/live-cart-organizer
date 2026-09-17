@@ -838,7 +838,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
   }
 
   const selectedInstallments = parseInt(installments);
-  const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
+  const { installmentValue: selectedInstallmentAmount, totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
 
   const handleSubmit = async () => {
     if (processingRef.current) return;
@@ -1039,7 +1039,10 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
         </Select>
       </div>
       <Button onClick={handleSubmit} disabled={processing} className="w-full h-14 text-lg font-semibold" size="lg">
-        <Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}
+        <Lock className="h-5 w-5 mr-2" />
+        {selectedInstallments === 1
+          ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
+          : `Pagar ${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)}`}
       </Button>
     </div>
   );
