@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Users, List, Star } from "lucide-react";
+import { Loader2, Users, List, Star, Video } from "lucide-react";
 import { MultiSelectFilter } from "./MultiSelectFilter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -25,6 +25,7 @@ export interface AudienceFilterBlock {
   rfm_segments?: string[];
   tags?: string[];
   in_vip_group?: boolean;
+  bought_live?: boolean;
   min_avg_ticket?: string;
   max_avg_ticket?: string;
   min_total_orders?: string;
@@ -180,6 +181,30 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
           </div>
         </div>
 
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="text-xs font-medium text-neutral-600 flex items-center gap-1.5">
+            <Video className="h-3.5 w-3.5 text-fuchsia-500" />
+            {tone === "include"
+              ? "Somente quem já comprou em Live Shopping"
+              : "Excluir quem já comprou em Live Shopping"}
+          </label>
+          <div
+            className={`flex items-center justify-between gap-3 rounded-lg border p-2.5 ${
+              tone === "include" ? "border-emerald-200 bg-white" : "border-rose-200 bg-white"
+            }`}
+          >
+            <span className="text-xs text-neutral-600">
+              {tone === "include"
+                ? "Filtra apenas clientes com pelo menos uma compra confirmada feita em Live (módulo Eventos > Live)."
+                : "Remove do público quem já comprou em alguma Live."}
+            </span>
+            <Switch
+              checked={!!block.bought_live}
+              onCheckedChange={(v) => onChange({ ...block, bought_live: v })}
+            />
+          </div>
+        </div>
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-neutral-600">Ticket médio (R$)</label>
