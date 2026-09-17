@@ -30,6 +30,7 @@ import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
 import { VipLinksManager } from "./VipLinksManager";
 import { OrphanBaseManager } from "./OrphanBaseManager";
+import { authHeaders } from "@/lib/authHeaders";
 
 interface WhatsAppGroup {
   id: string;
@@ -201,7 +202,7 @@ export function GroupsVipManager() {
       } else {
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
           method: 'POST',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          headers: await authHeaders(),
           body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
         });
         const data = await res.json();
