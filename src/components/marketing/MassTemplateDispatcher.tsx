@@ -2494,6 +2494,31 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
+            {/* Live Shopping — quem já comprou em Live */}
+            {audienceSource !== 'orphans' && (
+              <div className="rounded-md border border-fuchsia-500/40 bg-fuchsia-500/5 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-fuchsia-600 dark:text-fuchsia-300">
+                    Live Shopping — já comprou em Live {liveBuyerSuffixes.size > 0 ? `(${liveBuyerSuffixes.size} clientes identificados)` : '(carregando...)'}
+                  </div>
+                  <Select value={liveBuyerMode} onValueChange={(v) => { setLiveBuyerMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[320px] h-8 text-xs bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Sem filtro de Live Shopping</SelectItem>
+                      <SelectItem value="only">Somente quem já comprou em Live Shopping</SelectItem>
+                      <SelectItem value="exclude">Excluir quem já comprou em Live Shopping</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Cruza o telefone (últimos 8 dígitos) com as compras feitas no módulo Eventos {'>'} Live (vendas não canceladas).
+                  </p>
+                </div>
+              </div>
+            )}
+
+
             {/* Última compra (X dias) — filtro independente por recência */}
             {audienceSource !== 'orphans' && audienceSource !== 'leads' && (
               <div className="rounded-md border border-sky-500/40 bg-sky-500/5 p-2">
