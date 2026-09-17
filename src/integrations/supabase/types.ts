@@ -12036,6 +12036,51 @@ export type Database = {
         }
         Relationships: []
       }
+      module_access_log: {
+        Row: {
+          bucket_at: string
+          created_at: string
+          event_id: string | null
+          hits: number
+          id: string
+          ip: string | null
+          module: string
+          route: string | null
+          updated_at: string
+          user_agent: string | null
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          bucket_at: string
+          created_at?: string
+          event_id?: string | null
+          hits?: number
+          id?: string
+          ip?: string | null
+          module: string
+          route?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          bucket_at?: string
+          created_at?: string
+          event_id?: string | null
+          hits?: number
+          id?: string
+          ip?: string | null
+          module?: string
+          route?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_goals: {
         Row: {
           created_at: string
@@ -23217,6 +23262,10 @@ export type Database = {
       }
       live_zap_phone_key: { Args: { p_phone: string }; Returns: string }
       live_zap_upsert_lead: { Args: { p_click_id: string }; Returns: string }
+      log_module_access: {
+        Args: { p_event_id?: string; p_module: string; p_route?: string }
+        Returns: undefined
+      }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
         Returns: {

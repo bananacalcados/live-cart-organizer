@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation, useParams } from "react-router-dom";
 import { useAuthReady } from "@/hooks/useAuthReady";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +17,39 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
   const [permissionError, setPermissionError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const location = useLocation();
+  const params = useParams();
+  const routePath = location.pathname;
+  const routeEventId = (params as any)?.eventId || null;
+
+  // Registro de acesso (auditoria): grava quem abriu qual módulo e quando.
+  const logModule = requiredModule
+    ? Array.isArray(requiredModule)
+      ? requiredModule[0]
+      : requiredModule
+    : null;
+  const canLog = !!userId && (!requiredModule || hasAccess === true);
+  useEffect(() => {
+    if (!canLog || !logModule) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        if (cancelled) return;
+        await supabase.rpc("log_module_access", {
+          p_module: logModule,
+          p_route: routePath,
+          p_event_id: routeEventId,
+        });
+      } catch {
+        /* auditoria nunca bloqueia a tela */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canLog, logModule, routePath, routeEventId]);
+
 
   useEffect(() => {
     if (!isReady) return;
