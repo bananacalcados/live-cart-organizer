@@ -571,10 +571,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     try {
       // Trigger first batch — cron will continue remaining batches automatically.
       // Retry on transient network failures ("Load failed") to survive instability.
+      const hdrs = await authHeaders();
       const res = await withNetworkRetry(() =>
         fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
           method: 'POST',
-          headers: await authHeaders(),
+          headers: hdrs,
           body: JSON.stringify({ scheduledMessageId: messageId }),
         }),
       );
