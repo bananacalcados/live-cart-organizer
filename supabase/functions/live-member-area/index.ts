@@ -657,23 +657,10 @@ Deno.serve(async (req) => {
       const event = await resolveCurrentEvent();
       const loaded = await loadOrder(event?.id || null, session.phone, session.order_id || null);
       const customer = loaded.customer;
-      // O frete NÃO é aplicado automaticamente: a cliente escolhe a forma de envio
-      // na etapa de endereço. Aplicar antes cobraria frete duas vezes.
-      const order = loaded.order;
-      if (
-        order &&
-        !order.is_paid &&
-        (order.shipping_info as any)?.source === "event_rule" &&
-        Number(order.shipping_cost || 0) > 0
-      ) {
-        await supabase
-          .from("orders")
-          .update({ shipping_cost: 0, free_shipping: false, shipping_info: null })
-          .eq("id", order.id);
-        order.shipping_cost = 0;
-        order.free_shipping = false;
-        order.shipping_info = null;
-      }
+      // Frete padrão da Live: se a equipe não definiu nada, vale a regra do evento
+      // (grátis acima de X, senão o valor fixo configurado). A cliente ainda pode
+      // trocar a forma de envio na área de membros — a escolha dela sobrescreve.
+      const order = await applyEventShipping(loaded.order);
 
 
       // ⚡ Tudo o que não depende um do outro roda EM PARALELO.
