@@ -18,10 +18,10 @@ function groupDigits(raw: string): string {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
 
   const auth = await requireUser(req);
   if (!auth.ok) return auth.response;
-  }
 
   try {
     const { syncToDb, filterGroupIds, whatsapp_number_id } = await req.json().catch(() => ({ syncToDb: false, filterGroupIds: null, whatsapp_number_id: null }));

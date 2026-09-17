@@ -21,9 +21,9 @@ function json(body: unknown, status = 200) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-
   const auth = await requireUser(req);
   if (!auth.ok) return auth.response;
+
   try {
     const { phone, whatsapp_number_id } = await req.json();
     if (!phone) return json({ error: "phone é obrigatório" }, 400);

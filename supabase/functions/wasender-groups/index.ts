@@ -42,9 +42,9 @@ function groupDigits(raw: string): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-
   const auth = await requireUser(req);
   if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const action = String(body.action || "");
