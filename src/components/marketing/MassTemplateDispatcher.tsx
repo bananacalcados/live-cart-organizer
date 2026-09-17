@@ -652,6 +652,14 @@ export function MassTemplateDispatcher() {
         }
       } catch (e) { console.warn('vip_group_member_phone_suffixes failed', e); }
 
+      // Índice de compradores de Live Shopping (sufixos de 8 dígitos).
+      try {
+        const { data: liveSuffixes, error: liveErr } = await supabase.rpc('live_buyer_phone_suffixes' as any);
+        if (!liveErr && Array.isArray(liveSuffixes)) {
+          setLiveBuyerSuffixes(new Set((liveSuffixes as string[]).filter(Boolean)));
+        }
+      } catch (e) { console.warn('live_buyer_phone_suffixes failed', e); }
+
       setAudienceLoaded(true);
 
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
