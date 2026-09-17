@@ -899,6 +899,7 @@ export function MassTemplateDispatcher() {
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
         if (!passesTemperature(c.lead_temperature)) continue;
         if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
         if (!passesLastPurchase(c.last_purchase_at)) continue;
 
         if (searchQuery) {
@@ -977,6 +978,7 @@ export function MassTemplateDispatcher() {
           if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
           if (!passesTemperature(c.lead_temperature)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
           if (!passesLastPurchase(c.last_purchase_at)) continue;
 
           if (searchQuery) {
@@ -1012,6 +1014,7 @@ export function MassTemplateDispatcher() {
           // Sem correspondência => temperatura nula (mesma semântica do CRM).
           if (!passesTemperature(tempBySuffix.get(phone.slice(-8)) ?? null)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
           addedPhones.add(dk);
