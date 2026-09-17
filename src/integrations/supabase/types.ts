@@ -23236,6 +23236,7 @@ export type Database = {
         }
       }
       live_backfill_order_phone: { Args: { p_order_id: string }; Returns: Json }
+      live_buyer_phone_suffixes: { Args: never; Returns: string[] }
       live_link_order_by_last4: {
         Args: { p_event_id: string; p_phone_e164: string }
         Returns: Json

@@ -218,6 +218,11 @@ export function MassTemplateDispatcher() {
   const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
   const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
 
+  // Compradores de Live Shopping (pos_sales.sale_type = 'live', não canceladas).
+  //  - 'any' ignora | 'only' mantém só compradores de Live | 'exclude' remove
+  const [liveBuyerMode, setLiveBuyerMode] = useState<'any' | 'exclude' | 'only'>('any');
+  const [liveBuyerSuffixes, setLiveBuyerSuffixes] = useState<Set<string>>(new Set());
+
   // Última compra (X dias) — filtro independente por recência da última compra.
   // mode: 'any' ignora | 'include' mantém apenas quem comprou há <= X dias
   //       | 'exclude' remove quem comprou há <= X dias (útil para não bater em quem acabou de comprar).
@@ -647,6 +652,14 @@ export function MassTemplateDispatcher() {
         }
       } catch (e) { console.warn('vip_group_member_phone_suffixes failed', e); }
 
+      // Índice de compradores de Live Shopping (sufixos de 8 dígitos).
+      try {
+        const { data: liveSuffixes, error: liveErr } = await supabase.rpc('live_buyer_phone_suffixes' as any);
+        if (!liveErr && Array.isArray(liveSuffixes)) {
+          setLiveBuyerSuffixes(new Set((liveSuffixes as string[]).filter(Boolean)));
+        }
+      } catch (e) { console.warn('live_buyer_phone_suffixes failed', e); }
+
       setAudienceLoaded(true);
 
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
@@ -849,6 +862,11 @@ export function MassTemplateDispatcher() {
       const inVip = vipMemberSuffixes.has(suffix);
       return vipMembershipMode === 'exclude' ? !inVip : inVip;
     };
+    const passesLiveBuyer = (phoneDigits: string) => {
+      if (liveBuyerMode === 'any') return true;
+      const bought = liveBuyerSuffixes.has(phoneDigits.slice(-8));
+      return liveBuyerMode === 'exclude' ? !bought : bought;
+    };
     // Última compra: cutoff em ms; se sem data e mode=include => reprova; se exclude => passa.
     const lpDaysNum = parseInt(lastPurchaseDays || '0', 10);
     const lpCutoffMs = lpDaysNum > 0 ? Date.now() - lpDaysNum * 86400000 : 0;
@@ -881,6 +899,7 @@ export function MassTemplateDispatcher() {
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
         if (!passesTemperature(c.lead_temperature)) continue;
         if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
         if (!passesLastPurchase(c.last_purchase_at)) continue;
 
         if (searchQuery) {
@@ -959,6 +978,7 @@ export function MassTemplateDispatcher() {
           if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
           if (!passesTemperature(c.lead_temperature)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
           if (!passesLastPurchase(c.last_purchase_at)) continue;
 
           if (searchQuery) {
@@ -994,6 +1014,7 @@ export function MassTemplateDispatcher() {
           // Sem correspondência => temperatura nula (mesma semântica do CRM).
           if (!passesTemperature(tempBySuffix.get(phone.slice(-8)) ?? null)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLiveBuyer(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
           addedPhones.add(dk);
@@ -1014,7 +1035,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, liveBuyerMode, liveBuyerSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -2472,6 +2493,31 @@ export function MassTemplateDispatcher() {
                 </div>
               </div>
             )}
+
+            {/* Live Shopping — quem já comprou em Live */}
+            {audienceSource !== 'orphans' && (
+              <div className="rounded-md border border-fuchsia-500/40 bg-fuchsia-500/5 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-fuchsia-600 dark:text-fuchsia-300">
+                    Live Shopping — já comprou em Live {liveBuyerSuffixes.size > 0 ? `(${liveBuyerSuffixes.size} clientes identificados)` : '(carregando...)'}
+                  </div>
+                  <Select value={liveBuyerMode} onValueChange={(v) => { setLiveBuyerMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[320px] h-8 text-xs bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Sem filtro de Live Shopping</SelectItem>
+                      <SelectItem value="only">Somente quem já comprou em Live Shopping</SelectItem>
+                      <SelectItem value="exclude">Excluir quem já comprou em Live Shopping</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Cruza o telefone (últimos 8 dígitos) com as compras feitas no módulo Eventos {'>'} Live (vendas não canceladas).
+                  </p>
+                </div>
+              </div>
+            )}
+
 
             {/* Última compra (X dias) — filtro independente por recência */}
             {audienceSource !== 'orphans' && audienceSource !== 'leads' && (
