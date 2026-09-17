@@ -24,6 +24,7 @@ import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
 import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
+import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
