@@ -218,6 +218,11 @@ export function MassTemplateDispatcher() {
   const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
   const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
 
+  // Compradores de Live Shopping (pos_sales.sale_type = 'live', não canceladas).
+  //  - 'any' ignora | 'only' mantém só compradores de Live | 'exclude' remove
+  const [liveBuyerMode, setLiveBuyerMode] = useState<'any' | 'exclude' | 'only'>('any');
+  const [liveBuyerSuffixes, setLiveBuyerSuffixes] = useState<Set<string>>(new Set());
+
   // Última compra (X dias) — filtro independente por recência da última compra.
   // mode: 'any' ignora | 'include' mantém apenas quem comprou há <= X dias
   //       | 'exclude' remove quem comprou há <= X dias (útil para não bater em quem acabou de comprar).
