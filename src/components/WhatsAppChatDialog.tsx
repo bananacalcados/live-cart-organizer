@@ -69,7 +69,31 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [activePanel, setActivePanel] = useState<LivePanel>("ficha");
   const pixChannelRef = useRef<PixSendChannel | null>(null);
-  const dbOrder = useDbOrderStore((state) => state.orders.find((item) => item.id === order.id) || null);
+  const allOrders = useDbOrderStore((state) => state.orders);
+
+  const normHandle = (v?: string | null) =>
+    String(v || "").trim().replace(/^@/, "").toLowerCase();
+  const suffix8 = (v?: string | null) =>
+    String(v || "").replace(/\D/g, "").slice(-8);
+
+  const dbOrder = (() => {
+    const byId = allOrders.find((item) => item.id === order.id);
+    if (byId) return byId;
+    // Card do chat sem pedido próprio: localizar pedido real da cliente
+    // pelo @ do Instagram ou pelo telefone (últimos 8 dígitos).
+    const ig = normHandle(order.instagramHandle);
+    const ph = suffix8(order.whatsapp);
+    const matches = allOrders.filter((o) => {
+      if (o.stage === "cancelled") return false;
+      const oig = normHandle(o.customer?.instagram_handle);
+      const oph = suffix8(o.customer?.whatsapp);
+      return (!!ig && oig === ig) || (ph.length === 8 && oph === ph);
+    });
+    if (!matches.length) return null;
+    const open = matches.filter((o) => !o.is_paid);
+    const pool = open.length ? open : matches;
+    return pool.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+  })();
 
   const fichaOrder = dbOrder || ({
     id: order.id,
@@ -86,6 +110,7 @@ export function WhatsAppChatDialog({
       whatsapp: order.whatsapp || "",
     },
   } as unknown as DbOrder);
+
 
   useEffect(() => {
     if (open) setActivePanel("historico");
