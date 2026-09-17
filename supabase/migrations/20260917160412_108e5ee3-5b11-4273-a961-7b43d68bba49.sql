@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.auto_unarchive_conversation_on_message() FROM anon, authenticated, PUBLIC;
