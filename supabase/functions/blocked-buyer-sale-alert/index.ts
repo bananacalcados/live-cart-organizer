@@ -22,14 +22,32 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const {
       sale_id,
-      customer_name,
-      customer_phone,
       total,
       store_name,
       seller_name,
+      message: customMessage,
+      adminPhone,
     } = body || {};
+    let { customer_name, customer_phone } = body || {};
+    let totalValue = total;
 
     const supabase = getServiceClient();
+
+    // Fallback: quando o gatilho não manda os dados (ou vieram vazios),
+    // busca a venda no banco para o alerta nunca chegar sem identificação.
+    if (sale_id && (!customer_name || !customer_phone)) {
+      const { data: sale } = await supabase
+        .from("pos_sales")
+        .select("customer_name, customer_phone, total")
+        .eq("id", sale_id)
+        .maybeSingle();
+      if (sale) {
+        customer_name = customer_name || (sale as any).customer_name;
+        customer_phone = customer_phone || (sale as any).customer_phone;
+        totalValue = totalValue ?? (sale as any).total;
+      }
+    }
+
     const { data: inst, error } = await supabase
       .from("whatsapp_numbers")
       .select("uazapi_token")
@@ -43,25 +61,28 @@ serve(async (req) => {
       });
     }
 
-    const totalTxt = typeof total === "number"
-      ? `R$ ${total.toFixed(2).replace(".", ",")}`
-      : (total ?? "-");
+    const totalNum = typeof totalValue === "string" ? Number(totalValue) : totalValue;
+    const totalTxt = typeof totalNum === "number" && !Number.isNaN(totalNum)
+      ? `R$ ${totalNum.toFixed(2).replace(".", ",")}`
+      : "-";
 
-    const message =
-      `🚨 *ALERTA — CLIENTE BLOQUEADA*\n\n` +
-      `Entrou uma venda no PDV com o telefone monitorado.\n\n` +
-      `👤 *Cliente:* ${customer_name || "(sem nome)"}\n` +
-      `📱 *Telefone:* ${customer_phone || "-"}\n` +
-      `🧾 *Venda:* ${sale_id || "-"}\n` +
-      `💵 *Total:* ${totalTxt}\n` +
-      `🏪 *Loja:* ${store_name || "-"}\n` +
-      `🧑‍💼 *Vendedora:* ${seller_name || "-"}\n\n` +
-      `⚠️ *Barre o envio antes de despachar.*`;
+    const message = typeof customMessage === "string" && customMessage.trim()
+      ? customMessage
+      : `🚨 *ALERTA — CLIENTE BLOQUEADA*\n\n` +
+        `Entrou uma venda no PDV com o telefone monitorado.\n\n` +
+        `👤 *Cliente:* ${customer_name || "(sem nome)"}\n` +
+        `📱 *Telefone:* ${customer_phone || "-"}\n` +
+        `🧾 *Venda:* ${sale_id || "-"}\n` +
+        `💵 *Total:* ${totalTxt}\n` +
+        `🏪 *Loja:* ${store_name || "-"}\n` +
+        `🧑‍💼 *Vendedora:* ${seller_name || "-"}\n\n` +
+        `⚠️ *Barre o envio antes de despachar.*`;
 
     const payload = {
-      number: formatUazapiNumber(ALERT_ADMIN_PHONE),
+      number: formatUazapiNumber(adminPhone || ALERT_ADMIN_PHONE),
       text: message,
     };
+
     const r = await uazapiInstance("/send/text", inst.uazapi_token, {
       method: "POST",
       body: payload,
