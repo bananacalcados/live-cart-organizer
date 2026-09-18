@@ -3127,9 +3127,35 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
   };
 
   const deleteStep = async (id: string) => {
+    // Grava o desenho atual antes de apagar, para as demais setas não se reorganizarem.
+    if (steps.length > 0 && !savedWiring(steps, triggerConfigRef.current)) {
+      await persistWiring(steps, implicitWiring(steps));
+    }
+    const wiring = flowWiring(steps, triggerConfigRef.current);
+    const remaining = steps.filter((s) => s.id !== id);
+    const next = { ...wiring.next };
+    // Costura o buraco: quem apontava para a etapa apagada passa a apontar para a seguinte.
+    for (const [src, tgt] of Object.entries(next)) {
+      if (tgt === id) { const after = next[id]; if (after) next[src] = after; else delete next[src]; }
+    }
+    delete next[id];
+    const firstStepId = wiring.firstStepId === id ? (wiring.next[id] || null) : wiring.firstStepId;
     await supabase.from("automation_steps").delete().eq("id", id);
+    // Limpa ramos de botão que apontavam para ela
+    for (const s of remaining) {
+      const cfg = { ...((s.action_config || {}) as any) };
+      const branches = { ...(cfg.buttonBranches || {}) };
+      let changed = false;
+      for (const [k, v] of Object.entries(branches)) if (v === id) { delete branches[k]; changed = true; }
+      if (changed) {
+        cfg.buttonBranches = branches;
+        await supabase.from("automation_steps").update({ action_config: cfg }).eq("id", s.id);
+      }
+    }
+    await persistWiring(remaining, { firstStepId, next });
     fetchSteps();
   };
+
 
   const runTestFlow = async () => {
     if (!testPhone.trim()) { toast.error("Informe o número de WhatsApp"); return; }
