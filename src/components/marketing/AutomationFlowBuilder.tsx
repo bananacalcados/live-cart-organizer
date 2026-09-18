@@ -3113,20 +3113,21 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     }).select("id").single();
     if (error || !created) { toast.error("Erro ao adicionar etapa"); return; }
 
-    // Liga o bloco novo NO FIM do caminho atual (só ali aparece seta nova).
+    // Liga o bloco novo logo DEPOIS do último bloco da lista (só ali surge uma seta nova).
+    // Se aquele bloco já tiver saída (botões ou outra seta), o novo nasce solto,
+    // para você ligar onde quiser — nada existente é mexido.
     const wiring = flowWiring(steps, triggerConfigRef.current);
     const next = { ...wiring.next };
     let firstStepId = wiring.firstStepId;
-    if (!steps.length || !firstStepId) {
-      firstStepId = firstStepId || created.id;
-    } else {
-      let tail = firstStepId;
-      const guard = new Set<string>([tail]);
-      while (next[tail] && !guard.has(next[tail])) { tail = next[tail]; guard.add(tail); }
-      const tailCfg = (steps.find((s) => s.id === tail)?.action_config || {}) as any;
-      const tailHasButtons = !!((tailCfg.quickReplyButtons?.length > 0) || (tailCfg.interactiveButtons?.length > 0));
-      if (!tailHasButtons) next[tail] = created.id;
+    const last = steps.length ? steps[steps.length - 1] : null;
+    if (!firstStepId && !last) {
+      firstStepId = created.id;
+    } else if (last) {
+      const lastCfg = (last.action_config || {}) as any;
+      const lastHasButtons = !!((lastCfg.quickReplyButtons?.length > 0) || (lastCfg.interactiveButtons?.length > 0));
+      if (!lastHasButtons && !next[last.id]) next[last.id] = created.id;
     }
+
     const list = [...steps, { id: created.id, action_config: defaultConfig } as AutomationStep];
     await persistWiring(list, { firstStepId, next });
     fetchSteps();
