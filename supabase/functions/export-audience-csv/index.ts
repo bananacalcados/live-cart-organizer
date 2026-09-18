@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     return all;
   }
 
-  const salesSelect = "customer_phone, customer_name, sale_type, created_at";
+  const salesSelect = "customer_phone, customer_name, customer_id, sale_type, created_at";
 
   try {
     if (list === "physical" || list === "online") {
