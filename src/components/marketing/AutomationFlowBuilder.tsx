@@ -103,6 +103,7 @@ const ACTION_TYPES = [
   { value: "ai_response", label: "Resposta IA", icon: Brain, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900/30", description: "IA responde com prompt customizado" },
   { value: "add_tag", label: "Adicionar Tag", icon: Tag, color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30", description: "Adiciona tag ao lead" },
   { value: "delay", label: "Aguardar Tempo", icon: Timer, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", description: "Espera tempo configurável" },
+  { value: "condition_purchase", label: "Comprou?", icon: ShoppingBag, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-100 dark:bg-teal-900/30", description: "Se o cliente comprou, encerra o fluxo" },
 ];
 
 // Customer data variables for template mapping
@@ -128,6 +129,7 @@ const CUSTOMER_VARIABLES = [
   { value: "{{codigo_cashback}}", label: "🛍️ POS: Código do Cashback" },
   { value: "{{compra_minima}}", label: "🛍️ POS: Compra Mínima Cashback" },
   { value: "{{validade_cashback}}", label: "🛍️ POS: Validade do Cashback" },
+  { value: "{{dias_para_expirar}}", label: "⏳ POS: Dias p/ Expirar o Cashback (ex.: 12 dias)" },
 ];
 
 // Dynamic field options (pulled from lead/customer data at send time)
@@ -181,6 +183,7 @@ function ActionNode({ data }: { data: any }) {
   const isDelay = data.actionType === "delay";
   const isTag = data.actionType === "add_tag";
   const isCrossSell = data.actionType === "ai_crosssell";
+  const isCondPurchase = data.actionType === "condition_purchase";
   const isTemplate = data.actionType === "send_template";
   const isSendText = data.actionType === "send_text";
   const quickReplyButtons: string[] = data.quickReplyButtons || [];
@@ -195,6 +198,7 @@ function ActionNode({ data }: { data: any }) {
   if (isDelay) { borderClass = "border-amber-300 dark:border-amber-700"; bgClass = "bg-amber-50 dark:bg-amber-950/30"; }
   if (isTag) { borderClass = "border-pink-300 dark:border-pink-700"; bgClass = "bg-pink-50 dark:bg-pink-950/30"; }
   if (isCrossSell) { borderClass = "border-yellow-300 dark:border-yellow-700"; bgClass = "bg-yellow-50 dark:bg-yellow-950/30"; }
+  if (isCondPurchase) { borderClass = "border-teal-300 dark:border-teal-700"; bgClass = "bg-teal-50 dark:bg-teal-950/30"; }
 
   return (
     <div className={`rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 ${borderClass} ${bgClass} group relative`}>
@@ -236,9 +240,22 @@ function ActionNode({ data }: { data: any }) {
       {isDelay && (
         <div className="mt-1">
           <p className="text-xs text-foreground">⏱ {data.delayValue || data.minutes || 5} {data.delayUnit === "hours" ? "hora(s)" : data.delayUnit === "days" ? "dia(s)" : "min"}</p>
+          {data.anchor === "purchase" && (
+            <p className="text-[10px] text-teal-600 dark:text-teal-400">🛍️ contados a partir da compra</p>
+          )}
           {data.hasDeadline && data.deadline && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">🚫 Limite: {new Date(data.deadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
           )}
+        </div>
+      )}
+      {isCondPurchase && (
+        <div className="mt-1">
+          <p className="text-xs text-foreground">
+            🛒 {data.stopIf === "not_bought" ? "Não comprou → encerra" : "Comprou → encerra"}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {data.stopIf === "not_bought" ? "Quem comprou segue o fluxo" : "Quem não comprou segue o fluxo"}
+          </p>
         </div>
       )}
       {isWait && (
@@ -1699,6 +1716,26 @@ function StepEditorDialog({
                   })()}
                 </p>
 
+                {/* Âncora: contar a partir da compra */}
+                <div className="space-y-2 p-3 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5 text-teal-500" />
+                      Contar a partir da data da compra
+                    </Label>
+                    <Switch
+                      checked={config.anchor === "purchase"}
+                      onCheckedChange={v => setConfig({ ...config, anchor: v ? "purchase" : undefined })}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Com isso o prazo é fixo: "21 dias após a compra" continua sendo o 21º dia
+                    mesmo que o cliente clique num botão do template anterior no 19º dia.
+                    Desligado, o tempo conta a partir do momento em que o fluxo chega nesta etapa.
+                  </p>
+                </div>
+
+
                 {/* Deadline / Data Limite */}
                 <div className="space-y-2 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
                   <div className="flex items-center justify-between">
@@ -1748,8 +1785,46 @@ function StepEditorDialog({
                         </div>
                       )}
                     </>
-                  )}
+            )}
+          </div>
+              </div>
+            )}
+
+            {/* ── CONDIÇÃO: COMPROU? ── */}
+            {actionType === "condition_purchase" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Quando encerrar o fluxo</Label>
+                  <Select
+                    value={config.stopIf || "bought"}
+                    onValueChange={v => setConfig({ ...config, stopIf: v })}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bought">✅ Se comprou → encerra (quem não comprou segue)</SelectItem>
+                      <SelectItem value="not_bought">🚫 Se NÃO comprou → encerra (quem comprou segue)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Período considerado</Label>
+                  <Select
+                    value={config.window || "since_trigger"}
+                    onValueChange={v => setConfig({ ...config, window: v })}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="since_trigger">Desde que o fluxo começou</SelectItem>
+                      <SelectItem value="7">Últimos 7 dias</SelectItem>
+                      <SelectItem value="30">Últimos 30 dias</SelectItem>
+                      <SelectItem value="90">Últimos 90 dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  A condição é verificada no momento exato do envio da próxima mensagem —
+                  se o cliente comprar durante a espera, o fluxo para e ele não recebe o lembrete.
+                </p>
               </div>
             )}
           </div>
@@ -2747,6 +2822,8 @@ function FlowEditor({
           minutes: cfg.minutes,
           delayValue: cfg.delayValue || cfg.minutes,
           delayUnit: cfg.delayUnit || "minutes",
+          anchor: cfg.anchor,
+          stopIf: cfg.stopIf,
           templateName: cfg.templateName,
           templateVars: cfg.templateVars,
           headerMediaUrl: cfg.headerMediaUrl,
@@ -2888,7 +2965,7 @@ function FlowEditor({
 
   const addStep = async (actionType: string) => {
     const order = steps.length + 1;
-    const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : {};
+    const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : actionType === "condition_purchase" ? { stopIf: "bought", window: "since_trigger" } : {};
     const delaySecs = actionType === "delay" ? 300 : 0;
     const { error } = await supabase.from("automation_steps").insert({
       flow_id: flow.id,

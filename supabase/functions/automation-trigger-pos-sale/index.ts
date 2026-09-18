@@ -1,4 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  anchoredRunAtMs,
+  buildPurchaseGuard,
+  cashbackVars,
+  isPurchaseAnchored,
+  type PurchaseGuard,
+} from "../_shared/automation-context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -146,11 +153,7 @@ Deno.serve(async (req) => {
       "{{nome_vendedora}}": sellerName,
       "{{loja}}": storeName,
       "{{valor_compra}}": fmtMoney(sale.total),
-      "{{valor_cashback}}": cb ? fmtMoney(cb.cashback_amount) : "",
-      "{{codigo_cashback}}": cb?.coupon_code || "",
-      "{{cupom}}": cb?.coupon_code || "",
-      "{{compra_minima}}": cb ? fmtMoney(cb.min_purchase) : "",
-      "{{validade_cashback}}": cb?.expires_at ? new Date(cb.expires_at).toLocaleDateString("pt-BR") : "",
+      ...cashbackVars(cb),
       "{{telefone}}": phone,
       "__first_name__": firstName,
       "__full_name__": customerName,
@@ -200,21 +203,35 @@ Deno.serve(async (req) => {
       totalCancelled += cancelledCount;
 
       const steps = (flow.steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
-      let cumulativeDelay = 0;
+      // Cursor absoluto: espera normal soma a partir de agora; espera ancorada
+      // na compra usa a data da venda como base (não reinicia o prazo).
+      const purchaseAnchor = sale.created_at as string;
+      let runAtMs = Date.now();
+      let guard: PurchaseGuard | null = null;
+
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         const sCfg = (step.action_config || {}) as any;
-        cumulativeDelay += Number(step.delay_seconds || 0);
 
-        if (step.action_type === "delay") {
-          cumulativeDelay += Number(sCfg.seconds || sCfg.duration || 0);
+        if (step.action_type === "condition_purchase") {
+          guard = buildPurchaseGuard(sCfg, purchaseAnchor);
           continue;
         }
 
-        if (cumulativeDelay <= 5) {
+        if (step.action_type === "delay") {
+          const secs = Number(step.delay_seconds || 0) + Number(sCfg.seconds || sCfg.duration || 0);
+          const anchored = isPurchaseAnchored(sCfg)
+            ? anchoredRunAtMs(purchaseAnchor, secs)
+            : null;
+          runAtMs = anchored ?? runAtMs + secs * 1000;
+          continue;
+        }
+
+        runAtMs += Number(step.delay_seconds || 0) * 1000;
+
+        if (runAtMs - Date.now() <= 5000) {
           await executeStep(supabase, step, phone, replaceVars, flow.id);
         } else {
-          const scheduledAt = new Date(Date.now() + cumulativeDelay * 1000).toISOString();
           await supabase.from("automation_pos_followups").insert({
             sale_id: sale.id,
             flow_id: flow.id,
@@ -223,8 +240,13 @@ Deno.serve(async (req) => {
             customer_phone: phone,
             customer_phone_suffix: phoneSuffix,
             customer_cpf: cpf,
-            scheduled_at: scheduledAt,
-            payload: { vars, action_type: step.action_type, action_config: sCfg },
+            scheduled_at: new Date(runAtMs).toISOString(),
+            payload: {
+              vars,
+              action_type: step.action_type,
+              action_config: sCfg,
+              ...(guard ? { __guard__: guard } : {}),
+            },
           });
         }
       }

@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { sendAutomationJob, isTerminalSendError } from "../_shared/automation-send.ts";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+import { guardBlocks, readGuard } from "../_shared/automation-context.ts";
 
 
 const corsHeaders = {
@@ -262,6 +263,21 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Nó "Comprou?": condição reavaliada agora, na hora do envio.
+        const guard = readGuard(job.recipient_data);
+        if (await guardBlocks(supabase, job.phone, guard)) {
+          await supabase
+            .from("automation_message_queue")
+            .update({
+              status: "skipped",
+              skip_reason: "condition_purchase",
+              locked_by: null,
+              locked_until: null,
+            })
+            .eq("id", job.id);
+          skipped++;
+          continue;
+        }
 
 
         try {

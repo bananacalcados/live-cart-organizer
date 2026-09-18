@@ -323,3 +323,6 @@ verify_jwt = false
 
 [functions.contact-erase]
 verify_jwt = false
+
+[functions.automation-pos-followups-cron]
+verify_jwt = false
