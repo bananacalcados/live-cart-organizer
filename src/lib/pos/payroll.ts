@@ -14,7 +14,11 @@ export interface PayrollSale {
   shipping_cost: number | null;
   payment_details: any;
   event_id?: string | null;
+  /** Soma dos produtos (antes de desconto) — usada para saber se o frete está DENTRO do total. */
+  subtotal?: number | null;
+  discount?: number | null;
 }
+
 
 export interface PayrollSeller {
   id: string;
@@ -68,13 +72,35 @@ export interface PayrollGoal {
   goal_value: number | null;
 }
 
-/** Frete recebido em uma venda (coluna shipping_cost com fallback no payment_details). */
+/**
+ * Frete que está DENTRO do total da venda.
+ *
+ * Atenção: `pos_sales.shipping_cost` é o CUSTO da entrega (gravado pela Expedição:
+ * mototáxi/transportadora) e NÃO o frete cobrado da cliente — na maioria das vendas
+ * ele nem entra no `total`. Descontá-lo sempre reduzia indevidamente o faturamento
+ * da vendedora (online, live e entregas físicas).
+ *
+ * Regra: só desconta quando o total realmente contém o frete
+ * (total ≈ produtos - desconto + frete). Quando não dá para conferir
+ * (venda sem subtotal), mantém o comportamento antigo.
+ */
 export function saleFreight(sale: PayrollSale): number {
+  const total = Number(sale.total || 0);
   const col = Number(sale.shipping_cost || 0);
-  if (col > 0) return col;
   const pd = sale.payment_details as any;
-  return Number(pd?.shipping_amount || 0);
+  const charged = Number(pd?.shipping_amount || 0);
+
+  if (sale.subtotal !== null && sale.subtotal !== undefined) {
+    const products = Number(sale.subtotal || 0) - Number(sale.discount || 0);
+    if (charged > 0 && Math.abs(total - (products + charged)) <= 0.02) return charged;
+    if (col > 0 && Math.abs(total - (products + col)) <= 0.02) return col;
+    return 0;
+  }
+
+  if (col > 0) return col;
+  return charged;
 }
+
 
 /** Valor recebido sem frete. */
 export function saleNet(sale: PayrollSale): number {

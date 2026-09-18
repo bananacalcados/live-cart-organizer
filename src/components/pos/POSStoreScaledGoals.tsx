@@ -91,7 +91,7 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
         supabase.from("pos_goals").select("seller_id, goal_value, period, period_start, period_end")
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
         supabase.from("pos_sales")
-          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
+          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
           .in("status", REVENUE_STATUSES)
           .neq("revenue_attribution", "site_pickup_only")
           // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
