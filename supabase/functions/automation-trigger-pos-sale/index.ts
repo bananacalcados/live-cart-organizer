@@ -245,7 +245,6 @@ Deno.serve(async (req) => {
             step_id: step.id,
             step_index: i,
             customer_phone: phone,
-            customer_phone_suffix: phoneSuffix,
             customer_cpf: cpf,
             scheduled_at: new Date(runAtMs).toISOString(),
             payload: {
