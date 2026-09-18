@@ -24,7 +24,7 @@ import { POSStoreGoalCards } from "./POSStoreGoalCards";
 import { DeliveryCostsCard } from "./DeliveryCostsCard";
 
 import { POSChannelSalesModal, type ChannelSale } from "./POSChannelSalesModal";
-import { computePayroll, type PayrollSale } from "@/lib/pos/payroll";
+import { computePayroll, saleNet, type PayrollSale } from "@/lib/pos/payroll";
 
 import type { DateRange } from "react-day-picker";
 
@@ -267,9 +267,10 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           const key = sale.seller_id || "sem-vendedor";
           const name = sellersMap.get(sale.seller_id || "") || "Sem vendedor";
           const existing = metricsMap.get(key) || { name, totalSales: 0, salesCount: 0, totalItems: 0, sellerId: sale.seller_id || undefined };
-          const pd = (sale as any).payment_details as any;
-          const shippingAmt = pd?.shipping_amount || 0;
-          const netProductTotal = (sale.total || 0) - shippingAmt;
+          // Só desconta o frete quando ele realmente está DENTRO do total da venda
+          // (shipping_cost é o custo da entrega, não o frete cobrado da cliente).
+          const netProductTotal = saleNet(sale as unknown as PayrollSale);
+
           existing.totalSales += netProductTotal;
           existing.salesCount += 1;
           existing.totalItems += saleItemsMap.get(sale.id) || 0;
