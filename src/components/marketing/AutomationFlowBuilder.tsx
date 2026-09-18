@@ -3455,6 +3455,8 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
               edges={edges}
               onNodesChange={handleNodesChange}
               onEdgesChange={onEdgesChange}
+              onEdgesDelete={onEdgesDelete}
+
               onConnect={onConnect}
               onNodeClick={handleNodeClick}
               nodeTypes={nodeTypes}
