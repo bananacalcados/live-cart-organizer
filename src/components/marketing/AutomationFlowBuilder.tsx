@@ -2789,7 +2789,57 @@ function FlowEditor({
     };
   }, [flow.id]);
 
+/**
+ * LIGAÇÕES DO DESENHO
+ *
+ * Antes as setas "normais" (as que não saem de um botão) eram recalculadas a cada
+ * recarga a partir da ordem das etapas — por isso, ao adicionar um bloco novo, as
+ * linhas antigas mudavam de destino sozinhas.
+ *
+ * Agora cada ligação fica GRAVADA: a primeira etapa em trigger_config.firstStepId e
+ * as demais em action_config.nextStepId de quem sai a seta. Enquanto o fluxo antigo
+ * não tiver nada gravado, usamos a leitura antiga (ordem das etapas) para não perder
+ * o desenho existente — e gravamos esse desenho assim que um bloco novo é criado.
+ */
+type FlowWiring = { firstStepId: string | null; next: Record<string, string> };
+
+function implicitWiring(list: AutomationStep[]): FlowWiring {
+  const branchTargetIds = new Set<string>();
+  list.forEach((s) => {
+    const b = ((s.action_config || {}) as any).buttonBranches || {};
+    Object.values(b).forEach((v) => { if (typeof v === "string") branchTargetIds.add(v); });
+  });
+  const wiring: FlowWiring = { firstStepId: null, next: {} };
+  list.forEach((step, idx) => {
+    if (branchTargetIds.has(step.id)) return;
+    const prev = idx > 0 ? list[idx - 1] : null;
+    const prevCfg = prev ? ((prev.action_config || {}) as any) : null;
+    const prevHasButtons = !!(prevCfg && ((prevCfg.quickReplyButtons?.length > 0) || (prevCfg.interactiveButtons?.length > 0)));
+    if (prevHasButtons) return;
+    if (!prev) wiring.firstStepId = step.id;
+    else wiring.next[prev.id] = step.id;
+  });
+  return wiring;
+}
+
+function savedWiring(list: AutomationStep[], triggerConfig: any): FlowWiring | null {
+  const first = typeof triggerConfig?.firstStepId === "string" ? triggerConfig.firstStepId : null;
+  const next: Record<string, string> = {};
+  let hasAny = false;
+  list.forEach((s) => {
+    const cfg = (s.action_config || {}) as any;
+    if (typeof cfg.nextStepId === "string" && cfg.nextStepId) { next[s.id] = cfg.nextStepId; hasAny = true; }
+  });
+  if (!first && !hasAny && !triggerConfig?.wiringSaved) return null;
+  return { firstStepId: first, next };
+}
+
+function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
+  return savedWiring(list, triggerConfig) || implicitWiring(list);
+}
+
   const buildNodesAndEdges = useCallback(() => {
+
     const nodes: Node[] = [
       {
         id: "trigger",
