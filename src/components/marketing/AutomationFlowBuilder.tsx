@@ -3104,16 +3104,34 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
 
     const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : actionType === "condition_purchase" ? { stopIf: "bought", window: "since_trigger" } : {};
     const delaySecs = actionType === "delay" ? 300 : 0;
-    const { error } = await supabase.from("automation_steps").insert({
+    const { data: created, error } = await supabase.from("automation_steps").insert({
       flow_id: flow.id,
       step_order: order,
       action_type: actionType,
       action_config: defaultConfig,
       delay_seconds: delaySecs,
-    });
-    if (error) { toast.error("Erro ao adicionar etapa"); return; }
+    }).select("id").single();
+    if (error || !created) { toast.error("Erro ao adicionar etapa"); return; }
+
+    // Liga o bloco novo NO FIM do caminho atual (só ali aparece seta nova).
+    const wiring = flowWiring(steps, triggerConfigRef.current);
+    const next = { ...wiring.next };
+    let firstStepId = wiring.firstStepId;
+    if (!steps.length || !firstStepId) {
+      firstStepId = firstStepId || created.id;
+    } else {
+      let tail = firstStepId;
+      const guard = new Set<string>([tail]);
+      while (next[tail] && !guard.has(next[tail])) { tail = next[tail]; guard.add(tail); }
+      const tailCfg = (steps.find((s) => s.id === tail)?.action_config || {}) as any;
+      const tailHasButtons = !!((tailCfg.quickReplyButtons?.length > 0) || (tailCfg.interactiveButtons?.length > 0));
+      if (!tailHasButtons) next[tail] = created.id;
+    }
+    const list = [...steps, { id: created.id, action_config: defaultConfig } as AutomationStep];
+    await persistWiring(list, { firstStepId, next });
     fetchSteps();
   };
+
 
 
   const handleStepSave = async (actionType: string, config: any, delaySecs: number) => {
