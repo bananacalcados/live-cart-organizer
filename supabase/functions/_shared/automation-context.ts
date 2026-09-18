@@ -134,7 +134,8 @@ export function buildPurchaseGuard(
   config: Record<string, unknown>,
   fromIso: string,
 ): PurchaseGuard {
-  const windowDays = Number(config.windowDays || 0);
+  const raw = config.windowDays ?? config.window;
+  const windowDays = Number(raw) || 0; // "since_trigger" → 0
   const since = windowDays > 0
     ? new Date(Date.now() - windowDays * 86_400_000).toISOString()
     : fromIso;
