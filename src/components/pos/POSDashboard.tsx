@@ -49,7 +49,7 @@ async function loadPayrollTotals(start: Date, end: Date, storeId: string) {
     supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
     supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
     supabase.from("pos_sales")
-      .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id")
+      .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
       .in("status", PAYROLL_REVENUE_STATUSES)
       .neq("revenue_attribution", "site_pickup_only")
       // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
