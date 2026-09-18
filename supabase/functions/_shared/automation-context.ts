@@ -131,11 +131,14 @@ export interface PurchaseGuard {
   type: "purchase";
   since: string;
   stopIf: "bought" | "not_bought";
+  /** Venda que disparou o fluxo — nunca conta como "comprou de novo". */
+  excludeSaleId?: string | null;
 }
 
 export function buildPurchaseGuard(
   config: Record<string, unknown>,
   fromIso: string,
+  excludeSaleId?: string | null,
 ): PurchaseGuard {
   const raw = config.windowDays ?? config.window;
   const windowDays = Number(raw) || 0; // "since_trigger" → 0
@@ -146,6 +149,7 @@ export function buildPurchaseGuard(
     type: "purchase",
     since,
     stopIf: (config.stopIf as "bought" | "not_bought") || "bought",
+    ...(excludeSaleId ? { excludeSaleId } : {}),
   };
 }
 
@@ -156,7 +160,7 @@ export async function guardBlocks(
   guard: PurchaseGuard | null | undefined,
 ): Promise<boolean> {
   if (!guard || guard.type !== "purchase") return false;
-  const bought = await hasPurchaseSince(supabase, phone, guard.since);
+  const bought = await hasPurchaseSince(supabase, phone, guard.since, guard.excludeSaleId);
   return guard.stopIf === "bought" ? bought : !bought;
 }
 
