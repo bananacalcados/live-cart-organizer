@@ -96,7 +96,22 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: true })
           .range(f, t)
       );
-      rows.forEach((r) => add(r.customer_phone, r.customer_name));
+      const missing = new Map<string, string>(); // customer_id -> name
+      rows.forEach((r) => {
+        if (normPhone(r.customer_phone)) add(r.customer_phone, r.customer_name);
+        else if (r.customer_id) missing.set(r.customer_id, r.customer_name);
+      });
+      const ids = [...missing.keys()];
+      for (let i = 0; i < ids.length; i += 300) {
+        const chunk = ids.slice(i, i + 300);
+        const { data } = await supabase
+          .from("pos_customers")
+          .select("id, name, email, whatsapp")
+          .in("id", chunk);
+        (data || []).forEach((c: Record<string, string>) =>
+          add(c.whatsapp, c.name || missing.get(c.id), c.email)
+        );
+      }
     } else if (list === "all_customers") {
       const rows = await pageAll<Record<string, string>>((f, t) =>
         supabase
