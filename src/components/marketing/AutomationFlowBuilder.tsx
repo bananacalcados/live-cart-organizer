@@ -1786,6 +1786,9 @@ function StepEditorDialog({
                       )}
                     </>
             )}
+          </div>
+              </div>
+            )}
 
             {/* ── CONDIÇÃO: COMPROU? ── */}
             {actionType === "condition_purchase" && (
@@ -1822,9 +1825,6 @@ function StepEditorDialog({
                   A condição é verificada no momento exato do envio da próxima mensagem —
                   se o cliente comprar durante a espera, o fluxo para e ele não recebe o lembrete.
                 </p>
-              </div>
-            )}
-          </div>
               </div>
             )}
           </div>
