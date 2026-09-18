@@ -475,7 +475,7 @@ function CardPaymentForm({
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
-  const [installments, setInstallments] = useState("1");
+  const [installments, setInstallments] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [showFieldErrors, setShowFieldErrors] = useState(false);
@@ -624,12 +624,13 @@ function CardPaymentForm({
     installmentOptions.push({ value: String(i), label });
   }
 
-  const selectedInstallments = isDebit ? 1 : parseInt(installments);
+  const selectedInstallments = isDebit ? 1 : Number(installments);
   const selectedMp = mpOptions?.find((o) => o.installments === selectedInstallments);
   // Valor enviado ao gateway = SEMPRE o total do pedido. Quando o parcelamento tem
   // juros, quem soma os juros é o próprio gateway (não podemos inflar o valor,
   // senão o cliente pagaria juros em cima de juros).
-  const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
+  const installmentCountForCalculation = selectedInstallments || 1;
+  const { totalWithInterest } = calculateInstallmentAmount(amount, installmentCountForCalculation, installmentConfig);
   const chargeAmount = isDebit ? amount : (selectedMp ? amount : totalWithInterest);
   // Valor EXIBIDO no botão = o que o cliente realmente paga. Quando o Mercado Pago
   // devolve as condições reais (ex.: 10x sem juros), o total é o do MP — nunca o
@@ -637,7 +638,7 @@ function CardPaymentForm({
   const displayTotal = isDebit ? amount : (selectedMp ? selectedMp.totalAmount : totalWithInterest);
   const selectedInstallmentAmount = isDebit
     ? amount
-    : (selectedMp ? selectedMp.installmentAmount : displayTotal / selectedInstallments);
+    : (selectedMp ? selectedMp.installmentAmount : displayTotal / installmentCountForCalculation);
 
 
   const handleSubmit = async () => {
@@ -651,6 +652,11 @@ function CardPaymentForm({
 
     // Prevent double-click with ref (synchronous check)
     if (processingRef.current) return;
+
+    if (!isDebit && !selectedInstallments) {
+      toast.error("Selecione as parcelas");
+      return;
+    }
 
     if (missingFields.length) {
       setShowFieldErrors(true);
@@ -925,7 +931,7 @@ function CardPaymentForm({
         <div className="space-y-2">
           <Label className="text-sm">Parcelas</Label>
           <Select value={installments} onValueChange={setInstallments}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="SELECIONE AS PARCELAS" /></SelectTrigger>
             <SelectContent>
               {installmentOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -958,12 +964,14 @@ function CardPaymentForm({
       <div className="space-y-1.5">
         <Button
           onClick={handleSubmit}
-          disabled={isProcessing || !!mismatch}
+          disabled={isProcessing || !!mismatch || (!isDebit && !selectedInstallments)}
           className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
           size="lg"
         >
           <Lock className="h-5 w-5 mr-2" />
-          {isDebit || selectedInstallments === 1
+          {!isDebit && !selectedInstallments
+            ? "Selecione as parcelas"
+            : isDebit || selectedInstallments === 1
             ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
             : `Pagar ${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)}`}
         </Button>
