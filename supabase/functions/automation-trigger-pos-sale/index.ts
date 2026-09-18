@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
     const { data: sale, error: saleErr } = await supabase
       .from("pos_sales")
-      .select("id, store_id, seller_id, customer_id, total, customer_name, customer_phone, created_at")
+      .select("id, store_id, seller_id, customer_id, total, customer_name, customer_phone, created_at, sale_type")
       .eq("id", sale_id)
       .maybeSingle();
     if (saleErr || !sale) return new Response(JSON.stringify({ error: "sale not found" }), { status: 404, headers: corsHeaders });
@@ -62,6 +62,8 @@ Deno.serve(async (req) => {
     const phone = normalizePhoneBR(rawPhone);
     const phoneSuffix = phone.replace(/\D/g, "").slice(-8);
     const cpf = cleanCpf(customer?.cpf);
+
+    const saleKind = String(sale.sale_type || "physical") === "physical" ? "physical" : "online";
 
     const customerName = customer?.name || sale.customer_name || "Cliente";
     const firstName = customerName.split(" ")[0] || "Cliente";
@@ -181,6 +183,10 @@ Deno.serve(async (req) => {
 
     for (const flow of flows) {
       const cfg = (flow.trigger_config || {}) as any;
+      // Tipo de venda: "online" = site/WhatsApp/Live (qualquer loja);
+      // "physical" = venda presencial no PDV. Sem filtro = todas.
+      if (cfg.sale_kind === "online" && saleKind !== "online") continue;
+      if (cfg.sale_kind === "physical" && saleKind !== "physical") continue;
       if (cfg.store_id && cfg.store_id !== sale.store_id) continue;
       if (cfg.seller_id && cfg.seller_id !== sale.seller_id) continue;
       if (cfg.min_total && Number(sale.total) < Number(cfg.min_total)) continue;
@@ -208,13 +214,14 @@ Deno.serve(async (req) => {
       const purchaseAnchor = sale.created_at as string;
       let runAtMs = Date.now();
       let guard: PurchaseGuard | null = null;
+      let scheduled = 0;
 
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         const sCfg = (step.action_config || {}) as any;
 
         if (step.action_type === "condition_purchase") {
-          guard = buildPurchaseGuard(sCfg, purchaseAnchor);
+          guard = buildPurchaseGuard(sCfg, purchaseAnchor, sale.id);
           continue;
         }
 
@@ -232,13 +239,12 @@ Deno.serve(async (req) => {
         if (runAtMs - Date.now() <= 5000) {
           await executeStep(supabase, step, phone, replaceVars, flow.id);
         } else {
-          await supabase.from("automation_pos_followups").insert({
+          const { error: schedErr } = await supabase.from("automation_pos_followups").insert({
             sale_id: sale.id,
             flow_id: flow.id,
             step_id: step.id,
             step_index: i,
             customer_phone: phone,
-            customer_phone_suffix: phoneSuffix,
             customer_cpf: cpf,
             scheduled_at: new Date(runAtMs).toISOString(),
             payload: {
@@ -248,9 +254,14 @@ Deno.serve(async (req) => {
               ...(guard ? { __guard__: guard } : {}),
             },
           });
+          if (schedErr) {
+            console.error("[trigger-pos-sale] schedule error:", step.id, JSON.stringify(schedErr));
+          } else {
+            scheduled++;
+          }
         }
       }
-      results.push({ flow_id: flow.id, flow_name: flow.name, cancelled_previous: cancelledCount });
+      results.push({ flow_id: flow.id, flow_name: flow.name, cancelled_previous: cancelledCount, scheduled });
     }
 
     return new Response(JSON.stringify({

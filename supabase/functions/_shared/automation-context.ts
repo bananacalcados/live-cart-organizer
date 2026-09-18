@@ -97,22 +97,25 @@ export async function lastPurchaseAt(
   }
 }
 
-/** Houve compra concluída depois de `sinceIso`? */
+/** Houve compra concluída depois de `sinceIso`? (ignora a venda que disparou o fluxo) */
 export async function hasPurchaseSince(
   supabase: any,
   phone: string,
   sinceIso: string,
+  excludeSaleId?: string | null,
 ): Promise<boolean> {
   const suffix = phoneSuffix8(phone);
   if (suffix.length < 8) return false;
   try {
-    const { data } = await supabase
+    let q = supabase
       .from("pos_sales")
       .select("id")
       .ilike("customer_phone", `%${suffix}`)
       .in("status", ["completed", "paid", "pending_pickup"])
       .gte("created_at", sinceIso)
       .limit(1);
+    if (excludeSaleId) q = q.neq("id", excludeSaleId);
+    const { data } = await q;
     return Array.isArray(data) && data.length > 0;
   } catch (_e) {
     return false;
@@ -128,11 +131,14 @@ export interface PurchaseGuard {
   type: "purchase";
   since: string;
   stopIf: "bought" | "not_bought";
+  /** Venda que disparou o fluxo — nunca conta como "comprou de novo". */
+  excludeSaleId?: string | null;
 }
 
 export function buildPurchaseGuard(
   config: Record<string, unknown>,
   fromIso: string,
+  excludeSaleId?: string | null,
 ): PurchaseGuard {
   const raw = config.windowDays ?? config.window;
   const windowDays = Number(raw) || 0; // "since_trigger" → 0
@@ -143,6 +149,7 @@ export function buildPurchaseGuard(
     type: "purchase",
     since,
     stopIf: (config.stopIf as "bought" | "not_bought") || "bought",
+    ...(excludeSaleId ? { excludeSaleId } : {}),
   };
 }
 
@@ -153,7 +160,7 @@ export async function guardBlocks(
   guard: PurchaseGuard | null | undefined,
 ): Promise<boolean> {
   if (!guard || guard.type !== "purchase") return false;
-  const bought = await hasPurchaseSince(supabase, phone, guard.since);
+  const bought = await hasPurchaseSince(supabase, phone, guard.since, guard.excludeSaleId);
   return guard.stopIf === "bought" ? bought : !bought;
 }
 

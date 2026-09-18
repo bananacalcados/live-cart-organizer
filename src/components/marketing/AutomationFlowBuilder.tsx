@@ -2538,6 +2538,7 @@ function PosSaleTriggerConfig({ triggerConfig, onChange }: { triggerConfig: any;
   const selectedStoreId: string = triggerConfig.store_id || "all";
   const selectedSellerId: string = triggerConfig.seller_id || "all";
   const minTotal: number = Number(triggerConfig.min_total || 0);
+  const saleKind: string = triggerConfig.sale_kind || "all";
 
   useEffect(() => {
     (async () => {
@@ -2556,8 +2557,25 @@ function PosSaleTriggerConfig({ triggerConfig, onChange }: { triggerConfig: any;
     <div className="space-y-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
       <p className="text-[10px] text-amber-700 dark:text-amber-300">
         <ShoppingBag className="h-3 w-3 inline mr-1" />
-        Disparado quando uma venda física é concluída. Filtre por loja para usar a instância Meta vinculada.
+        Disparado quando uma venda é concluída ou paga. Filtre por tipo de venda e loja para usar a instância Meta vinculada.
       </p>
+      <div className="space-y-1">
+        <Label className="text-xs">Tipo de venda</Label>
+        <Select
+          value={saleKind}
+          onValueChange={v => onChange({ ...triggerConfig, sale_kind: v === "all" ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as vendas</SelectItem>
+            <SelectItem value="online">Venda online (site, WhatsApp e Live)</SelectItem>
+            <SelectItem value="physical">Venda física (presencial no PDV)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">
+          Online vale para qualquer loja: site, WhatsApp e Live. Física é só a venda feita presencialmente no balcão.
+        </p>
+      </div>
       <div className="space-y-1">
         <Label className="text-xs">Loja</Label>
         <Select
