@@ -2865,33 +2865,36 @@ function FlowEditor({
         });
       }
 
-      // 2) Emit sequential edge from previous node ONLY if:
-      //    - this step is not the target of any branch, AND
-      //    - the previous step does not have button branches (those nodes only flow via branches)
-      const prevStep = idx > 0 ? steps[idx - 1] : null;
-      const prevNodeId = idx === 0 ? "trigger" : `step-${prevStep!.id}`;
-      const prevCfg = prevStep ? (prevStep.action_config || {}) as any : null;
-      const prevHasButtons = !!(prevCfg && ((prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0) || (prevCfg.interactiveButtons && prevCfg.interactiveButtons.length > 0)));
+    });
 
-      if (branchTargetIds.has(step.id)) {
-        // Already wired via a branch — skip sequential
-        return;
-      }
-      if (prevHasButtons) {
-        // Don't auto-chain after a template-with-buttons step; user must explicitly route
-        return;
-      }
+    // 2) Sequential edges come from the SAVED wiring (never recalculated on the fly),
+    //    so adding a new block can't move an existing line.
+    const wiring = flowWiring(steps, triggerConfig);
+    const byId = new Set(steps.map((s) => s.id));
+    if (wiring.firstStepId && byId.has(wiring.firstStepId)) {
       edges.push({
-        id: `e-${idx}`,
-        source: prevNodeId,
-        target: nodeId,
+        id: `e-seq-trigger`,
+        source: "trigger",
+        target: `step-${wiring.firstStepId}`,
         animated: true,
         markerEnd: { type: MarkerType.ArrowClosed },
         style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
       });
-    });
+    }
+    for (const [sourceId, targetId] of Object.entries(wiring.next)) {
+      if (!byId.has(sourceId) || !byId.has(targetId)) continue;
+      edges.push({
+        id: `e-seq-${sourceId}`,
+        source: `step-${sourceId}`,
+        target: `step-${targetId}`,
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
+      });
+    }
     return { nodes, edges };
   }, [steps, triggerType, triggerConfig]);
+
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
