@@ -776,7 +776,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
-  const [installments, setInstallments] = useState("1");
+  const [installments, setInstallments] = useState("");
   const [processing, setProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const processingRef = useRef(false);
@@ -837,11 +837,17 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     installmentOptions.push({ value: String(i), label });
   }
 
-  const selectedInstallments = parseInt(installments);
-  const { installmentValue: selectedInstallmentAmount, totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
+  const selectedInstallments = Number(installments);
+  const installmentCountForCalculation = selectedInstallments || 1;
+  const { installmentValue: selectedInstallmentAmount, totalWithInterest } = calculateInstallmentAmount(amount, installmentCountForCalculation, installmentConfig);
 
   const handleSubmit = async () => {
     if (processingRef.current) return;
+
+    if (!selectedInstallments) {
+      toast.error("Selecione as parcelas");
+      return;
+    }
 
     if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
       toast.error("Preencha todos os dados do cartão");
@@ -1032,15 +1038,17 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       </div>
       <div><Label className="text-sm">Parcelas</Label>
         <Select value={installments} onValueChange={setInstallments}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="SELECIONE AS PARCELAS" /></SelectTrigger>
           <SelectContent>
             {installmentOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-      <Button onClick={handleSubmit} disabled={processing} className="w-full h-14 text-lg font-semibold" size="lg">
+      <Button onClick={handleSubmit} disabled={processing || !selectedInstallments} className="w-full h-14 text-lg font-semibold" size="lg">
         <Lock className="h-5 w-5 mr-2" />
-        {selectedInstallments === 1
+        {!selectedInstallments
+          ? "Selecione as parcelas"
+          : selectedInstallments === 1
           ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
           : `Pagar ${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)}`}
       </Button>
