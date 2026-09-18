@@ -2822,6 +2822,8 @@ function FlowEditor({
           minutes: cfg.minutes,
           delayValue: cfg.delayValue || cfg.minutes,
           delayUnit: cfg.delayUnit || "minutes",
+          anchor: cfg.anchor,
+          stopIf: cfg.stopIf,
           templateName: cfg.templateName,
           templateVars: cfg.templateVars,
           headerMediaUrl: cfg.headerMediaUrl,
