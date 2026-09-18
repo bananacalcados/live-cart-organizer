@@ -1716,6 +1716,26 @@ function StepEditorDialog({
                   })()}
                 </p>
 
+                {/* Âncora: contar a partir da compra */}
+                <div className="space-y-2 p-3 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5 text-teal-500" />
+                      Contar a partir da data da compra
+                    </Label>
+                    <Switch
+                      checked={config.anchor === "purchase"}
+                      onCheckedChange={v => setConfig({ ...config, anchor: v ? "purchase" : undefined })}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Com isso o prazo é fixo: "21 dias após a compra" continua sendo o 21º dia
+                    mesmo que o cliente clique num botão do template anterior no 19º dia.
+                    Desligado, o tempo conta a partir do momento em que o fluxo chega nesta etapa.
+                  </p>
+                </div>
+
+
                 {/* Deadline / Data Limite */}
                 <div className="space-y-2 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
                   <div className="flex items-center justify-between">
