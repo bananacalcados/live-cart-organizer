@@ -1785,8 +1785,46 @@ function StepEditorDialog({
                         </div>
                       )}
                     </>
-                  )}
+            )}
+
+            {/* ── CONDIÇÃO: COMPROU? ── */}
+            {actionType === "condition_purchase" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Quando encerrar o fluxo</Label>
+                  <Select
+                    value={config.stopIf || "bought"}
+                    onValueChange={v => setConfig({ ...config, stopIf: v })}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bought">✅ Se comprou → encerra (quem não comprou segue)</SelectItem>
+                      <SelectItem value="not_bought">🚫 Se NÃO comprou → encerra (quem comprou segue)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Período considerado</Label>
+                  <Select
+                    value={config.window || "since_trigger"}
+                    onValueChange={v => setConfig({ ...config, window: v })}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="since_trigger">Desde que o fluxo começou</SelectItem>
+                      <SelectItem value="7">Últimos 7 dias</SelectItem>
+                      <SelectItem value="30">Últimos 30 dias</SelectItem>
+                      <SelectItem value="90">Últimos 90 dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  A condição é verificada no momento exato do envio da próxima mensagem —
+                  se o cliente comprar durante a espera, o fluxo para e ele não recebe o lembrete.
+                </p>
+              </div>
+            )}
+          </div>
               </div>
             )}
           </div>
