@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
         const sCfg = (step.action_config || {}) as any;
 
         if (step.action_type === "condition_purchase") {
-          guard = buildPurchaseGuard(sCfg, purchaseAnchor);
+          guard = buildPurchaseGuard(sCfg, purchaseAnchor, sale.id);
           continue;
         }
 
