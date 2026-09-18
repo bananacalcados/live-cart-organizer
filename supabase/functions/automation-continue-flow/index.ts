@@ -156,7 +156,7 @@ serve(async (req) => {
 
       // Nó "Comprou?": a condição é reavaliada pelo worker na hora do envio.
       if (step.action_type === 'condition_purchase') {
-        activeGuard = buildPurchaseGuard(config, purchaseAnchor);
+        activeGuard = buildPurchaseGuard(config, purchaseAnchor || new Date().toISOString());
         continue;
       }
 
