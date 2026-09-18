@@ -2982,13 +2982,56 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     }, 1000);
   }, [onNodesChange, setNodes, flow.id]);
 
+  /** Grava no banco as ligações do desenho (primeira etapa + próxima de cada etapa). */
+  const persistWiring = useCallback(async (list: AutomationStep[], wiring: FlowWiring) => {
+    for (const s of list) {
+      const cfg = { ...((s.action_config || {}) as any) };
+      const target = wiring.next[s.id];
+      const current = typeof cfg.nextStepId === "string" ? cfg.nextStepId : undefined;
+      if (current === target) continue;
+      if (target) cfg.nextStepId = target; else delete cfg.nextStepId;
+      await supabase.from("automation_steps").update({ action_config: cfg }).eq("id", s.id);
+    }
+    const nextTrigger = { ...triggerConfigRef.current, firstStepId: wiring.firstStepId, wiringSaved: true };
+    triggerConfigRef.current = nextTrigger;
+    setTriggerConfig(nextTrigger);
+    await supabase.from("automation_flows").update({ trigger_config: nextTrigger }).eq("id", flow.id);
+  }, [flow.id]);
+
+  /**
+   * Mantém a ORDEM DE EXECUÇÃO igual à ordem do desenho: percorre o caminho a partir
+   * da primeira etapa (setas normais e de botão) e renumera as etapas.
+   */
+  const resyncOrder = useCallback(async (list: AutomationStep[], wiring: FlowWiring) => {
+    const byId = new Map(list.map((s) => [s.id, s]));
+    const seen: string[] = [];
+    const visit = (id: string | null | undefined) => {
+      if (!id || !byId.has(id) || seen.includes(id)) return;
+      seen.push(id);
+      const cfg = (byId.get(id)!.action_config || {}) as any;
+      Object.values(cfg.buttonBranches || {}).forEach((t) => { if (typeof t === "string") visit(t); });
+      visit(wiring.next[id]);
+    };
+    visit(wiring.firstStepId);
+    for (const s of list) visit(s.id);
+    // Duas passadas por causa do índice único (flow_id, step_order).
+    for (let i = 0; i < seen.length; i++) {
+      await supabase.from("automation_steps").update({ step_order: -(i + 1) }).eq("id", seen[i]);
+    }
+    for (let i = 0; i < seen.length; i++) {
+      await supabase.from("automation_steps").update({ step_order: i + 1 }).eq("id", seen[i]);
+    }
+  }, []);
+
   const onConnect = useCallback(async (conn: Connection) => {
-    // If connection comes from a button handle (btn-0, btn-1, btn-timeout), save to step config
-    if (conn.sourceHandle && conn.sourceHandle.startsWith('btn-') && conn.source) {
-      const sourceStepId = conn.source.replace('step-', '');
-      const targetStepId = conn.target?.replace('step-', '');
-      const sourceStep = steps.find(s => s.id === sourceStepId);
-      if (sourceStep && targetStepId) {
+    const targetStepId = conn.target?.replace("step-", "");
+    if (!targetStepId) return;
+
+    // Seta saindo de um botão → grava no ramo do botão
+    if (conn.sourceHandle && conn.sourceHandle.startsWith("btn-") && conn.source) {
+      const sourceStepId = conn.source.replace("step-", "");
+      const sourceStep = steps.find((s) => s.id === sourceStepId);
+      if (sourceStep) {
         const cfg = (sourceStep.action_config || {}) as any;
         const buttonBranches = { ...(cfg.buttonBranches || {}), [conn.sourceHandle]: targetStepId };
         await supabase
@@ -2997,17 +3040,48 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
           .eq("id", sourceStepId);
         fetchSteps();
       }
+      return;
     }
-    setEdges(eds => addEdge({
-      ...conn,
-      animated: true,
-      markerEnd: { type: MarkerType.ArrowClosed },
-      label: conn.sourceHandle?.startsWith('btn-') ? (conn.sourceHandle === 'btn-timeout' ? '⏳' : `↩️`) : undefined,
-      style: conn.sourceHandle?.startsWith('btn-')
-        ? { stroke: conn.sourceHandle === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 }
-        : undefined,
-    }, eds));
-  }, [steps]);
+
+    // Seta normal → grava a ligação (primeira etapa ou próxima etapa)
+    const wiring = { ...flowWiring(steps, triggerConfigRef.current) };
+    wiring.next = { ...wiring.next };
+    if (conn.source === "trigger") {
+      wiring.firstStepId = targetStepId;
+    } else if (conn.source) {
+      wiring.next[conn.source.replace("step-", "")] = targetStepId;
+    }
+    await persistWiring(steps, wiring);
+    await resyncOrder(steps, wiring);
+    fetchSteps();
+  }, [steps, persistWiring, resyncOrder]);
+
+  /** Apagar uma seta no desenho remove a ligação gravada. */
+  const onEdgesDelete = useCallback(async (removed: Edge[]) => {
+    const wiring = { ...flowWiring(steps, triggerConfigRef.current) };
+    wiring.next = { ...wiring.next };
+    let touched = false;
+    for (const e of removed) {
+      if (e.sourceHandle?.startsWith("btn-") && e.source) {
+        const sourceStepId = e.source.replace("step-", "");
+        const step = steps.find((s) => s.id === sourceStepId);
+        if (!step) continue;
+        const cfg = { ...((step.action_config || {}) as any) };
+        const branches = { ...(cfg.buttonBranches || {}) };
+        delete branches[e.sourceHandle];
+        cfg.buttonBranches = branches;
+        await supabase.from("automation_steps").update({ action_config: cfg }).eq("id", sourceStepId);
+        touched = true;
+        continue;
+      }
+      if (e.source === "trigger") { wiring.firstStepId = null; touched = true; }
+      else if (e.source) { delete wiring.next[e.source.replace("step-", "")]; touched = true; }
+    }
+    if (touched) {
+      await persistWiring(steps, wiring);
+      fetchSteps();
+    }
+  }, [steps, persistWiring]);
 
   const handleNodeClick = useCallback((_: any, node: Node) => {
     if (node.type === "action") {
@@ -3021,8 +3095,11 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
   }, [steps]);
 
   const addStep = async (actionType: string) => {
-    // Sempre DEPOIS da última etapa existente (nunca reaproveita um número já usado,
-    // o que antes criava empates e bagunçava as ligações do desenho).
+    // Antes de criar o bloco novo, GRAVA o desenho atual — assim nenhuma seta existente
+    // muda de lugar. O bloco novo nasce solto, para você ligar onde quiser.
+    if (steps.length > 0 && !savedWiring(steps, triggerConfigRef.current)) {
+      await persistWiring(steps, implicitWiring(steps));
+    }
     const order = steps.reduce((m, s) => Math.max(m, Number(s.step_order) || 0), 0) + 1;
 
     const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : actionType === "condition_purchase" ? { stopIf: "bought", window: "since_trigger" } : {};
@@ -3037,6 +3114,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     if (error) { toast.error("Erro ao adicionar etapa"); return; }
     fetchSteps();
   };
+
 
   const handleStepSave = async (actionType: string, config: any, delaySecs: number) => {
     if (!editingStep) return;
