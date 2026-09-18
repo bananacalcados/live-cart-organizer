@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
           }
         }
       }
-      results.push({ flow_id: flow.id, flow_name: flow.name, cancelled_previous: cancelledCount, scheduled, steps_count: steps.length, types: steps.map((s: any) => s.action_type) });
+      results.push({ flow_id: flow.id, flow_name: flow.name, cancelled_previous: cancelledCount, scheduled });
     }
 
     return new Response(JSON.stringify({
