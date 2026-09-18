@@ -74,7 +74,17 @@ serve(async (req) => {
         .replace(/\{\{pedido_total\}\}/g, 'R$ 199,90')
         .replace(/\{\{produtos\}\}/g, 'Produto Teste x1')
         .replace(/\{\{link_carrinho\}\}/g, 'https://exemplo.com/carrinho')
-        .replace(/\{\{cupom\}\}/g, 'TESTE10');
+         .replace(/\{\{cupom\}\}/g, 'CB-TESTE10')
+         .replace(/\{\{codigo_cashback\}\}/g, 'CB-TESTE10')
+         .replace(/\{\{valor_cashback\}\}/g, 'R$ 30,00')
+         .replace(/\{\{compra_minima\}\}/g, 'R$ 90,00')
+         .replace(/\{\{validade_cashback\}\}/g, '30/11/2026')
+         .replace(/\{\{dias_para_expirar\}\}/g, '60 dias')
+         .replace(/\{\{nome_cliente\}\}/g, testName || 'Teste')
+         .replace(/\{\{primeiro_nome\}\}/g, firstName)
+         .replace(/\{\{nome_vendedora\}\}/g, 'Vendedora Teste')
+         .replace(/\{\{loja\}\}/g, 'Loja Teste')
+         .replace(/\{\{valor_compra\}\}/g, 'R$ 300,00');
     }
 
     // Steps that are branch-targets must only be reached via explicit branch (button click), never sequentially.

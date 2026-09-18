@@ -145,6 +145,83 @@ const DYNAMIC_FIELD_OPTIONS = [
   { value: "__last_purchase__", label: "🛍️ Última Compra", description: "Data da última compra" },
 ];
 
+const TEMPLATE_VARIABLE_OPTIONS = [
+  ...DYNAMIC_FIELD_OPTIONS,
+  ...CUSTOMER_VARIABLES.map(option => ({ ...option, description: "Variável do sistema" })),
+];
+
+function TemplateVariableComposer({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [selectedToken, setSelectedToken] = useState("");
+
+  const insertToken = (token: string) => {
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? value.length;
+    const end = input?.selectionEnd ?? start;
+    const next = `${value.slice(0, start)}${token}${value.slice(end)}`;
+    onChange(next);
+    setSelectedToken("");
+    requestAnimationFrame(() => {
+      input?.focus();
+      const cursor = start + token.length;
+      input?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const usedTokens = TEMPLATE_VARIABLE_OPTIONS.filter(option => value.includes(option.value));
+
+  return (
+    <div className="space-y-1.5">
+      <Input
+        ref={inputRef}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder="Ex.: acima de {{compra_minima}}"
+        className={compact ? "h-7 text-[11px]" : "h-8 text-xs"}
+      />
+      <Select value={selectedToken} onValueChange={insertToken}>
+        <SelectTrigger className={compact ? "h-7 text-[11px]" : "h-8 text-xs"}>
+          <SelectValue placeholder="+ Inserir variável no texto" />
+        </SelectTrigger>
+        <SelectContent>
+          {DYNAMIC_FIELD_OPTIONS.map(option => (
+            <SelectItem key={option.value} value={option.value}>
+              <span className="text-xs">{option.label}</span>
+            </SelectItem>
+          ))}
+          {CUSTOMER_VARIABLES.map(option => (
+            <SelectItem key={option.value} value={option.value}>
+              <span className="text-xs">📋 {option.label}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value && (
+        <p className={compact ? "text-[9px] text-muted-foreground" : "text-[10px] text-muted-foreground"}>
+          Prévia: <span className="font-medium text-foreground">{value}</span>
+        </p>
+      )}
+      {usedTokens.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {usedTokens.map(option => (
+            <Badge key={option.value} variant="secondary" className="text-[9px] px-1.5 py-0">
+              {option.label}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Custom Nodes ──────────────────────────────────
 
 function TriggerNode({ data }: { data: any }) {
@@ -922,52 +999,16 @@ function StepEditorDialog({
                           {uniqueVars.map((v: string) => {
                             const varNum = v.replace(/\{\{|\}\}/g, "");
                             const currentVal = templateVars[varNum] || "";
-                            const isDynamic = DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal);
-                            const isLegacy = CUSTOMER_VARIABLES.some(cv => cv.value === currentVal);
-                            const isCustom = !isDynamic && !isLegacy;
                             return (
                               <div key={v} className="space-y-1">
                                 <Label className="text-[11px] text-muted-foreground">{v}</Label>
-                                <div className="flex gap-1.5">
-                                  <Select
-                                    value={isDynamic ? currentVal : isLegacy ? currentVal : "_custom"}
-                                    onValueChange={val => {
-                                      if (val === "_custom") {
-                                        setConfig({ ...config, templateVars: { ...templateVars, [varNum]: "" } });
-                                      } else {
-                                        setConfig({ ...config, templateVars: { ...templateVars, [varNum]: val } });
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="_custom">✏️ Texto fixo</SelectItem>
-                                      {DYNAMIC_FIELD_OPTIONS.map(df => (
-                                        <SelectItem key={df.value} value={df.value}>
-                                          <span className="text-xs">{df.label}</span>
-                                        </SelectItem>
-                                      ))}
-                                      {CUSTOMER_VARIABLES.map(cv => (
-                                        <SelectItem key={cv.value} value={cv.value}>
-                                          <span className="text-xs">📋 {cv.label}</span>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                {isDynamic && (
-                                  <p className="text-[10px] text-blue-600 dark:text-blue-400">
-                                    🔄 {DYNAMIC_FIELD_OPTIONS.find(df => df.value === currentVal)?.description}
-                                  </p>
-                                )}
-                                {isCustom && (
-                                  <Input
-                                    value={currentVal}
-                                    onChange={e => setConfig({ ...config, templateVars: { ...templateVars, [varNum]: e.target.value } })}
-                                    placeholder="Digite o valor fixo..."
-                                    className="h-8 text-xs"
-                                  />
-                                )}
+                                <TemplateVariableComposer
+                                  value={currentVal}
+                                  onChange={nextValue => setConfig({
+                                    ...config,
+                                    templateVars: { ...templateVars, [varNum]: nextValue },
+                                  })}
+                                />
                               </div>
                             );
                           })}
@@ -1087,52 +1128,17 @@ function StepEditorDialog({
                                           return (
                                             <div key={v} className="space-y-0.5">
                                               <Label className="text-[10px] text-muted-foreground">{v}</Label>
-                                              <div className="flex gap-1">
-                                                <Select
-                                                  value={DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) ? currentVal : CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
-                                                  onValueChange={val => {
-                                                    const newVars = { ...cardVars, [varNum]: val === "_custom" ? "" : val };
-                                                    setConfig({
-                                                      ...config,
-                                                      carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, bodyVars: newVars } }
-                                                    });
-                                                  }}
-                                                >
-                                                  <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="..." /></SelectTrigger>
-                                                  <SelectContent>
-                                                    <SelectItem value="_custom">✏️ Fixo</SelectItem>
-                                                    {DYNAMIC_FIELD_OPTIONS.map(df => (
-                                                      <SelectItem key={df.value} value={df.value}>
-                                                        <span className="text-[11px]">{df.label}</span>
-                                                      </SelectItem>
-                                                    ))}
-                                                    {CUSTOMER_VARIABLES.map(cv => (
-                                                      <SelectItem key={cv.value} value={cv.value}>
-                                                        <span className="text-[11px]">📋 {cv.label}</span>
-                                                      </SelectItem>
-                                                    ))}
-                                                  </SelectContent>
-                                                </Select>
-                                              </div>
-                                              {DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) && (
-                                                <p className="text-[9px] text-blue-600 dark:text-blue-400">
-                                                  🔄 {DYNAMIC_FIELD_OPTIONS.find(df => df.value === currentVal)?.description}
-                                                </p>
-                                              )}
-                                              {!DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) && !CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
-                                                <Input
-                                                  value={currentVal}
-                                                  onChange={e => {
-                                                    const newVars = { ...cardVars, [varNum]: e.target.value };
-                                                    setConfig({
-                                                      ...config,
-                                                      carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, bodyVars: newVars } }
-                                                    });
-                                                  }}
-                                                  placeholder="Valor fixo..."
-                                                  className="h-7 text-[11px]"
-                                                />
-                                              )}
+                                              <TemplateVariableComposer
+                                                compact
+                                                value={currentVal}
+                                                onChange={nextValue => {
+                                                  const newVars = { ...cardVars, [varNum]: nextValue };
+                                                  setConfig({
+                                                    ...config,
+                                                    carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, bodyVars: newVars } },
+                                                  });
+                                                }}
+                                              />
                                             </div>
                                           );
                                         })}
