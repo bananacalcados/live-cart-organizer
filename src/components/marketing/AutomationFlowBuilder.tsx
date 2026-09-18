@@ -2754,14 +2754,18 @@ function FlowEditor({
 
   const fetchSteps = async () => {
     setLoading(true);
+    // Ordem ESTÁVEL: step_order e, em caso de empate, a data de criação.
+    // Sem o desempate, uma etapa nova podia "embaralhar" as linhas já desenhadas.
     const { data } = await supabase
       .from("automation_steps")
       .select("*")
       .eq("flow_id", flow.id)
-      .order("step_order");
+      .order("step_order")
+      .order("created_at");
     setSteps((data || []) as AutomationStep[]);
     setLoading(false);
   };
+
 
   // Track saved positions so user-dragged positions persist across rebuilds AND page refreshes
   const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>(
