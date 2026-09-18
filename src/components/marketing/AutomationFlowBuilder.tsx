@@ -2968,7 +2968,10 @@ function FlowEditor({
   }, [steps]);
 
   const addStep = async (actionType: string) => {
-    const order = steps.length + 1;
+    // Sempre DEPOIS da última etapa existente (nunca reaproveita um número já usado,
+    // o que antes criava empates e bagunçava as ligações do desenho).
+    const order = steps.reduce((m, s) => Math.max(m, Number(s.step_order) || 0), 0) + 1;
+
     const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : actionType === "condition_purchase" ? { stopIf: "bought", window: "since_trigger" } : {};
     const delaySecs = actionType === "delay" ? 300 : 0;
     const { error } = await supabase.from("automation_steps").insert({
