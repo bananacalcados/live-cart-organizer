@@ -14,7 +14,11 @@ export interface PayrollSale {
   shipping_cost: number | null;
   payment_details: any;
   event_id?: string | null;
+  /** Soma dos produtos (antes de desconto) — usada para saber se o frete está DENTRO do total. */
+  subtotal?: number | null;
+  discount?: number | null;
 }
+
 
 export interface PayrollSeller {
   id: string;
