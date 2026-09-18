@@ -97,22 +97,25 @@ export async function lastPurchaseAt(
   }
 }
 
-/** Houve compra concluída depois de `sinceIso`? */
+/** Houve compra concluída depois de `sinceIso`? (ignora a venda que disparou o fluxo) */
 export async function hasPurchaseSince(
   supabase: any,
   phone: string,
   sinceIso: string,
+  excludeSaleId?: string | null,
 ): Promise<boolean> {
   const suffix = phoneSuffix8(phone);
   if (suffix.length < 8) return false;
   try {
-    const { data } = await supabase
+    let q = supabase
       .from("pos_sales")
       .select("id")
       .ilike("customer_phone", `%${suffix}`)
       .in("status", ["completed", "paid", "pending_pickup"])
       .gte("created_at", sinceIso)
       .limit(1);
+    if (excludeSaleId) q = q.neq("id", excludeSaleId);
+    const { data } = await q;
     return Array.isArray(data) && data.length > 0;
   } catch (_e) {
     return false;
