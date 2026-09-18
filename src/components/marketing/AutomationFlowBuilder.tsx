@@ -103,6 +103,7 @@ const ACTION_TYPES = [
   { value: "ai_response", label: "Resposta IA", icon: Brain, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900/30", description: "IA responde com prompt customizado" },
   { value: "add_tag", label: "Adicionar Tag", icon: Tag, color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30", description: "Adiciona tag ao lead" },
   { value: "delay", label: "Aguardar Tempo", icon: Timer, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", description: "Espera tempo configurável" },
+  { value: "condition_purchase", label: "Comprou?", icon: ShoppingBag, color: "text-teal-600 dark:text-teal-400", bg: "bg-teal-100 dark:bg-teal-900/30", description: "Se o cliente comprou, encerra o fluxo" },
 ];
 
 // Customer data variables for template mapping
@@ -128,6 +129,7 @@ const CUSTOMER_VARIABLES = [
   { value: "{{codigo_cashback}}", label: "🛍️ POS: Código do Cashback" },
   { value: "{{compra_minima}}", label: "🛍️ POS: Compra Mínima Cashback" },
   { value: "{{validade_cashback}}", label: "🛍️ POS: Validade do Cashback" },
+  { value: "{{dias_para_expirar}}", label: "⏳ POS: Dias p/ Expirar o Cashback (ex.: 12 dias)" },
 ];
 
 // Dynamic field options (pulled from lead/customer data at send time)
@@ -181,6 +183,7 @@ function ActionNode({ data }: { data: any }) {
   const isDelay = data.actionType === "delay";
   const isTag = data.actionType === "add_tag";
   const isCrossSell = data.actionType === "ai_crosssell";
+  const isCondPurchase = data.actionType === "condition_purchase";
   const isTemplate = data.actionType === "send_template";
   const isSendText = data.actionType === "send_text";
   const quickReplyButtons: string[] = data.quickReplyButtons || [];
@@ -195,6 +198,7 @@ function ActionNode({ data }: { data: any }) {
   if (isDelay) { borderClass = "border-amber-300 dark:border-amber-700"; bgClass = "bg-amber-50 dark:bg-amber-950/30"; }
   if (isTag) { borderClass = "border-pink-300 dark:border-pink-700"; bgClass = "bg-pink-50 dark:bg-pink-950/30"; }
   if (isCrossSell) { borderClass = "border-yellow-300 dark:border-yellow-700"; bgClass = "bg-yellow-50 dark:bg-yellow-950/30"; }
+  if (isCondPurchase) { borderClass = "border-teal-300 dark:border-teal-700"; bgClass = "bg-teal-50 dark:bg-teal-950/30"; }
 
   return (
     <div className={`rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 ${borderClass} ${bgClass} group relative`}>
@@ -236,9 +240,22 @@ function ActionNode({ data }: { data: any }) {
       {isDelay && (
         <div className="mt-1">
           <p className="text-xs text-foreground">⏱ {data.delayValue || data.minutes || 5} {data.delayUnit === "hours" ? "hora(s)" : data.delayUnit === "days" ? "dia(s)" : "min"}</p>
+          {data.anchor === "purchase" && (
+            <p className="text-[10px] text-teal-600 dark:text-teal-400">🛍️ contados a partir da compra</p>
+          )}
           {data.hasDeadline && data.deadline && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">🚫 Limite: {new Date(data.deadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
           )}
+        </div>
+      )}
+      {isCondPurchase && (
+        <div className="mt-1">
+          <p className="text-xs text-foreground">
+            🛒 {data.stopIf === "not_bought" ? "Não comprou → encerra" : "Comprou → encerra"}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {data.stopIf === "not_bought" ? "Quem comprou segue o fluxo" : "Quem não comprou segue o fluxo"}
+          </p>
         </div>
       )}
       {isWait && (

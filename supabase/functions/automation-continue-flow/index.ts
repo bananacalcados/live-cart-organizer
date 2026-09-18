@@ -2,6 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAutomationJob, type AutomationJobPayload } from "../_shared/automation-send.ts";
 import { isOptedOut } from "../_shared/opt-out.ts";
+import {
+  anchoredRunAtMs,
+  buildPurchaseGuard,
+  cashbackVars,
+  fetchActiveCashback,
+  isPurchaseAnchored,
+  lastPurchaseAt,
+  type PurchaseGuard,
+} from "../_shared/automation-context.ts";
 
 
 const corsHeaders = {
@@ -65,8 +74,14 @@ serve(async (req) => {
     const rd = (recipientData || {}) as Record<string, string>;
     const firstName = rd.firstName || rd.name?.split(' ')[0] || 'Cliente';
 
+    // Cashback continua válido quando o fluxo é retomado (clique em botão),
+    // então as variáveis são recalculadas aqui — inclusive {{dias_para_expirar}}.
+    const cbVars = cashbackVars(await fetchActiveCashback(supabase, phone));
+    // Âncora "após a compra": data da última compra concluída do contato.
+    const purchaseAnchor = await lastPurchaseAt(supabase, phone);
+
     function replaceVars(text: string): string {
-      return text
+      let out = text
         .replace(/__first_name__/g, firstName)
         .replace(/__full_name__/g, rd.name || 'Cliente')
         .replace(/__phone__/g, phone)
@@ -75,6 +90,8 @@ serve(async (req) => {
         .replace(/__state__/g, rd.state || '')
         .replace(/\{\{nome\}\}/g, rd.name || 'Cliente')
         .replace(/\{\{telefone\}\}/g, phone);
+      for (const [k, v] of Object.entries(cbVars)) out = out.split(k).join(v);
+      return out;
     }
 
     // ---------------------------------------------------------------------
@@ -87,6 +104,11 @@ serve(async (req) => {
     let cursorMs = 0;           // offset acumulado a partir de agora
     let firstSent = false;
     const queueRows: Record<string, unknown>[] = [];
+    let activeGuard: PurchaseGuard | null = null;
+    const rdWithGuard = () => ({
+      ...(recipientData || {}),
+      ...(activeGuard ? { __guard__: activeGuard } : {}),
+    });
 
     async function emit(
       stepId: string,
@@ -107,7 +129,7 @@ serve(async (req) => {
           queueRows.push({
             phone, flow_id: flowId, step_id: stepId, step_index: stepIndex,
             payload, whatsapp_number_id: numberId || null,
-            recipient_data: recipientData || {},
+            recipient_data: rdWithGuard(),
             scheduled_at: new Date(Date.now() + 30_000).toISOString(),
           });
         }
@@ -116,7 +138,7 @@ serve(async (req) => {
       queueRows.push({
         phone, flow_id: flowId, step_id: stepId, step_index: stepIndex,
         payload, whatsapp_number_id: numberId || null,
-        recipient_data: recipientData || {},
+        recipient_data: rdWithGuard(),
         scheduled_at: new Date(Date.now() + cursorMs).toISOString(),
       });
     }
@@ -132,10 +154,24 @@ serve(async (req) => {
         break;
       }
 
+      // Nó "Comprou?": a condição é reavaliada pelo worker na hora do envio.
+      if (step.action_type === 'condition_purchase') {
+        activeGuard = buildPurchaseGuard(config, purchaseAnchor);
+        continue;
+      }
+
       // Delay configurado no step: agora vira offset de agendamento (sem bloquear a função)
       if (step.delay_seconds > 0) {
-        cursorMs += step.delay_seconds * 1000;
+        if (isPurchaseAnchored(config)) {
+          // "X dias após a compra": prazo absoluto — clicar num botão não reinicia.
+          const runAt = anchoredRunAtMs(purchaseAnchor, step.delay_seconds);
+          if (runAt !== null) cursorMs = Math.max(cursorMs, runAt - Date.now());
+          else cursorMs += step.delay_seconds * 1000;
+        } else {
+          cursorMs += step.delay_seconds * 1000;
+        }
       }
+
 
       // If we hit another wait_for_reply, create a new pending reply and stop
       if (step.action_type === 'wait_for_reply') {
