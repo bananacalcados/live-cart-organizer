@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCartBuildingWatcher } from "@/hooks/events/useCartBuildingPresence";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -135,6 +136,7 @@ interface CommentRowProps {
   score?: ParticipantScore;
   chargebacks?: ChargebackRecord[];
   exchanges?: ExchangeRecord[];
+  buildingBy?: string[];
   onOpenOrder: (username: string) => void;
   onOpenInstagram: (username: string) => void;
   onOpenWhatsapp: (username: string) => void;
@@ -150,6 +152,7 @@ const CommentRow = memo(function CommentRow({
   score,
   chargebacks,
   exchanges,
+  buildingBy,
   onOpenOrder,
   onOpenInstagram,
   onOpenWhatsapp,
@@ -174,6 +177,15 @@ const CommentRow = memo(function CommentRow({
           >
             <ShoppingBag className="h-3 w-3" />@{handle}
           </button>
+          {buildingBy && buildingBy.length > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+              title={`Carrinho sendo montado por: ${buildingBy.join(", ")}`}
+            >
+              <ShoppingBag className="h-2.5 w-2.5" />
+              Montando carrinho{buildingBy.length ? ` · ${buildingBy.join(", ")}` : ""}
+            </span>
+          )}
           {chargebacks && chargebacks.length > 0 && (
             <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />
           )}
@@ -324,6 +336,8 @@ const CommentRow = memo(function CommentRow({
  */
 export function EventLiveCommentsPanel({ eventId }: Props) {
   const { orders } = useDbOrderStore();
+  // Quem está montando carrinho agora (tempo real) — evita trabalho duplicado.
+  const cartBuilding = useCartBuildingWatcher(eventId);
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [bannedHandles, setBannedHandles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -1054,6 +1068,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   score={scoreByHandle.get(handle)}
                   chargebacks={chargebacksForHandle(handle)}
                   exchanges={exchangesForHandle(handle)}
+                  buildingBy={cartBuilding.get(handle)}
                   onOpenOrder={openForHandle}
                   onOpenInstagram={openInstagramChat}
                   onOpenWhatsapp={openWhatsappChat}
