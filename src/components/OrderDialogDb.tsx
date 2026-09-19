@@ -46,6 +46,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import { useCartBuildingTracker } from "@/hooks/events/useCartBuildingPresence";
 
 /** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
 const normHandle = (v?: string | null) =>
