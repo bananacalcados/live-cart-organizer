@@ -114,11 +114,76 @@ serve(async (req) => {
       return parts.join('\n');
     }).join('\n\n');
 
+    // 4.5 Cashback de 10% sobre o valor REALMENTE pago (já com desconto/PIX)
+    const subtotal = products.reduce(
+      (s: number, p: any) => s + (Number(p.price) || 0) * (Number(p.quantity) || 1), 0);
+    const discount = order.discount_type === 'percentage'
+      ? subtotal * (Number(order.discount_value || 0) / 100)
+      : Number(order.discount_value || 0);
+    const shipping = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
+    const paidTotal = Math.max(0, subtotal - discount + shipping);
+
+    const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+    const phoneSuffix8 = fullPhone.slice(-8);
+    let cashbackLine = '';
+    try {
+      // Já existe cashback ativo recente? Não duplica.
+      const { data: existingCb } = await supabase
+        .from('internal_cashback')
+        .select('coupon_code, cashback_amount, min_purchase, expires_at')
+        .ilike('customer_phone', `%${phoneSuffix8}`)
+        .eq('is_used', false)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let cb = existingCb;
+      if (!cb) {
+        const amount = Math.round(paidTotal * 0.10 * 100) / 100;
+        if (amount > 0) {
+          const { data: cfg } = await supabase
+            .from('pos_cashback_config')
+            .select('min_purchase_multiplier, validity_days, code_prefix')
+            .is('store_id', null)
+            .maybeSingle();
+          const minPurchase = Math.round(amount * Number(cfg?.min_purchase_multiplier || 1.5) * 100) / 100;
+          const expiresAt = new Date(Date.now() + Number(cfg?.validity_days || 60) * 86400 * 1000).toISOString();
+          const code = `${cfg?.code_prefix || 'CB'}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+          const { data: inserted } = await supabase
+            .from('internal_cashback')
+            .insert({
+              coupon_code: code,
+              cashback_amount: amount,
+              min_purchase: minPurchase,
+              customer_phone: fullPhone,
+              customer_name: customerName,
+              expires_at: expiresAt,
+              origin_type: 'live_order',
+            })
+            .select('coupon_code, cashback_amount, min_purchase, expires_at')
+            .maybeSingle();
+          cb = inserted;
+        }
+      }
+
+      if (cb) {
+        cashbackLine =
+          `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* pro seu segundo par!\n` +
+          `Cupom: *${cb.coupon_code}*\n` +
+          `Compra mínima: ${fmt(Number(cb.min_purchase))}\n` +
+          `Válido até ${new Date(cb.expires_at).toLocaleDateString('pt-BR')}`;
+      }
+    } catch (err) {
+      console.error('[livete-payment-confirmation] cashback error:', err);
+    }
+
     // 5. Build confirmation message (direct, no fluff)
     const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
       `Confere os itens do seu pedido antes de enviar:\n\n` +
-      `${productLines}\n\n` +
+      `${productLines}` + cashbackLine + `\n\n` +
       `Tá tudo certo? Responde *SIM* pra confirmar ou me avisa se precisa corrigir algo 😊`;
+
 
     // 6. Resolve the WhatsApp instance to send from.
     //    Conversa = (telefone + instância): no modo WhatsApp a live pode não ter
