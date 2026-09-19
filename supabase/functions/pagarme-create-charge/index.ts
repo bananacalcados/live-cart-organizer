@@ -1415,6 +1415,9 @@ serve(async (req) => {
 
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
+    // Guarda o motivo REAL da 1ª recusa (Mercado Pago) para explicar ao cliente
+    // em vez de sempre acusar "dados do cartão errados".
+    let mpDeclineRaw = "";
     let mpAccountIdForOrder: string | null = null;
     let result: ChargeResult;
 
@@ -1439,6 +1442,7 @@ serve(async (req) => {
         mpAccountIdForOrder = result.mpAccountId || null;
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
       } else if (result.error) {
+        mpDeclineRaw = result.error;
         fallbackErrors.push(`MercadoPago: ${result.error}`);
         console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). ${result.stopCascade ? "Bloqueando cascata." : "Tentando Pagar.me..."}`);
       }
@@ -1501,10 +1505,21 @@ serve(async (req) => {
       if (result.error && !fallbackErrors.some((entry) => entry.includes(result.gateway))) {
         fallbackErrors.push(`${result.gateway}: ${result.error}`);
       }
-      // Log detailed errors for debugging, but show generic message to customer
+      // Log detailed errors for debugging, but show a message que reflita o motivo REAL
       console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
       if (!(result.stopCascade && result.error)) {
-        result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
+        const cause = normalizeFailureCode(mpDeclineRaw || "");
+        if (cause.includes("insufficient_amount") || cause.includes("sem limite")) {
+          result.error = "Seu banco recusou por limite insuficiente para este valor. Tente um número maior de parcelas, outro cartão ou pague no Pix (5% de desconto).";
+        } else if (cause.includes("bad_filled") || cause.includes("código de segurança") || cause.includes("codigo de seguranca") || cause.includes("número do cartão") || cause.includes("numero do cartao") || cause.includes("data de validade")) {
+          result.error = "Confira os dados do cartão (número, validade e código de segurança) e tente de novo.";
+        } else if (cause.includes("high_risk") || cause.includes("risco") || cause.includes("blacklist") || cause.includes("antifraud")) {
+          result.error = "Seu banco não autorizou esta compra por segurança. Ligue para o banco autorizando a compra, use outro cartão ou pague no Pix (5% de desconto).";
+        } else if (cause.includes("call_for_auth") || cause.includes("card_disabled") || cause.includes("cc_rejected_other_reason") || cause.includes("duplicated")) {
+          result.error = "Seu banco não autorizou esta compra. Não é erro de digitação: fale com o banco, use outro cartão ou pague no Pix (5% de desconto).";
+        } else {
+          result.error = "Não conseguimos aprovar o pagamento com este cartão. Tente outro cartão ou pague no Pix (5% de desconto).";
+        }
       }
     }
 
