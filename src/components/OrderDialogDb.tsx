@@ -46,6 +46,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import { useCartBuildingTracker } from "@/hooks/events/useCartBuildingPresence";
 
 /** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
 const normHandle = (v?: string | null) =>
@@ -88,6 +89,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
   const [instagramHandle, setInstagramHandle] = useState("");
+  // Avisa em tempo real que este @ está com o carrinho sendo montado.
+  useCartBuildingTracker(eventId, instagramHandle || prefillInstagram, open);
   const [whatsapp, setWhatsapp] = useState("");
   const [fullName, setFullName] = useState("");
   /** 4 últimos dígitos informados na live (vinculação automática do WhatsApp). */
