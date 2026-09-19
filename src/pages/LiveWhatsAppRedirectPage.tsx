@@ -37,7 +37,7 @@ function maskPhone(digits: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error";
+type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order";
 
 export default function LiveWhatsAppRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
