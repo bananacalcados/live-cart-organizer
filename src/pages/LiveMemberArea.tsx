@@ -410,7 +410,8 @@ export default function LiveMemberArea() {
 
   /** Sai da área de membros e volta para a etapa de WhatsApp. */
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
+    safeRemove(TOKEN_KEY);
+    safeRemove(ML_KEY);
     if (pollRef.current) window.clearInterval(pollRef.current);
     setState(null);
     setPhone("");
