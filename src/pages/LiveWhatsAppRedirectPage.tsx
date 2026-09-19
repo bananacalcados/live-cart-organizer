@@ -160,6 +160,11 @@ export default function LiveWhatsAppRedirectPage() {
         setStatus("ask_phone");
         return;
       }
+      if (data?.error === "no_order") {
+        setStatus("no_order");
+        return;
+      }
+
       if (!data?.wa_url) throw new Error(data?.error || "sem link");
       openWhatsApp(data.wa_url as string);
     } catch (err) {
