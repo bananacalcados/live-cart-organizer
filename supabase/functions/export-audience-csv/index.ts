@@ -27,6 +27,33 @@ function csvEscape(v: string) {
   return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
+/** Meta pede dob em YYYYMMDD. */
+function normDob(raw: string | null | undefined): string {
+  const v = String(raw || "").trim();
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}${m[2]}${m[3]}` : "";
+}
+
+function normGender(raw: string | null | undefined): string {
+  const v = String(raw || "").trim().toLowerCase();
+  if (v.startsWith("f")) return "f";
+  if (v.startsWith("m")) return "m";
+  return "";
+}
+
+function normState(raw: string | null | undefined): string {
+  return String(raw || "").trim().toLowerCase().slice(0, 2);
+}
+
+function normCity(raw: string | null | undefined): string {
+  return String(raw || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normZip(raw: string | null | undefined): string {
+  const d = String(raw || "").replace(/\D/g, "");
+  return d.length === 8 ? d : "";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -49,7 +76,26 @@ Deno.serve(async (req) => {
   const list = url.searchParams.get("list") || "physical";
 
   // ---- helpers -------------------------------------------------------
-  type Rec = { phone: string; email: string; fn: string; ln: string };
+  type Rec = {
+    phone: string;
+    email: string;
+    fn: string;
+    ln: string;
+    dob: string;
+    gen: string;
+    ct: string;
+    st: string;
+    zip: string;
+    external_id: string;
+    orders: string;
+    spent: string;
+    last_purchase: string;
+    segment: string;
+  };
+  const blank = (phone: string): Rec => ({
+    phone, email: "", fn: "", ln: "", dob: "", gen: "", ct: "", st: "", zip: "",
+    external_id: "", orders: "", spent: "", last_purchase: "", segment: "",
+  });
   const out = new Map<string, Rec>();
   const add = (phone: string | null, name?: string | null, email?: string | null) => {
     const p = normPhone(phone);
@@ -57,8 +103,11 @@ Deno.serve(async (req) => {
     const [fn, ln] = splitName(name);
     const prev = out.get(p);
     const e = (email || "").trim().toLowerCase();
-    if (!prev) out.set(p, { phone: p, email: e, fn, ln });
-    else {
+    if (!prev) {
+      const rec = blank(p);
+      rec.email = e; rec.fn = fn; rec.ln = ln;
+      out.set(p, rec);
+    } else {
       if (!prev.email && e) prev.email = e;
       if (!prev.fn && fn) { prev.fn = fn; prev.ln = ln; }
     }
@@ -80,17 +129,66 @@ Deno.serve(async (req) => {
     return all;
   }
 
+  /** Completa cada contato com a ficha do CRM (casamento por 8 dígitos). */
+  async function enrich() {
+    const bySuffix = new Map<string, Rec[]>();
+    for (const rec of out.values()) {
+      const s = rec.phone.slice(-8);
+      const arr = bySuffix.get(s);
+      if (arr) arr.push(rec);
+      else bySuffix.set(s, [rec]);
+    }
+    const suffixes = [...bySuffix.keys()];
+    for (let i = 0; i < suffixes.length; i += 300) {
+      const chunk = suffixes.slice(i, i + 300);
+      const { data } = await supabase
+        .from("customers_unified")
+        .select(
+          "customer_code, name, email, birth_date, gender, city, state, cep, phone_suffix8, total_orders, total_spent, last_purchase_at, rfm_segment",
+        )
+        .in("phone_suffix8", chunk)
+        .is("merged_into_id", null);
+      (data || []).forEach((c: Record<string, string | number | null>) => {
+        const recs = bySuffix.get(String(c.phone_suffix8 || ""));
+        if (!recs) return;
+        for (const rec of recs) {
+          if (!rec.email && c.email) rec.email = String(c.email).trim().toLowerCase();
+          if (!rec.fn && c.name) {
+            const [fn, ln] = splitName(String(c.name));
+            rec.fn = fn; rec.ln = ln;
+          }
+          if (!rec.dob) rec.dob = normDob(c.birth_date as string);
+          if (!rec.gen) rec.gen = normGender(c.gender as string);
+          if (!rec.ct) rec.ct = normCity(c.city as string);
+          if (!rec.st) rec.st = normState(c.state as string);
+          if (!rec.zip) rec.zip = normZip(c.cep as string);
+          if (!rec.external_id && c.customer_code) rec.external_id = String(c.customer_code);
+          if (!rec.orders && c.total_orders != null) rec.orders = String(c.total_orders);
+          if (!rec.spent && c.total_spent != null) rec.spent = String(c.total_spent);
+          if (!rec.last_purchase && c.last_purchase_at) {
+            rec.last_purchase = String(c.last_purchase_at).slice(0, 10);
+          }
+          if (!rec.segment && c.rfm_segment) rec.segment = String(c.rfm_segment);
+        }
+      });
+    }
+  }
+
   const salesSelect = "customer_phone, customer_name, customer_id, sale_type, created_at";
 
   try {
-    if (list === "physical" || list === "online") {
-      const types = list === "physical" ? ["physical"] : ["online", "live"];
+    if (list === "physical" || list === "online" || list === "buyers_all") {
+      const types = list === "physical"
+        ? ["physical"]
+        : list === "online"
+        ? ["online", "live"]
+        : ["physical", "online", "live"];
       const rows = await pageAll<Record<string, string>>((f, t) =>
         supabase
           .from("pos_sales")
           .select(salesSelect)
           .in("sale_type", types)
-          .in("status", ["paid", "completed", "pending_pickup"])
+          .in("status", ["paid", "completed", "pending_pickup", "pending_sync"])
           .eq("status_cancelamento", "ativo")
           .gte("created_at", SINCE)
           .order("created_at", { ascending: true })
@@ -106,11 +204,25 @@ Deno.serve(async (req) => {
         const chunk = ids.slice(i, i + 300);
         const { data } = await supabase
           .from("pos_customers")
-          .select("id, name, email, whatsapp")
+          .select("id, name, email, whatsapp, cpf")
           .in("id", chunk);
         (data || []).forEach((c: Record<string, string>) =>
           add(c.whatsapp, c.name || missing.get(c.id), c.email)
         );
+      }
+      // Compradores importados/legados: o CRM já sabe que compraram no período.
+      if (list === "buyers_all") {
+        const legacy = await pageAll<Record<string, string>>((f, t) =>
+          supabase
+            .from("customers_unified")
+            .select("phone_e164, name, email, last_purchase_at")
+            .not("phone_e164", "is", null)
+            .gte("last_purchase_at", SINCE)
+            .is("merged_into_id", null)
+            .order("phone_e164", { ascending: true })
+            .range(f, t)
+        );
+        legacy.forEach((r) => add(r.phone_e164, r.name, r.email));
       }
     } else if (list === "all_customers") {
       const rows = await pageAll<Record<string, string>>((f, t) =>
@@ -118,6 +230,7 @@ Deno.serve(async (req) => {
           .from("customers_unified")
           .select("phone_e164, name, email")
           .not("phone_e164", "is", null)
+          .is("merged_into_id", null)
           .order("phone_e164", { ascending: true })
           .range(f, t)
       );
@@ -160,9 +273,16 @@ Deno.serve(async (req) => {
       return new Response("unknown list", { status: 400, headers: corsHeaders });
     }
 
-    const lines = ["phone,email,fn,ln,country"];
+    await enrich();
+
+    const lines = [
+      "phone,email,fn,ln,dob,gen,ct,st,zip,country,external_id,pedidos,total_gasto,ultima_compra,segmento",
+    ];
     for (const r of out.values()) {
-      lines.push([r.phone, r.email, r.fn, r.ln, "br"].map(csvEscape).join(","));
+      lines.push([
+        r.phone, r.email, r.fn, r.ln, r.dob, r.gen, r.ct, r.st, r.zip, "br",
+        r.external_id, r.orders, r.spent, r.last_purchase, r.segment,
+      ].map(csvEscape).join(","));
     }
     return new Response(lines.join("\n"), {
       headers: {
