@@ -37,7 +37,7 @@ function maskPhone(digits: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error";
+type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order";
 
 export default function LiveWhatsAppRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -160,6 +160,11 @@ export default function LiveWhatsAppRedirectPage() {
         setStatus("ask_phone");
         return;
       }
+      if (data?.error === "no_order") {
+        setStatus("no_order");
+        return;
+      }
+
       if (!data?.wa_url) throw new Error(data?.error || "sem link");
       openWhatsApp(data.wa_url as string);
     } catch (err) {
@@ -285,7 +290,34 @@ export default function LiveWhatsAppRedirectPage() {
             </a>
           </>
         )}
+        {status === "no_order" && (
+          <div style={{ background: "#b91c1c", borderRadius: 14, padding: "1.5rem 1.25rem", textAlign: "left" }}>
+            <div style={{ fontSize: "2.4rem", textAlign: "center", marginBottom: ".5rem" }}>⚠️</div>
+            <h1 style={{ margin: "0 0 .75rem", fontSize: "1.6rem", textAlign: "center", letterSpacing: ".04em" }}>ATENÇÃO</h1>
+            <p style={{ margin: "0 0 1rem", fontSize: "1.05rem", fontWeight: 800, lineHeight: 1.35, textAlign: "center" }}>
+              NÃO LOCALIZAMOS SEU PEDIDO NA LIVE.
+            </p>
+            <p style={{ margin: "0 0 1rem", fontSize: "1rem", fontWeight: 700, lineHeight: 1.4 }}>
+              VOLTE NA LIVE E ESCOLHA O MODELO COM A APRESENTADORA E DEPOIS DIGITE NOS COMENTÁRIOS: NOME DO PRODUTO + COR +
+              TAMANHO E OS 4 ÚLTIMOS DÍGITOS DO SEU WHATSAPP.
+            </p>
+            <p style={{ margin: "0 0 1.25rem", fontSize: ".95rem", lineHeight: 1.4 }}>
+              Só depois de ter feito isso você volta aqui.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFieldError(null);
+                setStatus("ask_phone");
+              }}
+              style={{ ...btn, background: "white", color: "#b91c1c" }}
+            >
+              TENTAR OUTRO NÚMERO
+            </button>
+          </div>
+        )}
         {status === "paused" && (
+
           <>
             <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏸️</div>
             <h2 style={{ margin: 0 }}>Este link está pausado</h2>

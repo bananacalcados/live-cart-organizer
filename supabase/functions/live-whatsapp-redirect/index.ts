@@ -139,11 +139,33 @@ serve(async (req) => {
         if ((linkRes as any)?.ok && h) handle = String(h).replace(/^@/, "");
       }
 
+      // Só segue para o WhatsApp quem tem pedido em aberto nesta Live.
+      // O lead já foi salvo acima, mesmo sem pedido.
+      if (eventId) {
+        const last4 = norm.e164.slice(-4);
+        const suffix8 = norm.key.slice(-8);
+        const { data: evOrders, error: ordErr } = await supabase
+          .from("orders")
+          .select("id, phone_last4, customer:customers(whatsapp)")
+          .eq("event_id", eventId)
+          .neq("stage", "cancelled");
+        if (ordErr) console.error("[live-whatsapp-redirect] orders lookup error:", ordErr);
+        const hasOrder = (evOrders || []).some((o: any) => {
+          if (o.phone_last4 && String(o.phone_last4) === last4) return true;
+          const w = String(o.customer?.whatsapp || "").replace(/\D/g, "");
+          return w.length >= 8 && w.slice(-8) === suffix8;
+        });
+        if (!hasOrder) {
+          return json({ error: "no_order", phone: norm.e164 }, 200);
+        }
+      }
+
       const baseText = (link.message_text || "Oii, vim da Live, pode me ajudar?").trim();
       const withHandle = handle ? `${baseText} — @${handle}` : baseText;
       const text = saved ? `${withHandle} #${code}` : withHandle;
       const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;
       return json({ wa_url: waUrl, text, code: saved ? code : null, target_phone: targetPhone, phone: norm.e164, instagram_handle: handle });
+
 
     }
 
