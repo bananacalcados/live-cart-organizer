@@ -115,6 +115,38 @@ interface MemberState {
 }
 
 const TOKEN_KEY = "live_member_token";
+/** Token do link autenticado: guardado para reentrar sem pedir telefone/código. */
+const ML_KEY = "live_member_ml";
+
+/**
+ * Navegador do WhatsApp/modo privado pode bloquear o armazenamento. Sem estes
+ * wrappers, um erro de storage derrubava a sessão e a cliente era obrigada a se
+ * identificar de novo mesmo tendo chegado pelo link autenticado.
+ */
+const memStore: Record<string, string> = {};
+const safeGet = (k: string): string | null => {
+  try {
+    return localStorage.getItem(k) ?? memStore[k] ?? null;
+  } catch {
+    return memStore[k] ?? null;
+  }
+};
+const safeSet = (k: string, v: string) => {
+  memStore[k] = v;
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* ignora */
+  }
+};
+const safeRemove = (k: string) => {
+  delete memStore[k];
+  try {
+    localStorage.removeItem(k);
+  } catch {
+    /* ignora */
+  }
+};
 const ANSWERED_KEY = "live_member_confirm_answered";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
