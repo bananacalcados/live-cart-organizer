@@ -634,10 +634,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       toast.error("Informe o @ do Instagram ou o nome completo do cliente");
       return;
     }
-    if (!editingOrder && !whatsapp.trim() && !hasValidFullName) {
-      toast.error("Informe o WhatsApp ou o nome completo (nome e sobrenome)");
+    // Basta o @ do Instagram + os 4 últimos dígitos falados na live.
+    if (!editingOrder && !whatsapp.trim() && !hasValidFullName && phoneLast4.length !== 4) {
+      toast.error("Informe o WhatsApp, os 4 últimos dígitos ou o nome completo");
       return;
     }
+
 
     // Chargeback: avisa e exige confirmação antes de montar o pedido (Etapa 5)
     if (orderChargebacks.length > 0 && !forceChargeback && !chargebackConfirmed) {
