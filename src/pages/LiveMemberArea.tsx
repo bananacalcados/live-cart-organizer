@@ -568,28 +568,45 @@ export default function LiveMemberArea() {
         setEvent(boot.event);
 
         // Link mágico (?ml=TOKEN) enviado por WhatsApp: entra já autenticada.
+        // O `ml` FICA na URL: recarregar a página, voltar do gateway ou reabrir
+        // o link depois de uma tentativa de pagamento tem de reentrar sozinho.
         const ml = new URLSearchParams(window.location.search).get("ml");
         if (ml) {
+          safeSet(ML_KEY, ml);
           const mg = await callApi({ action: "magic_enter", ml }).catch(() => null);
-          const url = new URL(window.location.href);
-          url.searchParams.delete("ml");
-          window.history.replaceState({}, "", url.pathname + url.search + url.hash);
           if (mg?.ok && mg?.token) {
-            localStorage.setItem(TOKEN_KEY, mg.token);
+            safeSet(TOKEN_KEY, mg.token);
             applyState(mg);
             return;
           }
           // Um link explícito nunca pode cair na sessão salva de outra cliente.
-          localStorage.removeItem(TOKEN_KEY);
+          safeRemove(TOKEN_KEY);
+          safeRemove(ML_KEY);
           setStep("phone");
           return;
         }
 
-        const token = localStorage.getItem(TOKEN_KEY);
+        const token = safeGet(TOKEN_KEY);
         if (token) {
           const st = await callApi({ action: "state", token });
-          if (st?.ok) applyState(st);
-          else localStorage.removeItem(TOKEN_KEY);
+          if (st?.ok) {
+            applyState(st);
+            return;
+          }
+          safeRemove(TOKEN_KEY);
+        }
+
+        // Sessão perdida (expirou, storage limpo): reentra pelo último link
+        // autenticado dela, em vez de pedir telefone e código de novo.
+        const savedMl = safeGet(ML_KEY);
+        if (savedMl) {
+          const mg = await callApi({ action: "magic_enter", ml: savedMl }).catch(() => null);
+          if (mg?.ok && mg?.token) {
+            safeSet(TOKEN_KEY, mg.token);
+            applyState(mg);
+            return;
+          }
+          safeRemove(ML_KEY);
         }
       } catch {
         setNotFound(true);
