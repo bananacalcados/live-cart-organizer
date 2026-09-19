@@ -115,6 +115,38 @@ interface MemberState {
 }
 
 const TOKEN_KEY = "live_member_token";
+/** Token do link autenticado: guardado para reentrar sem pedir telefone/código. */
+const ML_KEY = "live_member_ml";
+
+/**
+ * Navegador do WhatsApp/modo privado pode bloquear o armazenamento. Sem estes
+ * wrappers, um erro de storage derrubava a sessão e a cliente era obrigada a se
+ * identificar de novo mesmo tendo chegado pelo link autenticado.
+ */
+const memStore: Record<string, string> = {};
+const safeGet = (k: string): string | null => {
+  try {
+    return localStorage.getItem(k) ?? memStore[k] ?? null;
+  } catch {
+    return memStore[k] ?? null;
+  }
+};
+const safeSet = (k: string, v: string) => {
+  memStore[k] = v;
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* ignora */
+  }
+};
+const safeRemove = (k: string) => {
+  delete memStore[k];
+  try {
+    localStorage.removeItem(k);
+  } catch {
+    /* ignora */
+  }
+};
 const ANSWERED_KEY = "live_member_confirm_answered";
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -378,7 +410,8 @@ export default function LiveMemberArea() {
 
   /** Sai da área de membros e volta para a etapa de WhatsApp. */
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
+    safeRemove(TOKEN_KEY);
+    safeRemove(ML_KEY);
     if (pollRef.current) window.clearInterval(pollRef.current);
     setState(null);
     setPhone("");
@@ -513,7 +546,7 @@ export default function LiveMemberArea() {
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
-      localStorage.setItem(TOKEN_KEY, data.token);
+      safeSet(TOKEN_KEY, data.token);
       itemsSigRef.current = itemsSignature(data.order);
       hydrateForms(data);
       const next = routeFor(data);
@@ -535,28 +568,45 @@ export default function LiveMemberArea() {
         setEvent(boot.event);
 
         // Link mágico (?ml=TOKEN) enviado por WhatsApp: entra já autenticada.
+        // O `ml` FICA na URL: recarregar a página, voltar do gateway ou reabrir
+        // o link depois de uma tentativa de pagamento tem de reentrar sozinho.
         const ml = new URLSearchParams(window.location.search).get("ml");
         if (ml) {
+          safeSet(ML_KEY, ml);
           const mg = await callApi({ action: "magic_enter", ml }).catch(() => null);
-          const url = new URL(window.location.href);
-          url.searchParams.delete("ml");
-          window.history.replaceState({}, "", url.pathname + url.search + url.hash);
           if (mg?.ok && mg?.token) {
-            localStorage.setItem(TOKEN_KEY, mg.token);
+            safeSet(TOKEN_KEY, mg.token);
             applyState(mg);
             return;
           }
           // Um link explícito nunca pode cair na sessão salva de outra cliente.
-          localStorage.removeItem(TOKEN_KEY);
+          safeRemove(TOKEN_KEY);
+          safeRemove(ML_KEY);
           setStep("phone");
           return;
         }
 
-        const token = localStorage.getItem(TOKEN_KEY);
+        const token = safeGet(TOKEN_KEY);
         if (token) {
           const st = await callApi({ action: "state", token });
-          if (st?.ok) applyState(st);
-          else localStorage.removeItem(TOKEN_KEY);
+          if (st?.ok) {
+            applyState(st);
+            return;
+          }
+          safeRemove(TOKEN_KEY);
+        }
+
+        // Sessão perdida (expirou, storage limpo): reentra pelo último link
+        // autenticado dela, em vez de pedir telefone e código de novo.
+        const savedMl = safeGet(ML_KEY);
+        if (savedMl) {
+          const mg = await callApi({ action: "magic_enter", ml: savedMl }).catch(() => null);
+          if (mg?.ok && mg?.token) {
+            safeSet(TOKEN_KEY, mg.token);
+            applyState(mg);
+            return;
+          }
+          safeRemove(ML_KEY);
         }
       } catch {
         setNotFound(true);
