@@ -701,7 +701,7 @@ function CardPaymentForm({
       const mpToken = await Promise.race([
         tokenizeCardMP({
           number: cardNumber.replace(/\D/g, ""),
-          holderName: cardName.trim(),
+          holderName: cardName.trim().toUpperCase(),
           expMonth: expiryParts[0].padStart(2, "0"),
           expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
           cvv: cvv.trim(),
@@ -726,7 +726,7 @@ function CardPaymentForm({
           paymentAttemptId: attemptId,
           card: {
             number: cardNumber.replace(/\s/g, ""),
-            holderName: cardName.trim(),
+            holderName: cardName.trim().toUpperCase(),
             expMonth: expiryParts[0],
             expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv: cvv.trim(),
@@ -897,7 +897,21 @@ function CardPaymentForm({
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
-          <Input ref={cardNameRef} className={errClass(isCardNameValid)} value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
+          {/* Não transformamos o texto a cada tecla (isso quebrava a digitação
+              preditiva do teclado Android). Mostramos em maiúsculas por CSS e
+              padronizamos só no envio ao gateway. */}
+          <Input
+            ref={cardNameRef}
+            className={`uppercase ${errClass(isCardNameValid)}`}
+            value={cardName}
+            onChange={(e) => setCardName(e.target.value)}
+            placeholder="JOÃO SILVA"
+            autoComplete="cc-name"
+            name="ccname"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+          />
           {showFieldErrors && !isCardNameValid && (
             <p className="text-xs text-destructive mt-1">Digite o nome impresso no cartão.</p>
           )}
