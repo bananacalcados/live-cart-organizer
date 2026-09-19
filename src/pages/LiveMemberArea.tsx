@@ -546,7 +546,7 @@ export default function LiveMemberArea() {
     (data: any) => {
       if (!data?.ok) return;
       setState(data as MemberState);
-      localStorage.setItem(TOKEN_KEY, data.token);
+      safeSet(TOKEN_KEY, data.token);
       itemsSigRef.current = itemsSignature(data.order);
       hydrateForms(data);
       const next = routeFor(data);
