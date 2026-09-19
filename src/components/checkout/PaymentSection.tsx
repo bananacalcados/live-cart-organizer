@@ -701,7 +701,7 @@ function CardPaymentForm({
       const mpToken = await Promise.race([
         tokenizeCardMP({
           number: cardNumber.replace(/\D/g, ""),
-          holderName: cardName.trim(),
+          holderName: cardName.trim().toUpperCase(),
           expMonth: expiryParts[0].padStart(2, "0"),
           expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
           cvv: cvv.trim(),
@@ -726,7 +726,7 @@ function CardPaymentForm({
           paymentAttemptId: attemptId,
           card: {
             number: cardNumber.replace(/\s/g, ""),
-            holderName: cardName.trim(),
+            holderName: cardName.trim().toUpperCase(),
             expMonth: expiryParts[0],
             expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv: cvv.trim(),
