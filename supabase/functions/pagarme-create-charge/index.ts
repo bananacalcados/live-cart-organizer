@@ -1415,6 +1415,9 @@ serve(async (req) => {
 
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
+    // Guarda o motivo REAL da 1ª recusa (Mercado Pago) para explicar ao cliente
+    // em vez de sempre acusar "dados do cartão errados".
+    let mpDeclineRaw = "";
     let mpAccountIdForOrder: string | null = null;
     let result: ChargeResult;
 
@@ -1439,6 +1442,7 @@ serve(async (req) => {
         mpAccountIdForOrder = result.mpAccountId || null;
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
       } else if (result.error) {
+        mpDeclineRaw = result.error;
         fallbackErrors.push(`MercadoPago: ${result.error}`);
         console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). ${result.stopCascade ? "Bloqueando cascata." : "Tentando Pagar.me..."}`);
       }
