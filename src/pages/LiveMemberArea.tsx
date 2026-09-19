@@ -570,7 +570,10 @@ export default function LiveMemberArea() {
         // Link mágico (?ml=TOKEN) enviado por WhatsApp: entra já autenticada.
         // O `ml` FICA na URL: recarregar a página, voltar do gateway ou reabrir
         // o link depois de uma tentativa de pagamento tem de reentrar sozinho.
-        const ml = new URLSearchParams(window.location.search).get("ml");
+        // Tolerante a lixo colado no fim do link (quebra de linha, letra solta):
+        // aproveitamos só os 64 caracteres válidos do código.
+        const mlRaw = new URLSearchParams(window.location.search).get("ml");
+        const ml = mlRaw ? (mlRaw.match(/[a-f0-9]{64}/i)?.[0] ?? mlRaw) : null;
         if (ml) {
           safeSet(ML_KEY, ml);
           const mg = await callApi({ action: "magic_enter", ml }).catch(() => null);
