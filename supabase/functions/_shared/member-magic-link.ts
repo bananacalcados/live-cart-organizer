@@ -95,8 +95,10 @@ export async function redeemMagicLink(
   supabase: any,
   token: string | null | undefined,
 ): Promise<RedeemedMagicLink | null> {
-  const raw = String(token || "").trim();
-  if (!/^[a-f0-9]{64}$/i.test(raw)) return null;
+  // Aceita o código mesmo com sobra colada no fim (quebra de linha, letra solta
+  // no texto da mensagem): usamos o primeiro bloco de 64 hex encontrado.
+  const raw = (String(token || "").trim().match(/[a-f0-9]{64}/i)?.[0] || "").trim();
+  if (!raw) return null;
   try {
     const tokenHash = await sha256Hex(raw.toLowerCase());
     const { data } = await supabase
