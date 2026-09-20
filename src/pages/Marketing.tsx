@@ -339,6 +339,8 @@ export default function Marketing() {
    const [brandFilter, setBrandFilter] = useState<string>("all");
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
+  // Paginação client-side da tabela de clientes RFM (100 por página)
+  const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
 
   // ─── Fetch data ──────────────────────────────
