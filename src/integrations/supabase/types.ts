@@ -6878,6 +6878,54 @@ export type Database = {
           },
         ]
       }
+      expedition_grade_purchases: {
+        Row: {
+          arrival_date: string
+          cor: string | null
+          created_at: string
+          created_by: string | null
+          grades_qty: number
+          id: string
+          notes: string | null
+          product_name: string
+          received: boolean
+          tipo_grade: string | null
+          total_cost: number
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          arrival_date: string
+          cor?: string | null
+          created_at?: string
+          created_by?: string | null
+          grades_qty?: number
+          id?: string
+          notes?: string | null
+          product_name: string
+          received?: boolean
+          tipo_grade?: string | null
+          total_cost?: number
+          unit_cost?: number
+          updated_at?: string
+        }
+        Update: {
+          arrival_date?: string
+          cor?: string | null
+          created_at?: string
+          created_by?: string | null
+          grades_qty?: number
+          id?: string
+          notes?: string | null
+          product_name?: string
+          received?: boolean
+          tipo_grade?: string | null
+          total_cost?: number
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expedition_groups: {
         Row: {
           created_at: string

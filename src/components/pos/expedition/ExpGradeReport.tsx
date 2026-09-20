@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ShoppingBag } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -34,6 +38,8 @@ const TIPO_LABEL: Record<string, string> = {
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 
+const PARES_POR_GRADE = 12;
+
 interface Props {
   /** Ids das vendas (pos_sales) que estão na etapa de separação */
   saleIds: string[];
@@ -47,6 +53,13 @@ export function ExpGradeReport({ saleIds, className }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+
+  // Marcar como comprado
+  const [buyRow, setBuyRow] = useState<LinhaGradeExp | null>(null);
+  const [buyQty, setBuyQty] = useState("1");
+  const [buyPrice, setBuyPrice] = useState("0");
+  const [buyDate, setBuyDate] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const key = saleIds.join(",");
 
@@ -78,22 +91,87 @@ export function ExpGradeReport({ saleIds, className }: Props) {
 
   const rowKey = (r: LinhaGradeExp, idx: number) => `${r.produto_nome}|${r.cor}|${idx}`;
 
-  const custoSelecionado = useMemo(
-    () => rows.reduce((s, r, i) => s + (selected[rowKey(r, i)] ? Number(r.custo_total || 0) : 0), 0),
-    [rows, selected],
-  );
+  /** Pares que a compra traz (grade cheia = 12 pares; letras = unidades vendidas). */
+  const paresComprados = (r: LinhaGradeExp) =>
+    r.tipo_grade === "letras" ? r.total_vendido || 0 : (r.grades || 0) * PARES_POR_GRADE;
+  /** Pares que sobram em loja depois de entregar os já vendidos. */
+  const paresSobra = (r: LinhaGradeExp) => Math.max(0, paresComprados(r) - (r.total_vendido || 0));
+  const custoSobra = (r: LinhaGradeExp) => paresSobra(r) * Number(r.custo_unitario || 0);
+
+  const totals = useMemo(() => {
+    let investimento = 0;
+    let sobraR$ = 0;
+    let sobraPares = 0;
+    rows.forEach((r, i) => {
+      if (!selected[rowKey(r, i)]) return;
+      investimento += Number(r.custo_total || 0);
+      sobraR$ += custoSobra(r);
+      sobraPares += paresSobra(r);
+    });
+    return { investimento, sobraR$, sobraPares };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, selected]);
+
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
   const totalPares = rows.reduce((s, r) => s + (r.total_vendido || 0), 0);
   const totalGrades = rows.reduce((s, r) => s + (r.grades || 0), 0);
 
+  const openBuy = (r: LinhaGradeExp) => {
+    setBuyRow(r);
+    setBuyQty(String(Math.max(1, r.grades || 1)));
+    setBuyPrice(String(Number(r.custo_unitario || 0).toFixed(2)));
+    setBuyDate("");
+  };
+
+  const buyTotal = useMemo(() => {
+    const qty = Number(String(buyQty).replace(",", ".")) || 0;
+    const price = Number(String(buyPrice).replace(",", ".")) || 0;
+    const mult = buyRow?.tipo_grade === "letras" ? 1 : PARES_POR_GRADE;
+    return qty * mult * price;
+  }, [buyQty, buyPrice, buyRow]);
+
+  const saveBuy = async () => {
+    if (!buyRow) return;
+    if (!buyDate) {
+      toast.error("Informe a data de chegada");
+      return;
+    }
+    setSaving(true);
+    const { data: auth } = await supabase.auth.getUser();
+    const { error } = await (supabase as any).from("expedition_grade_purchases").insert({
+      product_name: buyRow.produto_nome,
+      cor: buyRow.cor,
+      tipo_grade: buyRow.tipo_grade || null,
+      grades_qty: Number(String(buyQty).replace(",", ".")) || 0,
+      unit_cost: Number(String(buyPrice).replace(",", ".")) || 0,
+      total_cost: buyTotal,
+      arrival_date: buyDate,
+      created_by: auth?.user?.id ?? null,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Compra registrada — veja em Data de chegada");
+    setBuyRow(null);
+  };
+
+  const GRID = "grid-cols-[36px_minmax(0,2fr)_130px_minmax(0,1.6fr)_minmax(0,1.6fr)_130px_130px_120px]";
+
   return (
     <div className={cn("flex min-h-0 flex-col gap-3", className)}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-lg border bg-muted/40 px-3 py-2">
-          <div className="text-xs font-semibold text-muted-foreground">Custo das grades selecionadas</div>
-          <div className="text-2xl font-black">{brl(custoSelecionado)}</div>
+          <div className="text-xs font-semibold text-muted-foreground">Investimento nas grades selecionadas</div>
+          <div className="text-2xl font-black">{brl(totals.investimento)}</div>
           <div className="text-xs text-muted-foreground">{selectedCount} modelo(s) selecionado(s)</div>
+        </div>
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+          <div className="text-xs font-semibold text-emerald-700">Sobra em loja (após os vendidos)</div>
+          <div className="text-2xl font-black text-emerald-700">{brl(totals.sobraR$)}</div>
+          <div className="text-xs text-emerald-700/80">{totals.sobraPares} par(es)/un. em estoque</div>
         </div>
         <Button
           variant="outline"
@@ -121,13 +199,20 @@ export function ExpGradeReport({ saleIds, className }: Props) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border">
-        <div className="grid shrink-0 grid-cols-[36px_minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)_130px] gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground">
+        <div
+          className={cn(
+            "grid shrink-0 gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground",
+            GRID,
+          )}
+        >
           <span />
           <span>Produto · cor</span>
           <span>Status</span>
           <span>Vendidos</span>
           <span>Comprar / repor</span>
           <span>Custo</span>
+          <span>Sobra</span>
+          <span>Comprado</span>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           {loading && rows.length === 0 ? (
@@ -152,7 +237,8 @@ export function ExpGradeReport({ saleIds, className }: Props) {
                 <div
                   key={k}
                   className={cn(
-                    "grid grid-cols-[36px_minmax(0,2fr)_150px_minmax(0,2fr)_minmax(0,2fr)_130px] items-start gap-3 border-t px-3 py-3 text-base",
+                    "grid items-start gap-3 border-t px-3 py-3 text-base",
+                    GRID,
                     style.row,
                     selected[k] && "bg-primary/5",
                   )}
@@ -226,6 +312,17 @@ export function ExpGradeReport({ saleIds, className }: Props) {
                       {brl(Number(row.custo_unitario || 0))} / {isLetras ? "un." : "par"}
                     </div>
                   </div>
+                  <div className="text-right">
+                    <div className="text-base font-bold text-emerald-600">{brl(custoSobra(row))}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {paresSobra(row)} {isLetras ? "un." : "par(es)"} em loja
+                    </div>
+                  </div>
+                  <div>
+                    <Button size="sm" variant="outline" className="font-bold" onClick={() => openBuy(row)}>
+                      <ShoppingBag className="mr-1 h-4 w-4" /> Comprado
+                    </Button>
+                  </div>
                 </div>
               );
             })
@@ -237,6 +334,42 @@ export function ExpGradeReport({ saleIds, className }: Props) {
           </div>
         )}
       </div>
+
+      <Dialog open={!!buyRow} onOpenChange={(o) => !o && setBuyRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar como comprado</DialogTitle>
+          </DialogHeader>
+          {buyRow && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/50 px-3 py-2">
+                <div className="font-bold">{buyRow.produto_nome}</div>
+                <div className="text-sm text-muted-foreground">{buyRow.cor}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{buyRow.tipo_grade === "letras" ? "Unidades" : "Grades compradas"}</Label>
+                  <Input value={buyQty} onChange={(e) => setBuyQty(e.target.value)} inputMode="decimal" />
+                </div>
+                <div>
+                  <Label>Preço por {buyRow.tipo_grade === "letras" ? "unidade" : "par"} (R$)</Label>
+                  <Input value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} inputMode="decimal" />
+                </div>
+              </div>
+              <div>
+                <Label>Data de chegada</Label>
+                <Input type="date" value={buyDate} onChange={(e) => setBuyDate(e.target.value)} />
+              </div>
+              <div className="rounded-lg border px-3 py-2 text-lg font-black">
+                Total da compra: {brl(buyTotal)}
+              </div>
+              <Button className="w-full font-black" disabled={saving} onClick={saveBuy}>
+                SALVAR COMPRA
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

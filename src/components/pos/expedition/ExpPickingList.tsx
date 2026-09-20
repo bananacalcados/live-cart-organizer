@@ -7,8 +7,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid, CalendarDays } from "lucide-react";
 import { ExpGradeReport } from "./ExpGradeReport";
+import { ExpArrivalsDialog } from "./ExpArrivalsDialog";
 import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
 import { expeditionPriorityRank } from "@/lib/expeditionPriority";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
@@ -53,6 +54,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
   const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
   const [gradeOpen, setGradeOpen] = useState(false);
+  const [arrivalsOpen, setArrivalsOpen] = useState(false);
 
 
 
@@ -282,7 +284,13 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           {lines.length} produto(s) • {totalPieces} peça(s)
         </span>
         <Badge className="bg-exp-pick text-white font-bold">{totalSeparated} separada(s)</Badge>
-        <Button variant="outline" onClick={() => setGradeOpen(true)} className="ml-auto font-bold">
+        <Button
+          onClick={() => setArrivalsOpen(true)}
+          className="ml-auto h-14 px-6 text-lg font-black bg-exp-prep hover:bg-exp-prep/90 text-white"
+        >
+          <CalendarDays className="h-6 w-6 mr-2" /> DATA DE CHEGADA
+        </Button>
+        <Button variant="outline" onClick={() => setGradeOpen(true)} className="font-bold">
           <LayoutGrid className="h-4 w-4 mr-1" /> Grades · Reposição
         </Button>
         <Button variant="outline" onClick={print} className="font-bold">
@@ -471,6 +479,8 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         storeId={storeId || ""}
         target={purchaseTarget}
       />
+
+      <ExpArrivalsDialog open={arrivalsOpen} onOpenChange={setArrivalsOpen} />
 
       <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
         <DialogContent className="max-w-6xl h-[85vh] flex flex-col">
