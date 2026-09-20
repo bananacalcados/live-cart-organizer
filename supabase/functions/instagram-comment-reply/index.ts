@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { preferredIgToken } from "../_shared/instagram-account.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,10 +17,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+    // Token da conta de Instagram ativa (renovado diariamente); o secret global
+    // é legado e costuma estar inválido.
+    const pageAccessToken = await preferredIgToken(supabase);
     if (!pageAccessToken) {
       return new Response(
-        JSON.stringify({ error: "META_PAGE_ACCESS_TOKEN not configured" }),
+        JSON.stringify({ error: "Nenhum token de Instagram disponível" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

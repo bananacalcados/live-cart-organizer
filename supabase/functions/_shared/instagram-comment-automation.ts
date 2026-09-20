@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractBRPhone, textHasDigits } from "./br-phone-extract.ts";
+import { preferredIgToken } from "./instagram-account.ts";
 
 interface CommentData {
   commentId: string;
@@ -275,7 +276,8 @@ async function finishReservedAction(
  */
 export async function processCommentAutomation(
   supabase: ReturnType<typeof createClient>,
-  comment: CommentData
+  comment: CommentData,
+  accountToken?: string | null,
 ): Promise<{ actions: string[] }> {
   const actions: string[] = [];
 
@@ -298,9 +300,11 @@ export async function processCommentAutomation(
     return { actions };
   }
 
-  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  // Token da CONTA que recebeu o comentário (renovado diariamente).
+  // O secret global META_PAGE_ACCESS_TOKEN é legado e costuma ficar inválido.
+  const pageAccessToken = accountToken || await preferredIgToken(supabase);
   if (!pageAccessToken) {
-    console.error("META_PAGE_ACCESS_TOKEN not set, skipping automations");
+    console.error("Nenhum token de Instagram disponível, pulando automações");
     return { actions };
   }
 
@@ -659,6 +663,7 @@ interface StoryReplyData {
 export async function processStoryReplyAutomation(
   supabase: ReturnType<typeof createClient>,
   reply: StoryReplyData,
+  accountToken?: string | null,
 ): Promise<{ actions: string[] }> {
   const actions: string[] = [];
 
@@ -670,9 +675,9 @@ export async function processStoryReplyAutomation(
 
   if (error || !rules || rules.length === 0) return { actions };
 
-  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  const pageAccessToken = accountToken || await preferredIgToken(supabase);
   if (!pageAccessToken) {
-    console.error("META_PAGE_ACCESS_TOKEN not set, skipping story automations");
+    console.error("Nenhum token de Instagram disponível, pulando automações de story");
     return { actions };
   }
 
@@ -826,6 +831,7 @@ export async function handleCommentButtonPostback(
   payload: string,
   fromId: string,
   username: string | null,
+  accountToken?: string | null,
 ): Promise<{ handled: boolean; actions: string[] }> {
   const actions: string[] = [];
   if (!payload || !payload.startsWith("igbtn:")) return { handled: false, actions };
@@ -866,7 +872,7 @@ export async function handleCommentButtonPostback(
     }
   }
 
-  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  const pageAccessToken = accountToken || await preferredIgToken(supabase);
 
   // ── Mensagem de retorno opcional ──
   if (button.reply_message && pageAccessToken) {
