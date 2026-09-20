@@ -23142,12 +23142,15 @@ export type Database = {
         Args: { p_sale_ids: string[] }
         Returns: {
           cor: string
+          custo_total: number
+          custo_unitario: number
           grade_cheia: boolean
           grades: number
           produto_nome: string
           status: string
           tamanhos_estouro: string[]
           tamanhos_fora_da_grade: Json
+          tipo_grade: string
           total_vendido: number
           vender_mais: Json
           vendidos: Json
