@@ -28,6 +28,8 @@ import {
   type CustomerFormData,
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
+import { parseInstallmentRule } from "@/lib/installmentRules";
+
 
 
 interface OrderData {
