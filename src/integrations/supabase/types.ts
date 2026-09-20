@@ -15657,6 +15657,33 @@ export type Database = {
           },
         ]
       }
+      pos_sales_reattribution_log: {
+        Row: {
+          created_at: string
+          id: string
+          new_unified_id: string | null
+          old_unified_id: string | null
+          reason: string | null
+          sale_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_unified_id?: string | null
+          old_unified_id?: string | null
+          reason?: string | null
+          sale_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_unified_id?: string | null
+          old_unified_id?: string | null
+          reason?: string | null
+          sale_id?: string | null
+        }
+        Relationships: []
+      }
       pos_seller_commission_tiers: {
         Row: {
           achievement_percent: number | null
