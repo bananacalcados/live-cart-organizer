@@ -76,6 +76,27 @@ function isConversationUnread(o: DbOrder): boolean {
   return !!o.has_unread_messages;
 }
 
+/** Pedido incompleto: sem WhatsApp, sem produto ou marcado como incompleto. */
+function isOrderIncomplete(o: DbOrder): boolean {
+  if (o.stage === "incomplete_order") return true;
+  if (!(o.customer?.whatsapp || "").replace(/\D/g, "")) return true;
+  if (!o.products || o.products.length === 0) return true;
+  return false;
+}
+
+/** Há quantos ms a cliente está sem responder a nossa última mensagem (0 = não se aplica). */
+function msWaitingReply(o: DbOrder, now: number): number {
+  const outAt = o.last_sent_message_at ? +new Date(o.last_sent_message_at) : 0;
+  if (!outAt) return 0;
+  const inAt = o.last_customer_message_at ? +new Date(o.last_customer_message_at) : 0;
+  if (inAt > outAt) return 0;
+  return Math.max(0, now - outAt);
+}
+
+const TEN_MIN_MS = 10 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+
 
 /** Converte DbOrder para o tipo Order legado usado pelo chat de WhatsApp. */
 function dbOrderToLegacy(dbOrder: DbOrder): Order {
@@ -331,29 +352,40 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     return () => { cancelled = true; };
   }, [orders]);
 
-  const { awaiting, paid } = useMemo(() => {
+  const { awaiting, paid, incomplete } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
     const paidList: DbOrder[] = [];
+    const incompleteList: DbOrder[] = [];
     for (const o of orders) {
       if (isOrderMarkedPaid(o)) {
         paidList.push(o);
-      } else if (o.stage !== "cancelled" && o.stage !== "incomplete_order") {
-        // Todo pedido NÃO pago (e não cancelado/incompleto) está aguardando pagamento,
-        // independente do stage exato (contacted, new, awaiting_confirmation, awaiting_payment, no_response...).
-        awaitingList.push(o);
+      } else if (o.stage !== "cancelled") {
+        // Pedido não pago: incompleto vai para a linha própria; o resto aguarda pagamento.
+        if (isOrderIncomplete(o)) incompleteList.push(o);
+        else awaitingList.push(o);
       }
     }
-    // Pinned first, then by date. Team-shared pins keep priority cards at the top.
+    // Fixados primeiro, depois por data de CRIAÇÃO (posição estável: abrir a
+    // conversa não muda mais o card de lugar na fila).
     const sortByPinThenDate = (a: DbOrder, b: DbOrder) => {
       const pa = pinnedIds.has(a.id) ? 1 : 0;
       const pb = pinnedIds.has(b.id) ? 1 : 0;
       if (pa !== pb) return pb - pa;
-      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     };
     awaitingList.sort(sortByPinThenDate);
     paidList.sort(sortByPinThenDate);
-    return { awaiting: awaitingList, paid: paidList };
+    incompleteList.sort(sortByPinThenDate);
+    return { awaiting: awaitingList, paid: paidList, incomplete: incompleteList };
   }, [orders, pinnedIds]);
+
+  // Relógio para reclassificar as linhas de follow up sem recarregar a tela.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
 
   // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
   const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
@@ -410,6 +442,11 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     () => awaiting.map((o) => ({ rep: o, group: [o] })),
     [awaiting],
   );
+  const incompleteEntries: CardEntry[] = useMemo(
+    () => incomplete.map((o) => ({ rep: o, group: [o] })),
+    [incomplete],
+  );
+
   const cards: CardEntry[] =
     filter === "paid"
       ? paidEntries
@@ -434,10 +471,26 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
   // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
   const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isConversationUnread(e.rep)), [laneAwaitingAll]);
-  const laneAwaiting = useMemo(() => laneAwaitingAll.filter((e) => !isConversationUnread(e.rep)), [laneAwaitingAll]);
+  // Quem não respondeu ainda, separado pelo tempo desde a NOSSA última mensagem:
+  // < 10 min → Aguardando pagamento · 10 min a 1 h → Follow up · > 1 h → Follow +1 hora.
+  const { laneAwaiting, laneFollowup, laneFollowupHour } = useMemo(() => {
+    const a: CardEntry[] = [];
+    const f: CardEntry[] = [];
+    const h: CardEntry[] = [];
+    for (const e of laneAwaitingAll) {
+      if (isConversationUnread(e.rep)) continue;
+      const waited = msWaitingReply(e.rep, nowTick);
+      if (waited >= ONE_HOUR_MS) h.push(e);
+      else if (waited >= TEN_MIN_MS) f.push(e);
+      else a.push(e);
+    }
+    return { laneAwaiting: a, laneFollowup: f, laneFollowupHour: h };
+  }, [laneAwaitingAll, nowTick]);
+  const laneIncomplete = useMemo(() => laneFilter(incompleteEntries), [laneFilter, incompleteEntries]);
 
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
   const laneCancelled = useMemo(() => laneFilter(cancelledEntries), [laneFilter, cancelledEntries]);
+
 
 
   const eventIdForAlerts = orders.find((o) => o.event_id)?.event_id || null;
@@ -755,6 +808,17 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             </LiveLaneSection>
 
             <LiveLaneSection
+              id="incomplete"
+              eventId={eventId}
+              title="Incompletos"
+              count={laneIncomplete.length}
+              tone="text-orange-500"
+              icon={<AlertCircle className="h-3.5 w-3.5 text-orange-500" />}
+            >
+              {renderRow(laneIncomplete, false, "Nenhum pedido incompleto neste evento.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
 
               id="awaiting"
               eventId={eventId}
@@ -765,6 +829,29 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             >
               {renderRow(laneAwaiting, false, "Nenhum pedido aguardando pagamento neste evento.")}
             </LiveLaneSection>
+
+            <LiveLaneSection
+              id="followup"
+              eventId={eventId}
+              title="Follow up (10 min a 1 h)"
+              count={laneFollowup.length}
+              tone="text-sky-500"
+              icon={<Clock className="h-3.5 w-3.5 text-sky-500" />}
+            >
+              {renderRow(laneFollowup, false, "Ninguém sem responder entre 10 minutos e 1 hora.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+              id="followup-hour"
+              eventId={eventId}
+              title="Follow +1 hora"
+              count={laneFollowupHour.length}
+              tone="text-red-500"
+              icon={<MessageSquareOff className="h-3.5 w-3.5 text-red-500" />}
+            >
+              {renderRow(laneFollowupHour, false, "Ninguém sem responder há mais de 1 hora.")}
+            </LiveLaneSection>
+
 
             <LiveLaneSection
               id="paid"
