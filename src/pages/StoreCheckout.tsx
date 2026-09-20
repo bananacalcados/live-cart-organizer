@@ -1056,6 +1056,8 @@ export default function StoreCheckout() {
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49,
   });
+  const hasLinkRuleRef = useRef(false);
+
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
    const [showAllPayMethods, setShowAllPayMethods] = useState(true);
    const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
