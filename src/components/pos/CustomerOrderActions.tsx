@@ -6,6 +6,7 @@ import { NewExchangePicker } from "./NewExchangePicker";
 import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
 import { CustomerExchangeBadge } from "./CustomerExchangeBadge";
+import { ShippingTypeButtons } from "./ShippingTypeButtons";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
 import type { ExchangeRecord } from "@/hooks/useExchangeRegistry";
 
