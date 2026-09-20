@@ -442,6 +442,11 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     () => awaiting.map((o) => ({ rep: o, group: [o] })),
     [awaiting],
   );
+  const incompleteEntries: CardEntry[] = useMemo(
+    () => incomplete.map((o) => ({ rep: o, group: [o] })),
+    [incomplete],
+  );
+
   const cards: CardEntry[] =
     filter === "paid"
       ? paidEntries
