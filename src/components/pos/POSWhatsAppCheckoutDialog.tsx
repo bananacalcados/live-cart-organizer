@@ -15,6 +15,8 @@ import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { materializePosCustomer } from "@/lib/posCustomerResolve";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
+import { buildLinkInstallmentRule } from "@/lib/installmentRules";
 
 
 interface CartItem {
