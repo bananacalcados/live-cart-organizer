@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryGradeCoverage } from "./InventoryGradeCoverage";
 import { InventoryHealthScoreCard } from "./InventoryHealthScoreCard";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 type Category = { id: string; name: string; slug: string };
 type PriceTier = { id: string; label: string; min_price: number | null; max_price: number | null; color: string | null };
@@ -30,12 +31,7 @@ type ProductRow = {
   price: number | null;
 };
 
-const GENDERS = [
-  { value: "feminino", label: "Feminino" },
-  { value: "masculino", label: "Masculino" },
-  { value: "unissex", label: "Unissex" },
-  { value: "infantil", label: "Infantil" },
-];
+const GENDERS = GENDER_VALUES.map((g) => ({ value: g, label: g }));
 
 const toNumber = (value: unknown) => {
   const n = Number(value ?? 0);

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -60,6 +61,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [categoryId, setCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [newCategoryMode, setNewCategoryMode] = useState(false);
+  const [gender, setGender] = useState("");
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState("");
@@ -140,6 +142,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
         else setCategoryId("");
         setNewCategoryMode(!!catName && !match && !master.category_id);
       }
+      setGender(((master as any).gender || "") as string);
       setNcm(master.ncm || "");
       setCest(master.cest || "");
       setCostPrice(master.cost_price?.toString() || "");
@@ -353,6 +356,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
           brand,
           category,
           category_id: categoryId || null,
+          gender: gender || null,
+          gender_source: gender ? "manual" : null,
           ncm,
           cest,
           cost_price: parseFloat(costPrice) || 0,
@@ -373,7 +378,11 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       if (variantSkus.length > 0) {
         await supabase
           .from("pos_products")
-          .update({ category: category || null, category_id: categoryId || null })
+          .update({
+            category: category || null,
+            category_id: categoryId || null,
+            ...(gender ? { gender, gender_source: "manual" } : {}),
+          } as any)
           .in("sku", variantSkus);
       }
 
@@ -667,6 +676,23 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                       </SelectContent>
                     </Select>
                   )}
+                </div>
+                <div>
+                  <Label>Gênero</Label>
+                  <Select
+                    value={gender || "__none__"}
+                    onValueChange={(v) => setGender(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o gênero" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Não definido</SelectItem>
+                      {GENDER_VALUES.map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>NCM</Label>

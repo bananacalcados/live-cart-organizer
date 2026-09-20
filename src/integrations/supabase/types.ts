@@ -14769,13 +14769,16 @@ export type Database = {
           auto_classified: boolean
           barcode: string
           brand: string | null
+          brand_source: string | null
           category: string | null
           category_id: string | null
+          category_source: string | null
           classification_confidence: number | null
           color: string | null
           cost_price: number | null
           created_at: string
           gender: string | null
+          gender_source: string | null
           id: string
           image_url: string | null
           is_active: boolean
@@ -14797,13 +14800,16 @@ export type Database = {
           auto_classified?: boolean
           barcode?: string
           brand?: string | null
+          brand_source?: string | null
           category?: string | null
           category_id?: string | null
+          category_source?: string | null
           classification_confidence?: number | null
           color?: string | null
           cost_price?: number | null
           created_at?: string
           gender?: string | null
+          gender_source?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -14825,13 +14831,16 @@ export type Database = {
           auto_classified?: boolean
           barcode?: string
           brand?: string | null
+          brand_source?: string | null
           category?: string | null
           category_id?: string | null
+          category_source?: string | null
           classification_confidence?: number | null
           color?: string | null
           cost_price?: number | null
           created_at?: string
           gender?: string | null
+          gender_source?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -16798,6 +16807,27 @@ export type Database = {
         }
         Relationships: []
       }
+      product_category_merge_log: {
+        Row: {
+          created_at: string
+          id: string
+          new_name: string | null
+          old_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_name?: string | null
+          old_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_name?: string | null
+          old_name?: string
+        }
+        Relationships: []
+      }
       product_colors: {
         Row: {
           created_at: string
@@ -16898,6 +16928,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          gender: string | null
           height_cm: number | null
           images: string[] | null
           is_active: boolean
@@ -16929,6 +16960,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          gender?: string | null
           height_cm?: number | null
           images?: string[] | null
           is_active?: boolean
@@ -16960,6 +16992,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          gender?: string | null
           height_cm?: number | null
           images?: string[] | null
           is_active?: boolean
@@ -17302,8 +17335,10 @@ export type Database = {
           auto_classified: boolean
           brand: string | null
           brand_id: string | null
+          brand_source: string | null
           category: string | null
           category_id: string | null
+          category_source: string | null
           cest: string | null
           classe_produto: string | null
           classification_confidence: number | null
@@ -17312,6 +17347,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           gender: string | null
+          gender_source: string | null
           height_cm: number | null
           id: string
           images: string[] | null
@@ -17339,8 +17375,10 @@ export type Database = {
           auto_classified?: boolean
           brand?: string | null
           brand_id?: string | null
+          brand_source?: string | null
           category?: string | null
           category_id?: string | null
+          category_source?: string | null
           cest?: string | null
           classe_produto?: string | null
           classification_confidence?: number | null
@@ -17349,6 +17387,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           gender?: string | null
+          gender_source?: string | null
           height_cm?: number | null
           id?: string
           images?: string[] | null
@@ -17376,8 +17415,10 @@ export type Database = {
           auto_classified?: boolean
           brand?: string | null
           brand_id?: string | null
+          brand_source?: string | null
           category?: string | null
           category_id?: string | null
+          category_source?: string | null
           cest?: string | null
           classe_produto?: string | null
           classification_confidence?: number | null
@@ -17386,6 +17427,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           gender?: string | null
+          gender_source?: string | null
           height_cm?: number | null
           id?: string
           images?: string[] | null
@@ -23483,6 +23525,11 @@ export type Database = {
           total_spent: number
         }[]
       }
+      pc_gender_canon: { Args: { t: string }; Returns: string }
+      pc_gender_from_text: { Args: { t: string }; Returns: string }
+      pc_norm: { Args: { t: string }; Returns: string }
+      pc_ref_prefix: { Args: { t: string }; Returns: string }
+      pc_slug: { Args: { t: string }; Returns: string }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
       pos_crediario_norm: { Args: { p: string }; Returns: string }
@@ -23791,13 +23838,16 @@ export type Database = {
           auto_classified: boolean
           barcode: string
           brand: string | null
+          brand_source: string | null
           category: string | null
           category_id: string | null
+          category_source: string | null
           classification_confidence: number | null
           color: string | null
           cost_price: number | null
           created_at: string
           gender: string | null
+          gender_source: string | null
           id: string
           image_url: string | null
           is_active: boolean

@@ -22,16 +22,12 @@ import {
   computeColorSummaries,
   type ParentSummary, type MasterMeta, type PosSkuAgg,
 } from "@/lib/gradeCoverage";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 type Category = { id: string; name: string };
 type Store = { id: string; name: string };
 
-const GENDERS = [
-  { value: "feminino", label: "Feminino" },
-  { value: "masculino", label: "Masculino" },
-  { value: "unissex", label: "Unissex" },
-  { value: "infantil", label: "Infantil" },
-];
+const GENDERS = GENDER_VALUES.map((g) => ({ value: g, label: g }));
 
 const toNumber = (value: unknown) => {
   const n = Number(value ?? 0);
