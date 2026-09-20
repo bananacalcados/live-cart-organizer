@@ -23,19 +23,17 @@ Deno.serve(async (req) => {
     const applyStoreFilter = <T extends { eq: any; is: any }>(q: T): T =>
       (storeId === null ? q.is('store_id', null) : q.eq('store_id', storeId));
 
-    // 1) Try cache
-    if (!force) {
-      const { data: cached } = await applyStoreFilter(
-        admin.from('inventory_health_cache')
-          .select('payload, computed_at')
-          .eq('horizon_days', horizon)
-      ).maybeSingle();
+    // 1) Try cache (always read it: serves as fallback if the compute times out)
+    const { data: cached } = await applyStoreFilter(
+      admin.from('inventory_health_cache')
+        .select('payload, computed_at')
+        .eq('horizon_days', horizon)
+    ).maybeSingle();
 
-      if (cached) {
-        const age = Date.now() - new Date(cached.computed_at).getTime();
-        if (age < CACHE_TTL_MS) {
-          return json({ ...(cached.payload as any), cached: true, computed_at: cached.computed_at });
-        }
+    if (!force && cached) {
+      const age = Date.now() - new Date(cached.computed_at).getTime();
+      if (age < CACHE_TTL_MS) {
+        return json({ ...(cached.payload as any), cached: true, computed_at: cached.computed_at });
       }
     }
 
@@ -47,6 +45,15 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error('RPC error:', error);
+      // Fallback: serve the last known snapshot instead of breaking the screen
+      if (cached) {
+        return json({
+          ...(cached.payload as any),
+          cached: true,
+          stale: true,
+          computed_at: cached.computed_at,
+        });
+      }
       return json({ error: error.message }, 500);
     }
 
