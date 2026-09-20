@@ -1054,16 +1054,9 @@ export default function TransparentCheckout() {
 
       if (error || !order) throw new Error("Pedido não encontrado");
 
-      const checkoutConfig = order.checkout_installment_config as Partial<InstallmentConfig> | null | undefined;
-      if (checkoutConfig?.max_installments && checkoutConfig?.interest_free_installments) {
-        setOrderInstallmentConfig({
-          max_installments: Number(checkoutConfig.max_installments) || 12,
-          interest_free_installments: Number(checkoutConfig.interest_free_installments) || 6,
-          monthly_interest_rate: Number(checkoutConfig.monthly_interest_rate) || 2.49,
-        });
-      } else {
-        setOrderInstallmentConfig(null);
-      }
+      // Regra do próprio pedido/link: substitui o padrão (aceita 0 sem juros).
+      setOrderInstallmentConfig(parseInstallmentRule(order.checkout_installment_config));
+
 
       const products = (order.products || []) as unknown as OrderProduct[];
       const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
