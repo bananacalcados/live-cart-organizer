@@ -83,6 +83,9 @@ interface ZoppyCustomer {
   total_orders: number;
   total_spent: number;
   avg_ticket: number;
+  legacy_orders?: number | null;
+  legacy_spent?: number | null;
+
   last_purchase_at: string | null;
   first_purchase_at: string | null;
   tags: string[] | null;
@@ -370,7 +373,7 @@ export default function Marketing() {
           // Fonte única: base unificada de clientes (deduplicada), via view compatível.
           .from('crm_customers_v')
           // Apenas compradores (matriz RFM real de vendas).
-          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
+          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, legacy_orders, legacy_spent, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
           .gte('total_orders', 1);
         if (activeDdd && activeDdd !== 'all') query = query.eq('ddd', activeDdd);
         const { data, error } = await query
@@ -2416,20 +2419,8 @@ export default function Marketing() {
                         dates.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         setPurchaseDates(dates);
 
-                        // Update selectedCustomer with real data from purchase history
-                        if (dates.length > 0) {
-                          const realLastPurchase = dates[0].date;
-                          const realTotalSpent = dates.reduce((s, d) => s + d.total, 0);
-                          const realTotalOrders = dates.length;
-                          const realAvgTicket = realTotalOrders > 0 ? realTotalSpent / realTotalOrders : 0;
-                          setSelectedCustomer(prev => prev ? {
-                            ...prev,
-                            last_purchase_at: realLastPurchase,
-                            total_spent: realTotalSpent,
-                            total_orders: realTotalOrders,
-                            avg_ticket: realAvgTicket,
-                          } : prev);
-                        }
+                        // Totais oficiais (banco) não são sobrescritos pelas vendas visíveis do PDV.
+
                       } catch (err) {
                         console.error('Error fetching purchase dates:', err);
                       } finally {
@@ -2540,6 +2531,12 @@ export default function Marketing() {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="h-4 w-4" />Última: {formatDate(selectedCustomer.last_purchase_at)}
                 </div>
+                {Number(selectedCustomer.legacy_spent || 0) > 0 && (
+                  <div className="text-xs text-muted-foreground/80 basis-full">
+                    Histórico anterior ao sistema: {formatCurrency(Number(selectedCustomer.legacy_spent))} · {Number(selectedCustomer.legacy_orders || 0)} pedido(s)
+                  </div>
+                )}
+
               </div>
 
               {/* RFM Scores */}
