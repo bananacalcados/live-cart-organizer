@@ -808,6 +808,17 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             </LiveLaneSection>
 
             <LiveLaneSection
+              id="incomplete"
+              eventId={eventId}
+              title="Incompletos"
+              count={laneIncomplete.length}
+              tone="text-orange-500"
+              icon={<AlertCircle className="h-3.5 w-3.5 text-orange-500" />}
+            >
+              {renderRow(laneIncomplete, false, "Nenhum pedido incompleto neste evento.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
 
               id="awaiting"
               eventId={eventId}
@@ -818,6 +829,29 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
             >
               {renderRow(laneAwaiting, false, "Nenhum pedido aguardando pagamento neste evento.")}
             </LiveLaneSection>
+
+            <LiveLaneSection
+              id="followup"
+              eventId={eventId}
+              title="Follow up (10 min a 1 h)"
+              count={laneFollowup.length}
+              tone="text-sky-500"
+              icon={<Clock className="h-3.5 w-3.5 text-sky-500" />}
+            >
+              {renderRow(laneFollowup, false, "Ninguém sem responder entre 10 minutos e 1 hora.")}
+            </LiveLaneSection>
+
+            <LiveLaneSection
+              id="followup-hour"
+              eventId={eventId}
+              title="Follow +1 hora"
+              count={laneFollowupHour.length}
+              tone="text-red-500"
+              icon={<MessageSquareOff className="h-3.5 w-3.5 text-red-500" />}
+            >
+              {renderRow(laneFollowupHour, false, "Ninguém sem responder há mais de 1 hora.")}
+            </LiveLaneSection>
+
 
             <LiveLaneSection
               id="paid"
