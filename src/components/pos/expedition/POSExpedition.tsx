@@ -1044,6 +1044,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             {isSedexOrder(o) && (
                               <Badge className="bg-orange-500 text-white text-sm font-black">SEDEX</Badge>
                             )}
+                            {o.shipping_type === "correios" && (
+                              <Badge className="bg-sky-600 text-white text-sm font-black">CORREIOS</Badge>
+                            )}
+                            {o.shipping_type === "transportadora" && (
+                              <Badge className="bg-purple-600 text-white text-sm font-black">TRANSPORTADORA</Badge>
+                            )}
                             {isStorePickupOrder(o) && (
                               <Badge className="bg-violet-600 text-white text-sm font-black">
                                 <Store className="h-4 w-4 mr-1" />
