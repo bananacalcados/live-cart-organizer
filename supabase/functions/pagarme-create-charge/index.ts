@@ -1170,7 +1170,7 @@ serve(async (req) => {
 
     // ── TRAVA DE PARCELAS: a regra do link manda, não a conta do gateway ──
     try {
-      if (!isDebitCard && (params.installments || 1) > 1) {
+      if (params.paymentMode !== "debit" && params.mpPaymentTypeId !== "debit_card" && (params.installments || 1) > 1) {
         let ruleRaw: any = null;
         if (orderSource === "pos_sales") {
           const { data: s } = await supabase
