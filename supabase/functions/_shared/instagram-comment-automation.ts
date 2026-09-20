@@ -275,7 +275,8 @@ async function finishReservedAction(
  */
 export async function processCommentAutomation(
   supabase: ReturnType<typeof createClient>,
-  comment: CommentData
+  comment: CommentData,
+  accountToken?: string | null,
 ): Promise<{ actions: string[] }> {
   const actions: string[] = [];
 
@@ -298,9 +299,11 @@ export async function processCommentAutomation(
     return { actions };
   }
 
-  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  // Token da CONTA que recebeu o comentário (renovado diariamente).
+  // O secret global META_PAGE_ACCESS_TOKEN é legado e costuma ficar inválido.
+  const pageAccessToken = accountToken || await preferredIgToken(supabase);
   if (!pageAccessToken) {
-    console.error("META_PAGE_ACCESS_TOKEN not set, skipping automations");
+    console.error("Nenhum token de Instagram disponível, pulando automações");
     return { actions };
   }
 
