@@ -442,6 +442,17 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         storeId={storeId || ""}
         target={purchaseTarget}
       />
+
+      <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
+        <DialogContent className="max-w-6xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">
+              Relatório de grades · Reposição
+            </DialogTitle>
+          </DialogHeader>
+          <ExpGradeReport saleIds={orders.map((o) => o.id)} className="flex-1" />
+        </DialogContent>
+      </Dialog>
     </div>
 
   );
