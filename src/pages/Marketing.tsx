@@ -1193,6 +1193,16 @@ export default function Marketing() {
     return sortDir === "desc" ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
   }).slice(0, topN !== "all" ? parseInt(topN) : undefined);
 
+  // Resetar para a página 1 ao mudar qualquer filtro, busca, ordenação, topN ou presets
+  useEffect(() => {
+    setRfmPage(1);
+  }, [searchQuery, regionFilter, rfmFilter, dddFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
+
+  const RFM_PAGE_SIZE = 100;
+  const rfmTotalPages = Math.max(1, Math.ceil(filtered.length / RFM_PAGE_SIZE));
+  const rfmCurrentPage = Math.min(Math.max(1, rfmPage), rfmTotalPages);
+  const pagedRfmCustomers = filtered.slice((rfmCurrentPage - 1) * RFM_PAGE_SIZE, rfmCurrentPage * RFM_PAGE_SIZE);
+
   const segments = customers.reduce((acc, c) => {
     const seg = c.rfm_segment || 'Outros';
     acc[seg] = (acc[seg] || 0) + 1;
