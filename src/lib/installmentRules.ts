@@ -125,3 +125,30 @@ export function buildInstallmentOptions(
   }
   return out;
 }
+
+/**
+ * Monta o pedaço `installment_override` do payment_details a partir dos campos
+ * do formulário de geração de link. Vazio = usar o padrão da loja.
+ */
+export function buildLinkInstallmentRule(input: {
+  maxInstallments: string;
+  noInterestInstallments: string;
+  interestRate: string;
+  source: string;
+}): Record<string, any> {
+  const hasMax = input.maxInstallments !== "";
+  const hasFree = input.noInterestInstallments !== "";
+  const hasRate = input.interestRate !== "";
+  if (!hasMax && !hasFree && !hasRate) return {};
+  const max = hasMax ? Math.min(12, Math.max(1, Number(input.maxInstallments))) : 12;
+  const free = hasFree ? Math.min(max, Math.max(0, Number(input.noInterestInstallments))) : max;
+  const rate = hasRate ? Math.max(0, Number(String(input.interestRate).replace(",", "."))) : DEFAULT_INSTALLMENT_CONFIG.monthly_interest_rate;
+  return {
+    installment_override: {
+      max_installments: max,
+      interest_free_installments: free,
+      monthly_interest_rate: rate,
+      source: input.source,
+    },
+  };
+}
