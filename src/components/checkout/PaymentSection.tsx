@@ -30,11 +30,10 @@ export interface PixData {
   expirationDate: string;
 }
 
-export interface InstallmentConfig {
-  max_installments: number;
-  interest_free_installments: number;
-  monthly_interest_rate: number;
-}
+export type { InstallmentConfig } from "@/lib/installmentRules";
+import type { InstallmentConfig } from "@/lib/installmentRules";
+import { buildInstallmentOptions, calculateInstallmentAmount as calcInstallment } from "@/lib/installmentRules";
+
 
 export interface CustomerFormData {
   fullName: string;
