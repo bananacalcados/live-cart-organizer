@@ -872,7 +872,7 @@ export async function handleCommentButtonPostback(
     }
   }
 
-  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  const pageAccessToken = accountToken || await preferredIgToken(supabase);
 
   // ── Mensagem de retorno opcional ──
   if (button.reply_message && pageAccessToken) {
