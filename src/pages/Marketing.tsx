@@ -211,6 +211,10 @@ function getRfmSegmentDetail(segment: string) {
   };
 }
 
+function getRfmColor(segment: string) {
+  return RFM_SEGMENT_COLORS[RFM_SEGMENT_ALIASES[segment] || segment] || "bg-primary/15 text-primary border-primary/40";
+}
+
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
   review: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
@@ -1306,8 +1310,8 @@ export default function Marketing() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="flex min-h-12 items-stretch overflow-hidden rounded-md border border-border">
-                <Button variant={rfmFilter === "all" ? "default" : "ghost"} className="h-12 rounded-none px-5 text-sm font-semibold" onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Button>
+              <div className="flex min-h-12 items-stretch overflow-hidden rounded-md border border-primary/40 shadow-sm">
+                <Button variant={rfmFilter === "all" ? "default" : "ghost"} className={`h-12 rounded-none px-5 text-sm font-semibold ${rfmFilter !== "all" ? "text-foreground" : ""}`} onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Button>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-12 w-11 rounded-none border-l border-border" aria-label="Como funciona a matriz RFM">
@@ -1324,8 +1328,8 @@ export default function Marketing() {
                 const detail = getRfmSegmentDetail(seg);
                 const Icon = RFM_SEGMENT_ICONS[seg] || RFM_SEGMENT_ICONS[detail.label] || Star;
                 return (
-                  <div key={seg} className={`flex min-h-12 items-stretch overflow-hidden rounded-md border ${rfmFilter === seg ? RFM_SEGMENT_COLORS[seg] || RFM_SEGMENT_COLORS[detail.label] || "border-primary bg-primary/10 text-primary" : "border-border"}`}>
-                    <Button variant="ghost" className="h-12 gap-2 rounded-none px-4 text-sm font-semibold" onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
+                  <div key={seg} className={`flex min-h-12 items-stretch overflow-hidden rounded-md border shadow-sm transition-all ${getRfmColor(seg)} ${rfmFilter === seg ? "ring-2 ring-current ring-offset-2 ring-offset-background" : "hover:brightness-125"}`}>
+                    <Button variant="ghost" className={`h-12 gap-2 rounded-none px-4 text-sm ${rfmFilter === seg ? "font-bold" : "font-semibold"}`} onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
                       <Icon className="h-4 w-4" />{detail.label} ({count})
                     </Button>
                     <Popover>
