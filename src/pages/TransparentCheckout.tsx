@@ -28,6 +28,8 @@ import {
   type CustomerFormData,
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
+import { parseInstallmentRule } from "@/lib/installmentRules";
+
 
 
 interface OrderData {
@@ -956,24 +958,24 @@ export default function TransparentCheckout() {
     })();
   }, [orderData?.eventId]);
 
-  // Config efetiva: base (app_settings) + override do evento quando o total atinge o mínimo.
+  // Config efetiva. Regra do PEDIDO/LINK SUBSTITUI o padrão (pode apertar).
+  // O evento funciona como teto próprio: acima do valor mínimo libera o "Nx sem
+  // juros" configurado; abaixo dele vale o padrão geral (nunca as 10x do MP).
   const installmentConfig = useMemo<InstallmentConfig>(() => {
+    if (orderInstallmentConfig) return { ...orderInstallmentConfig };
     const cfg = { ...baseInstallmentConfig };
-    if (orderInstallmentConfig) {
-      cfg.max_installments = Math.max(cfg.max_installments, orderInstallmentConfig.max_installments);
-      cfg.interest_free_installments = Math.max(
-        cfg.interest_free_installments,
-        orderInstallmentConfig.interest_free_installments,
-      );
-      cfg.monthly_interest_rate = orderInstallmentConfig.monthly_interest_rate || cfg.monthly_interest_rate;
-    }
     const total = orderData?.totalAmount;
-    if (eventInstallment && eventInstallment.maxInst > 0 && total != null && total >= eventInstallment.minVal) {
-      cfg.max_installments = Math.max(cfg.max_installments, eventInstallment.maxInst);
-      cfg.interest_free_installments = Math.max(cfg.interest_free_installments, eventInstallment.maxInst);
+    if (eventInstallment && eventInstallment.maxInst > 0) {
+      if (total != null && total >= eventInstallment.minVal) {
+        cfg.max_installments = eventInstallment.maxInst;
+        cfg.interest_free_installments = eventInstallment.maxInst;
+      } else {
+        cfg.max_installments = Math.max(cfg.max_installments, eventInstallment.maxInst);
+      }
     }
     return cfg;
   }, [baseInstallmentConfig, orderInstallmentConfig, eventInstallment, orderData?.totalAmount]);
+
 
   // ===== Etapa A — Carregar ofertas de crossell após o pedido estar pronto =====
   useEffect(() => {
@@ -1054,16 +1056,9 @@ export default function TransparentCheckout() {
 
       if (error || !order) throw new Error("Pedido não encontrado");
 
-      const checkoutConfig = order.checkout_installment_config as Partial<InstallmentConfig> | null | undefined;
-      if (checkoutConfig?.max_installments && checkoutConfig?.interest_free_installments) {
-        setOrderInstallmentConfig({
-          max_installments: Number(checkoutConfig.max_installments) || 12,
-          interest_free_installments: Number(checkoutConfig.interest_free_installments) || 6,
-          monthly_interest_rate: Number(checkoutConfig.monthly_interest_rate) || 2.49,
-        });
-      } else {
-        setOrderInstallmentConfig(null);
-      }
+      // Regra do próprio pedido/link: substitui o padrão (aceita 0 sem juros).
+      setOrderInstallmentConfig(parseInstallmentRule(order.checkout_installment_config));
+
 
       const products = (order.products || []) as unknown as OrderProduct[];
       const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);

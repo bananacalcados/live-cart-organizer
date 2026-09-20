@@ -15,6 +15,8 @@ import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 import { materializePosCustomer } from "@/lib/posCustomerResolve";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
+import { buildLinkInstallmentRule } from "@/lib/installmentRules";
 
 
 interface CartItem {
@@ -61,6 +63,9 @@ export function POSWhatsAppCheckoutDialog({
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [noInterestInstallments, setNoInterestInstallments] = useState("");
+  const [maxInstallments, setMaxInstallments] = useState("");
+  const [interestRate, setInterestRate] = useState("");
+
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -243,12 +248,10 @@ export function POSWhatsAppCheckoutDialog({
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
-          ...(Number(noInterestInstallments) > 0 ? {
-            installment_override: {
-              interest_free_installments: Math.min(12, Math.max(1, Number(noInterestInstallments))),
-              source: "pos_whatsapp_checkout",
-            },
-          } : {}),
+          ...(buildLinkInstallmentRule({
+            maxInstallments, noInterestInstallments, interestRate, source: "pos_whatsapp_checkout",
+          })),
+
         },
       };
       const { data: sale, error } = await supabase.from("pos_sales").insert(salePayload as any).select("id").single();
@@ -474,21 +477,12 @@ export function POSWhatsAppCheckoutDialog({
 
 
 
-                  <div>
-                    <Label className="text-base font-bold">Parcelas sem juros (opcional)</Label>
-                    <Input
-                      value={noInterestInstallments}
-                      onChange={(e) => setNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
-                      placeholder="Padrão da loja"
-                      className="h-12 text-lg font-bold mt-1"
-                      type="number"
-                      min={1}
-                      max={12}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Vazio = usar limite padrão. Máx 12×.
-                    </p>
-                  </div>
+                  <LinkInstallmentRuleFields
+                    maxInstallments={maxInstallments} setMaxInstallments={setMaxInstallments}
+                    noInterestInstallments={noInterestInstallments} setNoInterestInstallments={setNoInterestInstallments}
+                    interestRate={interestRate} setInterestRate={setInterestRate}
+                  />
+
 
 
                 {/* Totals */}

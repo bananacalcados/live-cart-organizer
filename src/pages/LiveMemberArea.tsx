@@ -31,6 +31,8 @@ import {
   type CustomerFormData,
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
+import { parseInstallmentRule } from "@/lib/installmentRules";
+
 import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution } from "@/lib/metaAttribution";
 import {
@@ -1273,22 +1275,40 @@ export default function LiveMemberArea() {
   });
 
   useEffect(() => {
-    supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "installment_config")
-      .maybeSingle()
-      .then(({ data }) => {
-        const cfg = data?.value as any;
-        if (cfg) {
-          setInstallmentConfig({
-            max_installments: cfg.max_installments || 12,
-            interest_free_installments: cfg.interest_free_installments || 6,
-            monthly_interest_rate: cfg.monthly_interest_rate || 2.49,
-          });
-        }
-      });
-  }, []);
+    const order: any = state?.order;
+    // 1) Regra do próprio pedido/link substitui tudo.
+    const orderRule = parseInstallmentRule(order?.checkout_installment_config);
+    if (orderRule) { setInstallmentConfig(orderRule); return; }
+
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
+      const cfg = (data?.value || {}) as any;
+      const base = {
+        max_installments: Number(cfg.max_installments) || 12,
+        interest_free_installments: Number(cfg.interest_free_installments ?? 6),
+        monthly_interest_rate: Number(cfg.monthly_interest_rate) || 2.49,
+      };
+      // 2) Regra do evento (Live): acima do valor mínimo libera o Nx sem juros.
+      const evId = order?.event_id;
+      if (evId) {
+        try {
+          const { data: ev } = await supabase.rpc("get_event_installment_config", { p_event_id: evId });
+          const maxInst = Number((ev as any)?.installment_max || 0);
+          const minVal = Number((ev as any)?.installment_min_value || 0);
+          const total = Number(order?.total_amount ?? order?.total ?? 0);
+          if (maxInst > 0) {
+            if (total >= minVal) { base.max_installments = maxInst; base.interest_free_installments = maxInst; }
+            else base.max_installments = Math.max(base.max_installments, maxInst);
+          }
+        } catch { /* mantém base */ }
+      }
+      if (!cancelled) setInstallmentConfig(base);
+    })();
+    return () => { cancelled = true; };
+  }, [state?.order?.id]);
+
 
   /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */
   const payForm: CustomerFormData | null = (() => {

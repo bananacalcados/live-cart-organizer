@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
+import { buildLinkInstallmentRule } from "@/lib/installmentRules";
 import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
@@ -121,6 +123,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
   const [checkoutNoInterestInstallments, setCheckoutNoInterestInstallments] = useState("");
+  const [checkoutMaxInstallments, setCheckoutMaxInstallments] = useState("");
+  const [checkoutInterestRate, setCheckoutInterestRate] = useState("");
   const [hasGift, setHasGift] = useState(false);
   const [giftDescription, setGiftDescription] = useState("");
   
@@ -460,12 +464,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
             compare_at_price: c.compareAtPrice,
             quantity: c.quantity,
           })),
-          ...(gateway === "store-checkout" && Number(checkoutNoInterestInstallments) > 0 ? {
-            installment_override: {
-              interest_free_installments: Math.min(12, Math.max(1, Number(checkoutNoInterestInstallments))),
-              source: "pos_online_hub",
-            },
-          } : {}),
+          ...(gateway === "store-checkout" ? buildLinkInstallmentRule({
+            maxInstallments: checkoutMaxInstallments,
+            noInterestInstallments: checkoutNoInterestInstallments,
+            interestRate: checkoutInterestRate,
+            source: "pos_online_hub",
+          }) : {}),
+
         },
         notes: deliveryNotes || null,
       };
@@ -1040,22 +1045,16 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                   step="0.01"
                 />
                 <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    💳 Parcelas sem juros no link de checkout (opcional)
-                  </Label>
-                  <Input
-                    type="number"
-                    placeholder="Padrão da loja (ex.: 6x)"
-                    value={checkoutNoInterestInstallments}
-                    onChange={e => setCheckoutNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
-                    className="h-8 text-xs"
-                    min={1}
-                    max={12}
+                  <LinkInstallmentRuleFields
+                    maxInstallments={checkoutMaxInstallments} setMaxInstallments={setCheckoutMaxInstallments}
+                    noInterestInstallments={checkoutNoInterestInstallments} setNoInterestInstallments={setCheckoutNoInterestInstallments}
+                    interestRate={checkoutInterestRate} setInterestRate={setCheckoutInterestRate}
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Aplica somente ao botão "Checkout Loja". Vazio = usar padrão.
+                    Aplica somente ao botão "Checkout Loja".
                   </p>
                 </div>
+
                 {(discountAmount > 0 || shippingAmount > 0) && (
                   <div className="space-y-0.5 px-1">
                     <div className="flex justify-between text-xs">

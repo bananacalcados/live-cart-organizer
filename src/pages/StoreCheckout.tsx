@@ -50,11 +50,8 @@ interface CustomerFormData {
   state: string;
 }
 
-interface InstallmentConfig {
-  max_installments: number;
-  interest_free_installments: number;
-  monthly_interest_rate: number;
-}
+type InstallmentConfig = import("@/lib/installmentRules").InstallmentConfig;
+
 
 interface PixData {
   qrCode: string;
@@ -113,18 +110,8 @@ function formatExpiry(value: string) {
   return `${d.slice(0, 2)}/${d.slice(2)}`;
 }
 
-function calculateInstallmentAmount(total: number, installments: number, config: InstallmentConfig) {
-  if (installments <= config.interest_free_installments) {
-    return { installmentValue: total / installments, totalWithInterest: total, hasInterest: false };
-  }
-  const rate = config.monthly_interest_rate / 100;
-  const totalWithInterest = total * Math.pow(1 + rate, installments);
-  return {
-    installmentValue: totalWithInterest / installments,
-    totalWithInterest: Math.round(totalWithInterest * 100) / 100,
-    hasInterest: true,
-  };
-}
+import { buildInstallmentOptions, parseInstallmentRule } from "@/lib/installmentRules";
+
 
 // ── StepIndicator ───────────────────────────────────────────────
 function StepIndicator({ currentStep, isCustom }: { currentStep: number; isCustom?: boolean }) {
@@ -828,18 +815,16 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     processingRef.current = false;
   };
 
-  const installmentOptions = [];
-  for (let i = 1; i <= installmentConfig.max_installments; i++) {
-    const calc = calculateInstallmentAmount(amount, i, installmentConfig);
-    const label = i === 1
-      ? `1x de R$ ${amount.toFixed(2)} (à vista)`
-      : `${i}x de R$ ${calc.installmentValue.toFixed(2)}${calc.hasInterest ? ` (total R$ ${calc.totalWithInterest.toFixed(2)})` : " sem juros"}`;
-    installmentOptions.push({ value: String(i), label });
-  }
+  // Parcelas pela REGRA DO LINK (teto, sem juros e acréscimo próprios).
+  const builtOptions = buildInstallmentOptions(amount, installmentConfig, null);
+  const installmentOptions = builtOptions.map((o) => ({ value: String(o.installments), label: o.label }));
 
   const selectedInstallments = Number(installments);
   const installmentCountForCalculation = selectedInstallments || 1;
-  const { installmentValue: selectedInstallmentAmount, totalWithInterest } = calculateInstallmentAmount(amount, installmentCountForCalculation, installmentConfig);
+  const selectedOption = builtOptions.find((o) => o.installments === installmentCountForCalculation) || builtOptions[0];
+  const selectedInstallmentAmount = selectedOption.installmentAmount;
+  const totalWithInterest = selectedOption.chargeAmount;
+
 
   const handleSubmit = async () => {
     if (processingRef.current) return;
@@ -1071,6 +1056,8 @@ export default function StoreCheckout() {
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49,
   });
+  const hasLinkRuleRef = useRef(false);
+
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
    const [showAllPayMethods, setShowAllPayMethods] = useState(true);
    const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -1193,29 +1180,28 @@ export default function StoreCheckout() {
   const loadInstallmentConfig = async () => {
     try {
       const { data } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
-      if (data?.value) {
+      if (data?.value && !hasLinkRuleRef.current) {
         const config = data.value as any;
-        setInstallmentConfig(prev => ({
-          max_installments: config.max_installments || 12,
-          interest_free_installments: Math.max(prev.interest_free_installments, config.interest_free_installments || 6),
-          monthly_interest_rate: config.monthly_interest_rate || 2.49,
-        }));
+        setInstallmentConfig({
+          max_installments: Number(config.max_installments) || 12,
+          interest_free_installments: Number(config.interest_free_installments) ?? 6,
+          monthly_interest_rate: Number(config.monthly_interest_rate) || 2.49,
+        });
       }
     } catch {}
   };
 
+  // Regra do LINK: substitui o padrão (pode apertar o teto e zerar o sem juros).
   const loadInstallmentOverride = async () => {
     try {
       const { data } = await supabase.rpc("get_sale_installment_override", { p_sale_id: saleId! });
-      const ov = (data || {}) as { interest_free_installments?: number | null; max_installments?: number | null };
-      if (!ov.interest_free_installments && !ov.max_installments) return;
-      setInstallmentConfig(prev => ({
-        ...prev,
-        max_installments: Math.max(prev.max_installments, ov.max_installments || 0),
-        interest_free_installments: Math.max(prev.interest_free_installments, ov.interest_free_installments || 0),
-      }));
+      const rule = parseInstallmentRule(data);
+      if (!rule) return;
+      hasLinkRuleRef.current = true;
+      setInstallmentConfig(rule);
     } catch {}
   };
+
 
   const paymentConfirmedRef = useRef(false);
 
