@@ -1168,7 +1168,33 @@ serve(async (req) => {
       console.error("[pagarme] Falha ao aplicar prêmio (ignorado):", prizeErr);
     }
 
+    // ── TRAVA DE PARCELAS: a regra do link manda, não a conta do gateway ──
+    try {
+      if (!isDebitCard && (params.installments || 1) > 1) {
+        let ruleRaw: any = null;
+        if (orderSource === "pos_sales") {
+          const { data: s } = await supabase
+            .from("pos_sales").select("payment_details").eq("id", params.orderId).maybeSingle();
+          ruleRaw = (s?.payment_details as any)?.installment_override || null;
+        } else {
+          const { data: o } = await supabase
+            .from("orders").select("checkout_installment_config").eq("id", params.orderId).maybeSingle();
+          ruleRaw = (o as any)?.checkout_installment_config || null;
+        }
+        const maxRule = Number(ruleRaw?.max_installments || 0);
+        if (maxRule > 0 && Number(params.installments) > maxRule) {
+          return new Response(
+            JSON.stringify({ success: false, error: `Este link permite no máximo ${maxRule}x.` }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    } catch (ruleErr) {
+      console.error("[pagarme] Falha ao validar regra de parcelas (ignorado):", ruleErr);
+    }
+
     const chargeParams: ChargeRequest = {
+
       ...params,
       totalAmountCents: totalCents,
     };
