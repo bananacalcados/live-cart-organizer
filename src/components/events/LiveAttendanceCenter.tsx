@@ -217,6 +217,37 @@ export function LiveAttendanceCenter({
               </div>
 
             </div>
+            {selectedOrder?.is_paid && (() => {
+              const current =
+                shipOverride && shipOverride.orderId === selectedOrder.id
+                  ? shipOverride.value
+                  : ((selectedOrder as any).shipping_type ?? null);
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-1.5">
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
+                    <Truck className="h-3 w-3" /> Tipo de envio:
+                  </span>
+                  {SHIPPING_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setShippingType(current === opt.value ? null : opt.value)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-colors",
+                        current === opt.value
+                          ? opt.active
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  {current && (
+                    <span className="text-[10px] text-muted-foreground">· vai com essa tag para a Expedição</span>
+                  )}
+                </div>
+              );
+            })()}
             <div className="min-h-0 flex-1">
               <WhatsAppChat
                 key={`${selected.phone}::${selected.whatsappNumberId || "noinstance"}::${selectedOrder?.id || "noorder"}`}
