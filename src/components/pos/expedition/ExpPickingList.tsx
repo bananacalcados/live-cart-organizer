@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid } from "lucide-react";
+import { ExpGradeReport } from "./ExpGradeReport";
 import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
@@ -50,6 +51,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [advancing, setAdvancing] = useState(false);
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
   const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
+  const [gradeOpen, setGradeOpen] = useState(false);
 
 
 
