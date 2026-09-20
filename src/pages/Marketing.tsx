@@ -119,17 +119,16 @@ interface Campaign {
 // ─── Constants ──────────────────────────────────────
 
 const RFM_SEGMENT_COLORS: Record<string, string> = {
-  "Campeões": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
-  "Leais": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
-  "Potenciais Leais": "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/30",
-  "Novos Clientes": "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30",
-  "Promissores": "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
-  "Precisam Atenção": "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30",
-  "Quase Dormindo": "bg-stone-500/15 text-stone-700 dark:text-stone-400 border-stone-500/30",
-  "Em Risco": "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
-  "Não Pode Perder": "bg-pink-500/15 text-pink-700 dark:text-pink-400 border-pink-500/30",
-  "Hibernando": "bg-slate-500/15 text-slate-700 dark:text-slate-400 border-slate-500/30",
-  "Perdidos": "bg-gray-500/15 text-gray-700 dark:text-gray-400 border-gray-500/30",
+  champions: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
+  loyal_customers: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40",
+  cant_lose: "bg-pink-500/20 text-pink-700 dark:text-pink-300 border-pink-500/40",
+  at_risk: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40",
+  promising: "bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40",
+  new_customers: "bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40",
+  hibernating: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40",
+  lost: "bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/40",
+  leads: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40",
+  others: "bg-lime-500/20 text-lime-700 dark:text-lime-300 border-lime-500/40",
 };
 
 const RFM_SEGMENT_ICONS: Record<string, typeof Crown> = {
