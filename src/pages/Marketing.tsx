@@ -93,7 +93,19 @@ interface ZoppyCustomer {
   purchased_brands?: string[] | null;
   purchased_categories?: string[] | null;
   purchased_sizes?: string[] | null;
+  purchased_channels?: string[] | null;
 }
+
+const ONLINE_CHANNELS = ['whatsapp', 'live', 'site', 'link_online'];
+const CHANNEL_LABELS: Record<string, string> = {
+  presencial: 'Presencial',
+  whatsapp: 'WhatsApp',
+  live: 'Live',
+  site: 'Site',
+  link_online: 'Link',
+};
+const channelsLabel = (list?: string[] | null) =>
+  (list || []).map(ch => CHANNEL_LABELS[ch] || ch).join(', ');
 
 interface Campaign {
   id: string;
@@ -342,6 +354,7 @@ export default function Marketing() {
    const [brandFilter, setBrandFilter] = useState<string>("all");
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
+   const [channelFilter, setChannelFilter] = useState<string>("all");
   // Paginação client-side da tabela de clientes RFM (100 por página)
   const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
