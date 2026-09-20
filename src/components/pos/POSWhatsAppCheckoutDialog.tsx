@@ -475,21 +475,12 @@ export function POSWhatsAppCheckoutDialog({
 
 
 
-                  <div>
-                    <Label className="text-base font-bold">Parcelas sem juros (opcional)</Label>
-                    <Input
-                      value={noInterestInstallments}
-                      onChange={(e) => setNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
-                      placeholder="Padrão da loja"
-                      className="h-12 text-lg font-bold mt-1"
-                      type="number"
-                      min={1}
-                      max={12}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Vazio = usar limite padrão. Máx 12×.
-                    </p>
-                  </div>
+                  <LinkInstallmentRuleFields
+                    maxInstallments={maxInstallments} setMaxInstallments={setMaxInstallments}
+                    noInterestInstallments={noInterestInstallments} setNoInterestInstallments={setNoInterestInstallments}
+                    interestRate={interestRate} setInterestRate={setInterestRate}
+                  />
+
 
 
                 {/* Totals */}
