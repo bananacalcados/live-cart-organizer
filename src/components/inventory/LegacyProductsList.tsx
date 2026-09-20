@@ -540,6 +540,7 @@ export function LegacyProductsList() {
           category_id: p.category_id,
           brand: p.brand,
           category: p.category,
+          gender: (p as any).gender ?? null,
           created_at: p.created_at,
           cost_price: p.cost_price,
           sale_price: p.sale_price,

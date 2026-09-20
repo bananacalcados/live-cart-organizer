@@ -260,6 +260,7 @@ export function UnifiedProductsList() {
           category_id: m?.category_id ?? null,
           brand: m?.brand ?? null,
           category: m?.category ?? null,
+          gender: (m as any)?.gender ?? null,
           created_at: m?.created_at ?? null,
           cost_price: m?.cost_price ?? null,
           sale_price: m?.sale_price ?? null,
