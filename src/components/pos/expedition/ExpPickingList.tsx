@@ -170,7 +170,11 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
     const ready: string[] = [];
     for (const o of sorted) {
       const need = new Map<string, number>();
-      for (const it of o.items) need.set(lineKey(it), (need.get(lineKey(it)) || 0) + (Number(it.quantity) || 0));
+      const pref = expeditionPriorityRank(o) <= 2 ? "p" : "n";
+      for (const it of o.items) {
+        const k = `${pref}|${lineKey(it)}`;
+        need.set(k, (need.get(k) || 0) + (Number(it.quantity) || 0));
+      }
       let ok = o.items.length > 0;
       for (const [k, q] of need) if ((remaining[k] || 0) < q) ok = false;
       if (ok) {
@@ -294,7 +298,17 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         </Button>
       </div>
 
-      {lines.map((l) => {
+      {sections.filter((sec) => sec.lines.length > 0).map((sec) => (
+        <div key={sec.id} className="space-y-3">
+          <div
+            className={`rounded-lg px-3 py-2 text-lg font-black ${
+              sec.id === "p" ? "bg-destructive/15 text-destructive" : "bg-muted text-pos-muted-text"
+            }`}
+          >
+            {sec.id === "p" ? "🚨 " : ""}
+            {sec.title} · {sec.lines.length} produto(s) · {sec.lines.reduce((s, l) => s + l.quantity, 0)} peça(s)
+          </div>
+          {sec.lines.map((l) => {
         const done = separated[l.key] || 0;
         const bc = (l.barcode || "").trim();
         const sk = (l.sku || "").trim();
