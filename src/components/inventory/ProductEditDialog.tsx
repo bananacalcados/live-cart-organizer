@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 interface VariantRow {
   id?: string;                 // existente

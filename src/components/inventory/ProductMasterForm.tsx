@@ -18,6 +18,7 @@ import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 interface VariantRow {
   color: string;
@@ -60,6 +61,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
   const [categoryId, setCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [newCategoryMode, setNewCategoryMode] = useState(false);
+  const [gender, setGender] = useState("");
   const [ncm, setNcm] = useState(initial?.ncm || "64039900");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState<string>(initial?.cost_price?.toString() || "");
