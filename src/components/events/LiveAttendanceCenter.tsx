@@ -11,7 +11,14 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { LiveQuickActionsDialog } from "./LiveQuickActionsDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Plus, Users, Zap } from "lucide-react";
+import { MessageSquare, Plus, Truck, Users, Zap } from "lucide-react";
+import { toast } from "sonner";
+
+const SHIPPING_OPTIONS = [
+  { value: "sedex", label: "SEDEX", active: "bg-orange-500 text-white border-orange-500" },
+  { value: "correios", label: "Correios", active: "bg-sky-600 text-white border-sky-600" },
+  { value: "transportadora", label: "Transportadora", active: "bg-purple-600 text-white border-purple-600" },
+] as const;
 
 
 interface LiveAttendanceCenterProps {
@@ -61,6 +68,26 @@ export function LiveAttendanceCenter({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionsConv, setActionsConv] = useState<LiveConversation | null>(null);
   const [prefill, setPrefill] = useState<{ phone?: string; name?: string }>({});
+  const [shipOverride, setShipOverride] = useState<{ orderId: string; value: string | null } | null>(null);
+
+  const setShippingType = async (value: string | null) => {
+    if (!selectedOrder) return;
+    setShipOverride({ orderId: selectedOrder.id, value });
+    const { error } = await (supabase as any)
+      .from("orders")
+      .update({ shipping_type: value })
+      .eq("id", selectedOrder.id);
+    if (error) {
+      setShipOverride(null);
+      toast.error("Não foi possível marcar o tipo de envio");
+    } else {
+      toast.success(
+        value
+          ? `Envio marcado: ${SHIPPING_OPTIONS.find((o) => o.value === value)?.label} — já atualizado na Expedição`
+          : "Marcação de envio removida",
+      );
+    }
+  };
 
 
   const liveStartedAt: string | null =
