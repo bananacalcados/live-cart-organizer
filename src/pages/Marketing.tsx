@@ -339,6 +339,8 @@ export default function Marketing() {
    const [brandFilter, setBrandFilter] = useState<string>("all");
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
+  // Paginação client-side da tabela de clientes RFM (100 por página)
+  const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
 
   // ─── Fetch data ──────────────────────────────
@@ -1191,6 +1193,16 @@ export default function Marketing() {
     return sortDir === "desc" ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
   }).slice(0, topN !== "all" ? parseInt(topN) : undefined);
 
+  // Resetar para a página 1 ao mudar qualquer filtro, busca, ordenação, topN ou presets
+  useEffect(() => {
+    setRfmPage(1);
+  }, [searchQuery, regionFilter, rfmFilter, dddFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
+
+  const RFM_PAGE_SIZE = 100;
+  const rfmTotalPages = Math.max(1, Math.ceil(filtered.length / RFM_PAGE_SIZE));
+  const rfmCurrentPage = Math.min(Math.max(1, rfmPage), rfmTotalPages);
+  const pagedRfmCustomers = filtered.slice((rfmCurrentPage - 1) * RFM_PAGE_SIZE, rfmCurrentPage * RFM_PAGE_SIZE);
+
   const segments = customers.reduce((acc, c) => {
     const seg = c.rfm_segment || 'Outros';
     acc[seg] = (acc[seg] || 0) + 1;
@@ -1797,7 +1809,7 @@ export default function Marketing() {
                     <TableRow><TableCell colSpan={10} className="text-center py-8"><RefreshCw className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
-                  ) : filtered.slice(0, 200).map(c => (
+                  ) : pagedRfmCustomers.map(c => (
                     <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
                       // Pre-populate seller from map immediately
                       const phoneSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
@@ -1843,7 +1855,34 @@ export default function Marketing() {
                   ))}
                 </TableBody>
               </Table>
-              {filtered.length > 200 && <p className="text-xs text-muted-foreground text-center py-2">Mostrando 200 de {filtered.length}</p>}
+              {filtered.length > RFM_PAGE_SIZE && (
+                <div className="flex flex-col items-center gap-2 py-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-11 min-w-14 px-4 text-sm font-medium"
+                      disabled={rfmCurrentPage <= 1}
+                      onClick={() => setRfmPage(rfmCurrentPage - 1)}
+                    >
+                      ← Anterior
+                    </Button>
+                    <span className="text-sm font-medium text-muted-foreground px-2">
+                      Página {rfmCurrentPage} de {rfmTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-11 min-w-14 px-4 text-sm font-medium"
+                      disabled={rfmCurrentPage >= rfmTotalPages}
+                      onClick={() => setRfmPage(rfmCurrentPage + 1)}
+                    >
+                      Próxima →
+                    </Button>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{filtered.length} clientes</span>
+                </div>
+              )}
             </ScrollArea>
           </TabsContent>
 
