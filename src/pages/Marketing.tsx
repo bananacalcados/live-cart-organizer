@@ -145,22 +145,22 @@ const RFM_SEGMENT_DETAILS: Record<string, { label: string; description: string; 
   cant_lose: {
     label: "Não podemos perder",
     description: "Eram clientes muito valiosos, mas já estão há bastante tempo sem comprar.",
-    criteria: "Última compra há mais de 180 dias, 4 ou mais pedidos e pelo menos R$ 800 em compras.",
+    criteria: "Última compra há mais de 180 dias, 4 ou mais pedidos e pelo menos R$ 400 em compras.",
   },
   loyal_customers: {
     label: "Clientes fiéis",
     description: "Compram com frequência e têm um bom valor acumulado, mesmo sem estarem no grupo dos mais recentes.",
-    criteria: "4 ou mais pedidos e pelo menos R$ 400 em compras; não se enquadra antes em Campeões ou Não podemos perder.",
+    criteria: "Última compra em até 180 dias, 4 ou mais pedidos e pelo menos R$ 400 em compras.",
   },
   at_risk: {
     label: "Em risco",
-    description: "Já tiveram boa frequência e valor, mas estão começando a se afastar.",
-    criteria: "Última compra entre 121 e 180 dias, exatamente 3 pedidos e pelo menos R$ 400 em compras.",
+    description: "Estão esfriando: já passaram de 4 meses sem comprar. Melhor momento para reativar com baixo custo.",
+    criteria: "Última compra entre 121 e 180 dias e que não se enquadra nos grupos anteriores.",
   },
   promising: {
     label: "Promissores",
     description: "Voltaram a comprar recentemente e já demonstram potencial para se tornarem clientes fiéis.",
-    criteria: "Última compra em até 120 dias, exatamente 2 pedidos e pelo menos R$ 200 em compras.",
+    criteria: "Última compra em até 120 dias e 2 ou 3 pedidos.",
   },
   new_customers: {
     label: "Novos clientes",
@@ -170,7 +170,7 @@ const RFM_SEGMENT_DETAILS: Record<string, { label: string; description: string; 
   hibernating: {
     label: "Hibernando",
     description: "Estão há bastante tempo sem comprar e tinham frequência e valor baixos ou médios.",
-    criteria: "Última compra entre 181 e 365 dias, até 3 pedidos e menos de R$ 800 em compras.",
+    criteria: "Última compra entre 181 e 365 dias e que não se enquadra nos grupos anteriores.",
   },
   lost: {
     label: "Perdidos",
