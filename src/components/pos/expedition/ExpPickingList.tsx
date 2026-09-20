@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
-import { ExpOrder, ExpStage, nextStage } from "./expeditionTypes";
+import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
 
@@ -28,7 +28,7 @@ interface PickLine {
   sku: string | null;
   barcode: string | null;
   quantity: number;
-  orders: { id: string; customer: string; qty: number; created_at: string }[];
+  orders: { id: string; customer: string; qty: number; created_at: string; channel: string }[];
 }
 
 const lineKey = (it: any) =>
@@ -78,6 +78,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           customer: o.customer_name || "Sem nome",
           qty: Number(it.quantity) || 0,
           created_at: o.created_at,
+          channel: orderChannelLabel(o),
         });
         map.set(k, cur);
       }
@@ -210,7 +211,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         <td style="text-align:center">${i + 1}</td>
         <td><strong>${l.product_name}</strong><br/><span style="font-size:11px;color:#555">${[l.variant_name, l.size && `Tam ${l.size}`, l.sku]
           .filter(Boolean)
-          .join(" • ")}</span></td>
+          .join(" • ")}</span><br/><span style="font-size:11px;color:#333">${l.orders
+            .map((ord) => `${ord.channel} • ${ord.customer}${ord.qty > 1 ? ` ×${ord.qty}` : ""}`)
+            .join("  |  ")}</span></td>
         <td style="font-size:11px">${(stock[(l.barcode || "").trim()] || stock[(l.sku || "").trim()] || [])
           .map((s) => `${s.store}: ${s.stock}`)
           .join(" | ") || "—"}</td>
@@ -318,6 +321,19 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
                       Sem estoque localizado
                     </Badge>
                   )}
+                </div>
+                {/* Clientes que compraram este item (canal + nome + quantidade) */}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {l.orders.map((ord, i) => (
+                    <Badge
+                      key={`${ord.id}-${i}`}
+                      variant="outline"
+                      className="text-sm font-semibold border-pos-muted-text/40 text-pos-text"
+                    >
+                      {ord.channel} • {ord.customer}
+                      {ord.qty > 1 ? ` ×${ord.qty}` : ""}
+                    </Badge>
+                  ))}
                 </div>
                 <div className="mt-2 flex items-center gap-3">
                   <p className="text-sm font-semibold text-pos-muted-text">{l.orders.length} pedido(s)</p>
