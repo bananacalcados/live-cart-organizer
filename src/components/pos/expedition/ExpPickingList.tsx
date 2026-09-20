@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid } from "lucide-react";
+import { ExpGradeReport } from "./ExpGradeReport";
 import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
@@ -50,6 +51,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [advancing, setAdvancing] = useState(false);
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
   const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
+  const [gradeOpen, setGradeOpen] = useState(false);
 
 
 
@@ -263,7 +265,10 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           {lines.length} produto(s) • {totalPieces} peça(s)
         </span>
         <Badge className="bg-exp-pick text-white font-bold">{totalSeparated} separada(s)</Badge>
-        <Button variant="outline" onClick={print} className="ml-auto font-bold">
+        <Button variant="outline" onClick={() => setGradeOpen(true)} className="ml-auto font-bold">
+          <LayoutGrid className="h-4 w-4 mr-1" /> Grades · Reposição
+        </Button>
+        <Button variant="outline" onClick={print} className="font-bold">
           <Printer className="h-4 w-4 mr-1" /> Imprimir lista
         </Button>
         <Button
@@ -437,6 +442,17 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         storeId={storeId || ""}
         target={purchaseTarget}
       />
+
+      <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
+        <DialogContent className="max-w-6xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">
+              Relatório de grades · Reposição
+            </DialogTitle>
+          </DialogHeader>
+          <ExpGradeReport saleIds={orders.map((o) => o.id)} className="flex-1" />
+        </DialogContent>
+      </Dialog>
     </div>
 
   );
