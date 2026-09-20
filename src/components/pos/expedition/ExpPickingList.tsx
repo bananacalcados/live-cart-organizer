@@ -418,7 +418,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
             </div>
           </div>
         );
-      })}
+          })}
+        </div>
+      ))}
 
       <Dialog open={!!qtyDialog} onOpenChange={(v) => !v && setQtyDialog(null)}>
         <DialogContent className="max-w-md">
