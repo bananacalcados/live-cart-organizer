@@ -223,9 +223,9 @@ export function LiveAttendanceCenter({
                   ? shipOverride.value
                   : ((selectedOrder as any).shipping_type ?? null);
               return (
-                <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-1.5">
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
-                    <Truck className="h-3 w-3" /> Tipo de envio:
+                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                    <Truck className="h-4 w-4" /> Tipo de envio:
                   </span>
                   {SHIPPING_OPTIONS.map((opt) => (
                     <button
@@ -233,7 +233,7 @@ export function LiveAttendanceCenter({
                       type="button"
                       onClick={() => setShippingType(current === opt.value ? null : opt.value)}
                       className={cn(
-                        "rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-colors",
+                        "rounded-lg border-2 px-4 py-1.5 text-sm font-bold transition-colors",
                         current === opt.value
                           ? opt.active
                           : "border-border text-muted-foreground hover:text-foreground",
@@ -243,7 +243,7 @@ export function LiveAttendanceCenter({
                     </button>
                   ))}
                   {current && (
-                    <span className="text-[10px] text-muted-foreground">· vai com essa tag para a Expedição</span>
+                    <span className="text-xs text-muted-foreground">· vai com essa tag para o topo da Expedição</span>
                   )}
                 </div>
               );
