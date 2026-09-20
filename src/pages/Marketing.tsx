@@ -1855,7 +1855,34 @@ export default function Marketing() {
                   ))}
                 </TableBody>
               </Table>
-              {filtered.length > 200 && <p className="text-xs text-muted-foreground text-center py-2">Mostrando 200 de {filtered.length}</p>}
+              {filtered.length > RFM_PAGE_SIZE && (
+                <div className="flex flex-col items-center gap-2 py-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-11 min-w-14 px-4 text-sm font-medium"
+                      disabled={rfmCurrentPage <= 1}
+                      onClick={() => setRfmPage(rfmCurrentPage - 1)}
+                    >
+                      ← Anterior
+                    </Button>
+                    <span className="text-sm font-medium text-muted-foreground px-2">
+                      Página {rfmCurrentPage} de {rfmTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-11 min-w-14 px-4 text-sm font-medium"
+                      disabled={rfmCurrentPage >= rfmTotalPages}
+                      onClick={() => setRfmPage(rfmCurrentPage + 1)}
+                    >
+                      Próxima →
+                    </Button>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{filtered.length} clientes</span>
+                </div>
+              )}
             </ScrollArea>
           </TabsContent>
 
