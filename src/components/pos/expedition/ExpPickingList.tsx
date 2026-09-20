@@ -263,7 +263,10 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           {lines.length} produto(s) • {totalPieces} peça(s)
         </span>
         <Badge className="bg-exp-pick text-white font-bold">{totalSeparated} separada(s)</Badge>
-        <Button variant="outline" onClick={print} className="ml-auto font-bold">
+        <Button variant="outline" onClick={() => setGradeOpen(true)} className="ml-auto font-bold">
+          <LayoutGrid className="h-4 w-4 mr-1" /> Grades · Reposição
+        </Button>
+        <Button variant="outline" onClick={print} className="font-bold">
           <Printer className="h-4 w-4 mr-1" /> Imprimir lista
         </Button>
         <Button
