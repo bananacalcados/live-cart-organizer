@@ -64,9 +64,9 @@ export function ShippingTypeButtons({ saleId }: { saleId: string }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-      <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <Truck className="h-3 w-3" /> Tipo de envio:
+    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <span className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <Truck className="h-4 w-4" /> Tipo de envio:
       </span>
       {OPTIONS.map((opt) => (
         <button
@@ -76,7 +76,7 @@ export function ShippingTypeButtons({ saleId }: { saleId: string }) {
           onClick={() => mark(current === opt.value ? null : opt.value)}
           title={current === opt.value ? "Clique para desmarcar" : `Marcar envio como ${opt.label}`}
           className={cn(
-            "rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50",
+            "rounded-lg border-2 px-4 py-1.5 text-sm font-bold transition-colors disabled:opacity-50",
             current === opt.value
               ? opt.active
               : "border-border text-muted-foreground hover:text-foreground",
