@@ -815,18 +815,16 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     processingRef.current = false;
   };
 
-  const installmentOptions = [];
-  for (let i = 1; i <= installmentConfig.max_installments; i++) {
-    const calc = calculateInstallmentAmount(amount, i, installmentConfig);
-    const label = i === 1
-      ? `1x de R$ ${amount.toFixed(2)} (à vista)`
-      : `${i}x de R$ ${calc.installmentValue.toFixed(2)}${calc.hasInterest ? ` (total R$ ${calc.totalWithInterest.toFixed(2)})` : " sem juros"}`;
-    installmentOptions.push({ value: String(i), label });
-  }
+  // Parcelas pela REGRA DO LINK (teto, sem juros e acréscimo próprios).
+  const builtOptions = buildInstallmentOptions(amount, installmentConfig, null);
+  const installmentOptions = builtOptions.map((o) => ({ value: String(o.installments), label: o.label }));
 
   const selectedInstallments = Number(installments);
   const installmentCountForCalculation = selectedInstallments || 1;
-  const { installmentValue: selectedInstallmentAmount, totalWithInterest } = calculateInstallmentAmount(amount, installmentCountForCalculation, installmentConfig);
+  const selectedOption = builtOptions.find((o) => o.installments === installmentCountForCalculation) || builtOptions[0];
+  const selectedInstallmentAmount = selectedOption.installmentAmount;
+  const totalWithInterest = selectedOption.chargeAmount;
+
 
   const handleSubmit = async () => {
     if (processingRef.current) return;
