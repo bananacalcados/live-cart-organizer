@@ -4315,6 +4315,7 @@ export type Database = {
           previous_phones: string[] | null
           purchased_brands: string[] | null
           purchased_categories: string[] | null
+          purchased_channels: string[] | null
           purchased_sizes: string[] | null
           purchased_stores: string[] | null
           region_type: string | null
@@ -4390,6 +4391,7 @@ export type Database = {
           previous_phones?: string[] | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
+          purchased_channels?: string[] | null
           purchased_sizes?: string[] | null
           purchased_stores?: string[] | null
           region_type?: string | null
@@ -4465,6 +4467,7 @@ export type Database = {
           previous_phones?: string[] | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
+          purchased_channels?: string[] | null
           purchased_sizes?: string[] | null
           purchased_stores?: string[] | null
           region_type?: string | null
@@ -15375,6 +15378,7 @@ export type Database = {
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at: string | null
           sale_type: string
+          sales_channel: string | null
           seller_id: string | null
           shipped_at: string | null
           shipping_address: Json | null
@@ -15478,6 +15482,7 @@ export type Database = {
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at?: string | null
           sale_type?: string
+          sales_channel?: string | null
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
@@ -15581,6 +15586,7 @@ export type Database = {
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_released_at?: string | null
           sale_type?: string
+          sales_channel?: string | null
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
@@ -21660,6 +21666,7 @@ export type Database = {
           phone_suffix8: string | null
           purchased_brands: string[] | null
           purchased_categories: string[] | null
+          purchased_channels: string[] | null
           purchased_sizes: string[] | null
           purchased_stores: string[] | null
           region_type: string | null
@@ -21700,6 +21707,7 @@ export type Database = {
           phone_suffix8?: string | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
+          purchased_channels?: string[] | null
           purchased_sizes?: string[] | null
           purchased_stores?: string[] | null
           region_type?: never
@@ -21740,6 +21748,7 @@ export type Database = {
           phone_suffix8?: string | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
+          purchased_channels?: string[] | null
           purchased_sizes?: string[] | null
           purchased_stores?: string[] | null
           region_type?: never
@@ -22379,6 +22388,17 @@ export type Database = {
       clear_event_live_active: {
         Args: { p_event_id: string }
         Returns: undefined
+      }
+      compute_pos_sale_channel: {
+        Args: {
+          p_external_source: string
+          p_is_store_pickup: boolean
+          p_payment_details: Json
+          p_shipping_address: Json
+          p_shipping_carrier: string
+          p_source_order_id: string
+        }
+        Returns: string
       }
       consolidate_estoque_parents_by_pos: {
         Args: { p_commit?: boolean }
