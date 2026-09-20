@@ -275,7 +275,7 @@ serve(async (req) => {
       // completed/pending_sync for fresh sales that don't have such status yet.
       const { data: currentSale } = await supabase
         .from('pos_sales')
-        .select('status, customer_id, customer_name, customer_phone')
+        .select('status, customer_id, customer_name, customer_phone, customer_cpf, customer_email')
         .eq('id', sale_id)
         .maybeSingle();
       const preserveStatuses = new Set([
@@ -294,6 +294,9 @@ serve(async (req) => {
           customer_id: customer?.id || currentSale?.customer_id || null,
           customer_name: customer?.name || currentSale?.customer_name || null,
           customer_phone: customer?.whatsapp || customer?.phone || currentSale?.customer_phone || null,
+          customer_cpf: customer?.cpf || (currentSale as any)?.customer_cpf || null,
+          customer_email: customer?.email || (currentSale as any)?.customer_email || null,
+
           // Only set payment_method when a value is provided — NEVER overwrite an
           // existing real method (e.g. "PIX"/"Cartão") with null.
           ...(payment_method_name ? { payment_method: payment_method_name } : {}),
@@ -312,6 +315,9 @@ serve(async (req) => {
           customer_id: customer?.id || null,
           customer_name: customer?.name || null,
           customer_phone: customer?.whatsapp || customer?.phone || null,
+          customer_cpf: customer?.cpf || null,
+          customer_email: customer?.email || null,
+
           payment_method: payment_method_name || null,
           subtotal,
           discount: discount || 0,
