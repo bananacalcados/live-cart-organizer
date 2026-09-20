@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid } from "lucide-react";
 import { ExpGradeReport } from "./ExpGradeReport";
 import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
+import { expeditionPriorityRank } from "@/lib/expeditionPriority";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
 
@@ -55,11 +56,11 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
 
 
 
-  const lines = useMemo(() => {
+  const buildLines = (list: ExpOrder[], prefix: string) => {
     const map = new Map<string, PickLine>();
-    for (const o of orders) {
+    for (const o of list) {
       for (const it of o.items) {
-        const k = lineKey(it);
+        const k = `${prefix}|${lineKey(it)}`;
         const cur =
           map.get(k) ||
           ({
@@ -86,7 +87,19 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
       }
     }
     return [...map.values()].sort((a, b) => a.product_name.localeCompare(b.product_name));
+  };
+
+  const sections = useMemo(() => {
+    const prio = orders.filter((o) => expeditionPriorityRank(o) <= 2);
+    const rest = orders.filter((o) => expeditionPriorityRank(o) > 2);
+    return [
+      { id: "p", title: "PRIORITÁRIOS", lines: buildLines(prio, "p") },
+      { id: "n", title: "DEMAIS PEDIDOS", lines: buildLines(rest, "n") },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
+
+  const lines = useMemo(() => sections.flatMap((s) => s.lines), [sections]);
 
   const loadStock = async () => {
     const barcodes = [...new Set(lines.map((l) => (l.barcode || "").trim()).filter(Boolean))];
