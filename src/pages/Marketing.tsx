@@ -156,7 +156,7 @@ const RFM_SEGMENT_DETAILS: Record<string, { label: string; description: string; 
   at_risk: {
     label: "Em risco",
     description: "Já tiveram boa frequência e valor, mas estão começando a se afastar.",
-    criteria: "Última compra entre 121 e 180 dias, 3 ou mais pedidos e pelo menos R$ 400 em compras.",
+    criteria: "Última compra entre 121 e 180 dias, exatamente 3 pedidos e pelo menos R$ 400 em compras.",
   },
   promising: {
     label: "Promissores",
@@ -206,7 +206,7 @@ const RFM_SEGMENT_ALIASES: Record<string, string> = {
 function getRfmSegmentDetail(segment: string) {
   const normalized = RFM_SEGMENT_ALIASES[segment] || segment;
   return RFM_SEGMENT_DETAILS[normalized] || {
-    label: segment.replaceAll("_", " "),
+    label: segment.replace(/_/g, " "),
     description: "Grupo definido pela combinação entre a data da última compra, a frequência e o valor gasto.",
     criteria: "A classificação é atualizada pelo cálculo RFM com os dados de compras disponíveis.",
   };
