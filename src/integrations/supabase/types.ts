@@ -80,6 +80,36 @@ export type Database = {
           },
         ]
       }
+      _recalc_queue: {
+        Row: {
+          done: boolean | null
+          id: string
+        }
+        Insert: {
+          done?: boolean | null
+          id: string
+        }
+        Update: {
+          done?: boolean | null
+          id?: string
+        }
+        Relationships: []
+      }
+      _rfm_before: {
+        Row: {
+          id: string
+          seg: string | null
+        }
+        Insert: {
+          id: string
+          seg?: string | null
+        }
+        Update: {
+          id?: string
+          seg?: string | null
+        }
+        Relationships: []
+      }
       ad_campaign_nurture_steps: {
         Row: {
           campaign_id: string
@@ -21650,6 +21680,8 @@ export type Database = {
           last_name: string | null
           last_purchase_at: string | null
           lead_temperature: string | null
+          legacy_orders: number | null
+          legacy_spent: number | null
           name: string | null
           opt_out_mass_dispatch: boolean | null
           payment_methods: string[] | null
@@ -21688,6 +21720,8 @@ export type Database = {
           last_name?: never
           last_purchase_at?: string | null
           lead_temperature?: string | null
+          legacy_orders?: number | null
+          legacy_spent?: number | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
           payment_methods?: string[] | null
@@ -21726,6 +21760,8 @@ export type Database = {
           last_name?: never
           last_purchase_at?: string | null
           lead_temperature?: string | null
+          legacy_orders?: number | null
+          legacy_spent?: number | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
           payment_methods?: string[] | null
