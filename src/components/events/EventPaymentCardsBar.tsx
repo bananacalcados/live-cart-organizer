@@ -471,10 +471,26 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
   // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
   const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isConversationUnread(e.rep)), [laneAwaitingAll]);
-  const laneAwaiting = useMemo(() => laneAwaitingAll.filter((e) => !isConversationUnread(e.rep)), [laneAwaitingAll]);
+  // Quem não respondeu ainda, separado pelo tempo desde a NOSSA última mensagem:
+  // < 10 min → Aguardando pagamento · 10 min a 1 h → Follow up · > 1 h → Follow +1 hora.
+  const { laneAwaiting, laneFollowup, laneFollowupHour } = useMemo(() => {
+    const a: CardEntry[] = [];
+    const f: CardEntry[] = [];
+    const h: CardEntry[] = [];
+    for (const e of laneAwaitingAll) {
+      if (isConversationUnread(e.rep)) continue;
+      const waited = msWaitingReply(e.rep, nowTick);
+      if (waited >= ONE_HOUR_MS) h.push(e);
+      else if (waited >= TEN_MIN_MS) f.push(e);
+      else a.push(e);
+    }
+    return { laneAwaiting: a, laneFollowup: f, laneFollowupHour: h };
+  }, [laneAwaitingAll, nowTick]);
+  const laneIncomplete = useMemo(() => laneFilter(incompleteEntries), [laneFilter, incompleteEntries]);
 
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
   const laneCancelled = useMemo(() => laneFilter(cancelledEntries), [laneFilter, cancelledEntries]);
+
 
 
   const eventIdForAlerts = orders.find((o) => o.event_id)?.event_id || null;
