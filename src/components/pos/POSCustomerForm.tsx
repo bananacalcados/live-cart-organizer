@@ -147,11 +147,28 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
       return;
     }
 
+    const hasContact = !!(
+      form.whatsapp.replace(/\D/g, "").trim() ||
+      form.cpf.replace(/\D/g, "").trim() ||
+      form.email.trim()
+    );
+
+    if (!hasContact && !linkedId) {
+      toast.error(
+        "Preencha pelo menos um contato (WhatsApp, CPF ou e-mail). Se o cliente não quiser informar, finalize a venda sem identificar cliente (Consumidor Final).",
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       const data = await savePosCustomer(linkedId, form);
 
+      if (!hasContact && linkedId) {
+        toast.warning("Cadastro salvo, mas sem contato. Quando possível, complete com WhatsApp, CPF ou e-mail.");
+      }
       toast.success(linkedId ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente salvo!");
+
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
       setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
