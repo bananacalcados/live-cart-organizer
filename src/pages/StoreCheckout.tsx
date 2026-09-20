@@ -110,18 +110,8 @@ function formatExpiry(value: string) {
   return `${d.slice(0, 2)}/${d.slice(2)}`;
 }
 
-function calculateInstallmentAmount(total: number, installments: number, config: InstallmentConfig) {
-  if (installments <= config.interest_free_installments) {
-    return { installmentValue: total / installments, totalWithInterest: total, hasInterest: false };
-  }
-  const rate = config.monthly_interest_rate / 100;
-  const totalWithInterest = total * Math.pow(1 + rate, installments);
-  return {
-    installmentValue: totalWithInterest / installments,
-    totalWithInterest: Math.round(totalWithInterest * 100) / 100,
-    hasInterest: true,
-  };
-}
+import { buildInstallmentOptions, parseInstallmentRule } from "@/lib/installmentRules";
+
 
 // ── StepIndicator ───────────────────────────────────────────────
 function StepIndicator({ currentStep, isCustom }: { currentStep: number; isCustom?: boolean }) {
