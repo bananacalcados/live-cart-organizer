@@ -271,6 +271,14 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       if (error) throw error;
       const masterId = data as string;
 
+      if (gender) {
+        await supabase
+          .from("products_master")
+          .update({ gender, gender_source: "manual" } as any)
+          .eq("id", masterId);
+      }
+
+
       // Empurra ao PDV / catálogo unificado já com o estoque inicial na loja escolhida.
       // Envio SEMPRE obrigatório — replica em todas as lojas ativas (estoque zero nas outras).
       const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
@@ -396,6 +404,23 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                     </SelectContent>
                   </Select>
                 )}
+              </div>
+              <div>
+                <Label>Gênero</Label>
+                <Select
+                  value={gender || "__none__"}
+                  onValueChange={(v) => setGender(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o gênero" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Não definido</SelectItem>
+                    {GENDER_VALUES.map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <Label className="flex items-center gap-1.5">
