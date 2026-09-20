@@ -599,35 +599,19 @@ function CardPaymentForm({
     return () => { cancelled = true; clearTimeout(timer); };
   }, [amount, isDebit, cardBin.length >= 6 ? cardBin : ""]);
 
-  const installmentOptions = [];
-  for (let i = 1; i <= installmentConfig.max_installments; i++) {
-    const mp = mpOptions?.find((o) => o.installments === i);
-    if (mpOptions && !mp) continue; // parcela não oferecida pelo emissor
-    const calc = calculateInstallmentAmount(amount, i, installmentConfig);
-    const value = mp ? mp.installmentAmount : calc.installmentValue;
-    const total = mp ? mp.totalAmount : calc.totalWithInterest;
-    const hasInterest = mp ? !mp.interestFree : calc.hasInterest;
-    const label = i === 1
-      ? `1x de R$ ${amount.toFixed(2)} (à vista)`
-      : `${i}x de R$ ${value.toFixed(2)}${hasInterest ? ` (total R$ ${total.toFixed(2)} com juros)` : " sem juros"}`;
-    installmentOptions.push({ value: String(i), label });
-  }
+  // Lista de parcelas segue a REGRA DO LINK (teto, sem juros e acréscimo).
+  // Acima do "sem juros" do link o acréscimo é nosso, mesmo que a conta do
+  // Mercado Pago ofereça sem juros — nesse caso o valor cobrado já vai inflado.
+  const builtOptions = buildInstallmentOptions(amount, installmentConfig, isDebit ? null : mpOptions);
+  const installmentOptions = builtOptions.map((o) => ({ value: String(o.installments), label: o.label }));
 
   const selectedInstallments = isDebit ? 1 : Number(installments);
-  const selectedMp = mpOptions?.find((o) => o.installments === selectedInstallments);
-  // Valor enviado ao gateway = SEMPRE o total do pedido. Quando o parcelamento tem
-  // juros, quem soma os juros é o próprio gateway (não podemos inflar o valor,
-  // senão o cliente pagaria juros em cima de juros).
   const installmentCountForCalculation = selectedInstallments || 1;
-  const { totalWithInterest } = calculateInstallmentAmount(amount, installmentCountForCalculation, installmentConfig);
-  const chargeAmount = isDebit ? amount : (selectedMp ? amount : totalWithInterest);
-  // Valor EXIBIDO no botão = o que o cliente realmente paga. Quando o Mercado Pago
-  // devolve as condições reais (ex.: 10x sem juros), o total é o do MP — nunca o
-  // total inflado pela tabela de juros local, senão o botão mostra valor errado.
-  const displayTotal = isDebit ? amount : (selectedMp ? selectedMp.totalAmount : totalWithInterest);
-  const selectedInstallmentAmount = isDebit
-    ? amount
-    : (selectedMp ? selectedMp.installmentAmount : displayTotal / installmentCountForCalculation);
+  const selectedOption = builtOptions.find((o) => o.installments === installmentCountForCalculation) || builtOptions[0];
+  const chargeAmount = isDebit ? amount : selectedOption.chargeAmount;
+  const displayTotal = isDebit ? amount : selectedOption.totalAmount;
+  const selectedInstallmentAmount = isDebit ? amount : selectedOption.installmentAmount;
+
 
 
   const handleSubmit = async () => {
