@@ -698,12 +698,44 @@ Deno.serve(async (req) => {
             .catch(() => null)
         : Promise.resolve(null);
 
-      const [history, prizeRows, pixPct, raffleRows, regLoaded] = await Promise.all([
+      // ── Situação do pedido na Expedição: separação, envio e rastreio.
+      // Fonte única: pos_sales — primeiro pelo vínculo direto (source_order_id),
+      // depois pelo telefone da cliente dentro da mesma live.
+      const fulfillmentP = (async () => {
+        if (!order?.id) return null;
+        const sel =
+          "expedition_stage, expedition_finished_at, tracking_code, tracking_carrier, tracking_url";
+        const bySource = await supabase
+          .from("pos_sales")
+          .select(sel)
+          .eq("source_order_id", order.id)
+          .not("expedition_stage", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (bySource?.data) return bySource.data;
+        if (!order.event_id) return null;
+        const suf = suffix8(session.phone || "");
+        if (!suf) return null;
+        const byPhone = await supabase
+          .from("pos_sales")
+          .select(sel)
+          .eq("event_id", order.event_id)
+          .like("customer_phone", `%${suf}`)
+          .not("expedition_stage", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return byPhone?.data || null;
+      })().catch(() => null);
+
+      const [history, prizeRows, pixPct, raffleRows, regLoaded, fulfillment] = await Promise.all([
         historyP,
         prizesP,
         pixP,
         raffleRowsP,
         regP,
+        fulfillmentP,
       ]);
 
       // ── Prêmios ativos da roleta (não usados e dentro da validade).
@@ -1009,6 +1041,17 @@ Deno.serve(async (req) => {
                       order.confirmed_items_signature !== itemsSignature(order))),
                 payment_window_expires_at: order.payment_window_expires_at,
                 checkout_url: `/checkout/order/${order.id}`,
+                // Situação na Expedição (separação/envio/rastreio) — alimenta o
+                // painel "ACOMPANHAMENTO DO PEDIDO" da área de membros.
+                fulfillment: fulfillment
+                  ? {
+                      expedition_stage: fulfillment.expedition_stage || null,
+                      expedition_finished_at: fulfillment.expedition_finished_at || null,
+                      tracking_code: fulfillment.tracking_code || null,
+                      tracking_carrier: fulfillment.tracking_carrier || null,
+                      tracking_url: fulfillment.tracking_url || null,
+                    }
+                  : null,
               };
             })()
           : null,
