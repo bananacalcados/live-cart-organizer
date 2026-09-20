@@ -50,11 +50,8 @@ interface CustomerFormData {
   state: string;
 }
 
-interface InstallmentConfig {
-  max_installments: number;
-  interest_free_installments: number;
-  monthly_interest_rate: number;
-}
+type InstallmentConfig = import("@/lib/installmentRules").InstallmentConfig;
+
 
 interface PixData {
   qrCode: string;
