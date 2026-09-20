@@ -119,17 +119,16 @@ interface Campaign {
 // ─── Constants ──────────────────────────────────────
 
 const RFM_SEGMENT_COLORS: Record<string, string> = {
-  "Campeões": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
-  "Leais": "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
-  "Potenciais Leais": "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/30",
-  "Novos Clientes": "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30",
-  "Promissores": "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
-  "Precisam Atenção": "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30",
-  "Quase Dormindo": "bg-stone-500/15 text-stone-700 dark:text-stone-400 border-stone-500/30",
-  "Em Risco": "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30",
-  "Não Pode Perder": "bg-pink-500/15 text-pink-700 dark:text-pink-400 border-pink-500/30",
-  "Hibernando": "bg-slate-500/15 text-slate-700 dark:text-slate-400 border-slate-500/30",
-  "Perdidos": "bg-gray-500/15 text-gray-700 dark:text-gray-400 border-gray-500/30",
+  champions: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
+  loyal_customers: "bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/40",
+  cant_lose: "bg-pink-500/20 text-pink-700 dark:text-pink-300 border-pink-500/40",
+  at_risk: "bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40",
+  promising: "bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40",
+  new_customers: "bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40",
+  hibernating: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40",
+  lost: "bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/40",
+  leads: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40",
+  others: "bg-lime-500/20 text-lime-700 dark:text-lime-300 border-lime-500/40",
 };
 
 const RFM_SEGMENT_ICONS: Record<string, typeof Crown> = {
@@ -210,6 +209,10 @@ function getRfmSegmentDetail(segment: string) {
     description: "Grupo definido pela combinação entre a data da última compra, a frequência e o valor gasto.",
     criteria: "A classificação é atualizada pelo cálculo RFM com os dados de compras disponíveis.",
   };
+}
+
+function getRfmColor(segment: string) {
+  return RFM_SEGMENT_COLORS[RFM_SEGMENT_ALIASES[segment] || segment] || "bg-primary/15 text-primary border-primary/40";
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -1300,15 +1303,15 @@ export default function Marketing() {
           {/* ── CLIENTES RFM ── */}
           <TabsContent value="customers" className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
-              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Total Clientes</p><p className="text-lg sm:text-2xl font-bold">{customers.length}</p></CardContent></Card>
-              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Faturamento</p><p className="text-lg sm:text-2xl font-bold truncate">{formatCurrency(totalRevenue)}</p></CardContent></Card>
-              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['local'] || 0}</p></CardContent></Card>
-              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-blue-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">Total Clientes</p><Users className="h-4 w-4 text-blue-400" /></div><p className="text-lg sm:text-2xl font-bold text-blue-400">{customers.length}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-emerald-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">Faturamento</p><TrendingUp className="h-4 w-4 text-emerald-400" /></div><p className="text-lg sm:text-2xl font-bold text-emerald-400 truncate">{formatCurrency(totalRevenue)}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-amber-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><Store className="h-4 w-4 text-amber-400" /></div><p className="text-lg sm:text-2xl font-bold text-amber-400">{regionCounts['local'] || 0}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-violet-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><Globe className="h-4 w-4 text-violet-400" /></div><p className="text-lg sm:text-2xl font-bold text-violet-400">{regionCounts['online'] || 0}</p></CardContent></Card>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="flex min-h-12 items-stretch overflow-hidden rounded-md border border-border">
-                <Button variant={rfmFilter === "all" ? "default" : "ghost"} className="h-12 rounded-none px-5 text-sm font-semibold" onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Button>
+              <div className="flex min-h-12 items-stretch overflow-hidden rounded-md border border-primary/40 shadow-sm">
+                <Button variant={rfmFilter === "all" ? "default" : "ghost"} className={`h-12 rounded-none px-5 text-sm font-semibold ${rfmFilter !== "all" ? "text-foreground" : ""}`} onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Button>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-12 w-11 rounded-none border-l border-border" aria-label="Como funciona a matriz RFM">
@@ -1325,8 +1328,8 @@ export default function Marketing() {
                 const detail = getRfmSegmentDetail(seg);
                 const Icon = RFM_SEGMENT_ICONS[seg] || RFM_SEGMENT_ICONS[detail.label] || Star;
                 return (
-                  <div key={seg} className={`flex min-h-12 items-stretch overflow-hidden rounded-md border ${rfmFilter === seg ? RFM_SEGMENT_COLORS[seg] || RFM_SEGMENT_COLORS[detail.label] || "border-primary bg-primary/10 text-primary" : "border-border"}`}>
-                    <Button variant="ghost" className="h-12 gap-2 rounded-none px-4 text-sm font-semibold" onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
+                  <div key={seg} className={`flex min-h-12 items-stretch overflow-hidden rounded-md border shadow-sm transition-all ${getRfmColor(seg)} ${rfmFilter === seg ? "ring-2 ring-current ring-offset-2 ring-offset-background" : "hover:brightness-125"}`}>
+                    <Button variant="ghost" className={`h-12 gap-2 rounded-none px-4 text-sm ${rfmFilter === seg ? "font-bold" : "font-semibold"}`} onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
                       <Icon className="h-4 w-4" />{detail.label} ({count})
                     </Button>
                     <Popover>
@@ -1829,7 +1832,7 @@ export default function Marketing() {
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{c.region_type === 'local' ? '🏪 GV' : c.region_type === 'online' ? '🌐' : '❓'}</Badge></TableCell>
-                      <TableCell>{c.rfm_segment && <Badge className={`text-[10px] ${RFM_SEGMENT_COLORS[c.rfm_segment] || ''}`}>{c.rfm_segment}</Badge>}</TableCell>
+                      <TableCell>{c.rfm_segment && <Badge className={`text-[10px] ${getRfmColor(c.rfm_segment)}`}>{getRfmSegmentDetail(c.rfm_segment).label}</Badge>}</TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_recency_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_recency_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_recency_score || '-'}</span></TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_frequency_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_frequency_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_frequency_score || '-'}</span></TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_monetary_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_monetary_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_monetary_score || '-'}</span></TableCell>
@@ -2236,8 +2239,8 @@ export default function Marketing() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {selectedCustomer.rfm_segment && (
-                    <Badge className={`${RFM_SEGMENT_COLORS[selectedCustomer.rfm_segment] || ''}`}>
-                      {selectedCustomer.rfm_segment}
+                    <Badge className={`${getRfmColor(selectedCustomer.rfm_segment)}`}>
+                      {getRfmSegmentDetail(selectedCustomer.rfm_segment).label}
                     </Badge>
                   )}
                 </div>
