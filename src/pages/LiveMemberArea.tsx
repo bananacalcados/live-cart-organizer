@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
+  Truck,
   CreditCard,
   History,
   Loader2,
@@ -101,6 +102,14 @@ interface MemberState {
     confirmed_at: string | null;
     payment_window_expires_at: string | null;
     checkout_url: string;
+    /** Situação na Expedição: separação, envio e rastreio. */
+    fulfillment?: {
+      expedition_stage?: string | null;
+      expedition_finished_at?: string | null;
+      tracking_code?: string | null;
+      tracking_carrier?: string | null;
+      tracking_url?: string | null;
+    } | null;
   } | null;
 
 
@@ -2218,8 +2227,60 @@ export default function LiveMemberArea() {
 
 
               {order.is_paid ? (
-                <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-3 text-primary font-semibold text-sm">
-                  <CheckCircle2 className="h-5 w-5" /> Pagamento confirmado!
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-xl bg-primary/10 p-3 text-primary font-semibold text-sm">
+                    <CheckCircle2 className="h-5 w-5" /> Pagamento confirmado!
+                  </div>
+                  <div className="rounded-2xl border-2 border-border p-3 space-y-2.5">
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-primary" /> ACOMPANHAMENTO DO PEDIDO
+                    </p>
+                    {(() => {
+                      const f = order.fulfillment || null;
+                      const shipped = !!f?.tracking_code || f?.expedition_stage === "concluido";
+                      const steps = [
+                        { done: true, label: "Pagamento confirmado" },
+                        { done: !!f?.expedition_stage, label: "Separando seu pedido" },
+                        { done: shipped, label: shipped ? "Enviado — a caminho de você" : "Envio" },
+                      ];
+                      return steps.map((s, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-2 text-sm ${
+                            s.done ? "font-semibold text-foreground" : "text-muted-foreground"
+                          }`}
+                        >
+                          {s.done ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                          ) : (
+                            <span className="h-4 w-4 shrink-0 rounded-full border-2 border-border" />
+                          )}
+                          {s.label}
+                        </div>
+                      ));
+                    })()}
+                    {order.fulfillment?.tracking_code && (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-xs text-muted-foreground">
+                          Rastreio:{" "}
+                          <span className="font-bold text-foreground">
+                            {order.fulfillment.tracking_code}
+                          </span>
+                        </p>
+                        <a
+                          href={
+                            order.fulfillment.tracking_url ||
+                            `/rastreio/${order.fulfillment.tracking_code}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block"
+                        >
+                          <Button className="w-full h-12 font-bold">ACOMPANHAR ENTREGA</Button>
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : order.confirmed_at || state?.order_ready ? (
                 <div className="space-y-3">

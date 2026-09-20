@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { issueMagicLink } from "../_shared/member-magic-link.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,15 +105,14 @@ serve(async (req) => {
       });
     }
 
-    const productLines = products.map((p: any, i: number) => {
-      const parts: string[] = [];
-      parts.push(`*${i + 1}. ${p.title || 'Produto'}*`);
-      if (p.variant) parts.push(`   📏 ${p.variant}`);
-      if (p.color) parts.push(`   🎨 Cor: ${p.color}`);
-      if (p.size) parts.push(`   👟 Tamanho: ${p.size}`);
-      parts.push(`   🔢 Qtd: ${p.quantity || 1}`);
-      return parts.join('\n');
-    }).join('\n\n');
+    // Produto em UMA linha por item (formato aprovado): *1. Título — Cor — Tamanho*
+    const productLines = products
+      .map((p: any, i: number) => {
+        const desc = [p.color, p.size].filter(Boolean).join(" ") || p.variant || "";
+        const qty = Number(p.quantity || 1);
+        return `*${i + 1}. ${p.title || "Produto"}${desc ? ` — ${desc}` : ""}*${qty > 1 ? ` (${qty}x)` : ""}`;
+      })
+      .join("\n");
 
     // 4.5 Cashback de 10% sobre o valor REALMENTE pago (já com desconto/PIX)
     const subtotal = products.reduce(
@@ -169,20 +169,22 @@ serve(async (req) => {
 
       if (cb) {
         cashbackLine =
-          `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* pro seu segundo par!\n` +
-          `Cupom: *${cb.coupon_code}*\n` +
-          `Compra mínima: ${fmt(Number(cb.min_purchase))}\n` +
-          `Válido até ${new Date(cb.expires_at).toLocaleDateString('pt-BR')}`;
+          `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
       }
     } catch (err) {
       console.error('[livete-payment-confirmation] cashback error:', err);
     }
 
-    // 5. Build confirmation message (direct, no fluff)
+    // 5. Build confirmation message (texto aprovado)
+    // Link autenticado da Área de Membros preso ao pedido — SEMPRE em linha
+    // própria, sem texto grudado (evita o caso do token com sobra no fim).
+    const memberAreaLink = await issueMagicLink(supabase, fullPhone, undefined, orderId);
     const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
-      `Confere os itens do seu pedido antes de enviar:\n\n` +
+      `Confira seu pedido:\n\n` +
       `${productLines}` + cashbackLine + `\n\n` +
-      `Tá tudo certo? Responde *SIM* pra confirmar ou me avisa se precisa corrigir algo 😊`;
+      `📦 Seu pedido seguirá para a expedição. Acompanhe a separação, o envio e o rastreamento por aqui:\n\n` +
+      `${memberAreaLink}\n\n` +
+      `Está tudo correto? Responda *SIM* para confirmar ou avise o que precisa ser corrigido 😊`;
 
 
     // 6. Resolve the WhatsApp instance to send from.
