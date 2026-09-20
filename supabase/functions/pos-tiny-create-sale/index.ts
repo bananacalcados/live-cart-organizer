@@ -343,6 +343,7 @@ serve(async (req) => {
         category: item.category || null,
         quantity: item.quantity,
         unit_price: item.price,
+        total_price: Math.round(Number(item.price || 0) * Number(item.quantity || 0) * 100) / 100,
         barcode: item.barcode || null,
         tiny_product_id: item.tiny_id ? String(item.tiny_id) : null,
       }));
