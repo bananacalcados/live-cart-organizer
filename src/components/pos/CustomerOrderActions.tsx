@@ -56,6 +56,9 @@ export function CustomerOrderActions({
       {exchanges.length > 0 && <CustomerExchangeBadge exchanges={exchanges} size="sm" />}
       {chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}
 
+      <ShippingTypeButtons saleId={saleId} />
+
+
       <button
         type="button"
         onClick={() => setTypePickerOpen(true)}
