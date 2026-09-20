@@ -1809,7 +1809,7 @@ export default function Marketing() {
                     <TableRow><TableCell colSpan={10} className="text-center py-8"><RefreshCw className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
-                  ) : filtered.slice(0, 200).map(c => (
+                  ) : pagedRfmCustomers.map(c => (
                     <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
                       // Pre-populate seller from map immediately
                       const phoneSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
