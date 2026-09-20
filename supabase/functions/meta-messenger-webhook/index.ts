@@ -332,7 +332,7 @@ serve(async (req) => {
           if (channel === 'instagram' && typeof event.postback.payload === 'string' && event.postback.payload.startsWith('igbtn:')) {
             try {
               const igUsername = senderId ? await fetchInstagramSenderUsername(pageAccessToken, senderId).catch(() => null) : null;
-              const btnResult = await handleCommentButtonPostback(supabase, event.postback.payload, senderId, igUsername ? `@${igUsername}` : null);
+              const btnResult = await handleCommentButtonPostback(supabase, event.postback.payload, senderId, igUsername ? `@${igUsername}` : null, pageAccessToken);
               if (btnResult.handled) {
                 console.log(`[ig-button] postback tratado: ${btnResult.actions.join(', ')}`);
               }
@@ -484,7 +484,7 @@ serve(async (req) => {
                 text: messageText,
                 storyId,
                 messageId: event.message?.mid || null,
-              });
+              }, pageAccessToken);
               if (storyAuto.actions.length > 0) {
                 console.log(`Story automations triggered: ${storyAuto.actions.join(', ')}`);
               }
@@ -656,7 +656,7 @@ serve(async (req) => {
                 mediaType: isLiveComment ? 'LIVE' : mediaType,
                 mediaId: comment.media?.id || null,
                 isLive: isLiveComment,
-              });
+              }, pageAccessToken);
               if (automationResult.actions.length > 0) {
                 console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
               }
