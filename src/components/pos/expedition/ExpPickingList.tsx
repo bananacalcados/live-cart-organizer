@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid } from "lucide-react";
 import { ExpGradeReport } from "./ExpGradeReport";
 import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
+import { expeditionPriorityRank } from "@/lib/expeditionPriority";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
 
@@ -55,11 +56,11 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
 
 
 
-  const lines = useMemo(() => {
+  const buildLines = (list: ExpOrder[], prefix: string) => {
     const map = new Map<string, PickLine>();
-    for (const o of orders) {
+    for (const o of list) {
       for (const it of o.items) {
-        const k = lineKey(it);
+        const k = `${prefix}|${lineKey(it)}`;
         const cur =
           map.get(k) ||
           ({
@@ -86,7 +87,19 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
       }
     }
     return [...map.values()].sort((a, b) => a.product_name.localeCompare(b.product_name));
+  };
+
+  const sections = useMemo(() => {
+    const prio = orders.filter((o) => expeditionPriorityRank(o) <= 2);
+    const rest = orders.filter((o) => expeditionPriorityRank(o) > 2);
+    return [
+      { id: "p", title: "PRIORITÁRIOS", lines: buildLines(prio, "p") },
+      { id: "n", title: "DEMAIS PEDIDOS", lines: buildLines(rest, "n") },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
+
+  const lines = useMemo(() => sections.flatMap((s) => s.lines), [sections]);
 
   const loadStock = async () => {
     const barcodes = [...new Set(lines.map((l) => (l.barcode || "").trim()).filter(Boolean))];
@@ -157,7 +170,11 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
     const ready: string[] = [];
     for (const o of sorted) {
       const need = new Map<string, number>();
-      for (const it of o.items) need.set(lineKey(it), (need.get(lineKey(it)) || 0) + (Number(it.quantity) || 0));
+      const pref = expeditionPriorityRank(o) <= 2 ? "p" : "n";
+      for (const it of o.items) {
+        const k = `${pref}|${lineKey(it)}`;
+        need.set(k, (need.get(k) || 0) + (Number(it.quantity) || 0));
+      }
       let ok = o.items.length > 0;
       for (const [k, q] of need) if ((remaining[k] || 0) < q) ok = false;
       if (ok) {
@@ -281,7 +298,17 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         </Button>
       </div>
 
-      {lines.map((l) => {
+      {sections.filter((sec) => sec.lines.length > 0).map((sec) => (
+        <div key={sec.id} className="space-y-3">
+          <div
+            className={`rounded-lg px-3 py-2 text-lg font-black ${
+              sec.id === "p" ? "bg-destructive/15 text-destructive" : "bg-muted text-pos-muted-text"
+            }`}
+          >
+            {sec.id === "p" ? "🚨 " : ""}
+            {sec.title} · {sec.lines.length} produto(s) · {sec.lines.reduce((s, l) => s + l.quantity, 0)} peça(s)
+          </div>
+          {sec.lines.map((l) => {
         const done = separated[l.key] || 0;
         const bc = (l.barcode || "").trim();
         const sk = (l.sku || "").trim();
@@ -391,7 +418,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
             </div>
           </div>
         );
-      })}
+          })}
+        </div>
+      ))}
 
       <Dialog open={!!qtyDialog} onOpenChange={(v) => !v && setQtyDialog(null)}>
         <DialogContent className="max-w-md">
