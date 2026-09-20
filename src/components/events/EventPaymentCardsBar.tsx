@@ -76,6 +76,27 @@ function isConversationUnread(o: DbOrder): boolean {
   return !!o.has_unread_messages;
 }
 
+/** Pedido incompleto: sem WhatsApp, sem produto ou marcado como incompleto. */
+function isOrderIncomplete(o: DbOrder): boolean {
+  if (o.stage === "incomplete_order") return true;
+  if (!(o.customer?.whatsapp || "").replace(/\D/g, "")) return true;
+  if (!o.products || o.products.length === 0) return true;
+  return false;
+}
+
+/** Há quantos ms a cliente está sem responder a nossa última mensagem (0 = não se aplica). */
+function msWaitingReply(o: DbOrder, now: number): number {
+  const outAt = o.last_sent_message_at ? +new Date(o.last_sent_message_at) : 0;
+  if (!outAt) return 0;
+  const inAt = o.last_customer_message_at ? +new Date(o.last_customer_message_at) : 0;
+  if (inAt > outAt) return 0;
+  return Math.max(0, now - outAt);
+}
+
+const TEN_MIN_MS = 10 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+
 
 /** Converte DbOrder para o tipo Order legado usado pelo chat de WhatsApp. */
 function dbOrderToLegacy(dbOrder: DbOrder): Order {
