@@ -83,6 +83,9 @@ interface ZoppyCustomer {
   total_orders: number;
   total_spent: number;
   avg_ticket: number;
+  legacy_orders?: number | null;
+  legacy_spent?: number | null;
+
   last_purchase_at: string | null;
   first_purchase_at: string | null;
   tags: string[] | null;
@@ -2528,6 +2531,12 @@ export default function Marketing() {
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="h-4 w-4" />Última: {formatDate(selectedCustomer.last_purchase_at)}
                 </div>
+                {Number(selectedCustomer.legacy_spent || 0) > 0 && (
+                  <div className="text-xs text-muted-foreground/80 basis-full">
+                    Histórico anterior ao sistema: {formatCurrency(Number(selectedCustomer.legacy_spent))} · {Number(selectedCustomer.legacy_orders || 0)} pedido(s)
+                  </div>
+                )}
+
               </div>
 
               {/* RFM Scores */}
