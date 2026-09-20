@@ -15,6 +15,7 @@ import { Filter, X } from "lucide-react";
 export interface ProductFilters {
   brandId: string;      // "" = all
   categoryId: string;   // "" = all
+  gender: string;       // "" = all
   createdFrom: string;  // yyyy-mm-dd
   createdTo: string;
   priceMin: string;
@@ -23,6 +24,7 @@ export interface ProductFilters {
   noPrice: boolean;
   noBrand: boolean;
   noCategory: boolean;
+  noGender: boolean;
   inShopify: boolean;
   notInShopify: boolean;
   inPos: boolean;
@@ -32,9 +34,9 @@ export interface ProductFilters {
 }
 
 export const emptyProductFilters: ProductFilters = {
-  brandId: "", categoryId: "", createdFrom: "", createdTo: "",
+  brandId: "", categoryId: "", gender: "", createdFrom: "", createdTo: "",
   priceMin: "", priceMax: "", noCost: false, noPrice: false,
-  noBrand: false, noCategory: false,
+  noBrand: false, noCategory: false, noGender: false,
   inShopify: false, notInShopify: false, inPos: false, notInPos: false,
   maxVariants: "", noVariants: false,
 };
@@ -43,12 +45,14 @@ export function countActive(f: ProductFilters) {
   let n = 0;
   if (f.brandId) n++;
   if (f.categoryId) n++;
+  if (f.gender) n++;
   if (f.createdFrom || f.createdTo) n++;
   if (f.priceMin || f.priceMax) n++;
   if (f.noCost) n++;
   if (f.noPrice) n++;
   if (f.noBrand) n++;
   if (f.noCategory) n++;
+  if (f.noGender) n++;
   if (f.inShopify) n++;
   if (f.notInShopify) n++;
   if (f.inPos) n++;

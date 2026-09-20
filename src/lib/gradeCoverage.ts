@@ -1,13 +1,22 @@
 // Grade coverage utilities — parse sizes from product names and compute
 // "complete grade" status per parent_sku for inventory health.
 
-export type Gender = "feminino" | "masculino" | "unissex" | "infantil" | string;
+export type Gender =
+  | "Feminino"
+  | "Masculino"
+  | "Unissex"
+  | "Menino"
+  | "Menina"
+  | "Infantil"
+  | string;
 
 export const GRADE_RANGES: Record<string, number[]> = {
-  feminino: [34, 35, 36, 37, 38, 39],
-  masculino: [37, 38, 39, 40, 41, 42, 43],
-  unissex: [35, 36, 37, 38, 39, 40, 41, 42],
-  infantil: [25, 26, 27, 28, 29, 30, 31, 32, 33],
+  Feminino: [34, 35, 36, 37, 38, 39],
+  Masculino: [37, 38, 39, 40, 41, 42, 43],
+  Unissex: [35, 36, 37, 38, 39, 40, 41, 42],
+  Menino: [25, 26, 27, 28, 29, 30, 31, 32, 33],
+  Menina: [25, 26, 27, 28, 29, 30, 31, 32, 33],
+  Infantil: [25, 26, 27, 28, 29, 30, 31, 32, 33],
 };
 
 const SIZE_RE = /^(\d{2})(?:\/(\d{2}))?$/;
@@ -28,8 +37,11 @@ export function parseSizeFromName(name: string | null | undefined): number | nul
 }
 
 export function getGradeRange(gender: Gender | null | undefined): number[] {
-  if (!gender) return GRADE_RANGES.unissex;
-  return GRADE_RANGES[gender] || GRADE_RANGES.unissex;
+  if (!gender) return GRADE_RANGES.Unissex;
+  const key = Object.keys(GRADE_RANGES).find(
+    (k) => k.toLowerCase() === String(gender).trim().toLowerCase(),
+  );
+  return (key && GRADE_RANGES[key]) || GRADE_RANGES.Unissex;
 }
 
 export type VariantRow = {

@@ -56,7 +56,7 @@ const toNumber = (value: unknown) => {
 
 const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
 
-const GENDER_OPTIONS = ["masculino", "feminino", "unissex", "infantil"];
+const GENDER_OPTIONS = ["Feminino", "Masculino", "Unissex", "Menino", "Menina", "Infantil"];
 const AGE_OPTIONS = ["adulto", "infantil"];
 
 interface Brand {
