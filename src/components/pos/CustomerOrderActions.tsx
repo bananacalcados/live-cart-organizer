@@ -6,6 +6,7 @@ import { NewExchangePicker } from "./NewExchangePicker";
 import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
 import { CustomerExchangeBadge } from "./CustomerExchangeBadge";
+import { ShippingTypeButtons } from "./ShippingTypeButtons";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
 import type { ExchangeRecord } from "@/hooks/useExchangeRegistry";
 
@@ -54,6 +55,9 @@ export function CustomerOrderActions({
     <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={stop}>
       {exchanges.length > 0 && <CustomerExchangeBadge exchanges={exchanges} size="sm" />}
       {chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}
+
+      <ShippingTypeButtons saleId={saleId} />
+
 
       <button
         type="button"
