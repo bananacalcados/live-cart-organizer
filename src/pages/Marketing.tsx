@@ -1603,7 +1603,7 @@ export default function Marketing() {
                   </style></head><body>
                   <h1>Relatório de Clientes RFM</h1>
                   <p>Exportado em ${new Date().toLocaleDateString('pt-BR')} • ${exportData.length} clientes</p>
-                  <table><thead><tr><th>Nome</th><th>Telefone</th><th>Loja</th><th>Vendedora</th><th>Segmento</th><th>Pedidos</th><th>Total</th><th>Ticket</th><th>Última Compra</th></tr></thead><tbody>${rows}</tbody></table>
+                  <table><thead><tr><th>Nome</th><th>Telefone</th><th>Canais</th><th>Loja</th><th>Vendedora</th><th>Segmento</th><th>Pedidos</th><th>Total</th><th>Ticket</th><th>Última Compra</th></tr></thead><tbody>${rows}</tbody></table>
                   </body></html>`;
                   const printWin = window.open('', '_blank');
                   if (printWin) {
