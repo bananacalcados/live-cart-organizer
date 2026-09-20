@@ -1832,7 +1832,7 @@ export default function Marketing() {
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{c.region_type === 'local' ? '🏪 GV' : c.region_type === 'online' ? '🌐' : '❓'}</Badge></TableCell>
-                      <TableCell>{c.rfm_segment && <Badge className={`text-[10px] ${RFM_SEGMENT_COLORS[c.rfm_segment] || ''}`}>{c.rfm_segment}</Badge>}</TableCell>
+                      <TableCell>{c.rfm_segment && <Badge className={`text-[10px] ${getRfmColor(c.rfm_segment)}`}>{getRfmSegmentDetail(c.rfm_segment).label}</Badge>}</TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_recency_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_recency_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_recency_score || '-'}</span></TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_frequency_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_frequency_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_frequency_score || '-'}</span></TableCell>
                       <TableCell className="text-center"><span className={`text-xs font-mono ${(c.rfm_monetary_score || 0) >= 4 ? 'text-emerald-600 font-bold' : (c.rfm_monetary_score || 0) <= 2 ? 'text-red-500' : ''}`}>{c.rfm_monetary_score || '-'}</span></TableCell>
@@ -2239,8 +2239,8 @@ export default function Marketing() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {selectedCustomer.rfm_segment && (
-                    <Badge className={`${RFM_SEGMENT_COLORS[selectedCustomer.rfm_segment] || ''}`}>
-                      {selectedCustomer.rfm_segment}
+                    <Badge className={`${getRfmColor(selectedCustomer.rfm_segment)}`}>
+                      {getRfmSegmentDetail(selectedCustomer.rfm_segment).label}
                     </Badge>
                   )}
                 </div>
