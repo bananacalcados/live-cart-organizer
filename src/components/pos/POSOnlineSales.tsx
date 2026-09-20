@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
+import { buildLinkInstallmentRule } from "@/lib/installmentRules";
 import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
@@ -121,6 +123,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
   const [checkoutNoInterestInstallments, setCheckoutNoInterestInstallments] = useState("");
+  const [checkoutMaxInstallments, setCheckoutMaxInstallments] = useState("");
+  const [checkoutInterestRate, setCheckoutInterestRate] = useState("");
   const [hasGift, setHasGift] = useState(false);
   const [giftDescription, setGiftDescription] = useState("");
   
