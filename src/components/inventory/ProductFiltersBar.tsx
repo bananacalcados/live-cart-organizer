@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Filter, X } from "lucide-react";
+import { GENDER_VALUES } from "@/lib/productGender";
 
 export interface ProductFilters {
   brandId: string;      // "" = all
@@ -123,6 +124,16 @@ export function ProductFiltersBar({ value, onChange }: Props) {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-xs">Gênero</Label>
+            <Select value={local.gender || "__all__"} onValueChange={v => setLocal({ ...local, gender: v === "__all__" ? "" : v })}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {GENDER_VALUES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Criado de</Label>
@@ -159,6 +170,10 @@ export function ProductFiltersBar({ value, onChange }: Props) {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={local.noCategory} onChange={e => setLocal({ ...local, noCategory: e.target.checked })} />
               Sem categoria
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noGender} onChange={e => setLocal({ ...local, noGender: e.target.checked })} />
+              Sem gênero
             </label>
           </div>
           <div className="border-t pt-2 space-y-1">
@@ -218,6 +233,7 @@ export function matchesProductFilters(
     category_id?: string | null;
     brand?: string | null;
     category?: string | null;
+    gender?: string | null;
     created_at?: string | null;
     cost_price?: number | string | null;
     sale_price?: number | string | null;
@@ -229,6 +245,8 @@ export function matchesProductFilters(
 ): boolean {
   if (f.brandId && row.brand_id !== f.brandId) return false;
   if (f.categoryId && row.category_id !== f.categoryId) return false;
+  if (f.gender && (row.gender || "").toLowerCase() !== f.gender.toLowerCase()) return false;
+  if (f.noGender && row.gender && row.gender.trim()) return false;
   if (f.createdFrom && (!row.created_at || row.created_at < f.createdFrom)) return false;
   if (f.createdTo && (!row.created_at || row.created_at.slice(0, 10) > f.createdTo)) return false;
   const cost = Number(row.cost_price ?? 0);
