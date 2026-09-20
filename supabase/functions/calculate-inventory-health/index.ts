@@ -45,6 +45,15 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error('RPC error:', error);
+      // Fallback: serve the last known snapshot instead of breaking the screen
+      if (cached) {
+        return json({
+          ...(cached.payload as any),
+          cached: true,
+          stale: true,
+          computed_at: cached.computed_at,
+        });
+      }
       return json({ error: error.message }, 500);
     }
 
