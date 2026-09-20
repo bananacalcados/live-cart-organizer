@@ -4234,6 +4234,30 @@ export type Database = {
         }
         Relationships: []
       }
+      customers_legacy_rebuild_log: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          new_legacy: Json | null
+          old_legacy: Json | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          new_legacy?: Json | null
+          old_legacy?: Json | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          new_legacy?: Json | null
+          old_legacy?: Json | null
+        }
+        Relationships: []
+      }
       customers_unified: {
         Row: {
           address: string | null
