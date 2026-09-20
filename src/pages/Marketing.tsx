@@ -373,7 +373,7 @@ export default function Marketing() {
           // Fonte única: base unificada de clientes (deduplicada), via view compatível.
           .from('crm_customers_v')
           // Apenas compradores (matriz RFM real de vendas).
-          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
+          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, legacy_orders, legacy_spent, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
           .gte('total_orders', 1);
         if (activeDdd && activeDdd !== 'all') query = query.eq('ddd', activeDdd);
         const { data, error } = await query
