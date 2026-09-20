@@ -401,9 +401,13 @@ serve(async (req) => {
           .maybeSingle();
 
         const salePoints = 10;
-        const registrationPoints = customer?.id ? 15 : 0;
+        // Ponto de cadastro só quando o cliente tem algum contato real.
+        const hasContact = !!(customer?.whatsapp || customer?.phone || customer?.cpf || customer?.email);
+        const countsAsRegistration = !!(customer?.id && hasContact);
+        const registrationPoints = countsAsRegistration ? 15 : 0;
         const completenessPoints = customer?.id ? calculateCompletenessPoints(customer) : 0;
         const totalNew = salePoints + registrationPoints + completenessPoints;
+
 
         if (existingGamification) {
           await supabase.from('pos_gamification').update({

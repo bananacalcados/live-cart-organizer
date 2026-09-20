@@ -176,9 +176,16 @@ export const savePosCustomer = async (
     }
   }
 
+  if (!payload.cpf && !payload.whatsapp && !payload.email) {
+    throw new Error(
+      "Preencha pelo menos um contato (WhatsApp, CPF ou e-mail). Se o cliente não quiser informar, finalize a venda sem identificar cliente (Consumidor Final).",
+    );
+  }
+
   const { data, error } = await supabase
     .from("pos_customers")
     .insert(payload)
+
     .select()
     .single();
 
