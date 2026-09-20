@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles, Pencil,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio, Footprints
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio, Footprints, HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
@@ -135,6 +136,81 @@ const RFM_SEGMENT_ICONS: Record<string, typeof Crown> = {
   "Campeões": Crown, "Leais": Heart, "Novos Clientes": Star,
   "Promissores": TrendingUp, "Em Risco": AlertTriangle, "Quase Dormindo": Clock, "Hibernando": Clock,
 };
+
+const RFM_SEGMENT_DETAILS: Record<string, { label: string; description: string; criteria: string }> = {
+  champions: {
+    label: "Campeões",
+    description: "Compraram recentemente, compram muitas vezes e estão entre os clientes que mais gastam.",
+    criteria: "Última compra em até 120 dias, 4 ou mais pedidos e pelo menos R$ 800 em compras.",
+  },
+  cant_lose: {
+    label: "Não podemos perder",
+    description: "Eram clientes muito valiosos, mas já estão há bastante tempo sem comprar.",
+    criteria: "Última compra há mais de 180 dias, 4 ou mais pedidos e pelo menos R$ 800 em compras.",
+  },
+  loyal_customers: {
+    label: "Clientes fiéis",
+    description: "Compram com frequência e têm um bom valor acumulado, mesmo sem estarem no grupo dos mais recentes.",
+    criteria: "4 ou mais pedidos e pelo menos R$ 400 em compras; não se enquadra antes em Campeões ou Não podemos perder.",
+  },
+  at_risk: {
+    label: "Em risco",
+    description: "Já tiveram boa frequência e valor, mas estão começando a se afastar.",
+    criteria: "Última compra entre 121 e 180 dias, 3 ou mais pedidos e pelo menos R$ 400 em compras.",
+  },
+  promising: {
+    label: "Promissores",
+    description: "Voltaram a comprar recentemente e já demonstram potencial para se tornarem clientes fiéis.",
+    criteria: "Última compra em até 120 dias, exatamente 2 pedidos e pelo menos R$ 200 em compras.",
+  },
+  new_customers: {
+    label: "Novos clientes",
+    description: "Fizeram a primeira compra recentemente e ainda estão no início do relacionamento.",
+    criteria: "Última compra em até 120 dias e exatamente 1 pedido.",
+  },
+  hibernating: {
+    label: "Hibernando",
+    description: "Estão há bastante tempo sem comprar e tinham frequência e valor baixos ou médios.",
+    criteria: "Última compra entre 181 e 365 dias, até 3 pedidos e menos de R$ 800 em compras.",
+  },
+  lost: {
+    label: "Perdidos",
+    description: "Não compram há mais de um ano e precisam de uma ação forte de reativação.",
+    criteria: "Última compra há mais de 365 dias.",
+  },
+  leads: {
+    label: "Leads",
+    description: "Pessoas cadastradas que ainda não fizeram nenhuma compra.",
+    criteria: "Nenhum pedido pago registrado.",
+  },
+  others: {
+    label: "Outros",
+    description: "Clientes ativos que ainda não atendem por completo aos critérios dos demais grupos.",
+    criteria: "Possuem compra, mas a combinação de tempo, quantidade de pedidos e valor não entra nos grupos anteriores.",
+  },
+};
+
+const RFM_SEGMENT_ALIASES: Record<string, string> = {
+  champion: "champions", champions: "champions", "Campeões": "champions",
+  loyal: "loyal_customers", loyals: "loyal_customers", loyal_customers: "loyal_customers", "Leais": "loyal_customers", "Clientes fiéis": "loyal_customers",
+  cant_lose: "cant_lose", "Não Pode Perder": "cant_lose", "Não podemos perder": "cant_lose",
+  at_risk: "at_risk", "Em Risco": "at_risk", "Em risco": "at_risk",
+  promising: "promising", "Promissores": "promising",
+  new_customers: "new_customers", "Novos Clientes": "new_customers", "Novos clientes": "new_customers",
+  hibernating: "hibernating", "Hibernando": "hibernating",
+  lost: "lost", "Perdidos": "lost",
+  leads: "leads", "Leads": "leads",
+  others: "others", "Outros": "others",
+};
+
+function getRfmSegmentDetail(segment: string) {
+  const normalized = RFM_SEGMENT_ALIASES[segment] || segment;
+  return RFM_SEGMENT_DETAILS[normalized] || {
+    label: segment.replaceAll("_", " "),
+    description: "Grupo definido pela combinação entre a data da última compra, a frequência e o valor gasto.",
+    criteria: "A classificação é atualizada pelo cálculo RFM com os dados de compras disponíveis.",
+  };
+}
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -1230,14 +1306,47 @@ export default function Marketing() {
               <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={rfmFilter === "all" ? "default" : "outline"} className="cursor-pointer" onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Badge>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex min-h-12 items-stretch overflow-hidden rounded-md border border-border">
+                <Button variant={rfmFilter === "all" ? "default" : "ghost"} className="h-12 rounded-none px-5 text-sm font-semibold" onClick={() => setRfmFilter("all")}>Todos ({customers.length})</Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-12 w-11 rounded-none border-l border-border" aria-label="Como funciona a matriz RFM">
+                      <HelpCircle className="h-5 w-5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-80 space-y-2">
+                    <p className="font-semibold">Como funciona a matriz RFM</p>
+                    <p className="text-sm text-muted-foreground">Cada cliente recebe notas de 1 a 5 em três pontos: tempo desde a última compra, quantidade de pedidos e total gasto. A combinação dessas notas define a classificação.</p>
+                  </PopoverContent>
+                </Popover>
+              </div>
               {Object.entries(segments).sort((a, b) => b[1] - a[1]).map(([seg, count]) => {
-                const Icon = RFM_SEGMENT_ICONS[seg] || Star;
+                const detail = getRfmSegmentDetail(seg);
+                const Icon = RFM_SEGMENT_ICONS[seg] || RFM_SEGMENT_ICONS[detail.label] || Star;
                 return (
-                  <Badge key={seg} variant="outline" className={`cursor-pointer gap-1 ${rfmFilter === seg ? RFM_SEGMENT_COLORS[seg] || '' : ''}`} onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
-                    <Icon className="h-3 w-3" />{seg} ({count})
-                  </Badge>
+                  <div key={seg} className={`flex min-h-12 items-stretch overflow-hidden rounded-md border ${rfmFilter === seg ? RFM_SEGMENT_COLORS[seg] || RFM_SEGMENT_COLORS[detail.label] || "border-primary bg-primary/10 text-primary" : "border-border"}`}>
+                    <Button variant="ghost" className="h-12 gap-2 rounded-none px-4 text-sm font-semibold" onClick={() => setRfmFilter(rfmFilter === seg ? "all" : seg)}>
+                      <Icon className="h-4 w-4" />{detail.label} ({count})
+                    </Button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-12 w-11 rounded-none border-l border-border" aria-label={`Por que um cliente fica em ${detail.label}?`}>
+                          <HelpCircle className="h-5 w-5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-80 space-y-3">
+                        <div>
+                          <p className="font-semibold">{detail.label}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{detail.description}</p>
+                        </div>
+                        <div className="rounded-md bg-muted p-3">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">Critério atual</p>
+                          <p className="mt-1 text-sm">{detail.criteria}</p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 );
               })}
             </div>
