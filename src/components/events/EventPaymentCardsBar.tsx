@@ -352,29 +352,40 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     return () => { cancelled = true; };
   }, [orders]);
 
-  const { awaiting, paid } = useMemo(() => {
+  const { awaiting, paid, incomplete } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
     const paidList: DbOrder[] = [];
+    const incompleteList: DbOrder[] = [];
     for (const o of orders) {
       if (isOrderMarkedPaid(o)) {
         paidList.push(o);
-      } else if (o.stage !== "cancelled" && o.stage !== "incomplete_order") {
-        // Todo pedido NÃO pago (e não cancelado/incompleto) está aguardando pagamento,
-        // independente do stage exato (contacted, new, awaiting_confirmation, awaiting_payment, no_response...).
-        awaitingList.push(o);
+      } else if (o.stage !== "cancelled") {
+        // Pedido não pago: incompleto vai para a linha própria; o resto aguarda pagamento.
+        if (isOrderIncomplete(o)) incompleteList.push(o);
+        else awaitingList.push(o);
       }
     }
-    // Pinned first, then by date. Team-shared pins keep priority cards at the top.
+    // Fixados primeiro, depois por data de CRIAÇÃO (posição estável: abrir a
+    // conversa não muda mais o card de lugar na fila).
     const sortByPinThenDate = (a: DbOrder, b: DbOrder) => {
       const pa = pinnedIds.has(a.id) ? 1 : 0;
       const pb = pinnedIds.has(b.id) ? 1 : 0;
       if (pa !== pb) return pb - pa;
-      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     };
     awaitingList.sort(sortByPinThenDate);
     paidList.sort(sortByPinThenDate);
-    return { awaiting: awaitingList, paid: paidList };
+    incompleteList.sort(sortByPinThenDate);
+    return { awaiting: awaitingList, paid: paidList, incomplete: incompleteList };
   }, [orders, pinnedIds]);
+
+  // Relógio para reclassificar as linhas de follow up sem recarregar a tela.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
 
   // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
   const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
