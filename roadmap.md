@@ -12,3 +12,5 @@
 - [x] Ficha completa padrão à direita no PDV e na Live, com notas persistentes à esquerda no PDV
 - [x] Botão de cartão mostra as parcelas escolhidas na Área de Membros e nos checkouts do PDV/WhatsApp
 - [x] Registro de acessos aos módulos (aba Acessos em Administração)
+
+- [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
