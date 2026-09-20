@@ -93,7 +93,19 @@ interface ZoppyCustomer {
   purchased_brands?: string[] | null;
   purchased_categories?: string[] | null;
   purchased_sizes?: string[] | null;
+  purchased_channels?: string[] | null;
 }
+
+const ONLINE_CHANNELS = ['whatsapp', 'live', 'site', 'link_online'];
+const CHANNEL_LABELS: Record<string, string> = {
+  presencial: 'Presencial',
+  whatsapp: 'WhatsApp',
+  live: 'Live',
+  site: 'Site',
+  link_online: 'Link',
+};
+const channelsLabel = (list?: string[] | null) =>
+  (list || []).map(ch => CHANNEL_LABELS[ch] || ch).join(', ');
 
 interface Campaign {
   id: string;
@@ -342,6 +354,7 @@ export default function Marketing() {
    const [brandFilter, setBrandFilter] = useState<string>("all");
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
+   const [channelFilter, setChannelFilter] = useState<string>("all");
   // Paginação client-side da tabela de clientes RFM (100 por página)
   const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
@@ -373,7 +386,7 @@ export default function Marketing() {
           // Fonte única: base unificada de clientes (deduplicada), via view compatível.
           .from('crm_customers_v')
           // Apenas compradores (matriz RFM real de vendas).
-          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, legacy_orders, legacy_spent, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
+          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, legacy_orders, legacy_spent, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes, purchased_channels')
           .gte('total_orders', 1);
         if (activeDdd && activeDdd !== 'all') query = query.eq('ddd', activeDdd);
         const { data, error } = await query
@@ -1110,8 +1123,8 @@ export default function Marketing() {
 
   const customerStats = customers.length > 0 ? {
     total: customers.length,
-    local: customers.filter(c => c.region_type === 'local').length,
-    online: customers.filter(c => c.region_type === 'online').length,
+    local: customers.filter(c => (c.purchased_channels || []).includes('presencial')).length,
+    online: customers.filter(c => (c.purchased_channels || []).some(ch => ONLINE_CHANNELS.includes(ch))).length,
     revenue: customers.reduce((s, c) => s + c.total_spent, 0),
     segments: [...new Set(customers.map(c => c.rfm_segment).filter(Boolean))] as string[],
   } : null;
@@ -1148,6 +1161,12 @@ export default function Marketing() {
     if (brandFilter !== "all" && !(c.purchased_brands || []).includes(brandFilter)) return false;
     if (categoryFilter !== "all" && !(c.purchased_categories || []).includes(categoryFilter)) return false;
     if (sizeFilter !== "all" && !(c.purchased_sizes || []).includes(sizeFilter)) return false;
+    if (channelFilter !== "all") {
+      const chs = c.purchased_channels || [];
+      if (channelFilter === "online_any") {
+        if (!chs.some(ch => ONLINE_CHANNELS.includes(ch))) return false;
+      } else if (!chs.includes(channelFilter)) return false;
+    }
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
@@ -1199,7 +1218,7 @@ export default function Marketing() {
   // Resetar para a página 1 ao mudar qualquer filtro, busca, ordenação, topN ou presets
   useEffect(() => {
     setRfmPage(1);
-  }, [searchQuery, regionFilter, rfmFilter, dddFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
+  }, [searchQuery, regionFilter, rfmFilter, dddFilter, channelFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
 
   const RFM_PAGE_SIZE = 100;
   const rfmTotalPages = Math.max(1, Math.ceil(filtered.length / RFM_PAGE_SIZE));
@@ -1211,6 +1230,11 @@ export default function Marketing() {
     acc[seg] = (acc[seg] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  const channelCounts = {
+    presencial: customers.filter(c => (c.purchased_channels || []).includes('presencial')).length,
+    online: customers.filter(c => (c.purchased_channels || []).some(ch => ONLINE_CHANNELS.includes(ch))).length,
+  };
 
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
   // Usa a lista completa de DDDs (carregada sem filtro) quando disponível, para o dropdown
@@ -1320,8 +1344,8 @@ export default function Marketing() {
             <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
               <Card className="border-t-4 border-t-blue-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">Total Clientes</p><Users className="h-4 w-4 text-blue-400" /></div><p className="text-lg sm:text-2xl font-bold text-blue-400">{customers.length}</p></CardContent></Card>
               <Card className="border-t-4 border-t-emerald-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">Faturamento</p><TrendingUp className="h-4 w-4 text-emerald-400" /></div><p className="text-lg sm:text-2xl font-bold text-emerald-400 truncate">{formatCurrency(totalRevenue)}</p></CardContent></Card>
-              <Card className="border-t-4 border-t-amber-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><Store className="h-4 w-4 text-amber-400" /></div><p className="text-lg sm:text-2xl font-bold text-amber-400">{regionCounts['local'] || 0}</p></CardContent></Card>
-              <Card className="border-t-4 border-t-violet-500"><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><Globe className="h-4 w-4 text-violet-400" /></div><p className="text-lg sm:text-2xl font-bold text-violet-400">{regionCounts['online'] || 0}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-amber-500" title="Clientes que já compraram presencialmente na loja. Um mesmo cliente pode aparecer também em Online se já comprou pelos dois caminhos."><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><Store className="h-4 w-4 text-amber-400" /></div><p className="text-lg sm:text-2xl font-bold text-amber-400">{channelCounts.presencial}</p></CardContent></Card>
+              <Card className="border-t-4 border-t-violet-500" title="Clientes que já compraram por WhatsApp, Live, Site ou link online. Um mesmo cliente pode aparecer também em Loja Física."><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><div className="flex items-center justify-between"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><Globe className="h-4 w-4 text-violet-400" /></div><p className="text-lg sm:text-2xl font-bold text-violet-400">{channelCounts.online}</p></CardContent></Card>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -1382,6 +1406,18 @@ export default function Marketing() {
                     <SelectItem value="local">🏪 Loja Física</SelectItem>
                     <SelectItem value="online">🌐 Online</SelectItem>
                     <SelectItem value="unknown">❓ Indefinido</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={channelFilter} onValueChange={setChannelFilter}>
+                  <SelectTrigger className="h-9" title="Canal em que o cliente já comprou"><Globe className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos Canais</SelectItem>
+                    <SelectItem value="presencial">🏪 Presencial</SelectItem>
+                    <SelectItem value="online_any">🌐 Online (qualquer)</SelectItem>
+                    <SelectItem value="whatsapp">💬 WhatsApp</SelectItem>
+                    <SelectItem value="live">🔴 Live</SelectItem>
+                    <SelectItem value="site">🛒 Site</SelectItem>
+                    <SelectItem value="link_online">🔗 Link</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={storeFilter} onValueChange={setStoreFilter}>
@@ -1505,6 +1541,7 @@ export default function Marketing() {
                       Telefone: c.phone || '',
                       Email: c.email || '',
                       Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                      Canais: channelsLabel(c.purchased_channels),
                       Loja: mapping?.store_name || '',
                       Vendedora: mapping?.seller_name || '',
                       DDD: c.ddd || '',
@@ -1540,6 +1577,7 @@ export default function Marketing() {
                       telefone: c.phone || '',
                       email: c.email || '',
                       regiao: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                      canais: channelsLabel(c.purchased_channels),
                       loja: mapping?.store_name || '',
                       vendedora: mapping?.seller_name || '',
                       segmento: c.rfm_segment || '',
@@ -1551,7 +1589,7 @@ export default function Marketing() {
                   });
                   // Build HTML table for PDF
                   const rows = exportData.map(d =>
-                    `<tr><td>${d.nome}</td><td>${d.telefone}</td><td>${d.loja}</td><td>${d.vendedora}</td><td>${d.segmento}</td><td>${d.pedidos}</td><td>R$${Number(d.totalGasto||0).toFixed(2)}</td><td>R$${Number(d.ticketMedio||0).toFixed(2)}</td><td>${d.ultimaCompra}</td></tr>`
+                    `<tr><td>${d.nome}</td><td>${d.telefone}</td><td>${d.canais}</td><td>${d.loja}</td><td>${d.vendedora}</td><td>${d.segmento}</td><td>${d.pedidos}</td><td>R$${Number(d.totalGasto||0).toFixed(2)}</td><td>R$${Number(d.ticketMedio||0).toFixed(2)}</td><td>${d.ultimaCompra}</td></tr>`
                   ).join('');
                   const html = `<html><head><meta charset="utf-8"><title>Clientes RFM</title><style>
                     body{font-family:Arial,sans-serif;margin:20px;font-size:11px}
@@ -1565,7 +1603,7 @@ export default function Marketing() {
                   </style></head><body>
                   <h1>Relatório de Clientes RFM</h1>
                   <p>Exportado em ${new Date().toLocaleDateString('pt-BR')} • ${exportData.length} clientes</p>
-                  <table><thead><tr><th>Nome</th><th>Telefone</th><th>Loja</th><th>Vendedora</th><th>Segmento</th><th>Pedidos</th><th>Total</th><th>Ticket</th><th>Última Compra</th></tr></thead><tbody>${rows}</tbody></table>
+                  <table><thead><tr><th>Nome</th><th>Telefone</th><th>Canais</th><th>Loja</th><th>Vendedora</th><th>Segmento</th><th>Pedidos</th><th>Total</th><th>Ticket</th><th>Última Compra</th></tr></thead><tbody>${rows}</tbody></table>
                   </body></html>`;
                   const printWin = window.open('', '_blank');
                   if (printWin) {
@@ -1598,8 +1636,8 @@ export default function Marketing() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted-foreground">
                 {filtered.length} clientes
-                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
-                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
+                {(regionFilter !== "all" || channelFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setChannelFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
                     <X className="h-3 w-3 mr-0.5" />Limpar
                   </Button>
                 )}
