@@ -31,6 +31,18 @@ export const ORIGIN_LABEL: Record<ExpOrigin, string> = {
   online: "Online",
 };
 
+/** Rótulo curto do canal de venda (coluna pos_sales.sales_channel). */
+export const CHANNEL_SHORT_LABEL: Record<string, string> = {
+  presencial: "Loja",
+  whatsapp: "WhatsApp",
+  live: "Live",
+  site: "Site",
+  link_online: "Link",
+};
+
+export const orderChannelLabel = (o: ExpOrder): string =>
+  (o.sales_channel && CHANNEL_SHORT_LABEL[o.sales_channel]) || ORIGIN_LABEL[o.origin] || "Online";
+
 export interface ExpItem {
   id: string;
   sale_id: string;
@@ -103,6 +115,8 @@ export interface ExpOrder {
   is_sedex?: boolean | null;
   /** Tipo de envio solicitado pelo cliente: sedex | correios | transportadora. */
   shipping_type?: string | null;
+  /** Canal de venda (presencial | whatsapp | live | site | link_online). */
+  sales_channel?: string | null;
   items: ExpItem[];
   /**
    * Preenchido apenas quando o card representa um ENVIO UNIFICADO
@@ -222,7 +236,7 @@ export async function fetchExpeditionOrders(
 ): Promise<ExpOrder[]> {
   const allStores = storeId === "all";
   const SALE_COLS =
-    "id, store_id, created_at, paid_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method, pickup_date, is_store_pickup, is_sedex, shipping_type";
+    "id, store_id, created_at, paid_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method, pickup_date, is_store_pickup, is_sedex, shipping_type, sales_channel";
 
 
   const baseQuery = () => {
