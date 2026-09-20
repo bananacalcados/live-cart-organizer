@@ -80,36 +80,6 @@ export type Database = {
           },
         ]
       }
-      _recalc_queue: {
-        Row: {
-          done: boolean | null
-          id: string
-        }
-        Insert: {
-          done?: boolean | null
-          id: string
-        }
-        Update: {
-          done?: boolean | null
-          id?: string
-        }
-        Relationships: []
-      }
-      _rfm_before: {
-        Row: {
-          id: string
-          seg: string | null
-        }
-        Insert: {
-          id: string
-          seg?: string | null
-        }
-        Update: {
-          id?: string
-          seg?: string | null
-        }
-        Relationships: []
-      }
       ad_campaign_nurture_steps: {
         Row: {
           campaign_id: string
