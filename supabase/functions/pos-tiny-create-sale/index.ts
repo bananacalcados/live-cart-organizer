@@ -413,7 +413,7 @@ serve(async (req) => {
           await supabase.from('pos_gamification').update({
             total_points: existingGamification.total_points + totalNew,
             sales_count: existingGamification.sales_count + 1,
-            registrations_count: existingGamification.registrations_count + (customer?.id ? 1 : 0),
+            registrations_count: existingGamification.registrations_count + (countsAsRegistration ? 1 : 0),
           }).eq('id', existingGamification.id);
         } else {
           await supabase.from('pos_gamification').insert({
@@ -421,7 +421,7 @@ serve(async (req) => {
             store_id,
             total_points: totalNew,
             sales_count: 1,
-            registrations_count: customer?.id ? 1 : 0,
+            registrations_count: countsAsRegistration ? 1 : 0,
           });
         }
       }
