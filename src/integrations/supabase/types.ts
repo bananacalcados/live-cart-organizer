@@ -12683,6 +12683,7 @@ export type Database = {
           release_to_expedition: boolean
           shipping_cost: number | null
           shipping_info: Json | null
+          shipping_type: string | null
           shopify_order_id: string | null
           shopify_order_name: string | null
           stage: string
@@ -12749,6 +12750,7 @@ export type Database = {
           release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
+          shipping_type?: string | null
           shopify_order_id?: string | null
           shopify_order_name?: string | null
           stage?: string
@@ -12815,6 +12817,7 @@ export type Database = {
           release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
+          shipping_type?: string | null
           shopify_order_id?: string | null
           shopify_order_name?: string | null
           stage?: string
@@ -15385,6 +15388,7 @@ export type Database = {
           shipping_carrier: string | null
           shipping_cost: number
           shipping_notes: string | null
+          shipping_type: string | null
           source_order_id: string | null
           status: string
           status_cancelamento: Database["public"]["Enums"]["pedido_status_cancelamento"]
@@ -15489,6 +15493,7 @@ export type Database = {
           shipping_carrier?: string | null
           shipping_cost?: number
           shipping_notes?: string | null
+          shipping_type?: string | null
           source_order_id?: string | null
           status?: string
           status_cancelamento?: Database["public"]["Enums"]["pedido_status_cancelamento"]
@@ -15593,6 +15598,7 @@ export type Database = {
           shipping_carrier?: string | null
           shipping_cost?: number
           shipping_notes?: string | null
+          shipping_type?: string | null
           source_order_id?: string | null
           status?: string
           status_cancelamento?: Database["public"]["Enums"]["pedido_status_cancelamento"]
