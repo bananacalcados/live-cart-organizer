@@ -725,10 +725,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           else phonesWithoutPhotos.push(c.phone);
           if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) tagsMap[c.phone] = c.tags;
         }
-        // Map group names from whatsapp_groups table
+        // Nome de grupo: o `chat_contacts.display_name` é atualizado a CADA mensagem
+        // recebida com o nome real do grupo, então ele é a fonte mais fresca.
+        // A tabela `whatsapp_groups` (sincronizada de tempos em tempos) serve
+        // apenas de reserva para grupos que ainda não têm nome resolvido.
         if (groupsRes.data) {
           for (const g of groupsRes.data as any[]) {
-            if (g.group_id && g.name) {
+            if (g.group_id && g.name && !nameMap[g.group_id]) {
               nameMap[g.group_id] = g.name;
             }
           }
