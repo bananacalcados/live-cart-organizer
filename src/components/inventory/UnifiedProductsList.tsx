@@ -133,6 +133,9 @@ export function UnifiedProductsList() {
     { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null
   >(null);
   const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
+  const [balanceTarget, setBalanceTarget] = useState<
+    { productName: string; variationLabel: string; rows: BalanceStoreRow[] } | null
+  >(null);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
 
