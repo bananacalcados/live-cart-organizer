@@ -202,7 +202,9 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
    */
   const allocation = useMemo(() => {
     const remaining = { ...separated };
-    const sorted = [...allEntries].sort(
+    // O que já está em AGUARDANDO nunca pode consumir uma seleção feita na
+    // SEPARAÇÃO. Ele só acompanha o próprio envio unificado em selectedEntries.
+    const sorted = allEntries.filter((e) => !e.waiting).sort(
       (a, b) => +new Date(a.o.created_at) - +new Date(b.o.created_at),
     );
     const picked = new Map<string, Map<string, number>>();
