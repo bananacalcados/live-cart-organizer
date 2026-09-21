@@ -321,7 +321,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
   useEffect(() => {
     const ids = orders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
-    if (ids.length === 0) { setStepByOrder({}); return; }
+    if (ids.length === 0) { setStepByOrder({}); setOpenedByOrder({}); return; }
     let cancelled = false;
     (async () => {
       const startedMap: Record<string, boolean> = {};
@@ -695,8 +695,27 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
 
                   {/* Tags: SEM RESPOSTA + Etapa do link */}
 
-                  {(noResponse || step > 0) && (
+                  {(noResponse || step > 0 || !paidCard) && (
                     <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
+                      {!paidCard && (
+                        openedByOrder[order.id] ? (
+                          <span
+                            title={`Cliente abriu o link em ${format(new Date(openedByOrder[order.id]), "dd/MM 'às' HH:mm", { locale: ptBR })}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                          >
+                            <Eye className="h-2.5 w-2.5" />
+                            Abriu {format(new Date(openedByOrder[order.id]), "HH:mm")}
+                          </span>
+                        ) : (
+                          <span
+                            title="Cliente ainda não abriu o link da área de membros"
+                            className="inline-flex items-center gap-1 rounded-full bg-white/5 text-white/40 border border-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                          >
+                            <EyeOff className="h-2.5 w-2.5" />
+                            Não abriu
+                          </span>
+                        )
+                      )}
                       {noResponse && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 text-red-300 border border-red-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
                           <MessageSquareOff className="h-2.5 w-2.5" />
