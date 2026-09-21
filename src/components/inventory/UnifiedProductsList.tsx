@@ -618,7 +618,7 @@ export function UnifiedProductsList() {
                         </tbody>
                       </table>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Clique no estoque de uma loja para editar o SKU. Passe o mouse para ver SKU/barcode/preço.
+                        Clique no estoque de uma loja para editar o SKU. Clique no TOTAL para fazer o balanço de todas as lojas de uma vez.
                       </div>
                     </div>
                   );
