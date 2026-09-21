@@ -2415,6 +2415,21 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 </Button>
               )}
 
+              {/* Quem está atendendo esta conversa */}
+              {(() => {
+                const key = selectedConvKey || `${selectedPhone}__${selectedConvNumberId || 'none'}`;
+                const attendant = getAssignedName?.(key) ?? null;
+                if (!attendant) return null;
+                return (
+                  <Badge
+                    className="text-[10px] px-2 py-0.5 bg-violet-600 text-white font-semibold flex-shrink-0 gap-1 max-w-[180px] truncate"
+                    title={`Atendimento com ${attendant}`}
+                  >
+                    <User className="h-3 w-3" /> {attendant}
+                  </Badge>
+                );
+              })()}
+
               {/* Cashback disponível ao lado do nome */}
               {(() => {
                 const cb = (selectedPhone ? cashbackMap?.get(selectedPhone) : undefined) || crmData?.cashback;
