@@ -2601,6 +2601,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 onQuoteMessage={setQuotedMessage}
                 onCancelQuote={() => setQuotedMessage(null)}
                 onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
+                onOpenParticipant={(phone) => {
+                  const digits = String(phone || "").replace(/\D/g, "");
+                  if (!digits) return;
+                  const suffix = digits.slice(-8);
+                  const match = mergedConversations.find(
+                    (c) => !c.isGroup && String(c.phone || "").replace(/\D/g, "").slice(-8) === suffix,
+                  );
+                  handleSelectConversation(
+                    match?.phone || digits,
+                    match?.whatsapp_number_id ?? selectedConvNumberId,
+                  );
+                }}
               />
             </div>
 
