@@ -15283,6 +15283,7 @@ export type Database = {
           cst_cofins: string | null
           cst_icms: string | null
           cst_pis: string | null
+          expedition_completed_qty: number
           expedition_conference_qty: number
           expedition_picked_qty: number
           expedition_waiting_qty: number
@@ -15313,6 +15314,7 @@ export type Database = {
           cst_cofins?: string | null
           cst_icms?: string | null
           cst_pis?: string | null
+          expedition_completed_qty?: number
           expedition_conference_qty?: number
           expedition_picked_qty?: number
           expedition_waiting_qty?: number
@@ -15343,6 +15345,7 @@ export type Database = {
           cst_cofins?: string | null
           cst_icms?: string | null
           cst_pis?: string | null
+          expedition_completed_qty?: number
           expedition_conference_qty?: number
           expedition_picked_qty?: number
           expedition_waiting_qty?: number
