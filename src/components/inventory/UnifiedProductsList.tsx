@@ -21,6 +21,7 @@ import { DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
+import { MultiStoreBalanceDialog, type BalanceStoreRow } from "./MultiStoreBalanceDialog";
 
 interface MasterData {
   parent_sku: string;
@@ -132,6 +133,9 @@ export function UnifiedProductsList() {
     { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null
   >(null);
   const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
+  const [balanceTarget, setBalanceTarget] = useState<
+    { productName: string; variationLabel: string; rows: BalanceStoreRow[] } | null
+  >(null);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
 
@@ -560,7 +564,22 @@ export function UnifiedProductsList() {
                                     </td>
                                   );
                                 })}
-                                <td className={`py-1 pl-2 text-right font-bold ${total <= 0 ? "text-destructive" : ""}`}>
+                                <td
+                                  className={`py-1 pl-2 text-right font-bold cursor-pointer hover:underline ${total <= 0 ? "text-destructive" : ""}`}
+                                  title="Clique para fazer o balanço de todas as lojas de uma vez"
+                                  onClick={() => setBalanceTarget({
+                                    productName: g.master?.name || g.parent_sku,
+                                    variationLabel: `${v.color} · ${v.size}`,
+                                    rows: orderedStores
+                                      .filter((st) => v.byStore[st.id])
+                                      .map((st) => ({
+                                        productId: v.byStore[st.id].id,
+                                        storeId: st.id,
+                                        storeName: st.name,
+                                        currentStock: v.byStore[st.id].stock || 0,
+                                      })),
+                                  })}
+                                >
                                   {total}
                                 </td>
                                 <td className="py-1 pl-2 text-right whitespace-nowrap">
@@ -599,7 +618,7 @@ export function UnifiedProductsList() {
                         </tbody>
                       </table>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        Clique no estoque de uma loja para editar o SKU. Passe o mouse para ver SKU/barcode/preço.
+                        Clique no estoque de uma loja para editar o SKU. Clique no TOTAL para fazer o balanço de todas as lojas de uma vez.
                       </div>
                     </div>
                   );
@@ -667,6 +686,16 @@ export function UnifiedProductsList() {
         onOpenChange={(v) => !v && setLabelGroup(null)}
         productName={labelGroup?.name}
         items={labelGroup?.items || []}
+      />
+
+      {/* Balanço multi-loja pelo total */}
+      <MultiStoreBalanceDialog
+        open={!!balanceTarget}
+        onOpenChange={(v) => !v && setBalanceTarget(null)}
+        productName={balanceTarget?.productName || ""}
+        variationLabel={balanceTarget?.variationLabel || ""}
+        rows={balanceTarget?.rows || []}
+        onDone={() => { setBalanceTarget(null); load(); }}
       />
 
       {/* Bulk delete confirmation */}
