@@ -77,6 +77,8 @@ export interface ExpItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  /** Quantas unidades deste item já foram separadas (etapa AGUARDANDO). */
+  expedition_picked_qty?: number | null;
 }
 
 export interface ExpOrder {
