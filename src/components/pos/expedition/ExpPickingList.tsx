@@ -673,6 +673,47 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!waitDialog} onOpenChange={(v) => !v && setWaitDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Mandar para Aguardando</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-base font-semibold text-pos-muted-text">
+              {waitDialog?.product_name} — {waitDialog?.quantity} par(es) na Separação
+            </p>
+            <div>
+              <Label>Quantos pares vão para Aguardando?</Label>
+              <Input
+                type="number"
+                min={1}
+                max={waitDialog?.quantity}
+                value={waitInput}
+                autoFocus
+                onChange={(e) => setWaitInput(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  waitDialog &&
+                  sendLineToWaiting(waitDialog, Number(waitInput) || 0)
+                }
+                className="h-12 text-lg font-bold"
+              />
+              <p className="mt-1 text-sm font-semibold text-pos-muted-text">
+                O restante continua na Separação.
+              </p>
+            </div>
+            <Button
+              className="w-full h-12 font-black bg-amber-500 hover:bg-amber-500/90 text-white"
+              disabled={advancing}
+              onClick={() => waitDialog && sendLineToWaiting(waitDialog, Number(waitInput) || 0)}
+            >
+              {advancing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              CONFIRMAR
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ExpStockAdjustDialog
         open={!!adjustLine}
         onOpenChange={(v) => !v && setAdjustLine(null)}
