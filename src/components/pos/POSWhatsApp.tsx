@@ -1030,7 +1030,36 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const mapRowsToConvs = useMemo(() => (rows: any[]) => {
     const convs: Conversation[] = [];
     const phoneMessages = new Map<string, { direction: string }[]>();
-    for (const row of rows) {
+    // GRUPOS: o mesmo grupo chega por várias instâncias (cada número nosso que
+    // participa recebe uma parte). Isso criava várias linhas do mesmo grupo, cada
+    // uma com pedaço da conversa. Aqui colapsamos em UMA só linha (a instância com
+    // a mensagem mais recente) somando os não lidos — o chat já lê todas as instâncias.
+    const collapsedRows = (() => {
+      const isGroupRow = (r: any) =>
+        r.is_group || String(r.phone || '').includes('@g.us') || String(r.phone || '').includes('-');
+      const byGroup = new Map<string, any>();
+      const out: any[] = [];
+      for (const r of rows) {
+        if (!isGroupRow(r)) { out.push(r); continue; }
+        const key = String(r.phone);
+        const prev = byGroup.get(key);
+        if (!prev) {
+          byGroup.set(key, { ...r, unread_count: Number(r.unread_count) || 0 });
+          continue;
+        }
+        const unread = (Number(prev.unread_count) || 0) + (Number(r.unread_count) || 0);
+        const newer = new Date(r.last_message_at).getTime() > new Date(prev.last_message_at).getTime();
+        byGroup.set(key, {
+          ...(newer ? r : prev),
+          unread_count: unread,
+          has_outgoing: prev.has_outgoing || r.has_outgoing,
+          has_incoming: prev.has_incoming || r.has_incoming,
+        });
+      }
+      for (const r of byGroup.values()) out.push(r);
+      return out;
+    })();
+    for (const row of collapsedRows) {
       const phone = row.phone;
       const rowNumberId = row.whatsapp_number_id || null;
       const convKey = `${phone}__${rowNumberId || 'none'}`;
