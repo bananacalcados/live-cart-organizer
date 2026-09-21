@@ -906,6 +906,9 @@ export function ChatView({
 
             // Sender name resolution
             let senderLabel: string | null = null;
+            // Em grupos, o telefone do participante permite abrir a conversa individual.
+            const participantPhone: string | null =
+              !isOutgoing && conversation?.isGroup ? ((msg as any).sender_phone || null) : null;
             if (showSenderName) {
               if (isOutgoing) {
                 const isAuto = msg.message?.startsWith('[AUTO] ');
