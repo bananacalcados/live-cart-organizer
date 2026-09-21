@@ -152,6 +152,11 @@ export function LiveGradePanel({
 
   const totalPares = gradeRows.reduce((sum, r) => sum + (r.total_vendido || 0), 0);
   const totalGrades = gradeRows.reduce((sum, r) => sum + (r.grades || 0), 0);
+  const totalGradesComprar = gradeRows.reduce((sum, r) => sum + (r.grades_comprar || 0), 0);
+  const totalEstoque = gradeRows.reduce((sum, r) => sum + (r.estoque_total || 0), 0);
+
+  const GRID =
+    "grid-cols-[minmax(0,2fr)_150px_minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,1.6fr)]";
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-3", className)}>
