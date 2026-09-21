@@ -23451,6 +23451,10 @@ export type Database = {
         Args: { p_event_id: string; p_phone_e164: string }
         Returns: Json
       }
+      live_link_order_verified: {
+        Args: { p_event_id: string; p_phone: string }
+        Returns: Json
+      }
       live_member_rate_limit: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: boolean
