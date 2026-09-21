@@ -406,19 +406,36 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       const { error: insErr } = await supabase.from("pos_expedition_checks").insert(rows);
       if (insErr) throw insErr;
 
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({
-          expedition_stage: "concluido",
-          expedition_finished_at: new Date().toISOString(),
-          shipping_carrier: carrier,
-          tracking_carrier: carrier,
-          tracking_code: tracking.trim() || null,
-          tracking_url: trackingUrl.trim() || null,
-          delivery_days: deliveryDays.trim() || null,
-          courier_name: courier.trim() || null,
-        } as any)
-        .in("id", groupIds);
+      await Promise.all(order.items.map((item) =>
+        supabase.from("pos_sale_items").update({
+          expedition_completed_qty:
+            (Number(item.expedition_completed_qty) || 0) + (Number(item.expedition_conference_qty) || Number(item.quantity) || 0),
+          expedition_conference_qty: 0,
+        } as any).eq("id", item.id),
+      ));
+
+      const { data: groupItems, error: groupItemsError } = await supabase
+        .from("pos_sale_items")
+        .select("quantity, expedition_conference_qty, expedition_waiting_qty, expedition_completed_qty")
+        .in("sale_id", groupIds);
+      if (groupItemsError) throw groupItemsError;
+      const allCompleted = (groupItems || []).every((item: any) =>
+        (Number(item.expedition_completed_qty) || 0) >= (Number(item.quantity) || 0),
+      );
+      const hasConference = (groupItems || []).some((item: any) => (Number(item.expedition_conference_qty) || 0) > 0);
+      const hasWaiting = (groupItems || []).some((item: any) => (Number(item.expedition_waiting_qty) || 0) > 0);
+      const nextSummary = allCompleted ? "concluido" : hasConference ? "conferencia" : hasWaiting ? "aguardando" : "separacao";
+      const { error } = await supabase.from("pos_sales").update({
+        expedition_stage: nextSummary,
+        expedition_finished_at: allCompleted ? new Date().toISOString() : null,
+        expedition_waiting_products: !allCompleted,
+        shipping_carrier: carrier,
+        tracking_carrier: carrier,
+        tracking_code: tracking.trim() || null,
+        tracking_url: trackingUrl.trim() || null,
+        delivery_days: deliveryDays.trim() || null,
+        courier_name: courier.trim() || null,
+      } as any).in("id", groupIds);
       if (error) throw error;
 
       await saveExpeditionShippingCost({
@@ -432,7 +449,9 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       });
 
 
-      toast.success("Expedição concluída — pedido liberado na aba PEDIDOS");
+      toast.success(allCompleted
+        ? "Expedição concluída — pedido liberado na aba PEDIDOS"
+        : "Produtos conferidos; os demais continuam nas etapas pendentes");
       onFinished();
     } catch (e: any) {
       toast.error(e.message || "Erro ao concluir expedição");

@@ -542,6 +542,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to) return;
     setBulkBusy(true);
     try {
+      if (stage === "separacao") {
+        await moveVisibleItems(bulkEligible, "conferencia");
+        setSelected(new Set());
+        load();
+        return;
+      }
       const patch: any = { expedition_stage: to };
       if (to === "concluido") patch.expedition_finished_at = new Date().toISOString();
       const { error } = await supabase
@@ -554,6 +560,43 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       load();
     } catch (e: any) {
       toast.error(e.message || "Erro ao avançar em massa");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const moveVisibleItems = async (list: ExpOrder[], target: "conferencia" | "aguardando") => {
+    const items = list.flatMap((o) => o.items);
+    if (!items.length) return;
+    for (let i = 0; i < items.length; i += 20) {
+      await Promise.all(items.slice(i, i + 20).map((item) => {
+        const qty = Number(item.quantity) || 0;
+        const conference = (Number(item.expedition_conference_qty) || 0) + (target === "conferencia" ? qty : 0);
+        const waiting = (Number(item.expedition_waiting_qty) || 0) + (target === "aguardando" ? qty : 0);
+        return supabase.from("pos_sale_items").update({
+          expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
+          expedition_conference_qty: conference,
+          expedition_waiting_qty: waiting,
+        } as any).eq("id", item.id);
+      }));
+    }
+    const { error } = await supabase.from("pos_sales").update({
+      expedition_stage: target,
+      expedition_waiting_products: true,
+    } as any).in("id", list.map((o) => o.id));
+    if (error) throw error;
+    toast.success(`${items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} produto(s) movido(s)`);
+  };
+
+  const bulkSendWaiting = async () => {
+    if (!bulkEligible.length) return;
+    setBulkBusy(true);
+    try {
+      await moveVisibleItems(bulkEligible, "aguardando");
+      setSelected(new Set());
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao mover para Aguardando");
     } finally {
       setBulkBusy(false);
     }
@@ -945,6 +988,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                   >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     RETROAGIR {bulkSelectedOrders.length} EM MASSA
+                  </Button>
+                )}
+                {stage === "separacao" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-black border-amber-500 text-amber-600"
+                    disabled={bulkBusy || bulkEligible.length === 0}
+                    onClick={bulkSendWaiting}
+                  >
+                    <PauseCircle className="h-4 w-4 mr-1" />
+                    MOVER PARA AGUARDANDO
                   </Button>
                 )}
                 <Button
@@ -1344,20 +1399,35 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             </Button>
                           )}
                           {stage === "separacao" && (
-                            <Button
-                              size="lg"
-                              className="bg-exp-pick hover:bg-exp-pick/90 text-white text-base font-black"
-                              disabled={busyId === o.id}
-                              onClick={() =>
-                                setPickOrders(
-                                  o.expedition_group_id
-                                    ? filtered.filter((x) => x.expedition_group_id === o.expedition_group_id)
-                                    : [o],
-                                )
-                              }
-                            >
-                              SEPARADO <ChevronRight className="h-5 w-5" />
-                            </Button>
+                            <div className="flex gap-2 flex-wrap">
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-amber-500 text-amber-600 text-base font-black"
+                                disabled={busyId === o.id}
+                                onClick={async () => {
+                                  setBusyId(o.id);
+                                  try { await moveVisibleItems([o], "aguardando"); await load(); }
+                                  catch (e: any) { toast.error(e.message || "Erro ao mover produto"); }
+                                  finally { setBusyId(null); }
+                                }}
+                              >
+                                <PauseCircle className="h-5 w-5 mr-1" /> AGUARDANDO
+                              </Button>
+                              <Button
+                                size="lg"
+                                className="bg-exp-pick hover:bg-exp-pick/90 text-white text-base font-black"
+                                disabled={busyId === o.id}
+                                onClick={async () => {
+                                  setBusyId(o.id);
+                                  try { await moveVisibleItems([o], "conferencia"); await load(); }
+                                  catch (e: any) { toast.error(e.message || "Erro ao mover produto"); }
+                                  finally { setBusyId(null); }
+                                }}
+                              >
+                                CONFERÊNCIA <ChevronRight className="h-5 w-5" />
+                              </Button>
+                            </div>
                           )}
                            {stage === "aguardando" && (
                             <Button

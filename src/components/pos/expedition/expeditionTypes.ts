@@ -82,6 +82,7 @@ export interface ExpItem {
   /** Quantidades do item que já foram destinadas manualmente a cada etapa. */
   expedition_conference_qty?: number | null;
   expedition_waiting_qty?: number | null;
+  expedition_completed_qty?: number | null;
   /** Quantidade original antes do recorte visual por etapa. */
   expedition_total_qty?: number;
 }
@@ -360,9 +361,10 @@ export async function fetchExpeditionOrders(
     const total = Number(it.quantity) || 0;
     const conference = Math.max(0, Number(it.expedition_conference_qty) || 0);
     const waiting = Math.max(0, Number(it.expedition_waiting_qty) || 0);
+    const completed = Math.max(0, Number(it.expedition_completed_qty) || 0);
     const stageQuantity =
       stage === "separacao"
-        ? Math.max(0, total - conference - waiting)
+        ? Math.max(0, total - conference - waiting - completed)
         : stage === "aguardando"
           ? waiting
           : stage === "conferencia"
