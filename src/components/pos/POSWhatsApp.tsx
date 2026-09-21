@@ -85,6 +85,8 @@ import { isSalePaid } from "@/lib/salePaymentState";
 interface Props {
   storeId: string;
   initialFilter?: "unanswered" | "new";
+  /** Abre já na conversa deste telefone (usado na Expedição / tarefas). */
+  initialPhone?: string;
   onExitFullScreen?: () => void;
 }
 
@@ -124,7 +126,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props) {
+export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
 
@@ -141,7 +143,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const convSigRef = useRef('');
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(initialPhoneDigits || null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
@@ -160,7 +163,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [newMessage, setNewMessage] = useState("");
   // Termo de busca JÁ com debounce (os campos de busca guardam o texto localmente
   // e só propagam aqui após uma pausa na digitação — a tela-mãe não redesenha a cada tecla).
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialPhoneDigits ? initialPhoneDigits.slice(-8) : "");
   // Envio em andamento POR conversa (telefone+instância). Antes era um único booleano
   // global: enviar no chat A travava o botão de enviar do chat B aberto em seguida.
   const [sendingByConv, setSendingByConv] = useState<Record<string, boolean>>({});

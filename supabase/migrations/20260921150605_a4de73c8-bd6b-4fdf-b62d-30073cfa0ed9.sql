@@ -1,0 +1,2 @@
+ALTER TABLE public.pos_sales ADD COLUMN IF NOT EXISTS expedition_waiting_products boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_pos_sales_expedition_waiting ON public.pos_sales (expedition_waiting_products) WHERE expedition_waiting_products;
