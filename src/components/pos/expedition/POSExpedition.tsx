@@ -1099,6 +1099,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                 VALADARES, MG
                               </Badge>
                             )}
+                            {stage === "aguardando" && (
+                              <Badge
+                                className={`text-sm font-black text-white ${
+                                  isWaitingIncomplete(o) ? "bg-amber-500" : "bg-exp-done"
+                                }`}
+                              >
+                                {isWaitingIncomplete(o)
+                                  ? "AGUARDANDO RESTANTE DOS PRODUTOS"
+                                  : "COMPLETO — PRONTO PARA CONFERÊNCIA"}
+                              </Badge>
+                            )}
                             {o.is_test && (
                               <Badge className="bg-fuchsia-600 text-white text-sm font-black">TESTE</Badge>
                             )}
