@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock, PauseCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -48,6 +48,7 @@ const stageStyles: Record<ExpStage, { chip: string; ring: string; text: string }
   novo: { chip: "bg-exp-new", ring: "border-exp-new/40", text: "text-exp-new" },
   preparacao: { chip: "bg-exp-prep", ring: "border-exp-prep/40", text: "text-exp-prep" },
   separacao: { chip: "bg-exp-pick", ring: "border-exp-pick/40", text: "text-exp-pick" },
+  aguardando: { chip: "bg-amber-500", ring: "border-amber-500/40", text: "text-amber-500" },
   conferencia: { chip: "bg-exp-check", ring: "border-exp-check/40", text: "text-exp-check" },
   concluido: { chip: "bg-exp-done", ring: "border-exp-done/40", text: "text-exp-done" },
 };
@@ -56,15 +57,25 @@ const stageIcon: Record<ExpStage, any> = {
   novo: PlayCircle,
   preparacao: Layers,
   separacao: Package,
+  aguardando: PauseCircle,
   conferencia: ScanBarcode,
   concluido: CheckCircle2,
 };
+
+/** Quantas unidades de cada item do pedido já foram separadas. */
+const pickedQty = (it: any) => Number(it?.expedition_picked_qty) || 0;
+
+/** Pedido em AGUARDANDO que ainda tem produto faltando. */
+const isWaitingIncomplete = (o: ExpOrder) =>
+  o.items.some((it) => pickedQty(it) < (Number(it.quantity) || 0));
 
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
+  /** Pedidos na etapa AGUARDANDO (usados na lista de separação para mostrar o que falta). */
+  const [waitingOrders, setWaitingOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -137,7 +148,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         .from("pos_sales")
         .select("expedition_stage")
         .in("sale_type", ["live", "online"])
-        .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+        .in("expedition_stage", ["novo", "preparacao", "separacao", "aguardando", "conferencia"]);
       if (!allStores) q = q.eq("store_id", storeId);
       return q;
     };
@@ -194,6 +205,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
+      // Na Separação, o que ainda falta dos pedidos em AGUARDANDO entra na mesma lista.
+      if (stage === "separacao") {
+        try {
+          setWaitingOrders(await fetchExpeditionOrders(effectiveStore, "aguardando"));
+        } catch {
+          setWaitingOrders([]);
+        }
+      } else {
+        setWaitingOrders([]);
+      }
       await loadCounts();
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
@@ -426,6 +447,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         .update({ expedition_stage: to, expedition_finished_at: null })
         .eq("id", o.id);
       if (error) throw error;
+      // Voltar de AGUARDANDO para SEPARAÇÃO recomeça a separação do zero.
+      if (o.expedition_stage === "aguardando") {
+        await supabase
+          .from("pos_sale_items")
+          .update({ expedition_picked_qty: 0 } as any)
+          .eq("sale_id", o.id);
+      }
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
@@ -655,7 +683,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
 
         {/* Stage bar */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
           {EXP_STAGES.map((s) => {
             const Icon = stageIcon[s.id];
             const active = stage === s.id;
@@ -958,7 +986,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
-            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
+            <ExpPickingList
+              orders={filtered}
+              waitingOrders={waitingOrders}
+              stage={stage}
+              onRefresh={load}
+              storeId={storeId}
+            />
             <p className="text-base font-black text-pos-text uppercase pt-2">
               Pedidos desta etapa ({filtered.length})
             </p>
@@ -1063,6 +1097,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             {isValadaresOrder(o) && (
                               <Badge className="bg-emerald-600 text-white text-sm font-black">
                                 VALADARES, MG
+                              </Badge>
+                            )}
+                            {stage === "aguardando" && (
+                              <Badge
+                                className={`text-sm font-black text-white ${
+                                  isWaitingIncomplete(o) ? "bg-amber-500" : "bg-exp-done"
+                                }`}
+                              >
+                                {isWaitingIncomplete(o)
+                                  ? "AGUARDANDO RESTANTE DOS PRODUTOS"
+                                  : "COMPLETO — PRONTO PARA CONFERÊNCIA"}
                               </Badge>
                             )}
                             {o.is_test && (
@@ -1301,7 +1346,30 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               SEPARADO <ChevronRight className="h-5 w-5" />
                             </Button>
                           )}
-                          {stage === "conferencia" && (
+                           {stage === "aguardando" && (
+                            <Button
+                              size="lg"
+                              className={`text-white text-base font-black ${
+                                isWaitingIncomplete(o)
+                                  ? "bg-amber-500 hover:bg-amber-500/90"
+                                  : "bg-exp-check hover:bg-exp-check/90"
+                              }`}
+                              disabled={busyId === o.id}
+                              onClick={() => {
+                                if (
+                                  isWaitingIncomplete(o) &&
+                                  !confirm("Ainda falta produto neste pedido. Avançar assim mesmo para a Conferência?")
+                                )
+                                  return;
+                                advance(o, "conferencia");
+                              }}
+                              title={isWaitingIncomplete(o) ? "Forçar avanço mesmo faltando produto" : undefined}
+                            >
+                              {isWaitingIncomplete(o) ? "AVANÇAR MESMO ASSIM" : "AVANÇAR PARA CONFERÊNCIA"}
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                           )}
+                           {stage === "conferencia" && (
                             <Button
                               size="lg"
                               className="bg-exp-check hover:bg-exp-check/90 text-white text-base font-black"
@@ -1343,6 +1411,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               <p className="text-base font-semibold text-pos-muted-text">
                                 {[it.variant_name, it.size && `Tam ${it.size}`, it.sku].filter(Boolean).join(" • ")}
                               </p>
+                              {stage === "aguardando" && (
+                                <p
+                                  className={`text-sm font-black mt-1 ${
+                                    pickedQty(it) >= (Number(it.quantity) || 0) ? "text-exp-done" : "text-amber-600"
+                                  }`}
+                                >
+                                  {pickedQty(it) >= (Number(it.quantity) || 0)
+                                    ? `✔ Separado (${pickedQty(it)} de ${it.quantity})`
+                                    : `Falta separar ${(Number(it.quantity) || 0) - pickedQty(it)} de ${it.quantity}`}
+                                </p>
+                              )}
                               {stage === "separacao" && it.barcode && (
                                 <p className="text-sm font-bold text-exp-pick flex items-center gap-1 mt-1">
                                   <Store className="h-4 w-4" />
