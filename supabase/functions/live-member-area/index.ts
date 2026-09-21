@@ -312,11 +312,37 @@ Deno.serve(async (req) => {
 
 
 
+    /**
+     * Pedido da live de HOJE localizado pelos 4 últimos dígitos anotados no pedido,
+     * quando o cadastro da cliente ainda não tem o WhatsApp gravado (pedido montado
+     * só com o @ do Instagram). Só vale quando há exatamente UM pedido com aquele
+     * final na live — empate continua exigindo vinculação manual.
+     */
+    async function loadOrderByLast4(eventId: string | null, phone: string) {
+      const digits = String(phone || "").replace(/\D/g, "");
+      const last4 = digits.slice(-4);
+      if (!eventId || last4.length !== 4) return { order: null, customer: null };
+      const { data } = await supabase
+        .from("orders")
+        .select("*, customer:customers(id, instagram_handle, whatsapp)")
+        .eq("event_id", eventId)
+        .eq("phone_last4", last4)
+        .neq("stage", "cancelled");
+      const normalized = normalizePhone(phone);
+      const rows = (data || []).filter((o: any) => {
+        const w = o.customer?.whatsapp;
+        return !w || normalizePhone(String(w)) === normalized;
+      });
+      if (rows.length !== 1) return { order: null, customer: null };
+      return { order: rows[0], customer: rows[0].customer || null };
+    }
+
     /** Pedido fixado no link ou, para acessos genéricos antigos, o aberto mais recente. */
     async function loadOrder(eventId: string | null, phone: string, pinnedOrderId?: string | null) {
       const customers = await loadCustomers(phone);
       const ids = customers.map((c: any) => c.id);
-      if (!ids.length) return { order: null, customer: null };
+      if (!ids.length) return pinnedOrderId ? { order: null, customer: null } : await loadOrderByLast4(eventId, phone);
+
 
       // Links novos ficam presos ao pedido que os originou. Além do ID, valida-se
       // que o pedido pertence a um cadastro com o MESMO telefone completo.
@@ -363,6 +389,15 @@ Deno.serve(async (req) => {
           .limit(1);
         order = orders?.[0] || null;
       }
+
+      // Cadastro duplicado: o pedido de hoje pode estar num cadastro só com o @
+      // (sem WhatsApp). Se houver um único pedido desta live com o mesmo final
+      // de 4 dígitos, ele vence o pedido antigo achado pelo telefone.
+      if (eventId && (!order || order.event_id !== eventId)) {
+        const alt = await loadOrderByLast4(eventId, phone);
+        if (alt.order) return { order: alt.order, customer: alt.customer || customers[0] };
+      }
+
 
       const customer = order
         ? customers.find((c: any) => c.id === order.customer_id) || customers[0]
@@ -1274,6 +1309,25 @@ Deno.serve(async (req) => {
         }
         await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
       }
+
+      // Pedido achado pelos 4 últimos dígitos: agora o telefone está verificado
+      // (OTP ou link mágico), então grava no cadastro e marca o pedido vinculado.
+      if (customer?.id && !customer.whatsapp) {
+        const { error: bindErr } = await supabase
+          .from("customers")
+          .update({ whatsapp: phone })
+          .eq("id", customer.id)
+          .is("whatsapp", null);
+        if (bindErr) console.error("[live-member-area] bind phone", bindErr);
+        else {
+          customer = { ...customer, whatsapp: phone } as any;
+          customersMemo.clear();
+          if (boundOrder?.id) {
+            await supabase.from("orders").update({ link_status: "linked" }).eq("id", boundOrder.id);
+          }
+        }
+      }
+
 
       // Telefone verificado: vincula a IDENTIDADE informada na entrada (@ do
       // Instagram ou nome completo) ao telefone. Isso vale também para cliente
