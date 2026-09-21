@@ -131,6 +131,7 @@ export function ChatView({
   onExtraSent,
   hideTagsBar,
   archive,
+  onOpenParticipant,
 }: ChatViewProps) {
   /**
    * Rascunho LOCAL do composer. O texto vive SOMENTE aqui enquanto a atendente
