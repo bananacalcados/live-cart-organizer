@@ -226,6 +226,35 @@ export function ChatView({
   const statusQuotes = useStatusQuotes(messages as any);
   const [statusViewer, setStatusViewer] = useState<StatusViewerData | null>(null);
 
+  // Mensagens citadas que não estão carregadas na tela (ex.: foto antiga marcada
+  // no grupo). Busca pontual no banco só dos ids que faltam.
+  const [quotedFallback, setQuotedFallback] = useState<Record<string, Message>>({});
+  useEffect(() => {
+    const loadedIds = new Set(messages.map((m) => m.message_id).filter(Boolean) as string[]);
+    const missing = Array.from(
+      new Set(
+        messages
+          .map((m) => (m as any).quoted_message_id as string | undefined)
+          .filter((id): id is string => !!id && !loadedIds.has(id) && !quotedFallback[id]),
+      ),
+    ).slice(0, 50);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('id, message_id, message, direction, media_type, media_url, sender_name, created_at')
+        .in('message_id', missing);
+      if (cancelled || !data?.length) return;
+      setQuotedFallback((prev) => {
+        const next = { ...prev };
+        for (const row of data as any[]) if (row.message_id) next[row.message_id] = row as Message;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [messages, quotedFallback]);
+
 
 
   // ---- Bloqueio nativo de contato (Z-API / WaSender / Meta) ----
@@ -892,7 +921,9 @@ export function ChatView({
             const withinWhatsAppDeleteWindow = !!msg.message_id && msgAge < 7 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
-            const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
+            const quotedOriginal = quotedMsgId
+              ? (messages.find(m => m.message_id === quotedMsgId) || quotedFallback[quotedMsgId] || null)
+              : null;
             const quotedStatus = quotedMsgId && !quotedOriginal ? statusQuotes[quotedMsgId] : null;
 
             const prevMsg = idx > 0 ? messages[idx - 1] : null;
@@ -1058,8 +1089,24 @@ export function ChatView({
                         originalDirection={quotedOriginal.direction}
                         originalSenderName={(quotedOriginal as any).sender_name}
                         originalMediaType={quotedOriginal.media_type}
+                        thumbnailUrl={
+                          quotedOriginal.media_url &&
+                          (quotedOriginal.media_type === 'image' || quotedOriginal.media_type === 'video')
+                            ? quotedOriginal.media_url
+                            : null
+                        }
                         contactName={conversation?.customerName}
-                        onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                        onClick={() => {
+                          const isLoaded = messages.some(m => m.message_id === quotedOriginal.message_id);
+                          if (isLoaded) { scrollToMessage(quotedOriginal.message_id || ''); return; }
+                          if (quotedOriginal.media_url) {
+                            setStatusViewer({
+                              type: quotedOriginal.media_type === 'video' ? 'video' : 'image',
+                              mediaUrl: quotedOriginal.media_url,
+                              caption: quotedOriginal.message || '',
+                            } as StatusViewerData);
+                          }
+                        }}
                       />
                     )}
                     {quotedStatus && (
