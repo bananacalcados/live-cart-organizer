@@ -226,6 +226,35 @@ export function ChatView({
   const statusQuotes = useStatusQuotes(messages as any);
   const [statusViewer, setStatusViewer] = useState<StatusViewerData | null>(null);
 
+  // Mensagens citadas que não estão carregadas na tela (ex.: foto antiga marcada
+  // no grupo). Busca pontual no banco só dos ids que faltam.
+  const [quotedFallback, setQuotedFallback] = useState<Record<string, Message>>({});
+  useEffect(() => {
+    const loadedIds = new Set(messages.map((m) => m.message_id).filter(Boolean) as string[]);
+    const missing = Array.from(
+      new Set(
+        messages
+          .map((m) => (m as any).quoted_message_id as string | undefined)
+          .filter((id): id is string => !!id && !loadedIds.has(id) && !quotedFallback[id]),
+      ),
+    ).slice(0, 50);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('id, message_id, message, direction, media_type, media_url, sender_name, created_at')
+        .in('message_id', missing);
+      if (cancelled || !data?.length) return;
+      setQuotedFallback((prev) => {
+        const next = { ...prev };
+        for (const row of data as any[]) if (row.message_id) next[row.message_id] = row as Message;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [messages, quotedFallback]);
+
 
 
   // ---- Bloqueio nativo de contato (Z-API / WaSender / Meta) ----
