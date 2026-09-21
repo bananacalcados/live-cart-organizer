@@ -118,8 +118,12 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
   };
 
   const sections = useMemo(() => {
-    const prio = allEntries.filter((e) => expeditionPriorityRank(e.o) <= 2);
-    const rest = allEntries.filter((e) => expeditionPriorityRank(e.o) > 2);
+    // Produtos já enviados para AGUARDANDO não voltam a aparecer na SEPARAÇÃO.
+    // Os pedidos aguardando continuam em allEntries apenas para manter o envio
+    // unificado coeso quando um dos outros pedidos avançar parcialmente.
+    const visibleEntries = allEntries.filter((e) => !e.waiting);
+    const prio = visibleEntries.filter((e) => expeditionPriorityRank(e.o) <= 2);
+    const rest = visibleEntries.filter((e) => expeditionPriorityRank(e.o) > 2);
     return [
       { id: "p", title: "PRIORITÁRIOS", lines: buildLines(prio, "p") },
       { id: "n", title: "DEMAIS PEDIDOS", lines: buildLines(rest, "n") },
@@ -198,7 +202,9 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
    */
   const allocation = useMemo(() => {
     const remaining = { ...separated };
-    const sorted = [...allEntries].sort(
+    // O que já está em AGUARDANDO nunca pode consumir uma seleção feita na
+    // SEPARAÇÃO. Ele só acompanha o próprio envio unificado em selectedEntries.
+    const sorted = allEntries.filter((e) => !e.waiting).sort(
       (a, b) => +new Date(a.o.created_at) - +new Date(b.o.created_at),
     );
     const picked = new Map<string, Map<string, number>>();
@@ -242,40 +248,38 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
     return { picked, full };
   }, [allEntries, separated]);
 
-  /** Envio unificado só avança quando TODOS os pedidos do grupo estão completos. */
-  const groupReady = useMemo(() => {
-    const map = new Map<string, boolean>();
-    for (const e of allEntries) {
-      const gid = e.o.expedition_group_id;
-      if (!gid) continue;
-      const done = allocation.full.has(e.o.id);
-      map.set(gid, (map.get(gid) ?? true) && done);
-    }
-    return map;
+  /** Pedidos tocados pela seleção atual. Em envio unificado, inclui o grupo inteiro. */
+  const selectedEntries = useMemo(() => {
+    const directlySelected = allEntries.filter((e) => {
+      const picked = allocation.picked.get(e.o.id);
+      return picked ? [...picked.values()].some((qty) => qty > 0) : false;
+    });
+    const selectedIds = new Set(directlySelected.map((e) => e.o.id));
+    const selectedGroups = new Set(
+      directlySelected.map((e) => e.o.expedition_group_id).filter((id): id is string => !!id),
+    );
+    return allEntries.filter(
+      (e) => selectedIds.has(e.o.id) || (!!e.o.expedition_group_id && selectedGroups.has(e.o.expedition_group_id)),
+    );
   }, [allEntries, allocation]);
 
-  const readyEntries = useMemo(
+  const selectedShipmentCount = useMemo(
     () =>
-      allEntries.filter((e) => {
-        if (!allocation.full.has(e.o.id)) return false;
-        const gid = e.o.expedition_group_id;
-        return !gid || groupReady.get(gid) === true;
-      }),
-    [allEntries, allocation, groupReady],
+      new Set(
+        selectedEntries.map((e) => e.o.expedition_group_id || e.o.id),
+      ).size,
+    [selectedEntries],
   );
-
-  const readyIds = useMemo(() => new Set(readyEntries.map((e) => e.o.id)), [readyEntries]);
 
   /** Pedidos que ficam aguardando o restante dos produtos (inclui o grupo inteiro). */
   const waitingEntries = useMemo(
     () =>
       allEntries.filter((e) => {
-        if (readyIds.has(e.o.id)) return false;
         const m = allocation.picked.get(e.o.id);
         const newly = m ? [...m.values()].reduce((s, n) => s + n, 0) : 0;
-        return newly > 0 || allocation.full.has(e.o.id);
+        return newly > 0;
       }),
-    [allEntries, allocation, readyIds],
+    [allEntries, allocation],
   );
 
   const toggleLine = (l: PickLine, checked: boolean) => {
@@ -308,7 +312,9 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
         const before = e.waiting ? Number(it.expedition_picked_qty) || 0 : 0;
         const add = m.get(it.id) || 0;
         const total = Math.min(Number(it.quantity) || 0, before + add);
-        if (total !== before) updates.push({ id: it.id, qty: total });
+        // Na SEPARAÇÃO, a seleção atual é a verdade: também zera um valor antigo
+        // para impedir que um produto já marcado no passado reapareça como disponível.
+        if (!e.waiting || total !== before) updates.push({ id: it.id, qty: total });
       }
     }
     for (let i = 0; i < updates.length; i += 20) {
@@ -340,7 +346,63 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
     }
   };
 
-  const advanceReady = () => moveEntries(readyEntries, "conferencia", "enviados para Conferência");
+  const advanceSelected = async () => {
+    if (!selectedEntries.length) return;
+    setAdvancing(true);
+    try {
+      await persistPicked(selectedEntries);
+
+      const result = selectedEntries.map((e) => {
+        const items = e.o.items.map((it) => {
+          const before = e.waiting ? Number(it.expedition_picked_qty) || 0 : 0;
+          const added = allocation.picked.get(e.o.id)?.get(it.id) || 0;
+          const picked = Math.min(Number(it.quantity) || 0, before + added);
+          return { quantity: Number(it.quantity) || 0, picked };
+        });
+        return {
+          id: e.o.id,
+          hasPicked: items.some((it) => it.picked > 0),
+          complete: items.every((it) => it.picked >= it.quantity),
+        };
+      });
+      const hasMissing = result.some((r) => !r.complete);
+      const conferenceIds = result.filter((r) => r.hasPicked).map((r) => r.id);
+      const waitingIds = result.filter((r) => !r.hasPicked).map((r) => r.id);
+
+      const stageUpdates = [];
+      if (conferenceIds.length) {
+        stageUpdates.push(
+          supabase
+            .from("pos_sales")
+            .update({ expedition_stage: "conferencia", expedition_waiting_products: hasMissing } as any)
+            .in("id", conferenceIds),
+        );
+      }
+      if (waitingIds.length) {
+        stageUpdates.push(
+          supabase
+            .from("pos_sales")
+            .update({ expedition_stage: "aguardando", expedition_waiting_products: true } as any)
+            .in("id", waitingIds),
+        );
+      }
+      const responses = await Promise.all(stageUpdates);
+      const error = responses.find((response) => response.error)?.error;
+      if (error) throw error;
+
+      toast.success(
+        hasMissing
+          ? `${selectedShipmentCount} envio(s) em Conferência, aguardando o que falta`
+          : `${selectedShipmentCount} envio(s) enviados para Conferência`,
+      );
+      setSeparated({});
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao avançar pedidos");
+    } finally {
+      setAdvancing(false);
+    }
+  };
   const sendWaiting = () => moveEntries(waitingEntries, "aguardando", "movidos para Aguardando");
 
   const print = () => {
@@ -426,11 +488,11 @@ export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, s
         </Button>
         <Button
           className="bg-exp-pick hover:bg-exp-pick/90 text-white font-black"
-          disabled={!readyEntries.length || advancing}
-          onClick={advanceReady}
+          disabled={!selectedEntries.length || advancing}
+          onClick={advanceSelected}
         >
           {advancing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-          AVANÇAR {readyEntries.length} PEDIDO(S) SEPARADO(S)
+          AVANÇAR {selectedShipmentCount} ENVIO(S) PARA CONFERÊNCIA
         </Button>
       </div>
 
