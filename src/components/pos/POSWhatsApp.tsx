@@ -126,7 +126,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props) {
+export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
 
