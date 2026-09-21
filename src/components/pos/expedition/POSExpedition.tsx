@@ -1006,6 +1006,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
           </>
         )}
+        {stage === "aguardando" && !loading && (
+          <>
+            <ExpWaitingPanel storeId={effectiveStore} onRefresh={load} reloadKey={orders.length} />
+            <p className="text-base font-black text-pos-text uppercase pt-2">
+              Pedidos parados nesta etapa ({filtered.length})
+            </p>
+          </>
+        )}
         {loading ? (
 
           <div className="flex items-center justify-center py-20">
