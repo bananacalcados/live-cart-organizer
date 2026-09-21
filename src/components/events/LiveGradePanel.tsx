@@ -20,6 +20,13 @@ export type LinhaGrade = {
   tamanhos_estouro: string[];
   grade_cheia: boolean;
   tamanhos_fora_da_grade: { tam: string; qtd: number }[];
+  /** estoque atual por numeração (todas as lojas) */
+  estoque?: { tam: string; qtd: number }[];
+  estoque_total?: number;
+  /** pares que faltam comprar por numeração, já descontando o estoque */
+  comprar?: { tam: string; qtd: number }[];
+  /** grades a comprar já descontando o estoque */
+  grades_comprar?: number;
 };
 
 export const PAYMENT_OPTIONS: { id: PaymentFilter; label: string }[] = [
