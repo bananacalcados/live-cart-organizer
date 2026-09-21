@@ -113,6 +113,8 @@ export interface ExpOrder {
   expedition_stage: ExpStage;
   expedition_group_id: string | null;
   expedition_finished_at: string | null;
+  /** Pedido avançou com produto faltando — aviso grande "AGUARDANDO PRODUTO PRA FAZER ENVIO". */
+  expedition_waiting_products?: boolean | null;
 
   shipping_carrier: string | null;
   shipping_cost: number | null;
