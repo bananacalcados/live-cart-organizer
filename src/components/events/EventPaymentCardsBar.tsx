@@ -350,6 +350,17 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
         }
       }
       if (!cancelled) setStepByOrder(map);
+
+      // ── Quem já abriu o link da área de membros (consulta segura no servidor) ──
+      const opened: Record<string, string> = {};
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase.rpc("live_link_open_status", { p_order_ids: batch });
+        for (const r of (data || []) as { order_id: string; opened_at: string | null }[]) {
+          if (r.opened_at) opened[r.order_id] = r.opened_at;
+        }
+      }
+      if (!cancelled) setOpenedByOrder(opened);
     })();
     return () => { cancelled = true; };
   }, [orders]);
