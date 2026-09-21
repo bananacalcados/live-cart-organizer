@@ -767,7 +767,7 @@ function VariationEditDialog({
 }: {
   data: { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (ids: string[], color: string, size: string) => void;
 }) {
   const [color, setColor] = useState("");
   const [size, setSize] = useState("");
@@ -781,20 +781,23 @@ function VariationEditDialog({
     if (!data) return;
     setSaving(true);
     try {
-      const variant = [color.trim(), size.trim()].filter(Boolean).join(" ");
-      for (let i = 0; i < data.ids.length; i += 200) {
-        const { error } = await supabase
-          .from("pos_products")
-          .update({
-            color: color.trim() || null,
-            size: size.trim() || null,
-            variant: variant || null,
-          })
-          .in("id", data.ids.slice(i, i + 200));
-        if (error) throw error;
-      }
+      const c = color.trim();
+      const s = size.trim();
+      const variant = [c, s].filter(Boolean).join(" ");
+      const chunks: string[][] = [];
+      for (let i = 0; i < data.ids.length; i += 200) chunks.push(data.ids.slice(i, i + 200));
+      const results = await Promise.all(
+        chunks.map((ids) =>
+          supabase
+            .from("pos_products")
+            .update({ color: c || null, size: s || null, variant: variant || null })
+            .in("id", ids),
+        ),
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) throw failed.error;
       toast.success("Variação atualizada.");
-      onSaved();
+      onSaved(data.ids, c, s);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
     } finally {
