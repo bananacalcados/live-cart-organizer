@@ -447,6 +447,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         .update({ expedition_stage: to, expedition_finished_at: null })
         .eq("id", o.id);
       if (error) throw error;
+      // Voltar de AGUARDANDO para SEPARAÇÃO recomeça a separação do zero.
+      if (o.expedition_stage === "aguardando") {
+        await supabase
+          .from("pos_sale_items")
+          .update({ expedition_picked_qty: 0 } as any)
+          .eq("sale_id", o.id);
+      }
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
