@@ -23242,9 +23242,13 @@ export type Database = {
               p_status?: string
             }
             Returns: {
+              comprar: Json
               cor: string
+              estoque: Json
+              estoque_total: number
               grade_cheia: boolean
               grades: number
+              grades_comprar: number
               produto_nome: string
               status: string
               tamanhos_estouro: string[]

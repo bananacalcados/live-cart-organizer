@@ -20,6 +20,13 @@ export type LinhaGrade = {
   tamanhos_estouro: string[];
   grade_cheia: boolean;
   tamanhos_fora_da_grade: { tam: string; qtd: number }[];
+  /** estoque atual por numeração (todas as lojas) */
+  estoque?: { tam: string; qtd: number }[];
+  estoque_total?: number;
+  /** pares que faltam comprar por numeração, já descontando o estoque */
+  comprar?: { tam: string; qtd: number }[];
+  /** grades a comprar já descontando o estoque */
+  grades_comprar?: number;
 };
 
 export const PAYMENT_OPTIONS: { id: PaymentFilter; label: string }[] = [
@@ -145,6 +152,11 @@ export function LiveGradePanel({
 
   const totalPares = gradeRows.reduce((sum, r) => sum + (r.total_vendido || 0), 0);
   const totalGrades = gradeRows.reduce((sum, r) => sum + (r.grades || 0), 0);
+  const totalGradesComprar = gradeRows.reduce((sum, r) => sum + (r.grades_comprar || 0), 0);
+  const totalEstoque = gradeRows.reduce((sum, r) => sum + (r.estoque_total || 0), 0);
+
+  const GRID =
+    "grid-cols-[minmax(0,2fr)_150px_minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,1.6fr)]";
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-3", className)}>
@@ -188,11 +200,18 @@ export function LiveGradePanel({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border">
-        <div className="grid shrink-0 grid-cols-[minmax(0,2fr)_160px_minmax(0,2fr)_minmax(0,2fr)] gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground">
+        <div
+          className={cn(
+            "grid shrink-0 gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground",
+            GRID,
+          )}
+        >
           <span>Produto · cor</span>
           <span>Status</span>
           <span>Vendidos</span>
+          <span>Estoque atual</span>
           <span>Vender mais</span>
+          <span>Comprar (já descontando estoque)</span>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           {!eventId ? (
@@ -219,7 +238,8 @@ export function LiveGradePanel({
                 <div
                   key={`${row.produto_nome}-${row.cor}-${idx}`}
                   className={cn(
-                    "grid grid-cols-[minmax(0,2fr)_160px_minmax(0,2fr)_minmax(0,2fr)] items-start gap-3 border-t px-3 py-3 text-base",
+                    "grid items-start gap-3 border-t px-3 py-3 text-base",
+                    GRID,
                     style.row,
                   )}
                 >
@@ -258,6 +278,20 @@ export function LiveGradePanel({
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    {(row.estoque ?? []).length === 0 ? (
+                      <span className="text-sm text-muted-foreground">sem estoque</span>
+                    ) : (
+                      row.estoque!.map((e) => (
+                        <span
+                          key={`e-${e.tam}`}
+                          className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-sm font-semibold text-emerald-700"
+                        >
+                          {e.tam}×{e.qtd}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {row.status === "sem_grade" ? (
                       <span className="text-sm text-muted-foreground">—</span>
                     ) : row.grade_cheia || (row.vender_mais ?? []).length === 0 ? (
@@ -273,6 +307,27 @@ export function LiveGradePanel({
                       ))
                     )}
                   </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(row.comprar ?? []).length === 0 ? (
+                      <span className="text-sm font-bold text-emerald-600">
+                        Estoque cobre — não precisa comprar
+                      </span>
+                    ) : (
+                      <>
+                        <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-sm font-black">
+                          {row.grades_comprar ?? 0} grade(s)
+                        </span>
+                        {row.comprar!.map((c) => (
+                          <span
+                            key={`c-${c.tam}`}
+                            className="rounded bg-destructive/15 px-2 py-1 font-mono text-base font-extrabold text-destructive"
+                          >
+                            {c.tam}×{c.qtd}
+                          </span>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -280,7 +335,8 @@ export function LiveGradePanel({
         </ScrollArea>
         {gradeRows.length > 0 && (
           <div className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s)
+            {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s) ·{" "}
+            {totalEstoque} par(es) em estoque · {totalGradesComprar} grade(s) a comprar
           </div>
         )}
       </div>
