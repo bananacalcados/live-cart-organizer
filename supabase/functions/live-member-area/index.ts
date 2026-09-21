@@ -1310,6 +1310,25 @@ Deno.serve(async (req) => {
         await supabase.from("live_phone_verifications").insert({ phone, code, verified: true });
       }
 
+      // Pedido achado pelos 4 últimos dígitos: agora o telefone está verificado
+      // (OTP ou link mágico), então grava no cadastro e marca o pedido vinculado.
+      if (customer?.id && !customer.whatsapp) {
+        const { error: bindErr } = await supabase
+          .from("customers")
+          .update({ whatsapp: phone })
+          .eq("id", customer.id)
+          .is("whatsapp", null);
+        if (bindErr) console.error("[live-member-area] bind phone", bindErr);
+        else {
+          customer = { ...customer, whatsapp: phone } as any;
+          customersMemo.clear();
+          if (boundOrder?.id) {
+            await supabase.from("orders").update({ link_status: "linked" }).eq("id", boundOrder.id);
+          }
+        }
+      }
+
+
       // Telefone verificado: vincula a IDENTIDADE informada na entrada (@ do
       // Instagram ou nome completo) ao telefone. Isso vale também para cliente
       // que JÁ tem cadastro com esse número: o pedido montado na live só com o
