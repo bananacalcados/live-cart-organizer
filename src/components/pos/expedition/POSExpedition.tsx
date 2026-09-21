@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock, PauseCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -48,6 +48,7 @@ const stageStyles: Record<ExpStage, { chip: string; ring: string; text: string }
   novo: { chip: "bg-exp-new", ring: "border-exp-new/40", text: "text-exp-new" },
   preparacao: { chip: "bg-exp-prep", ring: "border-exp-prep/40", text: "text-exp-prep" },
   separacao: { chip: "bg-exp-pick", ring: "border-exp-pick/40", text: "text-exp-pick" },
+  aguardando: { chip: "bg-amber-500", ring: "border-amber-500/40", text: "text-amber-500" },
   conferencia: { chip: "bg-exp-check", ring: "border-exp-check/40", text: "text-exp-check" },
   concluido: { chip: "bg-exp-done", ring: "border-exp-done/40", text: "text-exp-done" },
 };
@@ -56,9 +57,17 @@ const stageIcon: Record<ExpStage, any> = {
   novo: PlayCircle,
   preparacao: Layers,
   separacao: Package,
+  aguardando: PauseCircle,
   conferencia: ScanBarcode,
   concluido: CheckCircle2,
 };
+
+/** Quantas unidades de cada item do pedido já foram separadas. */
+const pickedQty = (it: any) => Number(it?.expedition_picked_qty) || 0;
+
+/** Pedido em AGUARDANDO que ainda tem produto faltando. */
+const isWaitingIncomplete = (o: ExpOrder) =>
+  o.items.some((it) => pickedQty(it) < (Number(it.quantity) || 0));
 
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
