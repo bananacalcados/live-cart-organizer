@@ -163,7 +163,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [newMessage, setNewMessage] = useState("");
   // Termo de busca JÁ com debounce (os campos de busca guardam o texto localmente
   // e só propagam aqui após uma pausa na digitação — a tela-mãe não redesenha a cada tecla).
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialPhoneDigits ? initialPhoneDigits.slice(-8) : "");
   // Envio em andamento POR conversa (telefone+instância). Antes era um único booleano
   // global: enviar no chat A travava o botão de enviar do chat B aberto em seguida.
   const [sendingByConv, setSendingByConv] = useState<Record<string, boolean>>({});
