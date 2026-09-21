@@ -390,6 +390,15 @@ Deno.serve(async (req) => {
         order = orders?.[0] || null;
       }
 
+      // Cadastro duplicado: o pedido de hoje pode estar num cadastro só com o @
+      // (sem WhatsApp). Se houver um único pedido desta live com o mesmo final
+      // de 4 dígitos, ele vence o pedido antigo achado pelo telefone.
+      if (eventId && (!order || order.event_id !== eventId)) {
+        const alt = await loadOrderByLast4(eventId, phone);
+        if (alt.order) return { order: alt.order, customer: alt.customer || customers[0] };
+      }
+
+
       const customer = order
         ? customers.find((c: any) => c.id === order.customer_id) || customers[0]
         : customers[0];
