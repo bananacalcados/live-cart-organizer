@@ -238,7 +238,8 @@ export function LiveGradePanel({
                 <div
                   key={`${row.produto_nome}-${row.cor}-${idx}`}
                   className={cn(
-                    "grid grid-cols-[minmax(0,2fr)_160px_minmax(0,2fr)_minmax(0,2fr)] items-start gap-3 border-t px-3 py-3 text-base",
+                    "grid items-start gap-3 border-t px-3 py-3 text-base",
+                    GRID,
                     style.row,
                   )}
                 >
