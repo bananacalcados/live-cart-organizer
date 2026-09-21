@@ -152,7 +152,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const messagesNumberId = isGroupChat ? undefined : selectedConvNumberId;
   const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, messagesNumberId);
   // Histórico arquivado sob demanda ("Ler msgs antigas") — fora do polling.
-  const archiveLoader = useArchivedMessages(selectedPhone, messagesNumberId as any, messages);
+  const archiveLoader = useArchivedMessages(selectedPhone, messagesNumberId, messages);
   const chatMessages = useMemo(
     () => (archiveLoader.messages.length > 0 ? [...archiveLoader.messages, ...messages] : messages),
     [archiveLoader.messages, messages],
