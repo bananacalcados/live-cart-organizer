@@ -2,25 +2,48 @@ import { supabase } from "@/integrations/supabase/client";
 import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
 
 
-export type ExpStage = "novo" | "preparacao" | "separacao" | "conferencia" | "concluido";
+export type ExpStage =
+  | "novo"
+  | "preparacao"
+  | "separacao"
+  | "aguardando"
+  | "conferencia"
+  | "concluido";
 
 export const EXP_STAGES: { id: ExpStage; label: string; color: string; bg: string }[] = [
   { id: "novo", label: "Novos Pedidos", color: "text-exp-new", bg: "bg-exp-new" },
   { id: "preparacao", label: "Preparação", color: "text-exp-prep", bg: "bg-exp-prep" },
   { id: "separacao", label: "Separação", color: "text-exp-pick", bg: "bg-exp-pick" },
+  { id: "aguardando", label: "Aguardando", color: "text-amber-500", bg: "bg-amber-500" },
   { id: "conferencia", label: "Conferência", color: "text-exp-check", bg: "bg-exp-check" },
   { id: "concluido", label: "Concluídos", color: "text-exp-done", bg: "bg-exp-done" },
 ];
 
-export const nextStage = (s: ExpStage): ExpStage | null => {
-  const idx = EXP_STAGES.findIndex((e) => e.id === s);
-  return idx >= 0 && idx < EXP_STAGES.length - 1 ? EXP_STAGES[idx + 1].id : null;
+/**
+ * Fluxo explícito: a etapa AGUARDANDO é um desvio (pedido com produto faltando),
+ * nunca o próximo passo automático da Separação.
+ */
+const NEXT_MAP: Record<ExpStage, ExpStage | null> = {
+  novo: "preparacao",
+  preparacao: "separacao",
+  separacao: "conferencia",
+  aguardando: "conferencia",
+  conferencia: "concluido",
+  concluido: null,
 };
 
-export const prevStage = (s: ExpStage): ExpStage | null => {
-  const idx = EXP_STAGES.findIndex((e) => e.id === s);
-  return idx > 0 ? EXP_STAGES[idx - 1].id : null;
+const PREV_MAP: Record<ExpStage, ExpStage | null> = {
+  novo: null,
+  preparacao: "novo",
+  separacao: "preparacao",
+  aguardando: "separacao",
+  conferencia: "separacao",
+  concluido: "conferencia",
 };
+
+export const nextStage = (s: ExpStage): ExpStage | null => NEXT_MAP[s] ?? null;
+
+export const prevStage = (s: ExpStage): ExpStage | null => PREV_MAP[s] ?? null;
 
 
 export type ExpOrigin = "live" | "whatsapp" | "online";
