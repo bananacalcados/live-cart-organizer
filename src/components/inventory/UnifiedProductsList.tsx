@@ -310,10 +310,20 @@ export function UnifiedProductsList() {
   }
 
   async function deleteInChunks(ids: string[]) {
-    for (let i = 0; i < ids.length; i += 200) {
-      const { error } = await supabase.from("pos_products").delete().in("id", ids.slice(i, i + 200));
-      if (error) throw error;
-    }
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+    // Em paralelo — antes era sequencial.
+    const results = await Promise.all(
+      chunks.map((c) => supabase.from("pos_products").delete().in("id", c)),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+  }
+
+  /** Remove SKUs da lista local, sem recarregar a página inteira. */
+  function removeLocalSkus(ids: string[]) {
+    const set = new Set(ids);
+    setPosProducts((prev) => prev.filter((p) => !set.has(p.id)));
   }
 
   async function deleteGroup(g: GroupRow) {
@@ -321,15 +331,17 @@ export function UnifiedProductsList() {
     if (!confirm(
       `Excluir o cadastro "${label}"?\n\nRemove o produto do catálogo e TODAS as variações/estoque em todas as lojas. Esta ação não pode ser desfeita.`
     )) return;
+    const ids = groupSkuIds(g);
     setBusy(true);
     try {
-      await deleteInChunks(groupSkuIds(g));
+      await deleteInChunks(ids);
       if (g.master) {
         const { error } = await supabase.from("product_master_data").delete().eq("parent_sku", g.parent_sku);
         if (error) throw error;
       }
+      removeLocalSkus(ids);
+      setMasters((prev) => prev.filter((m) => m.parent_sku !== g.parent_sku));
       toast.success("Cadastro excluído.");
-      await load();
     } catch (err: any) {
       toast.error("Erro ao excluir: " + err.message);
     } finally {
@@ -339,15 +351,16 @@ export function UnifiedProductsList() {
 
   async function deleteVariation(g: GroupRow, color: string, size: string) {
     if (!confirm(`Excluir a variação ${color} / ${size} em todas as lojas? Esta ação não pode ser desfeita.`)) return;
-    setBusy(true);
+    const ids = variationSkuIds(g, color, size);
+    // Some da tela na hora; se falhar no servidor, volta.
+    removeLocalSkus(ids);
+    const snapshot = posProducts.filter((p) => ids.includes(p.id));
     try {
-      await deleteInChunks(variationSkuIds(g, color, size));
+      await deleteInChunks(ids);
       toast.success("Variação excluída.");
-      await load();
     } catch (err: any) {
+      setPosProducts((prev) => [...prev, ...snapshot]);
       toast.error("Erro ao excluir variação: " + err.message);
-    } finally {
-      setBusy(false);
     }
   }
 
