@@ -560,7 +560,22 @@ export function UnifiedProductsList() {
                                     </td>
                                   );
                                 })}
-                                <td className={`py-1 pl-2 text-right font-bold ${total <= 0 ? "text-destructive" : ""}`}>
+                                <td
+                                  className={`py-1 pl-2 text-right font-bold cursor-pointer hover:underline ${total <= 0 ? "text-destructive" : ""}`}
+                                  title="Clique para fazer o balanço de todas as lojas de uma vez"
+                                  onClick={() => setBalanceTarget({
+                                    productName: g.master?.name || g.parent_sku,
+                                    variationLabel: `${v.color} · ${v.size}`,
+                                    rows: orderedStores
+                                      .filter((st) => v.byStore[st.id])
+                                      .map((st) => ({
+                                        productId: v.byStore[st.id].id,
+                                        storeId: st.id,
+                                        storeName: st.name,
+                                        currentStock: v.byStore[st.id].stock || 0,
+                                      })),
+                                  })}
+                                >
                                   {total}
                                 </td>
                                 <td className="py-1 pl-2 text-right whitespace-nowrap">
