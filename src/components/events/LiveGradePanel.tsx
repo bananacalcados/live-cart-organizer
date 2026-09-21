@@ -335,7 +335,8 @@ export function LiveGradePanel({
         </ScrollArea>
         {gradeRows.length > 0 && (
           <div className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s)
+            {gradeRows.length} modelo(s)/cor · {totalPares} pares · {totalGrades} grade(s) ·{" "}
+            {totalEstoque} par(es) em estoque · {totalGradesComprar} grade(s) a comprar
           </div>
         )}
       </div>
