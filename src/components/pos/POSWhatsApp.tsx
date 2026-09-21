@@ -145,9 +145,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
-  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, selectedConvNumberId);
+  // Grupos: o mesmo grupo é entregue por várias instâncias (cada número nosso que
+  // participa recebe uma parte das mensagens). Filtrar por instância esconderia
+  // metade da conversa, então em grupo lemos TODAS as instâncias.
+  const isGroupChat = !!selectedPhone && selectedPhone.replace(/\D/g, '').length >= 15;
+  const messagesNumberId = isGroupChat ? undefined : selectedConvNumberId;
+  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, messagesNumberId);
   // Histórico arquivado sob demanda ("Ler msgs antigas") — fora do polling.
-  const archiveLoader = useArchivedMessages(selectedPhone, selectedConvNumberId, messages);
+  const archiveLoader = useArchivedMessages(selectedPhone, messagesNumberId, messages);
   const chatMessages = useMemo(
     () => (archiveLoader.messages.length > 0 ? [...archiveLoader.messages, ...messages] : messages),
     [archiveLoader.messages, messages],
