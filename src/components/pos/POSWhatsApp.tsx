@@ -143,7 +143,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const convSigRef = useRef('');
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
-  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(initialPhoneDigits || null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
