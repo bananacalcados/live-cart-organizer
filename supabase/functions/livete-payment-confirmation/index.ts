@@ -201,20 +201,42 @@ serve(async (req) => {
     let sendNumberId: string | null = null;
     let resolvedVia = 'event';
 
-    // 6a. Instância onde a cliente falou por último (prioridade: histórico real)
-    const { data: lastMsg } = await supabase
+    // 6a. Instância onde a cliente REALMENTE falou conosco (última mensagem
+    //     RECEBIDA). Usar a última mensagem de qualquer direção fazia o envio
+    //     cair numa instância Meta (disparo/automação) enquanto a conversa viva
+    //     era da uazapi — o guard devolvia 409 e a confirmação não chegava.
+    const { data: lastIn } = await supabase
       .from('whatsapp_messages')
-      .select('whatsapp_number_id, direction, created_at')
+      .select('whatsapp_number_id')
       .like('phone', `%${suffix8}`)
+      .eq('direction', 'incoming')
       .not('whatsapp_number_id', 'is', null)
       .not('message', 'like', '💬 Comentário%')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (lastMsg?.whatsapp_number_id) {
-      sendNumberId = lastMsg.whatsapp_number_id;
-      resolvedVia = 'last_conversation';
+    if (lastIn?.whatsapp_number_id) {
+      sendNumberId = lastIn.whatsapp_number_id;
+      resolvedVia = 'last_incoming';
     }
+
+    // 6a-bis. Sem mensagem recebida: usa a última conversa (qualquer direção).
+    if (!sendNumberId) {
+      const { data: lastMsg } = await supabase
+        .from('whatsapp_messages')
+        .select('whatsapp_number_id')
+        .like('phone', `%${suffix8}`)
+        .not('whatsapp_number_id', 'is', null)
+        .not('message', 'like', '💬 Comentário%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastMsg?.whatsapp_number_id) {
+        sendNumberId = lastMsg.whatsapp_number_id;
+        resolvedVia = 'last_conversation';
+      }
+    }
+
 
     // 6b. Clique no link /zap da live (atribuição explícita)
     if (!sendNumberId) {
