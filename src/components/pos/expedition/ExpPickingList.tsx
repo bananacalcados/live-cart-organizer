@@ -603,6 +603,20 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
                   >
                     <ShoppingCart className="h-3 w-3 mr-1" /> Solicitar compra
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 font-black border-2 border-amber-500 text-amber-600"
+                    disabled={advancing}
+                    onClick={() => {
+                      setWaitInput(String(l.quantity));
+                      setWaitDialog(l);
+                    }}
+                    title="Mandar só alguns pares deste produto para a etapa Aguardando"
+                  >
+                    <PauseCircle className="h-3 w-3 mr-1" /> Aguardando
+                    {l.quantity > 1 ? " (parcial)" : ""}
+                  </Button>
                 </div>
 
 
