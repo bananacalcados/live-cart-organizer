@@ -1089,8 +1089,24 @@ export function ChatView({
                         originalDirection={quotedOriginal.direction}
                         originalSenderName={(quotedOriginal as any).sender_name}
                         originalMediaType={quotedOriginal.media_type}
+                        thumbnailUrl={
+                          quotedOriginal.media_url &&
+                          (quotedOriginal.media_type === 'image' || quotedOriginal.media_type === 'video')
+                            ? quotedOriginal.media_url
+                            : null
+                        }
                         contactName={conversation?.customerName}
-                        onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                        onClick={() => {
+                          const isLoaded = messages.some(m => m.message_id === quotedOriginal.message_id);
+                          if (isLoaded) { scrollToMessage(quotedOriginal.message_id || ''); return; }
+                          if (quotedOriginal.media_url) {
+                            setStatusViewer({
+                              type: quotedOriginal.media_type === 'video' ? 'video' : 'image',
+                              mediaUrl: quotedOriginal.media_url,
+                              caption: quotedOriginal.message || '',
+                            } as StatusViewerData);
+                          }
+                        }}
                       />
                     )}
                     {quotedStatus && (
