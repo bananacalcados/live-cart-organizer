@@ -15402,6 +15402,7 @@ export type Database = {
           expedition_group_id: string | null
           expedition_stage: string | null
           expedition_status: string
+          expedition_waiting_products: boolean
           external_order_id: string | null
           external_source: string | null
           gift_added_at: string | null
@@ -15507,6 +15508,7 @@ export type Database = {
           expedition_group_id?: string | null
           expedition_stage?: string | null
           expedition_status?: string
+          expedition_waiting_products?: boolean
           external_order_id?: string | null
           external_source?: string | null
           gift_added_at?: string | null
@@ -15612,6 +15614,7 @@ export type Database = {
           expedition_group_id?: string | null
           expedition_stage?: string | null
           expedition_status?: string
+          expedition_waiting_products?: boolean
           external_order_id?: string | null
           external_source?: string | null
           gift_added_at?: string | null
