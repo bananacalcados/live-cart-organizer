@@ -201,20 +201,42 @@ serve(async (req) => {
     let sendNumberId: string | null = null;
     let resolvedVia = 'event';
 
-    // 6a. Instância onde a cliente falou por último (prioridade: histórico real)
-    const { data: lastMsg } = await supabase
+    // 6a. Instância onde a cliente REALMENTE falou conosco (última mensagem
+    //     RECEBIDA). Usar a última mensagem de qualquer direção fazia o envio
+    //     cair numa instância Meta (disparo/automação) enquanto a conversa viva
+    //     era da uazapi — o guard devolvia 409 e a confirmação não chegava.
+    const { data: lastIn } = await supabase
       .from('whatsapp_messages')
-      .select('whatsapp_number_id, direction, created_at')
+      .select('whatsapp_number_id')
       .like('phone', `%${suffix8}`)
+      .eq('direction', 'incoming')
       .not('whatsapp_number_id', 'is', null)
       .not('message', 'like', '💬 Comentário%')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (lastMsg?.whatsapp_number_id) {
-      sendNumberId = lastMsg.whatsapp_number_id;
-      resolvedVia = 'last_conversation';
+    if (lastIn?.whatsapp_number_id) {
+      sendNumberId = lastIn.whatsapp_number_id;
+      resolvedVia = 'last_incoming';
     }
+
+    // 6a-bis. Sem mensagem recebida: usa a última conversa (qualquer direção).
+    if (!sendNumberId) {
+      const { data: lastMsg } = await supabase
+        .from('whatsapp_messages')
+        .select('whatsapp_number_id')
+        .like('phone', `%${suffix8}`)
+        .not('whatsapp_number_id', 'is', null)
+        .not('message', 'like', '💬 Comentário%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastMsg?.whatsapp_number_id) {
+        sendNumberId = lastMsg.whatsapp_number_id;
+        resolvedVia = 'last_conversation';
+      }
+    }
+
 
     // 6b. Clique no link /zap da live (atribuição explícita)
     if (!sendNumberId) {
@@ -275,27 +297,59 @@ serve(async (req) => {
     await sleep(typingDelay(message));
 
     const headers = { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' };
-    let sendResp: Response;
-    if (provider === 'meta') {
-      sendResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+
+    const doSend = async (numberId: string, prov: string): Promise<Response> => {
+      if (prov === 'meta') {
+        return await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ phone: fullPhone, message, whatsappNumberId: numberId }),
+        });
+      }
+      const fnBase = prov === 'uazapi' ? 'uazapi' : prov === 'wasender' ? 'wasender' : 'zapi';
+      return await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
         method: 'POST', headers,
-        body: JSON.stringify({ phone: fullPhone, message, whatsappNumberId: sendNumberId }),
+        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: numberId, whatsappNumberId: numberId }),
       });
-    } else {
-      const fnBase = provider === 'uazapi' ? 'uazapi' : provider === 'wasender' ? 'wasender' : 'zapi';
-      sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: sendNumberId, whatsappNumberId: sendNumberId }),
-      });
+    };
+
+    let usedProvider = provider;
+    let sendResp = await doSend(sendNumberId, provider);
+
+    // 7b. Guard recusou a instância (409 INSTANCE_MISMATCH): reenvia pela
+    //     instância onde a conversa realmente vive (normalmente a uazapi).
+    if (sendResp.status === 409) {
+      const txt = await sendResp.text().catch(() => '');
+      let bound: string | null = null;
+      try { bound = JSON.parse(txt)?.bound_instance || null; } catch (_e) { /* ignore */ }
+      if (bound && bound !== sendNumberId) {
+        const { data: wnBound } = await supabase
+          .from('whatsapp_numbers')
+          .select('provider, label')
+          .eq('id', bound)
+          .maybeSingle();
+        sendNumberId = bound;
+        usedProvider = String(wnBound?.provider || '');
+        resolvedVia = 'guard_bound_instance';
+        console.log(`[livete-payment-confirmation] retry on bound instance ${bound} (${wnBound?.label || ''}/${usedProvider})`);
+        sendResp = await doSend(bound, usedProvider);
+      } else {
+        console.error(`[livete-payment-confirmation] send failed (409) via ${provider}: ${txt}`);
+        await releaseClaim();
+        return new Response(JSON.stringify({ handled: false, reason: 'send_failed', status: 409, details: txt }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
+
     if (!sendResp.ok) {
       const txt = await sendResp.text().catch(() => '');
-      console.error(`[livete-payment-confirmation] send failed (${sendResp.status}) via ${provider}: ${txt}`);
+      console.error(`[livete-payment-confirmation] send failed (${sendResp.status}) via ${usedProvider}: ${txt}`);
       await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'send_failed', status: sendResp.status, details: txt }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // 8. Save outgoing message
     await supabase.from('whatsapp_messages').insert({
