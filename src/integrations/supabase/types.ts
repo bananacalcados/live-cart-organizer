@@ -15283,6 +15283,7 @@ export type Database = {
           cst_cofins: string | null
           cst_icms: string | null
           cst_pis: string | null
+          expedition_picked_qty: number
           id: string
           ncm_snapshot: string | null
           origem_mercadoria: number | null
@@ -15310,6 +15311,7 @@ export type Database = {
           cst_cofins?: string | null
           cst_icms?: string | null
           cst_pis?: string | null
+          expedition_picked_qty?: number
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
@@ -15337,6 +15339,7 @@ export type Database = {
           cst_cofins?: string | null
           cst_icms?: string | null
           cst_pis?: string | null
+          expedition_picked_qty?: number
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
