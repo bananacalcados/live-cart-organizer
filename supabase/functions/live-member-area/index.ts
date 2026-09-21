@@ -312,11 +312,37 @@ Deno.serve(async (req) => {
 
 
 
+    /**
+     * Pedido da live de HOJE localizado pelos 4 últimos dígitos anotados no pedido,
+     * quando o cadastro da cliente ainda não tem o WhatsApp gravado (pedido montado
+     * só com o @ do Instagram). Só vale quando há exatamente UM pedido com aquele
+     * final na live — empate continua exigindo vinculação manual.
+     */
+    async function loadOrderByLast4(eventId: string | null, phone: string) {
+      const digits = String(phone || "").replace(/\D/g, "");
+      const last4 = digits.slice(-4);
+      if (!eventId || last4.length !== 4) return { order: null, customer: null };
+      const { data } = await supabase
+        .from("orders")
+        .select("*, customer:customers(id, instagram_handle, whatsapp)")
+        .eq("event_id", eventId)
+        .eq("phone_last4", last4)
+        .neq("stage", "cancelled");
+      const normalized = normalizePhone(phone);
+      const rows = (data || []).filter((o: any) => {
+        const w = o.customer?.whatsapp;
+        return !w || normalizePhone(String(w)) === normalized;
+      });
+      if (rows.length !== 1) return { order: null, customer: null };
+      return { order: rows[0], customer: rows[0].customer || null };
+    }
+
     /** Pedido fixado no link ou, para acessos genéricos antigos, o aberto mais recente. */
     async function loadOrder(eventId: string | null, phone: string, pinnedOrderId?: string | null) {
       const customers = await loadCustomers(phone);
       const ids = customers.map((c: any) => c.id);
-      if (!ids.length) return { order: null, customer: null };
+      if (!ids.length) return pinnedOrderId ? { order: null, customer: null } : await loadOrderByLast4(eventId, phone);
+
 
       // Links novos ficam presos ao pedido que os originou. Além do ID, valida-se
       // que o pedido pertence a um cadastro com o MESMO telefone completo.
