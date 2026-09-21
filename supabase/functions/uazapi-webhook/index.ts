@@ -596,7 +596,11 @@ serve(async (req) => {
       sysMediaType && typeof message.content === "object"
         ? asString((message.content as AnyObj)?.caption)
         : null;
-    const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
+    const displayMessage =
+      text ||
+      caption ||
+      (sysMediaType ? `📎 ${sysMediaType}` : "") ||
+      (reactionText ? `Reagiu: ${reactionText}` : "");
     if (!displayMessage && !mediaUrl) {
       // Votos de enquete chegam sem texto/mídia: ainda contam como engajamento.
       if (isGroup && !fromMe) {
