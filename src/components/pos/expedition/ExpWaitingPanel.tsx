@@ -130,20 +130,30 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
             .eq("id", d.item.id),
         ),
       );
-      // Pedido que ficou completo perde o aviso de espera.
-      const done: string[] = [];
-      for (const o of new Map(deps.map((d) => [d.order.id, d.order])).values()) {
-        const ids = new Set(deps.filter((d) => d.order.id === o.id).map((d) => d.item.id));
-        const stillMissing = o.items.some((it) => !ids.has(it.id) && missingOf(it) > 0);
-        if (!stillMissing) done.push(o.id);
-      }
-      if (done.length) {
-        await supabase
+      // Reavalia o envio inteiro. Um produto pode sair de AGUARDANDO sem fazer
+      // outro produto faltante parecer separado; a tarja só some ao completar tudo.
+      const touchedIds = new Set(deps.map((d) => d.item.id));
+      const touchedOrders = [...new Map(deps.map((d) => [d.order.id, d.order])).values()];
+      const touchedGroups = new Set(
+        touchedOrders.map((o) => o.expedition_group_id).filter((id): id is string => !!id),
+      );
+      const affected = orders.filter(
+        (o) => touchedOrders.some((t) => t.id === o.id) || (!!o.expedition_group_id && touchedGroups.has(o.expedition_group_id)),
+      );
+      const shipmentKeys = new Set(affected.map((o) => o.expedition_group_id || o.id));
+      for (const shipmentKey of shipmentKeys) {
+        const shipment = affected.filter((o) => (o.expedition_group_id || o.id) === shipmentKey);
+        const complete = shipment.every((o) =>
+          o.items.every((it) => touchedIds.has(it.id) || missingOf(it) <= 0),
+        );
+        if (!complete) continue;
+        const { error } = await supabase
           .from("pos_sales")
-          .update({ expedition_waiting_products: false } as any)
-          .in("id", done);
+          .update({ expedition_stage: "conferencia", expedition_waiting_products: false } as any)
+          .in("id", shipment.map((o) => o.id));
+        if (error) throw error;
       }
-      toast.success("Produto marcado como separado");
+      toast.success("Produto avançado para a Conferência");
       await load();
       onRefresh();
     } catch (e: any) {
@@ -204,7 +214,7 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
                 ) : (
                   <PackageCheck className="h-5 w-5 mr-1" />
                 )}
-                CHEGOU / SEPARADO
+                AVANÇAR PRODUTO PARA CONFERÊNCIA
               </Button>
             </div>
 
@@ -248,7 +258,7 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
                     disabled={busy === `${l.key}-${i}`}
                     onClick={() => markArrived([d], `${l.key}-${i}`)}
                   >
-                    Separado só deste pedido
+                    Avançar só deste pedido
                   </Button>
                 </div>
               ))}
