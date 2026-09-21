@@ -1411,6 +1411,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               <p className="text-base font-semibold text-pos-muted-text">
                                 {[it.variant_name, it.size && `Tam ${it.size}`, it.sku].filter(Boolean).join(" • ")}
                               </p>
+                              {stage === "aguardando" && (
+                                <p
+                                  className={`text-sm font-black mt-1 ${
+                                    pickedQty(it) >= (Number(it.quantity) || 0) ? "text-exp-done" : "text-amber-600"
+                                  }`}
+                                >
+                                  {pickedQty(it) >= (Number(it.quantity) || 0)
+                                    ? `✔ Separado (${pickedQty(it)} de ${it.quantity})`
+                                    : `Falta separar ${(Number(it.quantity) || 0) - pickedQty(it)} de ${it.quantity}`}
+                                </p>
+                              )}
                               {stage === "separacao" && it.barcode && (
                                 <p className="text-sm font-bold text-exp-pick flex items-center gap-1 mt-1">
                                   <Store className="h-4 w-4" />
