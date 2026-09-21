@@ -278,6 +278,20 @@ export function LiveGradePanel({
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    {(row.estoque ?? []).length === 0 ? (
+                      <span className="text-sm text-muted-foreground">sem estoque</span>
+                    ) : (
+                      row.estoque!.map((e) => (
+                        <span
+                          key={`e-${e.tam}`}
+                          className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-sm font-semibold text-emerald-700"
+                        >
+                          {e.tam}×{e.qtd}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {row.status === "sem_grade" ? (
                       <span className="text-sm text-muted-foreground">—</span>
                     ) : row.grade_cheia || (row.vender_mais ?? []).length === 0 ? (
