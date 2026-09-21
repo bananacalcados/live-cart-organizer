@@ -85,6 +85,8 @@ import { isSalePaid } from "@/lib/salePaymentState";
 interface Props {
   storeId: string;
   initialFilter?: "unanswered" | "new";
+  /** Abre já na conversa deste telefone (usado na Expedição / tarefas). */
+  initialPhone?: string;
   onExitFullScreen?: () => void;
 }
 
