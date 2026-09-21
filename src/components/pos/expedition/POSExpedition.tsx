@@ -27,7 +27,6 @@ import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpItemsEditDialog } from "./ExpItemsEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
-import { ExpAdvancePickDialog } from "./ExpAdvancePickDialog";
 import { ExpWaitingPanel } from "./ExpWaitingPanel";
 import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -77,8 +76,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
-  /** Pedidos na etapa AGUARDANDO (usados na lista de separação para mostrar o que falta). */
-  const [waitingOrders, setWaitingOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -95,8 +92,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [itemsOrder, setItemsOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
   const [deleteOrder, setDeleteOrder] = useState<ExpOrder | null>(null);
-  /** Pergunta "possui todos os produtos?" ao avançar da Separação. */
-  const [pickOrders, setPickOrders] = useState<ExpOrder[] | null>(null);
   /** WhatsApp completo do PDV (aba Concluídos). */
   const [waFullOrder, setWaFullOrder] = useState<ExpOrder | null>(null);
 
@@ -168,6 +163,38 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     }
     const c: Record<string, number> = {};
     for (const r of (data || []) as any[]) c[r.expedition_stage] = (c[r.expedition_stage] || 0) + 1;
+    try {
+      let itemQuery = supabase
+        .from("pos_sale_items")
+        .select("sale_id, quantity, expedition_conference_qty, expedition_waiting_qty, expedition_completed_qty, pos_sales!inner(store_id, sale_type, status, paid_at, payment_details)")
+        .in("pos_sales.sale_type", ["live", "online"])
+        .limit(5000);
+      if (!allStores) itemQuery = itemQuery.eq("pos_sales.store_id", storeId);
+      const { data: itemRows } = await itemQuery;
+      const stageSales: Record<"separacao" | "aguardando" | "conferencia", Set<string>> = {
+        separacao: new Set(),
+        aguardando: new Set(),
+        conferencia: new Set(),
+      };
+      for (const row of (itemRows || []) as any[]) {
+        const sale = row.pos_sales;
+        if (!sale || UNPAID_STATUSES.includes(sale.status)) continue;
+        const paid = !!sale.paid_at || !!sale.payment_details?.paid_at || sale.payment_details?.payment_status === "paid";
+        if (!paid) continue;
+        const total = Number(row.quantity) || 0;
+        const conference = Number(row.expedition_conference_qty) || 0;
+        const waiting = Number(row.expedition_waiting_qty) || 0;
+        const completed = Number(row.expedition_completed_qty) || 0;
+        if (total - conference - waiting - completed > 0) stageSales.separacao.add(row.sale_id);
+        if (waiting > 0) stageSales.aguardando.add(row.sale_id);
+        if (conference > 0) stageSales.conferencia.add(row.sale_id);
+      }
+      c.separacao = stageSales.separacao.size;
+      c.aguardando = stageSales.aguardando.size;
+      c.conferencia = stageSales.conferencia.size;
+    } catch {
+      // Mantém os contadores-resumo antigos se o detalhamento por produto falhar.
+    }
     setCounts(c);
   };
 
@@ -212,16 +239,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
-      // Na Separação, o que ainda falta dos pedidos em AGUARDANDO entra na mesma lista.
-      if (stage === "separacao") {
-        try {
-          setWaitingOrders(await fetchExpeditionOrders(effectiveStore, "aguardando"));
-        } catch {
-          setWaitingOrders([]);
-        }
-      } else {
-        setWaitingOrders([]);
-      }
       await loadCounts();
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
@@ -449,18 +466,20 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to) return;
     setBusyId(o.id);
     try {
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({ expedition_stage: to, expedition_finished_at: null })
-        .eq("id", o.id);
-      if (error) throw error;
-      // Voltar de AGUARDANDO para SEPARAÇÃO recomeça a separação do zero.
       if (o.expedition_stage === "aguardando") {
-        await supabase
-          .from("pos_sale_items")
-          .update({ expedition_picked_qty: 0 } as any)
-          .eq("sale_id", o.id);
+        await Promise.all(o.items.map((item) =>
+          supabase.from("pos_sale_items").update({
+            expedition_waiting_qty: 0,
+            expedition_picked_qty:
+              (Number(item.expedition_conference_qty) || 0) + (Number(item.expedition_completed_qty) || 0),
+          } as any).eq("id", item.id),
+        ));
       }
+      const { error } = await supabase.from("pos_sales").update({
+        expedition_stage: to,
+        expedition_finished_at: null,
+      }).eq("id", o.id);
+      if (error) throw error;
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
@@ -554,6 +573,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to) return;
     setBulkBusy(true);
     try {
+      if (stage === "separacao") {
+        await moveVisibleItems(bulkEligible, "conferencia");
+        setSelected(new Set());
+        load();
+        return;
+      }
       const patch: any = { expedition_stage: to };
       if (to === "concluido") patch.expedition_finished_at = new Date().toISOString();
       const { error } = await supabase
@@ -566,6 +591,43 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       load();
     } catch (e: any) {
       toast.error(e.message || "Erro ao avançar em massa");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const moveVisibleItems = async (list: ExpOrder[], target: "conferencia" | "aguardando") => {
+    const items = list.flatMap((o) => o.items);
+    if (!items.length) return;
+    for (let i = 0; i < items.length; i += 20) {
+      await Promise.all(items.slice(i, i + 20).map((item) => {
+        const qty = Number(item.quantity) || 0;
+        const conference = (Number(item.expedition_conference_qty) || 0) + (target === "conferencia" ? qty : 0);
+        const waiting = (Number(item.expedition_waiting_qty) || 0) + (target === "aguardando" ? qty : 0);
+        return supabase.from("pos_sale_items").update({
+          expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
+          expedition_conference_qty: conference,
+          expedition_waiting_qty: waiting,
+        } as any).eq("id", item.id);
+      }));
+    }
+    const { error } = await supabase.from("pos_sales").update({
+      expedition_stage: target,
+      expedition_waiting_products: true,
+    } as any).in("id", list.map((o) => o.id));
+    if (error) throw error;
+    toast.success(`${items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} produto(s) movido(s)`);
+  };
+
+  const bulkSendWaiting = async () => {
+    if (!bulkEligible.length) return;
+    setBulkBusy(true);
+    try {
+      await moveVisibleItems(bulkEligible, "aguardando");
+      setSelected(new Set());
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao mover para Aguardando");
     } finally {
       setBulkBusy(false);
     }
@@ -959,6 +1021,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                     RETROAGIR {bulkSelectedOrders.length} EM MASSA
                   </Button>
                 )}
+                {stage === "separacao" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-black border-amber-500 text-amber-600"
+                    disabled={bulkBusy || bulkEligible.length === 0}
+                    onClick={bulkSendWaiting}
+                  >
+                    <PauseCircle className="h-4 w-4 mr-1" />
+                    MOVER PARA AGUARDANDO
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   className="bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
@@ -995,7 +1069,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           <>
             <ExpPickingList
               orders={filtered}
-              waitingOrders={waitingOrders}
               stage={stage}
               onRefresh={load}
               storeId={storeId}
@@ -1357,41 +1430,67 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             </Button>
                           )}
                           {stage === "separacao" && (
-                            <Button
-                              size="lg"
-                              className="bg-exp-pick hover:bg-exp-pick/90 text-white text-base font-black"
-                              disabled={busyId === o.id}
-                              onClick={() =>
-                                setPickOrders(
-                                  o.expedition_group_id
-                                    ? filtered.filter((x) => x.expedition_group_id === o.expedition_group_id)
-                                    : [o],
-                                )
-                              }
-                            >
-                              SEPARADO <ChevronRight className="h-5 w-5" />
-                            </Button>
+                            <div className="flex gap-2 flex-wrap">
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-amber-500 text-amber-600 text-base font-black"
+                                disabled={busyId === o.id}
+                                onClick={async () => {
+                                  setBusyId(o.id);
+                                  try { await moveVisibleItems([o], "aguardando"); await load(); }
+                                  catch (e: any) { toast.error(e.message || "Erro ao mover produto"); }
+                                  finally { setBusyId(null); }
+                                }}
+                              >
+                                <PauseCircle className="h-5 w-5 mr-1" /> AGUARDANDO
+                              </Button>
+                              <Button
+                                size="lg"
+                                className="bg-exp-pick hover:bg-exp-pick/90 text-white text-base font-black"
+                                disabled={busyId === o.id}
+                                onClick={async () => {
+                                  setBusyId(o.id);
+                                  try { await moveVisibleItems([o], "conferencia"); await load(); }
+                                  catch (e: any) { toast.error(e.message || "Erro ao mover produto"); }
+                                  finally { setBusyId(null); }
+                                }}
+                              >
+                                CONFERÊNCIA <ChevronRight className="h-5 w-5" />
+                              </Button>
+                            </div>
                           )}
                            {stage === "aguardando" && (
                             <Button
                               size="lg"
-                              className={`text-white text-base font-black ${
-                                isWaitingIncomplete(o)
-                                  ? "bg-amber-500 hover:bg-amber-500/90"
-                                  : "bg-exp-check hover:bg-exp-check/90"
-                              }`}
+                               className="bg-exp-check hover:bg-exp-check/90 text-white text-base font-black"
                               disabled={busyId === o.id}
-                              onClick={() => {
-                                if (
-                                  isWaitingIncomplete(o) &&
-                                  !confirm("Ainda falta produto neste pedido. Avançar assim mesmo para a Conferência?")
-                                )
-                                  return;
-                                advance(o, "conferencia");
+                               onClick={async () => {
+                                 setBusyId(o.id);
+                                 try {
+                                   await Promise.all(o.items.map((item) => {
+                                     const qty = Number(item.quantity) || 0;
+                                     const waiting = Math.max(0, (Number(item.expedition_waiting_qty) || 0) - qty);
+                                     const conference = (Number(item.expedition_conference_qty) || 0) + qty;
+                                     return supabase.from("pos_sale_items").update({
+                                       expedition_waiting_qty: waiting,
+                                       expedition_conference_qty: conference,
+                                       expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
+                                     } as any).eq("id", item.id);
+                                   }));
+                                   await supabase.from("pos_sales").update({
+                                     expedition_stage: "conferencia",
+                                     expedition_waiting_products: true,
+                                   } as any).eq("id", o.id);
+                                   await load();
+                                 } catch (e: any) {
+                                   toast.error(e.message || "Erro ao avançar produto");
+                                 } finally {
+                                   setBusyId(null);
+                                 }
                               }}
-                              title={isWaitingIncomplete(o) ? "Forçar avanço mesmo faltando produto" : undefined}
                             >
-                              {isWaitingIncomplete(o) ? "AVANÇAR MESMO ASSIM" : "AVANÇAR PARA CONFERÊNCIA"}
+                               AVANÇAR PRODUTO PARA CONFERÊNCIA
                               <ChevronRight className="h-5 w-5" />
                             </Button>
                            )}
@@ -1579,16 +1678,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           wide
         />
       )}
-
-      <ExpAdvancePickDialog
-        orders={pickOrders}
-        open={!!pickOrders}
-        onOpenChange={(v) => !v && setPickOrders(null)}
-        onDone={() => {
-          setPickOrders(null);
-          load();
-        }}
-      />
 
       {waFullOrder && (
         <POSTaskWhatsAppDialog
