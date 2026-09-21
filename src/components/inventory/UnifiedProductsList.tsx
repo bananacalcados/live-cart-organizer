@@ -700,7 +700,14 @@ export function UnifiedProductsList() {
       <VariationEditDialog
         data={editingVariation}
         onClose={() => setEditingVariation(null)}
-        onSaved={() => { setEditingVariation(null); load(); }}
+        onSaved={(ids, color, size) => {
+          setEditingVariation(null);
+          const set = new Set(ids);
+          const variant = [color, size].filter(Boolean).join(" ") || null;
+          setPosProducts((prev) => prev.map((p) => (set.has(p.id)
+            ? { ...p, color: color || null, size: size || null, variant }
+            : p)));
+        }}
       />
 
       {/* Print labels dialog */}
