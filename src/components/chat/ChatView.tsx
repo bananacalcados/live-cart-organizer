@@ -1031,12 +1031,23 @@ export function ChatView({
                   >
                     {/* Sender name */}
                     {showSenderName && senderLabel && (
-                      <p className={cn(
-                        "text-[11px] font-medium mb-0.5",
-                        isOutgoing ? 'text-[#7c57d1]' : 'text-[#00a884]'
-                      )}>
-                        {senderLabel}
-                      </p>
+                      participantPhone && onOpenParticipant ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenParticipant(participantPhone, (msg as any).sender_name || null)}
+                          title="Abrir conversa com esta pessoa"
+                          className="text-[11px] font-semibold mb-0.5 text-[#00a884] underline decoration-dotted underline-offset-2 hover:text-[#0bd18a] text-left"
+                        >
+                          {senderLabel}
+                        </button>
+                      ) : (
+                        <p className={cn(
+                          "text-[11px] font-medium mb-0.5",
+                          isOutgoing ? 'text-[#7c57d1]' : 'text-[#00a884]'
+                        )}>
+                          {senderLabel}
+                        </p>
+                      )
                     )}
                     {isAuto && (
                       <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
