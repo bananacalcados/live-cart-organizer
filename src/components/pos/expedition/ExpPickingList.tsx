@@ -7,10 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid, CalendarDays } from "lucide-react";
+import { Loader2, Printer, Package, Store, ChevronRight, Pencil, ShoppingCart, LayoutGrid, CalendarDays, PauseCircle } from "lucide-react";
 import { ExpGradeReport } from "./ExpGradeReport";
 import { ExpArrivalsDialog } from "./ExpArrivalsDialog";
-import { ExpOrder, ExpStage, nextStage, orderChannelLabel } from "./expeditionTypes";
+import { ExpItem, ExpOrder, ExpStage, orderChannelLabel } from "./expeditionTypes";
 import { expeditionPriorityRank } from "@/lib/expeditionPriority";
 import { ExpStockAdjustDialog, StockRow } from "./ExpStockAdjustDialog";
 import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDialog";
@@ -18,6 +18,8 @@ import { ExpPurchaseRequestDialog, PurchaseTarget } from "./ExpPurchaseRequestDi
 
 interface Props {
   orders: ExpOrder[];
+  /** Pedidos já em AGUARDANDO: só o que ainda falta deles entra na lista de separação. */
+  waitingOrders?: ExpOrder[];
   stage: ExpStage;
   onRefresh: () => void;
   storeId?: string;
@@ -31,7 +33,7 @@ interface PickLine {
   sku: string | null;
   barcode: string | null;
   quantity: number;
-  orders: { id: string; customer: string; qty: number; created_at: string; channel: string }[];
+  orders: { id: string; customer: string; qty: number; created_at: string; channel: string; waiting: boolean }[];
 }
 
 const lineKey = (it: any) =>
@@ -41,8 +43,24 @@ const lineKey = (it: any) =>
     (it.size || "").trim().toLowerCase(),
   ].join("|");
 
+/** Pedido na fila de separação (da etapa Separação ou pendências da etapa Aguardando). */
+interface PickEntry {
+  o: ExpOrder;
+  waiting: boolean;
+}
+
+/** Itens com a quantidade que AINDA falta separar (desconta o que já foi separado). */
+const pendingItems = (o: ExpOrder, waiting: boolean) =>
+  o.items.map((it: ExpItem) => {
+    const picked = waiting ? Number(it.expedition_picked_qty) || 0 : 0;
+    const qty = Number(it.quantity) || 0;
+    return { item: it, picked, eff: Math.max(0, qty - picked) };
+  });
+
+const prefixOf = (o: ExpOrder) => (expeditionPriorityRank(o) <= 2 ? "p" : "n");
+
 /** Etapa SEPARAÇÃO: lista unificada de produtos a separar (não de pedidos). */
-export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
+export function ExpPickingList({ orders, waitingOrders = [], stage, onRefresh, storeId }: Props) {
   const [separated, setSeparated] = useState<Record<string, number>>({});
   const [stock, setStock] = useState<Record<string, StockRow[]>>({});
   const [resolved, setResolved] = useState<
@@ -56,12 +74,19 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   const [gradeOpen, setGradeOpen] = useState(false);
   const [arrivalsOpen, setArrivalsOpen] = useState(false);
 
+  const allEntries = useMemo<PickEntry[]>(
+    () => [
+      ...orders.map((o) => ({ o, waiting: false })),
+      ...waitingOrders.map((o) => ({ o, waiting: true })),
+    ],
+    [orders, waitingOrders],
+  );
 
-
-  const buildLines = (list: ExpOrder[], prefix: string) => {
+  const buildLines = (list: PickEntry[], prefix: string) => {
     const map = new Map<string, PickLine>();
-    for (const o of list) {
-      for (const it of o.items) {
+    for (const { o, waiting } of list) {
+      for (const { item: it, eff } of pendingItems(o, waiting)) {
+        if (eff <= 0) continue;
         const k = `${prefix}|${lineKey(it)}`;
         const cur =
           map.get(k) ||
@@ -75,15 +100,16 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
             quantity: 0,
             orders: [],
           } as PickLine);
-        cur.quantity += Number(it.quantity) || 0;
+        cur.quantity += eff;
         cur.barcode = cur.barcode || it.barcode;
         cur.sku = cur.sku || it.sku;
         cur.orders.push({
           id: o.id,
           customer: o.customer_name || "Sem nome",
-          qty: Number(it.quantity) || 0,
+          qty: eff,
           created_at: o.created_at,
           channel: orderChannelLabel(o),
+          waiting,
         });
         map.set(k, cur);
       }
@@ -92,14 +118,14 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   };
 
   const sections = useMemo(() => {
-    const prio = orders.filter((o) => expeditionPriorityRank(o) <= 2);
-    const rest = orders.filter((o) => expeditionPriorityRank(o) > 2);
+    const prio = allEntries.filter((e) => expeditionPriorityRank(e.o) <= 2);
+    const rest = allEntries.filter((e) => expeditionPriorityRank(e.o) > 2);
     return [
       { id: "p", title: "PRIORITÁRIOS", lines: buildLines(prio, "p") },
       { id: "n", title: "DEMAIS PEDIDOS", lines: buildLines(rest, "n") },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders]);
+  }, [allEntries]);
 
   const lines = useMemo(() => sections.flatMap((s) => s.lines), [sections]);
 
@@ -165,27 +191,92 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   }, [lines]);
 
 
-  /** Pedidos totalmente cobertos pelas quantidades já separadas. */
-  const readyOrderIds = useMemo(() => {
+  /**
+   * Distribui o que foi separado entre os pedidos.
+   * 1ª passada: pedidos que ficam COMPLETOS (não deixa um item "roubar" o par de quem fecharia o pedido).
+   * 2ª passada: sobras vão para pedidos parciais (que ficarão em AGUARDANDO).
+   */
+  const allocation = useMemo(() => {
     const remaining = { ...separated };
-    const sorted = [...orders].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
-    const ready: string[] = [];
-    for (const o of sorted) {
-      const need = new Map<string, number>();
-      const pref = expeditionPriorityRank(o) <= 2 ? "p" : "n";
-      for (const it of o.items) {
-        const k = `${pref}|${lineKey(it)}`;
-        need.set(k, (need.get(k) || 0) + (Number(it.quantity) || 0));
+    const sorted = [...allEntries].sort(
+      (a, b) => +new Date(a.o.created_at) - +new Date(b.o.created_at),
+    );
+    const picked = new Map<string, Map<string, number>>();
+    const full = new Set<string>();
+
+    const needOf = (e: PickEntry) => {
+      const pref = prefixOf(e.o);
+      const byLine = new Map<string, number>();
+      const byItem: { itemId: string; key: string; eff: number }[] = [];
+      for (const { item, eff } of pendingItems(e.o, e.waiting)) {
+        const k = `${pref}|${lineKey(item)}`;
+        byLine.set(k, (byLine.get(k) || 0) + eff);
+        byItem.push({ itemId: item.id, key: k, eff });
       }
-      let ok = o.items.length > 0;
-      for (const [k, q] of need) if ((remaining[k] || 0) < q) ok = false;
-      if (ok) {
-        for (const [k, q] of need) remaining[k] = (remaining[k] || 0) - q;
-        ready.push(o.id);
-      }
+      return { byLine, byItem };
+    };
+
+    for (const e of sorted) {
+      const { byLine, byItem } = needOf(e);
+      if (!byItem.length) continue;
+      let ok = true;
+      for (const [k, q] of byLine) if ((remaining[k] || 0) < q) ok = false;
+      if (!ok) continue;
+      for (const [k, q] of byLine) remaining[k] = (remaining[k] || 0) - q;
+      picked.set(e.o.id, new Map(byItem.map((i) => [i.itemId, i.eff])));
+      full.add(e.o.id);
     }
-    return ready;
-  }, [orders, separated]);
+
+    for (const e of sorted) {
+      if (full.has(e.o.id)) continue;
+      const { byItem } = needOf(e);
+      const m = new Map<string, number>();
+      for (const i of byItem) {
+        const have = Math.min(remaining[i.key] || 0, i.eff);
+        remaining[i.key] = (remaining[i.key] || 0) - have;
+        m.set(i.itemId, have);
+      }
+      picked.set(e.o.id, m);
+    }
+
+    return { picked, full };
+  }, [allEntries, separated]);
+
+  /** Envio unificado só avança quando TODOS os pedidos do grupo estão completos. */
+  const groupReady = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const e of allEntries) {
+      const gid = e.o.expedition_group_id;
+      if (!gid) continue;
+      const done = allocation.full.has(e.o.id);
+      map.set(gid, (map.get(gid) ?? true) && done);
+    }
+    return map;
+  }, [allEntries, allocation]);
+
+  const readyEntries = useMemo(
+    () =>
+      allEntries.filter((e) => {
+        if (!allocation.full.has(e.o.id)) return false;
+        const gid = e.o.expedition_group_id;
+        return !gid || groupReady.get(gid) === true;
+      }),
+    [allEntries, allocation, groupReady],
+  );
+
+  const readyIds = useMemo(() => new Set(readyEntries.map((e) => e.o.id)), [readyEntries]);
+
+  /** Pedidos que ficam aguardando o restante dos produtos (inclui o grupo inteiro). */
+  const waitingEntries = useMemo(
+    () =>
+      allEntries.filter((e) => {
+        if (readyIds.has(e.o.id)) return false;
+        const m = allocation.picked.get(e.o.id);
+        const newly = m ? [...m.values()].reduce((s, n) => s + n, 0) : 0;
+        return newly > 0 || allocation.full.has(e.o.id);
+      }),
+    [allEntries, allocation, readyIds],
+  );
 
   const toggleLine = (l: PickLine, checked: boolean) => {
     if (!checked) {
@@ -207,23 +298,50 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
     setQtyDialog(null);
   };
 
-  const advanceReady = async () => {
-    if (!readyOrderIds.length) return;
-    const to = nextStage(stage);
-    if (!to) return;
+  /** Grava em cada item quanto já foi separado (acumula com o que já estava). */
+  const persistPicked = async (entries: PickEntry[]) => {
+    const updates: { id: string; qty: number }[] = [];
+    for (const e of entries) {
+      const m = allocation.picked.get(e.o.id);
+      if (!m) continue;
+      for (const it of e.o.items) {
+        const before = e.waiting ? Number(it.expedition_picked_qty) || 0 : 0;
+        const add = m.get(it.id) || 0;
+        const total = Math.min(Number(it.quantity) || 0, before + add);
+        if (total !== before) updates.push({ id: it.id, qty: total });
+      }
+    }
+    for (let i = 0; i < updates.length; i += 20) {
+      await Promise.all(
+        updates.slice(i, i + 20).map((u) =>
+          supabase.from("pos_sale_items").update({ expedition_picked_qty: u.qty } as any).eq("id", u.id),
+        ),
+      );
+    }
+  };
+
+  const moveEntries = async (entries: PickEntry[], to: ExpStage, label: string) => {
+    if (!entries.length) return;
     setAdvancing(true);
     try {
-      const { error } = await supabase.from("pos_sales").update({ expedition_stage: to }).in("id", readyOrderIds);
+      await persistPicked(entries);
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: to })
+        .in("id", entries.map((e) => e.o.id));
       if (error) throw error;
-      toast.success(`${readyOrderIds.length} pedido(s) enviados para Conferência`);
+      toast.success(`${entries.length} pedido(s) ${label}`);
       setSeparated({});
       onRefresh();
     } catch (e: any) {
-      toast.error(e.message || "Erro ao avançar pedidos separados");
+      toast.error(e.message || "Erro ao mover pedidos");
     } finally {
       setAdvancing(false);
     }
   };
+
+  const advanceReady = () => moveEntries(readyEntries, "conferencia", "enviados para Conferência");
+  const sendWaiting = () => moveEntries(waitingEntries, "aguardando", "movidos para Aguardando");
 
   const print = () => {
     const rows = lines
@@ -233,7 +351,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
         <td><strong>${l.product_name}</strong><br/><span style="font-size:11px;color:#555">${[l.variant_name, l.size && `Tam ${l.size}`, l.sku]
           .filter(Boolean)
           .join(" • ")}</span><br/><span style="font-size:11px;color:#333">${l.orders
-            .map((ord) => `${ord.channel} • ${ord.customer}${ord.qty > 1 ? ` ×${ord.qty}` : ""}`)
+            .map((ord) => `${ord.channel} • ${ord.customer}${ord.qty > 1 ? ` ×${ord.qty}` : ""}${ord.waiting ? " (aguardando)" : ""}`)
             .join("  |  ")}</span></td>
         <td style="font-size:11px">${(stock[(l.barcode || "").trim()] || stock[(l.sku || "").trim()] || [])
           .map((s) => `${s.store}: ${s.stock}`)
@@ -297,12 +415,22 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           <Printer className="h-4 w-4 mr-1" /> Imprimir lista
         </Button>
         <Button
+          variant="outline"
+          className="font-black border-2 border-amber-500 text-amber-600"
+          disabled={!waitingEntries.length || advancing}
+          onClick={sendWaiting}
+          title="Guarda o que já foi separado e deixa o pedido esperando o restante dos produtos"
+        >
+          <PauseCircle className="h-4 w-4 mr-1" />
+          AGUARDANDO ({waitingEntries.length})
+        </Button>
+        <Button
           className="bg-exp-pick hover:bg-exp-pick/90 text-white font-black"
-          disabled={!readyOrderIds.length || advancing}
+          disabled={!readyEntries.length || advancing}
           onClick={advanceReady}
         >
           {advancing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-          AVANÇAR {readyOrderIds.length} PEDIDO(S) SEPARADO(S)
+          AVANÇAR {readyEntries.length} PEDIDO(S) SEPARADO(S)
         </Button>
       </div>
 
@@ -368,10 +496,15 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
                     <Badge
                       key={`${ord.id}-${i}`}
                       variant="outline"
-                      className="text-sm font-semibold border-pos-muted-text/40 text-pos-text"
+                      className={`text-sm font-semibold ${
+                        ord.waiting
+                          ? "border-amber-500 text-amber-600"
+                          : "border-pos-muted-text/40 text-pos-text"
+                      }`}
                     >
                       {ord.channel} • {ord.customer}
                       {ord.qty > 1 ? ` ×${ord.qty}` : ""}
+                      {ord.waiting ? " · aguardando" : ""}
                     </Badge>
                   ))}
                 </div>
@@ -489,7 +622,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
               Relatório de grades · Reposição
             </DialogTitle>
           </DialogHeader>
-          <ExpGradeReport saleIds={orders.map((o) => o.id)} className="flex-1" />
+          <ExpGradeReport saleIds={allEntries.map((e) => e.o.id)} className="flex-1" />
         </DialogContent>
       </Dialog>
     </div>
