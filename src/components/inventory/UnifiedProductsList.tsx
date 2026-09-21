@@ -928,7 +928,7 @@ function MasterEditDialog({
 
     setSaving(false);
     toast.success("Catálogo atualizado e sincronizado com o PDV.");
-    onSaved();
+    onSaved(master.parent_sku, patch);
   }
 
   return (
