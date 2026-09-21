@@ -476,13 +476,24 @@ serve(async (req) => {
     const fromMe = Boolean(message.fromMe);
     const messageId = asString(message.messageid) || asString(message.id);
     const uazMediaType = asString(message.mediaType);
-    const sysMediaType = mapMediaType(uazMediaType);
+    let sysMediaType = mapMediaType(uazMediaType);
     const text = asString(message.text) || "";
     const senderName =
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
     const messageType = (asString(message.messageType) || asString((message as AnyObj).type) || "").toLowerCase();
+
+    // Figurinha: alguns payloads da uazapi não trazem `mediaType`, só o
+    // messageType "stickerMessage". Sem isso a figurinha caía como "vazia".
+    if (!sysMediaType && messageType.includes("sticker")) sysMediaType = "image";
+
+    // Reação (emoji) chega sem texto e sem mídia — antes era descartada.
+    const reactionText =
+      asString((message as AnyObj).reaction) ||
+      asString(((message as AnyObj).reaction as AnyObj)?.text) ||
+      (messageType.includes("reaction") ? text : "") ||
+      "";
 
     /**
      * Classifica o ENGAJAMENTO de um membro num grupo (voto/reação/comentário).
@@ -585,7 +596,11 @@ serve(async (req) => {
       sysMediaType && typeof message.content === "object"
         ? asString((message.content as AnyObj)?.caption)
         : null;
-    const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
+    const displayMessage =
+      text ||
+      caption ||
+      (sysMediaType ? `📎 ${sysMediaType}` : "") ||
+      (reactionText ? `Reagiu: ${reactionText}` : "");
     if (!displayMessage && !mediaUrl) {
       // Votos de enquete chegam sem texto/mídia: ainda contam como engajamento.
       if (isGroup && !fromMe) {

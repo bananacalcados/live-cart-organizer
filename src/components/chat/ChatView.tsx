@@ -97,6 +97,8 @@ interface ChatViewProps {
   hideTagsBar?: boolean;
   /** Botão "Ler msgs antigas" (histórico arquivado sob demanda). */
   archive?: { load: () => void; loading: boolean; exhausted: boolean; loadedCount: number };
+  /** Em grupos: clicar no nome do participante abre a conversa individual com ele. */
+  onOpenParticipant?: (phone: string, name?: string | null) => void;
 }
 
 const PREDEFINED_TAGS = [
@@ -129,6 +131,7 @@ export function ChatView({
   onExtraSent,
   hideTagsBar,
   archive,
+  onOpenParticipant,
 }: ChatViewProps) {
   /**
    * Rascunho LOCAL do composer. O texto vive SOMENTE aqui enquanto a atendente
@@ -903,6 +906,9 @@ export function ChatView({
 
             // Sender name resolution
             let senderLabel: string | null = null;
+            // Em grupos, o telefone do participante permite abrir a conversa individual.
+            const participantPhone: string | null =
+              !isOutgoing && conversation?.isGroup ? ((msg as any).sender_phone || null) : null;
             if (showSenderName) {
               if (isOutgoing) {
                 const isAuto = msg.message?.startsWith('[AUTO] ');
@@ -1025,12 +1031,23 @@ export function ChatView({
                   >
                     {/* Sender name */}
                     {showSenderName && senderLabel && (
-                      <p className={cn(
-                        "text-[11px] font-medium mb-0.5",
-                        isOutgoing ? 'text-[#7c57d1]' : 'text-[#00a884]'
-                      )}>
-                        {senderLabel}
-                      </p>
+                      participantPhone && onOpenParticipant ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenParticipant(participantPhone, (msg as any).sender_name || null)}
+                          title="Abrir conversa com esta pessoa"
+                          className="text-[11px] font-semibold mb-0.5 text-[#00a884] underline decoration-dotted underline-offset-2 hover:text-[#0bd18a] text-left"
+                        >
+                          {senderLabel}
+                        </button>
+                      ) : (
+                        <p className={cn(
+                          "text-[11px] font-medium mb-0.5",
+                          isOutgoing ? 'text-[#7c57d1]' : 'text-[#00a884]'
+                        )}>
+                          {senderLabel}
+                        </p>
+                      )
                     )}
                     {isAuto && (
                       <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
