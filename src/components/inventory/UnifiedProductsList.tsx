@@ -725,7 +725,11 @@ export function UnifiedProductsList() {
         productName={balanceTarget?.productName || ""}
         variationLabel={balanceTarget?.variationLabel || ""}
         rows={balanceTarget?.rows || []}
-        onDone={() => { setBalanceTarget(null); load(); }}
+        onDone={(applied) => {
+          setBalanceTarget(null);
+          const map = new Map(applied.map((a) => [a.productId, a.stock]));
+          setPosProducts((prev) => prev.map((p) => (map.has(p.id) ? { ...p, stock: map.get(p.id)! } : p)));
+        }}
       />
 
       {/* Bulk delete confirmation */}
