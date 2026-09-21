@@ -21,6 +21,7 @@ import { DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
+import { MultiStoreBalanceDialog, type BalanceStoreRow } from "./MultiStoreBalanceDialog";
 
 interface MasterData {
   parent_sku: string;
