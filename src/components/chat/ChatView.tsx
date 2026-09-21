@@ -921,7 +921,9 @@ export function ChatView({
             const withinWhatsAppDeleteWindow = !!msg.message_id && msgAge < 7 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
-            const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
+            const quotedOriginal = quotedMsgId
+              ? (messages.find(m => m.message_id === quotedMsgId) || quotedFallback[quotedMsgId] || null)
+              : null;
             const quotedStatus = quotedMsgId && !quotedOriginal ? statusQuotes[quotedMsgId] : null;
 
             const prevMsg = idx > 0 ? messages[idx - 1] : null;
