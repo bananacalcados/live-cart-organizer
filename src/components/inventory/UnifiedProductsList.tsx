@@ -310,10 +310,20 @@ export function UnifiedProductsList() {
   }
 
   async function deleteInChunks(ids: string[]) {
-    for (let i = 0; i < ids.length; i += 200) {
-      const { error } = await supabase.from("pos_products").delete().in("id", ids.slice(i, i + 200));
-      if (error) throw error;
-    }
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+    // Em paralelo — antes era sequencial.
+    const results = await Promise.all(
+      chunks.map((c) => supabase.from("pos_products").delete().in("id", c)),
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+  }
+
+  /** Remove SKUs da lista local, sem recarregar a página inteira. */
+  function removeLocalSkus(ids: string[]) {
+    const set = new Set(ids);
+    setPosProducts((prev) => prev.filter((p) => !set.has(p.id)));
   }
 
   async function deleteGroup(g: GroupRow) {
@@ -321,15 +331,17 @@ export function UnifiedProductsList() {
     if (!confirm(
       `Excluir o cadastro "${label}"?\n\nRemove o produto do catálogo e TODAS as variações/estoque em todas as lojas. Esta ação não pode ser desfeita.`
     )) return;
+    const ids = groupSkuIds(g);
     setBusy(true);
     try {
-      await deleteInChunks(groupSkuIds(g));
+      await deleteInChunks(ids);
       if (g.master) {
         const { error } = await supabase.from("product_master_data").delete().eq("parent_sku", g.parent_sku);
         if (error) throw error;
       }
+      removeLocalSkus(ids);
+      setMasters((prev) => prev.filter((m) => m.parent_sku !== g.parent_sku));
       toast.success("Cadastro excluído.");
-      await load();
     } catch (err: any) {
       toast.error("Erro ao excluir: " + err.message);
     } finally {
@@ -339,15 +351,16 @@ export function UnifiedProductsList() {
 
   async function deleteVariation(g: GroupRow, color: string, size: string) {
     if (!confirm(`Excluir a variação ${color} / ${size} em todas as lojas? Esta ação não pode ser desfeita.`)) return;
-    setBusy(true);
+    const ids = variationSkuIds(g, color, size);
+    // Some da tela na hora; se falhar no servidor, volta.
+    removeLocalSkus(ids);
+    const snapshot = posProducts.filter((p) => ids.includes(p.id));
     try {
-      await deleteInChunks(variationSkuIds(g, color, size));
+      await deleteInChunks(ids);
       toast.success("Variação excluída.");
-      await load();
     } catch (err: any) {
+      setPosProducts((prev) => [...prev, ...snapshot]);
       toast.error("Erro ao excluir variação: " + err.message);
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -654,7 +667,17 @@ export function UnifiedProductsList() {
       <MasterEditDialog
         master={editing}
         onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); load(); }}
+        onSaved={(parentSku, patch) => {
+          setEditing(null);
+          setMasters((prev) => prev.map((m) => (m.parent_sku === parentSku ? { ...m, ...patch } as MasterData : m)));
+          setPosProducts((prev) => prev.map((p) => (p.parent_sku === parentSku
+            ? {
+                ...p,
+                cost_price: patch.cost_price && patch.cost_price > 0 ? patch.cost_price : p.cost_price,
+                price: patch.sale_price && patch.sale_price > 0 ? patch.sale_price : p.price,
+              }
+            : p)));
+        }}
       />
 
       {/* Edit pos sku dialog */}
@@ -677,7 +700,14 @@ export function UnifiedProductsList() {
       <VariationEditDialog
         data={editingVariation}
         onClose={() => setEditingVariation(null)}
-        onSaved={() => { setEditingVariation(null); load(); }}
+        onSaved={(ids, color, size) => {
+          setEditingVariation(null);
+          const set = new Set(ids);
+          const variant = [color, size].filter(Boolean).join(" ") || null;
+          setPosProducts((prev) => prev.map((p) => (set.has(p.id)
+            ? { ...p, color: color || null, size: size || null, variant }
+            : p)));
+        }}
       />
 
       {/* Print labels dialog */}
@@ -695,7 +725,11 @@ export function UnifiedProductsList() {
         productName={balanceTarget?.productName || ""}
         variationLabel={balanceTarget?.variationLabel || ""}
         rows={balanceTarget?.rows || []}
-        onDone={() => { setBalanceTarget(null); load(); }}
+        onDone={(applied) => {
+          setBalanceTarget(null);
+          const map = new Map(applied.map((a) => [a.productId, a.stock]));
+          setPosProducts((prev) => prev.map((p) => (map.has(p.id) ? { ...p, stock: map.get(p.id)! } : p)));
+        }}
       />
 
       {/* Bulk delete confirmation */}
@@ -733,7 +767,7 @@ function VariationEditDialog({
 }: {
   data: { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (ids: string[], color: string, size: string) => void;
 }) {
   const [color, setColor] = useState("");
   const [size, setSize] = useState("");
@@ -747,20 +781,23 @@ function VariationEditDialog({
     if (!data) return;
     setSaving(true);
     try {
-      const variant = [color.trim(), size.trim()].filter(Boolean).join(" ");
-      for (let i = 0; i < data.ids.length; i += 200) {
-        const { error } = await supabase
-          .from("pos_products")
-          .update({
-            color: color.trim() || null,
-            size: size.trim() || null,
-            variant: variant || null,
-          })
-          .in("id", data.ids.slice(i, i + 200));
-        if (error) throw error;
-      }
+      const c = color.trim();
+      const s = size.trim();
+      const variant = [c, s].filter(Boolean).join(" ");
+      const chunks: string[][] = [];
+      for (let i = 0; i < data.ids.length; i += 200) chunks.push(data.ids.slice(i, i + 200));
+      const results = await Promise.all(
+        chunks.map((ids) =>
+          supabase
+            .from("pos_products")
+            .update({ color: c || null, size: s || null, variant: variant || null })
+            .in("id", ids),
+        ),
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) throw failed.error;
       toast.success("Variação atualizada.");
-      onSaved();
+      onSaved(data.ids, c, s);
     } catch (err: any) {
       toast.error("Erro ao salvar: " + err.message);
     } finally {
@@ -806,7 +843,7 @@ function VariationEditDialog({
 /* ============ Master Edit Dialog ============ */
 function MasterEditDialog({
   master, onClose, onSaved,
-}: { master: MasterData | null; onClose: () => void; onSaved: () => void; }) {
+}: { master: MasterData | null; onClose: () => void; onSaved: (parentSku: string, patch: any) => void; }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
@@ -891,7 +928,7 @@ function MasterEditDialog({
 
     setSaving(false);
     toast.success("Catálogo atualizado e sincronizado com o PDV.");
-    onSaved();
+    onSaved(master.parent_sku, patch);
   }
 
   return (
