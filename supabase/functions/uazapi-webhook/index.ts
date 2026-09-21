@@ -484,6 +484,17 @@ serve(async (req) => {
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
     const messageType = (asString(message.messageType) || asString((message as AnyObj).type) || "").toLowerCase();
 
+    // Figurinha: alguns payloads da uazapi não trazem `mediaType`, só o
+    // messageType "stickerMessage". Sem isso a figurinha caía como "vazia".
+    if (!sysMediaType && messageType.includes("sticker")) sysMediaType = "image";
+
+    // Reação (emoji) chega sem texto e sem mídia — antes era descartada.
+    const reactionText =
+      asString((message as AnyObj).reaction) ||
+      asString(((message as AnyObj).reaction as AnyObj)?.text) ||
+      (messageType.includes("reaction") ? text : "") ||
+      "";
+
     /**
      * Classifica o ENGAJAMENTO de um membro num grupo (voto/reação/comentário).
      * Roda em background — nunca segura o webhook nem o derruba.
