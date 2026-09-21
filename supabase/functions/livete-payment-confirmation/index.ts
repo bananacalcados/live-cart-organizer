@@ -297,27 +297,59 @@ serve(async (req) => {
     await sleep(typingDelay(message));
 
     const headers = { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' };
-    let sendResp: Response;
-    if (provider === 'meta') {
-      sendResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+
+    const doSend = async (numberId: string, prov: string): Promise<Response> => {
+      if (prov === 'meta') {
+        return await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ phone: fullPhone, message, whatsappNumberId: numberId }),
+        });
+      }
+      const fnBase = prov === 'uazapi' ? 'uazapi' : prov === 'wasender' ? 'wasender' : 'zapi';
+      return await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
         method: 'POST', headers,
-        body: JSON.stringify({ phone: fullPhone, message, whatsappNumberId: sendNumberId }),
+        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: numberId, whatsappNumberId: numberId }),
       });
-    } else {
-      const fnBase = provider === 'uazapi' ? 'uazapi' : provider === 'wasender' ? 'wasender' : 'zapi';
-      sendResp = await fetch(`${supabaseUrl}/functions/v1/${fnBase}-send-message`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ phone: fullPhone, message, whatsapp_number_id: sendNumberId, whatsappNumberId: sendNumberId }),
-      });
+    };
+
+    let usedProvider = provider;
+    let sendResp = await doSend(sendNumberId, provider);
+
+    // 7b. Guard recusou a instância (409 INSTANCE_MISMATCH): reenvia pela
+    //     instância onde a conversa realmente vive (normalmente a uazapi).
+    if (sendResp.status === 409) {
+      const txt = await sendResp.text().catch(() => '');
+      let bound: string | null = null;
+      try { bound = JSON.parse(txt)?.bound_instance || null; } catch (_e) { /* ignore */ }
+      if (bound && bound !== sendNumberId) {
+        const { data: wnBound } = await supabase
+          .from('whatsapp_numbers')
+          .select('provider, label')
+          .eq('id', bound)
+          .maybeSingle();
+        sendNumberId = bound;
+        usedProvider = String(wnBound?.provider || '');
+        resolvedVia = 'guard_bound_instance';
+        console.log(`[livete-payment-confirmation] retry on bound instance ${bound} (${wnBound?.label || ''}/${usedProvider})`);
+        sendResp = await doSend(bound, usedProvider);
+      } else {
+        console.error(`[livete-payment-confirmation] send failed (409) via ${provider}: ${txt}`);
+        await releaseClaim();
+        return new Response(JSON.stringify({ handled: false, reason: 'send_failed', status: 409, details: txt }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
+
     if (!sendResp.ok) {
       const txt = await sendResp.text().catch(() => '');
-      console.error(`[livete-payment-confirmation] send failed (${sendResp.status}) via ${provider}: ${txt}`);
+      console.error(`[livete-payment-confirmation] send failed (${sendResp.status}) via ${usedProvider}: ${txt}`);
       await releaseClaim();
       return new Response(JSON.stringify({ handled: false, reason: 'send_failed', status: sendResp.status, details: txt }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // 8. Save outgoing message
     await supabase.from('whatsapp_messages').insert({
