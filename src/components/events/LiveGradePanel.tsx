@@ -200,11 +200,18 @@ export function LiveGradePanel({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border">
-        <div className="grid shrink-0 grid-cols-[minmax(0,2fr)_160px_minmax(0,2fr)_minmax(0,2fr)] gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground">
+        <div
+          className={cn(
+            "grid shrink-0 gap-3 bg-muted/50 px-3 py-2 text-sm font-semibold text-muted-foreground",
+            GRID,
+          )}
+        >
           <span>Produto · cor</span>
           <span>Status</span>
           <span>Vendidos</span>
+          <span>Estoque atual</span>
           <span>Vender mais</span>
+          <span>Comprar (já descontando estoque)</span>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           {!eventId ? (
