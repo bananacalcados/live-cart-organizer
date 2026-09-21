@@ -66,6 +66,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   >({});
   const [qtyDialog, setQtyDialog] = useState<PickLine | null>(null);
   const [qtyInput, setQtyInput] = useState("");
+  /** Envio parcial de um produto para AGUARDANDO (ex.: 3 pares, mandar só 2). */
+  const [waitDialog, setWaitDialog] = useState<PickLine | null>(null);
+  const [waitInput, setWaitInput] = useState("");
   const [advancing, setAdvancing] = useState(false);
   const [adjustLine, setAdjustLine] = useState<PickLine | null>(null);
   const [purchaseTarget, setPurchaseTarget] = useState<PurchaseTarget | null>(null);
