@@ -148,7 +148,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         .from("pos_sales")
         .select("expedition_stage")
         .in("sale_type", ["live", "online"])
-        .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+        .in("expedition_stage", ["novo", "preparacao", "separacao", "aguardando", "conferencia"]);
       if (!allStores) q = q.eq("store_id", storeId);
       return q;
     };
@@ -676,7 +676,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
 
         {/* Stage bar */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
           {EXP_STAGES.map((s) => {
             const Icon = stageIcon[s.id];
             const active = stage === s.id;
