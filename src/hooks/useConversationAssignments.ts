@@ -112,8 +112,19 @@ export function useConversationAssignments() {
     if (stored) return stored;
     const userId = assignments.get(conversationKey);
     if (userId) return profileNames.get(userId) || null;
+    // Fallback: the card may be collapsed to another instance of the same phone.
+    const phone = conversationKey.split("__")[0];
+    if (phone) {
+      for (const [k, v] of assignedNames) {
+        if (k.startsWith(`${phone}__`)) return v;
+      }
+      for (const [k, v] of assignments) {
+        if (k.startsWith(`${phone}__`)) return profileNames.get(v) || null;
+      }
+    }
     return null;
   }, [assignedNames, assignments, profileNames]);
+
 
   /**
    * Assigns a conversation to a user (an attendant).
