@@ -1297,8 +1297,10 @@ Deno.serve(async (req) => {
       if (!name) name = providedName || "Cliente";
 
       // OTP apenas para cadastro NOVO sem nenhum pedido/histórico.
-      // O link mágico já é fator de posse (chegou no WhatsApp dela): dispensa OTP.
-      if (!body.magicVerified && !(await isKnownCustomer(phone))) {
+      // Se o telefone digitado bate com o pedido montado na Live (4 últimos
+      // dígitos), ela já está identificada: entra direto, sem código.
+      if (!body.magicVerified && !boundOrder && !(await isKnownCustomer(phone))) {
+
         const code = String(body.otp || "").replace(/\D/g, "");
         if (!code) return json({ ok: false, error: "otp_required", needsOtp: true });
         if (!(await allow(`otpv:${phone}`, 8, 600))) {

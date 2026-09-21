@@ -126,18 +126,28 @@ serve(async (req) => {
       }
 
       // Vinculação pelos 4 últimos dígitos: se houver exatamente um pedido desta
-      // live com o mesmo final, grava o telefone no cadastro e identifica o @.
+      // live com o mesmo final, grava o WhatsApp digitado no cadastro, marca o
+      // pedido como vinculado e identifica o @ da cliente.
       let handle: string | null = null;
       const eventId = click.event_id || link.event_id || null;
       if (saved && eventId) {
-        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_by_last4", {
+        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_verified", {
           p_event_id: eventId,
-          p_phone_e164: norm.e164,
+          p_phone: norm.e164,
         });
-        if (linkErr) console.error("[live-whatsapp-redirect] link by last4 error:", linkErr);
-        const h = (linkRes as any)?.instagram_handle;
-        if ((linkRes as any)?.ok && h) handle = String(h).replace(/^@/, "");
+        if (linkErr) console.error("[live-whatsapp-redirect] link verified error:", linkErr);
+        const orderId = (linkRes as any)?.order_id;
+        if ((linkRes as any)?.ok && orderId) {
+          const { data: ord } = await supabase
+            .from("orders")
+            .select("customer:customers(instagram_handle)")
+            .eq("id", orderId)
+            .maybeSingle();
+          const h = (ord as any)?.customer?.instagram_handle;
+          if (h) handle = String(h).replace(/^@/, "");
+        }
       }
+
 
       // Só segue para o WhatsApp quem tem pedido em aberto nesta Live.
       // O lead já foi salvo acima, mesmo sem pedido.
