@@ -20,7 +20,8 @@ interface Props {
   productName: string;
   variationLabel: string;
   rows: BalanceStoreRow[];
-  onDone: () => void;
+  /** Recebe os saldos aplicados para atualização local (sem recarregar a lista). */
+  onDone: (applied: { productId: string; stock: number }[]) => void;
 }
 
 /** Balanço de todas as lojas de uma variação (cor + tamanho) de uma só vez. */
