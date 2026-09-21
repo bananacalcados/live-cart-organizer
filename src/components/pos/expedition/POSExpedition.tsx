@@ -74,6 +74,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
+  /** Pedidos na etapa AGUARDANDO (usados na lista de separação para mostrar o que falta). */
+  const [waitingOrders, setWaitingOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -203,6 +205,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
+      // Na Separação, o que ainda falta dos pedidos em AGUARDANDO entra na mesma lista.
+      if (stage === "separacao") {
+        try {
+          setWaitingOrders(await fetchExpeditionOrders(effectiveStore, "aguardando"));
+        } catch {
+          setWaitingOrders([]);
+        }
+      } else {
+        setWaitingOrders([]);
+      }
       await loadCounts();
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
