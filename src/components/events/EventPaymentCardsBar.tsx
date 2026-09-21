@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, MessageSquare, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, MessageSquare, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus, Eye, EyeOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -153,6 +153,8 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   const currentUserId = useCurrentUserId();
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
+  // Pedidos cujo link da área de membros já foi aberto pela cliente (data/hora da abertura).
+  const [openedByOrder, setOpenedByOrder] = useState<Record<string, string>>({});
   const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
