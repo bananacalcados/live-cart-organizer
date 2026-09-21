@@ -1005,6 +1005,7 @@ Deno.serve(async (req) => {
               const tot = Math.round(orderTotal(order) * 100) / 100;
               return {
                 id: order.id,
+                event_id: order.event_id || null,
                 stage: order.stage,
                 products: (order.products || []).map((p: any) => {
                   const full = Number(p.price || 0);
