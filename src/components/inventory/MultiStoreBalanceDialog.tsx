@@ -55,23 +55,25 @@ export function MultiStoreBalanceDialog({ open, onOpenChange, productName, varia
     }
     setBusy(true);
     try {
-      let ok = 0;
-      for (const r of changed) {
-        const qty = Number(values[r.productId]);
-        const { data, error } = await supabase.functions.invoke("pos-stock-movement", {
-          body: {
-            product_id: r.productId,
-            movement_type: "balanco",
-            quantity: qty,
-            reason: reason || "Balanço multi-loja (Catálogo Unificado)",
-          },
-        });
-        if (error) throw new Error(error.message);
-        if (!(data as any)?.success) throw new Error((data as any)?.error || `Falha em ${r.storeName}`);
-        ok++;
-      }
-      toast.success(`Balanço aplicado em ${ok} loja(s). Novo total: ${newTotal}`);
-      onDone();
+      // Envia todas as lojas em paralelo — antes era uma por vez (lento).
+      const results = await Promise.all(
+        changed.map(async (r) => {
+          const qty = Number(values[r.productId]);
+          const { data, error } = await supabase.functions.invoke("pos-stock-movement", {
+            body: {
+              product_id: r.productId,
+              movement_type: "balanco",
+              quantity: qty,
+              reason: reason || "Balanço multi-loja (Catálogo Unificado)",
+            },
+          });
+          if (error) throw new Error(error.message);
+          if (!(data as any)?.success) throw new Error((data as any)?.error || `Falha em ${r.storeName}`);
+          return { productId: r.productId, stock: qty };
+        }),
+      );
+      toast.success(`Balanço aplicado em ${results.length} loja(s). Novo total: ${newTotal}`);
+      onDone(results);
       onOpenChange(false);
     } catch (e: any) {
       toast.error("Erro no balanço: " + e.message, { duration: 8000 });
