@@ -1117,6 +1117,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                   : "COMPLETO — PRONTO PARA CONFERÊNCIA"}
                               </Badge>
                             )}
+                            {o.expedition_waiting_products && stage !== "aguardando" && (
+                              <Badge className="bg-destructive text-destructive-foreground text-base font-black px-4 py-2 uppercase">
+                                ⚠ AGUARDANDO PRODUTO PRA FAZER ENVIO — NÃO CONCLUIR
+                              </Badge>
+                            )}
                             {o.is_test && (
                               <Badge className="bg-fuchsia-600 text-white text-sm font-black">TESTE</Badge>
                             )}
@@ -1348,7 +1353,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               size="lg"
                               className="bg-exp-pick hover:bg-exp-pick/90 text-white text-base font-black"
                               disabled={busyId === o.id}
-                              onClick={() => advance(o)}
+                              onClick={() =>
+                                setPickOrders(
+                                  o.expedition_group_id
+                                    ? filtered.filter((x) => x.expedition_group_id === o.expedition_group_id)
+                                    : [o],
+                                )
+                              }
                             >
                               SEPARADO <ChevronRight className="h-5 w-5" />
                             </Button>
@@ -1386,15 +1397,26 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             </Button>
                           )}
                           {stage === "concluido" && o.resolved_phone && (
-                            <Button
-                              size="lg"
-                              variant="outline"
-                              className="border-2 border-exp-done text-exp-done text-base font-black"
-                              onClick={() => setTrackingOrder(o)}
-                              title="Reenviar a mensagem de rastreio no WhatsApp"
-                            >
-                              <Send className="h-5 w-5 mr-1" /> ENVIAR RASTREIO
-                            </Button>
+                            <>
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-2 border-emerald-600 text-emerald-700 text-base font-black"
+                                onClick={() => setWaFullOrder(o)}
+                                title="Abrir o WhatsApp completo do PDV nesta cliente"
+                              >
+                                <MessageCircle className="h-5 w-5 mr-1" /> WHATSAPP PDV
+                              </Button>
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-2 border-exp-done text-exp-done text-base font-black"
+                                onClick={() => setTrackingOrder(o)}
+                                title="Reenviar a mensagem de rastreio no WhatsApp"
+                              >
+                                <Send className="h-5 w-5 mr-1" /> ENVIAR RASTREIO
+                              </Button>
+                            </>
                           )}
                           <Button
                             size="lg"
