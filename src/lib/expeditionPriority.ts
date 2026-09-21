@@ -43,6 +43,27 @@ export const expeditionPriorityRank = (order: any): number => {
   return 3;
 };
 
+/** Mototáxi/entrega local (inclui Governador Valadares). */
+export const isMototaxiOrder = (order: any): boolean => {
+  const method = stripAccents(
+    String(order?.shipping_carrier || order?.delivery_method || order?.shipping_method || ""),
+  );
+  return method.includes("moto") || isValadaresOrder(order);
+};
+
+/**
+ * Prioridade da aba AGUARDANDO:
+ * 0 SEDEX · 1 mototáxi/Valadares · 2 retirada na loja · 3 Correios/transportadora · 4 demais.
+ * Dentro de cada faixa, os mais antigos primeiro.
+ */
+export const expeditionWaitingRank = (order: any): number => {
+  if (isSedexOrder(order) || order?.shipping_type === "sedex") return 0;
+  if (isMototaxiOrder(order)) return 1;
+  if (isStorePickupOrder(order)) return 2;
+  if (order?.shipping_type === "correios" || order?.shipping_type === "transportadora") return 3;
+  return 4;
+};
+
 /** Ordena mantendo a data (mais recente primeiro) dentro de cada prioridade. */
 export const sortByExpeditionPriority = <T,>(orders: T[]): T[] =>
   [...orders].sort((a: any, b: any) => {
