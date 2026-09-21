@@ -476,7 +476,7 @@ serve(async (req) => {
     const fromMe = Boolean(message.fromMe);
     const messageId = asString(message.messageid) || asString(message.id);
     const uazMediaType = asString(message.mediaType);
-    const sysMediaType = mapMediaType(uazMediaType);
+    let sysMediaType = mapMediaType(uazMediaType);
     const text = asString(message.text) || "";
     const senderName =
       asString(message.senderName) || asString(message.groupName) || null;
