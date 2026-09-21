@@ -336,6 +336,80 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   };
   const sendWaiting = () => moveEntries(selectedEntries, "aguardando", "movido(s) para Aguardando");
 
+  /**
+   * Manda para AGUARDANDO apenas parte das unidades de UM produto.
+   * Ex.: 3 pares do mesmo modelo, mando 2 pra Aguardando e 1 continua na Separação.
+   * As unidades são distribuídas entre os pedidos deste produto (mais prioritários/antigos primeiro).
+   */
+  const sendLineToWaiting = async (line: PickLine, qty: number) => {
+    let left = Math.max(0, Math.min(qty, line.quantity));
+    if (!left) return;
+    setAdvancing(true);
+    try {
+      const orderIds = new Set(line.orders.map((o) => o.id));
+      const entries = allEntries
+        .filter((e) => !e.waiting && orderIds.has(e.o.id))
+        .sort((a, b) => {
+          const r = expeditionPriorityRank(a.o) - expeditionPriorityRank(b.o);
+          return r !== 0 ? r : +new Date(a.o.created_at) - +new Date(b.o.created_at);
+        });
+
+      const itemUpdates: { id: string; waiting: number; picked: number }[] = [];
+      const saleAdds = new Map<string, number>();
+
+      for (const e of entries) {
+        if (left <= 0) break;
+        for (const it of e.o.items) {
+          if (left <= 0) break;
+          if (`${prefixOf(e.o)}|${lineKey(it)}` !== line.key) continue;
+          const add = Math.min(left, Number(it.quantity) || 0);
+          if (add <= 0) continue;
+          left -= add;
+          const waiting = (Number(it.expedition_waiting_qty) || 0) + add;
+          itemUpdates.push({
+            id: it.id,
+            waiting,
+            picked: (Number(it.expedition_conference_qty) || 0) + waiting,
+          });
+          saleAdds.set(e.o.id, (saleAdds.get(e.o.id) || 0) + add);
+        }
+      }
+
+      for (let i = 0; i < itemUpdates.length; i += 20) {
+        await Promise.all(
+          itemUpdates.slice(i, i + 20).map((u) =>
+            supabase
+              .from("pos_sale_items")
+              .update({ expedition_waiting_qty: u.waiting, expedition_picked_qty: u.picked } as any)
+              .eq("id", u.id),
+          ),
+        );
+      }
+
+      // O pedido só muda de etapa quando NÃO sobra mais nada dele na Separação.
+      for (const [saleId, added] of saleAdds) {
+        const order = allEntries.find((e) => e.o.id === saleId)?.o;
+        const restante =
+          (order?.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) || 0) - added;
+        await supabase
+          .from("pos_sales")
+          .update({
+            expedition_stage: restante > 0 ? "separacao" : "aguardando",
+            expedition_waiting_products: true,
+          } as any)
+          .eq("id", saleId);
+      }
+
+      toast.success(`${qty - left} par(es) movido(s) para Aguardando`);
+      setWaitDialog(null);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao mover para Aguardando");
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   const print = () => {
     const rows = lines
       .map(
