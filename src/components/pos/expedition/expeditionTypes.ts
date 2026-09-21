@@ -79,6 +79,11 @@ export interface ExpItem {
   total_price: number;
   /** Quantas unidades deste item já foram separadas (etapa AGUARDANDO). */
   expedition_picked_qty?: number | null;
+  /** Quantidades do item que já foram destinadas manualmente a cada etapa. */
+  expedition_conference_qty?: number | null;
+  expedition_waiting_qty?: number | null;
+  /** Quantidade original antes do recorte visual por etapa. */
+  expedition_total_qty?: number;
 }
 
 export interface ExpOrder {
@@ -266,14 +271,17 @@ export async function fetchExpeditionOrders(
     "id, store_id, created_at, paid_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id, has_gift, gift_description, gift_added_at, gift_after_completion, payment_on_delivery, expected_payment_method, delivery_payment_received_at, delivery_payment_method, pickup_date, is_store_pickup, is_sedex, shipping_type, sales_channel, expedition_waiting_products";
 
 
+  const itemStage = stage === "separacao" || stage === "aguardando" || stage === "conferencia";
   const baseQuery = () => {
     let q = supabase
       .from("pos_sales")
       .select(SALE_COLS)
-      .eq("expedition_stage", stage)
       .in("sale_type", ["live", "online"])
       .order("created_at", { ascending: stage !== "concluido" })
       .limit(allStores ? 800 : 400);
+    q = itemStage
+      ? q.in("expedition_stage", ["separacao", "aguardando", "conferencia"])
+      : q.eq("expedition_stage", stage);
     if (!allStores) q = q.eq("store_id", storeId);
     // Filtragem server-side por data de conclusão da expedição.
     // Só aplicamos quando há intervalo definido — senão excluíria os
@@ -349,7 +357,20 @@ export async function fetchExpeditionOrders(
   const itemsBySale = new Map<string, ExpItem[]>();
   for (const it of (itemsRes.data || []) as any[]) {
     const arr = itemsBySale.get(it.sale_id) || [];
-    arr.push(it as ExpItem);
+    const total = Number(it.quantity) || 0;
+    const conference = Math.max(0, Number(it.expedition_conference_qty) || 0);
+    const waiting = Math.max(0, Number(it.expedition_waiting_qty) || 0);
+    const stageQuantity =
+      stage === "separacao"
+        ? Math.max(0, total - conference - waiting)
+        : stage === "aguardando"
+          ? waiting
+          : stage === "conferencia"
+            ? conference
+            : total;
+    if (!itemStage || stageQuantity > 0) {
+      arr.push({ ...it, quantity: stageQuantity, expedition_total_qty: total } as ExpItem);
+    }
     itemsBySale.set(it.sale_id, arr);
   }
   const sellerMap = new Map((sellersRes.data || []).map((s: any) => [s.id, s.name]));
@@ -425,7 +446,7 @@ export async function fetchExpeditionOrders(
         s.tracking_carrier ||
         null,
     } as ExpOrder;
-  });
+  }).filter((order) => !itemStage || order.items.length > 0);
 }
 
 

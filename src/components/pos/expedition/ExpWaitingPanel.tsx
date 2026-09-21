@@ -46,7 +46,7 @@ const lineKey = (it: ExpItem) =>
   ].join("|");
 
 const missingOf = (it: ExpItem) =>
-  Math.max(0, (Number(it.quantity) || 0) - (Number(it.expedition_picked_qty) || 0));
+  Math.max(0, Number(it.quantity) || 0);
 
 /** Painel de faltas da etapa AGUARDANDO: produtos aguardados + pedidos que dependem deles. */
 export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
@@ -58,12 +58,7 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [waiting, conf] = await Promise.all([
-        fetchExpeditionOrders(storeId, "aguardando"),
-        fetchExpeditionOrders(storeId, "conferencia").catch(() => [] as ExpOrder[]),
-      ]);
-      const flagged = conf.filter((o) => (o as any).expedition_waiting_products);
-      setOrders([...waiting, ...flagged]);
+      setOrders(await fetchExpeditionOrders(storeId, "aguardando"));
     } catch (e: any) {
       toast.error(e?.message || "Erro ao carregar produtos aguardados");
     } finally {
@@ -126,33 +121,19 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
         deps.map((d) =>
           supabase
             .from("pos_sale_items")
-            .update({ expedition_picked_qty: Number(d.item.quantity) || 0 } as any)
+            .update({
+              expedition_waiting_qty: Math.max(0, (Number(d.item.expedition_waiting_qty) || 0) - d.missing),
+              expedition_conference_qty: (Number(d.item.expedition_conference_qty) || 0) + d.missing,
+            } as any)
             .eq("id", d.item.id),
         ),
       );
-      // Reavalia o envio inteiro. Um produto pode sair de AGUARDANDO sem fazer
-      // outro produto faltante parecer separado; a tarja só some ao completar tudo.
-      const touchedIds = new Set(deps.map((d) => d.item.id));
       const touchedOrders = [...new Map(deps.map((d) => [d.order.id, d.order])).values()];
-      const touchedGroups = new Set(
-        touchedOrders.map((o) => o.expedition_group_id).filter((id): id is string => !!id),
-      );
-      const affected = orders.filter(
-        (o) => touchedOrders.some((t) => t.id === o.id) || (!!o.expedition_group_id && touchedGroups.has(o.expedition_group_id)),
-      );
-      const shipmentKeys = new Set(affected.map((o) => o.expedition_group_id || o.id));
-      for (const shipmentKey of shipmentKeys) {
-        const shipment = affected.filter((o) => (o.expedition_group_id || o.id) === shipmentKey);
-        const complete = shipment.every((o) =>
-          o.items.every((it) => touchedIds.has(it.id) || missingOf(it) <= 0),
-        );
-        if (!complete) continue;
-        const { error } = await supabase
-          .from("pos_sales")
-          .update({ expedition_stage: "conferencia", expedition_waiting_products: false } as any)
-          .in("id", shipment.map((o) => o.id));
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: "conferencia", expedition_waiting_products: true } as any)
+        .in("id", touchedOrders.map((o) => o.id));
+      if (error) throw error;
       toast.success("Produto avançado para a Conferência");
       await load();
       onRefresh();
