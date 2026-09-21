@@ -1346,7 +1346,30 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               SEPARADO <ChevronRight className="h-5 w-5" />
                             </Button>
                           )}
-                          {stage === "conferencia" && (
+                           {stage === "aguardando" && (
+                            <Button
+                              size="lg"
+                              className={`text-white text-base font-black ${
+                                isWaitingIncomplete(o)
+                                  ? "bg-amber-500 hover:bg-amber-500/90"
+                                  : "bg-exp-check hover:bg-exp-check/90"
+                              }`}
+                              disabled={busyId === o.id}
+                              onClick={() => {
+                                if (
+                                  isWaitingIncomplete(o) &&
+                                  !confirm("Ainda falta produto neste pedido. Avançar assim mesmo para a Conferência?")
+                                )
+                                  return;
+                                advance(o, "conferencia");
+                              }}
+                              title={isWaitingIncomplete(o) ? "Forçar avanço mesmo faltando produto" : undefined}
+                            >
+                              {isWaitingIncomplete(o) ? "AVANÇAR MESMO ASSIM" : "AVANÇAR PARA CONFERÊNCIA"}
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                           )}
+                           {stage === "conferencia" && (
                             <Button
                               size="lg"
                               className="bg-exp-check hover:bg-exp-check/90 text-white text-base font-black"
