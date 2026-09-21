@@ -1580,6 +1580,25 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         />
       )}
 
+      <ExpAdvancePickDialog
+        orders={pickOrders}
+        open={!!pickOrders}
+        onOpenChange={(v) => !v && setPickOrders(null)}
+        onDone={() => {
+          setPickOrders(null);
+          load();
+        }}
+      />
+
+      {waFullOrder && (
+        <POSTaskWhatsAppDialog
+          open={!!waFullOrder}
+          onOpenChange={(v) => !v && setWaFullOrder(null)}
+          storeId={waFullOrder.store_id || storeId}
+          customerPhone={waFullOrder.resolved_phone || undefined}
+        />
+      )}
+
       <ExpTrackingSendDialog
         order={trackingOrder}
         open={!!trackingOrder}
