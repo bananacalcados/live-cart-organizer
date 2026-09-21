@@ -60,13 +60,24 @@ export function useConversationAssignments() {
   // Load assignments + realtime
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
-        .from("chat_conversation_assignments")
-        .select("phone, whatsapp_number_id, assigned_to, assigned_name");
-      if (data) {
+      // Supabase caps a select at 1000 rows by default — page through everything,
+      // otherwise most conversations show up without an attendant name.
+      const PAGE = 1000;
+      const all: Assignment[] = [];
+      for (let from = 0; from < 50000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("chat_conversation_assignments")
+          .select("phone, whatsapp_number_id, assigned_to, assigned_name")
+          .order("phone", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error || !data) break;
+        all.push(...(data as Assignment[]));
+        if (data.length < PAGE) break;
+      }
+      if (all.length) {
         const map = new Map<string, string>();
         const nameMap = new Map<string, string>();
-        for (const a of data as Assignment[]) {
+        for (const a of all) {
           const key = `${a.phone}__${a.whatsapp_number_id || "none"}`;
           map.set(key, a.assigned_to);
           if (a.assigned_name) nameMap.set(key, a.assigned_name);
@@ -75,6 +86,7 @@ export function useConversationAssignments() {
         setAssignedNames(nameMap);
       }
     };
+
     load();
 
     const channel = supabase
