@@ -97,6 +97,8 @@ interface ChatViewProps {
   hideTagsBar?: boolean;
   /** Botão "Ler msgs antigas" (histórico arquivado sob demanda). */
   archive?: { load: () => void; loading: boolean; exhausted: boolean; loadedCount: number };
+  /** Em grupos: clicar no nome do participante abre a conversa individual com ele. */
+  onOpenParticipant?: (phone: string, name?: string | null) => void;
 }
 
 const PREDEFINED_TAGS = [
