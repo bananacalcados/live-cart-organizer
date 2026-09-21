@@ -688,6 +688,16 @@ export function UnifiedProductsList() {
         items={labelGroup?.items || []}
       />
 
+      {/* Balanço multi-loja pelo total */}
+      <MultiStoreBalanceDialog
+        open={!!balanceTarget}
+        onOpenChange={(v) => !v && setBalanceTarget(null)}
+        productName={balanceTarget?.productName || ""}
+        variationLabel={balanceTarget?.variationLabel || ""}
+        rows={balanceTarget?.rows || []}
+        onDone={() => { setBalanceTarget(null); load(); }}
+      />
+
       {/* Bulk delete confirmation */}
       <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>
         <DialogContent>
