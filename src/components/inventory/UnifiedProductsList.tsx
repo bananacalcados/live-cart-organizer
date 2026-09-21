@@ -667,7 +667,17 @@ export function UnifiedProductsList() {
       <MasterEditDialog
         master={editing}
         onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); load(); }}
+        onSaved={(parentSku, patch) => {
+          setEditing(null);
+          setMasters((prev) => prev.map((m) => (m.parent_sku === parentSku ? { ...m, ...patch } as MasterData : m)));
+          setPosProducts((prev) => prev.map((p) => (p.parent_sku === parentSku
+            ? {
+                ...p,
+                cost_price: patch.cost_price && patch.cost_price > 0 ? patch.cost_price : p.cost_price,
+                price: patch.sale_price && patch.sale_price > 0 ? patch.sale_price : p.price,
+              }
+            : p)));
+        }}
       />
 
       {/* Edit pos sku dialog */}
