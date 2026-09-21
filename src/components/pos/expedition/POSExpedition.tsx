@@ -27,6 +27,9 @@ import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpItemsEditDialog } from "./ExpItemsEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
+import { ExpAdvancePickDialog } from "./ExpAdvancePickDialog";
+import { ExpWaitingPanel } from "./ExpWaitingPanel";
+import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
@@ -92,6 +95,10 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [itemsOrder, setItemsOrder] = useState<ExpOrder | null>(null);
   const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
   const [deleteOrder, setDeleteOrder] = useState<ExpOrder | null>(null);
+  /** Pergunta "possui todos os produtos?" ao avançar da Separação. */
+  const [pickOrders, setPickOrders] = useState<ExpOrder[] | null>(null);
+  /** WhatsApp completo do PDV (aba Concluídos). */
+  const [waFullOrder, setWaFullOrder] = useState<ExpOrder | null>(null);
 
 
 
