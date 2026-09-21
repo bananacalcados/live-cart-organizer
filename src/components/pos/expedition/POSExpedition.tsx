@@ -979,7 +979,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
-            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} storeId={storeId} />
+            <ExpPickingList
+              orders={filtered}
+              waitingOrders={waitingOrders}
+              stage={stage}
+              onRefresh={load}
+              storeId={storeId}
+            />
             <p className="text-base font-black text-pos-text uppercase pt-2">
               Pedidos desta etapa ({filtered.length})
             </p>
