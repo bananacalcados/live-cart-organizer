@@ -843,7 +843,7 @@ function VariationEditDialog({
 /* ============ Master Edit Dialog ============ */
 function MasterEditDialog({
   master, onClose, onSaved,
-}: { master: MasterData | null; onClose: () => void; onSaved: () => void; }) {
+}: { master: MasterData | null; onClose: () => void; onSaved: (parentSku: string, patch: any) => void; }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
