@@ -27,7 +27,6 @@ import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpItemsEditDialog } from "./ExpItemsEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
-import { ExpAdvancePickDialog } from "./ExpAdvancePickDialog";
 import { ExpWaitingPanel } from "./ExpWaitingPanel";
 import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -467,18 +466,20 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to) return;
     setBusyId(o.id);
     try {
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({ expedition_stage: to, expedition_finished_at: null })
-        .eq("id", o.id);
-      if (error) throw error;
-      // Voltar de AGUARDANDO para SEPARAÇÃO recomeça a separação do zero.
       if (o.expedition_stage === "aguardando") {
-        await supabase
-          .from("pos_sale_items")
-          .update({ expedition_picked_qty: 0 } as any)
-          .eq("sale_id", o.id);
+        await Promise.all(o.items.map((item) =>
+          supabase.from("pos_sale_items").update({
+            expedition_waiting_qty: 0,
+            expedition_picked_qty:
+              (Number(item.expedition_conference_qty) || 0) + (Number(item.expedition_completed_qty) || 0),
+          } as any).eq("id", item.id),
+        ));
       }
+      const { error } = await supabase.from("pos_sales").update({
+        expedition_stage: to,
+        expedition_finished_at: null,
+      }).eq("id", o.id);
+      if (error) throw error;
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
@@ -1462,23 +1463,34 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                            {stage === "aguardando" && (
                             <Button
                               size="lg"
-                              className={`text-white text-base font-black ${
-                                isWaitingIncomplete(o)
-                                  ? "bg-amber-500 hover:bg-amber-500/90"
-                                  : "bg-exp-check hover:bg-exp-check/90"
-                              }`}
+                               className="bg-exp-check hover:bg-exp-check/90 text-white text-base font-black"
                               disabled={busyId === o.id}
-                              onClick={() => {
-                                if (
-                                  isWaitingIncomplete(o) &&
-                                  !confirm("Ainda falta produto neste pedido. Avançar assim mesmo para a Conferência?")
-                                )
-                                  return;
-                                advance(o, "conferencia");
+                               onClick={async () => {
+                                 setBusyId(o.id);
+                                 try {
+                                   await Promise.all(o.items.map((item) => {
+                                     const qty = Number(item.quantity) || 0;
+                                     const waiting = Math.max(0, (Number(item.expedition_waiting_qty) || 0) - qty);
+                                     const conference = (Number(item.expedition_conference_qty) || 0) + qty;
+                                     return supabase.from("pos_sale_items").update({
+                                       expedition_waiting_qty: waiting,
+                                       expedition_conference_qty: conference,
+                                       expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
+                                     } as any).eq("id", item.id);
+                                   }));
+                                   await supabase.from("pos_sales").update({
+                                     expedition_stage: "conferencia",
+                                     expedition_waiting_products: true,
+                                   } as any).eq("id", o.id);
+                                   await load();
+                                 } catch (e: any) {
+                                   toast.error(e.message || "Erro ao avançar produto");
+                                 } finally {
+                                   setBusyId(null);
+                                 }
                               }}
-                              title={isWaitingIncomplete(o) ? "Forçar avanço mesmo faltando produto" : undefined}
                             >
-                              {isWaitingIncomplete(o) ? "AVANÇAR MESMO ASSIM" : "AVANÇAR PARA CONFERÊNCIA"}
+                               AVANÇAR PRODUTO PARA CONFERÊNCIA
                               <ChevronRight className="h-5 w-5" />
                             </Button>
                            )}
@@ -1666,16 +1678,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           wide
         />
       )}
-
-      <ExpAdvancePickDialog
-        orders={pickOrders}
-        open={!!pickOrders}
-        onOpenChange={(v) => !v && setPickOrders(null)}
-        onDone={() => {
-          setPickOrders(null);
-          load();
-        }}
-      />
 
       {waFullOrder && (
         <POSTaskWhatsAppDialog
