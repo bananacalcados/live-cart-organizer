@@ -307,6 +307,27 @@ export function LiveGradePanel({
                       ))
                     )}
                   </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(row.comprar ?? []).length === 0 ? (
+                      <span className="text-sm font-bold text-emerald-600">
+                        Estoque cobre — não precisa comprar
+                      </span>
+                    ) : (
+                      <>
+                        <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-sm font-black">
+                          {row.grades_comprar ?? 0} grade(s)
+                        </span>
+                        {row.comprar!.map((c) => (
+                          <span
+                            key={`c-${c.tam}`}
+                            className="rounded bg-destructive/15 px-2 py-1 font-mono text-base font-extrabold text-destructive"
+                          >
+                            {c.tam}×{c.qtd}
+                          </span>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })
