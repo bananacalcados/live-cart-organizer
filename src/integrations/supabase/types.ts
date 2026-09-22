@@ -18612,16 +18612,28 @@ export type Database = {
           created_by: string | null
           customer_name: string | null
           customer_phone: string | null
-          destination_city: string
-          destination_state: string
+          delivered_at: string | null
+          destination_city: string | null
+          destination_state: string | null
+          fulfillment: string
           id: string
+          kind: string
+          last_real_sync: string | null
           manual_offset_days: number
           notes: string | null
           order_id: string | null
           order_reference: string | null
-          origin_city: string
-          origin_state: string
+          origin_city: string | null
+          origin_state: string | null
           posted_at: string
+          real_carrier: string | null
+          real_events: Json
+          real_tracking_code: string | null
+          sale_id: string | null
+          stage: string
+          stage_days: Json | null
+          stage_history: Json
+          stage_started_at: string
           status: string
           step_interval_days: number
           stops: Json
@@ -18633,16 +18645,28 @@ export type Database = {
           created_by?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          destination_city: string
-          destination_state: string
+          delivered_at?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          fulfillment?: string
           id?: string
+          kind?: string
+          last_real_sync?: string | null
           manual_offset_days?: number
           notes?: string | null
           order_id?: string | null
           order_reference?: string | null
-          origin_city: string
-          origin_state: string
+          origin_city?: string | null
+          origin_state?: string | null
           posted_at?: string
+          real_carrier?: string | null
+          real_events?: Json
+          real_tracking_code?: string | null
+          sale_id?: string | null
+          stage?: string
+          stage_days?: Json | null
+          stage_history?: Json
+          stage_started_at?: string
           status?: string
           step_interval_days?: number
           stops?: Json
@@ -18654,16 +18678,28 @@ export type Database = {
           created_by?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          destination_city?: string
-          destination_state?: string
+          delivered_at?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          fulfillment?: string
           id?: string
+          kind?: string
+          last_real_sync?: string | null
           manual_offset_days?: number
           notes?: string | null
           order_id?: string | null
           order_reference?: string | null
-          origin_city?: string
-          origin_state?: string
+          origin_city?: string | null
+          origin_state?: string | null
           posted_at?: string
+          real_carrier?: string | null
+          real_events?: Json
+          real_tracking_code?: string | null
+          sale_id?: string | null
+          stage?: string
+          stage_days?: Json | null
+          stage_history?: Json
+          stage_started_at?: string
           status?: string
           step_interval_days?: number
           stops?: Json
@@ -22724,6 +22760,7 @@ export type Database = {
         Returns: Json
       }
       format_customer_code: { Args: { seq_val: number }; Returns: string }
+      gen_shipment_public_code: { Args: never; Returns: string }
       gen_unique_ean13: { Args: never; Returns: string }
       gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
       generate_crediario_installments: {
