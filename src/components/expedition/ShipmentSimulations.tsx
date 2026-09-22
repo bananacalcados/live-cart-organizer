@@ -23,7 +23,27 @@ type Row = SimulationRecord & {
   customer_phone: string | null;
   order_reference: string | null;
   created_at: string;
+  kind: string;
+  fulfillment: string;
+  stage: string;
+  stage_days: Record<string, number> | null;
+  real_tracking_code: string | null;
+  delivered_at: string | null;
 };
+
+type StageCfg = { em_separacao_days: number; separado_days: number; embalado_days: number; business_days: boolean };
+
+const DEFAULT_CFG: StageCfg = { em_separacao_days: 1, separado_days: 1, embalado_days: 1, business_days: true };
+
+const STAGE_LABEL: Record<string, string> = {
+  em_separacao: 'Em separação',
+  separado: 'Separado',
+  embalado: 'Embalado',
+  enviado: 'Enviado',
+  entregue: 'Entregue',
+};
+
+const STAGE_SEQ = ['em_separacao', 'separado', 'embalado', 'enviado', 'entregue'];
 
 const emptyForm = () => ({
   id: '' as string,
