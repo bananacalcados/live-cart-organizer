@@ -54,7 +54,9 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const handleEdit = (template: MessageTemplate) => {
     setEditingTemplate(template);
     setName(template.name);
-    setMessage(template.message);
+    setVariants(template.variants?.length ? template.variants : [template.message]);
+    setFunnelStep(Number(template.funnel_step) || 0);
+    setFocusedVariant(0);
     setSelectedStages(template.stage === 'all' ? [] : template.stage.split(','));
     setIsEditing(true);
   };
