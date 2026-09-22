@@ -582,6 +582,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
+      contact_name: (block as any)?.contactName?.trim() || null,
+      contact_phone: String((block as any)?.contactPhone || '').replace(/\D/g, '') || null,
       whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
     };
 
