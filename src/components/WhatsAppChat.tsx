@@ -817,6 +817,20 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     inputRef.current?.focus();
   };
 
+  // Etapa do atendimento: escolhe uma redação em RODÍZIO entre todas as
+  // variações cadastradas (anti-spam nas instâncias não oficiais).
+  const handleStepSelect = async (step: number) => {
+    const pool = templates.filter((t) => Number(t.funnel_step) === step);
+    if (pool.length === 0) {
+      toast.error('Nenhuma mensagem cadastrada nesta etapa.');
+      return;
+    }
+    const scope = hookEffectiveNumberId || selectedNumberId || 'global';
+    const msg = await pickStepMessage(step, scope, pool);
+    if (!msg) { toast.error('Nenhuma redação válida nesta etapa.'); return; }
+    handleTemplateSelect(msg);
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
