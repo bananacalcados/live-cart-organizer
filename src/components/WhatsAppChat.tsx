@@ -1878,6 +1878,26 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                   Templates Meta (API Oficial)
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs">Etapas do atendimento (rodízio automático)</DropdownMenuLabel>
+                {FUNNEL_STEPS.filter((s) => s.value > 0).map((s) => {
+                  const count = templates
+                    .filter((t) => Number(t.funnel_step) === s.value)
+                    .reduce((n, t) => n + (t.variants?.length || 1), 0);
+                  return (
+                    <DropdownMenuItem
+                      key={s.value}
+                      onClick={() => handleStepSelect(s.value)}
+                      disabled={count === 0}
+                      className="flex-col items-start gap-0.5 cursor-pointer"
+                    >
+                      <span className="font-medium text-sm">{s.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {count === 0 ? 'Sem redações cadastradas' : `${count} redação(ões) em rodízio`}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
                 {stageTemplates.length > 0 && (
                   <>
                     <DropdownMenuLabel className="text-xs">Para esta etapa ({currentStage?.title})</DropdownMenuLabel>
