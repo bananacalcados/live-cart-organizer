@@ -478,6 +478,16 @@ serve(async (req) => {
       metadata: { source: "mercadopago-create-pix", stage: ctx.stage },
     });
 
+    // ── Cascata de PIX (Fase 1): AustPay como DEGRAU SEGUINTE ao Mercado Pago ──
+    // Só entra aqui quando o MP já falhou, a chave `austpay_enabled` está
+    // ligada e as credenciais existem. Qualquer problema = comportamento de hoje.
+    const fallback = await tryAustpayPixFallback(supabase, ctx);
+    if (fallback) {
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(
       JSON.stringify({ error: error.message }),
       {
