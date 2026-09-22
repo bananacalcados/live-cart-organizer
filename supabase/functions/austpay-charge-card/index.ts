@@ -1,16 +1,18 @@
 // ── AustPay (Rinne): cobrança no cartão ───────────────────────────────────
 // Fase 3 do plano — ÚLTIMO degrau da cascata, nunca o primeiro.
-// A Rinne só aceita número e CVV CRIPTOGRAFADOS pelo rinne-js no navegador
-// (valores com prefixo "ev:"). Esta função recusa qualquer dado de cartão em
-// texto puro, então é impossível ela "roubar" o fluxo do Mercado Pago:
-// sem o SDK liberado, ela simplesmente não é acionada.
+// A Rinne não aceita PAN/CVV em texto puro no host normal, mas oferece o HOST
+// PCI (pci.api...), que criptografa número e CVV em trânsito antes de chegar à
+// API. Com isso NÃO é preciso o rinne-js no navegador: o formulário de cartão
+// atual do checkout continua exatamente igual e a AustPay só é chamada quando
+// os gateways anteriores já recusaram.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  austpayFetch,
+  austpayPciFetch,
   austpayRequestId,
   austpayTransactionsPath,
+  detectCardBrand,
   getAustpayConfig,
   isAustpayApproved,
   isAustpayEnabled,
