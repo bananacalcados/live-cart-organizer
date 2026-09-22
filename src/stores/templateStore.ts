@@ -210,6 +210,13 @@ export function applyTemplateVariables(
     link_carrinho?: string;
     total?: string;
     produtos?: string;
+    nome_completo?: string;
+    total_pix?: string;
+    desconto_pix?: string;
+    parcelas_max?: string;
+    valor_parcela?: string;
+    parcelamento?: string;
+    produtos_curto?: string;
   }
 ): string {
   let result = template;
