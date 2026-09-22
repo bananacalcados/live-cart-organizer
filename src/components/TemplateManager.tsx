@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useTemplateStore, MessageTemplate } from "@/stores/templateStore";
+import { useTemplateStore, MessageTemplate, FUNNEL_STEPS } from "@/stores/templateStore";
 import { STAGES, OrderStage } from "@/types/order";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -350,7 +350,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                         key={v.name}
                         variant="outline"
                         className="text-xs cursor-pointer hover:bg-secondary"
-                        onClick={() => setMessage((prev) => prev + v.name)}
+                        onClick={() => appendToFocused(v.name)}
                         title={v.desc}
                       >
                         {v.name}
@@ -369,7 +369,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                         key={v.name}
                         variant="secondary"
                         className="text-xs cursor-pointer hover:bg-primary/20 gap-1"
-                        onClick={() => setMessage((prev) => prev + v.name)}
+                        onClick={() => appendToFocused(v.name)}
                         title={v.desc}
                       >
                         <span>{v.preview}</span>
