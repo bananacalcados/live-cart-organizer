@@ -8191,6 +8191,8 @@ export type Database = {
         Row: {
           block_order: number | null
           campaign_id: string
+          contact_name: string | null
+          contact_phone: string | null
           created_at: string
           disable_link_preview: boolean
           execution_count: number
@@ -8216,6 +8218,8 @@ export type Database = {
         Insert: {
           block_order?: number | null
           campaign_id: string
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           disable_link_preview?: boolean
           execution_count?: number
@@ -8241,6 +8245,8 @@ export type Database = {
         Update: {
           block_order?: number | null
           campaign_id?: string
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           disable_link_preview?: boolean
           execution_count?: number
@@ -8489,6 +8495,8 @@ export type Database = {
       }
       group_message_templates: {
         Row: {
+          contact_name: string | null
+          contact_phone: string | null
           created_at: string
           id: string
           media_url: string | null
@@ -8498,6 +8506,8 @@ export type Database = {
           poll_options: Json | null
         }
         Insert: {
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           id?: string
           media_url?: string | null
@@ -8507,6 +8517,8 @@ export type Database = {
           poll_options?: Json | null
         }
         Update: {
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           id?: string
           media_url?: string | null
