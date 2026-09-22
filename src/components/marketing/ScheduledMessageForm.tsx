@@ -587,6 +587,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       if (editingMessage.poll_options) {
         b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
       }
+      b.contactName = editingMessage.contact_name || '';
+      b.contactPhone = editingMessage.contact_phone || '';
       setBlocks([b]);
       setSendSpeed(editingMessage.send_speed || 'normal');
       const d = new Date(editingMessage.scheduled_at);
