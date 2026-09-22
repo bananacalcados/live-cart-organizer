@@ -34,7 +34,7 @@ serve(async (req) => {
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, vindi_transaction_id, payment_method_label, payment_confirmed_source, is_paid, paid_at, products, discount_type, discount_value, shipping_cost, free_shipping")
+      .select("id, mercadopago_payment_id, vindi_transaction_id, austpay_transaction_id, payment_method_label, payment_confirmed_source, is_paid, paid_at, products, discount_type, discount_value, shipping_cost, free_shipping")
       .eq("id", orderId)
       .maybeSingle();
 
