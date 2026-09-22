@@ -201,6 +201,19 @@ export function ShipmentSimulations() {
 
   const advance = (r: Row) => patch(r, { manual_offset_days: (r.manual_offset_days || 0) + (r.step_interval_days || 2) });
 
+  /** Avança manualmente a etapa de um pedido (registra a data da etapa). */
+  const advanceStage = (r: Row) => {
+    const i = STAGE_SEQ.indexOf(r.stage || 'em_separacao');
+    const next = STAGE_SEQ[Math.min(i + 1, STAGE_SEQ.length - 1)];
+    const history: Record<string, string> = { ...((r as any).stage_history || {}) };
+    history[next] = new Date().toISOString();
+    return patch(r, { stage: next, stage_history: history, ...(next === 'entregue' ? { delivered_at: new Date().toISOString(), status: 'delivered' } : {}) });
+  };
+
+  /** Prazo próprio deste pedido (sobrepõe o padrão). */
+  const setOrderDays = (r: Row, key: keyof StageCfg, value: number) =>
+    patch(r, { stage_days: { ...((r.stage_days as any) || {}), [key]: value } });
+
   const copyLink = (code: string) => {
     navigator.clipboard.writeText(publicUrl(code));
     toast.success('Link copiado');
