@@ -1,0 +1,65 @@
+import { supabase } from '@/integrations/supabase/client';
+
+/** Etapas públicas mostradas ao cliente. */
+export type ShipmentStage = 'em_separacao' | 'separado' | 'embalado' | 'enviado' | 'entregue';
+
+export const SHIPMENT_STAGE_LABEL: Record<ShipmentStage, string> = {
+  em_separacao: 'Em separação',
+  separado: 'Separado',
+  embalado: 'Embalado',
+  enviado: 'Enviado',
+  entregue: 'Entregue',
+};
+
+/** Link público do acompanhamento (nunca expõe transportadora nem código real). */
+export const publicTrackingUrl = (code: string) =>
+  `${window.location.origin}/rastreio/${encodeURIComponent(code)}`;
+
+/** Busca (ou cria) o código público de acompanhamento de um pedido. */
+export async function getPublicTrackingCode(saleId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('shipment_simulations')
+    .select('tracking_code')
+    .eq('sale_id', saleId)
+    .maybeSingle();
+  return (data as any)?.tracking_code ?? null;
+}
+
+/**
+ * Registra o código real da transportadora no acompanhamento do pedido.
+ * Ao fazer isso, todas as etapas anteriores são dadas como concluídas e o
+ * cliente passa a ver "Pedido enviado", mesmo que o prazo automático ainda
+ * não tivesse sido atingido. A partir daí, o link passa a ser alimentado
+ * pelos eventos reais recebidos da transportadora.
+ */
+export async function attachRealTracking(params: {
+  saleIds: string[];
+  realCode: string;
+  carrier?: string | null;
+}): Promise<void> {
+  const code = params.realCode.trim();
+  if (!code || !params.saleIds.length) return;
+  const now = new Date().toISOString();
+
+  const { data: rows } = await supabase
+    .from('shipment_simulations')
+    .select('id, stage_history')
+    .in('sale_id', params.saleIds);
+
+  for (const row of (rows ?? []) as any[]) {
+    const history = { ...((row.stage_history as Record<string, string>) || {}) };
+    for (const k of ['em_separacao', 'separado', 'embalado'] as const) {
+      if (!history[k]) history[k] = now;
+    }
+    history.enviado = history.enviado || now;
+    await supabase
+      .from('shipment_simulations')
+      .update({
+        stage: 'enviado',
+        stage_history: history,
+        real_tracking_code: code,
+        real_carrier: params.carrier || null,
+      } as any)
+      .eq('id', row.id);
+  }
+}

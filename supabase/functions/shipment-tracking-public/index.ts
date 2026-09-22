@@ -1,4 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import {
+  DEFAULT_STAGE_CONFIG,
+  PICKUP_LABEL,
+  PublicEvent,
+  STAGE_DETAIL,
+  STAGE_LABEL,
+  STAGE_ORDER,
+  StageConfig,
+  StageKey,
+  autoStage,
+  naturalTime,
+  sanitize,
+  stageTimes,
+  translateRealEvent,
+} from '../_shared/shipment-stages.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +35,49 @@ const withNaturalTime = (base: Date, code: string, index: number) => {
   return d;
 };
 
+/** Modelo antigo: simulação manual por rota de cidades. */
+function legacyTimeline(sim: any, code: string): PublicEvent[] {
+  const stops: SimStop[] = Array.isArray(sim.stops) ? (sim.stops as SimStop[]) : [];
+  const interval = Math.max(1, Number(sim.step_interval_days) || 2);
+  const posted = new Date(sim.posted_at as string);
+  const offsetMs = (Number(sim.manual_offset_days) || 0) * 86400000;
+  const at = (i: number) =>
+    withNaturalTime(new Date(posted.getTime() + i * interval * 86400000 - offsetMs), code, i).toISOString();
+
+  const path: SimStop[] = [
+    { city: sim.origin_city, state: sim.origin_state },
+    ...stops,
+    { city: sim.destination_city, state: sim.destination_state },
+  ].filter((p) => p.city);
+
+  const events: PublicEvent[] = [];
+  events.push({
+    title: 'Pedido enviado',
+    city: path[0]?.city,
+    state: path[0]?.state,
+    at: withNaturalTime(new Date(posted.getTime() - offsetMs), code, 0).toISOString(),
+  });
+  let index = 0;
+  for (let i = 1; i < path.length; i++) {
+    index = i;
+    events.push({
+      title: 'Pedido em trânsito',
+      detail: `de ${path[i - 1].city}/${path[i - 1].state} para ${path[i].city}/${path[i].state}`,
+      city: path[i - 1].city,
+      state: path[i - 1].state,
+      at: at(i),
+    });
+  }
+  index += 1;
+  events.push({
+    title: 'Saiu para entrega',
+    city: path[path.length - 1]?.city,
+    state: path[path.length - 1]?.state,
+    at: at(index),
+  });
+  return events;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -31,7 +89,7 @@ Deno.serve(async (req) => {
       code = String(body?.code ?? '');
     }
     code = code.trim().toUpperCase();
-    if (!/^[A-Z0-9]{5,30}$/.test(code)) {
+    if (!/^[A-Z0-9-]{5,30}$/.test(code)) {
       return new Response(JSON.stringify({ error: 'Código inválido' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -45,7 +103,7 @@ Deno.serve(async (req) => {
 
     const { data: sim, error } = await supabase
       .from('shipment_simulations')
-      .select('tracking_code, origin_city, origin_state, destination_city, destination_state, stops, posted_at, step_interval_days, manual_offset_days, status')
+      .select('*')
       .eq('tracking_code', code)
       .maybeSingle();
 
@@ -57,63 +115,94 @@ Deno.serve(async (req) => {
       });
     }
 
-    const stops: SimStop[] = Array.isArray(sim.stops) ? (sim.stops as SimStop[]) : [];
-    const interval = Math.max(1, Number(sim.step_interval_days) || 2);
-    const posted = new Date(sim.posted_at as string);
-    const offsetMs = (Number(sim.manual_offset_days) || 0) * 86400000;
-    const at = (i: number) =>
-      withNaturalTime(new Date(posted.getTime() + i * interval * 86400000 - offsetMs), code, i).toISOString();
+    const now = new Date();
+    let events: PublicEvent[] = [];
+    let statusLabel = '';
 
-    const path: SimStop[] = [
-      { city: sim.origin_city as string, state: sim.origin_state as string },
-      ...stops,
-      { city: sim.destination_city as string, state: sim.destination_state as string },
-    ];
+    if (sim.kind === 'order') {
+      const { data: cfgRow } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'shipment_stage_config')
+        .maybeSingle();
+      const base: StageConfig = { ...DEFAULT_STAGE_CONFIG, ...(cfgRow?.value as any || {}) };
+      const cfg: StageConfig = { ...base, ...((sim.stage_days as any) || {}) };
 
-    const events: Array<{ title: string; detail?: string; city: string; state: string; at: string }> = [];
-    events.push({
-      title: 'Objeto postado',
-      city: path[0].city,
-      state: path[0].state,
-      at: withNaturalTime(new Date(posted.getTime() - offsetMs), code, 0).toISOString(),
-    });
-    let index = 0;
-    for (let i = 1; i < path.length; i++) {
-      index = i;
-      events.push({
-        title: 'Objeto em trânsito',
-        detail: `de ${path[i - 1].city}/${path[i - 1].state} para ${path[i].city}/${path[i].state}`,
-        city: path[i - 1].city,
-        state: path[i - 1].state,
-        at: at(i),
+      const fulfillment = String(sim.fulfillment || 'carrier');
+      const labels = fulfillment === 'pickup' ? PICKUP_LABEL : STAGE_LABEL;
+      const started = new Date(sim.stage_started_at as string);
+      const times = stageTimes(started, cfg);
+      const history = (sim.stage_history as Record<string, string>) || {};
+      const persisted = String(sim.stage || 'em_separacao') as StageKey;
+      const auto = autoStage(started, cfg, now);
+      const reached: StageKey =
+        STAGE_ORDER.indexOf(persisted) >= STAGE_ORDER.indexOf(auto) ? persisted : auto;
+
+      const stageAt = (k: StageKey, fallback: Date, i: number) =>
+        history[k] ? new Date(history[k]).toISOString() : naturalTime(fallback, code, i);
+
+      const autoStages: StageKey[] = ['em_separacao', 'separado', 'embalado'];
+      autoStages.forEach((k, i) => {
+        if (STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf(k)) {
+          events.push({
+            title: labels[k],
+            detail: STAGE_DETAIL[k],
+            at: stageAt(k, (times as any)[k], i),
+          });
+        }
       });
-    }
-    index += 1;
-    events.push({
-      title: 'Objeto saiu para entrega ao destinatário',
-      city: path[path.length - 1].city,
-      state: path[path.length - 1].state,
-      at: at(index),
-    });
-    index += 1;
-    events.push({
-      title: 'Objeto entregue ao destinatário',
-      city: path[path.length - 1].city,
-      state: path[path.length - 1].state,
-      at: at(index),
-    });
 
-    const now = Date.now();
-    const passed = sim.status === 'delivered'
-      ? events
-      : events.filter((e) => new Date(e.at).getTime() <= now);
-    const visible = (passed.length ? passed : [events[0]]).reverse();
+      if (STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf('enviado')) {
+        events.push({
+          title: labels.enviado,
+          detail: fulfillment === 'pickup'
+            ? 'Seu pedido está pronto para retirada na loja.'
+            : STAGE_DETAIL.enviado,
+          at: stageAt('enviado', now, 3),
+        });
+      }
+
+      // Eventos reais da transportadora, já traduzidos e sem citar a empresa.
+      const real = Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [];
+      const sentAt = events.length ? new Date(events[events.length - 1].at).getTime() : 0;
+      let last = sentAt;
+      for (const ev of real) {
+        const when = new Date(ev.at || ev.EventDateTime || now).getTime();
+        const tr = translateRealEvent(String(ev.description || ev.EventDescription || ''), fulfillment);
+        if (!tr) continue;
+        // Trava de coerência: nunca voltar no tempo.
+        const at = new Date(Math.max(when, last + 60000));
+        last = at.getTime();
+        const loc = sanitize(String(ev.location || ev.EventLocation || ''));
+        const [city, state] = loc.split(/[\/-]/).map((s: string) => s.trim());
+        events.push({
+          title: tr.title,
+          detail: tr.detail,
+          city: city || undefined,
+          state: state || undefined,
+          at: at.toISOString(),
+        });
+      }
+
+      // Nunca mostramos entrega por conta própria: só quando o evento real diz.
+      events = events.filter((e) => new Date(e.at).getTime() <= now.getTime() + 60000);
+      statusLabel = events[events.length - 1]?.title ?? labels.em_separacao;
+    } else {
+      const all = legacyTimeline(sim, code);
+      const passed = all.filter((e) => new Date(e.at).getTime() <= now.getTime());
+      events = passed.length ? passed : [all[0]];
+      statusLabel = events[events.length - 1]?.title ?? 'Pedido enviado';
+    }
+
+    const visible = [...events].reverse();
 
     return new Response(
       JSON.stringify({
         tracking_code: code,
-        status: visible[0]?.title ?? 'Objeto postado',
-        posted_at: events[0].at,
+        status: statusLabel,
+        customer_name: (sim.customer_name as string | null) ?? null,
+        order_reference: (sim.order_reference as string | null) ?? null,
+        posted_at: events[0]?.at ?? null,
         events: visible,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

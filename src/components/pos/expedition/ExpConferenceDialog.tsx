@@ -21,6 +21,7 @@ import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { hydrateSaleCustomer } from "./customerHydrate";
 
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
+import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/lib/shipmentTracking";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
 
@@ -70,6 +71,15 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [nfeReject, setNfeReject] = useState<string | null>(null);
   const [nfeDoc, setNfeDoc] = useState<any | null>(null);
   const [backfilling, setBackfilling] = useState(false);
+  // Código público do acompanhamento (o cliente nunca vê o código real da transportadora).
+  const [publicCode, setPublicCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getPublicTrackingCode(order.id).then((c) => { if (alive) setPublicCode(c); });
+    return () => { alive = false; };
+  }, [open, order.id]);
 
   // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
   const loadNfeStatus = async () => {
@@ -336,8 +346,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       primeiro_nome: full.split(" ")[0] || "",
       transportadora: carrier || courier || "",
       prazo_entrega: deliveryDays || "",
-      codigo_rastreio: tracking.trim(),
-      link_rastreio: trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
+      // O cliente recebe SEMPRE o nosso código/link de acompanhamento.
+      codigo_rastreio: publicCode || tracking.trim(),
+      link_rastreio: publicCode
+        ? publicTrackingUrl(publicCode)
+        : trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
       valor_pedido: brl(order.total || 0),
       endereco: formatShippingAddress(addr),
       cidade: (addr as any)?.city || (addr as any)?.cidade || "",
@@ -349,7 +362,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         .join("\n"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl]);
+  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl, publicCode]);
 
   const sendTrackingWa = async () => {
     const phone = (order.resolved_phone || order.customer_phone || "").replace(/\D/g, "");
@@ -374,6 +387,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           delivery_days: deliveryDays.trim() || null,
         } as any)
         .in("id", groupIds);
+      await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
       toast.success("Rastreio enviado no WhatsApp");
 
     } catch (e: any) {
@@ -438,6 +452,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         courier_name: courier.trim() || null,
       } as any).in("id", groupIds);
       if (error) throw error;
+
+      // Ao registrar o código real, o acompanhamento do cliente pula direto para "Enviado".
+      if (tracking.trim()) {
+        await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
+      }
 
       await saveExpeditionShippingCost({
         saleId: order.id,

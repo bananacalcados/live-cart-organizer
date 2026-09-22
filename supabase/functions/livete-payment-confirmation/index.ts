@@ -179,11 +179,25 @@ serve(async (req) => {
     // Link autenticado da Área de Membros preso ao pedido — SEMPRE em linha
     // própria, sem texto grudado (evita o caso do token com sobra no fim).
     const memberAreaLink = await issueMagicLink(supabase, fullPhone, undefined, orderId);
+    // Link da área de acompanhamento do envio (código próprio nosso, sem citar transportadora).
+    let trackingLine = '';
+    try {
+      const { data: ship } = await supabase
+        .from('shipment_simulations')
+        .select('tracking_code')
+        .eq('sale_id', orderId)
+        .maybeSingle();
+      if (ship?.tracking_code) {
+        trackingLine = `\n\n🚚 Acompanhe o preparo e o envio do seu pedido:\n\nhttps://checkout.bananacalcados.com.br/rastreio/${ship.tracking_code}`;
+      }
+    } catch (err) {
+      console.error('[livete-payment-confirmation] tracking link error:', err);
+    }
     const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
       `Confira seu pedido:\n\n` +
       `${productLines}` + cashbackLine + `\n\n` +
       `📦 Seu pedido seguirá para a expedição. Acompanhe a separação, o envio e o rastreamento por aqui:\n\n` +
-      `${memberAreaLink}\n\n` +
+      `${memberAreaLink}` + trackingLine + `\n\n` +
       `Está tudo correto? Responda *SIM* para confirmar ou avise o que precisa ser corrigido 😊`;
 
 
