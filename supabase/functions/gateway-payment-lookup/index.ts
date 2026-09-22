@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMpAccountForOrder } from "../_shared/mp-account.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
+import { austpayGetTransaction, fromCents, getAustpayConfig } from "../_shared/austpay.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -34,7 +35,7 @@ serve(async (req) => {
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, vindi_transaction_id, payment_method_label, payment_confirmed_source, is_paid, paid_at, products, discount_type, discount_value, shipping_cost, free_shipping")
+      .select("id, mercadopago_payment_id, vindi_transaction_id, austpay_transaction_id, payment_method_label, payment_confirmed_source, is_paid, paid_at, products, discount_type, discount_value, shipping_cost, free_shipping")
       .eq("id", orderId)
       .maybeSingle();
 
@@ -98,6 +99,42 @@ serve(async (req) => {
               || `https://www.mercadopago.com.br/activities/1/${mpId}`;
             entry.amountMatches = Math.abs(Number(p.transaction_amount || 0) - expectedTotal) < 0.01;
             entry.referenceMatches = !p.external_reference || p.external_reference === orderId;
+          }
+        } catch (e: any) {
+          entry.error = e.message || String(e);
+        }
+      }
+      result.gateways.push(entry);
+    }
+
+    // --- AustPay lookup ---
+    if (order.austpay_transaction_id) {
+      const txId = String(order.austpay_transaction_id);
+      const entry: any = { gateway: "austpay", paymentId: txId };
+      const cfg = getAustpayConfig();
+      if (!cfg) {
+        entry.error = "AustPay não configurada para consulta.";
+      } else {
+        try {
+          const res = await austpayGetTransaction(cfg, txId);
+          if (res.status === 404) {
+            entry.status = "not_found";
+            entry.error = "Transação não localizada na AustPay.";
+          } else if (!res.ok) {
+            entry.error = `HTTP ${res.status}: ${await res.text()}`;
+          } else {
+            const t = await res.json();
+            const amt = Number(t?.amount || 0);
+            entry.status = t.status;
+            entry.statusDetail = t.status_reason;
+            entry.amount = amt > 1000 ? fromCents(amt) : amt;
+            entry.currency = t.currency;
+            entry.dateCreated = t.created_at;
+            entry.paymentType = t.payment_method;
+            entry.installments = t.installments;
+            entry.externalReference = t.external_reference;
+            entry.amountMatches = Math.abs(Number(entry.amount || 0) - expectedTotal) < 0.01;
+            entry.referenceMatches = !t.external_reference || t.external_reference === orderId;
           }
         } catch (e: any) {
           entry.error = e.message || String(e);

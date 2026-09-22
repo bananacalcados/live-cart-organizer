@@ -326,3 +326,15 @@ verify_jwt = false
 
 [functions.automation-pos-followups-cron]
 verify_jwt = false
+
+[functions.austpay-create-pix]
+verify_jwt = false
+
+[functions.austpay-webhook]
+verify_jwt = false
+
+[functions.austpay-charge-card]
+verify_jwt = false
+
+[functions.austpay-refund]
+verify_jwt = false

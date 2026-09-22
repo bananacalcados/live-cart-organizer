@@ -7,6 +7,44 @@ import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.t
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
+import { getAustpayConfig, isAustpayEnabled } from "../_shared/austpay.ts";
+
+/**
+ * Degrau seguinte da cascata de PIX: tenta a AustPay quando o Mercado Pago
+ * falhou. Retorna null (sem alterar nada) se estiver desligada ou se falhar.
+ */
+async function tryAustpayPixFallback(
+  supabase: any,
+  ctx: { orderId: string; amount: number | null; name: string | null; email: string | null },
+): Promise<Record<string, unknown> | null> {
+  try {
+    if (!ctx.orderId || !(Number(ctx.amount) > 0)) return null;
+    if (!getAustpayConfig()) return null;
+    if (!(await isAustpayEnabled(supabase))) return null;
+
+    const [firstName, ...rest] = String(ctx.name || "").trim().split(/\s+/);
+    const { data, error } = await supabase.functions.invoke("austpay-create-pix", {
+      body: {
+        orderId: ctx.orderId,
+        amount: ctx.amount,
+        payer: {
+          firstName: firstName || undefined,
+          lastName: rest.join(" ") || undefined,
+          email: ctx.email || undefined,
+        },
+      },
+    });
+    if (error || !data?.qrCode) {
+      console.warn("[mp-pix] fallback AustPay não gerou PIX:", error || data);
+      return null;
+    }
+    console.log(`[mp-pix] PIX gerado pela AustPay (fallback) para ${ctx.orderId}`);
+    return data as Record<string, unknown>;
+  } catch (e) {
+    console.warn("[mp-pix] fallback AustPay falhou (ignorado):", e);
+    return null;
+  }
+}
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -477,6 +515,16 @@ serve(async (req) => {
       customer_email: ctx.email,
       metadata: { source: "mercadopago-create-pix", stage: ctx.stage },
     });
+
+    // ── Cascata de PIX (Fase 1): AustPay como DEGRAU SEGUINTE ao Mercado Pago ──
+    // Só entra aqui quando o MP já falhou, a chave `austpay_enabled` está
+    // ligada e as credenciais existem. Qualquer problema = comportamento de hoje.
+    const fallback = await tryAustpayPixFallback(supabase, ctx);
+    if (fallback) {
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(
       JSON.stringify({ error: error.message }),
