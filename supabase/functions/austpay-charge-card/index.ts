@@ -1,16 +1,18 @@
 // ── AustPay (Rinne): cobrança no cartão ───────────────────────────────────
 // Fase 3 do plano — ÚLTIMO degrau da cascata, nunca o primeiro.
-// A Rinne só aceita número e CVV CRIPTOGRAFADOS pelo rinne-js no navegador
-// (valores com prefixo "ev:"). Esta função recusa qualquer dado de cartão em
-// texto puro, então é impossível ela "roubar" o fluxo do Mercado Pago:
-// sem o SDK liberado, ela simplesmente não é acionada.
+// A Rinne não aceita PAN/CVV em texto puro no host normal, mas oferece o HOST
+// PCI (pci.api...), que criptografa número e CVV em trânsito antes de chegar à
+// API. Com isso NÃO é preciso o rinne-js no navegador: o formulário de cartão
+// atual do checkout continua exatamente igual e a AustPay só é chamada quando
+// os gateways anteriores já recusaram.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  austpayFetch,
+  austpayPciFetch,
   austpayRequestId,
   austpayTransactionsPath,
+  detectCardBrand,
   getAustpayConfig,
   isAustpayApproved,
   isAustpayEnabled,
@@ -85,53 +87,83 @@ serve(async (req) => {
       });
     }
 
-    // ── Trava de segurança: só dados criptografados pelo rinne-js ──
+    // ── Dados do cartão ──
+    // O host PCI aceita número/CVV em texto puro (criptografa em trânsito) e
+    // também deixa passar valores já criptografados pelo rinne-js ("ev:").
     const cardId = card?.cardId ? String(card.cardId) : "";
-    const encNumber = card?.number ? String(card.number) : "";
-    const encCvv = card?.cvv ? String(card.cvv) : "";
+    const rawNumber = String(card?.number || "").trim();
+    const digits = rawNumber.startsWith("ev:") ? "" : rawNumber.replace(/\D/g, "");
+    const cvv = String(card?.cvv || "").trim();
+    const expMonth = String(card?.expMonth || "").padStart(2, "0");
+    const expYearRaw = String(card?.expYear || "").replace(/\D/g, "");
+    const expYear = expYearRaw.length === 2 ? `20${expYearRaw}` : expYearRaw;
+    const lastDigits = String(card?.lastDigits || digits.slice(-4) || "");
+
     if (!cardId) {
-      if (!encNumber.startsWith("ev:") || !encCvv.startsWith("ev:")) {
-        throw new Error(
-          "Dados do cartão precisam vir criptografados pelo rinne-js (prefixo ev:). Cobrança recusada.",
-        );
+      if (!rawNumber) throw new Error("Número do cartão ausente.");
+      if (!/^(0[1-9]|1[0-2])$/.test(expMonth) || !/^\d{4}$/.test(expYear)) {
+        throw new Error("Validade do cartão inválida.");
       }
+      if (!/^\d{4}$/.test(lastDigits)) throw new Error("Não foi possível identificar o final do cartão.");
     }
 
     const cardData: Record<string, unknown> = cardId
-      ? { card_id: cardId }
+      ? { card_id: cardId, expiry_month: expMonth, expiry_year: expYear, last_digits: lastDigits }
       : {
-          number: encNumber,
-          cvv: encCvv,
-          holder_name: card?.holderName || undefined,
-          expiration_month: card?.expMonth || undefined,
-          expiration_year: card?.expYear || undefined,
+          number: rawNumber,
+          ...(cvv ? { cvv } : {}),
+          brand: String(card?.brand || detectCardBrand(digits)).toUpperCase(),
+          expiry_month: expMonth,
+          expiry_year: expYear,
+          last_digits: lastDigits,
+          ...(card?.holderName ? { cardholder_name: String(card.holderName) } : {}),
         };
 
-    const txBody: Record<string, unknown> = {
-      request_id: austpayRequestId("card", orderId),
-      amount: toCents(amount),
-      currency: "BRL",
-      capture_method: "ECOMMERCE",
-      payment_method: mode === "debit" ? "DEBIT_CARD" : "CREDIT_CARD",
-      installments,
-      external_reference: String(orderId),
-      card_data: cardData,
-      // Não travar a venda em desafio 3DS na primeira versão.
-      refuse_on_challenge: true,
-    };
-    if (cfg.provider) txBody.provider = cfg.provider;
-    const cpf = String(holder?.cpf || "").replace(/\D/g, "");
-    if (holder?.name || cpf) {
-      txBody.consumer = {
-        ...(holder?.name ? { full_name: String(holder.name) } : {}),
-        ...(cpf.length === 11 ? { document_type: "CPF", document_number: cpf } : {}),
-        ...(holder?.email ? { email: String(holder.email) } : {}),
+    const buildBody = (provider: string) => {
+      const txBody: Record<string, unknown> = {
+        provider,
+        request_id: austpayRequestId("card", orderId),
+        amount: toCents(amount),
+        currency: "BRL",
+        capture_method: "ECOMMERCE",
+        payment_method: mode === "debit" ? "DEBIT_CARD" : "CREDIT_CARD",
+        installments,
+        external_reference: String(orderId),
+        card_data: cardData,
+        // Não travar a venda em desafio 3DS na primeira versão.
+        refuse_on_challenge: true,
       };
-    }
+      const cpf = String(holder?.cpf || "").replace(/\D/g, "");
+      if (holder?.name || cpf) {
+        txBody.consumer = {
+          ...(holder?.name ? { full_name: String(holder.name) } : {}),
+          ...(cpf.length === 11 ? { document_type: "CPF", document_number: cpf } : {}),
+          ...(holder?.email ? { email: String(holder.email) } : {}),
+        };
+      }
+      return txBody;
+    };
 
-    const res = await austpayFetch(cfg, austpayTransactionsPath(cfg), { method: "POST", body: txBody });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`AustPay error ${res.status}: ${text.substring(0, 500)}`);
+    // A afiliação ativa da conta define o provedor. Tentamos o configurado e,
+    // se a afiliação não existir, os demais.
+    const providers = [cfg.provider || "CAPPTA", "CAPPTA", "CELCOIN", "RINNE"]
+      .filter((p, i, arr) => arr.indexOf(p) === i);
+
+    let res: Response | null = null;
+    let text = "";
+    for (const provider of providers) {
+      res = await austpayPciFetch(cfg, austpayTransactionsPath(cfg), {
+        method: "POST",
+        body: buildBody(provider),
+      });
+      text = await res.text();
+      if (res.ok) {
+        console.log(`[austpay-card] provedor usado: ${provider}`);
+        break;
+      }
+      if (!(res.status === 404 && /affiliation/i.test(text))) break;
+    }
+    if (!res || !res.ok) throw new Error(`AustPay error ${res?.status}: ${text.substring(0, 500)}`);
 
     const tx = JSON.parse(text || "{}");
     const txId = String(tx?.id || tx?.transaction_id || "");
