@@ -109,14 +109,30 @@ serve(async (req) => {
       };
     }
 
-    const res = await austpayFetch(cfg, austpayTransactionsPath(cfg), {
-      method: "POST",
-      body: txBody,
-    });
+    // Tenta o provedor configurado; se a conta não tiver afiliação com ele
+    // (404 "Affiliation ... not found"), tenta os demais provedores.
+    const providers = [cfg.provider, "CELCOIN", "RINNE", "CAPPTA"]
+      .filter((p, i, arr): p is string => !!p && arr.indexOf(p) === i);
+    let res: Response | null = null;
+    let text = "";
+    for (const p of providers) {
+      const attempt = { ...txBody, provider: p };
+      res = await austpayFetch(cfg, austpayTransactionsPath(cfg), {
+        method: "POST",
+        body: attempt,
+      });
+      text = await res.text();
+      if (res.ok) {
+        console.log(`[austpay-pix] provedor utilizado: ${p}`);
+        break;
+      }
+      const affiliationMissing = res.status === 404 && text.includes("Affiliation");
+      if (!affiliationMissing) break;
+      console.warn(`[austpay-pix] sem afiliação com ${p}; tentando próximo provedor`);
+    }
 
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`AustPay error ${res.status}: ${text.substring(0, 500)}`);
+    if (!res || !res.ok) {
+      throw new Error(`AustPay error ${res?.status}: ${text.substring(0, 500)}`);
     }
 
     const tx = JSON.parse(text || "{}");
