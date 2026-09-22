@@ -21,10 +21,14 @@ export function getAustpayConfig(): AustpayConfig | null {
   const env = (Deno.env.get("AUSTPAY_ENV") || "sandbox").toLowerCase() === "production"
     ? "production"
     : "sandbox";
+  // Só aceita os provedores válidos da Rinne — qualquer outro valor salvo
+  // é ignorado (a API rejeita com 400 e derrubaria o fallback de Pix).
+  const providerRaw = (Deno.env.get("AUSTPAY_PROVIDER") || "").trim().toUpperCase();
+  const provider = ["CELCOIN", "RINNE", "CAPPTA"].includes(providerRaw) ? providerRaw : null;
   return {
     apiKey,
     merchantId: Deno.env.get("AUSTPAY_MERCHANT_ID") || null,
-    provider: Deno.env.get("AUSTPAY_PROVIDER") || null,
+    provider,
     baseUrl: env === "production" ? AUSTPAY_PROD_BASE : AUSTPAY_SANDBOX_BASE,
     env,
   };
