@@ -280,14 +280,65 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="template-message">Mensagem</Label>
-                <Textarea
-                  id="template-message"
-                  placeholder="Digite sua mensagem..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={5}
-                />
+                <Label>Etapa do atendimento (rodízio)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {FUNNEL_STEPS.map((s) => (
+                    <Button
+                      key={s.value}
+                      type="button"
+                      variant={funnelStep === s.value ? "default" : "outline"}
+                      size="sm"
+                      className="justify-start text-xs h-auto py-2"
+                      onClick={() => setFunnelStep(s.value)}
+                    >
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mensagens da mesma etapa entram no rodízio: a cada envio o sistema usa
+                  uma redação diferente, reduzindo o risco de bloqueio.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Redações (variações)</Label>
+                {variants.map((v, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Redação {i + 1}{i === 0 ? " (principal)" : ""}
+                      </span>
+                      {variants.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setVariants((prev) => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      placeholder="Digite sua mensagem..."
+                      value={v}
+                      onFocus={() => setFocusedVariant(i)}
+                      onChange={(e) => setVariantAt(i, e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setVariants((prev) => [...prev, ""])}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Adicionar redação
+                </Button>
               </div>
 
               <div className="space-y-3">
