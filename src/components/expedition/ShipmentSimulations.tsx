@@ -290,16 +290,51 @@ export function ShipmentSimulations() {
                   <p className="text-sm text-muted-foreground">
                     {r.customer_name || 'Sem cliente'} {r.order_reference ? `• ${r.order_reference}` : ''}
                   </p>
-                  <p className="text-sm mt-1">
-                    {r.origin_city}/{r.origin_state} → {r.destination_city}/{r.destination_state}
-                    {r.stops?.length ? ` (${r.stops.length} paradas)` : ''}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Etapa atual: <strong>{currentStatusLabel(r)}</strong> • Entrega prevista:{' '}
-                    {new Date(estimatedDelivery(r)).toLocaleDateString('pt-BR')}
-                  </p>
+                  {r.kind === 'order' ? (
+                    <>
+                      <p className="text-sm mt-1">
+                        Etapa atual: <strong>{STAGE_LABEL[r.stage] ?? r.stage}</strong>
+                        {r.fulfillment === 'pickup' ? ' • Retirada em loja' : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {r.real_tracking_code
+                          ? `Código real (interno): ${r.real_tracking_code}`
+                          : 'Aguardando o código real na conferência da expedição'}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {(['em_separacao_days', 'separado_days', 'embalado_days'] as const).map((k) => (
+                          <label key={k} className="text-xs text-muted-foreground flex items-center gap-1">
+                            {k === 'em_separacao_days' ? 'Separação' : k === 'separado_days' ? 'Separado' : 'Embalado'}
+                            <Input
+                              type="number"
+                              min={0}
+                              className="h-7 w-16"
+                              defaultValue={(r.stage_days as any)?.[k] ?? cfg[k]}
+                              onBlur={(e) => setOrderDays(r, k, Number(e.target.value))}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm mt-1">
+                        {r.origin_city}/{r.origin_state} → {r.destination_city}/{r.destination_state}
+                        {r.stops?.length ? ` (${r.stops.length} paradas)` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Etapa atual: <strong>{currentStatusLabel(r)}</strong> • Entrega prevista:{' '}
+                        {new Date(estimatedDelivery(r)).toLocaleDateString('pt-BR')}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
+                  {r.kind === 'order' && (
+                    <Button size="sm" variant="outline" onClick={() => advanceStage(r)} className="gap-1">
+                      <FastForward className="h-3.5 w-3.5" /> Próxima etapa
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" onClick={() => window.open(publicUrl(r.tracking_code), '_blank')} className="gap-1">
                     <ExternalLink className="h-3.5 w-3.5" /> Ver
                   </Button>
