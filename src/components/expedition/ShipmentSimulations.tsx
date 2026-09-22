@@ -71,27 +71,52 @@ export function ShipmentSimulations() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'order' | 'manual'>('order');
+  const [cfg, setCfg] = useState<StageCfg>(DEFAULT_CFG);
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const [savingCfg, setSavingCfg] = useState(false);
 
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('shipment_simulations')
       .select('*')
-      .order('created_at', { ascending: false });
-    if (error) toast.error('Erro ao carregar simulações');
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) toast.error('Erro ao carregar envios');
     setRows(((data ?? []) as unknown as Row[]).map((r) => ({ ...r, stops: (r.stops as unknown as SimStop[]) ?? [] })));
+    const { data: cfgRow } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'shipment_stage_config')
+      .maybeSingle();
+    if (cfgRow?.value) setCfg({ ...DEFAULT_CFG, ...(cfgRow.value as any) });
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
+  const saveCfg = async () => {
+    setSavingCfg(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'shipment_stage_config', value: cfg as any }, { onConflict: 'key' });
+    setSavingCfg(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Prazos salvos');
+    setCfgOpen(false);
+  };
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      [r.tracking_code, r.customer_name, r.customer_phone, r.destination_city].some((v) => (v ?? '').toLowerCase().includes(q)),
+    const byTab = rows.filter((r) => (tab === 'order' ? r.kind === 'order' : r.kind !== 'order'));
+    if (!q) return byTab;
+    return byTab.filter((r) =>
+      [r.tracking_code, r.customer_name, r.customer_phone, r.destination_city, r.order_reference].some((v) =>
+        (v ?? '').toLowerCase().includes(q),
+      ),
     );
-  }, [rows, search]);
+  }, [rows, search, tab]);
 
   const openNew = () => { setForm(emptyForm()); setOpen(true); };
 
