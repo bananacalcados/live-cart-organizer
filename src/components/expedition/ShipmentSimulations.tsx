@@ -344,17 +344,21 @@ export function ShipmentSimulations() {
                   <Button size="sm" variant="outline" onClick={() => sendWhats(r)} className="gap-1">
                     <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => advance(r)} className="gap-1">
-                    <FastForward className="h-3.5 w-3.5" /> Avançar
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => patch(r, { status: 'delivered' })} className="gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Entregue
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => duplicate(r)} className="gap-1">
-                    <Copy className="h-3.5 w-3.5" /> Duplicar
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  {r.kind !== 'order' && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => advance(r)} className="gap-1">
+                        <FastForward className="h-3.5 w-3.5" /> Avançar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => patch(r, { status: 'delivered' })} className="gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Entregue
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => duplicate(r)} className="gap-1">
+                        <Copy className="h-3.5 w-3.5" /> Duplicar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button size="sm" variant="destructive" onClick={() => remove(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
