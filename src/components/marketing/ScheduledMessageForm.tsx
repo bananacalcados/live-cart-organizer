@@ -153,6 +153,27 @@ function BlockEditor({
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  // Atalhos de "nossos números" no cartão de contato
+  const [ourNumbers, setOurNumbers] = useState<{ id: string; label: string; phone: string }[]>([]);
+
+  useEffect(() => {
+    if (block.type !== 'contact' || ourNumbers.length > 0) return;
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_numbers_safe')
+        .select('id, label, phone_display, uazapi_owner, wasender_phone_number')
+        .eq('is_active', true)
+        .order('is_default', { ascending: false });
+      const rows = (data || [])
+        .map((n: any) => ({
+          id: n.id as string,
+          label: (n.label as string) || 'Número',
+          phone: String(n.uazapi_owner || n.wasender_phone_number || n.phone_display || '').replace(/\D/g, ''),
+        }))
+        .filter(n => n.phone.length >= 10);
+      setOurNumbers(rows);
+    })();
+  }, [block.type]);
 
   const multiMediaTypes = ['image', 'video', 'document'];
   const isMultiMedia = multiMediaTypes.includes(block.type);
