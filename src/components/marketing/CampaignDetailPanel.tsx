@@ -501,10 +501,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
+      // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert.
+      const allKeysNow = Array.from(new Set(allInserts.flatMap(r => Object.keys(r))));
+      const normalizedNow = allInserts.map(row => {
+        const full: any = {};
+        for (const k of allKeysNow) full[k] = row[k] ?? null;
+        full.mention_all = !!row.mention_all;
+        full.disable_link_preview = !!row.disable_link_preview;
+        if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
+        return full;
+      });
       const { data: insertedRows, error } = await withNetworkRetry(async () =>
         await supabase
           .from('group_campaign_scheduled_messages')
-          .insert(allInserts as any)
+          .insert(normalizedNow as any)
           .select('id, block_order'),
       );
       if (error) throw error;
