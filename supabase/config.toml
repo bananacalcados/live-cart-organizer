@@ -338,3 +338,6 @@ verify_jwt = false
 
 [functions.austpay-refund]
 verify_jwt = false
+
+[functions.austpay-diagnostics]
+verify_jwt = false
