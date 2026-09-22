@@ -5,6 +5,11 @@
 
 export const AUSTPAY_SANDBOX_BASE = "https://api-sandbox.rinne.com.br/core";
 export const AUSTPAY_PROD_BASE = "https://api.rinne.com.br/core";
+// Host PCI: aceita número/CVV em texto puro e criptografa em trânsito antes de
+// chegar à API (dispensa o rinne-js no navegador). Serve SOMENTE criação de
+// transação e de sessão 3DS.
+export const AUSTPAY_PCI_SANDBOX_BASE = "https://pci.api-sandbox.rinne.com.br/core";
+export const AUSTPAY_PCI_PROD_BASE = "https://pci.api.rinne.com.br/core";
 
 export interface AustpayConfig {
   apiKey: string;
