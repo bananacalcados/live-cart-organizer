@@ -287,6 +287,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
   const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
+  // Regra de parcelamento da live (usada nas variáveis {{parcelamento}} etc.)
+  const [eventInstallment, setEventInstallment] = useState<{ max: number; minValue: number }>({ max: 0, minValue: 0 });
   const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
   /** Instância usada nos disparos de template Meta (config da live) — imune à troca manual do chat. */
   const apiTemplateNumberId = eventMetaNumberId || hookEffectiveNumberId || selectedNumberId || null;
