@@ -332,3 +332,9 @@ verify_jwt = false
 
 [functions.austpay-webhook]
 verify_jwt = false
+
+[functions.austpay-charge-card]
+verify_jwt = false
+
+[functions.austpay-refund]
+verify_jwt = false
