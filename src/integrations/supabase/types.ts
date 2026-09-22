@@ -11638,27 +11638,33 @@ export type Database = {
       message_templates: {
         Row: {
           created_at: string
+          funnel_step: number
           id: string
           message: string
           name: string
           stage: string
           updated_at: string
+          variants: Json
         }
         Insert: {
           created_at?: string
+          funnel_step?: number
           id?: string
           message: string
           name: string
           stage?: string
           updated_at?: string
+          variants?: Json
         }
         Update: {
           created_at?: string
+          funnel_step?: number
           id?: string
           message?: string
           name?: string
           stage?: string
           updated_at?: string
+          variants?: Json
         }
         Relationships: []
       }
@@ -19282,6 +19288,30 @@ export type Database = {
         }
         Relationships: []
       }
+      template_step_rotation: {
+        Row: {
+          counter: number
+          funnel_step: number
+          id: string
+          scope_key: string
+          updated_at: string
+        }
+        Insert: {
+          counter?: number
+          funnel_step: number
+          id?: string
+          scope_key?: string
+          updated_at?: string
+        }
+        Update: {
+          counter?: number
+          funnel_step?: number
+          id?: string
+          scope_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       templates_carrossel: {
         Row: {
           aprovado: boolean
@@ -23582,6 +23612,10 @@ export type Database = {
         Returns: number
       }
       next_product_sku_root: { Args: never; Returns: string }
+      next_template_variant: {
+        Args: { p_count: number; p_scope: string; p_step: number }
+        Returns: number
+      }
       norm_cpf: { Args: { raw: string }; Returns: string }
       norm_email: { Args: { raw: string }; Returns: string }
       norm_identity_text: { Args: { p: string }; Returns: string }
