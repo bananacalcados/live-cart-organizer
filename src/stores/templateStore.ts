@@ -60,7 +60,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
 
       if (error) throw error;
       
-      set({ templates: data as MessageTemplate[] });
+      set({ templates: (data || []).map(normalizeTemplate) });
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
