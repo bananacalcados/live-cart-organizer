@@ -12694,6 +12694,7 @@ export type Database = {
           ai_paused: boolean | null
           ai_paused_at: string | null
           appmax_order_id: string | null
+          austpay_transaction_id: string | null
           cart_link: string | null
           checkout_started_at: string | null
           checkout_token: string | null
@@ -12761,6 +12762,7 @@ export type Database = {
           ai_paused?: boolean | null
           ai_paused_at?: string | null
           appmax_order_id?: string | null
+          austpay_transaction_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
@@ -12828,6 +12830,7 @@ export type Database = {
           ai_paused?: boolean | null
           ai_paused_at?: string | null
           appmax_order_id?: string | null
+          austpay_transaction_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
@@ -15395,6 +15398,7 @@ export type Database = {
         Row: {
           appmax_order_id: string | null
           attribution_source: string | null
+          austpay_transaction_id: string | null
           cash_register_id: string | null
           checkout_step: number | null
           conditional_signed_at: string | null
@@ -15501,6 +15505,7 @@ export type Database = {
         Insert: {
           appmax_order_id?: string | null
           attribution_source?: string | null
+          austpay_transaction_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
@@ -15607,6 +15612,7 @@ export type Database = {
         Update: {
           appmax_order_id?: string | null
           attribution_source?: string | null
+          austpay_transaction_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
