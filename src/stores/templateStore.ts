@@ -239,7 +239,15 @@ export function applyTemplateVariables(
   result = result.replace(/\{\{whatsapp\}\}/gi, variables.whatsapp || '');
   result = result.replace(/\{\{link_carrinho\}\}/gi, variables.link_carrinho || '');
   result = result.replace(/\{\{total\}\}/gi, variables.total || '');
+  result = result.replace(/\{\{produtos_curto\}\}/gi, variables.produtos_curto || '');
   result = result.replace(/\{\{produtos\}\}/gi, variables.produtos || '');
+  result = result.replace(/\{\{nome_completo\}\}/gi, variables.nome_completo || '');
+  result = result.replace(/\{\{primeiro_nome\}\}/gi, variables.nome || '');
+  result = result.replace(/\{\{total_pix\}\}/gi, variables.total_pix || '');
+  result = result.replace(/\{\{desconto_pix\}\}/gi, variables.desconto_pix || '');
+  result = result.replace(/\{\{parcelas_max\}\}/gi, variables.parcelas_max || '');
+  result = result.replace(/\{\{valor_parcela\}\}/gi, variables.valor_parcela || '');
+  result = result.replace(/\{\{parcelamento\}\}/gi, variables.parcelamento || '');
   
   return result;
 }
