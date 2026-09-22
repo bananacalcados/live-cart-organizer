@@ -121,12 +121,19 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   };
 
   const dataVariables = [
-    { name: '{{nome}}', desc: 'Nome do cliente (Instagram sem @)' },
+    { name: '{{nome}}', desc: 'Primeiro nome da ficha do cliente (se não houver, usa o @)' },
+    { name: '{{nome_completo}}', desc: 'Nome completo da ficha' },
     { name: '{{instagram}}', desc: 'Instagram com @' },
     { name: '{{whatsapp}}', desc: 'Número do WhatsApp' },
     { name: '{{link_carrinho}}', desc: 'Link do carrinho' },
     { name: '{{total}}', desc: 'Valor total do pedido' },
+    { name: '{{total_pix}}', desc: 'Valor no Pix (5% de desconto)' },
+    { name: '{{desconto_pix}}', desc: 'Quanto ela economiza no Pix' },
+    { name: '{{parcelamento}}', desc: 'Ex.: até 10x de R$ 35,99 sem juros' },
+    { name: '{{parcelas_max}}', desc: 'Número máximo de parcelas' },
+    { name: '{{valor_parcela}}', desc: 'Valor de cada parcela' },
     { name: '{{produtos}}', desc: 'Lista de produtos' },
+    { name: '{{produtos_curto}}', desc: 'Produtos em uma linha' },
   ];
 
   const emojiVariables = [
