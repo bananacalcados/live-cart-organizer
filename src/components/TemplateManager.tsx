@@ -72,25 +72,35 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
 
   const resetForm = () => {
     setName("");
-    setMessage("");
+    setVariants([""]);
+    setFunnelStep(0);
+    setFocusedVariant(0);
     setSelectedStages([]);
     setEditingTemplate(null);
   };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !message.trim()) {
-      toast.error("Preencha nome e mensagem");
+    const cleanVariants = variants.map((v) => v.trim()).filter(Boolean);
+    if (!name.trim() || cleanVariants.length === 0) {
+      toast.error("Preencha nome e ao menos uma redação");
       return;
     }
 
     setIsSaving(true);
     const stageValue = selectedStages.length === 0 ? 'all' : selectedStages.join(',');
+    const payload = {
+      name,
+      message: cleanVariants[0],
+      stage: stageValue as any,
+      funnel_step: funnelStep,
+      variants: cleanVariants,
+    };
     try {
       if (editingTemplate) {
-        await updateTemplate(editingTemplate.id, { name, message, stage: stageValue as any });
+        await updateTemplate(editingTemplate.id, payload);
         toast.success("Template atualizado");
       } else {
-        await addTemplate({ name, message, stage: stageValue as any });
+        await addTemplate(payload);
         toast.success("Template criado");
       }
       resetForm();
