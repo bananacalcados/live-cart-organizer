@@ -673,6 +673,11 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       if (b.type === 'poll' && b.pollOptions.filter(o => o.trim()).length < 2) {
         toast.error("Enquete precisa de ao menos 2 opções"); return false;
       }
+      if (b.type === 'contact') {
+        const digits = (b.contactPhone || '').replace(/\D/g, '');
+        if (!b.contactName?.trim()) { toast.error("Informe o nome do cartão de contato"); return false; }
+        if (digits.length < 10) { toast.error("Número do contato inválido (use DDI + DDD)"); return false; }
+      }
     }
     if (!scheduledDate) { toast.error("Selecione uma data"); return false; }
     return true;
