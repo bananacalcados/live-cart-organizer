@@ -101,6 +101,8 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
           name: updates.name,
           message: updates.message,
           stage: updates.stage,
+          funnel_step: updates.funnel_step ?? 0,
+          variants: (updates.variants?.length ? updates.variants : [updates.message || '']) as any,
         })
         .eq('id', id);
 
