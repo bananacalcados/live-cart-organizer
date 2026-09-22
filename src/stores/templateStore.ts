@@ -7,9 +7,20 @@ export interface MessageTemplate {
   name: string;
   message: string;
   stage: OrderStage | 'all';
+  /** 0 = nenhuma; 1 = dados, 2 = CPF/e-mail, 3 = pagamento */
+  funnel_step: number;
+  /** Redações alternativas da MESMA pergunta (rodízio anti-spam) */
+  variants: string[];
   created_at: string;
   updated_at: string;
 }
+
+export const FUNNEL_STEPS = [
+  { value: 0, label: 'Nenhuma etapa' },
+  { value: 1, label: 'Etapa 1 — Nome e endereço' },
+  { value: 2, label: 'Etapa 2 — CPF e e-mail' },
+  { value: 3, label: 'Etapa 3 — Forma de pagamento' },
+] as const;
 
 interface TemplateStore {
   templates: MessageTemplate[];
