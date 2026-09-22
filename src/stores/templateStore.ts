@@ -30,6 +30,20 @@ interface TemplateStore {
   updateTemplate: (id: string, updates: Partial<MessageTemplate>) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
   getTemplatesByStage: (stage: OrderStage) => MessageTemplate[];
+  getTemplatesByStep: (step: number) => MessageTemplate[];
+}
+
+/** Normaliza a linha do banco: variants sempre array de texto não vazio. */
+function normalizeTemplate(row: any): MessageTemplate {
+  const raw = Array.isArray(row?.variants) ? row.variants : [];
+  const variants = raw
+    .map((v: unknown) => (typeof v === 'string' ? v : String(v ?? '')))
+    .filter((v: string) => v.trim().length > 0);
+  return {
+    ...row,
+    funnel_step: Number(row?.funnel_step ?? 0) || 0,
+    variants: variants.length ? variants : [row?.message ?? ''],
+  } as MessageTemplate;
 }
 
 export const useTemplateStore = create<TemplateStore>((set, get) => ({
