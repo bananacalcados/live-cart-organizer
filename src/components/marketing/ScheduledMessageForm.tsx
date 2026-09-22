@@ -30,12 +30,15 @@ export interface MediaItem {
 
 export interface MessageBlock {
   id: string;
-  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll';
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll' | 'contact';
   content: string;
   mediaItems: MediaItem[];
   mediaUrl: string;
   pollOptions: string[];
   pollMaxOptions: number;
+  /** Cartão de contato (só para blocos do tipo 'contact'). */
+  contactName?: string;
+  contactPhone?: string;
   /** Envia o link SEM a miniatura de prévia (só para blocos de texto). */
   disableLinkPreview?: boolean;
 }
@@ -65,6 +68,8 @@ interface EditingMessage {
   scheduled_at: string;
   send_speed: string;
   disable_link_preview?: boolean | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
 }
 
 interface MessageTemplate {
