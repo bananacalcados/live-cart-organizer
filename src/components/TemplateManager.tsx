@@ -36,8 +36,16 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const [isSaving, setIsSaving] = useState(false);
   
   const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const [variants, setVariants] = useState<string[]>([""]);
+  const [focusedVariant, setFocusedVariant] = useState(0);
+  const [funnelStep, setFunnelStep] = useState(0);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
+
+  const message = variants[0] || "";
+  const setVariantAt = (i: number, text: string) =>
+    setVariants((prev) => prev.map((v, idx) => (idx === i ? text : v)));
+  const appendToFocused = (token: string) =>
+    setVariants((prev) => prev.map((v, idx) => (idx === focusedVariant ? v + token : v)));
 
   useEffect(() => {
     fetchTemplates();
