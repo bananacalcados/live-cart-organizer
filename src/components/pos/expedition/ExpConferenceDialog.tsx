@@ -21,6 +21,7 @@ import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { hydrateSaleCustomer } from "./customerHydrate";
 
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
+import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/lib/shipmentTracking";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
 
@@ -70,6 +71,15 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [nfeReject, setNfeReject] = useState<string | null>(null);
   const [nfeDoc, setNfeDoc] = useState<any | null>(null);
   const [backfilling, setBackfilling] = useState(false);
+  // Código público do acompanhamento (o cliente nunca vê o código real da transportadora).
+  const [publicCode, setPublicCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getPublicTrackingCode(order.id).then((c) => { if (alive) setPublicCode(c); });
+    return () => { alive = false; };
+  }, [open, order.id]);
 
   // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
   const loadNfeStatus = async () => {
