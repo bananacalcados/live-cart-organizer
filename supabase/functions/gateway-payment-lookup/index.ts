@@ -106,6 +106,42 @@ serve(async (req) => {
       result.gateways.push(entry);
     }
 
+    // --- AustPay lookup ---
+    if (order.austpay_transaction_id) {
+      const txId = String(order.austpay_transaction_id);
+      const entry: any = { gateway: "austpay", paymentId: txId };
+      const cfg = getAustpayConfig();
+      if (!cfg) {
+        entry.error = "AustPay não configurada para consulta.";
+      } else {
+        try {
+          const res = await austpayGetTransaction(cfg, txId);
+          if (res.status === 404) {
+            entry.status = "not_found";
+            entry.error = "Transação não localizada na AustPay.";
+          } else if (!res.ok) {
+            entry.error = `HTTP ${res.status}: ${await res.text()}`;
+          } else {
+            const t = await res.json();
+            const amt = Number(t?.amount || 0);
+            entry.status = t.status;
+            entry.statusDetail = t.status_reason;
+            entry.amount = amt > 1000 ? fromCents(amt) : amt;
+            entry.currency = t.currency;
+            entry.dateCreated = t.created_at;
+            entry.paymentType = t.payment_method;
+            entry.installments = t.installments;
+            entry.externalReference = t.external_reference;
+            entry.amountMatches = Math.abs(Number(entry.amount || 0) - expectedTotal) < 0.01;
+            entry.referenceMatches = !t.external_reference || t.external_reference === orderId;
+          }
+        } catch (e: any) {
+          entry.error = e.message || String(e);
+        }
+      }
+      result.gateways.push(entry);
+    }
+
     if (result.gateways.length === 0) {
       result.warning = "Este pedido não tem ID de gateway conhecido para consulta.";
     }
