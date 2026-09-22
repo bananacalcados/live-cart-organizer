@@ -21,10 +21,14 @@ export function getAustpayConfig(): AustpayConfig | null {
   const env = (Deno.env.get("AUSTPAY_ENV") || "sandbox").toLowerCase() === "production"
     ? "production"
     : "sandbox";
+  // A API exige `provider` (CELCOIN | RINNE | CAPPTA). Valor salvo inválido
+  // ou ausente cai no padrão RINNE (provedor nativo da plataforma).
+  const providerRaw = (Deno.env.get("AUSTPAY_PROVIDER") || "").trim().toUpperCase();
+  const provider = ["CELCOIN", "RINNE", "CAPPTA"].includes(providerRaw) ? providerRaw : "RINNE";
   return {
     apiKey,
     merchantId: Deno.env.get("AUSTPAY_MERCHANT_ID") || null,
-    provider: Deno.env.get("AUSTPAY_PROVIDER") || null,
+    provider,
     baseUrl: env === "production" ? AUSTPAY_PROD_BASE : AUSTPAY_SANDBOX_BASE,
     env,
   };
