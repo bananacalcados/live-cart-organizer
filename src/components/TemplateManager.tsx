@@ -195,6 +195,12 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{template.name}</p>
                       <div className="flex flex-wrap gap-1 mt-1">
+                        {Number(template.funnel_step) > 0 && (
+                          <Badge variant="outline" className="text-xs border-primary text-primary">
+                            {FUNNEL_STEPS.find((s) => s.value === Number(template.funnel_step))?.label}
+                            {" · "}{template.variants?.length || 1} redação(ões)
+                          </Badge>
+                        )}
                         {getStageBadges(template.stage).map((b, i) => (
                           <Badge key={i} variant="secondary" className={cn("text-xs", b.color, "text-white")}>
                             {b.label}
