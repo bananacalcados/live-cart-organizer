@@ -145,7 +145,40 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       return stages.includes(stage);
     });
   },
+
+  getTemplatesByStep: (step) => get().templates.filter((t) => Number(t.funnel_step) === step),
 }));
+
+/**
+ * Rodízio anti-spam: devolve a próxima redação da etapa, revezando entre todas
+ * as variações cadastradas (contador atômico no banco, por etapa + instância).
+ * Se o banco falhar, sorteia localmente — nunca trava o envio.
+ */
+export async function pickStepMessage(
+  step: number,
+  scopeKey: string | null,
+  templatesOfStep: MessageTemplate[],
+): Promise<string> {
+  const pool = templatesOfStep.flatMap((t) => (t.variants?.length ? t.variants : [t.message]));
+  const clean = pool.map((m) => (m || '').trim()).filter(Boolean);
+  if (clean.length === 0) return '';
+  if (clean.length === 1) return clean[0];
+
+  try {
+    const { data, error } = await supabase.rpc('next_template_variant', {
+      p_step: step,
+      p_scope: scopeKey || 'global',
+      p_count: clean.length,
+    });
+    if (error) throw error;
+    const idx = Number(data);
+    if (Number.isFinite(idx) && idx >= 0 && idx < clean.length) return clean[idx];
+  } catch (e) {
+    console.warn('[templates] rodízio via banco falhou, usando sorteio local', e);
+  }
+  return clean[Math.floor(Math.random() * clean.length)];
+}
+
 
 // Emoji categories for automatic variation
 export const EMOJI_CATEGORIES = {
