@@ -91,6 +91,7 @@ export function ExpTrackingSendDialog({ order, open, onOpenChange }: Props) {
       .select("id, label, phone_display")
       .eq("is_active", true)
       .eq("provider", "uazapi")
+      .not("label", "ilike", "%carol%")
       .order("is_default", { ascending: false })
       .order("label")
       .then(({ data }) => {
