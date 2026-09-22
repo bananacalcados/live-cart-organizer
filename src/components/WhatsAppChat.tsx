@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
+import { useTemplateStore, applyTemplateVariables, pickStepMessage, FUNNEL_STEPS } from "@/stores/templateStore";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
