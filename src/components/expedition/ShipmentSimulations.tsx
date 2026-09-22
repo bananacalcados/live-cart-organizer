@@ -461,6 +461,37 @@ export function ShipmentSimulations() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={cfgOpen} onOpenChange={setCfgOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Prazos padrão das etapas</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>Dias em "Em separação"</Label>
+              <Input type="number" min={0} value={cfg.em_separacao_days} onChange={(e) => setCfg({ ...cfg, em_separacao_days: Number(e.target.value) })} />
+            </div>
+            <div>
+              <Label>Dias em "Separado"</Label>
+              <Input type="number" min={0} value={cfg.separado_days} onChange={(e) => setCfg({ ...cfg, separado_days: Number(e.target.value) })} />
+            </div>
+            <div>
+              <Label>Dias em "Embalado"</Label>
+              <Input type="number" min={0} value={cfg.embalado_days} onChange={(e) => setCfg({ ...cfg, embalado_days: Number(e.target.value) })} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={cfg.business_days} onChange={(e) => setCfg({ ...cfg, business_days: e.target.checked })} />
+              Contar apenas dias úteis
+            </label>
+            <p className="text-xs text-muted-foreground">
+              O acompanhamento nunca avança sozinho para "Enviado" — isso só acontece quando a expedição registra o código real na conferência.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCfgOpen(false)}>Cancelar</Button>
+            <Button onClick={saveCfg} disabled={savingCfg}>{savingCfg ? 'Salvando...' : 'Salvar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
