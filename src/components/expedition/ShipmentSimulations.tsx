@@ -241,15 +241,34 @@ export function ShipmentSimulations() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-md border overflow-hidden">
+          <button
+            className={`px-3 py-2 text-sm ${tab === 'order' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+            onClick={() => setTab('order')}
+          >
+            Pedidos
+          </button>
+          <button
+            className={`px-3 py-2 text-sm ${tab === 'manual' ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+            onClick={() => setTab('manual')}
+          >
+            Simulações manuais
+          </button>
+        </div>
         <Input
-          placeholder="Buscar por código, cliente ou destino..."
+          placeholder="Buscar por código, cliente ou pedido..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        <Button onClick={openNew} className="gap-2 ml-auto">
-          <Plus className="h-4 w-4" /> Nova simulação
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" onClick={() => setCfgOpen(true)} className="gap-2">
+            Prazos das etapas
+          </Button>
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" /> Nova simulação
+          </Button>
+        </div>
       </div>
 
       {loading ? (
