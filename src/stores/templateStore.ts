@@ -76,14 +76,16 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
           name: template.name,
           message: template.message,
           stage: template.stage,
+          funnel_step: template.funnel_step ?? 0,
+          variants: (template.variants?.length ? template.variants : [template.message]) as any,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      set((state) => ({ 
-        templates: [...state.templates, data as MessageTemplate] 
+      set((state) => ({
+        templates: [...state.templates, normalizeTemplate(data)],
       }));
     } catch (error) {
       console.error('Error adding template:', error);
