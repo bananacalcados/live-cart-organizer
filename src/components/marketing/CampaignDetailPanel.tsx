@@ -315,6 +315,23 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           });
           offset++;
+        } else if (block.type === 'contact') {
+          allInserts.push({
+            campaign_id: cid,
+            message_type: 'contact',
+            message_content: null,
+            contact_name: (block as any).contactName?.trim() || null,
+            contact_phone: String((block as any).contactPhone || '').replace(/\D/g, '') || null,
+            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            disable_link_preview: false,
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+            whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+          });
+          offset++;
         } else if (block.type === 'audio') {
           allInserts.push({
             campaign_id: cid,
