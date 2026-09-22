@@ -482,6 +482,43 @@ function BlockEditor({
             </div>
           </>
         )}
+
+        {/* ── CONTACT CARD BLOCK ── */}
+        {block.type === 'contact' && (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              Envia o cartão de contato. Quem receber toca no cartão e já abre a conversa com esse número.
+            </p>
+            <Input
+              placeholder="Nome que vai aparecer no cartão (ex.: Banana Calçados)"
+              value={block.contactName || ''}
+              onChange={e => onChange({ ...block, contactName: e.target.value })}
+              className="text-sm"
+            />
+            <Input
+              placeholder="Número com DDI e DDD (ex.: 5533999999999)"
+              value={block.contactPhone || ''}
+              onChange={e => onChange({ ...block, contactPhone: e.target.value })}
+              className="text-sm"
+            />
+            {ourNumbers.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                <span className="text-[10px] text-muted-foreground self-center mr-1">Nossos números:</span>
+                {ourNumbers.map(n => (
+                  <Button
+                    key={n.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => onChange({ ...block, contactName: block.contactName || n.label, contactPhone: n.phone })}
+                  >
+                    {n.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
