@@ -120,10 +120,23 @@ serve(async (req) => {
     const groupId = job.group_zapi_id;
     const numberId = job.whatsapp_number_id;
     const isPoll = block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2;
-    const isMedia = block.message_type !== "text" && block.media_url;
+    const isContact = block.message_type === "contact" && block.contact_phone;
+    const isMedia = block.message_type !== "text" && block.message_type !== "contact" && block.media_url;
     const pollSel = block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1;
     // Sem miniatura de link (opcional, só texto). WaSender não suporta → ignorado.
     const noPreview = block.disable_link_preview === true;
+
+    // Cartão de contato (vCard): a pessoa toca no cartão e já abre a conversa.
+    if (isContact) {
+      if (provider === "uazapi" || provider === "wasender") {
+        return callFn(provider === "uazapi" ? "uazapi-send-extra" : "wasender-send-extra", {
+          kind: "contact", phone: groupId, whatsapp_number_id: numberId,
+          contact: { name: block.contact_name || block.contact_phone, phone: block.contact_phone },
+        });
+      }
+      return { ok: false, error: "Cartão de contato só é suportado nas instâncias uazapi/WaSender" };
+    }
+
 
     if (provider === "wasender") {
       if (isPoll) {
