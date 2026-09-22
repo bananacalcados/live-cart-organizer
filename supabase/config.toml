@@ -339,3 +339,6 @@ verify_jwt = false
 [functions.austpay-refund]
 verify_jwt = false
 
+
+[functions.shipment-frenet-webhook]
+verify_jwt = false
