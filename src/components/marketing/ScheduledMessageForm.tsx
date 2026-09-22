@@ -30,12 +30,15 @@ export interface MediaItem {
 
 export interface MessageBlock {
   id: string;
-  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll';
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll' | 'contact';
   content: string;
   mediaItems: MediaItem[];
   mediaUrl: string;
   pollOptions: string[];
   pollMaxOptions: number;
+  /** Cartão de contato (só para blocos do tipo 'contact'). */
+  contactName?: string;
+  contactPhone?: string;
   /** Envia o link SEM a miniatura de prévia (só para blocos de texto). */
   disableLinkPreview?: boolean;
 }
@@ -65,6 +68,8 @@ interface EditingMessage {
   scheduled_at: string;
   send_speed: string;
   disable_link_preview?: boolean | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
 }
 
 interface MessageTemplate {
@@ -102,6 +107,7 @@ const BLOCK_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
   audio: { icon: "🎵", label: "Áudio" },
   document: { icon: "📄", label: "Documento" },
   poll: { icon: "📊", label: "Enquete" },
+  contact: { icon: "👤", label: "Contato" },
 };
 
 function generateId() {
@@ -117,6 +123,8 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     mediaUrl: '',
     pollOptions: type === 'poll' ? ['', ''] : [],
     pollMaxOptions: 1,
+    contactName: '',
+    contactPhone: '',
     disableLinkPreview: false,
   };
 }
@@ -145,6 +153,27 @@ function BlockEditor({
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  // Atalhos de "nossos números" no cartão de contato
+  const [ourNumbers, setOurNumbers] = useState<{ id: string; label: string; phone: string }[]>([]);
+
+  useEffect(() => {
+    if (block.type !== 'contact' || ourNumbers.length > 0) return;
+    (async () => {
+      const { data } = await supabase
+        .from('whatsapp_numbers_safe')
+        .select('id, label, phone_display, uazapi_owner, wasender_phone_number')
+        .eq('is_active', true)
+        .order('is_default', { ascending: false });
+      const rows = (data || [])
+        .map((n: any) => ({
+          id: n.id as string,
+          label: (n.label as string) || 'Número',
+          phone: String(n.uazapi_owner || n.wasender_phone_number || n.phone_display || '').replace(/\D/g, ''),
+        }))
+        .filter(n => n.phone.length >= 10);
+      setOurNumbers(rows);
+    })();
+  }, [block.type]);
 
   const multiMediaTypes = ['image', 'video', 'document'];
   const isMultiMedia = multiMediaTypes.includes(block.type);
@@ -474,6 +503,43 @@ function BlockEditor({
             </div>
           </>
         )}
+
+        {/* ── CONTACT CARD BLOCK ── */}
+        {block.type === 'contact' && (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              Envia o cartão de contato. Quem receber toca no cartão e já abre a conversa com esse número.
+            </p>
+            <Input
+              placeholder="Nome que vai aparecer no cartão (ex.: Banana Calçados)"
+              value={block.contactName || ''}
+              onChange={e => onChange({ ...block, contactName: e.target.value })}
+              className="text-sm"
+            />
+            <Input
+              placeholder="Número com DDI e DDD (ex.: 5533999999999)"
+              value={block.contactPhone || ''}
+              onChange={e => onChange({ ...block, contactPhone: e.target.value })}
+              className="text-sm"
+            />
+            {ourNumbers.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                <span className="text-[10px] text-muted-foreground self-center mr-1">Nossos números:</span>
+                {ourNumbers.map(n => (
+                  <Button
+                    key={n.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => onChange({ ...block, contactName: block.contactName || n.label, contactPhone: n.phone })}
+                  >
+                    {n.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -521,6 +587,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       if (editingMessage.poll_options) {
         b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
       }
+      b.contactName = editingMessage.contact_name || '';
+      b.contactPhone = editingMessage.contact_phone || '';
       setBlocks([b]);
       setSendSpeed(editingMessage.send_speed || 'normal');
       const d = new Date(editingMessage.scheduled_at);
@@ -606,6 +674,11 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       if (b.type === 'audio' && !b.mediaUrl) { toast.error("Bloco de áudio sem arquivo"); return false; }
       if (b.type === 'poll' && b.pollOptions.filter(o => o.trim()).length < 2) {
         toast.error("Enquete precisa de ao menos 2 opções"); return false;
+      }
+      if (b.type === 'contact') {
+        const digits = (b.contactPhone || '').replace(/\D/g, '');
+        if (!b.contactName?.trim()) { toast.error("Informe o nome do cartão de contato"); return false; }
+        if (digits.length < 10) { toast.error("Número do contato inválido (use DDI + DDD)"); return false; }
       }
     }
     if (!scheduledDate) { toast.error("Selecione uma data"); return false; }

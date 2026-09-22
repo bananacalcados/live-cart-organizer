@@ -315,6 +315,23 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           });
           offset++;
+        } else if (block.type === 'contact') {
+          allInserts.push({
+            campaign_id: cid,
+            message_type: 'contact',
+            message_content: null,
+            contact_name: (block as any).contactName?.trim() || null,
+            contact_phone: String((block as any).contactPhone || '').replace(/\D/g, '') || null,
+            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            disable_link_preview: false,
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+            whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+          });
+          offset++;
         } else if (block.type === 'audio') {
           allInserts.push({
             campaign_id: cid,
@@ -452,6 +469,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           });
           offset++;
+        } else if (block.type === 'contact') {
+          allInserts.push({
+            campaign_id: campaignId,
+            message_type: 'contact',
+            message_content: null,
+            contact_name: (block as any).contactName?.trim() || null,
+            contact_phone: String((block as any).contactPhone || '').replace(/\D/g, '') || null,
+            scheduled_at: new Date(now.getTime()).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+            whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+          });
+          offset++;
         } else if (block.type === 'audio') {
           allInserts.push({
             campaign_id: campaignId,
@@ -468,10 +501,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
+      // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert.
+      const allKeysNow = Array.from(new Set(allInserts.flatMap(r => Object.keys(r))));
+      const normalizedNow = allInserts.map(row => {
+        const full: any = {};
+        for (const k of allKeysNow) full[k] = row[k] ?? null;
+        full.mention_all = !!row.mention_all;
+        full.disable_link_preview = !!row.disable_link_preview;
+        if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
+        return full;
+      });
       const { data: insertedRows, error } = await withNetworkRetry(async () =>
         await supabase
           .from('group_campaign_scheduled_messages')
-          .insert(allInserts as any)
+          .insert(normalizedNow as any)
           .select('id, block_order'),
       );
       if (error) throw error;
@@ -539,6 +582,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
+      contact_name: (block as any)?.contactName?.trim() || null,
+      contact_phone: String((block as any)?.contactPhone || '').replace(/\D/g, '') || null,
       whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
     };
 
