@@ -362,7 +362,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         .join("\n"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl]);
+  }, [order, carrier, courier, deliveryDays, tracking, trackingUrl, publicCode]);
 
   const sendTrackingWa = async () => {
     const phone = (order.resolved_phone || order.customer_phone || "").replace(/\D/g, "");
@@ -452,6 +452,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         courier_name: courier.trim() || null,
       } as any).in("id", groupIds);
       if (error) throw error;
+
+      // Ao registrar o código real, o acompanhamento do cliente pula direto para "Enviado".
+      if (tracking.trim()) {
+        await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
+      }
 
       await saveExpeditionShippingCost({
         saleId: order.id,
