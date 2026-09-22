@@ -107,6 +107,7 @@ const BLOCK_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
   audio: { icon: "🎵", label: "Áudio" },
   document: { icon: "📄", label: "Documento" },
   poll: { icon: "📊", label: "Enquete" },
+  contact: { icon: "👤", label: "Contato" },
 };
 
 function generateId() {
@@ -122,6 +123,8 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     mediaUrl: '',
     pollOptions: type === 'poll' ? ['', ''] : [],
     pollMaxOptions: 1,
+    contactName: '',
+    contactPhone: '',
     disableLinkPreview: false,
   };
 }
