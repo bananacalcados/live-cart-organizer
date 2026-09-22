@@ -7,9 +7,20 @@ export interface MessageTemplate {
   name: string;
   message: string;
   stage: OrderStage | 'all';
+  /** 0 = nenhuma; 1 = dados, 2 = CPF/e-mail, 3 = pagamento */
+  funnel_step: number;
+  /** Redações alternativas da MESMA pergunta (rodízio anti-spam) */
+  variants: string[];
   created_at: string;
   updated_at: string;
 }
+
+export const FUNNEL_STEPS = [
+  { value: 0, label: 'Nenhuma etapa' },
+  { value: 1, label: 'Etapa 1 — Nome e endereço' },
+  { value: 2, label: 'Etapa 2 — CPF e e-mail' },
+  { value: 3, label: 'Etapa 3 — Forma de pagamento' },
+] as const;
 
 interface TemplateStore {
   templates: MessageTemplate[];
@@ -19,6 +30,20 @@ interface TemplateStore {
   updateTemplate: (id: string, updates: Partial<MessageTemplate>) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
   getTemplatesByStage: (stage: OrderStage) => MessageTemplate[];
+  getTemplatesByStep: (step: number) => MessageTemplate[];
+}
+
+/** Normaliza a linha do banco: variants sempre array de texto não vazio. */
+function normalizeTemplate(row: any): MessageTemplate {
+  const raw = Array.isArray(row?.variants) ? row.variants : [];
+  const variants = raw
+    .map((v: unknown) => (typeof v === 'string' ? v : String(v ?? '')))
+    .filter((v: string) => v.trim().length > 0);
+  return {
+    ...row,
+    funnel_step: Number(row?.funnel_step ?? 0) || 0,
+    variants: variants.length ? variants : [row?.message ?? ''],
+  } as MessageTemplate;
 }
 
 export const useTemplateStore = create<TemplateStore>((set, get) => ({
@@ -35,7 +60,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
 
       if (error) throw error;
       
-      set({ templates: data as MessageTemplate[] });
+      set({ templates: (data || []).map(normalizeTemplate) });
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
@@ -51,14 +76,16 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
           name: template.name,
           message: template.message,
           stage: template.stage,
+          funnel_step: template.funnel_step ?? 0,
+          variants: (template.variants?.length ? template.variants : [template.message]) as any,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      set((state) => ({ 
-        templates: [...state.templates, data as MessageTemplate] 
+      set((state) => ({
+        templates: [...state.templates, normalizeTemplate(data)],
       }));
     } catch (error) {
       console.error('Error adding template:', error);
@@ -74,6 +101,8 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
           name: updates.name,
           message: updates.message,
           stage: updates.stage,
+          funnel_step: updates.funnel_step ?? 0,
+          variants: (updates.variants?.length ? updates.variants : [updates.message || '']) as any,
         })
         .eq('id', id);
 
@@ -116,7 +145,40 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       return stages.includes(stage);
     });
   },
+
+  getTemplatesByStep: (step) => get().templates.filter((t) => Number(t.funnel_step) === step),
 }));
+
+/**
+ * Rodízio anti-spam: devolve a próxima redação da etapa, revezando entre todas
+ * as variações cadastradas (contador atômico no banco, por etapa + instância).
+ * Se o banco falhar, sorteia localmente — nunca trava o envio.
+ */
+export async function pickStepMessage(
+  step: number,
+  scopeKey: string | null,
+  templatesOfStep: MessageTemplate[],
+): Promise<string> {
+  const pool = templatesOfStep.flatMap((t) => (t.variants?.length ? t.variants : [t.message]));
+  const clean = pool.map((m) => (m || '').trim()).filter(Boolean);
+  if (clean.length === 0) return '';
+  if (clean.length === 1) return clean[0];
+
+  try {
+    const { data, error } = await supabase.rpc('next_template_variant', {
+      p_step: step,
+      p_scope: scopeKey || 'global',
+      p_count: clean.length,
+    });
+    if (error) throw error;
+    const idx = Number(data);
+    if (Number.isFinite(idx) && idx >= 0 && idx < clean.length) return clean[idx];
+  } catch (e) {
+    console.warn('[templates] rodízio via banco falhou, usando sorteio local', e);
+  }
+  return clean[Math.floor(Math.random() * clean.length)];
+}
+
 
 // Emoji categories for automatic variation
 export const EMOJI_CATEGORIES = {
@@ -148,6 +210,13 @@ export function applyTemplateVariables(
     link_carrinho?: string;
     total?: string;
     produtos?: string;
+    nome_completo?: string;
+    total_pix?: string;
+    desconto_pix?: string;
+    parcelas_max?: string;
+    valor_parcela?: string;
+    parcelamento?: string;
+    produtos_curto?: string;
   }
 ): string {
   let result = template;
@@ -170,7 +239,15 @@ export function applyTemplateVariables(
   result = result.replace(/\{\{whatsapp\}\}/gi, variables.whatsapp || '');
   result = result.replace(/\{\{link_carrinho\}\}/gi, variables.link_carrinho || '');
   result = result.replace(/\{\{total\}\}/gi, variables.total || '');
+  result = result.replace(/\{\{produtos_curto\}\}/gi, variables.produtos_curto || '');
   result = result.replace(/\{\{produtos\}\}/gi, variables.produtos || '');
+  result = result.replace(/\{\{nome_completo\}\}/gi, variables.nome_completo || '');
+  result = result.replace(/\{\{primeiro_nome\}\}/gi, variables.nome || '');
+  result = result.replace(/\{\{total_pix\}\}/gi, variables.total_pix || '');
+  result = result.replace(/\{\{desconto_pix\}\}/gi, variables.desconto_pix || '');
+  result = result.replace(/\{\{parcelas_max\}\}/gi, variables.parcelas_max || '');
+  result = result.replace(/\{\{valor_parcela\}\}/gi, variables.valor_parcela || '');
+  result = result.replace(/\{\{parcelamento\}\}/gi, variables.parcelamento || '');
   
   return result;
 }

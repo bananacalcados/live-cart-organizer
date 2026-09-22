@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
+import { useTemplateStore, applyTemplateVariables, pickStepMessage, FUNNEL_STEPS } from "@/stores/templateStore";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
@@ -287,6 +287,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
   const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
+  // Regra de parcelamento da live (usada nas variáveis {{parcelamento}} etc.)
+  const [eventInstallment, setEventInstallment] = useState<{ max: number; minValue: number }>({ max: 0, minValue: 0 });
   const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
   /** Instância usada nos disparos de template Meta (config da live) — imune à troca manual do chat. */
   const apiTemplateNumberId = eventMetaNumberId || hookEffectiveNumberId || selectedNumberId || null;
@@ -317,12 +319,16 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     (async () => {
       const { data } = await supabase
         .from("events")
-        .select("followup_templates, whatsapp_number_id")
+        .select("followup_templates, whatsapp_number_id, installment_max, installment_min_value")
         .eq("id", eventId)
         .maybeSingle();
       if (cancelled) return;
       setFollowupTemplates((((data as any)?.followup_templates as FollowupTemplate[]) || []).filter((t) => t?.templateName));
       setEventMetaNumberId((data as any)?.whatsapp_number_id || null);
+      setEventInstallment({
+        max: Number((data as any)?.installment_max || 0),
+        minValue: Number((data as any)?.installment_min_value || 0),
+      });
     })();
     return () => { cancelled = true; };
   }, [eventId]);
@@ -614,13 +620,38 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
       : '';
 
+    // {{nome}} = PRIMEIRO NOME da ficha do cliente. Só cai no @ do Instagram
+    // quando a ficha ainda não tem nome completo preenchido.
+    const fullName = String((dbOrder?.customer as any)?.full_name || '').trim();
+    const rawFirst = fullName
+      ? fullName.split(/\s+/)[0]
+      : normalizedInstagram.replace('@', '').split(/[._\s\d]/)[0] || '';
+    const firstName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : '';
+
+    // Pix (5% de desconto) e parcelamento conforme a regra da live.
+    const pixValue = totalValue * 0.95;
+    const evMax = eventInstallment.max > 0 ? eventInstallment.max : 6;
+    const maxParcelas = totalValue >= (eventInstallment.minValue || 0)
+      ? Math.max(1, evMax)
+      : Math.max(1, Math.min(evMax, 6));
+    const parcela = maxParcelas > 0 ? totalValue / maxParcelas : totalValue;
+
     return {
-      nome: normalizedInstagram.replace('@', ''),
+      nome: firstName,
+      nome_completo: fullName,
       instagram: normalizedInstagram,
       whatsapp: order.whatsapp || '',
       link_carrinho: order.cartLink || '',
       total: totalValue.toFixed(2),
+      total_pix: pixValue.toFixed(2),
+      desconto_pix: (totalValue - pixValue).toFixed(2),
+      parcelas_max: String(maxParcelas),
+      valor_parcela: parcela.toFixed(2),
+      parcelamento: maxParcelas > 1
+        ? `até ${maxParcelas}x de R$ ${parcela.toFixed(2)} sem juros`
+        : `R$ ${totalValue.toFixed(2)} à vista`,
       produtos: productsList || 'Nenhum produto',
+      produtos_curto: order.products.map((p) => `${p.quantity}x ${p.title}`).join(', '),
     };
   };
 
@@ -784,6 +815,20 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     const filledMessage = applyTemplateVariables(templateMessage, variables);
     setNewMessage(filledMessage);
     inputRef.current?.focus();
+  };
+
+  // Etapa do atendimento: escolhe uma redação em RODÍZIO entre todas as
+  // variações cadastradas (anti-spam nas instâncias não oficiais).
+  const handleStepSelect = async (step: number) => {
+    const pool = templates.filter((t) => Number(t.funnel_step) === step);
+    if (pool.length === 0) {
+      toast.error('Nenhuma mensagem cadastrada nesta etapa.');
+      return;
+    }
+    const scope = hookEffectiveNumberId || selectedNumberId || 'global';
+    const msg = await pickStepMessage(step, scope, pool);
+    if (!msg) { toast.error('Nenhuma redação válida nesta etapa.'); return; }
+    handleTemplateSelect(msg);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1832,6 +1877,26 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                   <Send className="h-4 w-4" />
                   Templates Meta (API Oficial)
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs">Etapas do atendimento (rodízio automático)</DropdownMenuLabel>
+                {FUNNEL_STEPS.filter((s) => s.value > 0).map((s) => {
+                  const count = templates
+                    .filter((t) => Number(t.funnel_step) === s.value)
+                    .reduce((n, t) => n + (t.variants?.length || 1), 0);
+                  return (
+                    <DropdownMenuItem
+                      key={s.value}
+                      onClick={() => handleStepSelect(s.value)}
+                      disabled={count === 0}
+                      className="flex-col items-start gap-0.5 cursor-pointer"
+                    >
+                      <span className="font-medium text-sm">{s.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {count === 0 ? 'Sem redações cadastradas' : `${count} redação(ões) em rodízio`}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
                 <DropdownMenuSeparator />
                 {stageTemplates.length > 0 && (
                   <>

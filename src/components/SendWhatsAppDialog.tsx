@@ -54,7 +54,9 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
     // Try to use a saved template for this stage
     const stageTemplates = getTemplatesByStage(order.stage);
     if (stageTemplates.length > 0) {
-      const firstName = normalizedInstagram.replace('@', '') || '';
+      // Sem ficha carregada aqui: usa a 1ª palavra do @ já capitalizada.
+      const raw = (normalizedInstagram.replace('@', '').split(/[._\s\d]/)[0] || '');
+      const firstName = raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
       const productsList = order.products.map(p => `${p.quantity}x ${p.title}`).join(', ');
       return applyTemplateVariables(stageTemplates[0].message, {
         nome: firstName,

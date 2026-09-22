@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useTemplateStore, MessageTemplate } from "@/stores/templateStore";
+import { useTemplateStore, MessageTemplate, FUNNEL_STEPS } from "@/stores/templateStore";
 import { STAGES, OrderStage } from "@/types/order";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -36,8 +36,16 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const [isSaving, setIsSaving] = useState(false);
   
   const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const [variants, setVariants] = useState<string[]>([""]);
+  const [focusedVariant, setFocusedVariant] = useState(0);
+  const [funnelStep, setFunnelStep] = useState(0);
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
+
+  const message = variants[0] || "";
+  const setVariantAt = (i: number, text: string) =>
+    setVariants((prev) => prev.map((v, idx) => (idx === i ? text : v)));
+  const appendToFocused = (token: string) =>
+    setVariants((prev) => prev.map((v, idx) => (idx === focusedVariant ? v + token : v)));
 
   useEffect(() => {
     fetchTemplates();
@@ -46,7 +54,9 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const handleEdit = (template: MessageTemplate) => {
     setEditingTemplate(template);
     setName(template.name);
-    setMessage(template.message);
+    setVariants(template.variants?.length ? template.variants : [template.message]);
+    setFunnelStep(Number(template.funnel_step) || 0);
+    setFocusedVariant(0);
     setSelectedStages(template.stage === 'all' ? [] : template.stage.split(','));
     setIsEditing(true);
   };
@@ -62,25 +72,35 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
 
   const resetForm = () => {
     setName("");
-    setMessage("");
+    setVariants([""]);
+    setFunnelStep(0);
+    setFocusedVariant(0);
     setSelectedStages([]);
     setEditingTemplate(null);
   };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !message.trim()) {
-      toast.error("Preencha nome e mensagem");
+    const cleanVariants = variants.map((v) => v.trim()).filter(Boolean);
+    if (!name.trim() || cleanVariants.length === 0) {
+      toast.error("Preencha nome e ao menos uma redação");
       return;
     }
 
     setIsSaving(true);
     const stageValue = selectedStages.length === 0 ? 'all' : selectedStages.join(',');
+    const payload = {
+      name,
+      message: cleanVariants[0],
+      stage: stageValue as any,
+      funnel_step: funnelStep,
+      variants: cleanVariants,
+    };
     try {
       if (editingTemplate) {
-        await updateTemplate(editingTemplate.id, { name, message, stage: stageValue as any });
+        await updateTemplate(editingTemplate.id, payload);
         toast.success("Template atualizado");
       } else {
-        await addTemplate({ name, message, stage: stageValue as any });
+        await addTemplate(payload);
         toast.success("Template criado");
       }
       resetForm();
@@ -101,12 +121,19 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   };
 
   const dataVariables = [
-    { name: '{{nome}}', desc: 'Nome do cliente (Instagram sem @)' },
+    { name: '{{nome}}', desc: 'Primeiro nome da ficha do cliente (se não houver, usa o @)' },
+    { name: '{{nome_completo}}', desc: 'Nome completo da ficha' },
     { name: '{{instagram}}', desc: 'Instagram com @' },
     { name: '{{whatsapp}}', desc: 'Número do WhatsApp' },
     { name: '{{link_carrinho}}', desc: 'Link do carrinho' },
     { name: '{{total}}', desc: 'Valor total do pedido' },
+    { name: '{{total_pix}}', desc: 'Valor no Pix (5% de desconto)' },
+    { name: '{{desconto_pix}}', desc: 'Quanto ela economiza no Pix' },
+    { name: '{{parcelamento}}', desc: 'Ex.: até 10x de R$ 35,99 sem juros' },
+    { name: '{{parcelas_max}}', desc: 'Número máximo de parcelas' },
+    { name: '{{valor_parcela}}', desc: 'Valor de cada parcela' },
     { name: '{{produtos}}', desc: 'Lista de produtos' },
+    { name: '{{produtos_curto}}', desc: 'Produtos em uma linha' },
   ];
 
   const emojiVariables = [
@@ -168,6 +195,12 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{template.name}</p>
                       <div className="flex flex-wrap gap-1 mt-1">
+                        {Number(template.funnel_step) > 0 && (
+                          <Badge variant="outline" className="text-xs border-primary text-primary">
+                            {FUNNEL_STEPS.find((s) => s.value === Number(template.funnel_step))?.label}
+                            {" · "}{template.variants?.length || 1} redação(ões)
+                          </Badge>
+                        )}
                         {getStageBadges(template.stage).map((b, i) => (
                           <Badge key={i} variant="secondary" className={cn("text-xs", b.color, "text-white")}>
                             {b.label}
@@ -253,14 +286,65 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="template-message">Mensagem</Label>
-                <Textarea
-                  id="template-message"
-                  placeholder="Digite sua mensagem..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={5}
-                />
+                <Label>Etapa do atendimento (rodízio)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {FUNNEL_STEPS.map((s) => (
+                    <Button
+                      key={s.value}
+                      type="button"
+                      variant={funnelStep === s.value ? "default" : "outline"}
+                      size="sm"
+                      className="justify-start text-xs h-auto py-2"
+                      onClick={() => setFunnelStep(s.value)}
+                    >
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mensagens da mesma etapa entram no rodízio: a cada envio o sistema usa
+                  uma redação diferente, reduzindo o risco de bloqueio.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Redações (variações)</Label>
+                {variants.map((v, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Redação {i + 1}{i === 0 ? " (principal)" : ""}
+                      </span>
+                      {variants.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setVariants((prev) => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      placeholder="Digite sua mensagem..."
+                      value={v}
+                      onFocus={() => setFocusedVariant(i)}
+                      onChange={(e) => setVariantAt(i, e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setVariants((prev) => [...prev, ""])}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Adicionar redação
+                </Button>
               </div>
 
               <div className="space-y-3">
@@ -272,7 +356,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                         key={v.name}
                         variant="outline"
                         className="text-xs cursor-pointer hover:bg-secondary"
-                        onClick={() => setMessage((prev) => prev + v.name)}
+                        onClick={() => appendToFocused(v.name)}
                         title={v.desc}
                       >
                         {v.name}
@@ -291,7 +375,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                         key={v.name}
                         variant="secondary"
                         className="text-xs cursor-pointer hover:bg-primary/20 gap-1"
-                        onClick={() => setMessage((prev) => prev + v.name)}
+                        onClick={() => appendToFocused(v.name)}
                         title={v.desc}
                       >
                         <span>{v.preview}</span>
