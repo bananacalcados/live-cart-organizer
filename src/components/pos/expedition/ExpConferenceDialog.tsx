@@ -185,6 +185,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       .select("id, label, phone_display")
       .eq("is_active", true)
       .eq("provider", "uazapi")
+      .not("label", "ilike", "%carol%")
       .order("is_default", { ascending: false })
       .order("label")
       .then(({ data }) => {
