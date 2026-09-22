@@ -620,13 +620,38 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
       : '';
 
+    // {{nome}} = PRIMEIRO NOME da ficha do cliente. Só cai no @ do Instagram
+    // quando a ficha ainda não tem nome completo preenchido.
+    const fullName = String((dbOrder?.customer as any)?.full_name || '').trim();
+    const rawFirst = fullName
+      ? fullName.split(/\s+/)[0]
+      : normalizedInstagram.replace('@', '').split(/[._\s\d]/)[0] || '';
+    const firstName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : '';
+
+    // Pix (5% de desconto) e parcelamento conforme a regra da live.
+    const pixValue = totalValue * 0.95;
+    const evMax = eventInstallment.max > 0 ? eventInstallment.max : 6;
+    const maxParcelas = totalValue >= (eventInstallment.minValue || 0)
+      ? Math.max(1, evMax)
+      : Math.max(1, Math.min(evMax, 6));
+    const parcela = maxParcelas > 0 ? totalValue / maxParcelas : totalValue;
+
     return {
-      nome: normalizedInstagram.replace('@', ''),
+      nome: firstName,
+      nome_completo: fullName,
       instagram: normalizedInstagram,
       whatsapp: order.whatsapp || '',
       link_carrinho: order.cartLink || '',
       total: totalValue.toFixed(2),
+      total_pix: pixValue.toFixed(2),
+      desconto_pix: (totalValue - pixValue).toFixed(2),
+      parcelas_max: String(maxParcelas),
+      valor_parcela: parcela.toFixed(2),
+      parcelamento: maxParcelas > 1
+        ? `até ${maxParcelas}x de R$ ${parcela.toFixed(2)} sem juros`
+        : `R$ ${totalValue.toFixed(2)} à vista`,
       produtos: productsList || 'Nenhum produto',
+      produtos_curto: order.products.map((p) => `${p.quantity}x ${p.title}`).join(', '),
     };
   };
 
