@@ -317,12 +317,16 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     (async () => {
       const { data } = await supabase
         .from("events")
-        .select("followup_templates, whatsapp_number_id")
+        .select("followup_templates, whatsapp_number_id, installment_max, installment_min_value")
         .eq("id", eventId)
         .maybeSingle();
       if (cancelled) return;
       setFollowupTemplates((((data as any)?.followup_templates as FollowupTemplate[]) || []).filter((t) => t?.templateName));
       setEventMetaNumberId((data as any)?.whatsapp_number_id || null);
+      setEventInstallment({
+        max: Number((data as any)?.installment_max || 0),
+        minValue: Number((data as any)?.installment_min_value || 0),
+      });
     })();
     return () => { cancelled = true; };
   }, [eventId]);
