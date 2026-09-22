@@ -95,6 +95,7 @@ const GATEWAY_LABELS: Record<string, string> = {
   pagarme: "Pagar.me",
   appmax: "AppMax",
   vindi: "Vindi",
+  austpay: "AustPay",
   yampi: "Yampi",
   pix: "PIX",
   "store-checkout": "Checkout da Loja",
