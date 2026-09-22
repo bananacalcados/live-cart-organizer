@@ -346,8 +346,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       primeiro_nome: full.split(" ")[0] || "",
       transportadora: carrier || courier || "",
       prazo_entrega: deliveryDays || "",
-      codigo_rastreio: tracking.trim(),
-      link_rastreio: trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
+      // O cliente recebe SEMPRE o nosso código/link de acompanhamento.
+      codigo_rastreio: publicCode || tracking.trim(),
+      link_rastreio: publicCode
+        ? publicTrackingUrl(publicCode)
+        : trackingUrl.trim() || (tracking.trim() ? trackingLink(tracking.trim()) : ""),
       valor_pedido: brl(order.total || 0),
       endereco: formatShippingAddress(addr),
       cidade: (addr as any)?.city || (addr as any)?.cidade || "",
@@ -384,6 +387,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           delivery_days: deliveryDays.trim() || null,
         } as any)
         .in("id", groupIds);
+      await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
       toast.success("Rastreio enviado no WhatsApp");
 
     } catch (e: any) {
