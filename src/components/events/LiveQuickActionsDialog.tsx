@@ -32,6 +32,8 @@ import {
   Shuffle,
 } from "lucide-react";
 import { useEventStore } from "@/stores/eventStore";
+import { SplitPaymentSetupButton } from "@/components/checkout/SplitPaymentSetupButton";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 
 interface Props {
   open: boolean;
@@ -171,6 +173,14 @@ export function LiveQuickActionsDialog({
               <Copy className="h-4 w-4" />
               Copiar link do checkout
             </Button>
+
+            {order && !(order as any).is_paid && (
+              <SplitPaymentSetupButton
+                orderId={order.id}
+                total={getOrderFinalValue(order)}
+                maxInstallments={Math.min(Number((orderEvent as any)?.max_installments) || 6, 12)}
+              />
+            )}
 
             {waInitialReady && (
               <Button

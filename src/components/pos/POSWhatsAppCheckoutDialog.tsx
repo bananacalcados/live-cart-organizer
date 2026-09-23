@@ -1,3 +1,4 @@
+import { SplitPaymentSetupButton } from "@/components/checkout/SplitPaymentSetupButton";
 import { useState, useEffect } from "react";
 import {
   Search, Plus, Minus, ShoppingCart, Loader2, Copy, Check,
@@ -53,6 +54,7 @@ export function POSWhatsAppCheckoutDialog({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
+  const [splitDesc, setSplitDesc] = useState("");
   const [copied, setCopied] = useState(false);
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
@@ -300,7 +302,7 @@ export function POSWhatsAppCheckoutDialog({
     if (!generatedLink) return;
     setSending(true);
     try {
-      const message = `Olá${customerName ? ` ${customerName.split(' ')[0]}` : ''}! 🛍️\n\nSeu link de compra está pronto:\n${generatedLink}\n\nÉ só clicar, conferir e finalizar! 😊`;
+      const message = `Olá${customerName ? ` ${customerName.split(' ')[0]}` : ''}! 🛍️\n\nSeu link de compra está pronto:\n${generatedLink}${splitDesc ? `\n\n${splitDesc}` : ""}\n\nÉ só clicar, conferir e finalizar! 😊`;
       const messageId = await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
@@ -311,6 +313,7 @@ export function POSWhatsAppCheckoutDialog({
       onOpenChange(false);
       setCart([]);
       setGeneratedLink("");
+      setSplitDesc("");
       setDiscountValue("");
       setCouponApplied(null);
       setCouponCode("");
@@ -342,6 +345,7 @@ export function POSWhatsAppCheckoutDialog({
               <p className="font-bold text-lg">Link Gerado!</p>
               <p className="text-sm font-bold">{fmt(orderTotal)}</p>
               <div className="bg-white dark:bg-background p-3 rounded text-xs font-mono break-all border">{generatedLink}</div>
+              <SplitPaymentSetupButton saleId={generatedLink.split("/").pop()} total={orderTotal} onChange={setSplitDesc} />
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={async () => {
                   await navigator.clipboard.writeText(generatedLink);

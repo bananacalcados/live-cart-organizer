@@ -1,3 +1,4 @@
+import { SplitPaymentSetupButton } from "@/components/checkout/SplitPaymentSetupButton";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
 import { buildLinkInstallmentRule } from "@/lib/installmentRules";
@@ -87,6 +88,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
+  const [splitDesc, setSplitDesc] = useState("");
   const [copied, setCopied] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [mobileStep, setMobileStep] = useState<"catalog" | "cart">("catalog");
@@ -608,7 +610,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       const methodLabel = deliveryMethod === "cash" ? "dinheiro" : "cartão (maquininha)";
       text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor dos produtos: ${fmt(cartTotal)}${shippingAmount > 0 ? `\nFrete: ${fmt(shippingAmount)}` : " (frete grátis)"}\nValor total: ${fmt(orderTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${hasGift && giftDescription ? `\n\n🎁 *Brinde:* ${giftDescription}` : ""}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
     } else {
-      text = `Olá! Aqui está o link para pagamento: ${generatedLink}`;
+      text = `Olá! Aqui está o link para pagamento: ${generatedLink}${splitDesc ? `\n\n${splitDesc}` : ""}`;
     }
 
     const url = phone
@@ -1384,6 +1386,9 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                 onFocus={e => e.target.select()}
               />
             </div>
+            {generatedLink.includes("/checkout-loja/") && (
+              <SplitPaymentSetupButton key={generatedLink} saleId={generatedLink.split("/").pop()} onChange={setSplitDesc} />
+            )}
             <div className="flex gap-2">
               <Button type="button" variant="outline" className="flex-1" onClick={copyLink}>
                 {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
