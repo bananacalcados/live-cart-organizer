@@ -32,9 +32,14 @@ export default function PublicTracking() {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      setLoading(true);
-      setError(null);
+    let running = false;
+    const loadTracking = async (initial = false) => {
+      if (running) return;
+      running = true;
+      if (initial) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         const base = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/shipment-tracking-public`;
         const res = await fetch(
@@ -47,14 +52,21 @@ export default function PublicTracking() {
           setError(json?.error === 'not_found' ? 'Objeto não encontrado.' : 'Não foi possível consultar o objeto.');
         } else {
           setData(json);
+          setError(null);
         }
       } catch {
-        if (alive) setError('Não foi possível consultar o objeto.');
+        if (alive && initial) setError('Não foi possível consultar o objeto.');
       } finally {
-        if (alive) setLoading(false);
+        running = false;
+        if (alive && initial) setLoading(false);
       }
-    })();
-    return () => { alive = false; };
+    };
+    void loadTracking(true);
+    const refresh = window.setInterval(() => void loadTracking(false), 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(refresh);
+    };
   }, [codigo]);
 
   return (
