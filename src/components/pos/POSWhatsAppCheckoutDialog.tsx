@@ -18,6 +18,7 @@ import { materializePosCustomer } from "@/lib/posCustomerResolve";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
 import { buildLinkInstallmentRule } from "@/lib/installmentRules";
+import type { SplitPartInput } from "@/lib/splitPayment";
 
 
 interface CartItem {
@@ -55,6 +56,7 @@ export function POSWhatsAppCheckoutDialog({
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
   const [splitDesc, setSplitDesc] = useState("");
+  const [splitParts, setSplitParts] = useState<SplitPartInput[]>([]);
   const [copied, setCopied] = useState(false);
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
@@ -259,6 +261,13 @@ export function POSWhatsAppCheckoutDialog({
       const { data: sale, error } = await supabase.from("pos_sales").insert(salePayload as any).select("id").single();
       if (error || !sale) throw new Error(error?.message || "Erro ao criar venda");
 
+      if (splitParts.length > 0) {
+        const { data: splitData, error: splitError } = await supabase.functions.invoke("split-payment", {
+          body: { action: "setup", saleId: sale.id, total: orderTotal, parts: splitParts },
+        });
+        if (splitError || splitData?.error) throw new Error(splitData?.error || splitError?.message || "Erro ao salvar divisão do pagamento");
+      }
+
       const saleItems = cart.map(c => ({
         sale_id: sale.id, sku: c.sku || null, product_name: c.title,
         variant_name: c.variantLabel || null, unit_price: c.price,
@@ -314,6 +323,7 @@ export function POSWhatsAppCheckoutDialog({
       setCart([]);
       setGeneratedLink("");
       setSplitDesc("");
+      setSplitParts([]);
       setDiscountValue("");
       setCouponApplied(null);
       setCouponCode("");
@@ -485,6 +495,13 @@ export function POSWhatsAppCheckoutDialog({
                     maxInstallments={maxInstallments} setMaxInstallments={setMaxInstallments}
                     noInterestInstallments={noInterestInstallments} setNoInterestInstallments={setNoInterestInstallments}
                     interestRate={interestRate} setInterestRate={setInterestRate}
+                  />
+
+                  <SplitPaymentSetupButton
+                    total={orderTotal}
+                    maxInstallments={Math.min(Number(maxInstallments) || 6, 12)}
+                    onPartsChange={setSplitParts}
+                    onChange={setSplitDesc}
                   />
 
 

@@ -15,6 +15,8 @@ interface Props {
   maxInstallments?: number;
   /** Texto da divisão para anexar à mensagem ("" quando removida). */
   onChange?: (description: string) => void;
+  /** Permite montar a divisão antes de o pedido/link ser criado. */
+  onPartsChange?: (parts: SplitPartInput[]) => void;
   className?: string;
 }
 
@@ -32,7 +34,7 @@ async function call(body: Record<string, unknown>) {
 }
 
 /** Vendedor monta a divisão do pagamento antes de enviar o link (PDV Online, WhatsApp, Live). */
-export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, maxInstallments = 6, onChange, className }: Props) {
+export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, maxInstallments = 6, onChange, onPartsChange, className }: Props) {
   const target = orderId ? { orderId } : { saleId };
   const [open, setOpen] = useState(false);
   const [total, setTotal] = useState<number | null>(totalProp ?? null);
@@ -67,6 +69,15 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
   const anyPaid = parts.some((p) => p.status === "approved");
 
   const save = async (list: SplitPartInput[]) => {
+    if (!orderId && !saleId) {
+      const localParts = buildSplitParts(list, pixPct);
+      setParts(localParts);
+      onPartsChange?.(list);
+      onChange?.(desc(localParts));
+      setOpen(false);
+      toast.success("Divisão preparada");
+      return;
+    }
     const d = await call({ action: "setup", ...target, total, parts: list });
     setParts(d.parts || []);
     onChange?.(desc(d.parts || []));
@@ -77,13 +88,14 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
   const remove = async () => {
     setLoading(true);
     try {
-      await call({ action: "clear", ...target });
+      if (orderId || saleId) await call({ action: "clear", ...target });
+      onPartsChange?.([]);
       setParts([]); onChange?.(""); toast.success("Divisão removida");
     } catch (e: any) { toast.error(e.message); }
     setLoading(false);
   };
 
-  if (!orderId && !saleId) return null;
+  if (!orderId && !saleId && total == null) return null;
 
   return (
     <div className={className}>
