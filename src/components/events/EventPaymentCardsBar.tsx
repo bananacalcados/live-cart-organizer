@@ -38,6 +38,16 @@ interface EventPaymentCardsBarProps {
 
 type PayFilter = "awaiting" | "paid" | "errors";
 
+interface SplitInfo {
+  paid: number;
+  total: number;
+  parts: number;
+  paidParts: number;
+  lastPaidAt: string | null;
+}
+
+const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 interface FailedAttempt {
   id: string;
   sale_id: string;
@@ -155,6 +165,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
   // Pedidos cujo link da área de membros já foi aberto pela cliente (data/hora da abertura).
   const [openedByOrder, setOpenedByOrder] = useState<Record<string, string>>({});
+  const [splitByOrder, setSplitByOrder] = useState<Record<string, SplitInfo>>({});
   const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -321,7 +332,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
   useEffect(() => {
     const ids = orders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
-    if (ids.length === 0) { setStepByOrder({}); setOpenedByOrder({}); return; }
+    if (ids.length === 0) { setStepByOrder({}); setOpenedByOrder({}); setSplitByOrder({}); return; }
     let cancelled = false;
     (async () => {
       const startedMap: Record<string, boolean> = {};
@@ -361,6 +372,28 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
         }
       }
       if (!cancelled) setOpenedByOrder(opened);
+
+      // ── Pagamento dividido: quanto já foi pago ──
+      const splits: Record<string, SplitInfo> = {};
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("payment_splits" as any)
+          .select("order_id, amount, status, paid_at")
+          .in("order_id", batch);
+        for (const r of (data || []) as any[]) {
+          if (["canceled", "refunded"].includes(r.status)) continue;
+          const s = (splits[r.order_id] ||= { paid: 0, total: 0, parts: 0, paidParts: 0, lastPaidAt: null });
+          s.total += Number(r.amount) || 0;
+          s.parts += 1;
+          if (r.status === "approved") {
+            s.paid += Number(r.amount) || 0;
+            s.paidParts += 1;
+            if (r.paid_at && (!s.lastPaidAt || r.paid_at > s.lastPaidAt)) s.lastPaidAt = r.paid_at;
+          }
+        }
+      }
+      if (!cancelled) setSplitByOrder(splits);
     })();
     return () => { cancelled = true; };
   }, [orders]);
