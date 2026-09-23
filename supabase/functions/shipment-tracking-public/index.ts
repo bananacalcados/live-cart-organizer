@@ -34,6 +34,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const normalizePlace = (value: unknown) =>
+  String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const isGovernadorValadares = (city: unknown, state: unknown) => {
+  const normalizedCity = normalizePlace(city).replace(/[^a-z0-9]+/g, ' ').trim();
+  const normalizedState = normalizePlace(state);
+  const cityMatches = normalizedCity === 'governador valadares' ||
+    normalizedCity === 'gov valadares' ||
+    normalizedCity === 'valadares';
+  return cityMatches && (!normalizedState || normalizedState === 'mg' || normalizedState === 'minas gerais');
+};
+
 type SimStop = { city: string; state: string };
 
 const seedFrom = (code: string) => {
@@ -152,10 +164,14 @@ Deno.serve(async (req) => {
       }
     }
 
+    const localDelivery = sim.kind === 'order' &&
+      isGovernadorValadares(sim.destination_city, sim.destination_state);
+
     // Consulta sob demanda: quando o cliente abre o link e já existe código real,
     // buscamos a posição atual na transportadora (com cache de algumas horas).
     if (
       sim.kind === 'order' &&
+      !localDelivery &&
       sim.real_tracking_code &&
       !sim.delivered_at &&
       (!sim.last_real_sync ||
@@ -192,7 +208,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (sim.kind === 'order') {
+    if (localDelivery) {
+      const localAt = String(sim.stage_started_at || sim.posted_at || now.toISOString());
+      events = [{ title: 'Entrega em Valadares, MG', at: localAt }];
+      statusLabel = 'Entrega em Valadares, MG';
+    } else if (sim.kind === 'order') {
       const { data: cfgRow } = await supabase
         .from('app_settings')
         .select('value')
@@ -327,6 +347,7 @@ Deno.serve(async (req) => {
         customer_name: (sim.customer_name as string | null) ?? null,
         destination_city: (sim.destination_city as string | null) ?? null,
         destination_state: (sim.destination_state as string | null) ?? null,
+        local_delivery: localDelivery,
         order_reference: (sim.order_reference as string | null) ?? null,
         posted_at: events[0]?.at ?? null,
         events: visible,
