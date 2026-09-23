@@ -34,6 +34,8 @@ type Row = SimulationRecord & {
 type StageCfg = { em_separacao_days: number; separado_days: number; embalado_days: number; business_days: boolean };
 
 const DEFAULT_CFG: StageCfg = { em_separacao_days: 1, separado_days: 1, embalado_days: 1, business_days: true };
+/** Teto total das etapas automáticas até "Enviado". */
+const MAX_TOTAL_DAYS = 3;
 
 const STAGE_LABEL: Record<string, string> = {
   em_separacao: 'Em separação',
@@ -97,6 +99,11 @@ export function ShipmentSimulations() {
   useEffect(() => { load(); }, []);
 
   const saveCfg = async () => {
+    const total = cfg.em_separacao_days + cfg.separado_days + cfg.embalado_days;
+    if (total > MAX_TOTAL_DAYS) {
+      toast.error(`A soma das etapas não pode passar de ${MAX_TOTAL_DAYS} dias.`);
+      return;
+    }
     setSavingCfg(true);
     const { error } = await supabase
       .from('app_settings')
