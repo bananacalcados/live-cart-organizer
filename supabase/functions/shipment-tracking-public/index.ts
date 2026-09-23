@@ -134,13 +134,16 @@ Deno.serve(async (req) => {
       (!sim.customer_name || !sim.destination_city || !sim.destination_state)) {
       const { data: sale } = await supabase
         .from('pos_sales')
-        .select('customer_name, customer_city, customer_state')
+        .select('customer_name, customer_city, customer_state, shipping_address')
         .eq('id', sim.sale_id)
         .maybeSingle();
       if (sale) {
+        const address = sale.shipping_address && typeof sale.shipping_address === 'object'
+          ? sale.shipping_address as Record<string, unknown>
+          : {};
         sim.customer_name = sim.customer_name || sale.customer_name;
-        sim.destination_city = sim.destination_city || sale.customer_city;
-        sim.destination_state = sim.destination_state || sale.customer_state;
+        sim.destination_city = sim.destination_city || sale.customer_city || address.city || address.cidade;
+        sim.destination_state = sim.destination_state || sale.customer_state || address.state || address.uf || address.province;
       }
     }
 
