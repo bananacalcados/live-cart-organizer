@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 type Ev = { title: string; detail?: string; city: string; state: string; at: string };
+type TrackingData = {
+  tracking_code: string;
+  status: string;
+  customer_name?: string | null;
+  destination_city?: string | null;
+  destination_state?: string | null;
+  events: Ev[];
+};
 
 const fmt = (iso: string) => {
   const d = new Date(iso);
@@ -12,7 +20,10 @@ export default function PublicTracking() {
   const { codigo } = useParams<{ codigo: string }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<{ tracking_code: string; status: string; events: Ev[] } | null>(null);
+  const [data, setData] = useState<TrackingData | null>(null);
+
+  const firstName = data?.customer_name?.trim().split(/\s+/)[0] || null;
+  const destination = [data?.destination_city, data?.destination_state].filter(Boolean).join('/');
 
   useEffect(() => {
     document.title = `Rastreamento ${codigo ?? ''} | Banana Calçados`;
@@ -56,9 +67,25 @@ export default function PublicTracking() {
           <p className="text-xs text-muted-foreground">Código do objeto</p>
           <p className="text-xl font-mono font-bold tracking-wider">{codigo}</p>
           {data && (
-            <p className="mt-2 inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium">
-              {data.status}
-            </p>
+            <div className="mt-3 space-y-3 border-t pt-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {firstName && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Destinatário</p>
+                    <p className="text-sm font-semibold">{firstName}</p>
+                  </div>
+                )}
+                {destination && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Destino final</p>
+                    <p className="text-sm font-semibold">{destination}</p>
+                  </div>
+                )}
+              </div>
+              <p className="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-medium">
+                {data.status}
+              </p>
+            </div>
           )}
         </section>
 
