@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
 import { toast } from "sonner";
 import { POSCustomerForm } from "./POSCustomerForm";
+import type { SplitPartInput } from "@/lib/splitPayment";
 
 interface Seller {
   id: string;
@@ -89,6 +90,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
   const [splitDesc, setSplitDesc] = useState("");
+  const [splitParts, setSplitParts] = useState<SplitPartInput[]>([]);
   const [copied, setCopied] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [mobileStep, setMobileStep] = useState<"catalog" | "cart">("catalog");
@@ -506,6 +508,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
       // For store-checkout, generate the link using the sale ID
       if (gateway === "store-checkout" && sale) {
+        if (splitParts.length > 0) {
+          const { data: splitData, error: splitError } = await supabase.functions.invoke("split-payment", {
+            body: { action: "setup", saleId: sale.id, total: orderTotal, parts: splitParts },
+          });
+          if (splitError || splitData?.error) throw new Error(splitData?.error || splitError?.message || "Erro ao salvar divisão do pagamento");
+        }
         const storeCheckoutLink = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
         setGeneratedLink(storeCheckoutLink);
         setShowLinkDialog(true);
@@ -1248,6 +1256,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                 ) : (
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">Gerar Link / Pagamento</Label>
+                    <SplitPaymentSetupButton
+                      total={orderTotal}
+                      maxInstallments={Math.min(Number(checkoutMaxInstallments) || 6, 12)}
+                      onPartsChange={setSplitParts}
+                      onChange={setSplitDesc}
+                      className="mb-2"
+                    />
                     <div className="grid grid-cols-2 gap-2">
                       {GATEWAYS.map(gw => {
                         const Icon = gw.icon;
