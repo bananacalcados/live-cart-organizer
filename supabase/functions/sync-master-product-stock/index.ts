@@ -124,6 +124,105 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         };
 
+        // ============ NOVAS VARIAÇÕES ============
+        // A Shopify permite adicionar variantes a um produto já existente
+        // (POST /products/{id}/variants.json, limite de 100 por produto).
+        // Antes de mexer no estoque, criamos na Shopify toda variação local
+        // que ainda não tem shopify_variant_id — ou vinculamos pelo GTIN/SKU
+        // quando ela já existe lá.
+        const norm = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
+        let variantsCreated = 0;
+        let variantsLinked = 0;
+        const variantCreateErrors: string[] = [];
+
+        const { data: masterRow } = await supabase
+          .from("products_master")
+          .select("shopify_product_id, sale_price, weight_kg")
+          .eq("id", master_id)
+          .maybeSingle();
+
+        const shopifyProductId = masterRow?.shopify_product_id;
+        const pending = (variants as any[]).filter((v) => !v.shopify_variant_id);
+
+        if (shopifyProductId && pending.length) {
+          const prodRes = await fetch(
+            `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/products/${shopifyProductId}.json`,
+            { headers },
+          );
+          const prodJson = await prodRes.json().catch(() => ({}));
+          const shopProduct = prodJson?.product;
+
+          if (!shopProduct) {
+            variantCreateErrors.push("Produto não encontrado na Shopify");
+          } else {
+            const options: any[] = (shopProduct.options || []).slice().sort(
+              (a: any, b: any) => (a.position || 0) - (b.position || 0),
+            );
+            const existing: any[] = shopProduct.variants || [];
+
+            const optionValueFor = (optName: string, v: any) => {
+              const n = optName.toLowerCase();
+              if (/cor|color|colour/.test(n)) return norm(v.color) || "Único";
+              if (/tamanho|numera|n[uú]mero|size/.test(n)) return norm(v.size) || "Único";
+              return norm(v.size) || norm(v.color) || "Único";
+            };
+
+            for (const v of pending) {
+              // 1. Já existe lá? Vincula pelo código de barras ou SKU.
+              const match = existing.find(
+                (ev: any) =>
+                  (v.gtin && norm(ev.barcode) === norm(v.gtin)) ||
+                  (v.sku && norm(ev.sku).toLowerCase() === norm(v.sku).toLowerCase()),
+              );
+              if (match) {
+                await supabase
+                  .from("product_variants")
+                  .update({ shopify_variant_id: String(match.id) })
+                  .eq("id", v.id);
+                v.shopify_variant_id = String(match.id);
+                variantsLinked++;
+                continue;
+              }
+
+              // 2. Cria a nova variação no produto existente.
+              const payload: Record<string, unknown> = {
+                sku: v.sku,
+                barcode: v.gtin,
+                price: (v.sale_price_override ?? masterRow?.sale_price ?? 0).toString(),
+                inventory_management: "shopify",
+                weight: Number(v.weight_kg_override ?? masterRow?.weight_kg ?? 0),
+                weight_unit: "kg",
+                requires_shipping: true,
+              };
+              options.forEach((opt: any, i: number) => {
+                payload[`option${i + 1}`] = optionValueFor(String(opt.name || ""), v);
+              });
+              if (!options.length) payload["option1"] = norm(v.size) || norm(v.color) || "Default Title";
+
+              const createRes = await fetch(
+                `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/products/${shopifyProductId}/variants.json`,
+                { method: "POST", headers, body: JSON.stringify({ variant: payload }) },
+              );
+              const createJson = await createRes.json().catch(() => ({}));
+              if (createRes.ok && createJson?.variant?.id) {
+                await supabase
+                  .from("product_variants")
+                  .update({ shopify_variant_id: String(createJson.variant.id) })
+                  .eq("id", v.id);
+                v.shopify_variant_id = String(createJson.variant.id);
+                existing.push(createJson.variant);
+                variantsCreated++;
+              } else {
+                const detail = typeof createJson?.errors === "string"
+                  ? createJson.errors
+                  : JSON.stringify(createJson?.errors || createJson);
+                variantCreateErrors.push(`${v.sku || v.gtin || "variação"}: ${detail}`);
+                console.error("Erro ao criar variante na Shopify:", detail);
+              }
+            }
+          }
+        }
+
         const pickPrimaryLocation = (locations: Array<{ id: number; name?: string | null; active?: boolean }>) => {
           const active = (locations || []).filter((loc) => loc?.active !== false);
           const preferred = active.find((loc) => String(loc.name || "").toLowerCase().includes("tiny shopify"));
