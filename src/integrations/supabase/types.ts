@@ -18617,6 +18617,9 @@ export type Database = {
           destination_state: string | null
           fulfillment: string
           id: string
+          incident_at: string | null
+          incident_note: string | null
+          incident_type: string | null
           kind: string
           last_real_sync: string | null
           manual_offset_days: number
@@ -18651,6 +18654,9 @@ export type Database = {
           destination_state?: string | null
           fulfillment?: string
           id?: string
+          incident_at?: string | null
+          incident_note?: string | null
+          incident_type?: string | null
           kind?: string
           last_real_sync?: string | null
           manual_offset_days?: number
@@ -18685,6 +18691,9 @@ export type Database = {
           destination_state?: string | null
           fulfillment?: string
           id?: string
+          incident_at?: string | null
+          incident_note?: string | null
+          incident_type?: string | null
           kind?: string
           last_real_sync?: string | null
           manual_offset_days?: number
