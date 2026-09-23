@@ -185,25 +185,30 @@ serve(async (req) => {
     // etapas. Envio unificado: seguimos `merged_into_id` até o pedido principal.
     let trackingLine = '';
     try {
-      const saleIds: string[] = [orderId];
-      const { data: linkedSale } = await supabase
-        .from('pos_sales')
-        .select('id')
-        .eq('source_order_id', orderId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (linkedSale?.id) saleIds.unshift(linkedSale.id);
-
       let ship: any = null;
-      for (const sid of saleIds) {
-        const { data } = await supabase
-          .from('shipment_simulations')
-          .select('id, tracking_code, merged_into_id')
-          .eq('sale_id', sid)
+      // 2 tentativas: a venda no PDV pode estar sendo criada neste exato momento.
+      for (let attempt = 0; attempt < 2 && !ship; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 2500));
+        const saleIds: string[] = [orderId];
+        const { data: linkedSale } = await supabase
+          .from('pos_sales')
+          .select('id')
+          .eq('source_order_id', orderId)
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
-        if (data) { ship = data; break; }
+        if (linkedSale?.id) saleIds.unshift(linkedSale.id);
+
+        for (const sid of saleIds) {
+          const { data } = await supabase
+            .from('shipment_simulations')
+            .select('id, tracking_code, merged_into_id')
+            .eq('sale_id', sid)
+            .maybeSingle();
+          if (data) { ship = data; break; }
+        }
       }
+
       let guard = 0;
       while (ship?.merged_into_id && guard < 5) {
         const { data: parent } = await supabase
