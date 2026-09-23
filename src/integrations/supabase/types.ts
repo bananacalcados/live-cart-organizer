@@ -18628,6 +18628,7 @@ export type Database = {
           posted_at: string
           real_carrier: string | null
           real_events: Json
+          real_service_code: string | null
           real_tracking_code: string | null
           sale_id: string | null
           stage: string
@@ -18661,6 +18662,7 @@ export type Database = {
           posted_at?: string
           real_carrier?: string | null
           real_events?: Json
+          real_service_code?: string | null
           real_tracking_code?: string | null
           sale_id?: string | null
           stage?: string
@@ -18694,6 +18696,7 @@ export type Database = {
           posted_at?: string
           real_carrier?: string | null
           real_events?: Json
+          real_service_code?: string | null
           real_tracking_code?: string | null
           sale_id?: string | null
           stage?: string
