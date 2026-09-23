@@ -1,3 +1,4 @@
+import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -1427,6 +1428,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
                 <CreditCard className="h-3.5 w-3.5 text-emerald-500" /> Pagamento
               </h4>
+              <SplitPartsSummary saleId={sale.id} />
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
                 {(() => {
                   const hasMethod = !!(sale.payment_method || sale.payment_details?.payment_method);

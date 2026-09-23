@@ -21,4 +21,4 @@
 - [x] Etapa 3 — PDV > Online > Link de pagamento
 - [x] Etapa 4 — Modal do WhatsApp no PDV
 - [x] Etapa 5 — Live (botão nas Ações rápidas; falta "Pago parcialmente" nos cards)
-- [ ] Etapa 6 — Painéis, relatórios, estorno por parte
+- [x] Etapa 6 — Painéis, relatórios, estorno por parte
