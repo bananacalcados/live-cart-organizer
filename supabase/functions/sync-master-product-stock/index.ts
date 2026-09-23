@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
             if (!v.shopify_variant_id) continue;
 
             // Busca o inventory_item_id da variante
-            const variantRes = await fetch(
+            const variantRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/variants/${v.shopify_variant_id}.json`,
               { headers },
             );
@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
             }
 
             // Garante que o inventory_item está sendo rastreado
-            await fetch(
+            await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_items/${inventoryItemId}.json`,
               {
                 method: "PUT",
@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
               },
             ).catch(() => {});
 
-            const levelsRes = await fetch(
+            const levelsRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels.json?inventory_item_ids=${inventoryItemId}`,
               { headers },
             );
@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
             for (const level of levels) {
               const currentLocationId = level?.location_id;
               if (!currentLocationId || Number(currentLocationId) === Number(locationId)) continue;
-              await fetch(
+              await shopFetch(
                 `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
                 {
                   method: "POST",
@@ -327,7 +327,7 @@ Deno.serve(async (req) => {
             const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
               ? sharedStockByGtin[String(v.gtin)]
               : Number(v.initial_stock || 0);
-            const setRes = await fetch(
+            const setRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
               {
                 method: "POST",
