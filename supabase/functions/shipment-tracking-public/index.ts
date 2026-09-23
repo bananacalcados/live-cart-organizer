@@ -294,8 +294,22 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Aviso manual da equipe (extravio, atraso, conferência de endereço...).
+      // Entra na data em que foi marcado; se depois disso chegou movimentação
+      // real, ela fica por cima e o aviso permanece no histórico.
+      const incident = INCIDENT_LABEL[String(sim.incident_type || '') as IncidentType];
+      if (incident) {
+        const when = new Date((sim.incident_at as string) || now);
+        events.push({
+          title: incident.title,
+          detail: incident.detail,
+          at: new Date(Math.min(when.getTime(), now.getTime())).toISOString(),
+        });
+      }
+
       // Nunca mostramos entrega por conta própria: só quando o evento real diz.
       events = events.filter((e) => new Date(e.at).getTime() <= now.getTime() + 60000);
+      events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
       statusLabel = events[events.length - 1]?.title ?? labels.em_separacao;
     } else {
       const all = legacyTimeline(sim, code);
