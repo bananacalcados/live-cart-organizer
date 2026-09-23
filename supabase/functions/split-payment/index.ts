@@ -60,7 +60,12 @@ Deno.serve(async (req) => {
 
     // ── setup: define/redefine partes (só enquanto nenhuma foi paga) ──
     if (action === "setup") {
-      if (!(await splitPaymentEnabled(sb))) return json({ error: "Pagamento dividido desativado" }, 403);
+      if (!(await splitPaymentEnabled(sb))) {
+        // Equipe logada pode montar a divisão mesmo com a opção pública desligada.
+        const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        const { data: u } = tok ? await sb.auth.getUser(tok) : { data: null as any };
+        if (!u?.user) return json({ error: "Pagamento dividido desativado" }, 403);
+      }
       if (!orderId && !saleId) return json({ error: "orderId ou saleId obrigatório" }, 400);
       const tgt = await isTargetPaid(sb, orderId, saleId);
       if (!tgt.exists) return json({ error: "Pedido não encontrado" }, 404);

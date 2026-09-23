@@ -148,7 +148,7 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
   );
 }
 
-function SplitEditor({ total, pixPct, maxInstallments, initial, notice, onSave, onCancel }: {
+export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, onSave, onCancel }: {
   total: number; pixPct: number; maxInstallments: number; initial?: SplitPartInput[]; notice?: string;
   onSave: (p: SplitPartInput[]) => Promise<void>; onCancel: () => void;
 }) {
