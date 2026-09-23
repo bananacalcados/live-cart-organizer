@@ -37,7 +37,10 @@ export default function PublicTracking() {
       setError(null);
       try {
         const base = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/shipment-tracking-public`;
-        const res = await fetch(`${base}?code=${encodeURIComponent(codigo ?? '')}`);
+        const res = await fetch(
+          `${base}?code=${encodeURIComponent(codigo ?? '')}&refresh=${Date.now()}`,
+          { cache: 'no-store' },
+        );
         const json = await res.json();
         if (!alive) return;
         if (!res.ok) {
