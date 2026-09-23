@@ -13030,6 +13030,81 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_splits: {
+        Row: {
+          amount: number
+          charge_amount: number
+          created_at: string
+          created_by: string | null
+          discount_amount: number
+          gateway: string | null
+          gateway_tx_id: string | null
+          id: string
+          installments: number
+          method: string
+          order_id: string | null
+          paid_at: string | null
+          request_id: string
+          sale_id: string | null
+          seq: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          charge_amount: number
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          gateway?: string | null
+          gateway_tx_id?: string | null
+          id?: string
+          installments?: number
+          method: string
+          order_id?: string | null
+          paid_at?: string | null
+          request_id?: string
+          sale_id?: string | null
+          seq: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          charge_amount?: number
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          gateway?: string | null
+          gateway_tx_id?: string | null
+          id?: string
+          installments?: number
+          method?: string
+          order_id?: string | null
+          paid_at?: string | null
+          request_id?: string
+          sale_id?: string | null
+          seq?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_splits_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       paypal_payments: {
         Row: {
           amount: number
@@ -22277,6 +22352,10 @@ export type Database = {
         Returns: Json
       }
       apply_shopify_links: { Args: { _links: Json }; Returns: number }
+      apply_split_payment: {
+        Args: { _gateway: string; _split_id: string; _tx_id: string }
+        Returns: Json
+      }
       apply_variant_normalization: {
         Args: { p_dry_run?: boolean; p_limit?: number }
         Returns: {
