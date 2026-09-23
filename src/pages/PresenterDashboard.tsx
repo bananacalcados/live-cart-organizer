@@ -180,10 +180,74 @@ export default function PresenterDashboard() {
     });
   }, [eventId]);
 
+  // Leads da live que AINDA NÃO clicaram no botão de redirecionamento do WhatsApp (/zap)
+  const loadNoClickLeads = useCallback(async () => {
+    if (!eventId) return;
+    const [{ data: leads }, { data: links }] = await Promise.all([
+      supabase
+        .from("event_leads")
+        .select("id, name, instagram, phone, created_at, disqualified")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false })
+        .limit(1000),
+      (supabase as any)
+        .from("live_whatsapp_links")
+        .select("id")
+        .eq("event_id", eventId),
+    ]);
+    const linkIds = ((links || []) as any[]).map((l) => l.id);
+    const clicked = new Set<string>();
+    if (linkIds.length > 0) {
+      const { data: clicks } = await (supabase as any)
+        .from("live_whatsapp_clicks")
+        .select("entered_phone, phone, real_phone")
+        .in("link_id", linkIds)
+        .limit(5000);
+      for (const c of (clicks || []) as any[]) {
+        for (const p of [c.entered_phone, c.phone, c.real_phone]) {
+          const s = suffix8(p);
+          if (s) clicked.add(s);
+        }
+      }
+    }
+    const filtered = ((leads || []) as any[]).filter((l) => {
+      if (l.disqualified) return false;
+      const s = suffix8(l.phone);
+      if (!s) return false;
+      return !clicked.has(s);
+    });
+    setNoClickLeads(filtered);
+  }, [eventId]);
+
   useEffect(() => {
     loadAlerts();
     loadOrders();
-  }, [loadAlerts, loadOrders]);
+    loadNoClickLeads();
+  }, [loadAlerts, loadOrders, loadNoClickLeads]);
+
+  // Atualiza os cards quando alguém clica no link /zap
+  useEffect(() => {
+    if (!eventId) return;
+    const channel = supabase
+      .channel(`presenter-zap-clicks-${eventId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "live_whatsapp_clicks",
+      }, () => {
+        loadNoClickLeads();
+      })
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "event_leads",
+        filter: `event_id=eq.${eventId}`,
+      }, () => {
+        loadNoClickLeads();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
   useEffect(() => {
