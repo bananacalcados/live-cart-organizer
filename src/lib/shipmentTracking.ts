@@ -110,10 +110,21 @@ export async function attachRealTracking(params: {
   if (!code || !params.saleIds.length) return;
   const now = new Date().toISOString();
 
+  // inclui o registro principal quando o pedido faz parte de um envio unificado
+  const masterIds = new Set<string>();
+  for (const saleId of params.saleIds) {
+    const master = await resolveShipmentRow(saleId);
+    if (master?.id) masterIds.add(master.id);
+  }
+
   const { data: rows } = await supabase
     .from('shipment_simulations')
     .select('id, stage_history')
-    .in('sale_id', params.saleIds);
+    .or(
+      `sale_id.in.(${params.saleIds.join(',')})${masterIds.size ? `,id.in.(${[...masterIds].join(',')})` : ''}`,
+    );
+
+
 
   for (const row of (rows ?? []) as any[]) {
     const history = { ...((row.stage_history as Record<string, string>) || {}) };
