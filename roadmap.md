@@ -20,5 +20,5 @@
 - [x] Etapa 2 — Checkout da cliente pagando parte por parte (cartão das partes só pelo Mercado Pago por enquanto)
 - [x] Etapa 3 — PDV > Online > Link de pagamento
 - [x] Etapa 4 — Modal do WhatsApp no PDV
-- [~] Etapa 5 — Live (botão nas Ações rápidas; falta "Pago parcialmente" nos cards)
+- [x] Etapa 5 — Live (botão nas Ações rápidas; falta "Pago parcialmente" nos cards)
 - [ ] Etapa 6 — Painéis, relatórios, estorno por parte
