@@ -10,7 +10,6 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const UUID = /^[0-9a-f-]{36}$/i;
-const PIX_DISCOUNT_PCT = 5;
 const MAX_PARTS = 4;
 const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
@@ -51,7 +50,12 @@ Deno.serve(async (req) => {
       if (!orderId && !saleId) return json({ error: "orderId ou saleId obrigatório" }, 400);
       const enabled = await splitPaymentEnabled(sb);
       const { data } = await listParts(sb, orderId, saleId);
-      return json({ enabled, parts: data || [], pix_discount_pct: PIX_DISCOUNT_PCT });
+      let pix = 0;
+      if (orderId) {
+        const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
+        pix = parseFloat(String(st?.value ?? 0)) || 0;
+      }
+      return json({ enabled, parts: data || [], pix_discount_pct: pix });
     }
 
     // ── setup: define/redefine partes (só enquanto nenhuma foi paga) ──
@@ -65,6 +69,12 @@ Deno.serve(async (req) => {
       const parts = Array.isArray(body.parts) ? body.parts : [];
       if (!(total > 0 && total < 100000)) return json({ error: "Total inválido" }, 400);
       if (parts.length < 2 || parts.length > MAX_PARTS) return json({ error: `Use de 2 a ${MAX_PARTS} formas` }, 400);
+      // Desconto Pix: mesmo percentual do checkout do pedido (app_settings); links do PDV não têm desconto Pix.
+      let pixPct = 0;
+      if (orderId) {
+        const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
+        pixPct = Math.min(20, Math.max(0, parseFloat(String(st?.value ?? 0)) || 0));
+      }
       const rows = [];
       let sum = 0;
       for (let i = 0; i < parts.length; i++) {
@@ -75,7 +85,7 @@ Deno.serve(async (req) => {
         if (!(amount >= 1)) return json({ error: `Parte ${i + 1}: valor mínimo R$ 1,00` }, 400);
         const inst = method === "credit" ? Math.floor(Number(p.installments || 1)) : 1;
         if (inst < 1 || inst > 12) return json({ error: `Parte ${i + 1}: parcelas inválidas` }, 400);
-        const discount = method === "pix" ? r2(amount * PIX_DISCOUNT_PCT / 100) : 0;
+        const discount = method === "pix" ? r2(amount * pixPct / 100) : 0;
         sum = r2(sum + amount);
         rows.push({
           order_id: orderId ?? null, sale_id: saleId ?? null, seq: i + 1, method, amount,
