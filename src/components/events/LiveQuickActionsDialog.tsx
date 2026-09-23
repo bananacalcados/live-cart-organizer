@@ -1,3 +1,4 @@
+import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { useState } from "react";
 import {
   Dialog,

@@ -1,3 +1,4 @@
+import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
