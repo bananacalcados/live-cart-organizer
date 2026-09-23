@@ -1,3 +1,4 @@
+import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -1599,6 +1600,13 @@ export default function TransparentCheckout() {
                     />
                   )}
                   {currentStep === 3 && (
+                    <SplitPaymentPanel
+                      orderId={orderData.id.startsWith("live-") ? undefined : orderData.id}
+                      total={payableAmount}
+                      form={customerForm}
+                      maxInstallments={Math.min(installmentConfig?.max_installments || 6, 12)}
+                      onPaid={() => handlePaymentConfirmed({ platform: "mercadopago", method: "split" })}
+                    >
                     <StepPayment
                       orderId={orderData.id}
                       amount={payableAmount}
@@ -1611,6 +1619,7 @@ export default function TransparentCheckout() {
                       onProcessingChange={setIsPaymentProcessing}
                       onStepEvent={trackStep}
                     />
+                    </SplitPaymentPanel>
                   )}
                 </div>
               </CardContent>

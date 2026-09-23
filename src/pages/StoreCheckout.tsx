@@ -1,3 +1,4 @@
+import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -1578,6 +1579,13 @@ export default function StoreCheckout() {
                       const pixDiscountPercent = 0;
                       const pixAmount = Math.round(totalWithShipping * (1 - pixDiscountPercent / 100) * 100) / 100;
                       return (
+                        <SplitPaymentPanel
+                          saleId={saleData.id}
+                          total={Math.round(totalWithShipping * 100) / 100}
+                          form={customerForm}
+                          maxInstallments={Math.min(installmentConfig?.max_installments || 6, 12)}
+                          onPaid={handlePaymentConfirmed}
+                        >
                          <div className="space-y-2">
                            {/* Cartão de crédito */}
                            {(showAllPayMethods || selectedMethod === "card") && (
@@ -1659,6 +1667,7 @@ export default function StoreCheckout() {
                              </button>
                            )}
                          </div>
+                        </SplitPaymentPanel>
                       );
                     })()}
                     <Button variant="ghost" onClick={() => setCurrentStep(saleData.is_custom_amount ? 1 : 2)} className="w-full text-sm text-muted-foreground">← Voltar {saleData.is_custom_amount ? "para Identificação" : "para Entrega"}</Button>
