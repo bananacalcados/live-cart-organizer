@@ -26,12 +26,12 @@ import {
   mergeRealEvents,
 } from '../_shared/frenet-tracking.ts';
 
-/** Intervalo mínimo entre consultas à transportadora (cache). */
-const SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
 };
 
 const normalizePlace = (value: unknown) =>
@@ -167,22 +167,20 @@ Deno.serve(async (req) => {
     const localDelivery = sim.kind === 'order' &&
       isGovernadorValadares(sim.destination_city, sim.destination_state);
 
-    // Consulta sob demanda: quando o cliente abre o link e já existe código real,
-    // buscamos a posição atual na transportadora (com cache de algumas horas).
+    // Consulta sob demanda: cada abertura do link com código real consulta a Frenet.
+    // Não usamos cache temporal aqui para não esconder movimentações recentes.
     if (
       sim.kind === 'order' &&
       !localDelivery &&
       sim.real_tracking_code &&
-      !sim.delivered_at &&
-      (!sim.last_real_sync ||
-        now.getTime() - new Date(sim.last_real_sync as string).getTime() > SYNC_INTERVAL_MS)
+      !sim.delivered_at
     ) {
       try {
         const fetched = await fetchFrenetEvents(
           String(sim.real_tracking_code),
           (sim.real_service_code as string | null) || guessServiceCode(sim.real_carrier as string | null),
         );
-        const patch: Record<string, unknown> = { last_real_sync: now.toISOString() };
+        const patch: Record<string, unknown> = {};
         if (fetched) {
           const merged = mergeRealEvents(
             Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [],
@@ -191,6 +189,7 @@ Deno.serve(async (req) => {
           const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description));
           patch.real_events = merged;
           patch.real_service_code = fetched.serviceCode;
+          patch.last_real_sync = now.toISOString();
           if (delivered) {
             patch.delivered_at = delivered.at;
             patch.stage = 'entregue';
@@ -202,7 +201,9 @@ Deno.serve(async (req) => {
             sim.stage = 'entregue';
           }
         }
-        await supabase.from('shipment_simulations').update(patch).eq('id', sim.id);
+        if (Object.keys(patch).length) {
+          await supabase.from('shipment_simulations').update(patch).eq('id', sim.id);
+        }
       } catch (e) {
         console.error('Frenet sync falhou', (e as Error).message);
       }
