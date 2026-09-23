@@ -145,7 +145,7 @@ export function translateRealEvent(
     return { title: 'Pedido em trânsito', detail: 'Seu pedido foi recebido na unidade de distribuição.' };
   }
   if (/trânsito|transito|encaminhado|transferência|in transit|unidade/.test(t)) {
-    return { title: 'Pedido em trânsito', detail: sanitize(description) || undefined };
+    return { title: 'Pedido em trânsito', detail: 'Seu pedido está a caminho da sua cidade.' };
   }
   if (/fiscaliza|alfând|aduane|tributo/.test(t)) {
     return { title: 'Pedido em trânsito', detail: 'Seu pedido está em conferência de rotina.' };
