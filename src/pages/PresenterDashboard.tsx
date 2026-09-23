@@ -183,39 +183,52 @@ export default function PresenterDashboard() {
   // Leads da live que AINDA NÃO clicaram no botão de redirecionamento do WhatsApp (/zap)
   const loadNoClickLeads = useCallback(async () => {
     if (!eventId) return;
-    const [{ data: leads }, { data: links }] = await Promise.all([
+    // Base = PEDIDOS desta live (não cancelados e ainda não pagos)
+    const [{ data: ordersData }, { data: clicks }] = await Promise.all([
       supabase
-        .from("event_leads")
-        .select("id, name, instagram, phone, created_at, disqualified")
+        .from("orders")
+        .select("id, customer_id, stage, is_paid, paid_externally, paid_at, created_at")
         .eq("event_id", eventId)
         .order("created_at", { ascending: false })
         .limit(1000),
       (supabase as any)
-        .from("live_whatsapp_links")
-        .select("id")
-        .eq("event_id", eventId),
-    ]);
-    const linkIds = ((links || []) as any[]).map((l) => l.id);
-    const clicked = new Set<string>();
-    if (linkIds.length > 0) {
-      const { data: clicks } = await (supabase as any)
         .from("live_whatsapp_clicks")
         .select("entered_phone, phone, real_phone")
-        .in("link_id", linkIds)
-        .limit(5000);
-      for (const c of (clicks || []) as any[]) {
-        for (const p of [c.entered_phone, c.phone, c.real_phone]) {
-          const s = suffix8(p);
-          if (s) clicked.add(s);
-        }
+        .eq("event_id", eventId)
+        .limit(5000),
+    ]);
+    const clicked = new Set<string>();
+    for (const c of (clicks || []) as any[]) {
+      for (const p of [c.entered_phone, c.phone, c.real_phone]) {
+        const s = suffix8(p);
+        if (s) clicked.add(s);
       }
     }
-    const filtered = ((leads || []) as any[]).filter((l) => {
-      if (l.disqualified) return false;
-      const s = suffix8(l.phone);
-      if (!s) return false;
-      return !clicked.has(s);
-    });
+    const open = ((ordersData || []) as any[]).filter(
+      (o) => o.stage !== "cancelled" && !isRevenuePaid(o as any),
+    );
+    const custIds = [...new Set(open.map((o) => o.customer_id).filter(Boolean))];
+    const { data: customers } = custIds.length
+      ? await supabase.from("customers").select("id, instagram_handle, whatsapp").in("id", custIds)
+      : { data: [] as any[] };
+    const cmap = new Map(((customers || []) as any[]).map((c) => [c.id, c]));
+    const seen = new Set<string>();
+    const filtered: any[] = [];
+    for (const o of open) {
+      const c: any = cmap.get(o.customer_id);
+      const s = suffix8(c?.whatsapp);
+      if (s && clicked.has(s)) continue;
+      const key = o.customer_id || o.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      filtered.push({
+        id: o.id,
+        name: null,
+        instagram: c?.instagram_handle ? String(c.instagram_handle).replace(/^@+/, "") : null,
+        phone: c?.whatsapp || null,
+        created_at: o.created_at,
+      });
+    }
     setNoClickLeads(filtered);
   }, [eventId]);
 
