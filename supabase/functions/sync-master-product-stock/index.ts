@@ -124,6 +124,17 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         };
 
+        // Shopify limita ~2 chamadas/s. Espera e repete quando estourar.
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const shopFetch = async (url: string, init?: RequestInit) => {
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const res = await fetch(url, init);
+            if (res.status !== 429) return res;
+            await sleep(600 * (attempt + 1));
+          }
+          return await fetch(url, init);
+        };
+
         // ============ NOVAS VARIAÇÕES ============
         // A Shopify permite adicionar variantes a um produto já existente
         // (POST /products/{id}/variants.json, limite de 100 por produto).
