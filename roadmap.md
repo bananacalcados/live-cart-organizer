@@ -17,7 +17,7 @@
 
 ## Pagamento dividido (plano aprovado 23/09)
 - [x] Etapa 1 — Base: partes de pagamento, registro seguro de parte aprovada, contas (desconto só no Pix), chave desligada
-- [ ] Etapa 2 — Checkout da cliente pagando parte por parte
+- [x] Etapa 2 — Checkout da cliente pagando parte por parte (cartão das partes só pelo Mercado Pago por enquanto)
 - [ ] Etapa 3 — PDV > Online > Link de pagamento
 - [ ] Etapa 4 — Modal do WhatsApp no PDV
 - [ ] Etapa 5 — Live
