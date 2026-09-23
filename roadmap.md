@@ -14,3 +14,11 @@
 - [x] Registro de acessos aos módulos (aba Acessos em Administração)
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
+
+## Pagamento dividido (plano aprovado 23/09)
+- [x] Etapa 1 — Base: partes de pagamento, registro seguro de parte aprovada, contas (desconto só no Pix), chave desligada
+- [ ] Etapa 2 — Checkout da cliente pagando parte por parte
+- [ ] Etapa 3 — PDV > Online > Link de pagamento
+- [ ] Etapa 4 — Modal do WhatsApp no PDV
+- [ ] Etapa 5 — Live
+- [ ] Etapa 6 — Painéis, relatórios, estorno por parte
