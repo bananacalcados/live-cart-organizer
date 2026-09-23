@@ -181,6 +181,7 @@ export function LiveQuickActionsDialog({
                 maxInstallments={Math.min(6, 12)}
               />
             )}
+            {order && <SplitPartsSummary orderId={order.id} />}
 
             {waInitialReady && (
               <Button
