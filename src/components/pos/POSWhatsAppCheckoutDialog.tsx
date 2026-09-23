@@ -323,6 +323,7 @@ export function POSWhatsAppCheckoutDialog({
       setCart([]);
       setGeneratedLink("");
       setSplitDesc("");
+      setSplitParts([]);
       setDiscountValue("");
       setCouponApplied(null);
       setCouponCode("");

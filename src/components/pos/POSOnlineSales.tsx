@@ -274,6 +274,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const handleGenerateLink = async (gateway: Gateway) => {
     if (!selectedSeller) { toast.error("Selecione a vendedora"); return; }
     if (cart.length === 0) { toast.error("Adicione produtos ao carrinho"); return; }
+    if (splitParts.length > 0 && gateway !== "store-checkout") {
+      toast.error("Pagamento dividido usa o botão Checkout Loja");
+      return;
+    }
 
     // If delivery, show options first
     if (gateway === "delivery") {
@@ -629,7 +633,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
   const resetSale = () => {
     setCart([]);
-    setGeneratedLink(""); setSplitDesc("");
+    setGeneratedLink(""); setSplitDesc(""); setSplitParts([]);
     setShowLinkDialog(false);
     setLinkedCustomer(null);
     setCustomerSearch("");
