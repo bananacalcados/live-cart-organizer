@@ -218,8 +218,15 @@ export function ShipmentSimulations() {
   };
 
   /** Prazo próprio deste pedido (sobrepõe o padrão). */
-  const setOrderDays = (r: Row, key: keyof StageCfg, value: number) =>
+  const setOrderDays = (r: Row, key: keyof StageCfg, value: number) => {
+    const current = { ...cfg, ...((r.stage_days as any) || {}), [key]: value } as StageCfg;
+    const total = current.em_separacao_days + current.separado_days + current.embalado_days;
+    if (total > MAX_TOTAL_DAYS) {
+      toast.error(`A soma das etapas deste pedido não pode passar de ${MAX_TOTAL_DAYS} dias.`);
+      return;
+    }
     patch(r, { stage_days: { ...((r.stage_days as any) || {}), [key]: value } });
+  };
 
   const copyLink = (code: string) => {
     navigator.clipboard.writeText(publicUrl(code));
@@ -490,6 +497,7 @@ export function ShipmentSimulations() {
               Contar apenas dias úteis
             </label>
             <p className="text-xs text-muted-foreground">
+              A soma das três etapas não pode passar de {MAX_TOTAL_DAYS} dias.
               O acompanhamento nunca avança sozinho para "Enviado" — isso só acontece quando a expedição registra o código real na conferência.
             </p>
           </div>
