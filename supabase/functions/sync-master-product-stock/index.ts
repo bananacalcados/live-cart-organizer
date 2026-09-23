@@ -239,7 +239,12 @@ Deno.serve(async (req) => {
         const locationId = primaryLocation?.id;
 
         if (!locationId) {
-          result.shopify = { error: "Location não encontrado na Shopify" };
+          result.shopify = {
+            error: "Location não encontrado na Shopify",
+            variants_created: variantsCreated,
+            variants_linked: variantsLinked,
+            variant_create_errors: variantCreateErrors,
+          };
         } else {
           let shopUpdated = 0;
           let shopErrors = 0;
@@ -336,6 +341,9 @@ Deno.serve(async (req) => {
             updated: shopUpdated,
             errors: shopErrors,
             location_id: locationId,
+            variants_created: variantsCreated,
+            variants_linked: variantsLinked,
+            variant_create_errors: variantCreateErrors,
           };
         }
       }
