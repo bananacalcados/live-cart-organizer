@@ -730,6 +730,18 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
 
                   {(noResponse || step > 0 || !paidCard) && (
                     <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
+                      {!paidCard && splitByOrder[order.id]?.paid > 0 && (() => {
+                        const s = splitByOrder[order.id];
+                        const hrs = s.lastPaidAt ? Math.floor((nowTick - new Date(s.lastPaidAt).getTime()) / 3600000) : 0;
+                        return (
+                          <span
+                            title={`Pagamento dividido: ${s.paidParts} de ${s.parts} partes pagas${s.lastPaidAt ? ` — última há ${hrs}h, restante pendente` : ""}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                          >
+                            Pago parcialmente {brl(s.paid)} de {brl(s.total)}{hrs >= 1 ? ` · falta há ${hrs}h` : ""}
+                          </span>
+                        );
+                      })()}
                       {!paidCard && (
                         openedByOrder[order.id] ? (
                           <span
