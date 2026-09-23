@@ -128,6 +128,22 @@ Deno.serve(async (req) => {
     let events: PublicEvent[] = [];
     let statusLabel = '';
 
+    // Para acompanhamentos de pedido, completa os dados públicos diretamente
+    // da venda quando registros antigos ainda não trouxerem nome ou destino.
+    if (sim.kind === 'order' && sim.sale_id &&
+      (!sim.customer_name || !sim.destination_city || !sim.destination_state)) {
+      const { data: sale } = await supabase
+        .from('pos_sales')
+        .select('customer_name, customer_city, customer_state')
+        .eq('id', sim.sale_id)
+        .maybeSingle();
+      if (sale) {
+        sim.customer_name = sim.customer_name || sale.customer_name;
+        sim.destination_city = sim.destination_city || sale.customer_city;
+        sim.destination_state = sim.destination_state || sale.customer_state;
+      }
+    }
+
     // Consulta sob demanda: quando o cliente abre o link e já existe código real,
     // buscamos a posição atual na transportadora (com cache de algumas horas).
     if (
@@ -250,6 +266,8 @@ Deno.serve(async (req) => {
         tracking_code: code,
         status: statusLabel,
         customer_name: (sim.customer_name as string | null) ?? null,
+        destination_city: (sim.destination_city as string | null) ?? null,
+        destination_state: (sim.destination_state as string | null) ?? null,
         order_reference: (sim.order_reference as string | null) ?? null,
         posted_at: events[0]?.at ?? null,
         events: visible,
