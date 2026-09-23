@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
         .eq('key', 'shipment_stage_config')
         .maybeSingle();
       const base: StageConfig = { ...DEFAULT_STAGE_CONFIG, ...(cfgRow?.value as any || {}) };
-      const cfg: StageConfig = { ...base, ...((sim.stage_days as any) || {}) };
+      const cfg: StageConfig = clampStageConfig({ ...base, ...((sim.stage_days as any) || {}) });
 
       const fulfillment = String(sim.fulfillment || 'carrier');
       const labels = fulfillment === 'pickup' ? PICKUP_LABEL : STAGE_LABEL;
