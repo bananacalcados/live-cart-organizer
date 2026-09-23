@@ -224,6 +224,30 @@ Deno.serve(async (req) => {
       return json({ success: false, error: mp?.status_detail || mp?.message || "Pagamento recusado" });
     }
 
+    // ── refund: equipe estorna uma parte paga (só enquanto o pedido NÃO está 100% pago) ──
+    if (action === "refund") {
+      const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: u } = tok ? await sb.auth.getUser(tok) : { data: null as any };
+      if (!u?.user) return json({ error: "Apenas a equipe pode estornar" }, 403);
+      const s = await loadSplit(sb, body.splitId);
+      if (s.status !== "approved") return json({ error: "Esta parte não está paga" }, 400);
+      const tgt = await isTargetPaid(sb, s.order_id ?? undefined, s.sale_id ?? undefined);
+      if (tgt.paid) return json({ error: "Pedido já está pago por completo — use o cancelamento da venda" }, 409);
+      if (s.gateway !== "mercadopago" || !s.gateway_tx_id) return json({ error: "Estorno automático só para Mercado Pago" }, 400);
+      const acc = (await getMpAccountByPaymentId(sb, s.gateway_tx_id)) || (await getActiveMpAccount(sb));
+      if (!acc) return json({ error: "Mercado Pago indisponível" }, 503);
+      const res = await fetch(`https://api.mercadopago.com/v1/payments/${s.gateway_tx_id}/refunds`, {
+        method: "POST",
+        headers: buildMpHeaders({ accessToken: acc.access_token, idempotencyKey: `split-refund-${s.id}` }),
+        body: JSON.stringify({}),
+      });
+      const mp = await res.json().catch(() => ({}));
+      if (!res.ok) return json({ error: mp?.message || "Estorno recusado pelo Mercado Pago" }, 400);
+      await sb.from("payment_splits").update({ status: "refunded" }).eq("id", s.id);
+      console.log("[split-payment] refund", s.id, "by", u.user.id);
+      return json({ ok: true });
+    }
+
     return json({ error: "Ação inválida" }, 400);
   } catch (e) {
     console.error("[split-payment]", e);
