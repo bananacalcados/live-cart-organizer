@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { issueMagicLink } from "../_shared/member-magic-link.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,9 +175,6 @@ serve(async (req) => {
     }
 
     // 5. Build confirmation message (texto aprovado)
-    // Link autenticado da Área de Membros preso ao pedido — SEMPRE em linha
-    // própria, sem texto grudado (evita o caso do token com sobra no fim).
-    const memberAreaLink = await issueMagicLink(supabase, fullPhone, undefined, orderId);
     // Link da área de acompanhamento do envio (código próprio nosso, sem citar transportadora).
     // O registro é criado a partir da VENDA no PDV (pos_sales), que guarda o
     // id do pedido da live em `source_order_id` — por isso a busca é em duas
@@ -230,8 +226,7 @@ serve(async (req) => {
     const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
       `Confira seu pedido:\n\n` +
       `${productLines}` + cashbackLine + `\n\n` +
-      `📦 Seu pedido seguirá para a expedição. Acompanhe a separação, o envio e o rastreamento por aqui:\n\n` +
-      `${memberAreaLink}` + trackingLine + `\n\n` +
+      `📦 Seu pedido seguirá para a expedição.` + trackingLine + `\n\n` +
       `Está tudo correto? Responda *SIM* para confirmar ou avise o que precisa ser corrigido 😊`;
 
 
@@ -398,12 +393,26 @@ serve(async (req) => {
       });
     }
 
+    // O ID devolvido pelo provedor é indispensável: os webhooks de entrega e
+    // leitura atualizam a mensagem por esse identificador. Sem ele, o chat fica
+    // para sempre com um tique mesmo quando a cliente recebeu ou leu.
+    const sendData = await sendResp.json().catch(() => ({}));
+    const providerMessageId = String(
+      sendData?.messageId ||
+      sendData?.messageid ||
+      sendData?.id ||
+      sendData?.data?.messageId ||
+      sendData?.data?.messageid ||
+      sendData?.data?.id ||
+      '',
+    ) || null;
 
     // 8. Save outgoing message
     await supabase.from('whatsapp_messages').insert({
       phone: fullPhone,
       message,
       direction: 'outgoing',
+      message_id: providerMessageId,
       status: 'sent',
       whatsapp_number_id: sendNumberId,
     });
