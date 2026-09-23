@@ -23,7 +23,7 @@ export const publicTrackingUrl = (code: string) =>
 async function resolveShipmentRow(saleId: string): Promise<any | null> {
   const { data } = await supabase
     .from('shipment_simulations')
-    .select('id, tracking_code, incident_type, fulfillment, merged_into_id')
+    .select('id, tracking_code, real_tracking_code, incident_type, fulfillment, merged_into_id')
     .eq('sale_id', saleId)
     .maybeSingle();
   let row = data as any;
@@ -31,7 +31,7 @@ async function resolveShipmentRow(saleId: string): Promise<any | null> {
   while (row?.merged_into_id && guard < 5) {
     const { data: parent } = await supabase
       .from('shipment_simulations')
-      .select('id, tracking_code, incident_type, fulfillment, merged_into_id')
+      .select('id, tracking_code, real_tracking_code, incident_type, fulfillment, merged_into_id')
       .eq('id', row.merged_into_id)
       .maybeSingle();
     if (!parent) break;
@@ -65,6 +65,7 @@ export const INCIDENT_OPTIONS: { value: IncidentType; label: string }[] = [
 
 export type ShipmentTrackingInfo = {
   trackingCode: string;
+  realTrackingCode: string | null;
   incidentType: IncidentType | null;
   fulfillment: string | null;
 };
@@ -75,6 +76,7 @@ export async function getShipmentTracking(saleId: string): Promise<ShipmentTrack
   if (!row?.tracking_code) return null;
   return {
     trackingCode: row.tracking_code,
+    realTrackingCode: row.real_tracking_code ?? null,
     incidentType: (row.incident_type as IncidentType) || null,
     fulfillment: row.fulfillment ?? null,
   };

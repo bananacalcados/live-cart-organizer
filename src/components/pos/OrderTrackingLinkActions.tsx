@@ -31,6 +31,7 @@ interface Props {
  */
 export function OrderTrackingLinkActions({ saleId, customerName, customerPhone }: Props) {
   const [code, setCode] = useState<string | null>(null);
+  const [realCode, setRealCode] = useState<string | null>(null);
   const [incident, setIncident] = useState<IncidentType | null>(null);
   const [sending, setSending] = useState(false);
   const { effectiveNumberId } = useConversationInstance(customerPhone || null);
@@ -41,6 +42,7 @@ export function OrderTrackingLinkActions({ saleId, customerName, customerPhone }
       .then((info) => {
         if (!alive || !info) return;
         setCode(info.trackingCode);
+        setRealCode(info.realTrackingCode);
         setIncident(info.incidentType);
       })
       .catch(() => undefined);
@@ -57,6 +59,12 @@ export function OrderTrackingLinkActions({ saleId, customerName, customerPhone }
   const copy = async () => {
     await navigator.clipboard.writeText(url);
     toast.success("Link de acompanhamento copiado");
+  };
+
+  const copyRealCode = async () => {
+    if (!realCode) return;
+    await navigator.clipboard.writeText(realCode);
+    toast.success("Código real copiado");
   };
 
   const send = async () => {
@@ -94,6 +102,17 @@ export function OrderTrackingLinkActions({ saleId, customerName, customerPhone }
       <span className="inline-flex items-center gap-1 rounded-md border border-sky-400/50 bg-sky-500/10 px-2 py-1 font-mono text-[11px] font-bold text-sky-700 dark:text-sky-300">
         <Truck className="h-3 w-3" /> {code}
       </span>
+
+      {realCode ? (
+        <button
+          type="button"
+          onClick={copyRealCode}
+          className={`${btn} border-border bg-muted/60 text-foreground hover:bg-muted`}
+          title="Código real interno — não enviar ao cliente"
+        >
+          <Copy className="h-3 w-3" /> Rastreio real: <span className="font-mono">{realCode}</span>
+        </button>
+      ) : null}
 
       <button type="button" onClick={copy} className={`${btn} border-sky-400/50 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300`} title="Copiar o link de acompanhamento">
         <Copy className="h-3 w-3" /> Copiar link
