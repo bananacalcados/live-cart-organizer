@@ -443,44 +443,46 @@ export default function PresenterDashboard() {
 
 
       {/* Cards fixos: clientes que ainda NÃO clicaram no botão do WhatsApp */}
-      <Card className="mb-6 border-orange-500/40 bg-orange-500/5">
-        <CardHeader className="pb-2 pt-3 px-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MessageCircle className="h-5 w-5 text-orange-400" />
-            Ainda não clicaram no WhatsApp
-            <Badge className="bg-orange-600 text-white">{noClickLeads.length}</Badge>
-            <span className="text-[11px] font-normal text-muted-foreground">
-              chame pelo @ e peça para clicar no botão para finalizar a compra
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3">
-          {noClickLeads.length === 0 ? (
-            <p className="py-2 text-center text-sm text-muted-foreground">
-              Todas as leads da live já clicaram no botão do WhatsApp 🎉
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
-              {noClickLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  className="rounded-lg border border-orange-500/30 bg-background/60 px-3 py-2"
-                >
-                  <p className="truncate text-sm font-bold text-orange-400">
-                    {lead.instagram
-                      ? `@${lead.instagram.replace(/^@/, "")}`
-                      : lead.name || "Sem nome"}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {formatTime(lead.created_at)}
-                    {lead.instagram && lead.name ? ` · ${lead.name.split(" ")[0]}` : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="mb-6 rounded-3xl border-4 border-amber-500 bg-zinc-950 p-6 shadow-2xl">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 px-2">
+          <div className="flex items-center gap-4">
+            <span className="h-4 w-4 shrink-0 animate-pulse rounded-full bg-amber-500" />
+            <h2 className="text-lg font-bold uppercase tracking-widest text-zinc-400 md:text-xl">
+              Ainda não clicaram no WhatsApp
+            </h2>
+          </div>
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-4 py-1 text-sm font-black text-amber-500">
+            {noClickLeads.length} PENDENTES
+          </span>
+        </div>
+        <p className="mb-4 px-2 text-xs text-zinc-500">
+          Chame pelo @ no ar e peça para clicar no botão para finalizar a compra
+        </p>
+        {noClickLeads.length === 0 ? (
+          <p className="py-4 text-center text-sm font-semibold text-emerald-400">
+            Todas as clientes da live já clicaram no botão do WhatsApp 🎉
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {noClickLeads.map((lead) => (
+              <div
+                key={lead.id}
+                className="flex flex-col items-center justify-center rounded-2xl border-b-8 border-amber-600 bg-amber-400 p-5 shadow-lg transition-transform hover:scale-[1.03]"
+              >
+                <span className="mb-1 text-[11px] font-black uppercase tracking-tight text-amber-900/80">
+                  {formatTime(lead.created_at)}
+                  {lead.instagram && lead.name ? ` · ${lead.name.split(" ")[0]}` : ""}
+                </span>
+                <span className="w-full truncate text-center text-3xl font-black tracking-tight text-black md:text-4xl xl:text-5xl">
+                  {lead.instagram
+                    ? `@${lead.instagram.replace(/^@/, "")}`
+                    : (lead.name || "Sem nome").toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Comentários da Live — logo abaixo do painel de métricas */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
