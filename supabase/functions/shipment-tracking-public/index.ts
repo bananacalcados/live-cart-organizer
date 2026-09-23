@@ -128,6 +128,46 @@ Deno.serve(async (req) => {
     let events: PublicEvent[] = [];
     let statusLabel = '';
 
+    // Consulta sob demanda: quando o cliente abre o link e já existe código real,
+    // buscamos a posição atual na transportadora (com cache de algumas horas).
+    if (
+      sim.kind === 'order' &&
+      sim.real_tracking_code &&
+      !sim.delivered_at &&
+      (!sim.last_real_sync ||
+        now.getTime() - new Date(sim.last_real_sync as string).getTime() > SYNC_INTERVAL_MS)
+    ) {
+      try {
+        const fetched = await fetchFrenetEvents(
+          String(sim.real_tracking_code),
+          (sim.real_service_code as string | null) || guessServiceCode(sim.real_carrier as string | null),
+        );
+        const patch: Record<string, unknown> = { last_real_sync: now.toISOString() };
+        if (fetched) {
+          const merged = mergeRealEvents(
+            Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [],
+            fetched.events,
+          );
+          const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description));
+          patch.real_events = merged;
+          patch.real_service_code = fetched.serviceCode;
+          if (delivered) {
+            patch.delivered_at = delivered.at;
+            patch.stage = 'entregue';
+            patch.status = 'delivered';
+          }
+          sim.real_events = merged;
+          if (delivered) {
+            sim.delivered_at = delivered.at;
+            sim.stage = 'entregue';
+          }
+        }
+        await supabase.from('shipment_simulations').update(patch).eq('id', sim.id);
+      } catch (e) {
+        console.error('Frenet sync falhou', (e as Error).message);
+      }
+    }
+
     if (sim.kind === 'order') {
       const { data: cfgRow } = await supabase
         .from('app_settings')
