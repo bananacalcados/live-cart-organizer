@@ -1667,6 +1667,7 @@ export default function StoreCheckout() {
                              </button>
                            )}
                          </div>
+                        </SplitPaymentPanel>
                       );
                     })()}
                     <Button variant="ghost" onClick={() => setCurrentStep(saleData.is_custom_amount ? 1 : 2)} className="w-full text-sm text-muted-foreground">← Voltar {saleData.is_custom_amount ? "para Identificação" : "para Entrega"}</Button>
