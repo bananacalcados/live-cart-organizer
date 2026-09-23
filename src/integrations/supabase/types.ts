@@ -18623,6 +18623,7 @@ export type Database = {
           kind: string
           last_real_sync: string | null
           manual_offset_days: number
+          merged_into_id: string | null
           notes: string | null
           order_id: string | null
           order_reference: string | null
@@ -18660,6 +18661,7 @@ export type Database = {
           kind?: string
           last_real_sync?: string | null
           manual_offset_days?: number
+          merged_into_id?: string | null
           notes?: string | null
           order_id?: string | null
           order_reference?: string | null
@@ -18697,6 +18699,7 @@ export type Database = {
           kind?: string
           last_real_sync?: string | null
           manual_offset_days?: number
+          merged_into_id?: string | null
           notes?: string | null
           order_id?: string | null
           order_reference?: string | null
@@ -18718,7 +18721,15 @@ export type Database = {
           tracking_code?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shipment_simulations_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "shipment_simulations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shipping_rules: {
         Row: {
