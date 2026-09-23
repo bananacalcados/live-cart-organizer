@@ -14,6 +14,15 @@ import {
   stageTimes,
   translateRealEvent,
 } from '../_shared/shipment-stages.ts';
+import {
+  fetchFrenetEvents,
+  guessServiceCode,
+  isDeliveredEvent,
+  mergeRealEvents,
+} from '../_shared/frenet-tracking.ts';
+
+/** Intervalo mínimo entre consultas à transportadora (cache). */
+const SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
