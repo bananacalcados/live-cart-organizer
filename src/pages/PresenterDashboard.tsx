@@ -69,7 +69,13 @@ export default function PresenterDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
+  const [noClickLeads, setNoClickLeads] = useState<{ id: string; name: string | null; instagram: string | null; phone: string | null; created_at: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const suffix8 = (p?: string | null) => {
+    const d = (p || "").replace(/\D/g, "");
+    return d.length >= 8 ? d.slice(-8) : "";
+  };
 
   // Create audio element for notifications
   useEffect(() => {
@@ -174,10 +180,74 @@ export default function PresenterDashboard() {
     });
   }, [eventId]);
 
+  // Leads da live que AINDA NÃO clicaram no botão de redirecionamento do WhatsApp (/zap)
+  const loadNoClickLeads = useCallback(async () => {
+    if (!eventId) return;
+    const [{ data: leads }, { data: links }] = await Promise.all([
+      supabase
+        .from("event_leads")
+        .select("id, name, instagram, phone, created_at, disqualified")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: false })
+        .limit(1000),
+      (supabase as any)
+        .from("live_whatsapp_links")
+        .select("id")
+        .eq("event_id", eventId),
+    ]);
+    const linkIds = ((links || []) as any[]).map((l) => l.id);
+    const clicked = new Set<string>();
+    if (linkIds.length > 0) {
+      const { data: clicks } = await (supabase as any)
+        .from("live_whatsapp_clicks")
+        .select("entered_phone, phone, real_phone")
+        .in("link_id", linkIds)
+        .limit(5000);
+      for (const c of (clicks || []) as any[]) {
+        for (const p of [c.entered_phone, c.phone, c.real_phone]) {
+          const s = suffix8(p);
+          if (s) clicked.add(s);
+        }
+      }
+    }
+    const filtered = ((leads || []) as any[]).filter((l) => {
+      if (l.disqualified) return false;
+      const s = suffix8(l.phone);
+      if (!s) return false;
+      return !clicked.has(s);
+    });
+    setNoClickLeads(filtered);
+  }, [eventId]);
+
   useEffect(() => {
     loadAlerts();
     loadOrders();
-  }, [loadAlerts, loadOrders]);
+    loadNoClickLeads();
+  }, [loadAlerts, loadOrders, loadNoClickLeads]);
+
+  // Atualiza os cards quando alguém clica no link /zap
+  useEffect(() => {
+    if (!eventId) return;
+    const channel = supabase
+      .channel(`presenter-zap-clicks-${eventId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "live_whatsapp_clicks",
+      }, () => {
+        loadNoClickLeads();
+      })
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "event_leads",
+        filter: `event_id=eq.${eventId}`,
+      }, () => {
+        loadNoClickLeads();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
   useEffect(() => {
@@ -358,6 +428,46 @@ export default function PresenterDashboard() {
         />
       </div>
 
+
+      {/* Cards fixos: clientes que ainda NÃO clicaram no botão do WhatsApp */}
+      <Card className="mb-6 border-orange-500/40 bg-orange-500/5">
+        <CardHeader className="pb-2 pt-3 px-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageCircle className="h-5 w-5 text-orange-400" />
+            Ainda não clicaram no WhatsApp
+            <Badge className="bg-orange-600 text-white">{noClickLeads.length}</Badge>
+            <span className="text-[11px] font-normal text-muted-foreground">
+              chame pelo @ e peça para clicar no botão para finalizar a compra
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3">
+          {noClickLeads.length === 0 ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">
+              Todas as leads da live já clicaram no botão do WhatsApp 🎉
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
+              {noClickLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className="rounded-lg border border-orange-500/30 bg-background/60 px-3 py-2"
+                >
+                  <p className="truncate text-sm font-bold text-orange-400">
+                    {lead.instagram
+                      ? `@${lead.instagram.replace(/^@/, "")}`
+                      : lead.name || "Sem nome"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatTime(lead.created_at)}
+                    {lead.instagram && lead.name ? ` · ${lead.name.split(" ")[0]}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Comentários da Live — logo abaixo do painel de métricas */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
