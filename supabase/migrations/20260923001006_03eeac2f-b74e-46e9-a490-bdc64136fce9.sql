@@ -1,0 +1,1 @@
+ALTER TABLE public.shipment_simulations ADD COLUMN IF NOT EXISTS real_service_code text;
