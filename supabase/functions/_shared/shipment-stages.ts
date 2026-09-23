@@ -37,6 +37,55 @@ export const STAGE_DETAIL: Record<StageKey, string> = {
   entregue: 'Seu pedido foi entregue.',
 };
 
+/**
+ * Linhas automáticas DEPOIS de "enviado", usadas apenas enquanto o código real
+ * de rastreio não foi registrado na Conferência. Servem para o cliente não ficar
+ * dias olhando a mesma informação. Nunca aparecem em retirada na loja.
+ */
+export const POST_SHIPPED_STEPS: { days: number; title: string; detail: string }[] = [
+  {
+    days: 1,
+    title: 'Pedido chegando em um centro de distribuição',
+    detail: 'Seu pedido chegou a uma unidade de distribuição e segue para a próxima etapa.',
+  },
+  {
+    days: 2,
+    title: 'Pedido a caminho',
+    detail: 'Seu pedido está a caminho da sua cidade.',
+  },
+];
+
+export type IncidentType =
+  | 'extraviado'
+  | 'atraso_rota'
+  | 'cancelado'
+  | 'greve_correios'
+  | 'conferencia_endereco';
+
+/** Avisos manuais mostrados ao cliente (sem citar transportadora). */
+export const INCIDENT_LABEL: Record<IncidentType, { title: string; detail: string }> = {
+  extraviado: {
+    title: 'Pedido em verificação',
+    detail: 'Estamos localizando seu pedido junto ao transporte. Já estamos cuidando disso.',
+  },
+  atraso_rota: {
+    title: 'Atraso na rota',
+    detail: 'A rota do seu pedido sofreu um atraso. Ele segue a caminho.',
+  },
+  cancelado: {
+    title: 'Envio cancelado',
+    detail: 'O envio deste pedido foi cancelado. Fale com a gente.',
+  },
+  greve_correios: {
+    title: 'Atraso por paralisação',
+    detail: 'Há uma paralisação afetando as entregas na região. Seu pedido segue na fila.',
+  },
+  conferencia_endereco: {
+    title: 'Conferência de endereço',
+    detail: 'Precisamos confirmar seu endereço para concluir a entrega. Fale com a gente.',
+  },
+};
+
 export type StageConfig = {
   em_separacao_days: number;
   separado_days: number;
