@@ -377,7 +377,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
   const processPayment = async (gateway: Gateway) => {
     setGenerating(true);
-    setGeneratedLink("");
+    setGeneratedLink(""); setSplitDesc("");
 
     try {
       let link = "";
@@ -621,7 +621,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
   const resetSale = () => {
     setCart([]);
-    setGeneratedLink("");
+    setGeneratedLink(""); setSplitDesc("");
     setShowLinkDialog(false);
     setLinkedCustomer(null);
     setCustomerSearch("");

@@ -178,7 +178,7 @@ export function LiveQuickActionsDialog({
               <SplitPaymentSetupButton
                 orderId={order.id}
                 total={getOrderFinalValue(order)}
-                maxInstallments={Math.min(Number((orderEvent as any)?.max_installments) || 6, 12)}
+                maxInstallments={Math.min(6, 12)}
               />
             )}
 
