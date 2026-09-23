@@ -205,9 +205,7 @@ Deno.serve(async (req) => {
         const out = await approveSplitPart(sb, s.id, "mercadopago", String(mp.id));
         return json({ success: true, ...out });
       }
-      if (mp?.id) await sb.from("payment_splits").update({ status: "refused" }).eq("id", s.id);
-      // volta para pendente para permitir nova tentativa com outro cartão
-      if (mp?.id) await sb.from("payment_splits").update({ status: "pending" }).eq("id", s.id);
+      // parte continua pendente: a cliente pode tentar outro cartão
       return json({ success: false, error: mp?.status_detail || mp?.message || "Pagamento recusado" });
     }
 

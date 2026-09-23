@@ -1,3 +1,4 @@
+import { approveSplitPart, SPLIT_REF_PREFIX } from "../_shared/split-payment.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
@@ -220,6 +221,17 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
   // Boleto sob demanda (PDV chat): external_reference = "boleto:<uuid>"
   const extRefStr = String(mpPayment?.external_reference || "");
+  // Pagamento dividido: external_reference = "split:<uuid>" — nunca marca o pedido inteiro por uma parte.
+  if (extRefStr.startsWith(SPLIT_REF_PREFIX)) {
+    const splitId = extRefStr.slice(SPLIT_REF_PREFIX.length);
+    if (status === "approved") {
+      try {
+        const out = await approveSplitPart(supabase, splitId, "mercadopago", mpIdStr);
+        console.log(`[mercadopago] split ${splitId} aprovado`, out);
+      } catch (e) { console.error("[mercadopago] split approve error:", e); }
+    }
+    return new Response(JSON.stringify({ ok: true, split: splitId }), { headers: { "Content-Type": "application/json" } });
+  }
   if (extRefStr.startsWith("boleto:")) {
     const boletoId = extRefStr.slice("boleto:".length);
     const newStatus = status === "approved" ? "paid"
