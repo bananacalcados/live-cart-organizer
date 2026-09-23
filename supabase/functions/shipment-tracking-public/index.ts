@@ -9,6 +9,7 @@ import {
   StageConfig,
   StageKey,
   autoStage,
+  clampStageConfig,
   naturalTime,
   sanitize,
   stageTimes,
@@ -234,15 +235,32 @@ Deno.serve(async (req) => {
       const real = Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [];
       const sentAt = events.length ? new Date(events[events.length - 1].at).getTime() : 0;
       let last = sentAt;
+
+      const norm = (s: string) =>
+        String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const cityOf = (ev: any) => {
+        const loc = sanitize(String(ev.location || ev.EventLocation || ''));
+        const [city, state] = loc.split(/[\/-]/).map((s: string) => s.trim());
+        return { city: city || '', state: state || '' };
+      };
+      // Cidade de origem: a da primeira movimentação real (onde o pedido foi postado).
+      const originCity = norm(
+        String(sim.origin_city || '') || (real.map(cityOf).find((c) => c.city)?.city ?? ''),
+      );
+
       for (const ev of real) {
         const when = new Date(ev.at || ev.EventDateTime || now).getTime();
         const tr = translateRealEvent(String(ev.description || ev.EventDescription || ''), fulfillment);
         if (!tr) continue;
+        const { city, state } = cityOf(ev);
+        // Escondemos as movimentações que ainda estão na nossa própria cidade
+        // (pré-postagem, postagem e primeira transferência): o cliente já viu
+        // "Pedido enviado" e não pode perceber a diferença de datas.
+        const atOrigin = !city || (originCity && norm(city) === originCity);
+        if (atOrigin && tr.title === 'Pedido em trânsito') continue;
         // Trava de coerência: nunca voltar no tempo.
         const at = new Date(Math.max(when, last + 60000));
         last = at.getTime();
-        const loc = sanitize(String(ev.location || ev.EventLocation || ''));
-        const [city, state] = loc.split(/[\/-]/).map((s: string) => s.trim());
         events.push({
           title: tr.title,
           detail: tr.detail,
