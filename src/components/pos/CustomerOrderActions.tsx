@@ -7,6 +7,7 @@ import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
 import { CustomerExchangeBadge } from "./CustomerExchangeBadge";
 import { ShippingTypeButtons } from "./ShippingTypeButtons";
+import { OrderTrackingLinkActions } from "./OrderTrackingLinkActions";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
 import type { ExchangeRecord } from "@/hooks/useExchangeRegistry";
 
@@ -57,6 +58,8 @@ export function CustomerOrderActions({
       {chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}
 
       <ShippingTypeButtons saleId={saleId} />
+
+      <OrderTrackingLinkActions saleId={saleId} customerName={customer.name} customerPhone={customer.phone} />
 
 
       <button

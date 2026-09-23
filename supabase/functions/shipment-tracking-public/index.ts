@@ -1,6 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
   DEFAULT_STAGE_CONFIG,
+  INCIDENT_LABEL,
+  IncidentType,
+  POST_SHIPPED_STEPS,
   PICKUP_LABEL,
   PublicEvent,
   STAGE_DETAIL,
@@ -8,6 +11,7 @@ import {
   STAGE_ORDER,
   StageConfig,
   StageKey,
+  addDays,
   autoStage,
   clampStageConfig,
   naturalTime,
@@ -231,6 +235,26 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Enquanto o código real não é registrado na Conferência, damos sensação de
+      // movimento com duas linhas genéricas contadas a partir do "enviado".
+      if (
+        STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf('enviado') &&
+        fulfillment !== 'pickup' &&
+        !sim.real_tracking_code &&
+        !sim.delivered_at
+      ) {
+        const shippedAt = new Date(events[events.length - 1]?.at || now);
+        POST_SHIPPED_STEPS.forEach((step, i) => {
+          const when = addDays(shippedAt, step.days, cfg.business_days);
+          if (when.getTime() > now.getTime()) return;
+          events.push({
+            title: step.title,
+            detail: step.detail,
+            at: naturalTime(when, code, 10 + i),
+          });
+        });
+      }
+
       // Eventos reais da transportadora, já traduzidos e sem citar a empresa.
       const real = Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [];
       const sentAt = events.length ? new Date(events[events.length - 1].at).getTime() : 0;
@@ -270,8 +294,22 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Aviso manual da equipe (extravio, atraso, conferência de endereço...).
+      // Entra na data em que foi marcado; se depois disso chegou movimentação
+      // real, ela fica por cima e o aviso permanece no histórico.
+      const incident = INCIDENT_LABEL[String(sim.incident_type || '') as IncidentType];
+      if (incident) {
+        const when = new Date((sim.incident_at as string) || now);
+        events.push({
+          title: incident.title,
+          detail: incident.detail,
+          at: new Date(Math.min(when.getTime(), now.getTime())).toISOString(),
+        });
+      }
+
       // Nunca mostramos entrega por conta própria: só quando o evento real diz.
       events = events.filter((e) => new Date(e.at).getTime() <= now.getTime() + 60000);
+      events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
       statusLabel = events[events.length - 1]?.title ?? labels.em_separacao;
     } else {
       const all = legacyTimeline(sim, code);
