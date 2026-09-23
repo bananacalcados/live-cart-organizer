@@ -180,19 +180,48 @@ serve(async (req) => {
     // própria, sem texto grudado (evita o caso do token com sobra no fim).
     const memberAreaLink = await issueMagicLink(supabase, fullPhone, undefined, orderId);
     // Link da área de acompanhamento do envio (código próprio nosso, sem citar transportadora).
+    // O registro é criado a partir da VENDA no PDV (pos_sales), que guarda o
+    // id do pedido da live em `source_order_id` — por isso a busca é em duas
+    // etapas. Envio unificado: seguimos `merged_into_id` até o pedido principal.
     let trackingLine = '';
     try {
-      const { data: ship } = await supabase
-        .from('shipment_simulations')
-        .select('tracking_code')
-        .eq('sale_id', orderId)
+      const saleIds: string[] = [orderId];
+      const { data: linkedSale } = await supabase
+        .from('pos_sales')
+        .select('id')
+        .eq('source_order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
+      if (linkedSale?.id) saleIds.unshift(linkedSale.id);
+
+      let ship: any = null;
+      for (const sid of saleIds) {
+        const { data } = await supabase
+          .from('shipment_simulations')
+          .select('id, tracking_code, merged_into_id')
+          .eq('sale_id', sid)
+          .maybeSingle();
+        if (data) { ship = data; break; }
+      }
+      let guard = 0;
+      while (ship?.merged_into_id && guard < 5) {
+        const { data: parent } = await supabase
+          .from('shipment_simulations')
+          .select('id, tracking_code, merged_into_id')
+          .eq('id', ship.merged_into_id)
+          .maybeSingle();
+        if (!parent) break;
+        ship = parent;
+        guard += 1;
+      }
       if (ship?.tracking_code) {
-        trackingLine = `\n\n🚚 Acompanhe o preparo e o envio do seu pedido:\n\nhttps://checkout.bananacalcados.com.br/rastreio/${ship.tracking_code}`;
+        trackingLine = `\n\n🚚 *LINK DE RASTREIO DO PEDIDO:*\n\nhttps://checkout.bananacalcados.com.br/rastreio/${ship.tracking_code}`;
       }
     } catch (err) {
       console.error('[livete-payment-confirmation] tracking link error:', err);
     }
+
     const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
       `Confira seu pedido:\n\n` +
       `${productLines}` + cashbackLine + `\n\n` +
