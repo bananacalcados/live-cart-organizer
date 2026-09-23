@@ -85,6 +85,18 @@ function bucketPayment(raw: string | null, _saleType?: string | null): string {
   return "Outros";
 }
 
+// Pagamento dividido: reparte o total da venda entre as formas reais de cada parte.
+function paymentShares(r: any): { bucket: string; amount: number }[] {
+  const total = Number(r.total || 0);
+  const parts = r.payment_details?.split_payment;
+  if (Array.isArray(parts) && parts.length > 1) {
+    const LBL: Record<string, string> = { pix: "PIX", credit: "Crédito", debit: "Débito" };
+    const sum = parts.reduce((a: number, p: any) => a + Number(p.charged ?? p.amount ?? 0), 0);
+    if (sum > 0) return parts.map((p: any) => ({ bucket: LBL[p.method] || "Outros", amount: total * Number(p.charged ?? p.amount ?? 0) / sum }));
+  }
+  return [{ bucket: bucketPayment(r.payment_method, r.sale_type), amount: total }];
+}
+
 const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
   "PIX":           { icon: Wallet,    gradient: "from-emerald-500/20 to-emerald-700/10" },
   "Crédito":       { icon: CreditCard, gradient: "from-blue-500/20 to-blue-700/10" },
@@ -163,7 +175,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sales")
-          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number, crediario_gateway")
+          .select("id, store_id, total, payment_method, payment_details, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number, crediario_gateway")
           // PAGO É PAGO: somente vendas efetivamente pagas (completed/paid/pending_sync).
           // `pending_pickup` é aguardando pagamento na retirada (paid_at null) — não é receita.
           // Status de fulfillment (envio/mototaxi/retirada/enviado) ficam em db_orders.stage,
@@ -283,11 +295,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const paymentBuckets = useMemo(() => {
     const map = new Map<string, { revenue: number; sales: number }>();
     for (const r of salesRows) {
-      const b = bucketPayment(r.payment_method, r.sale_type);
-      const cur = map.get(b) || { revenue: 0, sales: 0 };
-      cur.revenue += Number(r.total || 0);
-      cur.sales += 1;
-      map.set(b, cur);
+      for (const { bucket: b, amount } of paymentShares(r)) {
+        const cur = map.get(b) || { revenue: 0, sales: 0 };
+        cur.revenue += amount;
+        cur.sales += 1;
+        map.set(b, cur);
+      }
     }
     return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenue - a.revenue);
   }, [salesRows]);
@@ -299,7 +312,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const modalSales = useMemo(() => {
     if (!paymentModal.open) return [];
     return salesRows.filter(r =>
-      bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket &&
+      paymentShares(r).some(x => x.bucket === paymentModal.bucket) &&
       (!paymentModal.storeId || r.store_id === paymentModal.storeId)
     );
   }, [paymentModal, salesRows]);
@@ -309,10 +322,11 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const out = new Map<string, { name: string; revenue: number; sales: number }[]>();
     for (const r of salesRows) {
       const list = out.get(r.store_id) || [];
-      const b = bucketPayment(r.payment_method, r.sale_type);
-      const found = list.find(x => x.name === b);
-      if (found) { found.revenue += Number(r.total || 0); found.sales += 1; }
-      else list.push({ name: b, revenue: Number(r.total || 0), sales: 1 });
+      for (const { bucket: b, amount } of paymentShares(r)) {
+        const found = list.find(x => x.name === b);
+        if (found) { found.revenue += amount; found.sales += 1; }
+        else list.push({ name: b, revenue: amount, sales: 1 });
+      }
       out.set(r.store_id, list);
     }
     for (const [k, v] of out) out.set(k, v.sort((a, b) => b.revenue - a.revenue));
