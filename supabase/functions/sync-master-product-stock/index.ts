@@ -124,6 +124,116 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         };
 
+        // Shopify limita ~2 chamadas/s. Espera e repete quando estourar.
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const shopFetch = async (url: string, init?: RequestInit) => {
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const res = await fetch(url, init);
+            if (res.status !== 429) return res;
+            await sleep(600 * (attempt + 1));
+          }
+          return await fetch(url, init);
+        };
+
+        // ============ NOVAS VARIAÇÕES ============
+        // A Shopify permite adicionar variantes a um produto já existente
+        // (POST /products/{id}/variants.json, limite de 100 por produto).
+        // Antes de mexer no estoque, criamos na Shopify toda variação local
+        // que ainda não tem shopify_variant_id — ou vinculamos pelo GTIN/SKU
+        // quando ela já existe lá.
+        const norm = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
+        let variantsCreated = 0;
+        let variantsLinked = 0;
+        const variantCreateErrors: string[] = [];
+
+        const { data: masterRow } = await supabase
+          .from("products_master")
+          .select("shopify_product_id, sale_price, weight_kg")
+          .eq("id", master_id)
+          .maybeSingle();
+
+        const shopifyProductId = masterRow?.shopify_product_id;
+        const pending = (variants as any[]).filter((v) => !v.shopify_variant_id);
+
+        if (shopifyProductId && pending.length) {
+          const prodRes = await fetch(
+            `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/products/${shopifyProductId}.json`,
+            { headers },
+          );
+          const prodJson = await prodRes.json().catch(() => ({}));
+          const shopProduct = prodJson?.product;
+
+          if (!shopProduct) {
+            variantCreateErrors.push("Produto não encontrado na Shopify");
+          } else {
+            const options: any[] = (shopProduct.options || []).slice().sort(
+              (a: any, b: any) => (a.position || 0) - (b.position || 0),
+            );
+            const existing: any[] = shopProduct.variants || [];
+
+            const optionValueFor = (optName: string, v: any) => {
+              const n = optName.toLowerCase();
+              if (/cor|color|colour/.test(n)) return norm(v.color) || "Único";
+              if (/tamanho|numera|n[uú]mero|size/.test(n)) return norm(v.size) || "Único";
+              return norm(v.size) || norm(v.color) || "Único";
+            };
+
+            for (const v of pending) {
+              // 1. Já existe lá? Vincula pelo código de barras ou SKU.
+              const match = existing.find(
+                (ev: any) =>
+                  (v.gtin && norm(ev.barcode) === norm(v.gtin)) ||
+                  (v.sku && norm(ev.sku).toLowerCase() === norm(v.sku).toLowerCase()),
+              );
+              if (match) {
+                await supabase
+                  .from("product_variants")
+                  .update({ shopify_variant_id: String(match.id) })
+                  .eq("id", v.id);
+                v.shopify_variant_id = String(match.id);
+                variantsLinked++;
+                continue;
+              }
+
+              // 2. Cria a nova variação no produto existente.
+              const payload: Record<string, unknown> = {
+                sku: v.sku,
+                barcode: v.gtin,
+                price: (v.sale_price_override ?? masterRow?.sale_price ?? 0).toString(),
+                inventory_management: "shopify",
+                weight: Number(v.weight_kg_override ?? masterRow?.weight_kg ?? 0),
+                weight_unit: "kg",
+                requires_shipping: true,
+              };
+              options.forEach((opt: any, i: number) => {
+                payload[`option${i + 1}`] = optionValueFor(String(opt.name || ""), v);
+              });
+              if (!options.length) payload["option1"] = norm(v.size) || norm(v.color) || "Default Title";
+
+              const createRes = await fetch(
+                `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/products/${shopifyProductId}/variants.json`,
+                { method: "POST", headers, body: JSON.stringify({ variant: payload }) },
+              );
+              const createJson = await createRes.json().catch(() => ({}));
+              if (createRes.ok && createJson?.variant?.id) {
+                await supabase
+                  .from("product_variants")
+                  .update({ shopify_variant_id: String(createJson.variant.id) })
+                  .eq("id", v.id);
+                v.shopify_variant_id = String(createJson.variant.id);
+                existing.push(createJson.variant);
+                variantsCreated++;
+              } else {
+                const detail = typeof createJson?.errors === "string"
+                  ? createJson.errors
+                  : JSON.stringify(createJson?.errors || createJson);
+                variantCreateErrors.push(`${v.sku || v.gtin || "variação"}: ${detail}`);
+                console.error("Erro ao criar variante na Shopify:", detail);
+              }
+            }
+          }
+        }
+
         const pickPrimaryLocation = (locations: Array<{ id: number; name?: string | null; active?: boolean }>) => {
           const active = (locations || []).filter((loc) => loc?.active !== false);
           const preferred = active.find((loc) => String(loc.name || "").toLowerCase().includes("tiny shopify"));
@@ -140,7 +250,12 @@ Deno.serve(async (req) => {
         const locationId = primaryLocation?.id;
 
         if (!locationId) {
-          result.shopify = { error: "Location não encontrado na Shopify" };
+          result.shopify = {
+            error: "Location não encontrado na Shopify",
+            variants_created: variantsCreated,
+            variants_linked: variantsLinked,
+            variant_create_errors: variantCreateErrors,
+          };
         } else {
           let shopUpdated = 0;
           let shopErrors = 0;
@@ -163,7 +278,7 @@ Deno.serve(async (req) => {
             if (!v.shopify_variant_id) continue;
 
             // Busca o inventory_item_id da variante
-            const variantRes = await fetch(
+            const variantRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/variants/${v.shopify_variant_id}.json`,
               { headers },
             );
@@ -175,7 +290,7 @@ Deno.serve(async (req) => {
             }
 
             // Garante que o inventory_item está sendo rastreado
-            await fetch(
+            await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_items/${inventoryItemId}.json`,
               {
                 method: "PUT",
@@ -184,7 +299,7 @@ Deno.serve(async (req) => {
               },
             ).catch(() => {});
 
-            const levelsRes = await fetch(
+            const levelsRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels.json?inventory_item_ids=${inventoryItemId}`,
               { headers },
             );
@@ -194,7 +309,7 @@ Deno.serve(async (req) => {
             for (const level of levels) {
               const currentLocationId = level?.location_id;
               if (!currentLocationId || Number(currentLocationId) === Number(locationId)) continue;
-              await fetch(
+              await shopFetch(
                 `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
                 {
                   method: "POST",
@@ -212,7 +327,7 @@ Deno.serve(async (req) => {
             const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
               ? sharedStockByGtin[String(v.gtin)]
               : Number(v.initial_stock || 0);
-            const setRes = await fetch(
+            const setRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
               {
                 method: "POST",
@@ -237,6 +352,9 @@ Deno.serve(async (req) => {
             updated: shopUpdated,
             errors: shopErrors,
             location_id: locationId,
+            variants_created: variantsCreated,
+            variants_linked: variantsLinked,
+            variant_create_errors: variantCreateErrors,
           };
         }
       }

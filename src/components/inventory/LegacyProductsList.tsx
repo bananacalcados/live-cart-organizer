@@ -381,7 +381,15 @@ export function LegacyProductsList() {
       const r = data?.result || {};
       const parts: string[] = [];
       if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.store_name}`);
-      if (r.shopify) parts.push(`Shopify: ${r.shopify.updated || 0} variantes`);
+      if (r.shopify) {
+        const s = r.shopify;
+        let txt = `Shopify: ${s.updated || 0} variantes`;
+        if (s.variants_created) txt += ` · ${s.variants_created} novas criadas`;
+        if (s.variants_linked) txt += ` · ${s.variants_linked} vinculadas`;
+        parts.push(txt);
+        const errs: string[] = s.variant_create_errors || [];
+        if (errs.length) toast.error(`Não consegui criar ${errs.length} variação(ões): ${errs[0]}`);
+      }
       toast.success("Estoque sincronizado — " + parts.join(" · "));
     } catch (err: any) {
       toast.error("Erro ao sincronizar estoque: " + err.message);
