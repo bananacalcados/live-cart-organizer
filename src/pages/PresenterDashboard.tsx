@@ -69,7 +69,13 @@ export default function PresenterDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
+  const [noClickLeads, setNoClickLeads] = useState<{ id: string; name: string | null; instagram: string | null; phone: string | null; created_at: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const suffix8 = (p?: string | null) => {
+    const d = (p || "").replace(/\D/g, "");
+    return d.length >= 8 ? d.slice(-8) : "";
+  };
 
   // Create audio element for notifications
   useEffect(() => {
