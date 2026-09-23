@@ -11,11 +11,22 @@ export type RealEvent = {
 const FRENET_URL = 'https://api.frenet.com.br/tracking/trackinginfo';
 
 /** Códigos de serviço da conta (SEDEX / PAC). */
-export const SERVICE_CODES = { sedex: '03220', pac: '03298' } as const;
+export const SERVICE_CODES = {
+  sedex: '03220',
+  pac: '03298',
+  mini: '04227',
+  jt: 'JTE_INT',
+  jadlog: 'F_3',
+  loggi: 'LOG_DRPOFF',
+  total: 'TOT_EXPRSS',
+} as const;
 
 export function parseFrenetDate(s: string): string {
   const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})/);
   if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] + 3, +m[5])).toISOString();
+  // Formato ISO sem fuso ("2026-09-22 01:27:24") vem no horário de Brasília.
+  const iso = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3], +iso[4] + 3, +iso[5], +(iso[6] || 0))).toISOString();
   const d = new Date(s);
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
@@ -25,7 +36,23 @@ export function guessServiceCode(carrier?: string | null): string | null {
   const c = String(carrier || '').toLowerCase();
   if (c.includes('sedex')) return SERVICE_CODES.sedex;
   if (c.includes('pac')) return SERVICE_CODES.pac;
+  if (c.includes('mini')) return SERVICE_CODES.mini;
+  if (c.includes('j&t') || c.includes('jt ') || c.includes('j&t') || /\bjt\b|jte/.test(c)) return SERVICE_CODES.jt;
+  if (c.includes('jadlog')) return SERVICE_CODES.jadlog;
+  if (c.includes('loggi')) return SERVICE_CODES.loggi;
+  if (c.includes('total')) return SERVICE_CODES.total;
   return null;
+}
+
+/** Ordem de tentativa pelo formato do código, quando a transportadora é desconhecida. */
+function candidatesForCode(code: string): string[] {
+  const t = code.trim().toUpperCase();
+  const all = Object.values(SERVICE_CODES) as string[];
+  let first: string[] = [];
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(t)) first = [SERVICE_CODES.sedex, SERVICE_CODES.pac, SERVICE_CODES.mini];
+  else if (/^888\d{9,}$/.test(t)) first = [SERVICE_CODES.jt];
+  else if (/^\d{8,14}$/.test(t)) first = [SERVICE_CODES.jadlog, SERVICE_CODES.jt];
+  return [...first, ...all.filter((c) => !first.includes(c))];
 }
 
 async function callFrenet(token: string, serviceCode: string, trackingNumber: string) {
@@ -52,9 +79,10 @@ export async function fetchFrenetEvents(
   const token = Deno.env.get('FRENET_TOKEN');
   if (!token || !trackingNumber) return null;
 
+  const byFormat = candidatesForCode(trackingNumber);
   const candidates = serviceCode
-    ? [serviceCode]
-    : [SERVICE_CODES.sedex, SERVICE_CODES.pac];
+    ? [serviceCode, ...byFormat.filter((c) => c !== serviceCode)]
+    : byFormat;
 
   for (const code of candidates) {
     try {
