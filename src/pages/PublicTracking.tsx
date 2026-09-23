@@ -8,6 +8,7 @@ type TrackingData = {
   customer_name?: string | null;
   destination_city?: string | null;
   destination_state?: string | null;
+  local_delivery?: boolean;
   events: Ev[];
 };
 
@@ -96,7 +97,13 @@ export default function PublicTracking() {
           </div>
         )}
 
-        {data && !loading && (
+        {data && !loading && data.local_delivery && (
+          <div className="bg-card border rounded-lg p-6 text-center">
+            <p className="text-base font-semibold text-primary">Entrega em Valadares, MG</p>
+          </div>
+        )}
+
+        {data && !loading && !data.local_delivery && (
           <ol className="bg-card border rounded-lg divide-y">
             {data.events.map((e, i) => (
               <li key={i} className="p-4 flex gap-4">
@@ -116,9 +123,11 @@ export default function PublicTracking() {
           </ol>
         )}
 
-        <p className="text-[11px] text-muted-foreground text-center mt-6">
-          As informações são atualizadas conforme a movimentação do objeto.
-        </p>
+        {!data?.local_delivery && (
+          <p className="text-[11px] text-muted-foreground text-center mt-6">
+            As informações são atualizadas conforme a movimentação do objeto.
+          </p>
+        )}
       </main>
     </div>
   );
