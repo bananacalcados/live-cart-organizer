@@ -59,6 +59,8 @@ export function CustomerOrderActions({
 
       <ShippingTypeButtons saleId={saleId} />
 
+      <OrderTrackingLinkActions saleId={saleId} customerName={customer.name} customerPhone={customer.phone} />
+
 
       <button
         type="button"
