@@ -53,6 +53,25 @@ export const DEFAULT_STAGE_CONFIG: StageConfig = {
 
 const DAY = 86400000;
 
+/** Teto total das etapas automáticas até "enviado": nunca mais que 3 dias úteis. */
+export const MAX_STAGE_TOTAL_DAYS = 3;
+
+/** Garante que a soma das etapas automáticas nunca passe do teto. */
+export function clampStageConfig(cfg: StageConfig): StageConfig {
+  const keys: (keyof StageConfig)[] = ['em_separacao_days', 'separado_days', 'embalado_days'];
+  const out: StageConfig = { ...cfg };
+  for (const k of keys) out[k] = Math.max(0, Math.round(Number(out[k]) || 0)) as never;
+  let total = keys.reduce((s, k) => s + (out[k] as number), 0);
+  // Corta do fim para o começo até caber no teto.
+  for (let i = keys.length - 1; i >= 0 && total > MAX_STAGE_TOTAL_DAYS; i--) {
+    const excess = total - MAX_STAGE_TOTAL_DAYS;
+    const cut = Math.min(excess, out[keys[i]] as number);
+    out[keys[i]] = ((out[keys[i]] as number) - cut) as never;
+    total -= cut;
+  }
+  return out;
+}
+
 /** Soma dias úteis (ou corridos) a uma data. */
 export function addDays(from: Date, days: number, businessDays: boolean): Date {
   if (!businessDays) return new Date(from.getTime() + days * DAY);
