@@ -13,6 +13,9 @@ import { cn } from "@/lib/utils";
 import { formatCpf, isValidCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { ChatPixButton } from "@/components/ChatPixButton";
 import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
+import { SplitPaymentSetupButton } from "@/components/checkout/SplitPaymentSetupButton";
+import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 
 /** CEP visual: 00000-000. */
 function formatCep(value?: string | null): string {
@@ -515,6 +518,37 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+        {isRealOrder && (order.products || []).length > 0 && (() => {
+          const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+          const subtotal = (order.products || []).reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
+          const discount = order.discount_type && order.discount_value
+            ? order.discount_type === "percentage" ? subtotal * (Number(order.discount_value) / 100) : Number(order.discount_value)
+            : 0;
+          const ship = Number(order.shipping_cost || 0);
+          return (
+            <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-1">
+              <p className="font-semibold text-foreground">Pedido</p>
+              {(order.products || []).map((p, i) => (
+                <div key={p.id || i} className="flex justify-between gap-2">
+                  <span className="truncate">
+                    {p.quantity}x {p.title}{p.variant ? ` — ${p.variant}` : ""}
+                  </span>
+                  <span className="shrink-0">{brl((Number(p.price) || 0) * (Number(p.quantity) || 0))}</span>
+                </div>
+              ))}
+              {discount > 0 && (
+                <div className="flex justify-between text-muted-foreground"><span>Desconto</span><span>- {brl(discount)}</span></div>
+              )}
+              <div className="flex justify-between text-muted-foreground">
+                <span>Frete</span>
+                <span>{order.free_shipping ? "Grátis" : ship > 0 ? brl(ship) : "Sem frete"}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1 font-semibold text-foreground">
+                <span>Total</span><span>{brl(getOrderFinalValue(order))}</span>
+              </div>
+            </div>
+          );
+        })()}
         {!isRealOrder && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">
             Esta conversa ainda não tem pedido. Você já pode salvar a ficha — os dados ficam no
@@ -649,6 +683,15 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             Link do checkout
           </button>
         </div>
+
+        {isRealOrder && !order.is_paid && (
+          <SplitPaymentSetupButton
+            orderId={order.id}
+            total={getOrderFinalValue(order)}
+            maxInstallments={6}
+          />
+        )}
+        {isRealOrder && <SplitPartsSummary orderId={order.id} />}
 
         <div className="flex flex-wrap gap-2">
           <ChatPixButton
