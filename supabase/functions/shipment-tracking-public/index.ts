@@ -234,6 +234,26 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Enquanto o código real não é registrado na Conferência, damos sensação de
+      // movimento com duas linhas genéricas contadas a partir do "enviado".
+      if (
+        STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf('enviado') &&
+        fulfillment !== 'pickup' &&
+        !sim.real_tracking_code &&
+        !sim.delivered_at
+      ) {
+        const shippedAt = new Date(events[events.length - 1]?.at || now);
+        POST_SHIPPED_STEPS.forEach((step, i) => {
+          const when = addDays(shippedAt, step.days, cfg.business_days);
+          if (when.getTime() > now.getTime()) return;
+          events.push({
+            title: step.title,
+            detail: step.detail,
+            at: naturalTime(when, code, 10 + i),
+          });
+        });
+      }
+
       // Eventos reais da transportadora, já traduzidos e sem citar a empresa.
       const real = Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [];
       const sentAt = events.length ? new Date(events[events.length - 1].at).getTime() : 0;
