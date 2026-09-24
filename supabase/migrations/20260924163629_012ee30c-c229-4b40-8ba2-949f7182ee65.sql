@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sync_cash_register_movement_totals() FROM PUBLIC, anon, authenticated;
