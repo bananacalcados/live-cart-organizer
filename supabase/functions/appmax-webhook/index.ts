@@ -208,6 +208,16 @@ serve(async (req) => {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
 
+  // URL de validação/verificação de integridade (cadastro de app na AppMax):
+  // a AppMax exige que a resposta traga o campo external_id em formato UUID,
+  // com valor dinâmico por instalação (nunca fixo).
+  if (req.method === "GET") {
+    return new Response(
+      JSON.stringify({ ok: true, external_id: crypto.randomUUID() }),
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
+    );
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
