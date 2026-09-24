@@ -902,6 +902,7 @@ Deno.serve(async (req) => {
         // ── Envio salvo: reaplica a forma de envio escolhida antes (mesmo CEP).
         if (
           !order.is_paid &&
+          order.free_shipping !== true && // nunca derrubar frete grátis marcado pela equipe
           (order.shipping_info as any)?.source !== "member_area" &&
           reg?.cep
         ) {
@@ -2049,6 +2050,7 @@ Deno.serve(async (req) => {
       const cepDigits = String(body.cep || "").replace(/\D/g, "").slice(0, 8);
       const cached = (session as any).shipping_quote;
       const cacheFresh =
+        order.free_shipping !== true && // cotação antiga pode ser de antes do frete grátis
         cached?.cep === cepDigits &&
         Array.isArray(cached?.options) &&
         Date.now() - new Date(cached.at || 0).getTime() < 15 * 60_000;
@@ -2058,6 +2060,8 @@ Deno.serve(async (req) => {
         : (await shippingChoices(cepDigits)).options;
       const chosen = options.find((o: any) => o.id === String(body.method || ""));
       if (!chosen) return json({ ok: false, error: "Forma de envio indisponível" });
+      // Frete grátis marcado pela equipe vale sempre para o envio ao endereço.
+      if (order.free_shipping === true && chosen.id === "delivery") chosen.cost = 0;
 
       const { error: upErr } = await supabase
         .from("orders")
