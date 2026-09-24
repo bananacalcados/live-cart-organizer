@@ -1310,7 +1310,13 @@ export default function LiveMemberArea() {
       if (!cancelled) setInstallmentConfig(base);
     })();
     return () => { cancelled = true; };
-  }, [state?.order?.id]);
+  }, [
+    state?.order?.id,
+    (state?.order as any)?.event_id,
+    state?.order?.total,
+    state?.order?.free_shipping,
+    state?.order?.shipping_cost,
+  ]);
 
 
   /** Dados completos do cliente para o gateway (null = precisa liberar/preencher). */

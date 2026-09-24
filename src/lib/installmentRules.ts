@@ -77,8 +77,9 @@ export interface InstallmentOption {
 
 /**
  * Monta a lista de parcelas respeitando a regra do link.
- * - Dentro do "sem juros" do link: cobra o total cheio (ou o que o MP informar,
- *   se o emissor cobrar juros mesmo assim).
+ * - Dentro do "sem juros" do link/evento: a promessa configurada é definitiva.
+ *   A tela cobra o total cheio; o servidor desvia do MP se aquela condição do
+ *   cartão não puder ser cumprida sem juros.
  * - Acima do "sem juros" do link: acréscimo NOSSO, ignorando o "sem juros" da
  *   conta do Mercado Pago (o valor enviado ao gateway já vai com o acréscimo).
  */
@@ -98,11 +99,7 @@ export function buildInstallmentOptions(
     let hasInterest: boolean;
 
     if (i <= config.interest_free_installments) {
-      if (mp && !mp.interestFree) {
-        totalAmount = mp.totalAmount; chargeAmount = amount; hasInterest = true;
-      } else {
-        totalAmount = amount; chargeAmount = amount; hasInterest = false;
-      }
+      totalAmount = amount; chargeAmount = amount; hasInterest = false;
     } else if (mp && !mp.interestFree) {
       // O próprio Mercado Pago já cobra juros nessa parcela — não inflamos nada.
       totalAmount = mp.totalAmount; chargeAmount = amount; hasInterest = true;
