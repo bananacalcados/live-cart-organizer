@@ -441,6 +441,7 @@ async function chargeMercadoPago(
         amount: amount.toFixed(2),
         payment_method_id: String(params.mpPaymentMethodId),
       });
+      if (params.mpIssuerId) q.set("issuer.id", String(params.mpIssuerId));
       const insRes = await fetch(
         `https://api.mercadopago.com/v1/payment_methods/installments?${q.toString()}`,
         { headers: buildMpHeaders({ accessToken: mpAccount.access_token }) },
