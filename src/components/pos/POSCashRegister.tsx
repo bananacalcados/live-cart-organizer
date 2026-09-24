@@ -220,7 +220,10 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   const handleClose = async () => {
     if (!register) return;
     const closing = parseFloat(closingBalance) || 0;
-    const expected = (register.opening_balance || 0) + (register.cash_sales || 0) + (register.deposits || 0) - (register.withdrawals || 0);
+    const { data: freshReg } = await supabase.from('pos_cash_registers').select('*').eq('id', register.id).maybeSingle();
+    const r: any = freshReg || register;
+    if (r.status === 'closed') { toast.error('Este caixa já foi fechado em outra tela.'); setRegister(null); return; }
+    const expected = (r.opening_balance || 0) + (r.cash_sales || 0) + (r.deposits || 0) - (r.withdrawals || 0);
     try {
       const { error } = await supabase
         .from('pos_cash_registers')
