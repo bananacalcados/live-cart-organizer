@@ -1297,7 +1297,9 @@ export default function LiveMemberArea() {
           const { data: ev } = await supabase.rpc("get_event_installment_config", { p_event_id: evId });
           const maxInst = Number((ev as any)?.installment_max || 0);
           const minVal = Number((ev as any)?.installment_min_value || 0);
-          const total = Number(order?.total_amount ?? order?.total ?? 0);
+          // orders NÃO tem coluna de total: calcula produtos - desconto + frete.
+          // (Antes lia total_amount inexistente → 0 → sempre abaixo do mínimo.)
+          const total = getOrderFinalValue(order);
           if (maxInst > 0) {
             if (total >= minVal) { base.max_installments = maxInst; base.interest_free_installments = maxInst; }
             else base.max_installments = Math.max(base.max_installments, maxInst);
