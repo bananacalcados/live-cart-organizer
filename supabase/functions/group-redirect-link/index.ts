@@ -197,8 +197,17 @@ function hasCapacity(group: any): boolean {
 // IMPORTANTE: nunca confiar cegamente no invite_link salvo — se o link for
 // resetado/revogado no WhatsApp, o salvo vira um convite morto e ninguém entra.
 // O cache de 2 min do link (cached_invite_url) evita excesso de chamadas.
+const BLOCKED = '__blocked__';
+
 async function inviteForGroup(supabase: any, group: any): Promise<string | null> {
   const fresh = await fetchInviteLink(supabase, group);
+  if (fresh === BLOCKED) {
+    // WhatsApp travou o convite (ex.: "growth-locked"): o link salvo está morto.
+    // Tira o grupo da rotação automaticamente e segue para o próximo.
+    console.warn(`[group-redirect] grupo ${group.name} bloqueado no WhatsApp — removido da rotação`);
+    supabase.from('whatsapp_groups').update({ is_full: true }).eq('id', group.id).then(() => {});
+    return null;
+  }
   if (fresh) {
     if (fresh !== group.invite_link) {
       supabase.from('whatsapp_groups')
@@ -333,6 +342,10 @@ async function fetchUazapiInviteLink(groupId: string, token: string): Promise<st
     const pathRes = await uazapiInstance(`/group/invitelink/${encodeURIComponent(jid)}`, token, { method: 'GET' });
     const pathLink = extractInviteUrl(pathRes.data);
     if (pathRes.ok && pathLink) return pathLink;
+    const errText = JSON.stringify(pathRes.data || '').toLowerCase();
+    if (/growth-locked|not-authorized|forbidden|not admin|status 40[13]|status 436/.test(errText)) {
+      return BLOCKED;
+    }
 
     const payloads = [
       { groupjid: jid, revoke: false },
