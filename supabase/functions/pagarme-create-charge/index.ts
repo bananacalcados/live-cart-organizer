@@ -347,6 +347,43 @@ async function chargeMercadoPago(
     payment_method_id: params.mpPaymentMethodId,
     payer,
   };
+
+  // A regra configurada na Live é uma promessa ao cliente. Se o Mercado Pago
+  // não absorver os juros para este cartão/parcela, não cobramos por ele: a
+  // cascata segue para o próximo gateway, que recebe o valor nominal do pedido.
+  // Assim uma Live marcada como 10x sem juros nunca vira 7x–10x com juros.
+  let eventPromisesInterestFree = false;
+  const nInst = isDebit ? 1 : Number(params.installments || 1);
+  if (!isDebit && nInst > 1) {
+    try {
+      const { data: liveOrder } = await supabase
+        .from("orders")
+        .select("event_id, products, discount_type, discount_value, free_shipping, shipping_cost")
+        .eq("id", params.orderId)
+        .maybeSingle();
+      if (liveOrder?.event_id) {
+        const { data: liveEvent } = await supabase
+          .from("events")
+          .select("installment_min_value, installment_max")
+          .eq("id", liveOrder.event_id)
+          .maybeSingle();
+        const eventMax = Number(liveEvent?.installment_max || 0);
+        const eventMin = Number(liveEvent?.installment_min_value || 0);
+        const subtotal = (Array.isArray(liveOrder.products) ? liveOrder.products : []).reduce(
+          (sum: number, item: any) => sum + Number(item?.price || 0) * Number(item?.quantity || 1),
+          0,
+        );
+        const discount = liveOrder.discount_type === "percentage"
+          ? subtotal * (Number(liveOrder.discount_value || 0) / 100)
+          : Number(liveOrder.discount_value || 0);
+        const shipping = liveOrder.free_shipping ? 0 : Number(liveOrder.shipping_cost || 0);
+        const orderTotal = Math.max(0, subtotal - discount + shipping);
+        eventPromisesInterestFree = eventMax >= nInst && orderTotal >= eventMin;
+      }
+    } catch (eventRuleError) {
+      console.error("[mercadopago] Falha ao validar parcelamento da Live:", eventRuleError);
+    }
+  }
   // external_reference sempre presente (rastreabilidade e conciliação)
   body.external_reference = String(params.orderId);
   if (!mpAccount.is_sandbox) {
@@ -398,7 +435,6 @@ async function chargeMercadoPago(
 
   // Diagnóstico: registra se a conta MP realmente cobre "sem juros" nessa quantidade
   // de parcelas. Se não cobrir, o cliente será cobrado com juros pelo próprio MP.
-  const nInst = isDebit ? 1 : Number(params.installments || 1);
   if (nInst > 1) {
     try {
       const q = new URLSearchParams({
@@ -416,10 +452,38 @@ async function chargeMercadoPago(
           console.log(`[mercadopago] parcelamento ${nInst}x → rate=${pc.installment_rate} total=${pc.total_amount} (base ${amount})`);
           if (Number(pc.installment_rate || 0) > 0) {
             console.warn(`[mercadopago] ATENÇÃO: conta NÃO absorve juros em ${nInst}x — cliente pagará R$ ${pc.total_amount}. Configure "parcelamento sem juros" na conta MP.`);
+            if (eventPromisesInterestFree) {
+              return {
+                success: false,
+                gateway: "mercadopago",
+                error: `Mercado Pago não ofereceu ${nInst}x sem juros para este cartão — seguindo a cascata`,
+              };
+            }
           }
+        } else if (eventPromisesInterestFree) {
+          return {
+            success: false,
+            gateway: "mercadopago",
+            error: `Mercado Pago não confirmou ${nInst}x sem juros para este cartão — seguindo a cascata`,
+          };
         }
+      } else if (eventPromisesInterestFree) {
+        return {
+          success: false,
+          gateway: "mercadopago",
+          error: `Mercado Pago não confirmou o parcelamento sem juros — seguindo a cascata`,
+        };
       }
-    } catch (_) { /* diagnóstico não bloqueia a cobrança */ }
+    } catch (installmentError) {
+      if (eventPromisesInterestFree) {
+        console.error("[mercadopago] Consulta de parcelas falhou; preservando promessa sem juros:", installmentError);
+        return {
+          success: false,
+          gateway: "mercadopago",
+          error: `Não foi possível confirmar o parcelamento sem juros no Mercado Pago — seguindo a cascata`,
+        };
+      }
+    }
   }
 
   try {
