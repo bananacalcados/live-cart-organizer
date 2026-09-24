@@ -35,6 +35,7 @@ import { parseInstallmentRule } from "@/lib/installmentRules";
 
 import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution } from "@/lib/metaAttribution";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 import {
   fireInitiateCheckout,
   fireAddShippingInfo,
