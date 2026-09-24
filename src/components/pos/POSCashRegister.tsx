@@ -220,7 +220,10 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   const handleClose = async () => {
     if (!register) return;
     const closing = parseFloat(closingBalance) || 0;
-    const expected = (register.opening_balance || 0) + (register.cash_sales || 0) + (register.deposits || 0) - (register.withdrawals || 0);
+    const { data: freshReg } = await supabase.from('pos_cash_registers').select('*').eq('id', register.id).maybeSingle();
+    const r: any = freshReg || register;
+    if (r.status === 'closed') { toast.error('Este caixa já foi fechado em outra tela.'); setRegister(null); return; }
+    const expected = (r.opening_balance || 0) + (r.cash_sales || 0) + (r.deposits || 0) - (r.withdrawals || 0);
     try {
       const { error } = await supabase
         .from('pos_cash_registers')
@@ -253,17 +256,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       return;
     }
 
-    const field = showMovement === 'withdraw' ? 'withdrawals' : 'deposits';
-    const current = (register as any)[field] || 0;
-
     try {
-      const { error } = await supabase
-        .from('pos_cash_registers')
-        .update({ [field]: current + amount, notes: movementNotes || null })
-        .eq('id', register.id);
-      if (error) throw error;
-
-      // Log individual movement with counterpart account (trigger creates transfer entries)
+      // O total de sangrias/reforços é recalculado no banco pela soma da lista
+      // detalhada (trigger), evitando divergência entre telas abertas.
       const { error: movErr } = await (supabase as any).from('pos_cash_movements').insert({
         cash_register_id: register.id,
         store_id: storeId,
@@ -273,14 +268,17 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         description: movementNotes || null,
         counterpart_bank_account_id: movementCounterpart,
       });
-      if (movErr) {
-        // rollback the aggregate so total and detailed list never diverge
-        await supabase.from('pos_cash_registers').update({ [field]: current }).eq('id', register.id);
-        throw movErr;
+      if (movErr) throw movErr;
+      if (movementNotes) {
+        await supabase.from('pos_cash_registers').update({ notes: movementNotes }).eq('id', register.id);
       }
 
-
-      setRegister(r => r ? { ...r, [field]: current + amount } : r);
+      const { data: fresh } = await supabase
+        .from('pos_cash_registers')
+        .select('*')
+        .eq('id', register.id)
+        .maybeSingle();
+      if (fresh) setRegister(fresh as any);
       setShowMovement(null);
       setMovementAmount("");
       setMovementNotes("");
