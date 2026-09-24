@@ -1,0 +1,1 @@
+UPDATE public.marketing_contact_lists l SET contact_count = (SELECT count(*) FROM public.marketing_contacts c WHERE c.list_id = l.id) WHERE l.id = 'd9089231-9297-492e-9431-f009b51aba2f';
