@@ -88,8 +88,9 @@ serve(async (req) => {
         .replace(/__email__/g, rd.email || '')
         .replace(/__city__/g, rd.city || '')
         .replace(/__state__/g, rd.state || '')
-        .replace(/\{\{nome\}\}/g, rd.name || 'Cliente')
-        .replace(/\{\{telefone\}\}/g, phone);
+        .replace(/\{\{\s*(nome|primeiro_nome|first_name)\s*\}\}/gi, firstName)
+        .replace(/\{\{\s*(nome_completo|full_name)\s*\}\}/gi, rd.name || 'Cliente')
+        .replace(/\{\{\s*telefone\s*\}\}/gi, phone);
       for (const [k, v] of Object.entries(cbVars)) out = out.split(k).join(v);
       return out;
     }

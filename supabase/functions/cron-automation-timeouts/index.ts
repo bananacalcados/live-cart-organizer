@@ -94,15 +94,36 @@ serve(async (req) => {
         }
 
         if (timeoutAction === 'send_text' && timeoutMessage) {
-          // Send follow-up text message (must use template since >24h window)
-          // Note: since timeout means >24h, we can't send free-form text via Meta API
-          // We log this as a limitation
-          console.log(`[timeout] ${phone} — send_text requested but >24h window, skipping free text`);
-          // Still try if within window (the Meta API will reject if outside)
+          // Resolve variáveis ({{nome}} etc.) com os dados da cliente — antes
+          // o texto saía cru, com "{{nome}}" literal.
+          const rd = (pending.recipient_data || {}) as Record<string, string>;
+          let fullName = String(rd.name || '').trim();
+          if (!fullName) {
+            try {
+              const { data: cc } = await supabase.from('chat_contacts')
+                .select('custom_name, display_name')
+                .like('phone', `%${phone.slice(-8)}`)
+                .limit(1).maybeSingle();
+              fullName = String(cc?.custom_name || cc?.display_name || '').trim();
+            } catch (_e) { /* ignora */ }
+          }
+          const cap = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+          const first = cap(String(rd.firstName || fullName.split(/\s+/)[0] || '').trim()) || 'Cliente';
+          const full = fullName || 'Cliente';
+          const text = timeoutMessage
+            .replace(/__first_name__/g, first)
+            .replace(/__full_name__/g, full)
+            .replace(/__phone__/g, phone)
+            .replace(/__email__/g, rd.email || '')
+            .replace(/__city__/g, rd.city || '')
+            .replace(/__state__/g, rd.state || '')
+            .replace(/\{\{\s*(nome|primeiro_nome|first_name)\s*\}\}/gi, first)
+            .replace(/\{\{\s*(nome_completo|full_name)\s*\}\}/gi, full)
+            .replace(/\{\{\s*telefone\s*\}\}/gi, phone);
           await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, message: timeoutMessage, whatsappNumberId: numberId }),
+            body: JSON.stringify({ phone, message: text, whatsappNumberId: numberId }),
           });
         }
 
