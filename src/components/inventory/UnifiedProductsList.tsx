@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
 import { MultiStoreBalanceDialog, type BalanceStoreRow } from "./MultiStoreBalanceDialog";
+import { GradeStockEntryDialog } from "./GradeStockEntryDialog";
 
 interface MasterData {
   parent_sku: string;
@@ -144,6 +145,7 @@ export function UnifiedProductsList() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  const [gradeEntryOpen, setGradeEntryOpen] = useState(false);
   function toggleParent(sku: string) {
     setSelectedParents((prev) => {
       const n = new Set(prev);
@@ -415,7 +417,7 @@ export function UnifiedProductsList() {
           <Button variant="outline" className="gap-1" onClick={() => setGradeEntryOpen(true)}>
             <Boxes className="h-4 w-4" /> Entrada por grade
           </Button>
-          <GradeStockEntryDialog open={gradeEntryOpen} onOpenChange={setGradeEntryOpen} onApplied={() => loadAll?.()} />
+          <GradeStockEntryDialog open={gradeEntryOpen} onOpenChange={setGradeEntryOpen} onApplied={() => load()} />
         </CardContent>
       </Card>
 
