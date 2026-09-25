@@ -697,12 +697,15 @@ function StepEditorDialog({
     const file = e.target.files?.[0];
     if (!file) return;
     const ext = file.name.split('.').pop();
-    const fileName = `automation-media-${Date.now()}.${ext}`;
+    const safeOriginalName = file.name
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const fileName = `automation-media-${Date.now()}-${safeOriginalName || `arquivo.${ext}`}`;
     const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
     if (error) { toast.error("Erro ao enviar arquivo"); return; }
     const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
     const mediaType = file.type.startsWith("image") ? "image" : file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "document";
-    setConfig({ ...config, mediaUrl: data.publicUrl, mediaType });
+    setConfig({ ...config, mediaUrl: data.publicUrl, mediaType, fileName: file.name });
     toast.success("Arquivo anexado!");
   };
 
@@ -1345,12 +1348,15 @@ function StepEditorDialog({
               };
               const uploadForBlock = async (idx: number, file: File) => {
                 const ext = file.name.split('.').pop();
-                const fileName = `automation-media-${Date.now()}.${ext}`;
+                const safeOriginalName = file.name
+                  .replace(/[^a-zA-Z0-9._-]+/g, "-")
+                  .replace(/^-+|-+$/g, "");
+                const fileName = `automation-media-${Date.now()}-${safeOriginalName || `arquivo.${ext}`}`;
                 const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
                 if (error) { toast.error("Erro ao enviar arquivo"); return; }
                 const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
                 const mt = file.type.startsWith("image") ? "image" : file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "document";
-                updateBlock(idx, { mediaUrl: data.publicUrl, mediaType: mt, type: mt });
+                updateBlock(idx, { mediaUrl: data.publicUrl, mediaType: mt, type: mt, fileName: file.name });
                 toast.success("Anexo carregado");
               };
 
@@ -1391,7 +1397,7 @@ function StepEditorDialog({
                             {blk.mediaUrl ? (
                               <div className="flex items-center gap-2 p-2 bg-background rounded text-xs">
                                 <Paperclip className="h-3.5 w-3.5" />
-                                <span className="truncate flex-1">{blk.mediaUrl.split('/').pop()}</span>
+                                <span className="truncate flex-1">{blk.fileName || blk.mediaUrl.split('/').pop()}</span>
                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateBlock(idx, { mediaUrl: "" })}>
                                   <Trash2 className="h-3 w-3 text-destructive" />
                                 </Button>
