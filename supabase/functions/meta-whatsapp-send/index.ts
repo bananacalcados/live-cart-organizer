@@ -28,8 +28,6 @@ interface SendMessageRequest {
   mediaType?: 'image' | 'video' | 'audio' | 'document';
   media_type?: 'image' | 'video' | 'audio' | 'document';
   caption?: string;
-  fileName?: string;
-  filename?: string;
   whatsappNumberId?: string;
   whatsapp_number_id?: string;
   interactiveData?: InteractiveData;
@@ -337,13 +335,7 @@ serve(async (req) => {
       };
     } else if (normalizedType === 'document' && mediaUrl) {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'document', phoneNumberId, accessToken);
-      // The upload filename is not carried into the outbound message by Meta.
-      // Send it explicitly so WhatsApp can identify the attachment as a PDF
-      // and render the clearest document card supported by the receiving app.
-      const documentPayload: Record<string, unknown> = {
-        id: mediaId,
-        filename: rawBody.fileName || rawBody.filename || getFileName(mediaUrl, 'document'),
-      };
+      const documentPayload: Record<string, unknown> = { id: mediaId };
       if (resolvedCaption) documentPayload.caption = resolvedCaption;
 
       body = {

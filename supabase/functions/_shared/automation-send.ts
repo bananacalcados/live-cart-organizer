@@ -17,7 +17,6 @@ export type AutomationJobPayload =
       mediaUrl?: string;
       mediaType?: string;
       type?: string;
-      fileName?: string;
     }
   | {
       kind: "interactive";
@@ -113,7 +112,7 @@ export async function sendAutomationJob(
   if (["uazapi", "wasender", "zapi"].includes(provider)) {
     const fnName = payload.mediaUrl ? `${provider}-send-media` : `${provider}-send-message`;
     const body = payload.mediaUrl
-      ? { phone, mediaUrl: payload.mediaUrl, mediaType: payload.mediaType || "image", caption: payload.message || "", filename: payload.fileName, whatsapp_number_id: whatsappNumberId }
+      ? { phone, mediaUrl: payload.mediaUrl, mediaType: payload.mediaType || "image", caption: payload.message || "", whatsapp_number_id: whatsappNumberId }
       : { phone, message: payload.message, whatsapp_number_id: whatsappNumberId };
     const r = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
       method: "POST",
@@ -145,7 +144,6 @@ export async function sendAutomationJob(
       mediaUrl: payload.mediaUrl,
       mediaType: payload.mediaType,
       type: payload.type || (payload.mediaUrl ? payload.mediaType || "document" : "text"),
-      fileName: payload.fileName,
       whatsappNumberId,
     }),
   });
