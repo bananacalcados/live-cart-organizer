@@ -196,25 +196,6 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
   );
 }
 
-      <div className="space-y-2">
-        {templates.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhuma grade cadastrada ainda.</p>}
-        {templates.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 rounded-md border p-2">
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm">{t.name} <span className="text-xs text-muted-foreground">· {t.sizes.reduce((s, x) => s + x.qty, 0)} pares</span></div>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {t.sizes.map((s) => <Badge key={s.size} variant="secondary" className="text-[10px]">{s.size} × {s.qty}</Badge>)}
-              </div>
-            </div>
-            <Button size="icon" variant="ghost" onClick={() => { setEditingId(t.id); setName(t.name); setRows(t.sizes.map((s) => ({ ...s }))); }}><Pencil className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={() => remove(t)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function EntryTab({ templates, stores, onGoTemplates, onApplied }: { templates: Template[]; stores: Store[]; onGoTemplates: () => void; onApplied?: () => void }) {
   const [storeId, setStoreId] = useState("");
   const [search, setSearch] = useState("");
