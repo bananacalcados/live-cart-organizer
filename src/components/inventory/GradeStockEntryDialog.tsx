@@ -71,6 +71,12 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
   const [name, setName] = useState("");
   const [rows, setRows] = useState<SizeQty[]>([{ size: "", qty: 1 }]);
   const [saving, setSaving] = useState(false);
+  const [stdSizes, setStdSizes] = useState<string[]>([]);
+
+  useEffect(() => {
+    (supabase as any).from("product_sizes").select("label, numeric_value").order("numeric_value", { ascending: true, nullsFirst: false })
+      .then(({ data }: any) => setStdSizes(((data || []) as { label: string }[]).map((s) => s.label)));
+  }, []);
 
   const reset = () => { setEditingId(null); setName(""); setRows([{ size: "", qty: 1 }]); };
 
@@ -111,8 +117,14 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {rows.map((r, i) => (
             <div key={i} className="flex gap-1 items-center">
-              <Input className="h-8 w-16" placeholder="Tam." value={r.size}
-                onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)))} />
+              <Select value={r.size || undefined} onValueChange={(v) => setRows((p) => p.map((x, j) => (j === i ? { ...x, size: v } : x)))}>
+                <SelectTrigger className="h-8 w-20"><SelectValue placeholder="Tam." /></SelectTrigger>
+                <SelectContent>
+                  {stdSizes.filter((s) => s === r.size || !rows.some((x) => x.size === s)).map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <span className="text-xs text-muted-foreground">×</span>
               <Input className="h-8 w-14" type="number" min={1} value={r.qty}
                 onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))} />
