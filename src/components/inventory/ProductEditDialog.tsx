@@ -886,7 +886,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                     );
                   })()}
                   <p className="text-[11px] text-muted-foreground">
-                    Combinações que já existem neste produto são ignoradas (sem duplicar).
+                    Combinações que já existem não são duplicadas: os pares da entrada são somados ao estoque delas. Nada é gravado até clicar em Salvar.
                   </p>
                 </div>
 
