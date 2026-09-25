@@ -5,6 +5,7 @@ import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
 import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
+import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -154,7 +155,10 @@ function normalizeJid(jid: string | null): { phone: string; isGroup: boolean; is
   }
 
   // Injeção do 9º dígito para números BR (padrão E.164 do projeto)
-  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
+  // JID do WhatsApp (`...@s.whatsapp.net`) já vem SEMPRE com DDI. Só
+  // adicionamos 55 em número cru que realmente pareça brasileiro — senão
+  // números dos EUA (+1, 11 dígitos) viravam "55 + número" inexistente.
+  if (!raw.includes("@") && looksLikeBrLocal(digits)) digits = "55" + digits;
   if (digits.startsWith("55") && digits.length === 12) {
     const ddd = digits.substring(2, 4);
     const number = digits.substring(4);

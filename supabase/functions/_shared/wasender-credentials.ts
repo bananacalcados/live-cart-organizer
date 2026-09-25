@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { looksLikeBrLocal } from "./br-local-phone.ts";
 
 /**
  * Base URL da WasenderAPI.
@@ -33,7 +34,7 @@ export function formatWasenderJid(target: string): string {
 
   // Telefone individual: garante DDI 55 para números BR sem código de país
   let phone = digits;
-  if (phone.length >= 10 && phone.length <= 11) phone = "55" + phone;
+  if (looksLikeBrLocal(phone)) phone = "55" + phone;
   return phone;
 }
 
