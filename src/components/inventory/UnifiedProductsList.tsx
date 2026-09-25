@@ -412,6 +412,10 @@ export function UnifiedProductsList() {
             </SelectContent>
           </Select>
           <ProductFiltersBar value={filters} onChange={setFilters} />
+          <Button variant="outline" className="gap-1" onClick={() => setGradeEntryOpen(true)}>
+            <Boxes className="h-4 w-4" /> Entrada por grade
+          </Button>
+          <GradeStockEntryDialog open={gradeEntryOpen} onOpenChange={setGradeEntryOpen} onApplied={() => loadAll?.()} />
         </CardContent>
       </Card>
 
