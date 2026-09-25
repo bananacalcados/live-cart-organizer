@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
+import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
 import { GENDER_VALUES } from "@/lib/productGender";
 
 interface VariantRow {
@@ -80,10 +81,18 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   // Lote: gerador de matriz cor × tamanho + loja que recebe o estoque das variações novas
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [stockStoreId, setStockStoreId] = useState<string>("");
-  const [matrixColors, setMatrixColors] = useState("");
-  const [matrixSizes, setMatrixSizes] = useState("");
+  const [matrixColors, setMatrixColors] = useState<string[]>([]);
+  const [matrixSizes, setMatrixSizes] = useState<string[]>([]);
   const [batchStock, setBatchStock] = useState("0");
   const [batchCost, setBatchCost] = useState("");
+  const [gradeTemplates, setGradeTemplates] = useState<{ id: string; name: string; sizes: { size: string; qty: number }[] }[]>([]);
+  const [gradePicks, setGradePicks] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    (supabase as any).from("stock_grade_templates").select("id, name, sizes").order("name")
+      .then(({ data }: any) => setGradeTemplates(data || []));
+  }, [open]);
 
   useEffect(() => {
     if (!open || !masterId) return;
@@ -206,50 +215,77 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     ]);
   }
 
+  // Quantidade por tamanho vinda das grades escolhidas (tamanho -> pares por cor)
+  function gradeQtyBySize(): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const t of gradeTemplates) {
+      const times = gradePicks[t.id] || 0;
+      if (times <= 0) continue;
+      for (const r of t.sizes || []) {
+        if (!r.size) continue;
+        m.set(r.size, (m.get(r.size) || 0) + (Number(r.qty) || 0) * times);
+      }
+    }
+    return m;
+  }
+
   function generateMatrix() {
-    const colors = matrixColors.split(",").map((c) => c.trim()).filter(Boolean);
-    const sizes = matrixSizes.split(",").map((s) => s.trim()).filter(Boolean);
+    const colors = matrixColors;
+    const gradeMap = gradeQtyBySize();
+    const useGrades = gradeMap.size > 0;
+    const sizes = useGrades ? Array.from(gradeMap.keys()) : matrixSizes;
     if (!colors.length || !sizes.length) {
-      toast.error("Informe pelo menos uma cor e um tamanho.");
+      toast.error("Escolha ao menos uma cor e um tamanho (ou uma grade).");
       return;
     }
     const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-    const stock = parseInt(batchStock, 10) || 0;
+    const flatStock = parseInt(batchStock, 10) || 0;
+    const qtyFor = (s: string) => (useGrades ? gradeMap.get(s) || 0 : flatStock);
     const newRows: VariantRow[] = [];
-    let skipped = 0;
+    let added = 0;
     setVariants((arr) => {
-      const existing = new Set(arr.map((v) => `${norm(v.color)}|${norm(v.size)}`));
+      const next = [...arr];
+      const index = new Map(next.map((v, i) => [`${norm(v.color)}|${norm(v.size)}`, i]));
       for (const c of colors) {
         for (const s of sizes) {
           const key = `${norm(c)}|${norm(s)}`;
-          if (existing.has(key)) { skipped++; continue; }
-          existing.add(key);
-          newRows.push({
+          const q = qtyFor(s);
+          const idx = index.get(key);
+          if (idx != null) {
+            // Já existe: soma a entrada de pares no estoque atual
+            if (q > 0) { next[idx] = { ...next[idx], current_stock: next[idx].current_stock + q }; added++; }
+            continue;
+          }
+          const row: VariantRow = {
             _isNew: true,
             color: c,
             size: s,
             cost_price_override: batchCost.trim() || "",
             sale_price_override: "",
             weight_kg_override: "",
-            current_stock: stock,
+            current_stock: q,
             original_stock: 0,
             is_active: true,
-          });
+          };
+          index.set(key, next.length);
+          next.push(row);
+          newRows.push(row);
         }
       }
-      return [...arr, ...newRows];
+      return next;
     });
     setTimeout(() => {
-      if (newRows.length === 0) {
-        toast.info("Todas as combinações já existem neste produto.");
+      if (newRows.length === 0 && added === 0) {
+        toast.info("Nada novo: as combinações já existem e não há pares para somar.");
       } else {
         toast.success(
-          `${newRows.length} variação(ões) gerada(s)${skipped ? ` · ${skipped} já existia(m), ignorada(s)` : ""}.`
+          `${newRows.length} variação(ões) nova(s)${added ? ` · entrada somada em ${added} existente(s)` : ""}. Clique em Salvar para gravar.`
         );
       }
     }, 0);
-    setMatrixColors("");
-    setMatrixSizes("");
+    setMatrixColors([]);
+    setMatrixSizes([]);
+    setGradePicks({});
   }
 
   function removeVariant(idx: number) {
@@ -776,40 +812,81 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                   <Label className="flex items-center gap-1.5 text-sm">
                     <Sparkles className="h-4 w-4 text-primary" /> Gerar variações em lote (Cor × Tamanho)
                   </Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Cores (separadas por vírgula)</Label>
-                      <Input className="h-8" value={matrixColors} onChange={(e) => setMatrixColors(e.target.value)} placeholder="Preto, Bege, Rosa" />
-                    </div>
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Tamanhos (separados por vírgula)</Label>
-                      <Input className="h-8" value={matrixSizes} onChange={(e) => setMatrixSizes(e.target.value)} placeholder="35, 36, 37, 38" />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[11px] text-muted-foreground self-center">Grades rápidas:</span>
-                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => setMatrixSizes("33/34, 35/36, 37/38, 39/40")}>Chinelo (33/34…)</Button>
-                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => setMatrixSizes("25/26, 27/28, 29/30, 31/32, 33/34")}>Chinelo Infantil</Button>
-                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
-                      onClick={() => setMatrixSizes("34, 35, 36, 37, 38, 39, 40")}>Numérico 34-40</Button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Estoque inicial p/ cada</Label>
-                      <Input className="h-8" type="number" min="0" value={batchStock} onChange={(e) => setBatchStock(e.target.value)} />
-                    </div>
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">Custo R$ (opcional)</Label>
-                      <Input className="h-8" type="number" step="0.01" value={batchCost} onChange={(e) => setBatchCost(e.target.value)} placeholder={costPrice || "—"} />
-                    </div>
-                    <Button type="button" size="sm" variant="secondary" className="h-8" onClick={generateMatrix}>
-                      <Sparkles className="h-4 w-4 mr-1" /> Gerar variações
-                    </Button>
-                  </div>
+                  {(() => {
+                    const gm = gradeQtyBySize();
+                    const usingGrades = gm.size > 0;
+                    const totalPerColor = Array.from(gm.values()).reduce((a, b) => a + b, 0);
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Cores (cadastradas no sistema)</Label>
+                            <ColorSizeMultiCombobox kind="color" values={matrixColors} onChange={setMatrixColors} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">
+                              Tamanhos {usingGrades ? "(definidos pelas grades)" : "(cadastrados no sistema)"}
+                            </Label>
+                            {usingGrades ? (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {Array.from(gm.entries()).map(([s, q]) => (
+                                  <span key={s} className="text-xs rounded border bg-background px-1.5 py-0.5">{s}: <b>{q}</b></span>
+                                ))}
+                              </div>
+                            ) : (
+                              <ColorSizeMultiCombobox kind="size" values={matrixSizes} onChange={setMatrixSizes} />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-muted-foreground">Entrada por grade (quantas vezes chegou cada grade, por cor):</span>
+                          {gradeTemplates.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground">Nenhuma grade cadastrada. Crie em Estoque › Produtos › Entrada por grade › Grades padrão.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {gradeTemplates.map((t) => (
+                                <div key={t.id} className="flex items-center gap-1 rounded border bg-background px-2 py-1">
+                                  <span className="text-xs font-medium" title={(t.sizes || []).map((r) => `${r.size}×${r.qty}`).join(", ")}>{t.name}</span>
+                                  <Input
+                                    className="h-7 w-14 text-xs"
+                                    type="number"
+                                    min="0"
+                                    value={gradePicks[t.id] ?? ""}
+                                    placeholder="0"
+                                    onChange={(e) => setGradePicks((p) => ({ ...p, [t.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                                  />
+                                  <span className="text-[11px] text-muted-foreground">x</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">
+                              {usingGrades ? "Pares por cor (pelas grades)" : "Pares de entrada p/ cada"}
+                            </Label>
+                            {usingGrades ? (
+                              <div className="h-8 flex items-center text-sm font-semibold">
+                                {totalPerColor} pares{matrixColors.length > 1 ? ` × ${matrixColors.length} cores = ${totalPerColor * matrixColors.length}` : ""}
+                              </div>
+                            ) : (
+                              <Input className="h-8" type="number" min="0" value={batchStock} onChange={(e) => setBatchStock(e.target.value)} />
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Custo R$ (opcional)</Label>
+                            <Input className="h-8" type="number" step="0.01" value={batchCost} onChange={(e) => setBatchCost(e.target.value)} placeholder={costPrice || "—"} />
+                          </div>
+                          <Button type="button" size="sm" variant="secondary" className="h-8" onClick={generateMatrix}>
+                            <Sparkles className="h-4 w-4 mr-1" /> Gerar variações
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <p className="text-[11px] text-muted-foreground">
-                    Combinações que já existem neste produto são ignoradas (sem duplicar).
+                    Combinações que já existem não são duplicadas: os pares da entrada são somados ao estoque delas. Nada é gravado até clicar em Salvar.
                   </p>
                 </div>
 
