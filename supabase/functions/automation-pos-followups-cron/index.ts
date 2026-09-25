@@ -121,6 +121,9 @@ Deno.serve(async (req) => {
             ...(cfg.mediaUrl ? [{ type: cfg.mediaType || "document", mediaUrl: cfg.mediaUrl, mediaType: cfg.mediaType }] : []),
           ];
         for (const blk of blocks) {
+          if ((blk.type === "document" || blk.mediaType === "document") && blk.previewImageUrl) {
+            jobs.push({ kind: "text", mediaUrl: blk.previewImageUrl, mediaType: "image", type: "image" });
+          }
           jobs.push({
             kind: "text",
             message: replaceVars(blk.message || ""),

@@ -373,6 +373,15 @@ serve(async (req) => {
           for (let bi = 0; bi < rawBlocks.length; bi++) {
             const blk = rawBlocks[bi];
             const isInteractive = interactiveButtons.length > 0 && bi === lastTextIdxForInteractive;
+            if (!isInteractive && (blk.type === 'document' || blk.mediaType === 'document') && blk.previewImageUrl) {
+              const coverRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: formattedPhone, mediaUrl: blk.previewImageUrl, mediaType: 'image', type: 'image', whatsappNumberId: config.whatsappNumberId }),
+              });
+              if (!coverRes.ok) throw new Error(`Falha ao enviar capa do PDF: ${await coverRes.text()}`);
+              await new Promise(r => setTimeout(r, 800));
+            }
             const payload: any = isInteractive
               ? {
                   phone: formattedPhone,

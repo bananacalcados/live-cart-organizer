@@ -79,6 +79,31 @@ interface MetaTemplate {
   components: any[];
 }
 
+async function createPdfCover(file: File): Promise<File | null> {
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return null;
+  try {
+    const pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+    const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+    const page = await pdf.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(2, 1200 / baseViewport.width) });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+    if (!blob) return null;
+    const baseName = file.name.replace(/\.pdf$/i, "") || "catalogo";
+    return new File([blob], `${baseName}-capa.jpg`, { type: "image/jpeg" });
+  } catch (error) {
+    console.warn("Não foi possível gerar a capa do PDF", error);
+    return null;
+  }
+}
+
 // ─── Trigger / Action config ──────────────────────
 
 const TRIGGER_TYPES = [
@@ -1356,7 +1381,18 @@ function StepEditorDialog({
                 if (error) { toast.error("Erro ao enviar arquivo"); return; }
                 const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
                 const mt = file.type.startsWith("image") ? "image" : file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "document";
-                updateBlock(idx, { mediaUrl: data.publicUrl, mediaType: mt, type: mt, fileName: file.name });
+                let previewImageUrl: string | undefined;
+                if (mt === "document" && file.name.toLowerCase().endsWith(".pdf")) {
+                  const cover = await createPdfCover(file);
+                  if (cover) {
+                    const coverPath = `automation-media-${Date.now()}-${cover.name.replace(/[^a-zA-Z0-9._-]+/g, "-")}`;
+                    const { error: coverError } = await supabase.storage.from("chat-media").upload(coverPath, cover);
+                    if (!coverError) {
+                      previewImageUrl = supabase.storage.from("chat-media").getPublicUrl(coverPath).data.publicUrl;
+                    }
+                  }
+                }
+                updateBlock(idx, { mediaUrl: data.publicUrl, mediaType: mt, type: mt, fileName: file.name, previewImageUrl });
                 toast.success("Anexo carregado");
               };
 

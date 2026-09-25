@@ -769,6 +769,14 @@ serve(async (req) => {
             for (let bi = 0; bi < rawBlocks.length; bi++) {
               const blk = rawBlocks[bi];
               const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
+              if (blkType === 'document' && blk.previewImageUrl) {
+                await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phone: recipient.phone, mediaUrl: blk.previewImageUrl, mediaType: 'image', type: 'image', whatsappNumberId: (config.whatsappNumberId as string) || defaultNumberId }),
+                });
+                await new Promise(r => setTimeout(r, 800));
+              }
               const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },

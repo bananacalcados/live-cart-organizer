@@ -295,6 +295,12 @@ serve(async (req) => {
             });
           } else {
             const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
+            if (blkType === 'document' && blk.previewImageUrl) {
+              await emit(step.id, i, sendNumberId, {
+                kind: 'text', mediaUrl: blk.previewImageUrl, mediaType: 'image', type: 'image',
+              });
+              cursorMs += BLOCK_GAP_MS;
+            }
             await emit(step.id, i, sendNumberId, {
               kind: 'text',
               message: replaceVars(blk.message || ''),
