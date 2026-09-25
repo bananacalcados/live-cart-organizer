@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, Trash2, Pencil, Search, PackagePlus } from "lucide-react";
+import { Loader2, Trash2, Pencil, Search, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
 
 type SizeQty = { size: string; qty: number };
@@ -69,7 +69,8 @@ export function GradeStockEntryDialog({ open, onOpenChange, onApplied }: Props) 
 function TemplatesTab({ templates, reload }: { templates: Template[]; reload: () => void }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [rows, setRows] = useState<SizeQty[]>([{ size: "", qty: 1 }]);
+  const [rows, setRows] = useState<SizeQty[]>([]);
+  const [defaultQty, setDefaultQty] = useState(1);
   const [saving, setSaving] = useState(false);
   const [stdSizes, setStdSizes] = useState<string[]>([]);
 
@@ -78,12 +79,12 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
       .then(({ data }: any) => setStdSizes(((data || []) as { label: string }[]).map((s) => s.label)));
   }, []);
 
-  const reset = () => { setEditingId(null); setName(""); setRows([{ size: "", qty: 1 }]); };
+  const reset = () => { setEditingId(null); setName(""); setRows([]); setDefaultQty(1); };
 
   const save = async () => {
     const clean = rows.filter((r) => r.size.trim() && r.qty > 0).map((r) => ({ size: r.size.trim(), qty: Math.floor(r.qty) }));
     if (!name.trim()) return toast.error("Dê um nome à grade");
-    if (!clean.length) return toast.error("Informe ao menos um tamanho");
+    if (!clean.length) return toast.error("Selecione ao menos um tamanho");
     clean.sort((a, b) => sizeSort(a.size, b.size));
     setSaving(true);
     const q = (supabase as any).from("stock_grade_templates");
@@ -104,6 +105,16 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
     reload();
   };
 
+  const toggleSize = (s: string) => {
+    setRows((p) => {
+      if (p.some((r) => r.size === s)) return p.filter((r) => r.size !== s);
+      return [...p, { size: s, qty: defaultQty }].sort((a, b) => sizeSort(a.size, b.size));
+    });
+  };
+  const allSizes = useMemo(() => {
+    const set = new Set([...stdSizes, ...rows.map((r) => r.size)]);
+    return [...set].sort(sizeSort);
+  }, [stdSizes, rows]);
   const total = rows.reduce((s, r) => s + (r.size.trim() ? Number(r.qty) || 0 : 0), 0);
 
   return (
@@ -113,29 +124,51 @@ function TemplatesTab({ templates, reload }: { templates: Template[]; reload: ()
           <Label>Nome da grade</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Grade A feminina 34-39" />
         </div>
-        <Label>Tamanhos e quantidade por grade</Label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {rows.map((r, i) => (
-            <div key={i} className="flex gap-1 items-center">
-              <Select value={r.size || undefined} onValueChange={(v) => setRows((p) => p.map((x, j) => (j === i ? { ...x, size: v } : x)))}>
-                <SelectTrigger className="h-8 w-20"><SelectValue placeholder="Tam." /></SelectTrigger>
-                <SelectContent>
-                  {stdSizes.filter((s) => s === r.size || !rows.some((x) => x.size === s)).map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-muted-foreground">×</span>
-              <Input className="h-8 w-14" type="number" min={1} value={r.qty}
-                onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))} />
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setRows((p) => p.filter((_, j) => j !== i))}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <Label>Tamanhos (clique para marcar quantos quiser)</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Qtd. ao marcar:</span>
+              <Input type="number" min={1} className="h-7 w-14" value={defaultQty}
+                onChange={(e) => setDefaultQty(Math.max(1, parseInt(e.target.value) || 1))} />
             </div>
-          ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {allSizes.map((s) => {
+              const sel = rows.some((r) => r.size === s);
+              return (
+                <button key={s} type="button" onClick={() => toggleSize(s)}
+                  className={`h-8 min-w-10 px-2 rounded-md border text-sm font-medium transition-colors ${sel ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-accent"}`}>
+                  {s}
+                </button>
+              );
+            })}
+            {allSizes.length === 0 && <p className="text-sm text-muted-foreground">Nenhum tamanho padrão cadastrado no sistema.</p>}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => setRows(allSizes.map((s) => ({ size: s, qty: rows.find((r) => r.size === s)?.qty ?? defaultQty })))}>Marcar todos</Button>
+            <Button size="sm" variant="outline" onClick={() => setRows([])}>Limpar</Button>
+          </div>
         </div>
+        {rows.length > 0 && (
+          <div className="space-y-1">
+            <Label>Quantidade de cada tamanho</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {rows.map((r, i) => (
+                <div key={r.size} className="flex gap-1 items-center rounded-md border px-2 py-1">
+                  <span className="text-sm font-medium flex-1">{r.size}</span>
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <Input className="h-7 w-14" type="number" min={1} value={r.qty}
+                    onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, qty: Number(e.target.value) } : x)))} />
+                  <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setRows((p) => p.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => setRows((p) => [...p, { size: "", qty: 1 }])}><Plus className="h-3.5 w-3.5 mr-1" />Tamanho</Button>
           <span className="text-xs text-muted-foreground">{total} pares por grade</span>
           <div className="ml-auto flex gap-2">
             {editingId && <Button size="sm" variant="ghost" onClick={reset}>Cancelar</Button>}
