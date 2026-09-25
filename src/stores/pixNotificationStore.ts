@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 
 /**
  * Notificações de PIX/Checkout pendentes no chat do WhatsApp (PDV).
@@ -343,7 +344,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         const [{ data: openOrders }, { data: paidOrders }] = await Promise.all([
           supabase
             .from("orders")
-            .select("id, event_id, customer_id, stage, products, shipping_cost, free_shipping, created_at")
+            .select("id, event_id, customer_id, stage, products, discount_type, discount_value, shipping_cost, free_shipping, created_at")
             .in("stage", OPEN_LIVE_STAGES)
             .eq("is_paid", false)
             .is("merged_into_order_id", null)
@@ -351,7 +352,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             .limit(300),
           supabase
             .from("orders")
-            .select("id, event_id, customer_id, products, shipping_cost, free_shipping, created_at, paid_at")
+            .select("id, event_id, customer_id, products, discount_type, discount_value, shipping_cost, free_shipping, created_at, paid_at")
             .eq("is_paid", true)
             .gte("paid_at", paidSince)
             .order("paid_at", { ascending: false })
@@ -387,15 +388,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             eventById.set(String(e.id), e);
           });
 
-          const amountOf = (o: any): number => {
-            const items = Array.isArray(o.products) ? o.products : [];
-            const itemsTotal = items.reduce(
-              (acc: number, p: any) => acc + (Number(p?.price) || 0) * (Number(p?.quantity) || 1),
-              0,
-            );
-            const ship = o.free_shipping ? 0 : Number(o.shipping_cost) || 0;
-            return itemsTotal + ship;
-          };
+          const amountOf = (o: any): number => getOrderFinalValue(o);
 
           for (const o of liveRows) {
             const oid = String(o.id);
