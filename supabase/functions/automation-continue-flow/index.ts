@@ -301,6 +301,7 @@ serve(async (req) => {
               mediaUrl: blk.mediaUrl,
               mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
               type: blk.mediaUrl ? blkType : 'text',
+              fileName: blk.fileName,
             });
           }
           if (bi < rawBlocks.length - 1) cursorMs += BLOCK_GAP_MS;

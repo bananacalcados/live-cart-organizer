@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
             mediaUrl: blk.mediaUrl,
             mediaType: blk.mediaType,
             type: blk.mediaUrl ? (blk.type || blk.mediaType || "document") : "text",
+            fileName: blk.fileName,
           });
         }
       }

@@ -388,6 +388,7 @@ serve(async (req) => {
                   mediaUrl: blk.mediaUrl,
                   mediaType: blk.mediaType || (blk.type && blk.type !== 'text' ? blk.type : undefined),
                   type: blk.mediaUrl ? (blk.type || blk.mediaType || 'document') : 'text',
+                  fileName: blk.fileName,
                 };
             const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
               method: 'POST',

@@ -28,6 +28,8 @@ interface SendMessageRequest {
   mediaType?: 'image' | 'video' | 'audio' | 'document';
   media_type?: 'image' | 'video' | 'audio' | 'document';
   caption?: string;
+  fileName?: string;
+  filename?: string;
   whatsappNumberId?: string;
   whatsapp_number_id?: string;
   interactiveData?: InteractiveData;
@@ -340,7 +342,7 @@ serve(async (req) => {
       // and render the clearest document card supported by the receiving app.
       const documentPayload: Record<string, unknown> = {
         id: mediaId,
-        filename: getFileName(mediaUrl, 'document'),
+        filename: rawBody.fileName || rawBody.filename || getFileName(mediaUrl, 'document'),
       };
       if (resolvedCaption) documentPayload.caption = resolvedCaption;
 

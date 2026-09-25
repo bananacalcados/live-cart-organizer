@@ -778,6 +778,7 @@ serve(async (req) => {
                   mediaUrl: blk.mediaUrl,
                   mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
                   type: blk.mediaUrl ? blkType : 'text',
+                  fileName: blk.fileName,
                   whatsappNumberId: (config.whatsappNumberId as string) || defaultNumberId,
                 }),
               });
