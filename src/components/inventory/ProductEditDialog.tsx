@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
+import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
 import { GENDER_VALUES } from "@/lib/productGender";
 
 interface VariantRow {
@@ -80,10 +81,18 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   // Lote: gerador de matriz cor × tamanho + loja que recebe o estoque das variações novas
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [stockStoreId, setStockStoreId] = useState<string>("");
-  const [matrixColors, setMatrixColors] = useState("");
-  const [matrixSizes, setMatrixSizes] = useState("");
+  const [matrixColors, setMatrixColors] = useState<string[]>([]);
+  const [matrixSizes, setMatrixSizes] = useState<string[]>([]);
   const [batchStock, setBatchStock] = useState("0");
   const [batchCost, setBatchCost] = useState("");
+  const [gradeTemplates, setGradeTemplates] = useState<{ id: string; name: string; sizes: { size: string; qty: number }[] }[]>([]);
+  const [gradePicks, setGradePicks] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    (supabase as any).from("stock_grade_templates").select("id, name, sizes").order("name")
+      .then(({ data }: any) => setGradeTemplates(data || []));
+  }, [open]);
 
   useEffect(() => {
     if (!open || !masterId) return;
@@ -206,50 +215,77 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     ]);
   }
 
+  // Quantidade por tamanho vinda das grades escolhidas (tamanho -> pares por cor)
+  function gradeQtyBySize(): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const t of gradeTemplates) {
+      const times = gradePicks[t.id] || 0;
+      if (times <= 0) continue;
+      for (const r of t.sizes || []) {
+        if (!r.size) continue;
+        m.set(r.size, (m.get(r.size) || 0) + (Number(r.qty) || 0) * times);
+      }
+    }
+    return m;
+  }
+
   function generateMatrix() {
-    const colors = matrixColors.split(",").map((c) => c.trim()).filter(Boolean);
-    const sizes = matrixSizes.split(",").map((s) => s.trim()).filter(Boolean);
+    const colors = matrixColors;
+    const gradeMap = gradeQtyBySize();
+    const useGrades = gradeMap.size > 0;
+    const sizes = useGrades ? Array.from(gradeMap.keys()) : matrixSizes;
     if (!colors.length || !sizes.length) {
-      toast.error("Informe pelo menos uma cor e um tamanho.");
+      toast.error("Escolha ao menos uma cor e um tamanho (ou uma grade).");
       return;
     }
     const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-    const stock = parseInt(batchStock, 10) || 0;
+    const flatStock = parseInt(batchStock, 10) || 0;
+    const qtyFor = (s: string) => (useGrades ? gradeMap.get(s) || 0 : flatStock);
     const newRows: VariantRow[] = [];
-    let skipped = 0;
+    let added = 0;
     setVariants((arr) => {
-      const existing = new Set(arr.map((v) => `${norm(v.color)}|${norm(v.size)}`));
+      const next = [...arr];
+      const index = new Map(next.map((v, i) => [`${norm(v.color)}|${norm(v.size)}`, i]));
       for (const c of colors) {
         for (const s of sizes) {
           const key = `${norm(c)}|${norm(s)}`;
-          if (existing.has(key)) { skipped++; continue; }
-          existing.add(key);
-          newRows.push({
+          const q = qtyFor(s);
+          const idx = index.get(key);
+          if (idx != null) {
+            // Já existe: soma a entrada de pares no estoque atual
+            if (q > 0) { next[idx] = { ...next[idx], current_stock: next[idx].current_stock + q }; added++; }
+            continue;
+          }
+          const row: VariantRow = {
             _isNew: true,
             color: c,
             size: s,
             cost_price_override: batchCost.trim() || "",
             sale_price_override: "",
             weight_kg_override: "",
-            current_stock: stock,
+            current_stock: q,
             original_stock: 0,
             is_active: true,
-          });
+          };
+          index.set(key, next.length);
+          next.push(row);
+          newRows.push(row);
         }
       }
-      return [...arr, ...newRows];
+      return next;
     });
     setTimeout(() => {
-      if (newRows.length === 0) {
-        toast.info("Todas as combinações já existem neste produto.");
+      if (newRows.length === 0 && added === 0) {
+        toast.info("Nada novo: as combinações já existem e não há pares para somar.");
       } else {
         toast.success(
-          `${newRows.length} variação(ões) gerada(s)${skipped ? ` · ${skipped} já existia(m), ignorada(s)` : ""}.`
+          `${newRows.length} variação(ões) nova(s)${added ? ` · entrada somada em ${added} existente(s)` : ""}. Clique em Salvar para gravar.`
         );
       }
     }, 0);
-    setMatrixColors("");
-    setMatrixSizes("");
+    setMatrixColors([]);
+    setMatrixSizes([]);
+    setGradePicks({});
   }
 
   function removeVariant(idx: number) {
