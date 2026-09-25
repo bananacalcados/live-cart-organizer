@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveUazapiCredentials, uazapiInstance } from "../_shared/uazapi-credentials.ts";
+import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +46,7 @@ function mapMediaType(t: string | null): string | null {
  */
 function normalizeBRDigits(raw: string): string {
   let digits = (raw || "").split("@")[0].split(":")[0].replace(/\D/g, "");
-  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
+  if (!(raw || "").includes("@") && looksLikeBrLocal(digits)) digits = "55" + digits;
   if (digits.startsWith("55") && digits.length === 12) {
     const ddd = digits.substring(2, 4);
     const number = digits.substring(4);

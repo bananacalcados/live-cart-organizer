@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { looksLikeBrLocal } from "./br-local-phone.ts";
 
 /**
  * Credenciais e helpers da integração uazapi (uazapiGO v2).
@@ -86,7 +87,7 @@ export function formatUazapiNumber(target: string): string {
   const isGroup = target.endsWith("-group") || /^120\d{5,}$/.test(digits);
   if (isGroup) return `${digits}@g.us`;
   let phone = digits;
-  if (phone.length >= 10 && phone.length <= 11) phone = "55" + phone;
+  if (looksLikeBrLocal(phone)) phone = "55" + phone;
   return phone;
 }
 

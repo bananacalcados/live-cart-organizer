@@ -14,6 +14,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import { captureVipGroupJoins } from "./vip-group-lead-capture.ts";
+import { looksLikeBrLocal } from "./br-local-phone.ts";
 
 type AnyObj = Record<string, unknown>;
 
@@ -39,7 +40,7 @@ function phoneFromJid(jid: string): string | null {
   let digits = raw.split("@")[0].split(":")[0].replace(/\D/g, "");
   if (!digits) return null;
   // Injeção do 9º dígito (padrão E.164 do projeto)
-  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
+  if (!raw.includes("@") && looksLikeBrLocal(digits)) digits = "55" + digits;
   if (digits.startsWith("55") && digits.length === 12) {
     const ddd = digits.substring(2, 4);
     const number = digits.substring(4);
