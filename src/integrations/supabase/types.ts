@@ -19112,6 +19112,30 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_grade_templates: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sizes: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sizes?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sizes?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       stock_movements: {
         Row: {
           barcode: string | null
