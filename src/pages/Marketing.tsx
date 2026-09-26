@@ -1613,6 +1613,7 @@ export default function Marketing() {
                       Total_RFM: c.rfm_total_score || '',
                       Pedidos: c.total_orders,
                       Total_Gasto: c.total_spent,
+                      Cashback_Ativo: activeCashbackMap.get((c.phone || '').replace(/\D/g, '').slice(-8))?.total ?? '',
                       Ticket_Medio: c.avg_ticket,
                       Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
                       Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
@@ -1780,6 +1781,7 @@ export default function Marketing() {
                     {storeFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Loja: {storesList.find(s => s.id === storeFilter)?.name || storeFilter}</Badge>}
                     {sellerFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Vendedora: {sellersList.find(s => s.id === sellerFilter)?.name || sellerFilter}</Badge>}
                     {dddFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">DDD: {dddFilter}</Badge>}
+                    {cashbackFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Cashback: {cashbackFilter === 'active' ? 'Com cashback ativo' : 'Sem cashback ativo'}</Badge>}
                     {dateFrom && <Badge variant="secondary" className="text-[10px] mr-1">Depois de: {dateFrom}</Badge>}
                     {dateTo && <Badge variant="secondary" className="text-[10px] mr-1">Antes de: {dateTo}</Badge>}
                     {topN !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Top {topN}</Badge>}
@@ -1826,6 +1828,7 @@ export default function Marketing() {
                       if (presetFilters?.storeFilter && presetFilters.storeFilter !== 'all') filterSummary.push(`Loja`);
                       if (presetFilters?.sellerFilter && presetFilters.sellerFilter !== 'all') filterSummary.push(`Vendedora`);
                       if (presetFilters?.regionFilter && presetFilters.regionFilter !== 'all') filterSummary.push(`Região: ${presetFilters.regionFilter}`);
+                      if (presetFilters?.cashbackFilter && presetFilters.cashbackFilter !== 'all') filterSummary.push(`Cashback: ${presetFilters.cashbackFilter === 'active' ? 'ativo' : 'sem cashback'}`);
                       if (presetFilters?.dateFrom) filterSummary.push(`De: ${presetFilters.dateFrom}`);
                       if (presetFilters?.dateTo) filterSummary.push(`Até: ${presetFilters.dateTo}`);
                       if (presetFilters?.topN && presetFilters.topN !== 'all') filterSummary.push(`Top ${presetFilters.topN}`);
@@ -1943,6 +1946,11 @@ export default function Marketing() {
                         <div className="space-y-0.5">
                           {c.phone && <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{c.phone}</div>}
                           {c.email && <div className="flex items-center gap-1 text-muted-foreground"><Mail className="h-3 w-3" />{c.email}</div>}
+                          {activeCashbackMap.has((c.phone || '').replace(/\D/g, '').slice(-8)) && (
+                            <div className="text-[10px] font-medium text-amber-600">
+                              💵 Cashback R$ {(activeCashbackMap.get((c.phone || '').replace(/\D/g, '').slice(-8))?.total || 0).toFixed(2)}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{c.region_type === 'local' ? '🏪 GV' : c.region_type === 'online' ? '🌐' : '❓'}</Badge></TableCell>
@@ -2995,6 +3003,7 @@ export default function Marketing() {
           ...(storeFilter !== 'all' ? ['Loja'] : []),
           ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
           ...(recencyFilter !== 'all' ? ['Score de Recência RFM'] : []),
+          ...(cashbackFilter !== 'all' ? ['Cashback ativo'] : []),
           ...(topN !== 'all' ? ['Top N'] : []),
           ...(excludedPresetIds.length > 0 || includedPresetIds.length > 0 ? ['Interseção/Exclusão de presets'] : []),
         ]}
