@@ -26,6 +26,7 @@ export interface AudienceFilterBlock {
   tags?: string[];
   in_vip_group?: boolean;
   bought_live?: boolean;
+  has_active_cashback?: boolean;
   min_avg_ticket?: string;
   max_avg_ticket?: string;
   min_total_orders?: string;
@@ -202,6 +203,21 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
             <Switch
               checked={!!block.bought_live}
               onCheckedChange={(v) => onChange({ ...block, bought_live: v })}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-neutral-600">Cashback ativo</label>
+          <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 bg-white">
+            <span className="text-xs text-neutral-600">
+              {tone === "include"
+                ? "Apenas clientes com cupom de cashback não usado e dentro da validade."
+                : "Remove do público quem tem cashback ativo."}
+            </span>
+            <Switch
+              checked={!!block.has_active_cashback}
+              onCheckedChange={(v) => onChange({ ...block, has_active_cashback: v })}
             />
           </div>
         </div>
