@@ -2996,14 +2996,16 @@ export default function Marketing() {
             inc.last_purchase_op = 'before';
             inc.last_purchase_to = dateTo;
           }
-          return { include: inc, exclude: {} } as AudienceFilter;
+          const exc: any = {};
+          if (cashbackFilter === 'active') inc.has_active_cashback = true;
+          if (cashbackFilter === 'none') exc.has_active_cashback = true;
+          return { include: inc, exclude: exc } as AudienceFilter;
         })()}
         ignoredFilters={[
           ...(regionFilter !== 'all' ? ['Região (derivada)'] : []),
           ...(storeFilter !== 'all' ? ['Loja'] : []),
           ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
           ...(recencyFilter !== 'all' ? ['Score de Recência RFM'] : []),
-          ...(cashbackFilter !== 'all' ? ['Cashback ativo'] : []),
           ...(topN !== 'all' ? ['Top N'] : []),
           ...(excludedPresetIds.length > 0 || includedPresetIds.length > 0 ? ['Interseção/Exclusão de presets'] : []),
         ]}
