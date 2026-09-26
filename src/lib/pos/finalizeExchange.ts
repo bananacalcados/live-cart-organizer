@@ -373,121 +373,18 @@ export async function finalizeExchange(
   const concluded = fiscalOk;
   let posSaleId: string | null = null;
   let awaitingShipping = false;
+  let mirrorError: string | null = null;
 
   if (concluded) {
     // ── 6) Criar venda-espelho da reposição na aba Pedidos (idempotente) ──
     // Só faz sentido quando é TROCA (tem reposição). Devolução pura não gera venda.
     if (tipo === "troca") {
-      try {
-        const { data: existing } = await supabase
-          .from("pos_sales")
-          .select("id")
-          .eq("external_source", "troca")
-          .eq("external_order_id", eventId)
-          .maybeSingle();
-
-        if (existing?.id) {
-          posSaleId = (existing as any).id;
-        } else {
-          const { data: repItems } = await supabase
-            .from("trocas_devolucoes_itens")
-            .select("sku, barcode, produto_nome, tamanho, quantidade, valor_unitario")
-            .eq("troca_devolucao_id", eventId)
-            .eq("direcao", "reposicao");
-
-          if (repItems && repItems.length > 0) {
-            const subtotal = Number(valor_reposicao || 0);
-            const credito = Number(valor_devolvido || 0);
-            const diferenca = Number((subtotal - credito).toFixed(2));
-
-            // REGRA DE FATURAMENTO:
-            // • Se o pedido original foi TOTALMENTE cancelado (totalReturn), ele deixou
-            //   de contar como faturamento — logo a venda-espelho carrega o VALOR CHEIO
-            //   da reposição (sem desconto do crédito), para que loja/vendedora recebam
-            //   faturamento e comissão.
-            // • Em troca parcial, o pedido original continua ativo com os itens que
-            //   ficaram, então o crédito da devolução entra como desconto para não
-            //   contabilizar duas vezes.
-            const mirrorDiscount = totalReturn ? 0 : credito;
-            const mirrorTotal = totalReturn ? subtotal : Math.max(0, diferenca);
-            const mirrorPayment = totalReturn
-              ? "troca"
-              : (diferenca > 0.009 ? "troca_com_diferenca" : "troca");
-            const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id}${totalReturn ? " (cancelado integralmente)" : ""} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
-
-            // Busca nome do cliente para gravar no espelho (evita "Sem cliente" no dashboard)
-            let mirrorCustomerName: string | null = null;
-            if (cliente_id) {
-              const { data: cust } = await supabase
-                .from("pos_customers")
-                .select("name")
-                .eq("id", cliente_id)
-                .maybeSingle();
-              mirrorCustomerName = (cust as any)?.name || null;
-            }
-
-            const { data: newSale, error: saleErr } = await supabase
-              .from("pos_sales")
-              .insert({
-                store_id: loja_origem_id,
-                seller_id: sellerId || null,
-                customer_id: cliente_id || null,
-                customer_name: mirrorCustomerName,
-                subtotal,
-                discount: mirrorDiscount,
-                total: mirrorTotal,
-                payment_method: mirrorPayment,
-                status: "completed",
-                sale_type: "exchange",
-                external_source: "troca",
-                external_order_id: eventId,
-                // Rastreabilidade ao pedido original fica em `notes` (não usar source_order_id: FK aponta para tabela `orders` legado)
-                notes: notaTroca,
-                paid_at: new Date().toISOString(),
-                revenue_attribution: origem_canal === "site" ? "online" : "store",
-              } as any)
-
-              .select("id")
-              .single();
-
-            if (saleErr) {
-              console.error("[finalizeExchange] mirror sale insert error", saleErr);
-              await supabase
-                .from("trocas_devolucoes")
-                .update({ fase2_erro: `Venda-espelho falhou: ${saleErr.message}` } as any)
-                .eq("id", eventId);
-            } else if (newSale?.id) {
-              posSaleId = (newSale as any).id;
-              const itemsPayload = (repItems as any[]).map((r) => ({
-                sale_id: newSale.id,
-                sku: r.sku || null,
-                barcode: r.barcode || null,
-                product_name: r.produto_nome || r.sku || "Produto",
-                variant_name: r.tamanho || null,
-                size: r.tamanho || null,
-                unit_price: Number(r.valor_unitario || 0),
-                quantity: Number(r.quantidade || 0),
-                total_price: Number(r.valor_unitario || 0) * Number(r.quantidade || 0),
-              }));
-              const { error: itErr } = await supabase.from("pos_sale_items").insert(itemsPayload);
-              if (itErr) {
-                console.error("[finalizeExchange] mirror sale items insert error", itErr);
-                await supabase
-                  .from("trocas_devolucoes")
-                  .update({ fase2_erro: `Itens da venda-espelho falharam: ${itErr.message}` } as any)
-                  .eq("id", eventId);
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        // best-effort: falha aqui não invalida a troca (fiscal + estoque já OK).
-        console.error("[finalizeExchange] criação da venda-espelho da troca falhou", e);
-        await supabase
-          .from("trocas_devolucoes")
-          .update({ fase2_erro: `Venda-espelho exception: ${e?.message || String(e)}` } as any)
-          .eq("id", eventId);
-      }
+      const r = await ensureExchangeMirrorSale({
+        eventId, loja_origem_id, pedido_original_id, origem_canal, cliente_id,
+        sellerId, codigo_devolucao, valor_devolvido, valor_reposicao, totalReturn,
+      });
+      posSaleId = r.posSaleId;
+      mirrorError = r.error;
     }
 
     // ── 7) Se é troca com reposição, aguardar etapas de NF + rastreio antes de concluir ──
@@ -501,7 +398,7 @@ export async function finalizeExchange(
     } else {
       await supabase
         .from("trocas_devolucoes")
-        .update({ status: "concluida", fase2_erro: null })
+        .update({ status: "concluida", fase2_erro: mirrorError })
         .eq("id", eventId);
     }
   } else {
@@ -516,4 +413,107 @@ export async function finalizeExchange(
   }
 
   return { totalReturn, restocked, concluded, awaitingShipping, posSaleId, devolucao, atribuicao };
+}
+
+export interface EnsureMirrorParams {
+  eventId: string;
+  loja_origem_id: string;
+  pedido_original_id: string;
+  origem_canal?: string | null;
+  cliente_id?: string | null;
+  sellerId?: string | null;
+  codigo_devolucao?: string | null;
+  valor_devolvido?: number | null;
+  valor_reposicao?: number | null;
+  totalReturn: boolean;
+}
+
+/**
+ * Cria (idempotente) a venda-espelho da reposição de uma troca — base para a NF-e de envio.
+ * Obs.: revenue_attribution só aceita 'store' | 'site_pickup_only' (enum). Usar 'online'
+ * fazia o insert falhar em silêncio nas trocas do site e a NF-e de envio nunca era gerada.
+ */
+export async function ensureExchangeMirrorSale(p: EnsureMirrorParams): Promise<{ posSaleId: string | null; error: string | null }> {
+  const { eventId, loja_origem_id, pedido_original_id, origem_canal, cliente_id, sellerId, codigo_devolucao, totalReturn } = p;
+  try {
+    const { data: existing } = await supabase
+      .from("pos_sales").select("id")
+      .eq("external_source", "troca").eq("external_order_id", eventId)
+      .maybeSingle();
+    if (existing?.id) return { posSaleId: (existing as any).id, error: null };
+
+    const { data: repItems } = await supabase
+      .from("trocas_devolucoes_itens")
+      .select("sku, barcode, produto_nome, tamanho, quantidade, valor_unitario")
+      .eq("troca_devolucao_id", eventId).eq("direcao", "reposicao");
+    if (!repItems || repItems.length === 0) return { posSaleId: null, error: null };
+
+    const subtotalItens = (repItems as any[]).reduce((s, r) => s + Number(r.valor_unitario || 0) * Number(r.quantidade || 0), 0);
+    const subtotal = Number(p.valor_reposicao || 0) || subtotalItens;
+    const credito = Number(p.valor_devolvido || 0);
+    const diferenca = Number((subtotal - credito).toFixed(2));
+    // Pedido original cancelado por inteiro → espelho com valor cheio; parcial → crédito como desconto.
+    const mirrorDiscount = totalReturn ? 0 : credito;
+    const mirrorTotal = totalReturn ? subtotal : Math.max(0, diferenca);
+    const mirrorPayment = totalReturn ? "troca" : (diferenca > 0.009 ? "troca_com_diferenca" : "troca");
+    const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id}${totalReturn ? " (cancelado integralmente)" : ""} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
+
+    let mirrorCustomerName: string | null = null;
+    if (cliente_id) {
+      const { data: cust } = await supabase.from("pos_customers").select("name").eq("id", cliente_id).maybeSingle();
+      mirrorCustomerName = (cust as any)?.name || null;
+    }
+
+    const { data: newSale, error: saleErr } = await supabase
+      .from("pos_sales")
+      .insert({
+        store_id: loja_origem_id,
+        seller_id: sellerId || null,
+        customer_id: cliente_id || null,
+        customer_name: mirrorCustomerName,
+        subtotal,
+        discount: mirrorDiscount,
+        total: mirrorTotal,
+        payment_method: mirrorPayment,
+        status: "completed",
+        sale_type: "exchange",
+        external_source: "troca",
+        external_order_id: eventId,
+        notes: notaTroca,
+        paid_at: new Date().toISOString(),
+        revenue_attribution: "store",
+        sales_channel: origem_canal === "site" ? "site" : "presencial",
+      } as any)
+      .select("id").single();
+
+    if (saleErr || !newSale?.id) {
+      const msg = `Venda-espelho falhou: ${saleErr?.message || "sem id"}`;
+      console.error("[ensureExchangeMirrorSale]", msg);
+      await supabase.from("trocas_devolucoes").update({ fase2_erro: msg } as any).eq("id", eventId);
+      return { posSaleId: null, error: msg };
+    }
+
+    const itemsPayload = (repItems as any[]).map((r) => ({
+      sale_id: newSale.id,
+      sku: r.sku || null,
+      barcode: r.barcode || null,
+      product_name: r.produto_nome || r.sku || "Produto",
+      variant_name: r.tamanho || null,
+      size: r.tamanho || null,
+      unit_price: Number(r.valor_unitario || 0),
+      quantity: Number(r.quantidade || 0),
+      total_price: Number(r.valor_unitario || 0) * Number(r.quantidade || 0),
+    }));
+    const { error: itErr } = await supabase.from("pos_sale_items").insert(itemsPayload);
+    if (itErr) {
+      const msg = `Itens da venda-espelho falharam: ${itErr.message}`;
+      await supabase.from("trocas_devolucoes").update({ fase2_erro: msg } as any).eq("id", eventId);
+      return { posSaleId: newSale.id, error: msg };
+    }
+    return { posSaleId: newSale.id, error: null };
+  } catch (e: any) {
+    const msg = `Venda-espelho exception: ${e?.message || String(e)}`;
+    await supabase.from("trocas_devolucoes").update({ fase2_erro: msg } as any).eq("id", eventId);
+    return { posSaleId: null, error: msg };
+  }
 }
