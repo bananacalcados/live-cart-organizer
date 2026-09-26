@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
+import { loadExchangeNfes } from "@/lib/pos/exchangeNfe";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
