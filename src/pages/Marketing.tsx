@@ -355,6 +355,9 @@ export default function Marketing() {
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
    const [channelFilter, setChannelFilter] = useState<string>("all");
+   const [cashbackFilter, setCashbackFilter] = useState<string>("all");
+   // Cashback ativo por sufixo de 8 dígitos (cupons não usados e dentro da validade)
+   const [activeCashbackMap, setActiveCashbackMap] = useState<Map<string, { total: number; count: number; expiresAt: string }>>(new Map());
   // Paginação client-side da tabela de clientes RFM (100 por página)
   const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
@@ -647,6 +650,43 @@ export default function Marketing() {
       setSellersList((sellersRes.data || []) as any[]);
     };
     fetchMapping();
+  }, []);
+
+  // Fetch cashback ativo (não usados e dentro da validade) — agrupado por sufixo de 8 dígitos
+  useEffect(() => {
+    (async () => {
+      try {
+        const map = new Map<string, { total: number; count: number; expiresAt: string }>();
+        let from = 0;
+        const PAGE = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('internal_cashback')
+            .select('customer_phone, cashback_amount, expires_at')
+            .eq('is_used', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          const rows = (data || []) as any[];
+          for (const row of rows) {
+            const suffix = (row.customer_phone || '').replace(/\D/g, '').slice(-8);
+            if (!suffix || suffix.length !== 8) continue;
+            const prev = map.get(suffix);
+            map.set(suffix, {
+              total: (prev?.total || 0) + Number(row.cashback_amount || 0),
+              count: (prev?.count || 0) + 1,
+              expiresAt: !prev?.expiresAt || String(row.expires_at) > prev.expiresAt ? String(row.expires_at) : prev.expiresAt,
+            });
+          }
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+        setActiveCashbackMap(map);
+      } catch (err) {
+        console.error('[Marketing] active cashback fetch error:', err);
+      }
+    })();
   }, []);
 
   // Fetch saved filter presets
@@ -1134,6 +1174,12 @@ export default function Marketing() {
     const f = presetValue?.filters || presetValue;
     if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
     if (f.recencyFilter && f.recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(f.recencyFilter)) return false;
+    if (f.cashbackFilter && f.cashbackFilter !== "all") {
+      const cbSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const hasCashback = cbSuffix ? activeCashbackMap.has(cbSuffix) : false;
+      if (f.cashbackFilter === 'active' && !hasCashback) return false;
+      if (f.cashbackFilter === 'none' && hasCashback) return false;
+    }
     if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
     if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
     if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
@@ -1151,7 +1197,7 @@ export default function Marketing() {
     }
     // topN is not applied here — it's a limit, not a filter condition
     return true;
-  }, [customerStoreMap]);
+  }, [customerStoreMap, activeCashbackMap]);
 
   const filtered = customers.filter(c => {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
@@ -1168,6 +1214,12 @@ export default function Marketing() {
       } else if (!chs.includes(channelFilter)) return false;
     }
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
+    if (cashbackFilter !== "all") {
+      const cbSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const hasCashback = cbSuffix ? activeCashbackMap.has(cbSuffix) : false;
+      if (cashbackFilter === "active" && !hasCashback) return false;
+      if (cashbackFilter === "none" && hasCashback) return false;
+    }
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
