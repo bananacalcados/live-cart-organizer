@@ -917,14 +917,18 @@ function CardPaymentForm({
       {!isDebit ? (
         <div className="space-y-2">
           <Label className="text-sm">Parcelas</Label>
-          <Select value={installments} onValueChange={setInstallments}>
-            <SelectTrigger><SelectValue placeholder="SELECIONE AS PARCELAS" /></SelectTrigger>
-            <SelectContent>
-              {installmentOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Seletor NATIVO: o menu flutuante travava toques na página em alguns Android
+              (o botão Pagar parava de responder depois de escolher as parcelas). */}
+          <select
+            value={installments}
+            onChange={(e) => setInstallments(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="" disabled>SELECIONE AS PARCELAS</option>
+            {installmentOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
@@ -948,7 +952,14 @@ function CardPaymentForm({
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div
+        className="space-y-1.5"
+        onPointerDownCapture={() => {
+          // Anota o toque mesmo com o botão travado, com o motivo — para auditoria.
+          const blocked = isProcessing ? "processando" : mismatch ? `cartão parece ${mismatch}` : (!isDebit && !selectedInstallments) ? "sem parcelas" : null;
+          if (blocked) onStepEvent?.("card_pay_blocked", { method: isDebit ? "debit_card" : "credit_card", amount, detail: blocked });
+        }}
+      >
         <Button
           onClick={handleSubmit}
           disabled={isProcessing || !!mismatch || (!isDebit && !selectedInstallments)}
