@@ -761,7 +761,7 @@ export default function Marketing() {
     const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
     const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
-      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter,
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter, cashbackFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
       excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
       includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
@@ -788,6 +788,7 @@ export default function Marketing() {
     setOrdersMin(f.ordersMin || "");
     setOrdersMax(f.ordersMax || "");
     if (f.recencyFilter) setRecencyFilter(f.recencyFilter);
+    if (f.cashbackFilter) setCashbackFilter(f.cashbackFilter);
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
@@ -1270,7 +1271,7 @@ export default function Marketing() {
   // Resetar para a página 1 ao mudar qualquer filtro, busca, ordenação, topN ou presets
   useEffect(() => {
     setRfmPage(1);
-  }, [searchQuery, regionFilter, rfmFilter, dddFilter, channelFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
+  }, [searchQuery, regionFilter, rfmFilter, dddFilter, channelFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, cashbackFilter, activeCashbackMap, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
 
   const RFM_PAGE_SIZE = 100;
   const rfmTotalPages = Math.max(1, Math.ceil(filtered.length / RFM_PAGE_SIZE));
@@ -1566,6 +1567,14 @@ export default function Marketing() {
                     <SelectItem value="1">💤 R1 — Mais antigos</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={cashbackFilter} onValueChange={setCashbackFilter}>
+                  <SelectTrigger className="h-9"><Gift className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Cashback: Todos</SelectItem>
+                    <SelectItem value="active">Com cashback ativo ({activeCashbackMap.size})</SelectItem>
+                    <SelectItem value="none">Sem cashback ativo</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={topN} onValueChange={setTopN}>
                   <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1688,8 +1697,8 @@ export default function Marketing() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted-foreground">
                 {filtered.length} clientes
-                {(regionFilter !== "all" || channelFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
-                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setChannelFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
+                {(regionFilter !== "all" || channelFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || cashbackFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setChannelFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setCashbackFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
                     <X className="h-3 w-3 mr-0.5" />Limpar
                   </Button>
                 )}
