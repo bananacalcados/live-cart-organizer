@@ -355,6 +355,9 @@ export default function Marketing() {
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
    const [sizeFilter, setSizeFilter] = useState<string>("all");
    const [channelFilter, setChannelFilter] = useState<string>("all");
+   const [cashbackFilter, setCashbackFilter] = useState<string>("all");
+   // Cashback ativo por sufixo de 8 dígitos (cupons não usados e dentro da validade)
+   const [activeCashbackMap, setActiveCashbackMap] = useState<Map<string, { total: number; count: number; expiresAt: string }>>(new Map());
   // Paginação client-side da tabela de clientes RFM (100 por página)
   const [rfmPage, setRfmPage] = useState(1);
   const loadedTabsRef = useRef<Set<string>>(new Set());
@@ -649,6 +652,43 @@ export default function Marketing() {
     fetchMapping();
   }, []);
 
+  // Fetch cashback ativo (não usados e dentro da validade) — agrupado por sufixo de 8 dígitos
+  useEffect(() => {
+    (async () => {
+      try {
+        const map = new Map<string, { total: number; count: number; expiresAt: string }>();
+        let from = 0;
+        const PAGE = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('internal_cashback')
+            .select('customer_phone, cashback_amount, expires_at')
+            .eq('is_used', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          const rows = (data || []) as any[];
+          for (const row of rows) {
+            const suffix = (row.customer_phone || '').replace(/\D/g, '').slice(-8);
+            if (!suffix || suffix.length !== 8) continue;
+            const prev = map.get(suffix);
+            map.set(suffix, {
+              total: (prev?.total || 0) + Number(row.cashback_amount || 0),
+              count: (prev?.count || 0) + 1,
+              expiresAt: !prev?.expiresAt || String(row.expires_at) > prev.expiresAt ? String(row.expires_at) : prev.expiresAt,
+            });
+          }
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+        setActiveCashbackMap(map);
+      } catch (err) {
+        console.error('[Marketing] active cashback fetch error:', err);
+      }
+    })();
+  }, []);
+
   // Fetch saved filter presets
   const fetchPresets = useCallback(async () => {
     const { data } = await supabase
@@ -721,7 +761,7 @@ export default function Marketing() {
     const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
     const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
-      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter,
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter, cashbackFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
       excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
       includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
@@ -748,6 +788,7 @@ export default function Marketing() {
     setOrdersMin(f.ordersMin || "");
     setOrdersMax(f.ordersMax || "");
     if (f.recencyFilter) setRecencyFilter(f.recencyFilter);
+    if (f.cashbackFilter) setCashbackFilter(f.cashbackFilter);
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
@@ -1134,6 +1175,12 @@ export default function Marketing() {
     const f = presetValue?.filters || presetValue;
     if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
     if (f.recencyFilter && f.recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(f.recencyFilter)) return false;
+    if (f.cashbackFilter && f.cashbackFilter !== "all") {
+      const cbSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const hasCashback = cbSuffix ? activeCashbackMap.has(cbSuffix) : false;
+      if (f.cashbackFilter === 'active' && !hasCashback) return false;
+      if (f.cashbackFilter === 'none' && hasCashback) return false;
+    }
     if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
     if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
     if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
@@ -1151,7 +1198,7 @@ export default function Marketing() {
     }
     // topN is not applied here — it's a limit, not a filter condition
     return true;
-  }, [customerStoreMap]);
+  }, [customerStoreMap, activeCashbackMap]);
 
   const filtered = customers.filter(c => {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
@@ -1168,6 +1215,12 @@ export default function Marketing() {
       } else if (!chs.includes(channelFilter)) return false;
     }
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
+    if (cashbackFilter !== "all") {
+      const cbSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const hasCashback = cbSuffix ? activeCashbackMap.has(cbSuffix) : false;
+      if (cashbackFilter === "active" && !hasCashback) return false;
+      if (cashbackFilter === "none" && hasCashback) return false;
+    }
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
@@ -1218,7 +1271,7 @@ export default function Marketing() {
   // Resetar para a página 1 ao mudar qualquer filtro, busca, ordenação, topN ou presets
   useEffect(() => {
     setRfmPage(1);
-  }, [searchQuery, regionFilter, rfmFilter, dddFilter, channelFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
+  }, [searchQuery, regionFilter, rfmFilter, dddFilter, channelFilter, tagFilter, brandFilter, categoryFilter, sizeFilter, recencyFilter, cashbackFilter, activeCashbackMap, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, storeFilter, sellerFilter, topN, sortField, sortDir, includedPresetIds, excludedPresetIds]);
 
   const RFM_PAGE_SIZE = 100;
   const rfmTotalPages = Math.max(1, Math.ceil(filtered.length / RFM_PAGE_SIZE));
@@ -1514,6 +1567,14 @@ export default function Marketing() {
                     <SelectItem value="1">💤 R1 — Mais antigos</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={cashbackFilter} onValueChange={setCashbackFilter}>
+                  <SelectTrigger className="h-9"><Gift className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Cashback: Todos</SelectItem>
+                    <SelectItem value="active">Com cashback ativo ({activeCashbackMap.size})</SelectItem>
+                    <SelectItem value="none">Sem cashback ativo</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={topN} onValueChange={setTopN}>
                   <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1552,6 +1613,7 @@ export default function Marketing() {
                       Total_RFM: c.rfm_total_score || '',
                       Pedidos: c.total_orders,
                       Total_Gasto: c.total_spent,
+                      Cashback_Ativo: activeCashbackMap.get((c.phone || '').replace(/\D/g, '').slice(-8))?.total ?? '',
                       Ticket_Medio: c.avg_ticket,
                       Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
                       Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
@@ -1636,8 +1698,8 @@ export default function Marketing() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted-foreground">
                 {filtered.length} clientes
-                {(regionFilter !== "all" || channelFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
-                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setChannelFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
+                {(regionFilter !== "all" || channelFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || cashbackFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setChannelFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setCashbackFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
                     <X className="h-3 w-3 mr-0.5" />Limpar
                   </Button>
                 )}
@@ -1719,6 +1781,7 @@ export default function Marketing() {
                     {storeFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Loja: {storesList.find(s => s.id === storeFilter)?.name || storeFilter}</Badge>}
                     {sellerFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Vendedora: {sellersList.find(s => s.id === sellerFilter)?.name || sellerFilter}</Badge>}
                     {dddFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">DDD: {dddFilter}</Badge>}
+                    {cashbackFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Cashback: {cashbackFilter === 'active' ? 'Com cashback ativo' : 'Sem cashback ativo'}</Badge>}
                     {dateFrom && <Badge variant="secondary" className="text-[10px] mr-1">Depois de: {dateFrom}</Badge>}
                     {dateTo && <Badge variant="secondary" className="text-[10px] mr-1">Antes de: {dateTo}</Badge>}
                     {topN !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Top {topN}</Badge>}
@@ -1765,6 +1828,7 @@ export default function Marketing() {
                       if (presetFilters?.storeFilter && presetFilters.storeFilter !== 'all') filterSummary.push(`Loja`);
                       if (presetFilters?.sellerFilter && presetFilters.sellerFilter !== 'all') filterSummary.push(`Vendedora`);
                       if (presetFilters?.regionFilter && presetFilters.regionFilter !== 'all') filterSummary.push(`Região: ${presetFilters.regionFilter}`);
+                      if (presetFilters?.cashbackFilter && presetFilters.cashbackFilter !== 'all') filterSummary.push(`Cashback: ${presetFilters.cashbackFilter === 'active' ? 'ativo' : 'sem cashback'}`);
                       if (presetFilters?.dateFrom) filterSummary.push(`De: ${presetFilters.dateFrom}`);
                       if (presetFilters?.dateTo) filterSummary.push(`Até: ${presetFilters.dateTo}`);
                       if (presetFilters?.topN && presetFilters.topN !== 'all') filterSummary.push(`Top ${presetFilters.topN}`);
@@ -1882,6 +1946,11 @@ export default function Marketing() {
                         <div className="space-y-0.5">
                           {c.phone && <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{c.phone}</div>}
                           {c.email && <div className="flex items-center gap-1 text-muted-foreground"><Mail className="h-3 w-3" />{c.email}</div>}
+                          {activeCashbackMap.has((c.phone || '').replace(/\D/g, '').slice(-8)) && (
+                            <div className="text-[10px] font-medium text-amber-600">
+                              💵 Cashback R$ {(activeCashbackMap.get((c.phone || '').replace(/\D/g, '').slice(-8))?.total || 0).toFixed(2)}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell><Badge variant="outline" className="text-[10px]">{c.region_type === 'local' ? '🏪 GV' : c.region_type === 'online' ? '🌐' : '❓'}</Badge></TableCell>
@@ -2934,6 +3003,7 @@ export default function Marketing() {
           ...(storeFilter !== 'all' ? ['Loja'] : []),
           ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
           ...(recencyFilter !== 'all' ? ['Score de Recência RFM'] : []),
+          ...(cashbackFilter !== 'all' ? ['Cashback ativo'] : []),
           ...(topN !== 'all' ? ['Top N'] : []),
           ...(excludedPresetIds.length > 0 || includedPresetIds.length > 0 ? ['Interseção/Exclusão de presets'] : []),
         ]}
