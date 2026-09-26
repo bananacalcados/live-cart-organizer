@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
+import { ExchangeNfeActions } from "./ExchangeNfeActions";
 
 type TdEvent = Database["public"]["Tables"]["trocas_devolucoes"]["Row"];
 type TdStatus = Database["public"]["Enums"]["td_status"];
@@ -322,6 +323,7 @@ export function ExchangeSearchList({ open, onClose }: Props) {
                       )}
                     </div>
                   )}
+                  <ExchangeNfeActions ev={e} />
                 </div>
               ))}
             </div>

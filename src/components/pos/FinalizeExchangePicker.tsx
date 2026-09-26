@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
+import { loadExchangeNfes } from "@/lib/pos/exchangeNfe";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
@@ -212,38 +213,10 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     const custId = (sale as any)?.customer_id || ev.cliente_id || null;
     setCustomerId(custId);
     if (custId) await loadCustomerIntoForm(custId);
-    // NF-e da reposição, se já existir
-    const nfeId = (ev as any).nfe_reposicao_id as string | null | undefined;
-    if (nfeId) {
-      const { data: doc } = await supabase
-        .from("fiscal_documents")
-        .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
-        .eq("id", nfeId).maybeSingle();
-      if (doc) {
-        setNfeDoc({
-          id: (doc as any).id, status: (doc as any).status,
-          chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
-          xml_content: (doc as any).xml_content, rejection_message: (doc as any).rejection_message,
-        });
-      }
-    } else if (psid) {
-      // Fallback: procura NF-e vinculada à venda-espelho
-      const { data: doc } = await supabase
-        .from("fiscal_documents")
-        .select("id, status, chave_acesso, danfe_url, xml_content, rejection_message")
-        .eq("pos_sale_id", psid).eq("modelo", 55)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (doc) {
-        setNfeDoc({
-          id: (doc as any).id, status: (doc as any).status,
-          chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
-          xml_content: (doc as any).xml_content, rejection_message: (doc as any).rejection_message,
-        });
-        // Persiste vínculo para próximas aberturas
-        await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: (doc as any).id } as any).eq("id", ev.id);
-      }
-    }
-    return { psid, nfeAuthorized: nfeId ? true : false };
+    // NF-e da reposição, se já existir (id gravado, venda-espelho ou vínculo pela troca)
+    const { envio } = await loadExchangeNfes(ev as any);
+    if (envio) setNfeDoc(envio);
+    return { psid, nfeAuthorized: !!envio };
   }, [loadCustomerIntoForm]);
 
   const selectEvent = async (ev: EventRow) => {
