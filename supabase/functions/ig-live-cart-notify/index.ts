@@ -55,7 +55,12 @@ Deno.serve(async (req) => {
 
   while (Date.now() - started < 50_000) {
     const { data: jobs } = await sb.rpc("claim_ig_live_cart_notifications", { p_limit: 3 });
-    if (!jobs?.length) { await new Promise((r) => setTimeout(r, 4000)); continue; }
+    if (!jobs?.length) {
+      const { count } = await sb.from("ig_live_cart_notifications").select("id", { count: "exact", head: true }).eq("status", "pending");
+      if (!count) break; // fila vazia: encerra
+      await new Promise((r) => setTimeout(r, 3000));
+      continue;
+    }
 
     if (!accounts) {
       const { data } = await sb.from("whatsapp_numbers")
@@ -127,6 +132,14 @@ Deno.serve(async (req) => {
         await fail(errs.join(" | ").slice(0, 900));
       }
     }
+  }
+  // ainda há avisos agendados para depois: acorda outra rodada
+  const { count: left } = await sb.from("ig_live_cart_notifications").select("id", { count: "exact", head: true }).eq("status", "pending");
+  if (left) {
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ig-live-cart-notify`, {
+      method: "POST", headers: { "Content-Type": "application/json", "x-cron-secret": secret }, body: "{}",
+    }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 500));
   }
   return json({ ok: true, results });
 });
