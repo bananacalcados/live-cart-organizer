@@ -278,23 +278,16 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
-    // Novidade só no Instagram → abre o direct para ler.
-    const k = igKey(order.customer?.instagram_handle);
-    if (k && igUnread[k] && !isConversationUnread(order)) {
-      setIgHandle(k);
-      setIgOpen(true);
-      return;
-    }
+    // Tem WhatsApp → prioridade sempre é o chat de WhatsApp na instância da conversa.
     if (phone) {
-      // Tem WhatsApp → abre o chat de WhatsApp na instância da conversa.
       setChatOrder(dbOrderToLegacy(order));
       setChatOpen(true);
       return;
     }
-    // Sem WhatsApp → tenta abrir DM do Instagram.
+    // Sem WhatsApp (pedido incompleto) → abre o direct do Instagram para ler/responder.
     const handle = order.customer?.instagram_handle?.replace(/^@/, "").trim();
     if (handle) {
-      setIgHandle(handle);
+      setIgHandle(igKey(order.customer?.instagram_handle) || handle);
       setIgOpen(true);
     }
   };
