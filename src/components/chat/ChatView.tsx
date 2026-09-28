@@ -618,10 +618,52 @@ export function ChatView({
   const [pendingMediaCaption, setPendingMediaCaption] = useState("");
   const [sendingMedia, setSendingMedia] = useState(false);
 
+  const [multiItems, setMultiItems] = useState<MultiImageItem[]>([]);
+
+  const prepareMultiImages = useCallback(async (files: File[]) => {
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+    const { getMaxSizeForType, getMaxSizeLabel } = await import('@/constants/mediaLimits');
+    const out: File[] = [];
+    for (const f of files) {
+      let file = f;
+      try { file = await normalizeImageOrientation(f); } catch (e) { console.error('[ChatView] normalize failed', e); }
+      if (file.size > getMaxSizeForType(file.type)) { toast.error(`${f.name}: muito grande (limite ${getMaxSizeLabel(file.type)}).`); continue; }
+      out.push(file);
+    }
+    return out;
+  }, []);
+
+  const closeMulti = useCallback(() => {
+    setMultiItems((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
+  }, []);
+
+  const confirmMulti = useCallback(async (items: MultiImageItem[], onProgress: (n: number) => void) => {
+    if (!onSendMedia) return;
+    let failed = 0;
+    for (let i = 0; i < items.length; i++) {
+      const url = await uploadMediaToStorage(items[i].file);
+      if (url) onSendMedia(url, 'image', items[i].caption.trim() || undefined);
+      else failed++;
+      onProgress(i + 1);
+      if (i < items.length - 1) await new Promise((r) => setTimeout(r, 1500));
+    }
+    if (failed) toast.error(`${failed} foto(s) não foram enviadas.`);
+    closeMulti();
+  }, [onSendMedia, closeMulti]);
+
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const rawFile = event.target.files?.[0];
+    const allFiles = Array.from(event.target.files || []);
+    const rawFile = allFiles[0];
     if (!rawFile || !onSendMedia) return;
     event.target.value = '';
+
+    if (allFiles.length > 1) {
+      const imgs = allFiles.filter((f) => f.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
+      if (imgs.length > MAX_MULTI_IMAGES) toast.info(`Só as primeiras ${MAX_MULTI_IMAGES} fotos foram adicionadas.`);
+      const prepared = await prepareMultiImages(imgs.slice(0, MAX_MULTI_IMAGES));
+      if (prepared.length) setMultiItems(makeMultiImageItems(prepared));
+      return;
+    }
 
     let file = rawFile;
     // Imagens (foto tirada na hora pela câmera inclusive): redimensiona/re-encoda para
@@ -1306,7 +1348,15 @@ export function ChatView({
                 <PopoverContent className="w-auto p-2" align="start" side="top">
                   <div className="flex flex-col gap-1">
                     {/* Galeria / arquivos */}
-                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                    <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
+                    <MultiImageSendDialog
+                      open={multiItems.length > 0}
+                      items={multiItems}
+                      onItemsChange={setMultiItems}
+                      onCancel={closeMulti}
+                      onConfirm={confirmMulti}
+                      prepareFiles={prepareMultiImages}
+                    />
                     <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
                     <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
                     {/* Câmera ao vivo (tirar foto / gravar vídeo na hora) — capture abre a câmera direto no mobile */}
