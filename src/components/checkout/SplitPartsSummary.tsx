@@ -61,11 +61,21 @@ export function SplitPartsSummary({ orderId, saleId, className }: { orderId?: st
     setParts(rows);
   }, [orderId, saleId]);
 
+  // Sem conferência periódica: o webhook do gateway grava o pagamento e o
+  // banco avisa esta tela na hora (tempo real).
   useEffect(() => {
     load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
-  }, [load]);
+    const ch = supabase.channel(`split-parts-${orderId || saleId}`);
+    if (orderId) {
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "payment_splits", filter: `order_id=eq.${orderId}` }, () => load());
+      ch.on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${orderId}` }, () => load());
+    }
+    if (saleId) {
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "payment_splits", filter: `sale_id=eq.${saleId}` }, () => load());
+    }
+    ch.subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load, orderId, saleId]);
 
   if (!parts.length) return null;
 
