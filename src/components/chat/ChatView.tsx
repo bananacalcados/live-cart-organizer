@@ -82,7 +82,7 @@ interface ChatViewProps {
   /** Pode devolver `false` (ou Promise<false>) quando o envio NÃO foi aceito — o rascunho é mantido. */
   onSendMessage: (overrideText?: string) => void | boolean | Promise<void | boolean>;
   onSendAudio?: (audioUrl: string) => void;
-  onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
+  onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void | Promise<unknown>;
   onDeleteMessage?: (msg: Message) => Promise<void>;
   onEditMessage?: (msg: Message, newText: string) => Promise<void>;
   onBack?: () => void;
@@ -643,7 +643,7 @@ export function ChatView({
     let failed = 0;
     for (let i = 0; i < items.length; i++) {
       const url = await uploadMediaToStorage(items[i].file);
-      if (url) onSendMedia(url, 'image', items[i].caption.trim() || undefined);
+      if (url) await onSendMedia(url, 'image', items[i].caption.trim() || undefined);
       else failed++;
       onProgress(i + 1);
       if (i < items.length - 1) await new Promise((r) => setTimeout(r, 1500));
