@@ -677,18 +677,20 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                     needsUnify && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background animate-pulse",
                   )}
                 >
-                  {unread && (
-                    <span className="absolute -top-2 left-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
-                      Não lida
-                    </span>
-                  )}
-                  {!paidCard && igUnread[igKey(order.customer?.instagram_handle)] && (
-                    <span className={cn(
-                      "absolute -top-2 z-10 rounded-full bg-pink-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow",
-                      unread ? "right-8" : "left-2",
-                    )}>
-                      {igUnread[igKey(order.customer?.instagram_handle)] === "comment" ? "Não lida · comentou na live" : "Não lida · direct"}
-                    </span>
+                  {/* Selos de novidade: dentro do card, em linha própria, sem cortar no topo */}
+                  {!paidCard && (unread || igUnread[igKey(order.customer?.instagram_handle)]) && (
+                    <div className="flex flex-wrap items-center gap-1 pr-7 -mb-0.5">
+                      {unread && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white shadow">
+                          Não lida
+                        </span>
+                      )}
+                      {igUnread[igKey(order.customer?.instagram_handle)] && (
+                        <span className="inline-flex items-center rounded-full bg-pink-600 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white shadow">
+                          {igUnread[igKey(order.customer?.instagram_handle)] === "comment" ? "Não lida · comentou na live" : "Não lida · direct"}
+                        </span>
+                      )}
+                    </div>
                   )}
 
 
