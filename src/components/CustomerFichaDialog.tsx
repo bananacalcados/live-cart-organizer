@@ -464,6 +464,39 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       // Save first to ensure pre-fill works
       await handleSave();
 
+      // 0) Pagamento dividido: a Área de Membros cobra o total, então enviamos o
+      //    link do checkout, que cobra só as partes ainda pendentes.
+      const { data: splitRows } = await supabase
+        .from("payment_splits" as any)
+        .select("method, charge_amount, status")
+        .eq("order_id", order.id)
+        .order("seq");
+      const activeSplits = ((splitRows as any[]) || []).filter(
+        (p) => !["refunded", "canceled"].includes(p.status),
+      );
+      if (activeSplits.length) {
+        const pending = activeSplits.filter((p) => p.status !== "approved");
+        if (!pending.length) {
+          toast.info("Todas as partes já estão pagas.");
+          return;
+        }
+        const brl = (v: number) => `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
+        const lbl: Record<string, string> = { pix: "Pix", credit: "cartão de crédito", debit: "cartão de débito" };
+        const paidAny = activeSplits.some((p) => p.status === "approved");
+        const greet = form.full_name?.split(" ")[0] || (order.customer?.instagram_handle || "");
+        const falta = pending.map((p) => `${brl(p.charge_amount)} no ${lbl[p.method] || p.method}`).join(" + ");
+        const message =
+          `Olá ${greet}! 🍌\n\n` +
+          (paidAny ? `Recebemos a primeira parte ✅ ` : ``) +
+          `Falta pagar ${falta}. É só finalizar aqui:\n\n${paymentLink}`;
+        const { error } = await supabase.functions.invoke("zapi-send-message", {
+          body: { phone, message, linkPreview: false },
+        });
+        if (error) throw error;
+        toast.success(`Link enviado só com o que falta: ${falta}`);
+        return;
+      }
+
       // 1) Mensagem inicial configurada na Live (instância não-API / uazapi),
       //    com rodízio de variações e tokens {checkout_link} / {member_area_link}.
       const { data: waData, error: waError } = await supabase.functions.invoke(
