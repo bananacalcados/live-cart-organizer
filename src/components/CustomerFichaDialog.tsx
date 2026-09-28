@@ -16,6 +16,19 @@ import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import { SplitPaymentSetupButton } from "@/components/checkout/SplitPaymentSetupButton";
 import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
+
+/** Envia pela instância configurada na Live (nunca pela Z-API padrão, que pode estar vencida). */
+async function sendViaLiveInstance(eventId: string | null | undefined, phone: string, message: string) {
+  let numberId: string | null = null;
+  if (eventId) {
+    const { data: ev } = await supabase.from("events").select("wa_initial_number_id").eq("id", eventId).maybeSingle();
+    numberId = (ev as any)?.wa_initial_number_id || null;
+  }
+  if (!numberId) throw new Error("A live não tem instância de WhatsApp configurada (etapa MENSAGEM).");
+  const { data: num } = await supabase.from("whatsapp_numbers_safe" as any).select("provider").eq("id", numberId).maybeSingle();
+  await posSendText({ provider: (num as any)?.provider, phone, message, numberId });
+}
 
 /** CEP visual: 00000-000. */
 function formatCep(value?: string | null): string {
@@ -489,10 +502,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           `Olá ${greet}! 🍌\n\n` +
           (paidAny ? `Recebemos a primeira parte ✅ ` : ``) +
           `Falta pagar ${falta}. É só finalizar aqui:\n\n${paymentLink}`;
-        const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone, message, linkPreview: false },
-        });
-        if (error) throw error;
+        await sendViaLiveInstance(order.event_id, phone, message);
         toast.success(`Link enviado só com o que falta: ${falta}`);
         return;
       }
@@ -521,10 +531,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           : `Sua ficha está pré-preenchida. Para concluir, é só revisar e finalizar o pagamento aqui:\n\n`) +
         `${link}`;
 
-      const { error } = await supabase.functions.invoke("zapi-send-message", {
-        body: { phone, message, linkPreview: false },
-      });
-      if (error) throw error;
+      await sendViaLiveInstance(order.event_id, phone, message);
 
       toast.success("Link enviado no WhatsApp (mensagem padrão)");
     } catch (e: any) {

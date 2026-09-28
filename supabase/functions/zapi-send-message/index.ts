@@ -73,8 +73,12 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('Z-API error:', data);
+      const raw = String(data?.error || data?.message || '');
+      const friendly = /subscribe to this instance/i.test(raw)
+        ? 'A assinatura desta instância Z-API venceu. Envie por outra instância (uazapi/WaSender/Meta) ou renove a Z-API.'
+        : 'Falha ao enviar pela Z-API';
       return new Response(
-        JSON.stringify({ error: 'Failed to send message', details: data }),
+        JSON.stringify({ error: friendly, details: data }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
