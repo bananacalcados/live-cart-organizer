@@ -74,8 +74,10 @@ function computeOrderTotal(order: any): number {
 
 // Tolerância de centavos no match de valor.
 const AMOUNT_TOLERANCE = 0.05;
-// Janela curta para aceitar match por telefone.
-const PHONE_MATCH_WINDOW_MIN = 30;
+// Janela para aceitar match por telefone + valor exato (pedido único).
+// Era 30 min: pedidos da live criados horas antes do pagamento ficavam órfãos
+// quando uma tentativa AppMax paralela sobrescrevia o appmax_order_id.
+const PHONE_MATCH_WINDOW_MIN = 72 * 60;
 
 function amountsMatch(a: number | null | undefined, b: number | null | undefined): boolean {
   if (a == null || b == null) return false;
@@ -175,7 +177,11 @@ async function findOrder(
           .order("created_at", { ascending: false })
           .limit(10);
 
-        const matched = (orders || []).find((o: any) => amountsMatch(computeOrderTotal(o), gatewayTotal));
+        // Só aceita quando existe UM único pedido em aberto com o mesmo valor
+        // (evita marcar o pedido errado quando a cliente tem dois iguais).
+        const candidates = (orders || []).filter((o: any) => amountsMatch(computeOrderTotal(o), gatewayTotal));
+        const matched = candidates.length === 1 ? candidates[0] : null;
+        if (candidates.length > 1) console.warn(`[appmax] Strategy 3: ${candidates.length} pedidos com mesmo valor — sem match automático.`);
         if (matched) {
           console.log(`[appmax] Strategy 3: order ${matched.id} casou por telefone + valor ${gatewayTotal}`);
           return { source: "orders", record: matched, strategy: "phone_amount" };
