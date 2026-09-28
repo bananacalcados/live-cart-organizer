@@ -371,7 +371,7 @@ export function InstagramDMChat({
         body: { username: handle, message: text, eventId, fallbackCommentId: effectiveCommentId },
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);
       await persistOutgoingMessage({
         messageId: (data as any)?.messageId || null,
         phone: (data as any)?.ig_user_id || igUserId,
