@@ -42,6 +42,7 @@ import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
 import type { FollowupTemplate } from "./events/EventFollowupTemplates";
 import { PixCopyMessage } from "./chat/PixCopyMessage";
 import { QuotedMessagePreview, type QuotedMessageData } from "./chat/QuotedMessagePreview";
+import { MultiImageSendDialog, makeMultiImageItems, MAX_MULTI_IMAGES, type MultiImageItem } from "./chat/MultiImageSendDialog";
 
 interface Message {
   id: string;
@@ -901,9 +902,78 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     handleTemplateSelect(msg);
   };
 
+  const prepareMultiImages = async (files: File[]) => {
+    const { getMaxSizeForType, getMaxSizeLabel } = await import('@/constants/mediaLimits');
+    let normalize: ((f: File) => Promise<File>) | null = null;
+    try { normalize = (await import('@/lib/imageOrientation')).normalizeImageOrientation; } catch { /* opcional */ }
+    const out: File[] = [];
+    for (const f of files) {
+      let file = f;
+      if (normalize) { try { file = await normalize(f); } catch { /* mantém original */ } }
+      if (file.size > getMaxSizeForType(file.type)) { toast.error(`${f.name}: muito grande (limite ${getMaxSizeLabel(file.type)}).`); continue; }
+      out.push(file);
+    }
+    return out;
+  };
+
+  const closeMulti = () => {
+    setMultiItems((prev) => { prev.forEach((i) => URL.revokeObjectURL(i.previewUrl)); return []; });
+  };
+
+  const confirmMulti = async (items: MultiImageItem[], onProgress: (n: number) => void) => {
+    const targetId = isIgMode && igUserId ? igUserId : phone;
+    const storedPhone = isIgMode && igUserId ? igUserId : normalizedPhone;
+    if (isIgMode && !targetId) { toast.error('Esta cliente ainda não tem conversa no Direct.'); return; }
+    // Citação só na primeira foto.
+    let quotedId = quotedMessage?.message_id || null;
+    let failed = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const caption = it.caption.trim();
+      const mediaUrl = await uploadMediaToStorage(it.file);
+      if (!mediaUrl) { failed++; onProgress(i + 1); continue; }
+      const result = await sendMessage(targetId, caption, 'image', mediaUrl, caption || undefined, quotedId);
+      if (result.success) {
+        await supabase.from('whatsapp_messages').insert({
+          phone: storedPhone,
+          message: caption || '[image]',
+          direction: 'outgoing',
+          status: 'sent',
+          media_type: 'image',
+          media_url: mediaUrl,
+          message_id: result.messageId || null,
+          whatsapp_number_id: effectiveNumberId || null,
+          channel: getProvider() === 'instagram' || getProvider() === 'messenger' ? getProvider() : 'whatsapp',
+          sender_user_id: currentUserId || null,
+          quoted_message_id: quotedId,
+        });
+        quotedId = null;
+      } else {
+        failed++;
+      }
+      onProgress(i + 1);
+      if (i < items.length - 1) await new Promise((r) => setTimeout(r, 1500));
+    }
+    if (failed < items.length) {
+      updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+      setQuotedMessage(null);
+    }
+    if (failed) toast.error(`${failed} foto(s) não foram enviadas.`);
+    closeMulti();
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const allFiles = Array.from(event.target.files || []);
+    const file = allFiles[0];
     if (!file) return;
+    if (allFiles.length > 1) {
+      event.target.value = '';
+      const imgs = allFiles.filter((f) => f.type.startsWith('image/'));
+      if (imgs.length > MAX_MULTI_IMAGES) toast.info(`Só as primeiras ${MAX_MULTI_IMAGES} fotos foram adicionadas.`);
+      const prepared = await prepareMultiImages(imgs.slice(0, MAX_MULTI_IMAGES));
+      if (prepared.length) setMultiItems(makeMultiImageItems(prepared));
+      return;
+    }
 
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
     if (file.size > getMaxSizeForType(file.type)) {
@@ -1479,7 +1549,15 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Hidden file inputs */}
-      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
+      <MultiImageSendDialog
+        open={multiItems.length > 0}
+        items={multiItems}
+        onItemsChange={setMultiItems}
+        onCancel={closeMulti}
+        onConfirm={confirmMulti}
+        prepareFiles={prepareMultiImages}
+      />
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
 
       {/* WhatsApp-style Header */}
