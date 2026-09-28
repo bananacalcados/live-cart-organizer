@@ -32,6 +32,7 @@ import {
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
 import { parseInstallmentRule } from "@/lib/installmentRules";
+import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 
 import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution } from "@/lib/metaAttribution";
@@ -2333,22 +2334,30 @@ export default function LiveMemberArea() {
                     </Button>
                   ) : payForm ? (
                     <div className="rounded-2xl border-2 border-border p-3">
-                      <StepPayment
+                      <SplitPaymentPanel
                         orderId={order.id}
-                        amount={order.total}
-                        products={(order.products || []).map((p: any) => ({
-                          title: p.title,
-                          variant: p.variant,
-                          price: Number(p.effective_price ?? p.price ?? 0),
-                          quantity: Number(p.quantity || 1),
-                          image: p.image,
-                        }))}
+                        total={order.total}
                         form={payForm}
-                        installmentConfig={installmentConfig}
-                        stepBadge={null}
-                        onPaymentConfirmed={handlePaymentConfirmed}
-                        onStepEvent={trackStep}
-                      />
+                        maxInstallments={Math.min(installmentConfig.max_installments || 6, 12)}
+                        onPaid={handlePaymentConfirmed}
+                      >
+                        <StepPayment
+                          orderId={order.id}
+                          amount={order.total}
+                          products={(order.products || []).map((p: any) => ({
+                            title: p.title,
+                            variant: p.variant,
+                            price: Number(p.effective_price ?? p.price ?? 0),
+                            quantity: Number(p.quantity || 1),
+                            image: p.image,
+                          }))}
+                          form={payForm}
+                          installmentConfig={installmentConfig}
+                          stepBadge={null}
+                          onPaymentConfirmed={handlePaymentConfirmed}
+                          onStepEvent={trackStep}
+                        />
+                      </SplitPaymentPanel>
                       <button
                         type="button"
                         onClick={() => goCheckout("pix")}
