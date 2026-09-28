@@ -190,7 +190,8 @@ Deno.serve(async (req) => {
         transaction_amount: Number(s.charge_amount),
         token: body.mpCardToken,
         payment_method_id: body.mpPaymentMethodId,
-        installments: isDebit ? 1 : s.installments,
+        // Cliente pode escolher de 1x até o teto combinado na divisão.
+        installments: isDebit ? 1 : Math.min(Math.max(1, Math.floor(Number(body.installments) || s.installments || 1)), Math.max(Number(s.installments) || 1, 6)),
         binary_mode: true,
         capture: true,
         statement_descriptor: "BANANACALCAD",

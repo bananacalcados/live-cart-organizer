@@ -177,7 +177,7 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
 
       {active && (active.method === "pix"
         ? <SplitPixPart key={active.id} part={active} form={form} onApproved={load} />
-        : <SplitCardPart key={active.id} part={active} form={form} onApproved={load} />)}
+        : <SplitCardPart key={active.id} part={active} form={form} maxInstallments={maxInstallments} onApproved={load} />)}
       {allPaid && <p className="text-center text-sm font-semibold">Todas as partes pagas ✅</p>}
     </div>
   );
@@ -309,30 +309,33 @@ function SplitPixPart({ part, form, onApproved }: { part: Part; form: Payer; onA
   );
 }
 
-function SplitCardPart({ part, form, onApproved }: { part: Part; form: Payer; onApproved: () => void }) {
+function SplitCardPart({ part, form, maxInstallments, onApproved }: { part: Part; form: Payer; maxInstallments: number; onApproved: () => void }) {
   const [number, setNumber] = useState("");
-  const [holder, setHolder] = useState(form.fullName || "");
+  const [holder, setHolder] = useState("");
   const [exp, setExp] = useState("");
   const [cvv, setCvv] = useState("");
   const [busy, setBusy] = useState(false);
   const isDebit = part.method === "debit";
+  const maxInst = Math.max(1, maxInstallments, part.installments || 1);
+  const [inst, setInst] = useState(isDebit ? 1 : Math.min(part.installments || 1, maxInst));
+  const perInst = Number(part.charge_amount) / inst;
 
   useEffect(() => { initMercadoPago(); }, []);
 
   const pay = async () => {
     const [mm, yy] = exp.split("/").map((s) => s.trim());
-    if (number.replace(/\D/g, "").length < 13 || !mm || !yy || cvv.length < 3 || !holder) {
+    if (number.replace(/\D/g, "").length < 13 || !mm || !yy || cvv.length < 3 || !holder.trim()) {
       toast.error("Preencha os dados do cartão"); return;
     }
     setBusy(true);
     try {
       const tok = await tokenizeCardMP({
-        number: number.replace(/\D/g, ""), holderName: holder, expMonth: mm.padStart(2, "0"),
+        number: number.replace(/\D/g, ""), holderName: holder.trim(), expMonth: mm.padStart(2, "0"),
         expYear: yy.length === 2 ? `20${yy}` : yy, cvv, cpf: form.cpf.replace(/\D/g, ""),
       }, isDebit ? "debit" : "credit");
       if (!tok) throw new Error(isDebit ? "Este cartão não aceita débito" : "Não foi possível validar o cartão");
       const d = await call({
-        action: "charge_card", splitId: part.id, ...tok, attemptId: crypto.randomUUID(),
+        action: "charge_card", splitId: part.id, ...tok, installments: isDebit ? 1 : inst, attemptId: crypto.randomUUID(),
         customer: { name: form.fullName, email: form.email, cpf: form.cpf },
       });
       if (!d.success) throw new Error("Pagamento recusado. Confira os dados ou tente outro cartão.");
@@ -346,16 +349,30 @@ function SplitCardPart({ part, form, onApproved }: { part: Part; form: Payer; on
     <div className="rounded-lg border border-border p-3 space-y-3">
       <p className="text-sm font-semibold flex items-center gap-2">
         <CreditCard className="h-4 w-4" /> Parte {part.seq}: {isDebit ? "Débito" : "Crédito"} {BRL(part.charge_amount)}
-        {!isDebit && part.installments > 1 ? ` em ${part.installments}x` : ""}
       </p>
       <Input placeholder="Número do cartão" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} />
-      <Input placeholder="Nome impresso no cartão" value={holder} onChange={(e) => setHolder(e.target.value)} />
+      <Input placeholder="Nome impresso no cartão" autoComplete="cc-name" value={holder} onChange={(e) => setHolder(e.target.value.toUpperCase())} />
       <div className="flex gap-2">
         <Input placeholder="MM/AA" value={exp} onChange={(e) => setExp(e.target.value)} />
         <Input placeholder="CVV" inputMode="numeric" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, ""))} />
       </div>
+      {!isDebit && (
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Parcelas</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={inst}
+            onChange={(e) => setInst(Number(e.target.value))}
+          >
+            {Array.from({ length: maxInst }, (_, k) => k + 1).map((n) => (
+              <option key={n} value={n}>{n}x de {BRL(Number(part.charge_amount) / n)} sem juros</option>
+            ))}
+          </select>
+        </div>
+      )}
       <Button className="w-full" disabled={busy} onClick={pay}>
-        {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Pagar {BRL(part.charge_amount)}
+        {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+        {isDebit || inst === 1 ? `Pagar ${BRL(part.charge_amount)}` : `Pagar ${inst}x de ${BRL(perInst)}`}
       </Button>
     </div>
   );
