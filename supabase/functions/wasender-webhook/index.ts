@@ -15,6 +15,23 @@ function asString(v: unknown): string | null {
   return String(v);
 }
 
+function findQuotedMessageId(msg: Record<string, any>, rawMessage: Record<string, any>): string | null {
+  const direct =
+    asString(msg?.quotedMessageId) ||
+    asString(msg?.quoted?.key?.id) ||
+    asString(msg?.quoted?.messageId) ||
+    asString(msg?.contextInfo?.stanzaId);
+  if (direct) return direct;
+
+  for (const value of Object.values(rawMessage)) {
+    if (!value || typeof value !== "object") continue;
+    const context = (value as Record<string, any>).contextInfo;
+    const stanzaId = asString(context?.stanzaId) || asString(context?.quotedMessageId);
+    if (stanzaId) return stanzaId;
+  }
+  return null;
+}
+
 const MEDIA_KEYS: Record<string, string> = {
   imageMessage: "image",
   videoMessage: "video",
@@ -236,6 +253,7 @@ serve(async (req) => {
 
       // Detecta mídia no objeto raw `message`
       const rawMessage = (msg?.message || {}) as Record<string, any>;
+      const quotedMessageId = findQuotedMessageId(msg, rawMessage);
       let mediaType: string | null = null;
       let mediaObjKey: string | null = null;
       for (const k of Object.keys(MEDIA_KEYS)) {
@@ -274,6 +292,7 @@ serve(async (req) => {
         messageId,
         senderName: pushName,
         ...(isGroup && participantPhone ? { participantPhone } : {}),
+        ...(quotedMessageId ? { quotedMsg: { messageId: quotedMessageId } } : {}),
       };
 
 

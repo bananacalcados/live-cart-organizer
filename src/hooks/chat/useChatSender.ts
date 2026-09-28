@@ -30,7 +30,7 @@ export interface SendRoute {
 export interface SendBaseParams {
   phone: string;
   route: SendRoute;
-  /** ID da mensagem citada (apenas Z-API/WhatsApp). */
+  /** ID da mensagem citada no WhatsApp. */
   quotedMessageId?: string | null;
   senderUserId?: string | null;
   senderName?: string | null;
@@ -131,6 +131,7 @@ export function useChatSender() {
               message: text,
               whatsapp_number_id: route.numberId,
               ...(isMedia ? { media_url: mediaUrl, media_type: mediaType } : {}),
+              quotedMessageId: quotedMessageId || undefined,
             },
             headers: invokeHeaders,
           });
@@ -146,6 +147,7 @@ export function useChatSender() {
                 mediaType,
                 caption: (params as SendMediaParams).caption,
                 whatsapp_number_id: route.numberId,
+                quotedMessageId: quotedMessageId || undefined,
               }
             : {
                 phone,

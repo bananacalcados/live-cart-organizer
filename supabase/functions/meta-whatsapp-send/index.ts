@@ -32,6 +32,7 @@ interface SendMessageRequest {
   whatsapp_number_id?: string;
   interactiveData?: InteractiveData;
   interactive_data?: InteractiveData;
+  quotedMessageId?: string;
 }
 
 async function getCredentials(supabase: ReturnType<typeof createClient>, whatsappNumberId?: string) {
@@ -238,6 +239,7 @@ serve(async (req) => {
       : (rawBody.mediaType || rawBody.media_type || rawBody.type || 'text');
     const interactiveData = rawBody.interactiveData || rawBody.interactive_data;
     const caption = rawBody.caption;
+    const quotedMessageId = rawBody.quotedMessageId?.trim() || undefined;
     const resolvedCaption = resolveMediaCaption(message, caption);
 
     console.log('[meta-whatsapp-send] payload received:', {
@@ -377,6 +379,10 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // WhatsApp Cloud API: `context.message_id` makes the reply appear attached
+    // to the original message in the customer's WhatsApp.
+    if (quotedMessageId) body.context = { message_id: quotedMessageId };
 
     const response = await fetch(graphUrl, {
       method: 'POST',

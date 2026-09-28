@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone, Archive, Instagram } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList, Smartphone, Archive, Instagram, Reply } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,6 +41,7 @@ import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
 import type { FollowupTemplate } from "./events/EventFollowupTemplates";
 import { PixCopyMessage } from "./chat/PixCopyMessage";
+import { QuotedMessagePreview, type QuotedMessageData } from "./chat/QuotedMessagePreview";
 
 interface Message {
   id: string;
@@ -55,6 +56,8 @@ interface Message {
   error_code?: string | null;
   error_message?: string | null;
   whatsapp_number_id?: string | null;
+  quoted_message_id?: string | null;
+  sender_name?: string | null;
 }
 
 interface MediaAttachment {
@@ -127,6 +130,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const activeNumberIdRef = useRef<string | null>(null);
   const ARCHIVE_PAGE = 100;
   const [newMessage, setNewMessage] = useState("");
+  const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
+  const [quotedFallback, setQuotedFallback] = useState<Record<string, Message>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMedia, setSelectedMedia] = useState<MediaAttachment | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -416,11 +421,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
     mediaUrl?: string,
     caption?: string,
+    quotedMessageId?: string | null,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('uazapi-send-media', {
-          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
           headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
@@ -428,7 +434,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         return { success: false, error: data?.error || 'Erro ao enviar' };
       }
       const { data, error } = await supabase.functions.invoke('uazapi-send-message', {
-        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
         headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
@@ -443,14 +449,15 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const sendViaZapi = async (
     phoneNumber: string,
     message: string,
+    quotedMessageId?: string | null,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
-        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
         headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
-      if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
+      if (data?.success) return { success: true, messageId: data?.messageId || data?.data?.zapiMessageId || data?.data?.messageId || data?.data?.zaapId || data?.data?.id };
       return { success: false, error: data?.error || 'Erro ao enviar' };
     } catch (err) {
       return { success: false, error: 'Erro de conexão' };
@@ -464,11 +471,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
     mediaUrl?: string,
     caption?: string,
+    quotedMessageId?: string | null,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       if (type !== 'text' && mediaUrl) {
         const { data, error } = await supabase.functions.invoke('wasender-send-media', {
-          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
           headers: forceInstanceHeaders(),
         });
         if (error) return { success: false, error: error.message };
@@ -476,7 +484,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         return { success: false, error: data?.error || 'Erro ao enviar' };
       }
       const { data, error } = await supabase.functions.invoke('wasender-send-message', {
-        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
         headers: forceInstanceHeaders(),
       });
       if (error) return { success: false, error: error.message };
@@ -494,6 +502,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
     mediaUrl?: string,
     caption?: string,
+    quotedMessageId?: string | null,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send`;
@@ -510,6 +519,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           mediaUrl,
           caption,
           whatsappNumberId: effectiveNumberId,
+          quotedMessageId: quotedMessageId || undefined,
         }),
       });
       const data = await res.json();
@@ -557,23 +567,24 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
     mediaUrl?: string,
     caption?: string,
+    quotedMessageId?: string | null,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     const provider = getProvider();
     if (provider === 'instagram' || provider === 'messenger') {
       return sendViaMessenger(phoneNumber, message, provider, type, mediaUrl);
     }
     if (provider === 'wasender') {
-      return sendViaWasender(phoneNumber, message, type, mediaUrl, caption);
+      return sendViaWasender(phoneNumber, message, type, mediaUrl, caption, quotedMessageId);
     }
     if (provider === 'uazapi') {
-      return sendViaUazapi(phoneNumber, message, type, mediaUrl, caption);
+      return sendViaUazapi(phoneNumber, message, type, mediaUrl, caption, quotedMessageId);
     }
     if (provider === 'zapi') {
       if (type !== 'text' && mediaUrl) {
         // Z-API media send
         try {
           const { data, error } = await supabase.functions.invoke('zapi-send-media', {
-            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId, quotedMessageId: quotedMessageId || undefined },
           });
           if (error) return { success: false, error: error.message };
           if (data?.success) {
@@ -587,9 +598,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           return { success: false, error: 'Erro de conexão' };
         }
       }
-      return sendViaZapi(phoneNumber, message);
+      return sendViaZapi(phoneNumber, message, quotedMessageId);
     }
-    return sendViaMeta(phoneNumber, message, type, mediaUrl, caption);
+    return sendViaMeta(phoneNumber, message, type, mediaUrl, caption, quotedMessageId);
   };
 
   const phone = order.whatsapp || '';
@@ -775,6 +786,65 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   const displayMessages = archivedMessages.length > 0 ? [...archivedMessages, ...messages] : messages;
 
+  // A mensagem original pode ter saído da janela ativa. Busca pontualmente no
+  // histórico corrente e, se necessário, no arquivo para ainda mostrar a citação.
+  useEffect(() => {
+    const loadedIds = new Set(displayMessages.map((m) => m.message_id).filter(Boolean) as string[]);
+    const missing = Array.from(new Set(
+      displayMessages
+        .map((m) => m.quoted_message_id)
+        .filter((id): id is string => !!id && !loadedIds.has(id) && !quotedFallback[id]),
+    ));
+    if (!missing.length) return;
+    let cancelled = false;
+    (async () => {
+      const select = 'id, phone, message, direction, message_id, status, created_at, media_type, media_url, whatsapp_number_id, quoted_message_id, sender_name';
+      const { data: active } = await supabase.from('whatsapp_messages').select(select).in('message_id', missing);
+      const found = new Set((active || []).map((row: any) => row.message_id));
+      const stillMissing = missing.filter((id) => !found.has(id));
+      let archived: any[] = [];
+      if (stillMissing.length) {
+        const result = await supabase.from('whatsapp_messages_archive' as any).select(select).in('message_id', stillMissing);
+        archived = (result.data as any[]) || [];
+      }
+      if (cancelled) return;
+      const next: Record<string, Message> = {};
+      for (const row of [...(active || []), ...archived] as Message[]) {
+        if (row.message_id) next[row.message_id] = row;
+      }
+      if (Object.keys(next).length) setQuotedFallback((prev) => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [displayMessages, quotedFallback]);
+
+  useEffect(() => {
+    setQuotedMessage(null);
+    setQuotedFallback({});
+  }, [normalizedPhone, effectiveNumberId]);
+
+  const selectQuotedMessage = (msg: Message) => {
+    if (!msg.message_id) {
+      toast.info('Esta mensagem antiga não possui identificação do WhatsApp e não pode ser citada.');
+      return;
+    }
+    setQuotedMessage({
+      message_id: msg.message_id,
+      message: msg.message || '',
+      sender_name: msg.sender_name || undefined,
+      direction: msg.direction,
+      media_type: msg.media_type,
+    });
+    inputRef.current?.focus();
+  };
+
+  const scrollToQuotedMessage = (messageId: string) => {
+    const el = document.getElementById(`event-wa-msg-${messageId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-primary');
+    window.setTimeout(() => el.classList.remove('ring-2', 'ring-primary'), 1800);
+  };
+
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
   // Payload carries minimal info — we filter by phone, then refetch.
@@ -880,7 +950,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       setMessages((prev) => [...prev, tempMessage]);
 
       setIsSending(true);
-      const result = await sendMessage(targetId, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      const quotedId = quotedMessage?.message_id || null;
+      const result = await sendMessage(targetId, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined, quotedId);
       setIsSending(false);
 
       if (result.success) {
@@ -895,10 +966,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           whatsapp_number_id: effectiveNumberId || null,
           channel: getProvider() === 'instagram' || getProvider() === 'messenger' ? getProvider() : 'whatsapp',
           sender_user_id: currentUserId || null,
+          quoted_message_id: quotedId,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         // Track that we sent a message for no-response timer
         updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+        setQuotedMessage(null);
       } else {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
@@ -916,6 +989,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     if (!newMessage.trim()) return;
 
     const messageText = newMessage.trim();
+    const quotedId = quotedMessage?.message_id || null;
     setNewMessage("");
 
     const tempId = `temp-${Date.now()}`;
@@ -927,11 +1001,12 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       message_id: null,
       status: 'sending',
       created_at: new Date().toISOString(),
+      quoted_message_id: quotedId,
     };
     setMessages((prev) => [...prev, tempMessage]);
 
     setIsSending(true);
-    const result = await sendMessage(targetId, messageText);
+    const result = await sendMessage(targetId, messageText, 'text', undefined, undefined, quotedId);
     setIsSending(false);
 
     if (result.success) {
@@ -944,6 +1019,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         whatsapp_number_id: effectiveNumberId || null,
         channel: getProvider() === 'instagram' || getProvider() === 'messenger' ? getProvider() : 'whatsapp',
         sender_user_id: currentUserId || null,
+        quoted_message_id: quotedId,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
       await supabase
@@ -954,6 +1030,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       // Track that we sent a message for no-response timer
       updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+      setQuotedMessage(null);
       
       // Auto-move to awaiting_payment when sending a payment link
       if (messageText.includes('/checkout/') || messageText.includes('link_carrinho') || (order.cartLink && messageText.includes(order.cartLink))) {
@@ -961,6 +1038,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         moveOrder(order.id, 'awaiting_payment');
       }
     } else {
+      setNewMessage(messageText);
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
       );
@@ -1710,19 +1788,25 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                     const isAuto = msg.message?.startsWith('[AUTO] ');
                     const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
                     return (
-                  <div className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                  <div
+                    id={msg.message_id ? `event-wa-msg-${msg.message_id}` : undefined}
+                    className={cn("flex rounded transition-all", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}
+                  >
                     {isAuto && (
                       <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
                     )}
-                    {msg.direction === 'outgoing' && (
+                    {!!msg.message_id && !isIgMode && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="mr-1 mt-1 h-7 w-7 shrink-0 rounded-full bg-black/5 opacity-60 transition-opacity hover:bg-black/15 hover:opacity-100">
                             <MoreVertical className="h-4 w-4 text-foreground" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-36">
-                          <DropdownMenuItem
+                        <DropdownMenuContent align={msg.direction === 'outgoing' ? 'end' : 'start'} className="w-40">
+                          <DropdownMenuItem onClick={() => selectQuotedMessage(msg)} className="gap-2 text-xs">
+                            <Reply className="h-3 w-3" /> Responder
+                          </DropdownMenuItem>
+                          {msg.direction === 'outgoing' && <DropdownMenuItem
                             onClick={async () => {
                               if (!confirm('Apagar esta mensagem?')) return;
                               try {
@@ -1735,7 +1819,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                             className="gap-2 text-xs text-destructive"
                           >
                             <Trash2 className="h-3 w-3" /> Apagar
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -1750,6 +1834,31 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                         borderTopLeftRadius: msg.direction === 'incoming' ? 0 : undefined,
                       }}
                     >
+                      {msg.quoted_message_id && (() => {
+                        const original = displayMessages.find((item) => item.message_id === msg.quoted_message_id)
+                          || quotedFallback[msg.quoted_message_id]
+                          || null;
+                        const mediaLabel = original?.media_type === 'image' ? '📷 Foto'
+                          : original?.media_type === 'video' ? '🎥 Vídeo'
+                          : original?.media_type === 'audio' ? '🎤 Áudio'
+                          : original?.media_type === 'document' ? '📄 Documento'
+                          : '';
+                        const originalText = original?.message?.replace(/^\[AUTO\] /, '') || mediaLabel || 'Mensagem anterior';
+                        const author = original?.direction === 'outgoing'
+                          ? 'Você'
+                          : (original?.sender_name || contactName || 'Cliente');
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => scrollToQuotedMessage(msg.quoted_message_id as string)}
+                            className="mb-1.5 block w-full overflow-hidden rounded border-l-4 border-[#00a884] bg-black/5 px-2 py-1.5 text-left hover:bg-black/10"
+                            title="Ir para a mensagem original"
+                          >
+                            <span className="block truncate text-[11px] font-semibold text-[#008069]">{author}</span>
+                            <span className="block truncate text-[11px] text-gray-600">{originalText}</span>
+                          </button>
+                        );
+                      })()}
                       <MessageMedia msg={msg} />
                       {displayMsg && (
                         <div className="pr-12">
@@ -1821,6 +1930,13 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       )}
 
       {/* Input Area */}
+      {quotedMessage && !isIgMode && (
+        <QuotedMessagePreview
+          quoted={quotedMessage}
+          contactName={contactName}
+          onCancel={() => setQuotedMessage(null)}
+        />
+      )}
       <div className="flex items-center gap-1 px-2 py-2 bg-[#F0F0F0]">
         {audioPreviewUrl ? (
           <>
