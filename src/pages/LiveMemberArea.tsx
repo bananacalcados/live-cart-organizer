@@ -2241,10 +2241,10 @@ export default function LiveMemberArea() {
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Total</span>
+                  <span className="text-sm text-muted-foreground">{splitBalance != null ? "Falta pagar" : "Total"}</span>
                   <span className="text-xl font-bold">{brl(splitBalance ?? order.total)}</span>
                 </div>
-                {!order.is_paid && !!order.pix_discount_percent && (
+                {!order.is_paid && splitBalance == null && !!order.pix_discount_percent && (
                   <div className="flex justify-between items-center rounded-xl bg-primary/10 px-3 py-2 mt-1">
                     <span className="text-xs font-semibold text-primary">
                       No PIX ({order.pix_discount_percent}% OFF)

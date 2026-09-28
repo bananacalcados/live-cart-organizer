@@ -326,12 +326,6 @@ function OrderSummary({ orderData, collapsed, onToggle, prizeDeduction = 0, priz
                 <span className="text-stage-paid font-medium">-R$ {prizeDeduction.toFixed(2)}</span>
               </div>
             )}
-            {remainingBalance != null && remainingBalance < orderTotal && (
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Já pago</span>
-                <span className="text-stage-paid font-medium">-R$ {(orderTotal - remainingBalance).toFixed(2)}</span>
-              </div>
-            )}
             <div className="flex justify-between font-bold text-sm pt-1">
               <span>{remainingBalance != null ? "Falta pagar" : "Total"}</span>
               <span className="text-primary">R$ {finalTotal.toFixed(2)}</span>
