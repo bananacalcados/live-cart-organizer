@@ -159,20 +159,29 @@ Deno.serve(async (req) => {
       metaResponse = await res.json();
       if (!res.ok) {
         console.warn(`[ig-dm-send] Direct DM failed for @${cleanUsername}, trying private_reply. Error:`, JSON.stringify(metaResponse));
+        const windowClosed = metaResponse?.error?.error_subcode === 2534022;
+        const directErr = metaResponse;
         if (commentIdCandidates.length) {
           const pr = await tryPrivateReply();
           metaResponse = pr.data;
           usedMethod = "private_reply";
           if (!pr.ok) {
-            return new Response(JSON.stringify({ error: "Both direct DM and private_reply failed", details: metaResponse }), {
-              status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
+            return new Response(JSON.stringify({
+              error: "send_failed",
+              message: windowClosed
+                ? "Não foi possível enviar: a janela de 24h do direct fechou e o comentário dela já foi respondido (ou expirou). Aguarde ela responder ou comentar de novo."
+                : "O Instagram recusou o envio (direct e resposta ao comentário). Tente novamente mais tarde.",
+              details: { direct: directErr, private_reply: metaResponse },
+            }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
         } else {
           return new Response(JSON.stringify({
-            error: "Direct DM failed and no comment_id for fallback",
+            error: "send_failed",
+            message: windowClosed
+              ? "Não foi possível enviar: a janela de 24h do direct fechou. Aguarde ela responder ou comentar de novo."
+              : "O Instagram recusou o envio do direct.",
             details: metaResponse,
-          }), { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
     } else if (commentIdCandidates.length) {
@@ -180,9 +189,11 @@ Deno.serve(async (req) => {
       metaResponse = pr.data;
       usedMethod = "private_reply";
       if (!pr.ok) {
-        return new Response(JSON.stringify({ error: "private_reply failed", details: metaResponse }), {
-          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(JSON.stringify({
+          error: "send_failed",
+          message: "Não foi possível responder pelo comentário (já respondido ou expirado). Aguarde ela responder ou comentar de novo.",
+          details: metaResponse,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     } else {
       return new Response(JSON.stringify({
