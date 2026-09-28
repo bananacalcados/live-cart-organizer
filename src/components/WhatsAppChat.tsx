@@ -135,6 +135,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const [quotedFallback, setQuotedFallback] = useState<Record<string, Message>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMedia, setSelectedMedia] = useState<MediaAttachment | null>(null);
+  const [multiItems, setMultiItems] = useState<MultiImageItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
