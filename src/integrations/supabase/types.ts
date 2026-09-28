@@ -8662,6 +8662,65 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_live_cart_notifications: {
+        Row: {
+          attempts: number
+          channel: string | null
+          created_at: string
+          error: string | null
+          event_id: string | null
+          id: string
+          instagram_handle: string
+          kind: string
+          message: string | null
+          order_id: string
+          rule_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          channel?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string | null
+          id?: string
+          instagram_handle: string
+          kind: string
+          message?: string | null
+          order_id: string
+          rule_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string | null
+          id?: string
+          instagram_handle?: string
+          kind?: string
+          message?: string | null
+          order_id?: string
+          rule_id?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_live_cart_notifications_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_comment_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instagram_comment_actions: {
         Row: {
           action_type: string
@@ -8718,7 +8777,9 @@ export type Database = {
           dm_message_text: string | null
           id: string
           is_active: boolean
+          max_delay_seconds: number
           media_types: string[] | null
+          min_delay_seconds: number
           name: string
           reply_comment_text: string | null
           reply_comment_variations: string[]
@@ -8745,7 +8806,9 @@ export type Database = {
           dm_message_text?: string | null
           id?: string
           is_active?: boolean
+          max_delay_seconds?: number
           media_types?: string[] | null
+          min_delay_seconds?: number
           name: string
           reply_comment_text?: string | null
           reply_comment_variations?: string[]
@@ -8772,7 +8835,9 @@ export type Database = {
           dm_message_text?: string | null
           id?: string
           is_active?: boolean
+          max_delay_seconds?: number
           media_types?: string[] | null
+          min_delay_seconds?: number
           name?: string
           reply_comment_text?: string | null
           reply_comment_variations?: string[]
@@ -22700,6 +22765,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "group_campaign_block_dispatches"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_ig_live_cart_notifications: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          channel: string | null
+          created_at: string
+          error: string | null
+          event_id: string | null
+          id: string
+          instagram_handle: string
+          kind: string
+          message: string | null
+          order_id: string
+          rule_id: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ig_live_cart_notifications"
           isOneToOne: false
           isSetofReturn: true
         }
