@@ -211,6 +211,7 @@ export default function LiveMemberArea() {
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [splitBalance, setSplitBalance] = useState<number | null>(null);
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
   /** Sequência das respostas do servidor (evita resposta antiga sobrescrever a nova). */
@@ -2241,7 +2242,7 @@ export default function LiveMemberArea() {
 
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Total</span>
-                  <span className="text-xl font-bold">{brl(order.total)}</span>
+                  <span className="text-xl font-bold">{brl(splitBalance ?? order.total)}</span>
                 </div>
                 {!order.is_paid && !!order.pix_discount_percent && (
                   <div className="flex justify-between items-center rounded-xl bg-primary/10 px-3 py-2 mt-1">
@@ -2340,6 +2341,7 @@ export default function LiveMemberArea() {
                         form={payForm}
                         maxInstallments={Math.min(installmentConfig.max_installments || 6, 12)}
                         onPaid={handlePaymentConfirmed}
+                        onBalanceChange={({ hasSplit, remaining }) => setSplitBalance(hasSplit ? remaining : null)}
                       >
                         <StepPayment
                           orderId={order.id}

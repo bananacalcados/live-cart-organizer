@@ -273,8 +273,9 @@ function StepBanner({ currentStep }: { currentStep: number }) {
   );
 }
 // ── Order Summary Sidebar ───────────────────────────────────────
-function OrderSummary({ orderData, collapsed, onToggle, prizeDeduction = 0, prizeLabel }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void; prizeDeduction?: number; prizeLabel?: string | null }) {
-  const finalTotal = Math.max(0, Math.round((orderData.totalAmount - prizeDeduction) * 100) / 100);
+function OrderSummary({ orderData, collapsed, onToggle, prizeDeduction = 0, prizeLabel, remainingBalance }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void; prizeDeduction?: number; prizeLabel?: string | null; remainingBalance?: number | null }) {
+  const orderTotal = Math.max(0, Math.round((orderData.totalAmount - prizeDeduction) * 100) / 100);
+  const finalTotal = remainingBalance ?? orderTotal;
   const totalItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
@@ -325,8 +326,14 @@ function OrderSummary({ orderData, collapsed, onToggle, prizeDeduction = 0, priz
                 <span className="text-stage-paid font-medium">-R$ {prizeDeduction.toFixed(2)}</span>
               </div>
             )}
+            {remainingBalance != null && remainingBalance < orderTotal && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Já pago</span>
+                <span className="text-stage-paid font-medium">-R$ {(orderTotal - remainingBalance).toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-sm pt-1">
-              <span>Total</span>
+              <span>{remainingBalance != null ? "Falta pagar" : "Total"}</span>
               <span className="text-primary">R$ {finalTotal.toFixed(2)}</span>
             </div>
           </div>
@@ -832,6 +839,7 @@ export default function TransparentCheckout() {
   const [orderInstallmentConfig, setOrderInstallmentConfig] = useState<InstallmentConfig | null>(null);
   const [eventInstallment, setEventInstallment] = useState<{ minVal: number; maxInst: number } | null>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  const [splitBalance, setSplitBalance] = useState<number | null>(null);
   const paymentConfirmedRef = useRef(false);
 
   // 3-step state
@@ -1606,6 +1614,7 @@ export default function TransparentCheckout() {
                       form={customerForm}
                       maxInstallments={Math.min(installmentConfig?.max_installments || 6, 12)}
                       onPaid={() => handlePaymentConfirmed({ platform: "mercadopago", method: "split" })}
+                      onBalanceChange={({ hasSplit, remaining }) => setSplitBalance(hasSplit ? remaining : null)}
                     >
                     <StepPayment
                       orderId={orderData.id}
@@ -1630,10 +1639,10 @@ export default function TransparentCheckout() {
           <div className="lg:col-span-1">
             {/* Mobile: collapsible, Desktop: always visible */}
             <div className="lg:hidden">
-              <OrderSummary orderData={orderData} collapsed={summaryCollapsed} onToggle={() => setSummaryCollapsed(!summaryCollapsed)} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} />
+              <OrderSummary orderData={orderData} collapsed={summaryCollapsed} onToggle={() => setSummaryCollapsed(!summaryCollapsed)} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} remainingBalance={splitBalance} />
             </div>
             <div className="hidden lg:block sticky top-4">
-              <OrderSummary orderData={orderData} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} />
+              <OrderSummary orderData={orderData} prizeDeduction={prizeDeduction} prizeLabel={prizePreview?.label} remainingBalance={splitBalance} />
             </div>
           </div>
         </div>

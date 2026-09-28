@@ -27,6 +27,7 @@ interface Props {
   form: Payer;
   maxInstallments?: number;
   onPaid: () => void;
+  onBalanceChange?: (balance: { hasSplit: boolean; remaining: number; paid: number }) => void;
   /** Pagamento normal (exibido quando não há divisão). */
   children: ReactNode;
 }
@@ -44,7 +45,7 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
-export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallments = 6, onPaid, children }: Props) {
+export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallments = 6, onPaid, onBalanceChange, children }: Props) {
   const target = orderId ? { orderId } : { saleId };
   const [enabled, setEnabled] = useState(false);
   const [parts, setParts] = useState<Part[]>([]);
@@ -72,6 +73,19 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
   }, [orderId, saleId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const activeParts = parts.filter((p) => !["refunded", "canceled"].includes(p.status));
+    onBalanceChange?.({
+      hasSplit: activeParts.length > 0,
+      remaining: activeParts
+        .filter((p) => p.status !== "approved")
+        .reduce((sum, p) => sum + Number(p.charge_amount), 0),
+      paid: activeParts
+        .filter((p) => p.status === "approved")
+        .reduce((sum, p) => sum + Number(p.charge_amount), 0),
+    });
+  }, [parts, onBalanceChange]);
 
   const allPaid = parts.length > 0 && parts.every((p) => p.status === "approved");
   useEffect(() => {
