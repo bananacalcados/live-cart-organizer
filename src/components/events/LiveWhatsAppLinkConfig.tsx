@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { Button } from "@/components/ui/button";
@@ -122,12 +122,19 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
     };
   }, [eventId, eventName, defaultWhatsappNumberId]);
 
-  // Pré-preenche o telefone a partir da instância escolhida
+  // Telefone de destino SEMPRE acompanha a instância escolhida: ao trocar de
+  // instância, o número antigo é substituído (antes ficava o número anterior e
+  // os clientes caíam na instância errada).
+  const lastWaIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (waId === "none") return;
     const n = numbers.find((x) => x.id === waId);
     const digits = (n?.phone_display || "").replace(/\D/g, "");
-    if (digits && !phone) setPhone(digits.startsWith("55") ? digits : `55${digits}`);
+    if (!digits) return;
+    const full = digits.startsWith("55") ? digits : `55${digits}`;
+    const changed = lastWaIdRef.current !== null && lastWaIdRef.current !== waId;
+    lastWaIdRef.current = waId;
+    if (!phone || changed) setPhone(full);
   }, [waId, numbers, phone]);
 
   const publicUrl = slug ? `${PUBLIC_HOST}/zap/${slug}` : "";
