@@ -474,10 +474,21 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               (Number(item.expedition_conference_qty) || 0) + (Number(item.expedition_completed_qty) || 0),
           } as any).eq("id", item.id),
         ));
+      } else if (["novo", "preparacao", "separacao"].includes(to)) {
+        // As abas Separação/Aguardando/Conferência são montadas pelas quantidades
+        // de cada produto. Ao voltar, zera o que estava em conferência/aguardando;
+        // senão o pedido continua aparecendo na Conferência mesmo com a etapa trocada.
+        const { error: itemErr } = await supabase
+          .from("pos_sale_items")
+          .update({ expedition_conference_qty: 0, expedition_waiting_qty: 0, expedition_picked_qty: 0 } as any)
+          .eq("sale_id", o.id)
+          .eq("expedition_completed_qty", 0);
+        if (itemErr) throw itemErr;
       }
       const { error } = await supabase.from("pos_sales").update({
         expedition_stage: to,
         expedition_finished_at: null,
+        ...(["novo", "preparacao", "separacao"].includes(to) ? { expedition_waiting_products: false } : {}),
       }).eq("id", o.id);
       if (error) throw error;
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
