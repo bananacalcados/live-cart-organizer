@@ -946,6 +946,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         created_at: new Date().toISOString(),
         media_type: selectedMedia.type,
         media_url: selectedMedia.previewUrl,
+        quoted_message_id: quotedMessage?.message_id || null,
       };
       setMessages((prev) => [...prev, tempMessage]);
 
@@ -1378,7 +1379,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     try {
       const mediaUrl = await uploadMediaToStorage(audioPreviewFile);
       if (!mediaUrl) { toast.error('Erro ao enviar áudio'); return; }
-      const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
+      const quotedId = quotedMessage?.message_id || null;
+      const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl, undefined, quotedId);
       if (result.success) {
         await supabase.from('whatsapp_messages').insert({
           phone: normalizedPhone,
@@ -1390,17 +1392,19 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
           message_id: result.messageId || null,
           whatsapp_number_id: effectiveNumberId || null,
           sender_user_id: currentUserId || null,
+          quoted_message_id: quotedId,
         });
         updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
         await loadMessages();
         discardAudioPreview();
+        setQuotedMessage(null);
       } else {
         toast.error('Erro ao enviar áudio');
       }
     } finally {
       setIsSendingAudio(false);
     }
-  }, [audioPreviewFile, isSendingAudio, phone, normalizedPhone, effectiveNumberId, currentUserId, order.id, updateOrder, loadMessages, discardAudioPreview]);
+  }, [audioPreviewFile, isSendingAudio, phone, normalizedPhone, effectiveNumberId, currentUserId, order.id, updateOrder, loadMessages, discardAudioPreview, quotedMessage]);
 
   const formatRecordingTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

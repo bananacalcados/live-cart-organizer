@@ -22,4 +22,4 @@
 - [x] Etapa 4 — Modal do WhatsApp no PDV
 - [x] Etapa 5 — Live (botão nas Ações rápidas; falta "Pago parcialmente" nos cards)
 - [x] Etapa 6 — Painéis, relatórios, estorno por parte
-- [~] Respostas citadas no WhatsApp da Live: exibir citação recebida, responder mensagem anterior e enviar vínculo por provider
+- [x] Respostas citadas no WhatsApp da Live: exibir citação recebida, responder mensagem anterior e enviar vínculo por provider
