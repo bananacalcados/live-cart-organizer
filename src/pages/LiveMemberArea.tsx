@@ -32,6 +32,7 @@ import {
   type InstallmentConfig,
 } from "@/components/checkout/PaymentSection";
 import { parseInstallmentRule } from "@/lib/installmentRules";
+import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 
 import { initMetaPixel, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution } from "@/lib/metaAttribution";
@@ -210,6 +211,7 @@ export default function LiveMemberArea() {
   const [form, setForm] = useState<any>({});
   const [remaining, setRemaining] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [splitBalance, setSplitBalance] = useState<number | null>(null);
   const [activeWheel, setActiveWheel] = useState<PublicWheel | null>(null);
   const pollRef = useRef<number | null>(null);
   /** Sequência das respostas do servidor (evita resposta antiga sobrescrever a nova). */
@@ -2239,10 +2241,10 @@ export default function LiveMemberArea() {
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Total</span>
-                  <span className="text-xl font-bold">{brl(order.total)}</span>
+                  <span className="text-sm text-muted-foreground">{splitBalance != null ? "Falta pagar" : "Total"}</span>
+                  <span className="text-xl font-bold">{brl(splitBalance ?? order.total)}</span>
                 </div>
-                {!order.is_paid && !!order.pix_discount_percent && (
+                {!order.is_paid && splitBalance == null && !!order.pix_discount_percent && (
                   <div className="flex justify-between items-center rounded-xl bg-primary/10 px-3 py-2 mt-1">
                     <span className="text-xs font-semibold text-primary">
                       No PIX ({order.pix_discount_percent}% OFF)
@@ -2333,22 +2335,31 @@ export default function LiveMemberArea() {
                     </Button>
                   ) : payForm ? (
                     <div className="rounded-2xl border-2 border-border p-3">
-                      <StepPayment
+                      <SplitPaymentPanel
                         orderId={order.id}
-                        amount={order.total}
-                        products={(order.products || []).map((p: any) => ({
-                          title: p.title,
-                          variant: p.variant,
-                          price: Number(p.effective_price ?? p.price ?? 0),
-                          quantity: Number(p.quantity || 1),
-                          image: p.image,
-                        }))}
+                        total={order.total}
                         form={payForm}
-                        installmentConfig={installmentConfig}
-                        stepBadge={null}
-                        onPaymentConfirmed={handlePaymentConfirmed}
-                        onStepEvent={trackStep}
-                      />
+                        maxInstallments={Math.min(installmentConfig.max_installments || 6, 12)}
+                        onPaid={handlePaymentConfirmed}
+                        onBalanceChange={({ hasSplit, remaining }) => setSplitBalance(hasSplit ? remaining : null)}
+                      >
+                        <StepPayment
+                          orderId={order.id}
+                          amount={order.total}
+                          products={(order.products || []).map((p: any) => ({
+                            title: p.title,
+                            variant: p.variant,
+                            price: Number(p.effective_price ?? p.price ?? 0),
+                            quantity: Number(p.quantity || 1),
+                            image: p.image,
+                          }))}
+                          form={payForm}
+                          installmentConfig={installmentConfig}
+                          stepBadge={null}
+                          onPaymentConfirmed={handlePaymentConfirmed}
+                          onStepEvent={trackStep}
+                        />
+                      </SplitPaymentPanel>
                       <button
                         type="button"
                         onClick={() => goCheckout("pix")}

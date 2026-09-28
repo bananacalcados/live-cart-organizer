@@ -27,6 +27,7 @@ interface Props {
   form: Payer;
   maxInstallments?: number;
   onPaid: () => void;
+  onBalanceChange?: (balance: { hasSplit: boolean; remaining: number; paid: number }) => void;
   /** Pagamento normal (exibido quando não há divisão). */
   children: ReactNode;
 }
@@ -44,12 +45,13 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
-export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallments = 6, onPaid, children }: Props) {
+export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallments = 6, onPaid, onBalanceChange, children }: Props) {
   const target = orderId ? { orderId } : { saleId };
   const [enabled, setEnabled] = useState(false);
   const [parts, setParts] = useState<Part[]>([]);
   const [pixPct, setPixPct] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState(false);
   const paidFired = useRef(false);
 
@@ -60,19 +62,52 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
       setEnabled(!!d.enabled);
       setParts(d.parts || []);
       setPixPct(Number(d.pix_discount_pct) || 0);
-    } catch { /* sem divisão: segue normal */ }
+      setLoadError(false);
+    } catch {
+      // Nunca liberar a cobrança integral quando não conseguimos confirmar se
+      // existe uma divisão já paga para este pedido.
+      setLoadError(true);
+    }
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, saleId]);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const activeParts = parts.filter((p) => !["refunded", "canceled"].includes(p.status));
+    onBalanceChange?.({
+      hasSplit: activeParts.length > 0,
+      remaining: activeParts
+        .filter((p) => p.status !== "approved")
+        .reduce((sum, p) => sum + Number(p.charge_amount), 0),
+      paid: activeParts
+        .filter((p) => p.status === "approved")
+        .reduce((sum, p) => sum + Number(p.charge_amount), 0),
+    });
+  }, [parts, onBalanceChange]);
+
   const allPaid = parts.length > 0 && parts.every((p) => p.status === "approved");
   useEffect(() => {
     if (allPaid && !paidFired.current) { paidFired.current = true; onPaid(); }
   }, [allPaid, onPaid]);
 
-  if (!loaded) return <>{children}</>;
+  if (!loaded) {
+    return (
+      <div className="flex min-h-28 items-center justify-center rounded-lg border border-border">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-center">
+        <p className="text-sm font-medium text-destructive">Não foi possível conferir o valor restante.</p>
+        <Button type="button" variant="outline" size="sm" onClick={load}>Tentar novamente</Button>
+      </div>
+    );
+  }
 
   const anyPaid = parts.some((p) => p.status === "approved");
   const sumParts = parts.reduce((a, p) => a + Number(p.amount), 0);
@@ -115,7 +150,7 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
     );
   }
 
-  const active = parts.find((p) => p.status !== "approved");
+  const active = parts.find((p) => !["approved", "refunded", "canceled"].includes(p.status));
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border p-3 space-y-2">
