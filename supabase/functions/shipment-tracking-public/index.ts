@@ -235,14 +235,17 @@ Deno.serve(async (req) => {
       const stageAt = (k: StageKey, fallback: Date, i: number) =>
         history[k] ? new Date(history[k]).toISOString() : naturalTime(fallback, code, i);
 
+      // Se o envio real aconteceu antes do cronograma automático, as etapas
+      // anteriores não podem aparecer DEPOIS do "enviado".
+      const shippedMs = history.enviado ? new Date(history.enviado).getTime() : null;
       const autoStages: StageKey[] = ['em_separacao', 'separado', 'embalado'];
       autoStages.forEach((k, i) => {
         if (STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf(k)) {
-          events.push({
-            title: labels[k],
-            detail: STAGE_DETAIL[k],
-            at: stageAt(k, (times as any)[k], i),
-          });
+          let at = stageAt(k, (times as any)[k], i);
+          if (!history[k] && shippedMs && new Date(at).getTime() > shippedMs) {
+            at = new Date(shippedMs - (3 - i) * 60 * 60 * 1000).toISOString();
+          }
+          events.push({ title: labels[k], detail: STAGE_DETAIL[k], at });
         }
       });
 
