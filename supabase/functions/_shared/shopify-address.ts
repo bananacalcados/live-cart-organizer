@@ -9,11 +9,25 @@ export function parseShopifyAddress(addr: any, noteNumber?: string | null, noteC
   let street: string | null = raw || null;
   let number: string | null = null;
   let extra = "";
-  const m = raw.match(/^(.*?[A-Za-zÀ-ú.])[,\s]+(?:n[ºo°.]?\s*)?(\d+[A-Za-z]?|s\/?n)\b[,\s\-–]*(.*)$/i);
-  if (m) {
-    street = m[1].replace(/[,\s]+$/, "").trim();
-    number = m[2];
-    extra = (m[3] || "").trim();
+  const NUM = /^(?:n[ºo°.]?\s*)?(\d+[A-Za-z]?|s\/?n)$/i;
+  const parts = raw.split(",").map((x) => x.trim()).filter(Boolean);
+  if (parts.length >= 2 && NUM.test(parts[1])) {
+    street = parts[0];
+    number = parts[1].match(NUM)![1];
+    extra = parts.slice(2).join(", ");
+  } else {
+    // Sem vírgula: "Rua 58 230 Ap 1603" → rua "Rua 58", nº 230. Um número colado
+    // em uma única palavra ("Caminho 4", "Rua 58") é nome da rua, não número.
+    const toks = raw.split(/\s+/);
+    for (let k = 1; k < toks.length; k++) {
+      const t = toks[k].replace(/[,;]$/, "");
+      if (!NUM.test(t)) continue;
+      if (k === 1) continue;
+      street = toks.slice(0, k).join(" ").replace(/[,\s]+$/, "");
+      number = t.match(NUM)![1];
+      extra = toks.slice(k + 1).join(" ").replace(/^[-–,\s]+/, "");
+      break;
+    }
   }
   const address2 = String(addr?.address2 || "").trim();
   const company = String(addr?.company || "").trim();
