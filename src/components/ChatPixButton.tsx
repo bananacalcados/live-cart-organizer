@@ -56,9 +56,40 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
-        body: { orderId },
-      });
+      // Pagamento dividido: se o pedido tem uma parte Pix em aberto, gera o Pix
+      // SÓ dessa parte (o link de pagamento cobra depois apenas o restante).
+      const { data: splitRows } = await supabase
+        .from("payment_splits" as any)
+        .select("id, method, status, charge_amount")
+        .eq("order_id", orderId)
+        .order("seq");
+      const pixPart = ((splitRows as any[]) || []).find(
+        (p) => p.method === "pix" && !["approved", "refunded", "canceled"].includes(p.status),
+      );
+      let data: any; let error: any;
+      if (pixPart) {
+        const { data: ord } = await supabase
+          .from("orders").select("customer_id").eq("id", orderId).maybeSingle();
+        let payer: Record<string, string> = {};
+        if ((ord as any)?.customer_id) {
+          const { data: reg } = await supabase.rpc("get_customer_last_address" as any, { p_customer_id: (ord as any).customer_id });
+          const r: any = Array.isArray(reg) ? reg[0] : reg;
+          if (r) payer = { name: r.full_name || "", email: r.email || "", cpf: r.cpf || "" };
+        }
+        const res = await supabase.functions.invoke("split-payment", {
+          body: { action: "create_pix", splitId: pixPart.id, payer },
+        });
+        error = res.error;
+        data = res.data ? { ...res.data, amount: res.data.amount ?? pixPart.charge_amount } : res.data;
+        if (error) {
+          try { const j = await error.context?.json?.(); if (j?.error) error = new Error(j.error); } catch { /* */ }
+        } else if (data?.error) error = new Error(data.error);
+      } else {
+        const res = await supabase.functions.invoke("mercadopago-create-pix", {
+          body: { orderId },
+        });
+        data = res.data; error = res.error;
+      }
       const blocked = await parseChargebackBlock(error, data);
       if (blocked) throw new Error(chargebackBlockMessage(blocked));
       if (error) throw error;
