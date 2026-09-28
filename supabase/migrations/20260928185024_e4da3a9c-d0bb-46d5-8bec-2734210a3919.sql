@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.enqueue_ig_live_cart_notification() FROM public, anon, authenticated;
