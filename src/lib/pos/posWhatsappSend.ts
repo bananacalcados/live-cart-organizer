@@ -65,13 +65,14 @@ export async function posSendText(opts: {
   phone: string;
   message: string;
   numberId?: string | null;
+  quotedMessageId?: string | null;
 }): Promise<string | null> {
   const provider = normalizeProvider(opts.provider);
   const { phone, message, numberId } = opts;
 
   if (provider === "meta") {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-send", {
-      body: { phone, message, whatsapp_number_id: numberId },
+      body: { phone, message, whatsapp_number_id: numberId, quotedMessageId: opts.quotedMessageId || undefined },
     });
     assertNoError(error, data);
   return extractMessageId(data);
@@ -83,7 +84,7 @@ export async function posSendText(opts: {
         ? "wasender-send-message"
         : "zapi-send-message";
   const { data, error } = await supabase.functions.invoke(fn, {
-    body: { phone, message, whatsapp_number_id: numberId },
+    body: { phone, message, whatsapp_number_id: numberId, quotedMessageId: opts.quotedMessageId || undefined },
   });
   assertNoError(error, data);
   return extractMessageId(data);
@@ -98,6 +99,7 @@ export async function posSendMedia(opts: {
   caption?: string;
   fileName?: string;
   numberId?: string | null;
+  quotedMessageId?: string | null;
 }): Promise<string | null> {
   const provider = normalizeProvider(opts.provider);
   const { phone, mediaUrl, mediaType, caption, fileName, numberId } = opts;
@@ -110,6 +112,7 @@ export async function posSendMedia(opts: {
         mediaUrl,
         caption,
         whatsapp_number_id: numberId,
+        quotedMessageId: opts.quotedMessageId || undefined,
       },
     });
     assertNoError(error, data);
@@ -122,7 +125,7 @@ export async function posSendMedia(opts: {
         ? "wasender-send-media"
         : "zapi-send-media";
   const { data, error } = await supabase.functions.invoke(fn, {
-    body: { phone, mediaUrl, mediaType, caption, fileName, whatsapp_number_id: numberId },
+    body: { phone, mediaUrl, mediaType, caption, fileName, whatsapp_number_id: numberId, quotedMessageId: opts.quotedMessageId || undefined },
   });
   assertNoError(error, data);
   return extractMessageId(data);

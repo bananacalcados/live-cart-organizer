@@ -86,7 +86,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, mediaUrl, mediaType, caption, whatsapp_number_id } = await req.json();
+    const { phone, mediaUrl, mediaType, caption, whatsapp_number_id, quotedMessageId } = await req.json();
     if (!phone || !mediaUrl) {
       return new Response(JSON.stringify({ error: "Phone and mediaUrl are required" }), {
         status: 400,
@@ -118,6 +118,7 @@ serve(async (req) => {
     const payload: Record<string, unknown> = { to };
     if (caption) payload.text = caption;
     payload[mediaField(mediaType || "document")] = finalMediaUrl;
+    if (quotedMessageId) payload.quotedMessageId = quotedMessageId;
 
     const res = await fetch(`${WASENDER_BASE}/send-message`, {
       method: "POST",
