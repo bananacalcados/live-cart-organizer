@@ -488,6 +488,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       const { error } = await supabase.from("pos_sales").update({
         expedition_stage: to,
         expedition_finished_at: null,
+        ...(["novo", "preparacao", "separacao"].includes(to) ? { expedition_waiting_products: false } : {}),
       }).eq("id", o.id);
       if (error) throw error;
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
