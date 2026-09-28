@@ -1,3 +1,4 @@
+import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MessageCircle, Send, Loader2, ArrowLeft, Phone, Instagram } from "lucide-react";
 import { InstagramDMChat } from "./events/InstagramDMChat";
@@ -273,17 +274,10 @@ export function DashboardChatPanel() {
       const selectedNum = getSelectedNumber();
       const isZapi = selectedNum?.provider === "zapi" || sendVia === "zapi";
 
-      if (!isZapi && selectedNumberId) {
-        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: messageText, whatsappNumberId: selectedNumberId },
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
-        });
-        if (error) throw error;
-      }
+      await posSendText({
+        provider: isZapi ? "zapi" : (selectedNum?.provider || "meta"),
+        phone: selectedPhone, message: messageText, numberId: selectedNumberId,
+      });
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: messageText, direction: "outgoing", status: "sent",
         whatsapp_number_id: selectedNumberId || null,
@@ -291,7 +285,7 @@ export function DashboardChatPanel() {
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error("Error sending message:", error);
-      toast.error("Erro ao enviar mensagem");
+      toast.error(`Erro ao enviar mensagem: ${(error as any)?.message || ""}`);
     } finally {
       setIsSending(false);
     }
