@@ -218,10 +218,73 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
   }, [lanes, orders, laneMarks, clearLane]);
 
+  // ── Instagram "não lida": DM ou comentário novo na live depois da nossa
+  // última resposta e depois da última vez que abrimos o direct dela. ──
+  const igKey = (h?: string | null) => (h || "").replace(/^@+/, "").trim().toLowerCase();
+  const [igUnread, setIgUnread] = useState<Record<string, "dm" | "comment">>({});
+  const [igRefresh, setIgRefresh] = useState(0);
+  const igHandlesKey = useMemo(
+    () => Array.from(new Set(orders.filter((o) => o.stage !== "cancelled" && !isOrderMarkedPaid(o))
+      .map((o) => igKey(o.customer?.instagram_handle)).filter(Boolean))).sort().join(","),
+    [orders],
+  );
+  useEffect(() => {
+    const handles = igHandlesKey ? igHandlesKey.split(",") : [];
+    if (handles.length === 0 || !currentUserId) { setIgUnread({}); return; }
+    let cancelled = false;
+    const load = async () => {
+      const since = new Date(Date.now() - 3 * 86400000).toISOString();
+      const lastIn: Record<string, { at: number; comment: boolean }> = {};
+      const lastOut: Record<string, number> = {};
+      const reads: Record<string, number> = {};
+      for (let i = 0; i < handles.length; i += 80) {
+        const batch = handles.slice(i, i + 80);
+        const [{ data: msgs }, { data: rd }] = await Promise.all([
+          supabase.from("whatsapp_messages")
+            .select("sender_name, direction, created_at, message")
+            .eq("channel", "instagram")
+            .in("sender_name", batch.map((h) => `@${h}`))
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(1000),
+          supabase.from("instagram_dm_reads")
+            .select("username, last_read_at")
+            .eq("user_id", currentUserId)
+            .in("username", batch),
+        ]);
+        for (const m of (msgs || []) as any[]) {
+          const k = igKey(m.sender_name);
+          const t = +new Date(m.created_at);
+          if (m.direction === "outgoing") { if (!lastOut[k] || t > lastOut[k]) lastOut[k] = t; }
+          else if (!lastIn[k] || t > lastIn[k].at) {
+            lastIn[k] = { at: t, comment: String(m.message || "").includes("Comentário no Live") };
+          }
+        }
+        for (const r of (rd || []) as any[]) reads[igKey(r.username)] = +new Date(r.last_read_at);
+      }
+      const res: Record<string, "dm" | "comment"> = {};
+      for (const [k, v] of Object.entries(lastIn)) {
+        if (v.at > Math.max(lastOut[k] || 0, reads[k] || 0)) res[k] = v.comment ? "comment" : "dm";
+      }
+      if (!cancelled) setIgUnread(res);
+    };
+    load();
+    const t = setInterval(load, 20000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [igHandlesKey, currentUserId, igRefresh]);
 
+  // Ao fechar o direct, recalcula (marca como lida).
+  useEffect(() => { if (!igOpen) setIgRefresh((n) => n + 1); }, [igOpen]);
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
+    // Novidade só no Instagram → abre o direct para ler.
+    const k = igKey(order.customer?.instagram_handle);
+    if (k && igUnread[k] && !isConversationUnread(order)) {
+      setIgHandle(k);
+      setIgOpen(true);
+      return;
+    }
     if (phone) {
       // Tem WhatsApp → abre o chat de WhatsApp na instância da conversa.
       setChatOrder(dbOrderToLegacy(order));
@@ -617,6 +680,14 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                   {unread && (
                     <span className="absolute -top-2 left-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
                       Não lida
+                    </span>
+                  )}
+                  {!paidCard && igUnread[igKey(order.customer?.instagram_handle)] && (
+                    <span className={cn(
+                      "absolute -top-2 z-10 rounded-full bg-pink-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow",
+                      unread ? "right-8" : "left-2",
+                    )}>
+                      {igUnread[igKey(order.customer?.instagram_handle)] === "comment" ? "Não lida · comentou na live" : "Não lida · direct"}
                     </span>
                   )}
 
