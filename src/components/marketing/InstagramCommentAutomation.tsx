@@ -44,6 +44,8 @@ interface Rule {
   action_trigger_automation: boolean;
   automation_flow_id: string | null;
   cooldown_minutes: number;
+  min_delay_seconds?: number | null;
+  max_delay_seconds?: number | null;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
   target_media_id: string | null;
@@ -108,6 +110,8 @@ export default function InstagramCommentAutomation() {
     action_trigger_automation: false,
     automation_flow_id: "",
     cooldown_minutes: 60,
+    min_delay_seconds: 20,
+    max_delay_seconds: 60,
     target_media_id: "",
     target_media_caption: "",
     action_capture_lead: false,
@@ -115,6 +119,7 @@ export default function InstagramCommentAutomation() {
     capture_mode: "phone",
     capture_fallback_dm_text: "",
   });
+  const isLiveCart = form.trigger_type.startsWith("live_cart");
 
   useEffect(() => {
     loadRules();
@@ -165,6 +170,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: false,
       automation_flow_id: "",
       cooldown_minutes: 60,
+      min_delay_seconds: 20,
+      max_delay_seconds: 60,
       target_media_id: "",
       target_media_caption: "",
       action_capture_lead: false,
@@ -191,6 +198,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: rule.action_trigger_automation,
       automation_flow_id: rule.automation_flow_id || "",
       cooldown_minutes: rule.cooldown_minutes,
+      min_delay_seconds: rule.min_delay_seconds ?? 20,
+      max_delay_seconds: rule.max_delay_seconds ?? 60,
       target_media_id: rule.target_media_id || "",
       target_media_caption: rule.target_media_caption || "",
       action_capture_lead: rule.action_capture_lead || false,
@@ -215,7 +224,7 @@ export default function InstagramCommentAutomation() {
         .map((k) => k.trim())
         .filter(Boolean),
       media_types: form.media_types,
-      action_reply_comment: form.action_reply_comment,
+      action_reply_comment: form.trigger_type.startsWith("live_cart") ? true : form.action_reply_comment,
       reply_comment_text: form.reply_comment_text || null,
       reply_comment_variations: (form.reply_comment_variations || [])
         .map((v) => v.trim())
@@ -238,6 +247,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: form.action_trigger_automation,
       automation_flow_id: form.automation_flow_id || null,
       cooldown_minutes: form.cooldown_minutes,
+      min_delay_seconds: Math.max(5, form.min_delay_seconds),
+      max_delay_seconds: Math.max(Math.max(5, form.min_delay_seconds), form.max_delay_seconds),
       target_media_id: form.target_media_id || null,
       target_media_caption: form.target_media_id ? (form.target_media_caption || null) : null,
       action_capture_lead: form.action_capture_lead,
@@ -526,9 +537,34 @@ export default function InstagramCommentAutomation() {
                 <SelectContent>
                   <SelectItem value="keyword">Por Palavras-chave</SelectItem>
                   <SelectItem value="all">Todos os Comentários</SelectItem>
+                  <SelectItem value="live_cart_ready">Live: carrinho criado com 4 dígitos</SelectItem>
+                  <SelectItem value="live_cart_missing_last4">Live: carrinho criado sem 4 dígitos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {isLiveCart && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Dispara quando um carrinho é criado no Eventos com o @ da cliente durante uma live ativa.
+                  O texto é publicado como comentário na live que está no ar marcando <b>{"{{arroba}}"}</b>;
+                  se o Instagram recusar, responde ao último comentário dela na live e, por último, manda no direct.
+                  Use o campo "Responder no Comentário" abaixo com várias variações.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Intervalo mínimo entre avisos (seg)</Label>
+                    <Input type="number" min={5} value={form.min_delay_seconds}
+                      onChange={(e) => setForm({ ...form, min_delay_seconds: Number(e.target.value) || 0 })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Intervalo máximo (seg)</Label>
+                    <Input type="number" min={5} value={form.max_delay_seconds}
+                      onChange={(e) => setForm({ ...form, max_delay_seconds: Number(e.target.value) || 0 })} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {form.trigger_type === "keyword" && (
               <div>
