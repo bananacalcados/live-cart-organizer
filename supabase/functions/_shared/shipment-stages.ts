@@ -146,12 +146,16 @@ export function naturalTime(base: Date, code: string, index: number): string {
 
 /**
  * Calcula até que etapa automática o pedido já chegou.
- * Nunca avança sozinho para "enviado": isso só acontece quando a expedição
- * registra o código real de rastreio.
+ * Regra do negócio: se o envio real não acontecer em até 3 dias úteis
+ * (soma das etapas, com teto), o pedido passa a constar como "enviado"
+ * automaticamente. Quando o código real chega depois, a data do "enviado"
+ * continua sendo a do cronograma (a mais cedo entre as duas).
  */
 export function autoStage(startedAt: Date, cfg: StageConfig, now: Date): StageKey {
   const t1 = addDays(startedAt, cfg.em_separacao_days, cfg.business_days);
   const t2 = addDays(t1, cfg.separado_days, cfg.business_days);
+  const t3 = addDays(t2, cfg.embalado_days, cfg.business_days);
+  if (now >= t3) return 'enviado';
   if (now >= t2) return 'embalado';
   if (now >= t1) return 'separado';
   return 'em_separacao';
@@ -161,7 +165,8 @@ export function stageTimes(startedAt: Date, cfg: StageConfig) {
   const t0 = startedAt;
   const t1 = addDays(t0, cfg.em_separacao_days, cfg.business_days);
   const t2 = addDays(t1, cfg.separado_days, cfg.business_days);
-  return { em_separacao: t0, separado: t1, embalado: t2 };
+  const t3 = addDays(t2, cfg.embalado_days, cfg.business_days);
+  return { em_separacao: t0, separado: t1, embalado: t2, enviado: t3 };
 }
 
 const CARRIER_WORDS = [

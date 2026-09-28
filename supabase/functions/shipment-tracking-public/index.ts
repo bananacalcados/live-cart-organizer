@@ -228,7 +228,9 @@ Deno.serve(async (req) => {
       const times = stageTimes(started, cfg);
       const history = (sim.stage_history as Record<string, string>) || {};
       const persisted = String(sim.stage || 'em_separacao') as StageKey;
-      const auto = autoStage(started, cfg, now);
+      // Retirada na loja nunca vira "pronto para retirada" sozinha.
+      const autoRaw = autoStage(started, cfg, now);
+      const auto: StageKey = fulfillment === 'pickup' && autoRaw === 'enviado' ? 'embalado' : autoRaw;
       const reached: StageKey =
         STAGE_ORDER.indexOf(persisted) >= STAGE_ORDER.indexOf(auto) ? persisted : auto;
 
@@ -237,7 +239,14 @@ Deno.serve(async (req) => {
 
       // Se o envio real aconteceu antes do cronograma automático, as etapas
       // anteriores não podem aparecer DEPOIS do "enviado".
-      const shippedMs = history.enviado ? new Date(history.enviado).getTime() : null;
+      // Data efetiva do "enviado": a mais cedo entre o envio real e o 3º dia útil.
+      const realShippedMs = history.enviado ? new Date(history.enviado).getTime() : null;
+      const autoShippedMs = fulfillment === 'pickup'
+        ? null
+        : new Date(naturalTime(times.enviado, code, 3)).getTime();
+      const shippedMs = realShippedMs != null && autoShippedMs != null
+        ? Math.min(realShippedMs, autoShippedMs)
+        : (realShippedMs ?? (autoShippedMs != null && autoShippedMs <= now.getTime() ? autoShippedMs : null));
       const autoStages: StageKey[] = ['em_separacao', 'separado', 'embalado'];
       autoStages.forEach((k, i) => {
         if (STAGE_ORDER.indexOf(reached) >= STAGE_ORDER.indexOf(k)) {
@@ -255,7 +264,7 @@ Deno.serve(async (req) => {
           detail: fulfillment === 'pickup'
             ? 'Seu pedido está pronto para retirada na loja.'
             : STAGE_DETAIL.enviado,
-          at: stageAt('enviado', now, 3),
+          at: shippedMs != null ? new Date(shippedMs).toISOString() : stageAt('enviado', now, 3),
         });
       }
 
