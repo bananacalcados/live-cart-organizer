@@ -61,7 +61,11 @@ export function SplitPartsSummary({ orderId, saleId, className }: { orderId?: st
     setParts(rows);
   }, [orderId, saleId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
 
   if (!parts.length) return null;
 
