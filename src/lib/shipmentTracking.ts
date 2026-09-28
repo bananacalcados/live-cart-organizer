@@ -129,10 +129,10 @@ export async function attachRealTracking(params: {
 
 
   for (const row of (rows ?? []) as any[]) {
+    // NÃO carimbar separação/separado/embalado com "agora": essas etapas são
+    // calculadas a partir da data do pagamento pela página pública. Carimbar
+    // aqui fazia um pedido pago dia 19 aparecer "em separação" no dia do envio.
     const history = { ...((row.stage_history as Record<string, string>) || {}) };
-    for (const k of ['em_separacao', 'separado', 'embalado'] as const) {
-      if (!history[k]) history[k] = now;
-    }
     history.enviado = history.enviado || now;
     await supabase
       .from('shipment_simulations')
