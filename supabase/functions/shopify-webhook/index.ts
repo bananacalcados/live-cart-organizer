@@ -1,3 +1,4 @@
+import { parseShopifyAddress } from "../_shared/shopify-address.ts";
 // Shopify webhook receiver — orders/paid + orders/updated
 // HMAC validation with SHOPIFY_CLIENT_SECRET (used for Shopify custom app webhooks).
 // Idempotent upsert via (external_source='shopify', external_order_id).
@@ -185,11 +186,11 @@ Deno.serve(async (req) => {
     const customerCity = addr.city || null;
     const customerState = addr.province_code || addr.province || null;
     const customerCep = digits(addr.zip) || null;
-    const { street, number } = splitStreetNumber(addr.address1);
-    const custAddress = street;
-    const custNumber = number || findNoteAttr(notesAttrs, /n[uú]mero/i, /^num/i);
-    const custComplement = (addr.address2 || "").trim() || findNoteAttr(notesAttrs, /complement/i);
-    const custNeighborhood = findNoteAttr(notesAttrs, /bairro/i, /neighborhood/i) || (addr.company || "").trim() || null;
+    const pa = parseShopifyAddress(addr, findNoteAttr(notesAttrs, /n[uú]mero/i, /^num/i), findNoteAttr(notesAttrs, /complement/i), findNoteAttr(notesAttrs, /bairro/i, /neighborhood/i));
+    const custAddress = pa.street;
+    const custNumber = pa.number;
+    const custComplement = pa.complement;
+    const custNeighborhood = pa.neighborhood;
     const phoneClean = digits(customerPhone);
 
     // Vincula/cria o cliente no PDV (CPF > telefone)
@@ -262,7 +263,7 @@ Deno.serve(async (req) => {
         link_page_item_id: lp.link_page_item_id,
         link_page_catalog_product_id: lp.link_page_catalog_product_id,
         shipping_address: {
-          address: custAddress, address_number: custNumber, complement: custComplement,
+          address: custAddress, number: custNumber, address_number: custNumber, complement: custComplement,
           neighborhood: custNeighborhood, city: customerCity, state: customerState,
           cep: customerCep, name: customerName, phone: phoneClean || null,
         },
