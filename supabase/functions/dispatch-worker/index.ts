@@ -451,6 +451,7 @@ serve(async (req) => {
       if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
       const testRcp: any = { phone: formatted, recipient_name: 'Teste', first_name: 'Teste' };
+      if (usesCashback(testConfig)) await attachCashback(supabase, [testRcp]);
       const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId, mediaIds);
 
       const body: any = {
@@ -552,6 +553,8 @@ serve(async (req) => {
           (r as any).recipient_name = wa;
         }
       }
+
+      if (hasDynamicVars && usesCashback(variablesConfig)) await attachCashback(supabase, claimed);
 
       async function sendOne(rcp: any) {
         let formatted = rcp.phone.replace(/\D/g, '');
