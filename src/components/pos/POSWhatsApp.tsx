@@ -2672,11 +2672,11 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
           {sideToolOpen && (
             <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[35%] lg:w-[30%] md:shrink-0 md:border-l md:border-border/60">
-              {auxiliaryToolOpen && <div className="flex h-11 shrink-0 items-center border-b border-border/60 px-2">
+              <div className={cn("flex h-11 shrink-0 items-center border-b border-border/60 px-2", !auxiliaryToolOpen && "md:hidden")}>
                 <Button variant="ghost" size="sm" className="gap-1.5" onClick={closeSideTools}>
                   <ArrowLeft className="h-4 w-4" /> Voltar ao chat
                 </Button>
-              </div>}
+              </div>
               <div className="min-h-0 flex-1">
               {showOrdersModal && !auxiliaryToolOpen && <POSCustomerOrdersPanel
                 phone={selectedPhone}
