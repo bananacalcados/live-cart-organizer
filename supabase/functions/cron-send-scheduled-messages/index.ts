@@ -80,7 +80,7 @@ serve(async (req) => {
 
         const res = await supabase.functions.invoke(fn, {
           body: { phone: msg.phone, message: msg.message, whatsapp_number_id: msg.whatsapp_number_id },
-          headers: { "x-force-instance": "1" },
+          headers: { "x-force-instance": "true" },
         });
         let errText: string | null = null;
         if (res.error) {
