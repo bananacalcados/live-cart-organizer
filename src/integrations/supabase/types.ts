@@ -12799,6 +12799,8 @@ export type Database = {
           appmax_order_id: string | null
           austpay_transaction_id: string | null
           cart_link: string | null
+          cashback_amount: number
+          cashback_id: string | null
           checkout_started_at: string | null
           checkout_token: string | null
           confirmed_items_signature: string | null
@@ -12867,6 +12869,8 @@ export type Database = {
           appmax_order_id?: string | null
           austpay_transaction_id?: string | null
           cart_link?: string | null
+          cashback_amount?: number
+          cashback_id?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
           confirmed_items_signature?: string | null
@@ -12935,6 +12939,8 @@ export type Database = {
           appmax_order_id?: string | null
           austpay_transaction_id?: string | null
           cart_link?: string | null
+          cashback_amount?: number
+          cashback_id?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
           confirmed_items_signature?: string | null
@@ -22610,6 +22616,17 @@ export type Database = {
           revenue: number
         }[]
       }
+      available_cashbacks_for_order: {
+        Args: { p_order_id: string; p_phone: string }
+        Returns: {
+          cashback_amount: number
+          coupon_code: string
+          created_at: string
+          expires_at: string
+          id: string
+          min_purchase: number
+        }[]
+      }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
         Args: never
@@ -22691,6 +22708,16 @@ export type Database = {
       can_access_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      cashback_return_stats: {
+        Args: { p_days?: number }
+        Returns: {
+          customers_returned: number
+          customers_used: number
+          return_revenue: number
+          return_sales: number
+          used_count: number
+        }[]
       }
       chargeback_gate: {
         Args: {
