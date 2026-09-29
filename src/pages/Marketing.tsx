@@ -1575,6 +1575,7 @@ export default function Marketing() {
                     <SelectItem value="none">Sem cashback ativo</SelectItem>
                   </SelectContent>
                 </Select>
+                <CashbackReturnStats />
                 <Select value={topN} onValueChange={setTopN}>
                   <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
