@@ -108,6 +108,7 @@ interface Recipient {
   state?: string;
   email?: string;
   unified_id?: string | null;
+  cashback?: { total: number; minPurchase: number; expiresAt: string | null; code: string | null };
 }
 
 type TipoComunicacao = '' | 'convite_live' | 'oferta' | 'reativacao' | 'lancamento' | 'pesquisa';
@@ -123,6 +124,7 @@ const TIPO_COMUNICACAO_OPTIONS: Array<{ value: Exclude<TipoComunicacao,''>; labe
 // Dynamic variable options that pull from recipient data
 const DYNAMIC_VARIABLE_OPTIONS = [
   { value: '__static__', label: '✏️ Texto fixo' },
+  { value: '__composed__', label: '🧩 Texto livre + variáveis' },
   { value: '__external__', label: '🔗 Campo externo (preencher ao disparar)' },
   { value: '__first_name__', label: '👤 Primeiro Nome' },
   { value: '__full_name__', label: '👤 Nome Completo' },
@@ -131,9 +133,33 @@ const DYNAMIC_VARIABLE_OPTIONS = [
   { value: '__state__', label: '📍 Estado' },
   { value: '__segment__', label: '🏷️ Segmento RFM' },
   { value: '__email__', label: '📧 Email' },
+  { value: '__cashback_value__', label: '💰 Cashback disponível' },
+  { value: '__cashback_expiry__', label: '📅 Validade do cashback' },
+  { value: '__cashback_min__', label: '🛒 Compra mínima do cashback' },
+  { value: '__cashback_code__', label: '🎟️ Código do cashback' },
+  { value: '__cashback_days__', label: '⏳ Dias p/ expirar o cashback' },
 ];
 
+// Marcadores aceitos no modo "Texto livre + variáveis"
+const COMPOSE_TOKENS = [
+  { token: '{{primeiro_nome}}', label: 'Primeiro nome', mode: '__first_name__' },
+  { token: '{{nome_completo}}', label: 'Nome completo', mode: '__full_name__' },
+  { token: '{{telefone}}', label: 'Telefone', mode: '__phone__' },
+  { token: '{{cidade}}', label: 'Cidade', mode: '__city__' },
+  { token: '{{estado}}', label: 'Estado', mode: '__state__' },
+  { token: '{{segmento}}', label: 'Segmento RFM', mode: '__segment__' },
+  { token: '{{email}}', label: 'Email', mode: '__email__' },
+  { token: '{{cashback_valor}}', label: 'Cashback disponível', mode: '__cashback_value__' },
+  { token: '{{cashback_validade}}', label: 'Validade do cashback', mode: '__cashback_expiry__' },
+  { token: '{{cashback_minimo}}', label: 'Compra mínima', mode: '__cashback_min__' },
+  { token: '{{cashback_codigo}}', label: 'Código do cashback', mode: '__cashback_code__' },
+  { token: '{{cashback_dias}}', label: 'Dias p/ expirar', mode: '__cashback_days__' },
+];
+
+const brl = (n: number) => `R$ ${(Number(n) || 0).toFixed(2).replace('.', ',')}`;
+
 function resolveVariableForRecipient(varConfig: { mode: string; staticValue: string }, recipient: Recipient): string {
+  const cb = recipient.cashback;
   switch (varConfig.mode) {
     case '__first_name__': return recipient.firstName || recipient.name.split(' ')[0] || 'Cliente';
     case '__full_name__': return recipient.name || 'Cliente';
@@ -142,6 +168,22 @@ function resolveVariableForRecipient(varConfig: { mode: string; staticValue: str
     case '__state__': return recipient.state || 'N/A';
     case '__segment__': return recipient.segment || 'N/A';
     case '__email__': return recipient.email || 'N/A';
+    case '__cashback_value__': return brl(cb?.total || 0);
+    case '__cashback_expiry__': return cb?.expiresAt ? new Date(cb.expiresAt).toLocaleDateString('pt-BR') : '-';
+    case '__cashback_min__': return brl(cb?.minPurchase || 0);
+    case '__cashback_code__': return cb?.code || '-';
+    case '__cashback_days__': {
+      if (!cb?.expiresAt) return '0 dias';
+      const d = Math.max(0, Math.ceil((new Date(cb.expiresAt).getTime() - Date.now()) / 86400000));
+      return `${d} ${d === 1 ? 'dia' : 'dias'}`;
+    }
+    case '__composed__': {
+      let text = varConfig.staticValue || '';
+      for (const t of COMPOSE_TOKENS) {
+        if (text.includes(t.token)) text = text.split(t.token).join(resolveVariableForRecipient({ mode: t.mode, staticValue: '' }, recipient));
+      }
+      return text.trim() || 'Cliente';
+    }
     default: return varConfig.staticValue || 'Cliente';
   }
 }
@@ -149,6 +191,11 @@ function resolveVariableForRecipient(varConfig: { mode: string; staticValue: str
 function getPreviewLabel(mode: string, staticValue: string): string {
   const opt = DYNAMIC_VARIABLE_OPTIONS.find(o => o.value === mode);
   if (mode === '__static__') return staticValue || '{{?}}';
+  if (mode === '__composed__') {
+    let t = staticValue || '{{?}}';
+    for (const tk of COMPOSE_TOKENS) t = t.split(tk.token).join(`[${tk.label}]`);
+    return t;
+  }
   if (mode === '__external__') return `[🔗 ${staticValue || 'Campo externo'}]`;
   return opt ? `[${opt.label}]` : staticValue || '{{?}}';
 }
