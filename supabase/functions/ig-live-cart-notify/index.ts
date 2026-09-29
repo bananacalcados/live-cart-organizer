@@ -26,6 +26,25 @@ function render(tpl: string, handle: string) {
   return m.trim();
 }
 
+// Live do evento: usa o @ e o ID da mídia do link da live configurado no evento.
+async function liveFromEvent(sb: any, eventId: string, accounts: any[]) {
+  const { data: ev } = await sb.from("events").select("instagram_live_url").eq("id", eventId).maybeSingle();
+  const url = String(ev?.instagram_live_url || "");
+  const m = url.match(/instagram\.com\/([^/?#]+)\/live\/(\d+)/i);
+  if (!m) return null;
+  const user = m[1].toLowerCase();
+  const acc = accounts.find((a) => String(a.label || "").replace(/^@/, "").toLowerCase() === user);
+  if (!acc) return null;
+  const token = acc.access_token || globalIgToken();
+  // Confere a live atual desta conta; se o link estiver velho, usa a live no ar dessa mesma conta.
+  for (const h of HOSTS) {
+    const r = await g(`${h}/${acc.instagram_account_id}/live_media?fields=id&limit=1&access_token=${encodeURIComponent(token)}`);
+    const id = r.ok ? r.d?.data?.[0]?.id : null;
+    if (id) return { mediaId: String(id), token };
+  }
+  return { mediaId: m[2], token };
+}
+
 async function findLive(accounts: any[]) {
   for (const a of accounts) {
     const token = a.access_token || globalIgToken();
@@ -50,7 +69,7 @@ Deno.serve(async (req) => {
 
   const started = Date.now();
   const results: any[] = [];
-  let live: { mediaId: string; token: string } | null | undefined;
+  const liveByEvent = new Map<string, { mediaId: string; token: string } | null>();
   let accounts: any[] | null = null;
 
   while (Date.now() - started < 50_000) {
@@ -64,11 +83,10 @@ Deno.serve(async (req) => {
 
     if (!accounts) {
       const { data } = await sb.from("whatsapp_numbers")
-        .select("id, instagram_account_id, access_token").eq("provider", "instagram").eq("is_active", true)
+        .select("id, label, instagram_account_id, access_token").eq("provider", "instagram").eq("is_active", true)
         .not("instagram_account_id", "is", null);
       accounts = data || [];
     }
-    if (live === undefined) live = await findLive(accounts);
 
     for (const job of jobs as any[]) {
       const fail = async (error: string) => {
@@ -89,6 +107,11 @@ Deno.serve(async (req) => {
       if (!pool.length) { await fail("automação sem texto"); continue; }
       const message = render(pool[Math.floor(Math.random() * pool.length)], job.instagram_handle);
 
+      if (!liveByEvent.has(job.event_id)) {
+        liveByEvent.set(job.event_id, (await liveFromEvent(sb, job.event_id, accounts!)) || (await findLive(accounts!)));
+      }
+      const live = liveByEvent.get(job.event_id);
+      console.log(`[ig-live-cart-notify] evento ${job.event_id} -> live ${live?.mediaId}`);
       if (!live) { await fail("nenhuma live no ar no Instagram"); continue; }
       const token = live.token;
       const errs: string[] = [];
