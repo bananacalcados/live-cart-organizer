@@ -14550,6 +14550,27 @@ export type Database = {
           },
         ]
       }
+      pos_link_confirmation_sent: {
+        Row: {
+          created_at: string
+          sale_id: string
+          sent_at: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          sale_id: string
+          sent_at?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          sale_id?: string
+          sent_at?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       pos_payment_methods: {
         Row: {
           created_at: string
