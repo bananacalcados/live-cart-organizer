@@ -3753,6 +3753,23 @@ export function AutomationFlowBuilder() {
   const [showExecLog, setShowExecLog] = useState(false);
   const [execLog, setExecLog] = useState<any[]>([]);
   const [execLogLoading, setExecLogLoading] = useState(false);
+  const [salesDays, setSalesDays] = useState(7);
+  const [salesStats, setSalesStats] = useState<Record<string, { recipients: number; buyers: number; orders: number; revenue: number }>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc('automation_sales_results' as any, { p_days: salesDays });
+      if (cancelled) return;
+      if (error) { console.error('automation sales results error:', error); setSalesStats({}); return; }
+      const m: Record<string, { recipients: number; buyers: number; orders: number; revenue: number }> = {};
+      for (const r of (data as any[]) || []) {
+        m[r.flow_id] = { recipients: Number(r.recipients) || 0, buyers: Number(r.buyers) || 0, orders: Number(r.orders) || 0, revenue: Number(r.revenue) || 0 };
+      }
+      setSalesStats(m);
+    })();
+    return () => { cancelled = true; };
+  }, [salesDays]);
 
   const fetchFlows = useCallback(async () => {
     setLoading(true);
@@ -3906,7 +3923,13 @@ export function AutomationFlowBuilder() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Crie automações de disparo por gatilhos com IA, templates e mensagens ricas.</p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="flex items-center gap-1 rounded-md border p-0.5" title="Vendas de quem recebeu a automação, em até X dias. Cada venda conta só para a última automação recebida.">
+            <span className="text-[11px] text-muted-foreground px-1">Vendas em</span>
+            {[7, 14, 21, 30].map(d => (
+              <Button key={d} size="sm" variant={salesDays === d ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setSalesDays(d)}>{d}d</Button>
+            ))}
+          </div>
           <Button size="sm" variant="outline" onClick={() => { setShowExecLog(true); fetchExecLog(); }} className="gap-1">
             <FileText className="h-3.5 w-3.5" />Log de Disparos
           </Button>
@@ -3960,6 +3983,17 @@ export function AutomationFlowBuilder() {
                         {totalFailed > 0 && <span className="text-[10px] text-destructive">{totalFailed} ✗</span>}
                         {skipped > 0 && <span className="text-[10px] text-amber-600">{skipped.toLocaleString('pt-BR')} excluídos por cota/cooldown</span>}
                         {lastAtRaw && <span className="text-[10px] text-muted-foreground">Último: {new Date(lastAtRaw).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                    )}
+                    {salesStats[flow.id] && (
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px]">
+                        <span className="text-muted-foreground">{salesStats[flow.id].recipients.toLocaleString('pt-BR')} receberam</span>
+                        <span className="font-semibold text-primary">
+                          {salesStats[flow.id].buyers.toLocaleString('pt-BR')} compraram em até {salesDays} dias
+                          {salesStats[flow.id].recipients > 0 && ` (${((salesStats[flow.id].buyers / salesStats[flow.id].recipients) * 100).toFixed(1).replace('.', ',')}%)`}
+                        </span>
+                        <span className="text-muted-foreground">{salesStats[flow.id].orders} vendas</span>
+                        <span className="font-semibold text-foreground">{salesStats[flow.id].revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                       </div>
                     )}
                   </div>
