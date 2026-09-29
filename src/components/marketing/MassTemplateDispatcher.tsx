@@ -1278,7 +1278,16 @@ export function MassTemplateDispatcher() {
     }
     setIsTesting(true);
     try {
-      const components = buildComponentsForRecipient(); // static only for test
+      // Teste usa um destinatário fictício com o cashback real do número de teste
+      const tp = testPhone.replace(/\D/g, '');
+      let testCb: Recipient['cashback'] = undefined;
+      try {
+        const { data: cbRows } = await supabase.rpc('lookup_cashback_by_phones' as any, { p_phones: [tp] });
+        const row = (cbRows as any[] | null)?.[0];
+        if (row) testCb = { total: Number(row.total_available) || 0, minPurchase: Number(row.min_purchase) || 0, expiresAt: row.expires_at, code: row.coupon_code };
+      } catch { /* sem cashback */ }
+      const testRecipient: Recipient = { phone: tp, name: 'Teste', firstName: 'Teste', lastName: '', source: 'crm', cashback: testCb };
+      const components = buildComponentsForRecipient(testRecipient);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
