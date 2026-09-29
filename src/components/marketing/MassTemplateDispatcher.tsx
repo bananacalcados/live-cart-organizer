@@ -2052,6 +2052,42 @@ export function MassTemplateDispatcher() {
                           </p>
                         </div>
                       )}
+                      {vc.mode === '__composed__' && (
+                        <div className="space-y-1">
+                          <Input
+                            id={`compose-${v.key}`}
+                            className="h-7 text-xs"
+                            placeholder="Ex.: {{cashback_valor}} em compras acima de {{cashback_minimo}}"
+                            value={vc.staticValue}
+                            onChange={e => setVariables(prev => ({
+                              ...prev,
+                              [v.key]: { ...prev[v.key], staticValue: e.target.value },
+                            }))}
+                          />
+                          <div className="flex flex-wrap gap-1">
+                            {COMPOSE_TOKENS.map(t => (
+                              <button
+                                key={t.token}
+                                type="button"
+                                className="text-[10px] px-1.5 py-0.5 rounded border bg-background hover:bg-secondary"
+                                onClick={() => {
+                                  const el = document.getElementById(`compose-${v.key}`) as HTMLInputElement | null;
+                                  setVariables(prev => {
+                                    const cur = prev[v.key]?.staticValue || '';
+                                    const pos = el?.selectionStart ?? cur.length;
+                                    return { ...prev, [v.key]: { ...prev[v.key], mode: '__composed__', staticValue: cur.slice(0, pos) + t.token + cur.slice(pos) } };
+                                  });
+                                }}
+                              >
+                                + {t.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Cada cliente recebe o texto com os próprios dados. Sem cashback ativo, o valor sai como R$ 0,00.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
