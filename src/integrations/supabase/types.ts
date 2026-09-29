@@ -22512,6 +22512,16 @@ export type Database = {
       automation_pacing_reset_stale: { Args: never; Returns: number }
       automation_phone_key: { Args: { p_phone: string }; Returns: string }
       automation_queue_pending_count: { Args: never; Returns: number }
+      automation_sales_results: {
+        Args: { p_days?: number }
+        Returns: {
+          buyers: number
+          flow_id: string
+          orders: number
+          recipients: number
+          revenue: number
+        }[]
+      }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
         Args: never

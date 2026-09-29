@@ -1,0 +1,1 @@
+ALTER FUNCTION public.automation_sales_results(int) SECURITY INVOKER;
