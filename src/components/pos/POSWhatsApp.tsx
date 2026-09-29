@@ -262,9 +262,11 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   }, []);
 
   // Voltar ao chat = ferramentas fechadas e ficha completa como painel padrão.
+  // No celular a ficha cobre o chat inteiro, então "Voltar ao chat" precisa fechá-la.
   const closeSideTools = useCallback(() => {
     resetSideTools();
-    setShowOrdersModal(true);
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    setShowOrdersModal(!isMobile);
   }, [resetSideTools]);
 
   const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
@@ -2672,9 +2674,12 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
           {sideToolOpen && (
             <aside className="absolute inset-0 z-30 flex flex-col bg-card md:static md:z-auto md:h-full md:w-[35%] lg:w-[30%] md:shrink-0 md:border-l md:border-border/60">
-              <div className={cn("flex h-11 shrink-0 items-center border-b border-border/60 px-2", !auxiliaryToolOpen && "md:hidden")}>
+              <div className={cn("flex h-11 shrink-0 items-center justify-between border-b border-border/60 px-2", !auxiliaryToolOpen && "md:hidden")}>
                 <Button variant="ghost" size="sm" className="gap-1.5" onClick={closeSideTools}>
                   <ArrowLeft className="h-4 w-4" /> Voltar ao chat
+                </Button>
+                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Fechar conversa" onClick={() => { resetSideTools(); setShowOrdersModal(false); setSelectedPhone(null); setSelectedConvKey(null); }}>
+                  <X className="h-5 w-5" />
                 </Button>
               </div>
               <div className="min-h-0 flex-1">
