@@ -163,6 +163,14 @@ serve(async (req) => {
             .select('coupon_code, cashback_amount, min_purchase, expires_at')
             .maybeSingle();
           cb = inserted;
+          if (!cb) {
+            // Inserção ignorada pelo banco: a mesma compra já gerou cashback pelo PDV.
+            const { data: again } = await supabase.from('internal_cashback')
+              .select('coupon_code, cashback_amount, min_purchase, expires_at')
+              .ilike('customer_phone', `%${phoneSuffix8}`).eq('is_used', false)
+              .order('created_at', { ascending: false }).limit(1).maybeSingle();
+            cb = again;
+          }
         }
       }
 
