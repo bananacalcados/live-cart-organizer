@@ -143,6 +143,14 @@ Deno.serve(async (req) => {
               .select("coupon_code, cashback_amount, min_purchase, expires_at")
               .maybeSingle();
             if (inserted) cb = inserted;
+            else {
+              // Inserção ignorada pelo banco: a mesma compra já gerou cashback pela Live.
+              const { data: again } = await supabase.from("internal_cashback")
+                .select("coupon_code, cashback_amount, min_purchase, expires_at")
+                .ilike("customer_phone", `%${phoneSuffix}`).eq("is_used", false)
+                .order("created_at", { ascending: false }).limit(1).maybeSingle();
+              cb = again;
+            }
           }
         }
       }

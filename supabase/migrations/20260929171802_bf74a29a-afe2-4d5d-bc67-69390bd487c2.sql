@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.internal_cashback_prevent_duplicate() FROM PUBLIC, anon, authenticated;
