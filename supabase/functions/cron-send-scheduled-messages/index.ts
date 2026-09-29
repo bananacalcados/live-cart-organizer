@@ -61,67 +61,38 @@ serve(async (req) => {
           continue;
         }
 
-        // Resolve credentials
-        let instanceId: string | undefined;
-        let token: string | undefined;
-        let clientToken: string | undefined;
+        // Roteia pelo provider REAL da instância (meta | uazapi | wasender | zapi).
+        // Antes, uazapi/wasender caíam no Z-API (vencido) e falhavam.
         let provider = "zapi";
-
         if (msg.whatsapp_number_id) {
           const { data: numData } = await supabase
             .from("whatsapp_numbers")
-            .select("zapi_instance_id, zapi_token, zapi_client_token, provider")
+            .select("provider")
             .eq("id", msg.whatsapp_number_id)
-            .single();
-
-          if (numData?.provider === "meta") {
-            provider = "meta";
-          } else if (numData?.zapi_instance_id && numData?.zapi_token && numData?.zapi_client_token) {
-            instanceId = numData.zapi_instance_id;
-            token = numData.zapi_token;
-            clientToken = numData.zapi_client_token;
-          }
+            .maybeSingle();
+          if (numData?.provider) provider = numData.provider;
         }
+        const fn =
+          provider === "meta" ? "meta-whatsapp-send"
+          : provider === "uazapi" ? "uazapi-send-message"
+          : provider === "wasender" ? "wasender-send-message"
+          : "zapi-send-message";
 
-        let sendSuccess = false;
-
-        if (provider === "meta") {
-          // Send via Meta WhatsApp API
-          const res = await supabase.functions.invoke("meta-whatsapp-send", {
-            body: { phone: msg.phone, message: msg.message, whatsapp_number_id: msg.whatsapp_number_id },
-          });
-          sendSuccess = !res.error;
-          if (res.error) console.error(`Meta send failed for ${msg.id}:`, res.error);
-        } else {
-          // Fallback to env vars
-          if (!instanceId || !token || !clientToken) {
-            instanceId = Deno.env.get("ZAPI_INSTANCE_ID");
-            token = Deno.env.get("ZAPI_TOKEN");
-            clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN");
-          }
-
-          if (!instanceId || !token || !clientToken) {
-            throw new Error("Z-API credentials not configured");
-          }
-
-          let formattedPhone = msg.phone.replace(/\D/g, "");
-          if (!formattedPhone.startsWith("55")) formattedPhone = "55" + formattedPhone;
-
-          const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
-          const response = await fetch(zapiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Client-Token": clientToken },
-            body: JSON.stringify({ phone: formattedPhone, message: msg.message }),
-          });
-
-          sendSuccess = response.ok;
-          if (!response.ok) {
-            const errData = await response.text();
-            console.error(`Z-API send failed for ${msg.id}:`, errData);
-          } else {
-            await response.text();
-          }
+        const res = await supabase.functions.invoke(fn, {
+          body: { phone: msg.phone, message: msg.message, whatsapp_number_id: msg.whatsapp_number_id },
+          headers: { "x-force-instance": "1" },
+        });
+        let errText: string | null = null;
+        if (res.error) {
+          try { errText = await (res.error as any).context?.text?.(); } catch { /* ignore */ }
+          errText = errText || res.error.message;
+        } else if (res.data && (res.data.error || res.data.success === false)) {
+          errText = JSON.stringify(res.data.error || res.data).slice(0, 500);
         }
+        const sendSuccess = !errText;
+        const providerMessageId =
+          res.data?.messageId ?? res.data?.data?.messages?.[0]?.id ?? res.data?.data?.messageid ?? null;
+        if (errText) console.error(`[${provider}] send failed for ${msg.id}:`, errText);
 
         if (sendSuccess) {
           // Save to whatsapp_messages so it appears in chat history
@@ -131,6 +102,7 @@ serve(async (req) => {
             direction: "outgoing",
             status: "sent",
             whatsapp_number_id: msg.whatsapp_number_id,
+            ...(providerMessageId ? { message_id: String(providerMessageId) } : {}),
           });
 
           await supabase
@@ -142,7 +114,7 @@ serve(async (req) => {
         } else {
           await supabase
             .from("scheduled_messages")
-            .update({ status: "failed", error_message: "Send failed" })
+            .update({ status: "failed", error_message: `[${provider}] ${errText}`.slice(0, 1000) })
             .eq("id", msg.id);
         }
       } catch (err) {
