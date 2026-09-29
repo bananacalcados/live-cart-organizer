@@ -1,3 +1,4 @@
+import { AutomationBuyersDialog } from "./AutomationBuyersDialog";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ReactFlow,
@@ -3754,6 +3755,7 @@ export function AutomationFlowBuilder() {
   const [execLog, setExecLog] = useState<any[]>([]);
   const [execLogLoading, setExecLogLoading] = useState(false);
   const [salesDays, setSalesDays] = useState(7);
+  const [buyersFlow, setBuyersFlow] = useState<AutomationFlow | null>(null);
   const [salesStats, setSalesStats] = useState<Record<string, { recipients: number; buyers: number; orders: number; revenue: number }>>({});
 
   useEffect(() => {
@@ -3986,7 +3988,7 @@ export function AutomationFlowBuilder() {
                       </div>
                     )}
                     {salesStats[flow.id] && (
-                      <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px]">
+                      <button type="button" title="Ver compradores" onClick={e => { e.stopPropagation(); setBuyersFlow(flow); }} className="flex flex-wrap items-center gap-3 mt-1 text-[11px] rounded px-1 -mx-1 hover:bg-muted text-left underline-offset-2 hover:underline">
                         <span className="text-muted-foreground">{salesStats[flow.id].recipients.toLocaleString('pt-BR')} receberam</span>
                         <span className="font-semibold text-primary">
                           {salesStats[flow.id].buyers.toLocaleString('pt-BR')} compraram em até {salesDays} dias
@@ -3994,7 +3996,7 @@ export function AutomationFlowBuilder() {
                         </span>
                         <span className="text-muted-foreground">{salesStats[flow.id].orders} vendas</span>
                         <span className="font-semibold text-foreground">{salesStats[flow.id].revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                      </div>
+                      </button>
                     )}
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
@@ -4012,6 +4014,8 @@ export function AutomationFlowBuilder() {
           })}
         </div>
       )}
+
+      <AutomationBuyersDialog open={!!buyersFlow} onOpenChange={o => !o && setBuyersFlow(null)} flowId={buyersFlow?.id || null} flowName={buyersFlow?.name || ""} days={salesDays} />
 
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-sm">

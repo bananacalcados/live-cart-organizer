@@ -22403,6 +22403,18 @@ export type Database = {
       }
     }
     Functions: {
+      _automation_sale_attribution: {
+        Args: { p_days: number }
+        Returns: {
+          flow_id: string
+          s8: string
+          sale_at: string
+          sale_id: string
+          total: number
+          touch_at: string
+          touch_wa: string
+        }[]
+      }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
       add_business_days: {
         Args: { p_days: number; p_start: string }
@@ -22512,6 +22524,23 @@ export type Database = {
       automation_pacing_reset_stale: { Args: never; Returns: number }
       automation_phone_key: { Args: { p_phone: string }; Returns: string }
       automation_queue_pending_count: { Args: never; Returns: number }
+      automation_sales_buyers: {
+        Args: { p_days?: number; p_flow_id: string }
+        Returns: {
+          customer_name: string
+          customer_phone: string
+          event_id: string
+          items: string
+          sale_at: string
+          sale_id: string
+          sale_type: string
+          sales_channel: string
+          store_name: string
+          total: number
+          touch_at: string
+          whatsapp_number_id: string
+        }[]
+      }
       automation_sales_results: {
         Args: { p_days?: number }
         Returns: {
