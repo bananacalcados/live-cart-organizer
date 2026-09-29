@@ -4860,6 +4860,24 @@ export type Database = {
         }
         Relationships: []
       }
+      dispatch_unit_cost_rates: {
+        Row: {
+          category: string
+          unit_cost_brl: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          unit_cost_brl?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          unit_cost_brl?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_campaigns: {
         Row: {
           created_at: string
@@ -11850,6 +11868,99 @@ export type Database = {
             referencedColumns: ["account_id"]
           },
         ]
+      }
+      meta_ads_campaign_group_overrides: {
+        Row: {
+          campaign_id: string
+          campaign_name: string | null
+          group_override: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          campaign_name?: string | null
+          group_override: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          campaign_name?: string | null
+          group_override?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_ads_campaign_spend_daily: {
+        Row: {
+          account_id: string
+          campaign_id: string
+          campaign_name: string | null
+          date: string
+          id: string
+          impressions: number | null
+          link_clicks: number | null
+          objective: string | null
+          reach: number | null
+          spend: number
+          synced_at: string
+        }
+        Insert: {
+          account_id: string
+          campaign_id: string
+          campaign_name?: string | null
+          date: string
+          id?: string
+          impressions?: number | null
+          link_clicks?: number | null
+          objective?: string | null
+          reach?: number | null
+          spend?: number
+          synced_at?: string
+        }
+        Update: {
+          account_id?: string
+          campaign_id?: string
+          campaign_name?: string | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          link_clicks?: number | null
+          objective?: string | null
+          reach?: number | null
+          spend?: number
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      meta_ads_sync_runs: {
+        Row: {
+          error: string | null
+          id: string
+          ran_at: string
+          rows_upserted: number | null
+          since: string | null
+          status: string
+          until: string | null
+        }
+        Insert: {
+          error?: string | null
+          id?: string
+          ran_at?: string
+          rows_upserted?: number | null
+          since?: string | null
+          status: string
+          until?: string | null
+        }
+        Update: {
+          error?: string | null
+          id?: string
+          ran_at?: string
+          rows_upserted?: number | null
+          since?: string | null
+          status?: string
+          until?: string | null
+        }
+        Relationships: []
       }
       meta_attribution_identities: {
         Row: {
@@ -22236,6 +22347,16 @@ export type Database = {
         }
         Relationships: []
       }
+      mv_ad_contact_first_touch: {
+        Row: {
+          campaign_ref: string | null
+          first_touch_at: string | null
+          phone_key: string | null
+          product_ref: string | null
+          source: string | null
+        }
+        Relationships: []
+      }
       product_master_stock: {
         Row: {
           master_id: string | null
@@ -22328,6 +22449,27 @@ export type Database = {
           },
         ]
       }
+      v_ad_attributed_sales: {
+        Row: {
+          buyers_fora_live: number | null
+          buyers_live: number | null
+          contacts: number | null
+          revenue_fora_live: number | null
+          revenue_live: number | null
+          source: string | null
+          week_start: string | null
+        }
+        Relationships: []
+      }
+      v_dispatch_cost_daily: {
+        Row: {
+          cost_brl: number | null
+          date: string | null
+          messages: number | null
+          source: string | null
+        }
+        Relationships: []
+      }
       v_products_needs_review: {
         Row: {
           brand: string | null
@@ -22343,6 +22485,22 @@ export type Database = {
           sku_count: number | null
           total_stock: number | null
           updated_at: string | null
+        }
+        Relationships: []
+      }
+      v_revenue_daily_by_channel: {
+        Row: {
+          date: string | null
+          n_live: number | null
+          n_loja: number | null
+          n_online: number | null
+          n_total: number | null
+          n_whatsapp: number | null
+          rec_live: number | null
+          rec_loja: number | null
+          rec_online: number | null
+          rec_total: number | null
+          rec_whatsapp: number | null
         }
         Relationships: []
       }
@@ -23052,6 +23210,10 @@ export type Database = {
         Returns: Json
       }
       event_buyer_origin_matrix: { Args: { p_event_id: string }; Returns: Json }
+      event_buyer_origin_matrix_v2: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
       event_phone_key: { Args: { p_phone: string }; Returns: string }
@@ -24003,6 +24165,10 @@ export type Database = {
         }[]
       }
       merge_unified_zoppy_duplicates: { Args: never; Returns: Json }
+      meta_ads_campaign_group: {
+        Args: { campaign_id: string; campaign_name: string }
+        Returns: string
+      }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
         Returns: number
@@ -24159,6 +24325,7 @@ export type Database = {
         }
         Returns: Json
       }
+      refresh_ad_first_touch: { Args: never; Returns: undefined }
       refresh_dispatch_counts: {
         Args: { p_dispatch_id: string }
         Returns: undefined
