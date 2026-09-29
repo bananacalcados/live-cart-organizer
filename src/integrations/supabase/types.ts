@@ -1156,6 +1156,44 @@ export type Database = {
           },
         ]
       }
+      automation_dispatch_sent_log: {
+        Row: {
+          flow_id: string
+          id: string
+          phone: string
+          provider_at_send: string | null
+          sent_at: string
+          status: string
+          unified_id: string | null
+        }
+        Insert: {
+          flow_id: string
+          id?: string
+          phone: string
+          provider_at_send?: string | null
+          sent_at?: string
+          status?: string
+          unified_id?: string | null
+        }
+        Update: {
+          flow_id?: string
+          id?: string
+          phone?: string
+          provider_at_send?: string | null
+          sent_at?: string
+          status?: string
+          unified_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_dispatch_sent_log_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           error_message: string | null
