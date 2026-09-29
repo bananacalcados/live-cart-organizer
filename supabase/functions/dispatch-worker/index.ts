@@ -37,7 +37,18 @@ const LEASE_SECONDS = 90;
 
 interface VariableConfig { mode: string; staticValue: string; externalValue?: string; }
 
+const COMPOSE_TOKENS: Array<[string, string]> = [
+  ['{{primeiro_nome}}', '__first_name__'], ['{{nome_completo}}', '__full_name__'],
+  ['{{telefone}}', '__phone__'], ['{{cidade}}', '__city__'], ['{{estado}}', '__state__'],
+  ['{{segmento}}', '__segment__'], ['{{email}}', '__email__'],
+  ['{{cashback_valor}}', '__cashback_value__'], ['{{cashback_validade}}', '__cashback_expiry__'],
+  ['{{cashback_minimo}}', '__cashback_min__'], ['{{cashback_codigo}}', '__cashback_code__'],
+  ['{{cashback_dias}}', '__cashback_days__'],
+];
+const brl = (n: number) => `R$ ${(Number(n) || 0).toFixed(2).replace('.', ',')}`;
+
 function resolveVariable(vc: VariableConfig, recipient: any): string {
+  const cb = recipient?.cashback;
   switch (vc.mode) {
     // Campo externo: valor preenchido no momento do disparo (ex.: link da live).
     // É igual para todos os destinatários. Fallback vazio se não preenchido.
@@ -49,8 +60,42 @@ function resolveVariable(vc: VariableConfig, recipient: any): string {
     case '__state__': return recipient.state || 'N/A';
     case '__segment__': return recipient.segment || 'N/A';
     case '__email__': return recipient.email || 'N/A';
+    case '__cashback_value__': return brl(cb?.total || 0);
+    case '__cashback_expiry__': return cb?.expiresAt ? new Date(cb.expiresAt).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '-';
+    case '__cashback_min__': return brl(cb?.minPurchase || 0);
+    case '__cashback_code__': return cb?.code || '-';
+    case '__cashback_days__': {
+      if (!cb?.expiresAt) return '0 dias';
+      const d = Math.max(0, Math.ceil((new Date(cb.expiresAt).getTime() - Date.now()) / 86400000));
+      return `${d} ${d === 1 ? 'dia' : 'dias'}`;
+    }
+    case '__composed__': {
+      let text = vc.staticValue || '';
+      for (const [tk, mode] of COMPOSE_TOKENS) {
+        if (text.includes(tk)) text = text.split(tk).join(resolveVariable({ mode, staticValue: '' }, recipient));
+      }
+      return text.trim() || 'Cliente';
+    }
     default: return vc.staticValue || 'Cliente';
   }
+}
+
+// Anexa o cashback ativo (soma, compra mínima, validade e código do mais recente) a cada destinatário.
+async function attachCashback(supabase: any, rows: any[]) {
+  const phones = Array.from(new Set(rows.map((r) => r.phone).filter(Boolean)));
+  if (phones.length === 0) return;
+  const { data, error } = await supabase.rpc('lookup_cashback_by_phones', { p_phones: phones });
+  if (error) { console.error('cashback lookup', error.message); return; }
+  const map = new Map<string, any>();
+  for (const row of data || []) map.set(row.phone, row);
+  for (const r of rows) {
+    const row = map.get(r.phone);
+    if (row) r.cashback = { total: Number(row.total_available) || 0, minPurchase: Number(row.min_purchase) || 0, expiresAt: row.expires_at, code: row.coupon_code };
+  }
+}
+
+function usesCashback(cfg: Record<string, VariableConfig>): boolean {
+  return Object.values(cfg || {}).some((v) => v?.mode?.startsWith('__cashback_') || (v?.mode === '__composed__' && (v.staticValue || '').includes('{{cashback_')));
 }
 
 // Distinct {{n}} numbers in a text, sorted ascending.
