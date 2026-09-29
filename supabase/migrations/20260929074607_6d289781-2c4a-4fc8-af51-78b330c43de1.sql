@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.log_automation_dispatch_sent() FROM PUBLIC, anon, authenticated;
