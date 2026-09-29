@@ -104,6 +104,8 @@ export function POSWhatsAppPixDialog({
           description: description || "PIX WhatsApp",
           is_avulso: true,
           link_origin: "whatsapp_chat",
+          // Instância onde o link foi gerado: a confirmação de pagamento sai por ela.
+          whatsapp_number_id: selectedNumberId || null,
         },
       } as any).select("id").single();
       if (saleErr || !sale) throw new Error("Erro ao criar registro");

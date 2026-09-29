@@ -239,6 +239,8 @@ export function POSWhatsAppCheckoutDialog({
         customer_phone: cleanPhone || null,
         payment_details: {
           link_origin: "whatsapp_chat",
+          // Instância onde o link foi gerado: a confirmação de pagamento sai por ela.
+          whatsapp_number_id: selectedNumberId || null,
           customer_name: customerName || null,
           customer_phone: phone,
           discount_amount: discountAmount,

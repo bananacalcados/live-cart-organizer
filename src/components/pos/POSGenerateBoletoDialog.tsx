@@ -274,6 +274,7 @@ export function POSGenerateBoletoDialog({
         customer_phone: cleanPhone || null,
         payment_details: {
           link_origin: "whatsapp_chat",
+          whatsapp_number_id: selectedNumberId || null,
           payment_kind: "boleto",
           boleto_id: boletoId,
           mp_payment_id: mpPaymentId,
