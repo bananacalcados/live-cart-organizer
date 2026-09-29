@@ -18,6 +18,7 @@ import {
   Settings2, UserCheck, UserX, Megaphone, ChevronDown, ChevronRight, Filter,
 } from "lucide-react";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subWeeks, startOfQuarter, endOfQuarter } from "date-fns";
+import { RoasRealDashboard } from "./RoasRealDashboard";
 
 // ─── Period helpers ───
 type PeriodKey = "all" | "7d" | "30d" | "quarter" | "semester" | "year" | "custom";
@@ -202,7 +203,15 @@ export function MarketingAttributionDashboard() {
           <TabsTrigger value="ltv" className="gap-1">
             <TrendingUp className="h-3.5 w-3.5" />LTV & Recompra
           </TabsTrigger>
+          <TabsTrigger value="roas_real" className="gap-1">
+            <DollarSign className="h-3.5 w-3.5" />ROAS Real
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="roas_real" className="space-y-4 mt-4">
+          <RoasRealDashboard />
+        </TabsContent>
+
 
         {/* ═══════ ATTRIBUTION TAB ═══════ */}
         <TabsContent value="attribution" className="space-y-4 mt-4">

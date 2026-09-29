@@ -342,3 +342,6 @@ verify_jwt = false
 
 [functions.shipment-frenet-webhook]
 verify_jwt = false
+
+[functions.meta-ads-sync]
+verify_jwt = false
