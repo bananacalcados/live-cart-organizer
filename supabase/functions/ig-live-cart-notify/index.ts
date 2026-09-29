@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
         liveByEvent.set(job.event_id, (await liveFromEvent(sb, job.event_id, accounts!)) || (await findLive(accounts!)));
       }
       const live = liveByEvent.get(job.event_id);
+      console.log(`[ig-live-cart-notify] evento ${job.event_id} -> live ${live?.mediaId}`);
       if (!live) { await fail("nenhuma live no ar no Instagram"); continue; }
       const token = live.token;
       const errs: string[] = [];
