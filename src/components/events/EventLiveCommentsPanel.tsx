@@ -641,7 +641,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         const wa = (cached?.whatsapp || "").replace(/\D/g, "");
         if (cached?.whatsapp && wa) map.set(h, cached.whatsapp);
       });
-      if (!cancelled) setWhatsappByHandle(map);
+      if (cancelled) return;
+      // Só troca o mapa se o conteúdo mudou (evita refazer a busca de leads a cada pedido alterado).
+      setWhatsappByHandle((prev) => {
+        if (prev.size === map.size && [...map].every(([k, v]) => prev.get(k) === v)) return prev;
+        return map;
+      });
     })();
     return () => {
       cancelled = true;
