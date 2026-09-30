@@ -13354,6 +13354,51 @@ export type Database = {
         }
         Relationships: []
       }
+      participant_score_cache: {
+        Row: {
+          avg_ticket: number | null
+          cancelled_orders: number | null
+          category: string | null
+          comment_count: number | null
+          handle: string
+          last_participation: string | null
+          live_count: number | null
+          live_dates: string[] | null
+          paid_orders: number | null
+          refreshed_at: string
+          score: number | null
+          total_spent: number | null
+        }
+        Insert: {
+          avg_ticket?: number | null
+          cancelled_orders?: number | null
+          category?: string | null
+          comment_count?: number | null
+          handle: string
+          last_participation?: string | null
+          live_count?: number | null
+          live_dates?: string[] | null
+          paid_orders?: number | null
+          refreshed_at?: string
+          score?: number | null
+          total_spent?: number | null
+        }
+        Update: {
+          avg_ticket?: number | null
+          cancelled_orders?: number | null
+          category?: string | null
+          comment_count?: number | null
+          handle?: string
+          last_participation?: string | null
+          live_count?: number | null
+          live_dates?: string[] | null
+          paid_orders?: number | null
+          refreshed_at?: string
+          score?: number | null
+          total_spent?: number | null
+        }
+        Relationships: []
+      }
       payment_method_fees: {
         Row: {
           acquirer: string
@@ -24587,6 +24632,22 @@ export type Database = {
           total_spent: number
         }[]
       }
+      participant_score_ranking_live: {
+        Args: { p_handles?: string[] }
+        Returns: {
+          avg_ticket: number
+          cancelled_orders: number
+          category: string
+          comment_count: number
+          handle: string
+          last_participation: string
+          live_count: number
+          live_dates: string[]
+          paid_orders: number
+          score: number
+          total_spent: number
+        }[]
+      }
       pc_gender_canon: { Args: { t: string }; Returns: string }
       pc_gender_from_text: { Args: { t: string }; Returns: string }
       pc_norm: { Args: { t: string }; Returns: string }
@@ -24704,6 +24765,7 @@ export type Database = {
         Args: { p_send_id: string }
         Returns: undefined
       }
+      refresh_participant_score_cache: { Args: never; Returns: undefined }
       refresh_vip_orphans: { Args: never; Returns: Json }
       register_template_category_change: {
         Args: {
