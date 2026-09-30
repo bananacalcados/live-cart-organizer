@@ -35,11 +35,37 @@ Deno.serve(async (req) => {
     return error?.message ?? null;
   };
 
-  const token = Deno.env.get("META_ADS_ACCESS_TOKEN");
+  // Vault token (renovado) primeiro; segredo como fallback
+  const { data: vaultToken } = await admin.rpc("meta_ads_get_token");
+  let token: string | undefined = (vaultToken as string) || Deno.env.get("META_ADS_ACCESS_TOKEN");
   if (!token) {
     const refreshErr = await refresh();
     await admin.from("meta_ads_sync_runs").insert({ status: "token_missing", since, until, error: refreshErr });
     return json({ status: "token_missing", refresh_error: refreshErr });
+  }
+
+  // Renovação automática (< 30 dias ou validade desconhecida)
+  let tokenRefresh: string = "skipped";
+  try {
+    const { data: st } = await admin.from("meta_ads_token_state").select("token_expires_at").eq("id", 1).maybeSingle();
+    const exp = st?.token_expires_at ? new Date(st.token_expires_at).getTime() : null;
+    if (!exp || exp - Date.now() < 30 * 86400000) {
+      const appId = Deno.env.get("META_APP_ID");
+      const appSecret = Deno.env.get("META_APP_SECRET");
+      if (!appId || !appSecret) throw new Error("META_APP_ID/META_APP_SECRET ausentes");
+      const u = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
+      u.search = new URLSearchParams({ grant_type: "fb_exchange_token", client_id: appId, client_secret: appSecret, fb_exchange_token: token }).toString();
+      const r = await (await fetch(u)).json();
+      if (r.error || !r.access_token) throw new Error(r.error?.message || "resposta sem access_token");
+      token = r.access_token as string;
+      const expiresAt = new Date(Date.now() + (Number(r.expires_in) || 60 * 86400) * 1000).toISOString();
+      const { error } = await admin.rpc("meta_ads_set_token", { p_token: token, p_expires_at: expiresAt });
+      if (error) throw new Error("vault: " + error.message);
+      tokenRefresh = "refreshed";
+    }
+  } catch (e: any) {
+    tokenRefresh = "error";
+    await admin.from("meta_ads_token_state").upsert({ id: 1, last_error: String(e?.message || e), updated_at: new Date().toISOString() });
   }
 
   const accountId = (Deno.env.get("META_ADS_ACCOUNT_ID") || "2253897104825255").replace(/^act_/, "");
@@ -84,5 +110,5 @@ Deno.serve(async (req) => {
 
   const refreshErr = await refresh();
   await admin.from("meta_ads_sync_runs").insert({ status: "ok", since, until, rows_upserted: upserted, error: refreshErr });
-  return json({ status: "ok", rows_upserted: upserted, since, until });
+  return json({ status: "ok", rows_upserted: upserted, since, until, token_refresh: tokenRefresh });
 });
