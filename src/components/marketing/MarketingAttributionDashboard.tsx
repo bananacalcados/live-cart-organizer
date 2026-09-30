@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subWeeks, startOfQuarter, endOfQuarter } from "date-fns";
 import { RoasRealDashboard } from "./RoasRealDashboard";
+import { LiveRepurchaseCohorts } from "./LiveRepurchaseCohorts";
 
 // ─── Period helpers ───
 type PeriodKey = "all" | "7d" | "30d" | "quarter" | "semester" | "year" | "custom";
@@ -460,6 +461,7 @@ export function MarketingAttributionDashboard() {
 
         {/* ═══════ LTV TAB ═══════ */}
         <TabsContent value="ltv" className="space-y-4 mt-4">
+          <LiveRepurchaseCohorts />
           {/* Controls row */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[140px]">

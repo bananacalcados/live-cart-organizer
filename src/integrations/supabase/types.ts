@@ -1538,6 +1538,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
             foreignKeyName: "automation_pos_followups_step_id_fkey"
             columns: ["step_id"]
             isOneToOne: false
@@ -2459,6 +2473,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "cash_flow_entries_reconciled_with_id_fkey"
@@ -4605,6 +4633,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "delivery_costs_provider_id_fkey"
@@ -7881,6 +7923,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "fiscal_documents_troca_devolucao_id_fkey"
@@ -13395,6 +13451,20 @@ export type Database = {
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
         ]
       }
       paypal_payments: {
@@ -14203,6 +14273,20 @@ export type Database = {
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
         ]
       }
       pos_customers: {
@@ -14373,6 +14457,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "pos_exchanges_seller_id_fkey"
@@ -14859,6 +14957,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "pos_payment_receipts_store_id_fkey"
@@ -15663,6 +15775,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
             foreignKeyName: "pos_returns_seller_id_fkey"
             columns: ["seller_id"]
             isOneToOne: false
@@ -15779,6 +15905,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
         ]
       }
@@ -16700,6 +16840,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "pos_stock_adjustments_seller_id_fkey"
@@ -20333,6 +20487,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
             foreignKeyName: "tiny_stock_sync_errors_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
@@ -20645,11 +20813,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
             foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
             columns: ["pedido_original_id"]
             isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
           },
           {
             foreignKeyName: "trocas_devolucoes_venda_nova_doc_id_fkey"
@@ -22542,6 +22738,53 @@ export type Database = {
         }
         Relationships: []
       }
+      v_live_buyer_purchase_number: {
+        Row: {
+          created_at: string | null
+          event_id: string | null
+          is_live: boolean | null
+          phone_key: string | null
+          purchase_number: number | null
+          sale_id: string | null
+          total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_live_first_purchase_cohort: {
+        Row: {
+          age: string | null
+          cohort_month: string | null
+          first_live_at: string | null
+          first_live_event_id: string | null
+          first_live_purchase_number: number | null
+          first_live_sale_id: string | null
+          first_live_total: number | null
+          phone_key: string | null
+          purchases_90d: number | null
+          repurchase_60d: boolean | null
+          repurchase_60d_live: boolean | null
+          repurchase_90d: boolean | null
+          revenue_90d: number | null
+          was_customer_before: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_event_id_fkey"
+            columns: ["first_live_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_products_needs_review: {
         Row: {
           brand: string | null
@@ -23292,6 +23535,10 @@ export type Database = {
       }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
+      event_live_repurchase: {
+        Args: { p_event_id: string; p_only_prior_customers?: boolean }
+        Returns: Json
+      }
       event_phone_key: { Args: { p_phone: string }; Returns: string }
       events_buyer_origin_matrix_range: {
         Args: { p_channel?: string; p_from: string; p_to: string }
@@ -24129,6 +24376,21 @@ export type Database = {
       live_member_rate_limit: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: boolean
+      }
+      live_repurchase_cohorts: {
+        Args: { p_filter?: string }
+        Returns: {
+          buyers: number
+          cohort_month: string
+          partial: boolean
+          pct_2plus_90: number
+          pct_rep_60: number
+          pct_rep_60_live: number
+          pct_rep_90: number
+          prior_customers: number
+          revenue_90d: number
+          revenue_per_buyer: number
+        }[]
       }
       live_resolve_contact_identities: {
         Args: { p_phones?: string[]; p_suffixes: string[] }
