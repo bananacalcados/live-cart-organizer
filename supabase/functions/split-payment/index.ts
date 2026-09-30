@@ -52,8 +52,13 @@ Deno.serve(async (req) => {
       const { data } = await listParts(sb, orderId, saleId);
       let pix = 0;
       if (orderId) {
-        const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
-        pix = parseFloat(String(st?.value ?? 0)) || 0;
+        // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
+        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
+        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
+        if (!hasCashback) {
+          const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
+          pix = parseFloat(String(st?.value ?? 0)) || 0;
+        }
       }
       return json({ enabled, parts: data || [], pix_discount_pct: pix });
     }
@@ -75,10 +80,15 @@ Deno.serve(async (req) => {
       if (!(total > 0 && total < 100000)) return json({ error: "Total inválido" }, 400);
       if (parts.length < 2 || parts.length > MAX_PARTS) return json({ error: `Use de 2 a ${MAX_PARTS} formas` }, 400);
       // Desconto Pix: mesmo percentual do checkout do pedido (app_settings); links do PDV não têm desconto Pix.
+      // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
       let pixPct = 0;
       if (orderId) {
-        const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
-        pixPct = Math.min(20, Math.max(0, parseFloat(String(st?.value ?? 0)) || 0));
+        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
+        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
+        if (!hasCashback) {
+          const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
+          pixPct = Math.min(20, Math.max(0, parseFloat(String(st?.value ?? 0)) || 0));
+        }
       }
       const rows = [];
       let sum = 0;
