@@ -1321,8 +1321,16 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       case '{products_short}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
       case '{checkout_link}': return checkoutLink;
       case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
-      case '{discount}': return 'R$0.00';
-      case '{total}': return `R$${subtotal.toFixed(2)}`;
+      case '{discount}':
+      case '{total}': {
+        const d = dbOrder as any;
+        const disc = d?.discount_type && d?.discount_value
+          ? d.discount_type === 'percentage' ? subtotal * (Number(d.discount_value) / 100) : Number(d.discount_value)
+          : 0;
+        if (token === '{discount}') return `R$${disc.toFixed(2)}`;
+        const ship = d?.free_shipping ? 0 : Number(d?.shipping_cost || 0);
+        return `R$${Math.max(0, subtotal - disc + ship).toFixed(2)}`;
+      }
       case '{order_id}': return String(order.id).slice(0, 8);
       default: return '';
     }
