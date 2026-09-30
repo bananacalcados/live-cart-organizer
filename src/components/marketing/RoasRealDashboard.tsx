@@ -76,6 +76,7 @@ export function RoasRealDashboard() {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [lastRun, setLastRun] = useState<any>(null);
   const [rates, setRates] = useState<{ category: string; unit_cost_brl: number }[]>([]);
+  const [tokenState, setTokenState] = useState<{ token_expires_at: string | null; last_refreshed_at: string | null; last_error: string | null } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +90,8 @@ export function RoasRealDashboard() {
         sb.from("meta_ads_sync_runs").select("*").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
         sb.from("dispatch_unit_cost_rates").select("category,unit_cost_brl").order("category"),
       ]);
+      const ts = await sb.from("meta_ads_token_state").select("token_expires_at,last_refreshed_at,last_error").eq("id", 1).maybeSingle();
+      setTokenState(ts.data ?? null);
       setSpend(s); setDisp(d); setRev(r); setAttr(a);
       setOverrides(Object.fromEntries((o.data || []).map((x: any) => [x.campaign_id, x.group_override])));
       setLastRun(lr.data);
@@ -247,8 +250,25 @@ export function RoasRealDashboard() {
           <span className="text-xs text-muted-foreground">
             {lastRun ? `Última sync: ${format(new Date(lastRun.ran_at), "dd/MM/yyyy HH:mm")} · ${lastRun.status === "ok" ? `${lastRun.rows_upserted} linhas` : lastRun.status === "token_missing" ? "token ausente" : "erro"}` : "Nenhuma sincronização ainda"}
           </span>
+          {tokenState?.token_expires_at && (
+            <span className="text-xs text-muted-foreground">Token válido até {format(new Date(tokenState.token_expires_at), "dd/MM/yyyy")}</span>
+          )}
         </div>
       </div>
+
+      {tokenState && (tokenState.last_error || (tokenState.token_expires_at && new Date(tokenState.token_expires_at).getTime() - Date.now() < 7 * 86400000)) && (
+        <Card className="border-destructive/40">
+          <CardContent className="p-3 flex gap-2 text-sm">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <span>
+              {tokenState.token_expires_at && new Date(tokenState.token_expires_at).getTime() - Date.now() < 7 * 86400000
+                ? `O token do Meta Ads vence em ${format(new Date(tokenState.token_expires_at), "dd/MM/yyyy")}. `
+                : ""}
+              {tokenState.last_error && `Falha na renovação automática do token: ${tokenState.last_error}`}
+            </span>
+          </CardContent>
+        </Card>
+      )}
 
       {(!hasSpend || lastRun?.status === "token_missing") && (
         <Card className="border-destructive/40">

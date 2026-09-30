@@ -11962,6 +11962,33 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_ads_token_state: {
+        Row: {
+          current_token_secret_id: string | null
+          id: number
+          last_error: string | null
+          last_refreshed_at: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          current_token_secret_id?: string | null
+          id?: number
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          current_token_secret_id?: string | null
+          id?: number
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_attribution_identities: {
         Row: {
           ad_id: string | null
@@ -24168,6 +24195,11 @@ export type Database = {
       meta_ads_campaign_group: {
         Args: { campaign_id: string; campaign_name: string }
         Returns: string
+      }
+      meta_ads_get_token: { Args: never; Returns: string }
+      meta_ads_set_token: {
+        Args: { p_expires_at: string; p_token: string }
+        Returns: undefined
       }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
