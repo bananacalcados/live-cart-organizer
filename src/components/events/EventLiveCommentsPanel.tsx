@@ -160,8 +160,26 @@ const CommentRow = memo(function CommentRow({
   const handle = cleanHandle(c.username);
 
   const scoreMeta = score ? SCORE_META[score.category] : undefined;
+  // Destaque para comentários com intenção de compra (palavra "QUERO")
+  const hasQuero = /quero/i.test(c.comment_text || "");
+  const renderHighlightedText = (text: string) => {
+    const parts = text.split(/(quero)/gi);
+    return parts.map((part, i) =>
+      /^quero$/i.test(part) ? (
+        <mark
+          key={i}
+          className="rounded bg-amber-300 px-0.5 font-extrabold text-amber-950 dark:bg-amber-400/70 dark:text-amber-950"
+        >
+          {part}
+        </mark>
+      ) : (
+        part
+      ),
+    );
+  };
   return (
-    <div className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
+    <div className={cn("flex gap-2.5 px-3 py-2.5", hasQuero ? "bg-amber-400/15 ring-1 ring-inset ring-amber-400/50" : "hover:bg-muted/40")}>
+
       <Avatar className="h-9 w-9 shrink-0">
         {c.profile_pic_url && <AvatarImage src={c.profile_pic_url} alt={handle} />}
         <AvatarFallback className="bg-pink-500/20 text-pink-600 text-xs">
@@ -289,7 +307,10 @@ const CommentRow = memo(function CommentRow({
           )}
           <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
         </div>
-        <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
+        <p className={cn("mt-0.5 break-words text-sm", hasQuero ? "font-semibold text-foreground" : "text-foreground/90")}>
+          {renderHighlightedText(c.comment_text)}
+        </p>
+
         {/* Ações: abrir chat do Instagram / WhatsApp */}
         <div className="mt-1.5 flex items-center gap-1.5">
           <button
