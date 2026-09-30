@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,10 +74,13 @@ export default function PresenterDashboard() {
   const [noClickLeads, setNoClickLeads] = useState<{ id: string; name: string | null; instagram: string | null; phone: string | null; created_at: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const orderHandles = new Set(
-    orders
-      .map((order) => order.customer_name.replace(/^@+/, "").trim().toLowerCase())
-      .filter((handle) => handle && handle !== "cliente"),
+  const orderHandles = useMemo(
+    () => new Set(
+      orders
+        .map((order) => order.customer_name.replace(/^@+/, "").trim().toLowerCase())
+        .filter((handle) => handle && handle !== "cliente"),
+    ),
+    [orders],
   );
   const orderIntents = useLiveOrderIntents(eventId, orderHandles);
 
