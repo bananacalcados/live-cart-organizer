@@ -23190,6 +23190,10 @@ export type Database = {
         }
         Returns: Json
       }
+      dispatch_unit_cost_for: {
+        Args: { p_category: string; p_provider: string }
+        Returns: number
+      }
       enqueue_campanha_envios_guarded: {
         Args: {
           p_campanha_id: string
@@ -24469,6 +24473,10 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      resolve_meta_template_category: {
+        Args: { p_fallback?: string; p_template: string; p_wn: string }
+        Returns: string
+      }
       resolve_or_create_unified_customer: {
         Args: { p_name?: string; p_phone: string }
         Returns: string
@@ -24807,6 +24815,7 @@ export type Database = {
       }
       wa_conv_reconcile: { Args: { p_since?: string }; Returns: number }
       wa_status_rank: { Args: { s: string }; Returns: number }
+      wn_provider: { Args: { p_wn: string }; Returns: string }
       zoppy_origin_class: { Args: { p_zoppy_id: string }; Returns: string }
     }
     Enums: {
