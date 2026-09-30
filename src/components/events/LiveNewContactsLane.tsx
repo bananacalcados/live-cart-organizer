@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Order } from "@/types/order";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -241,16 +241,31 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     };
   }, [eventId, load]);
 
-  // Novas mensagens recebidas (broadcast já existente do chat) atualizam a atividade
-  // e também a lista — a primeira mensagem da cliente casa o clique (phone) no banco.
-  useWaMessageBroadcast(
-    (p) => {
-      if (p?.direction && p.direction !== "incoming") return;
-      loadActivity();
-      load();
-    },
-    { debounceMs: 1500 },
-  );
+  // Novas mensagens: só reagem se forem de um contato DESTA live. A atividade é
+  // atualizada direto com os dados do aviso (sem reconsultar o banco); a lista só
+  // recarrega quando alguém que digitou o número e ainda não falou manda a 1ª mensagem.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  useWaMessageBroadcast((p) => {
+    if (p?.event === "wa_msg_update") return;
+    const k = suffix8(p?.phone);
+    if (k.length !== 8) return;
+    const cur = rowsRef.current;
+    const talked = cur.some((r) => suffix8(r.phone) === k || suffix8(r.real_phone) === k);
+    if (talked) {
+      if (p.direction !== "incoming" && p.direction !== "outgoing") return;
+      setActivity((prev) => {
+        const next = new Map(prev);
+        const a = { ...(next.get(k) || { lastIn: null, lastOut: null }) };
+        if (p.direction === "incoming") a.lastIn = p.created_at;
+        else a.lastOut = p.created_at;
+        next.set(k, a);
+        return next;
+      });
+      return;
+    }
+    if (p.direction === "incoming") load();
+  });
 
   // Fallback: polling leve a cada 20s (aba visível) + refresh ao voltar para a aba.
   useEffect(() => {
