@@ -15,6 +15,7 @@ export interface OriginPerson {
   bucket: OriginBucket;
   value?: number | null;
   reason?: string | null;
+  ad_origin?: string | null;
   created_at?: string | null;
   last_activity_at?: string | null;
   sources: {
@@ -191,6 +192,11 @@ function PersonRow({ person, kind }: { person: OriginPerson; kind: "buyer" | "no
               {person.bucket === "brand_new" && <User className="h-3 w-3 mr-1" />}
               {bucketLabel[person.bucket]}
             </Badge>
+            {kind === "buyer" && person.ad_origin && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {person.ad_origin === "leads_ad" ? "Ad Leads" : "Ad WhatsApp"}
+              </Badge>
+            )}
             {kind === "non_buyer" && person.reason && (
               <Badge variant="outline" className="text-[10px]">
                 {reasonLabel[person.reason] || person.reason}

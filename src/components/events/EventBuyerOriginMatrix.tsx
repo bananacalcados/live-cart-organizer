@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Loader2, Sparkles, Star, User, Users, TrendingDown } from "lucide-react";
+import { Loader2, Sparkles, Star, User, Users, TrendingDown, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   EventOriginDrilldownDialog,
@@ -22,6 +22,8 @@ interface MatrixData {
     existing_customers: number;
     brand_new: number;
     revenue: number;
+    from_whatsapp_ad?: number;
+    from_leads_ad?: number;
   };
   non_buyers: {
     total: number;
@@ -57,14 +59,25 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data: res, error } = eventId
-        ? await supabase.rpc("event_buyer_origin_matrix" as any, { p_event_id: eventId })
-        : await supabase.rpc("events_buyer_origin_matrix_range" as any, {
-            p_from: range!.from,
-            p_to: range!.to,
-            p_channel: range!.channel ?? null,
-          });
-      if (error) throw error;
+      let res: any;
+      if (eventId) {
+        const v2 = await supabase.rpc("event_buyer_origin_matrix_v2" as any, { p_event_id: eventId });
+        if (!v2.error && v2.data && !(v2.data as any).error) {
+          res = v2.data;
+        } else {
+          const v1 = await supabase.rpc("event_buyer_origin_matrix" as any, { p_event_id: eventId });
+          if (v1.error) throw v1.error;
+          res = v1.data;
+        }
+      } else {
+        const r = await supabase.rpc("events_buyer_origin_matrix_range" as any, {
+          p_from: range!.from,
+          p_to: range!.to,
+          p_channel: range!.channel ?? null,
+        });
+        if (r.error) throw r.error;
+        res = r.data;
+      }
       setData(res as unknown as MatrixData);
     } catch (e: any) {
       setError(e?.message || "Falha ao carregar matriz de origem");
@@ -115,6 +128,9 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   const avgLead = avgTicket("lead_first_purchase");
   const avgRecurring = avgTicket("existing_customer");
   const avgBrandNew = avgTicket("brand_new");
+  const hasAd = data.buyers.from_whatsapp_ad !== undefined || data.buyers.from_leads_ad !== undefined;
+  const adWa = Number(data.buyers.from_whatsapp_ad) || 0;
+  const adLeads = Number(data.buyers.from_leads_ad) || 0;
 
   return (
     <div className="container py-2 space-y-3">
@@ -142,7 +158,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               Ver todos
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className={cn("grid gap-2", hasAd ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
             <OriginTile
               label="Lead → 1ª compra"
               value={data.buyers.lead_first_purchase}
@@ -188,6 +204,19 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
                 )
               }
             />
+            {hasAd && (
+              <OriginTile
+                label="Veio de anúncio"
+                value={adWa + adLeads}
+                total={data.buyers.total}
+                icon={Megaphone}
+                tone="text-primary"
+                subtitle={`WhatsApp ${adWa} · Leads ${adLeads}`}
+                onClick={() =>
+                  openDrill("buyer", "all", `Compradores desta live (${data.buyers.total})`)
+                }
+              />
+            )}
           </div>
         </Card>
 
