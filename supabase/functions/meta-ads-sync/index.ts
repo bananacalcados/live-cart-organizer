@@ -108,7 +108,48 @@ Deno.serve(async (req) => {
     return json({ status: "error", error: e.message, rows_upserted: upserted });
   }
 
+  // Nível conjunto de anúncios (adset)
+  let adsetUpserted = 0;
+  let adsetError: string | null = null;
+  try {
+    const p2 = new URLSearchParams({
+      level: "adset",
+      time_increment: "1",
+      fields: "campaign_id,campaign_name,adset_id,adset_name,spend,impressions,reach,inline_link_clicks",
+      time_range: JSON.stringify({ since, until }),
+      limit: "500",
+      access_token: token,
+    });
+    let n2: string | null = `https://graph.facebook.com/v21.0/act_${accountId}/insights?${p2}`;
+    while (n2) {
+      const data = await (await fetch(n2)).json();
+      if (data.error) throw new Error(data.error.message);
+      const rows = (data.data || []).map((d: any) => ({
+        account_id: accountId,
+        campaign_id: d.campaign_id ? String(d.campaign_id) : null,
+        campaign_name: d.campaign_name ?? null,
+        adset_id: String(d.adset_id),
+        adset_name: d.adset_name ?? null,
+        date: d.date_start,
+        spend: parseFloat(d.spend || "0"),
+        impressions: parseInt(d.impressions || "0"),
+        reach: parseInt(d.reach || "0"),
+        link_clicks: parseInt(d.inline_link_clicks || "0"),
+        synced_at: new Date().toISOString(),
+      }));
+      if (rows.length) {
+        const { error } = await admin.from("meta_ads_adset_spend_daily").upsert(rows, { onConflict: "account_id,adset_id,date" });
+        if (error) throw new Error(error.message);
+        adsetUpserted += rows.length;
+      }
+      n2 = data.paging?.next ?? null;
+    }
+  } catch (e: any) {
+    adsetError = "adset: " + (e?.message || e);
+  }
+
   const refreshErr = await refresh();
-  await admin.from("meta_ads_sync_runs").insert({ status: "ok", since, until, rows_upserted: upserted, error: refreshErr });
-  return json({ status: "ok", rows_upserted: upserted, since, until, token_refresh: tokenRefresh });
+  const errs = [refreshErr, adsetError].filter(Boolean).join(" | ") || null;
+  await admin.from("meta_ads_sync_runs").insert({ status: "ok", since, until, rows_upserted: upserted + adsetUpserted, error: errs });
+  return json({ status: "ok", rows_upserted: upserted, adset_rows_upserted: adsetUpserted, adset_error: adsetError, since, until, token_refresh: tokenRefresh });
 });
