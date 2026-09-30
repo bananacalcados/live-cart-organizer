@@ -23,6 +23,8 @@ import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNe
 import { useEventContactLanes } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
 import { ptBR } from "date-fns/locale";
+import { ShoppingCart } from "lucide-react";
+import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
@@ -198,6 +200,17 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     search,
   );
   const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
+
+  // Linha PEDIDOS: quem comentou QUERO na live e ainda não tem pedido neste evento.
+  const orderHandles = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orders) {
+      const h = (o.customer?.instagram_handle || "").replace(/^@+/, "").trim().toLowerCase();
+      if (h) set.add(h);
+    }
+    return set;
+  }, [orders]);
+  const intents = useLiveOrderIntents(lanes && eventId ? eventId : undefined, orderHandles);
   const { newContacts, doubtContacts } = useMemo(() => {
     const n: typeof linkContacts = [];
     const d: typeof linkContacts = [];
@@ -914,6 +927,25 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                 )}
               </Button>
             </div>
+
+            {eventId && (
+              <LiveLaneSection
+                id="order-intents"
+                eventId={eventId}
+                title="PEDIDOS"
+                count={intents.cards.length}
+                tone="text-amber-500"
+                icon={<ShoppingCart className="h-3.5 w-3.5 text-amber-500" />}
+              >
+                <LiveOrderIntentCards
+                  eventId={eventId}
+                  cards={intents.cards}
+                  loading={intents.loading}
+                  onReload={intents.reload}
+                  onDismiss={intents.dismiss}
+                />
+              </LiveLaneSection>
+            )}
 
             <LiveLaneSection
               id="new-contacts"
