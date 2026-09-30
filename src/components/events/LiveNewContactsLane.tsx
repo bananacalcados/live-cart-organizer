@@ -172,10 +172,12 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   }, [load]);
 
   // Atividade de conversa (última mensagem recebida/enviada) dos contatos que já falaram.
-  const talkedPhones = useMemo(
-    () => [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))],
+  // Chave estável: só muda quando entra/sai um telefone (recarregar a lista não refaz a busca).
+  const talkedKey = useMemo(
+    () => [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))].sort().join(","),
     [rows],
   );
+  const talkedPhones = useMemo(() => (talkedKey ? talkedKey.split(",") : []), [talkedKey]);
   const loadActivity = useCallback(async () => {
     if (!eventId || talkedPhones.length === 0) {
       setActivity(new Map());

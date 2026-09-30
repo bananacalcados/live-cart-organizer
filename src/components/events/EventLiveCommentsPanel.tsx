@@ -22,6 +22,9 @@ import { isOrderMarkedPaid, isPaidOrderStage } from "@/lib/orderPaymentStages";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// Cache da pontuação de participação por @ (vale para a sessão da página).
+const scoreCache = new Map<string, { score: number; category: string; liveCount: number } | null>();
+
 interface LiveComment {
   id: string;
   comment_id: string;
@@ -638,7 +641,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         const wa = (cached?.whatsapp || "").replace(/\D/g, "");
         if (cached?.whatsapp && wa) map.set(h, cached.whatsapp);
       });
-      if (!cancelled) setWhatsappByHandle(map);
+      if (cancelled) return;
+      // Só troca o mapa se o conteúdo mudou (evita refazer a busca de leads a cada pedido alterado).
+      setWhatsappByHandle((prev) => {
+        if (prev.size === map.size && [...map].every(([k, v]) => prev.get(k) === v)) return prev;
+        return map;
+      });
     })();
     return () => {
       cancelled = true;
@@ -817,17 +825,26 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     }
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.rpc("participant_score_ranking", {
-        p_handles: handles,
-      });
-      if (cancelled || error || !data) return;
-      const map = new Map<string, ParticipantScore>();
-      (data as any[]).forEach((row) => {
-        map.set(cleanHandle(row.handle), {
-          score: row.score ?? 0,
-          category: row.category || "frio",
-          liveCount: row.live_count ?? 0,
+      // Só busca no banco os @ que ainda não têm pontuação em cache.
+      const missing = handles.filter((h) => !scoreCache.has(h));
+      for (let i = 0; i < missing.length; i += 200) {
+        const batch = missing.slice(i, i + 200);
+        const { data, error } = await supabase.rpc("participant_score_ranking", { p_handles: batch });
+        if (cancelled) return;
+        if (error) break;
+        batch.forEach((h) => scoreCache.set(h, null));
+        (data as any[] | null)?.forEach((row) => {
+          scoreCache.set(cleanHandle(row.handle), {
+            score: row.score ?? 0,
+            category: row.category || "frio",
+            liveCount: row.live_count ?? 0,
+          });
         });
+      }
+      const map = new Map<string, ParticipantScore>();
+      handles.forEach((h) => {
+        const v = scoreCache.get(h);
+        if (v) map.set(h, v);
       });
       setScoreByHandle(map);
     })();
