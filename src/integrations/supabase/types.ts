@@ -10432,6 +10432,33 @@ export type Database = {
           },
         ]
       }
+      live_order_intent_dismissals: {
+        Row: {
+          created_at: string
+          dismissed_at: string
+          dismissed_by: string | null
+          event_id: string
+          id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed_at?: string
+          dismissed_by?: string | null
+          event_id: string
+          id?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          dismissed_at?: string
+          dismissed_by?: string | null
+          event_id?: string
+          id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       live_phone_verifications: {
         Row: {
           code: string
