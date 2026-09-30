@@ -546,7 +546,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
     if (!isToToday) return;
     syncLiveCommentsFromMeta({ silent: true });
-    const t = setInterval(() => syncLiveCommentsFromMeta({ silent: true }), 15000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") syncLiveCommentsFromMeta({ silent: true });
+    }, 15000);
     return () => clearInterval(t);
   }, [eventId, toDate, syncLiveCommentsFromMeta]);
 
@@ -607,8 +609,14 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   }, []);
 
   // Carrega o WhatsApp cadastrado dos @ que comentaram (para o botão de WhatsApp)
+  // Chave estável da lista de @: só muda quando entra um @ NOVO (não a cada comentário).
+  const handlesKey = useMemo(
+    () => Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean))).sort().join(","),
+    [comments],
+  );
+
   useEffect(() => {
-    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    const handles = handlesKey ? handlesKey.split(",") : [];
     if (handles.length === 0) {
       setWhatsappByHandle(new Map());
       return;
@@ -635,18 +643,19 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [comments, orders, resolveHandles]);
+  }, [handlesKey, orders, resolveHandles]);
 
   // Carrega o histórico de pedidos (concluídos x abertos) dos @ que comentaram.
   // Serve para sinalizar no painel quem já comprou e quem costuma deixar pedidos sem pagar.
   useEffect(() => {
-    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    const handles = handlesKey ? handlesKey.split(",") : [];
     if (handles.length === 0 || !eventId) {
       setOrderStatsByHandle(new Map());
       return;
     }
     let cancelled = false;
-    (async () => {
+    // Espera 2s de calma: numa live cheia, vários @ novos chegam juntos.
+    const timer = setTimeout(async () => {
       // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
       const handlesSet = new Set(handles);
       const idToHandle = new Map<string, string>();
@@ -748,11 +757,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       }
 
       if (!cancelled) setOrderStatsByHandle(stats);
-    })();
+    }, 2000);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [comments, eventId, orders, resolveHandles]);
+  }, [handlesKey, eventId, orders, resolveHandles]);
 
   // Tags de LEAD: descobre quais @ foram captados pela LP/Typebot deste evento
   // ou de outras campanhas. Faz o match pelo WhatsApp (DDD + 9 dígitos) já que
@@ -800,7 +810,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
 
   // Score de participação (engajamento) dos @ presentes no painel
   useEffect(() => {
-    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    const handles = handlesKey ? handlesKey.split(",") : [];
     if (handles.length === 0) {
       setScoreByHandle(new Map());
       return;
@@ -824,7 +834,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [comments]);
+  }, [handlesKey]);
 
 
 
@@ -904,7 +914,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     if (!eventId) return;
     const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
     if (!isToToday) return;
-    const t = setInterval(() => loadComments({ silent: true }), 60000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") loadComments({ silent: true });
+    }, 60000);
     return () => clearInterval(t);
   }, [eventId, toDate, loadComments]);
 
