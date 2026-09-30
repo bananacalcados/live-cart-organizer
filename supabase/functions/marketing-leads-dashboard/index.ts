@@ -696,7 +696,7 @@ Deno.serve(async (req) => {
     const breakdownChannel: string | null = typeof body.breakdown_channel === "string" && body.breakdown_channel.trim()
       ? String(body.breakdown_channel).trim()
       : null;
-    const breakdownDim: string = ["link", "campaign", "adset", "ad", "tag"].includes(String(body.breakdown_dim || ""))
+    const breakdownDim: string = ["link", "campaign", "adset", "adset_meta", "ad", "tag"].includes(String(body.breakdown_dim || ""))
       ? String(body.breakdown_dim)
       : "link";
     const breakdownMap: Record<string, {
@@ -709,6 +709,7 @@ Deno.serve(async (req) => {
       switch (breakdownDim) {
         case "campaign": return pick(m.utm_campaign) || "(sem campanha)";
         case "adset": return pick(m.utm_content) || "(sem conjunto)";
+        case "adset_meta": return pick(m.utm_term) || "(sem conjunto)";
         case "ad": return pick(m.utm_term) || "(sem anúncio)";
         case "tag": return pick(m.link_tag) || "(sem etiqueta)";
         default: return pick(m.link_slug) || pick(m.typebot_slug) || "(link não identificado)";
@@ -873,7 +874,7 @@ Deno.serve(async (req) => {
 
     // Sub-camada: ranking por link / campanha / conjunto / anúncio dentro do canal.
     if (breakdownChannel) {
-      const rows = Object.values(breakdownMap).map((b) => ({
+      let rows: any[] = Object.values(breakdownMap).map((b) => ({
         key: b.key,
         leads: b.leads,
         new_leads: b.new_leads,
@@ -884,11 +885,81 @@ Deno.serve(async (req) => {
         receita_total_com_recompras: Math.round(b.revenue * 100) / 100,
         ticket_medio_conversao: b.converted > 0 ? Math.round((b.convertedRevenue / b.converted) * 100) / 100 : 0,
       })).sort((a, b) => b.valor_convertido - a.valor_convertido || b.leads - a.leads);
+
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const dFrom = body.date_from ? String(body.date_from).slice(0, 10) : "2000-01-01";
+      const dTo = body.date_to ? String(body.date_to).slice(0, 10) : "2999-12-31";
+      let spendAvailable = false;
+
+      // Por conjunto (utm_term = adset_id) com gasto/custos
+      if (breakdownDim === "adset_meta") {
+        const spendRows = await fetchAllRows<any>(supabase, "meta_ads_adset_spend_daily",
+          "id,adset_id,adset_name,spend,date", { orderBy: "date", apply: (q: any) => q.gte("date", dFrom).lte("date", dTo) });
+        const nameRows = await fetchAllRows<any>(supabase, "meta_ads_adset_spend_daily",
+          "id,adset_id,adset_name,date", { orderBy: "date" });
+        const names: Record<string, string> = {};
+        for (const n of nameRows) if (n.adset_name) names[n.adset_id] = n.adset_name;
+        const spendBy: Record<string, number> = {};
+        for (const s of spendRows) spendBy[s.adset_id] = (spendBy[s.adset_id] || 0) + Number(s.spend || 0);
+        spendAvailable = spendRows.length > 0;
+        rows = rows.map((r) => {
+          const sp = spendBy[r.key];
+          const has = spendAvailable && sp != null;
+          return {
+            ...r,
+            label: names[r.key] || r.key,
+            spend: has ? r2(sp) : null,
+            cost_per_lead: has && r.leads > 0 ? r2(sp / r.leads) : null,
+            cost_per_converted: has && r.converted > 0 ? r2(sp / r.converted) : null,
+          };
+        }).sort((a, b) => b.converted - a.converted || b.leads - a.leads);
+      }
+
+      // Anúncios (Ads): rateio proporcional ao gasto das campanhas WHATSAPP
+      let whatsappCampaigns: any[] | null = null;
+      if (breakdownChannel === "Anúncios (Ads)") {
+        const totLeads = Object.values(breakdownMap).reduce((a, b) => a + b.leads, 0);
+        const totConv = Object.values(breakdownMap).reduce((a, b) => a + b.converted, 0);
+        const camp = await fetchAllRows<any>(supabase, "meta_ads_campaign_spend_daily",
+          "id,campaign_id,campaign_name,spend,date", { orderBy: "date", apply: (q: any) => q.gte("date", dFrom).lte("date", dTo) });
+        const { data: ov } = await supabase.from("meta_ads_campaign_group_overrides").select("campaign_id,group_override");
+        const ovMap: Record<string, string> = {};
+        for (const o of ov || []) ovMap[o.campaign_id] = o.group_override;
+        const classify = (name: string | null) => {
+          const n = (name || "").toUpperCase();
+          if (n.includes("LIVE") && n.includes("VENDA")) return "LIVE";
+          if (n.includes("WHATS")) return "WHATSAPP";
+          if (n.includes("LEAD")) return "LEADS";
+          if (n.includes("ENG") || n.includes("ALCANCE")) return "ENGAJAMENTO";
+          return "OUTROS";
+        };
+        const agg: Record<string, { id: string; name: string; spend: number }> = {};
+        for (const c of camp) {
+          const g = ovMap[c.campaign_id] || classify(c.campaign_name);
+          if (g !== "WHATSAPP") continue;
+          const a = (agg[c.campaign_id] ||= { id: c.campaign_id, name: c.campaign_name || c.campaign_id, spend: 0 });
+          a.spend += Number(c.spend || 0);
+          if (c.campaign_name) a.name = c.campaign_name;
+        }
+        const totSpend = Object.values(agg).reduce((a, b) => a + b.spend, 0);
+        whatsappCampaigns = Object.values(agg).filter(a => a.spend > 0).map((a) => {
+          const share = totSpend > 0 ? a.spend / totSpend : 0;
+          const l = totLeads * share, c = totConv * share;
+          return {
+            campaign_id: a.id, campaign_name: a.name, spend: r2(a.spend), share_pct: r2(share * 100),
+            leads_rateados: r2(l), convertidos_rateados: r2(c),
+            cost_per_converted: c > 0 ? r2(a.spend / c) : null,
+          };
+        }).sort((a, b) => b.spend - a.spend);
+      }
+
       return new Response(JSON.stringify({
         mode,
         breakdown_channel: breakdownChannel,
         breakdown_dim: breakdownDim,
         rows,
+        spend_available: spendAvailable,
+        whatsapp_campaigns: whatsappCampaigns,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
