@@ -307,7 +307,10 @@ const CommentRow = memo(function CommentRow({
           )}
           <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
         </div>
-        <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
+        <p className={cn("mt-0.5 break-words text-sm", hasQuero ? "font-semibold text-foreground" : "text-foreground/90")}>
+          {renderHighlightedText(c.comment_text)}
+        </p>
+
         {/* Ações: abrir chat do Instagram / WhatsApp */}
         <div className="mt-1.5 flex items-center gap-1.5">
           <button
