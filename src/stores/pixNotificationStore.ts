@@ -143,10 +143,34 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
     get().refresh();
 
+    // Throttle (não debounce): com eventos contínuos o debounce adiava a recarga
+    // indefinidamente e atrasava a confirmação de pagamento.
     const scheduleRefresh = () => {
-      const t = get()._refreshTimer;
-      if (t) clearTimeout(t);
-      set({ _refreshTimer: setTimeout(() => get().refresh(), 1500) });
+      if (get()._refreshTimer) return;
+      set({
+        _refreshTimer: setTimeout(() => {
+          set({ _refreshTimer: null });
+          get().refresh();
+        }, 1500),
+      });
+    };
+
+    // Só reage a mudanças de pedido que afetam a barra (etapa/pagamento/valores).
+    // Ignora, por exemplo, a marcação de "mensagem não lida" que acontece a cada mensagem.
+    const OPEN = new Set(["new", "awaiting_payment", "awaiting_confirmation", "contacted", "incomplete_order"]);
+    const sigById = new Map<string, string>();
+    const onOrderChange = (payload: any) => {
+      const n = payload?.new;
+      if (!n?.id) {
+        scheduleRefresh();
+        return;
+      }
+      const sig = [n.stage, n.is_paid, n.paid_at, n.merged_into_order_id, n.discount_value, n.shipping_cost, n.free_shipping, JSON.stringify(n.products ?? null).length].join("|");
+      const prev = sigById.get(n.id);
+      sigById.set(n.id, sig);
+      if (prev === sig) return;
+      if (prev === undefined && !OPEN.has(n.stage) && !n.is_paid) return;
+      scheduleRefresh();
     };
 
     const channel = supabase
@@ -160,15 +184,16 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         // Pedidos de Live (tabela orders) também viram cards na barra.
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
-        scheduleRefresh,
+        onOrderChange,
       )
       .subscribe();
 
     // Rede de segurança: confirma status real periodicamente (cobre o caminho
     // do webhook, que nem sempre apaga a linha de chat_awaiting_payment na hora).
     const poll = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       if (get().tabs.some((t) => t.status === "pending")) get().refresh();
-    }, 8000);
+    }, 15000);
 
     set({ _channel: channel, _poll: poll });
   },
