@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,8 @@ import { LiveInstagramComments } from "@/components/events/LiveInstagramComments
 import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
+import { LiveLaneSection } from "@/components/events/LiveLaneSection";
+import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 
 
 
@@ -71,6 +73,16 @@ export default function PresenterDashboard() {
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
   const [noClickLeads, setNoClickLeads] = useState<{ id: string; name: string | null; instagram: string | null; phone: string | null; created_at: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const orderHandles = useMemo(
+    () => new Set(
+      orders
+        .map((order) => order.customer_name.replace(/^@+/, "").trim().toLowerCase())
+        .filter((handle) => handle && handle !== "cliente"),
+    ),
+    [orders],
+  );
+  const orderIntents = useLiveOrderIntents(eventId, orderHandles);
 
   const suffix8 = (p?: string | null) => {
     const d = (p || "").replace(/\D/g, "");
@@ -441,6 +453,27 @@ export default function PresenterDashboard() {
         />
       </div>
 
+
+      {eventId && (
+        <div className="mb-6 border-y border-border bg-card px-3 py-2 shadow-sm">
+          <LiveLaneSection
+            id="presenter-order-intents"
+            eventId={eventId}
+            title="PEDIDOS"
+            count={orderIntents.cards.length}
+            tone="text-amber-500"
+            icon={<ShoppingCart className="h-4 w-4 text-amber-500" />}
+          >
+            <LiveOrderIntentCards
+              eventId={eventId}
+              cards={orderIntents.cards}
+              loading={orderIntents.loading}
+              onReload={orderIntents.reload}
+              onDismiss={orderIntents.dismiss}
+            />
+          </LiveLaneSection>
+        </div>
+      )}
 
       {/* Cards fixos: clientes que ainda NÃO clicaram no botão do WhatsApp */}
       <div className="mb-6 rounded-2xl border-2 border-amber-500 bg-zinc-950 p-3 shadow-lg">

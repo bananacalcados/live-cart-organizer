@@ -94,13 +94,29 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "live_order_intent_dismissals", filter: `event_id=eq.${eventId}` },
-        () => load(),
+        (payload) => {
+          const next = payload.new as { username?: string; dismissed_at?: string };
+          const previous = payload.old as { username?: string };
+          if (payload.eventType === "DELETE") {
+            const username = norm(previous.username);
+            if (!username) return;
+            setDismissals((current) => {
+              const updated = new Map(current);
+              updated.delete(username);
+              return updated;
+            });
+            return;
+          }
+          const username = norm(next.username);
+          if (!username || !next.dismissed_at) return;
+          setDismissals((current) => new Map(current).set(username, next.dismissed_at as string));
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [eventId, load]);
+  }, [eventId]);
 
   const cards = useMemo<OrderIntentCard[]>(() => {
     const byUser = new Map<string, LiveComment[]>();
