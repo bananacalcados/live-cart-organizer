@@ -11869,6 +11869,51 @@ export type Database = {
           },
         ]
       }
+      meta_ads_adset_spend_daily: {
+        Row: {
+          account_id: string
+          adset_id: string
+          adset_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          date: string
+          id: string
+          impressions: number
+          link_clicks: number
+          reach: number
+          spend: number
+          synced_at: string
+        }
+        Insert: {
+          account_id: string
+          adset_id: string
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          date: string
+          id?: string
+          impressions?: number
+          link_clicks?: number
+          reach?: number
+          spend?: number
+          synced_at?: string
+        }
+        Update: {
+          account_id?: string
+          adset_id?: string
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          date?: string
+          id?: string
+          impressions?: number
+          link_clicks?: number
+          reach?: number
+          spend?: number
+          synced_at?: string
+        }
+        Relationships: []
+      }
       meta_ads_campaign_group_overrides: {
         Row: {
           campaign_id: string
