@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EventBuyerOriginMatrix } from "./EventBuyerOriginMatrix";
+import { EventLiveRepurchase } from "./EventLiveRepurchase";
 
 interface DashboardData {
   total_orders: number;
@@ -142,6 +143,9 @@ export function EventInnerDashboard({ eventId }: Props) {
         ))}
       </div>
       <EventBuyerOriginMatrix eventId={eventId} />
+      <div className="container py-2">
+        <EventLiveRepurchase eventId={eventId} />
+      </div>
     </div>
   );
 }
