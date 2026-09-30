@@ -624,7 +624,17 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const phoneVariations = buildPhoneVariations(phone);
 
   const getTemplateVariables = () => {
-    const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    // Total REAL do pedido (mesma conta do checkout): subtotal − desconto + frete.
+    // Sem isso a mensagem mostrava o valor cheio e confundia a cliente.
+    const subtotalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    const dOrder = dbOrder as any;
+    const discountAmount = dOrder?.discount_type && dOrder?.discount_value
+      ? dOrder.discount_type === 'percentage'
+        ? subtotalValue * (Number(dOrder.discount_value) / 100)
+        : Number(dOrder.discount_value)
+      : 0;
+    const shippingValue = dOrder?.free_shipping ? 0 : Number(dOrder?.shipping_cost || 0);
+    const totalValue = Math.round(Math.max(0, subtotalValue - discountAmount + shippingValue) * 100) / 100;
     const productsList = order.products
       .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
       .join('\n');
