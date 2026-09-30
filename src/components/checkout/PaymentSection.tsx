@@ -106,15 +106,22 @@ export function StepPayment({
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
 
   useEffect(() => {
-    supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "pix_discount_percent")
-      .single()
-      .then(({ data }) => {
-        if (data?.value) setPixDiscountPercent(parseFloat(String(data.value)) || 0);
-      });
-  }, []);
+    (async () => {
+      // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
+      const { data: ord } = await supabase
+        .from("orders")
+        .select("cashback_id, cashback_amount")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (ord && ((ord as any).cashback_id || Number((ord as any).cashback_amount || 0) > 0)) return;
+      const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "pix_discount_percent")
+        .single();
+      if (data?.value) setPixDiscountPercent(parseFloat(String(data.value)) || 0);
+    })();
+  }, [orderId]);
 
   const pixDiscountAmount = pixDiscountPercent > 0 ? amount * (pixDiscountPercent / 100) : 0;
   const pixAmount = Math.round((amount - pixDiscountAmount) * 100) / 100;

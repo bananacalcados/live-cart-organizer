@@ -297,6 +297,12 @@ serve(async (req) => {
       }
     }
 
+    // Regra: pedido com cashback NÃO ganha o desconto extra de Pix (seria desconto em dobro).
+    if (order && (order.cashback_id || Number(order.cashback_amount || 0) > 0)) {
+      if (pixDiscountPct > 0) console.log("[mp-pix] Pedido com cashback — desconto PIX zerado");
+      pixDiscountPct = 0;
+    }
+
     // Apply PIX-specific discount (e.g. "5% OFF no PIX") so cobrança casa com o exibido no checkout
     if (pixDiscountPct > 0) {
       const pixDiscount = Math.round(totalAmount * (pixDiscountPct / 100) * 100) / 100;
