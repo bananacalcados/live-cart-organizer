@@ -624,7 +624,17 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const phoneVariations = buildPhoneVariations(phone);
 
   const getTemplateVariables = () => {
-    const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    // Total REAL do pedido (mesma conta do checkout): subtotal − desconto + frete.
+    // Sem isso a mensagem mostrava o valor cheio e confundia a cliente.
+    const subtotalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    const dOrder = dbOrder as any;
+    const discountAmount = dOrder?.discount_type && dOrder?.discount_value
+      ? dOrder.discount_type === 'percentage'
+        ? subtotalValue * (Number(dOrder.discount_value) / 100)
+        : Number(dOrder.discount_value)
+      : 0;
+    const shippingValue = dOrder?.free_shipping ? 0 : Number(dOrder?.shipping_cost || 0);
+    const totalValue = Math.round(Math.max(0, subtotalValue - discountAmount + shippingValue) * 100) / 100;
     const productsList = order.products
       .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
       .join('\n');
@@ -1311,8 +1321,16 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       case '{products_short}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
       case '{checkout_link}': return checkoutLink;
       case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
-      case '{discount}': return 'R$0.00';
-      case '{total}': return `R$${subtotal.toFixed(2)}`;
+      case '{discount}':
+      case '{total}': {
+        const d = dbOrder as any;
+        const disc = d?.discount_type && d?.discount_value
+          ? d.discount_type === 'percentage' ? subtotal * (Number(d.discount_value) / 100) : Number(d.discount_value)
+          : 0;
+        if (token === '{discount}') return `R$${disc.toFixed(2)}`;
+        const ship = d?.free_shipping ? 0 : Number(d?.shipping_cost || 0);
+        return `R$${Math.max(0, subtotal - disc + ship).toFixed(2)}`;
+      }
       case '{order_id}': return String(order.id).slice(0, 8);
       default: return '';
     }
