@@ -210,7 +210,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     }
     return set;
   }, [orders]);
-  const intents = useLiveOrderIntents(lanes && eventId ? eventId : undefined, orderHandles);
+  const intents = useLiveOrderIntents(eventId || undefined, orderHandles);
   const { newContacts, doubtContacts } = useMemo(() => {
     const n: typeof linkContacts = [];
     const d: typeof linkContacts = [];
@@ -1069,6 +1069,26 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
           </div>
         ) : (
           <>
+          {eventId && (
+            <div className="mb-2">
+              <LiveLaneSection
+                id="order-intents"
+                eventId={eventId}
+                title="PEDIDOS"
+                count={intents.cards.length}
+                tone="text-amber-500"
+                icon={<ShoppingCart className="h-3.5 w-3.5 text-amber-500" />}
+              >
+                <LiveOrderIntentCards
+                  eventId={eventId}
+                  cards={intents.cards}
+                  loading={intents.loading}
+                  onReload={intents.reload}
+                  onDismiss={intents.dismiss}
+                />
+              </LiveLaneSection>
+            </div>
+          )}
 
           {/* Toggle Aguardando / Pagos / Erros */}
           <div className="flex flex-wrap items-center gap-2 mb-2">
