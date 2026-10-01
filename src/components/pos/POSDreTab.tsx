@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, startOfMonth, endOfMonth, subMonths, differenceInDays, addDays } from "date-fns";
-import { Loader2, Download, Settings, AlertTriangle, RefreshCw } from "lucide-react";
+import { Loader2, Download, Settings, AlertTriangle, RefreshCw, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ const LINES: { key: string; label: string; sign?: "-" | "="; strong?: boolean; p
 interface Params {
   tax_regime: string; simples_rate_pct: number; commission_pct_store: number; commission_pct_online: number;
   commission_pct_live: number; packaging_cost_per_shipped_order: number; fixed_cost_allocation: string;
+  fixed_cost_store_ids: string[]; exclude_marketing_fixed_cost_names: string[];
 }
 
 export function POSDreTab() {
@@ -129,17 +131,17 @@ export function POSDreTab() {
       <div className="p-4 space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="text-[11px] text-muted-foreground block">De</label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
+            <label className="text-[11px] text-zinc-400 block">De</label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40 bg-zinc-900 border-zinc-700 text-zinc-100" />
           </div>
           <div>
             <label className="text-[11px] text-muted-foreground block">Até</label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40 bg-zinc-900 border-zinc-700 text-zinc-100" />
           </div>
           <div>
             <label className="text-[11px] text-muted-foreground block">Loja</label>
             <Select value={storeId} onValueChange={setStoreId}>
-              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-48 bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as lojas</SelectItem>
                 {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -149,7 +151,7 @@ export function POSDreTab() {
           <div>
             <label className="text-[11px] text-muted-foreground block">Canal</label>
             <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-40 bg-zinc-900 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="live">Live</SelectItem>
@@ -171,16 +173,16 @@ export function POSDreTab() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kpi label="Margem bruta" value={pct(total.margem_bruta_pct)} />
           <Kpi label="Margem de contribuição" value={pct(total.margem_contribuicao_pct)} />
-          <Kpi label="Resultado operacional" value={BRL(total.resultado_operacional)} negative={Number(total.resultado_operacional) < 0} />
-          <Kpi label="Ponto de equilíbrio" value={pe == null ? "—" : BRL(pe)} sub={peText} negative={pe != null && rl < pe} />
+          <Kpi label="Resultado operacional" value={BRL(total.resultado_operacional)} negative={Number(total.resultado_operacional) < 0} positive={Number(total.resultado_operacional) > 0} />
+          <Kpi label="Ponto de equilíbrio" value={pe == null ? "—" : BRL(pe)} sub={peText} negative={pe != null && rl < pe} positive={pe != null && rl >= pe} />
         </div>
 
         {loading && !data ? (
           <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : data ? (
-          <div className="overflow-auto rounded-md border border-border">
+          <div className="overflow-auto rounded-lg border border-zinc-700/60 bg-zinc-900/60">
             <table className="w-full text-[12px]">
-              <thead className="bg-muted/40 text-muted-foreground">
+              <thead className="bg-zinc-800 text-zinc-200 uppercase text-[10px] tracking-wide">
                 <tr>
                   <th className="text-left p-2 min-w-[240px]">Linha</th>
                   {visibleCols.map((c) => <th key={c.key} className="text-right p-2 min-w-[120px]">{c.label}</th>)}
@@ -197,7 +199,7 @@ export function POSDreTab() {
                     : `${total.vendas_sem_regra_taxa} venda(s) sem taxa cadastrada para a forma de pagamento — contadas com taxa zero. Cadastre em Taxas de Pagamento.`;
                   const varTxt = variation(total[l.key], prevTotal[l.key]);
                   return (
-                    <tr key={l.key} className={`border-t border-border ${l.strong ? "bg-muted/20 font-semibold" : ""}`}>
+                    <tr key={l.key} className={`border-t border-zinc-800 text-zinc-100 ${l.sign === "=" ? "bg-zinc-800/70 font-bold" : l.strong ? "font-semibold" : ""}`}>
                       <td className="p-2">
                         <span className="inline-flex items-center gap-1">
                           {l.label}
@@ -214,16 +216,17 @@ export function POSDreTab() {
                         const v = r[l.key];
                         const base = Number(r.receita_liquida || 0);
                         const isNeg = l.sign === "=" && Number(v) < 0;
+                        const isResPos = l.key === "resultado_operacional" && Number(v) > 0;
                         return (
-                          <td key={c.key} className={`p-2 text-right ${isNeg ? "text-destructive" : ""}`}>
+                          <td key={c.key} className={`p-2 text-right ${isNeg ? "text-red-400" : isResPos ? "text-emerald-400" : "text-zinc-100"}`}>
                             {v == null ? "—" : BRL(Number(v))}
                             {v != null && base > 0 && l.key !== "ponto_equilibrio" && (
-                              <span className="block text-[10px] text-muted-foreground font-normal">{((Number(v) / base) * 100).toFixed(1)}%</span>
+                              <span className="block text-[10px] text-zinc-500 font-normal">{((Number(v) / base) * 100).toFixed(1)}%</span>
                             )}
                           </td>
                         );
                       })}
-                      <td className="p-2 text-right text-muted-foreground">{varTxt ?? "—"}</td>
+                      <td className="p-2 text-right text-zinc-400">{varTxt ?? "—"}</td>
                     </tr>
                   );
                 })}
@@ -231,7 +234,7 @@ export function POSDreTab() {
             </table>
           </div>
         ) : null}
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[11px] text-zinc-500">
           Comparação com {format(new Date(prevRange.from + "T00:00:00"), "dd/MM/yyyy")} a {format(new Date(prevRange.to + "T00:00:00"), "dd/MM/yyyy")}. Percentuais sobre a receita líquida.
         </p>
       </div>
@@ -250,12 +253,13 @@ function variation(cur: unknown, old: unknown): string | null {
   return `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
 }
 
-function Kpi({ label, value, sub, negative }: { label: string; value: string; sub?: string; negative?: boolean }) {
+function Kpi({ label, value, sub, negative, positive }: { label: string; value: string; sub?: string; negative?: boolean; positive?: boolean }) {
+  const color = negative ? "text-red-400" : positive ? "text-emerald-400" : "text-zinc-100";
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
-      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className={`text-xl font-bold ${negative ? "text-destructive" : ""}`}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+    <div className="relative overflow-hidden bg-gradient-to-br from-zinc-800/80 via-zinc-900/90 to-black border border-zinc-700/60 rounded-lg p-3 shadow-md">
+      <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{label}</p>
+      <p className={`text-xl font-bold ${color} drop-shadow`}>{value}</p>
+      {sub && <p className="text-[11px] text-zinc-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -263,10 +267,17 @@ function Kpi({ label, value, sub, negative }: { label: string; value: string; su
 function DreParamsDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void }) {
   const [p, setP] = useState<Params | null>(null);
   const [saving, setSaving] = useState(false);
+  const [costStores, setCostStores] = useState<{ id: string; name: string }[]>([]);
+  const [newName, setNewName] = useState("");
 
   useEffect(() => {
     if (!open) return;
     supabase.from("dre_parameters" as any).select("*").eq("id", 1).maybeSingle().then(({ data }) => setP(data as any));
+    supabase.from("cost_center_store_fixed_costs").select("store_id, pos_stores(id, name)").then(({ data }) => {
+      const m = new Map<string, string>();
+      for (const r of (data || []) as any[]) if (r.pos_stores) m.set(r.pos_stores.id, r.pos_stores.name);
+      setCostStores(Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
+    });
   }, [open]);
 
   const save = async () => {
@@ -287,7 +298,7 @@ function DreParamsDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-auto">
         <DialogHeader><DialogTitle>Parâmetros da DRE</DialogTitle></DialogHeader>
         {!p ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
           <div className="grid gap-3 text-sm">
@@ -313,6 +324,42 @@ function DreParamsDialog({ open, onOpenChange, onSaved }: { open: boolean; onOpe
                   <SelectItem value="by_store">Por loja (demais canais pela receita)</SelectItem>
                 </SelectContent>
               </Select>
+            </Field>
+            {p.fixed_cost_allocation === "by_store" && (
+              <p className="text-[11px] text-muted-foreground -mt-2">Nesse modo, Live, WhatsApp e Online não recebem custo de loja.</p>
+            )}
+            <Field label="Lojas do Centro de Custos que entram na DRE">
+              <div className="grid gap-1.5">
+                {costStores.map((cs) => (
+                  <label key={cs.id} className="flex items-center gap-2">
+                    <Checkbox checked={p.fixed_cost_store_ids?.includes(cs.id)}
+                      onCheckedChange={(v) => setP({ ...p, fixed_cost_store_ids: v
+                        ? [...(p.fixed_cost_store_ids || []), cs.id]
+                        : (p.fixed_cost_store_ids || []).filter((x) => x !== cs.id) })} />
+                    {cs.name}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <Field label="Itens de custo fixo excluídos (já contados como gasto real)">
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {(p.exclude_marketing_fixed_cost_names || []).map((n) => (
+                  <span key={n} className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs">
+                    {n}
+                    <button type="button" onClick={() => setP({ ...p, exclude_marketing_fixed_cost_names: p.exclude_marketing_fixed_cost_names.filter((x) => x !== n) })}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nome exato do item" className="h-9" />
+                <Button type="button" variant="outline" size="sm" onClick={() => {
+                  const n = newName.trim(); if (!n) return;
+                  setP({ ...p, exclude_marketing_fixed_cost_names: Array.from(new Set([...(p.exclude_marketing_fixed_cost_names || []), n])) });
+                  setNewName("");
+                }}>Adicionar</Button>
+              </div>
             </Field>
             <Button onClick={save} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}Salvar</Button>
           </div>
