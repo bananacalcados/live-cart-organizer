@@ -4920,6 +4920,42 @@ export type Database = {
         }
         Relationships: []
       }
+      dre_parameters: {
+        Row: {
+          commission_pct_live: number
+          commission_pct_online: number
+          commission_pct_store: number
+          fixed_cost_allocation: string
+          id: number
+          packaging_cost_per_shipped_order: number
+          simples_rate_pct: number
+          tax_regime: string
+          updated_at: string
+        }
+        Insert: {
+          commission_pct_live?: number
+          commission_pct_online?: number
+          commission_pct_store?: number
+          fixed_cost_allocation?: string
+          id?: number
+          packaging_cost_per_shipped_order?: number
+          simples_rate_pct?: number
+          tax_regime?: string
+          updated_at?: string
+        }
+        Update: {
+          commission_pct_live?: number
+          commission_pct_online?: number
+          commission_pct_store?: number
+          fixed_cost_allocation?: string
+          id?: number
+          packaging_cost_per_shipped_order?: number
+          simples_rate_pct?: number
+          tax_regime?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_campaigns: {
         Row: {
           created_at: string
