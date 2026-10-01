@@ -428,7 +428,8 @@ export function computePayroll(input: ComputeInput): PayrollResult {
         storeId: info.storeId,
         net: info.net,
         participants: eligible.length,
-        quota,
+        // se excluída, mostra quanto ela receberia caso participasse
+        quota: included ? quota : info.net / (eligible.length + 1),
         included,
         credited,
       });
