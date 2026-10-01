@@ -15885,6 +15885,8 @@ export type Database = {
           category: string | null
           cest_snapshot: string | null
           cfop_snapshot: string | null
+          cost_price_at_sale: number | null
+          cost_source: string | null
           created_at: string
           csosn_icms: string | null
           cst_cofins: string | null
@@ -15916,6 +15918,8 @@ export type Database = {
           category?: string | null
           cest_snapshot?: string | null
           cfop_snapshot?: string | null
+          cost_price_at_sale?: number | null
+          cost_source?: string | null
           created_at?: string
           csosn_icms?: string | null
           cst_cofins?: string | null
@@ -15947,6 +15951,8 @@ export type Database = {
           category?: string | null
           cest_snapshot?: string | null
           cfop_snapshot?: string | null
+          cost_price_at_sale?: number | null
+          cost_source?: string | null
           created_at?: string
           csosn_icms?: string | null
           cst_cofins?: string | null
@@ -24867,6 +24873,13 @@ export type Database = {
           customer_id: string
           handle: string
           whatsapp: string
+        }[]
+      }
+      resolve_item_current_cost: {
+        Args: { p_barcode: string; p_sku: string; p_tiny: string }
+        Returns: {
+          cost: number
+          source: string
         }[]
       }
       resolve_meta_template_category: {
