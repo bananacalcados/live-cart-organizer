@@ -776,6 +776,16 @@ export function POSPayrollTab({ periodRange }: Props) {
                         {p.stores.length > 1 && (
                           <Badge variant="outline" className="ml-1 text-[9px] border-amber-600 text-amber-400">2 lojas</Badge>
                         )}
+                        {p.liveEvents.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setLiveDialogPerson(p.personId); }}
+                            className="ml-1 inline-flex items-center rounded border border-fuchsia-700 px-1.5 py-0.5 text-[9px] text-fuchsia-300 hover:bg-fuchsia-950"
+                            title="Escolher de quais lives ela participa"
+                          >
+                            Lives {p.liveEvents.filter((ev) => ev.included).length}/{p.liveEvents.length}
+                          </button>
+                        )}
                         {p.isEmployeeOnly && (
                           <Badge variant="outline" className="ml-1 text-[9px] border-sky-700 text-sky-300">Administrativo</Badge>
                         )}
