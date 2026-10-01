@@ -5030,7 +5030,9 @@ export type Database = {
           commission_pct_live: number
           commission_pct_online: number
           commission_pct_store: number
+          exclude_marketing_fixed_cost_names: string[]
           fixed_cost_allocation: string
+          fixed_cost_store_ids: string[]
           id: number
           packaging_cost_per_shipped_order: number
           simples_rate_pct: number
@@ -5041,7 +5043,9 @@ export type Database = {
           commission_pct_live?: number
           commission_pct_online?: number
           commission_pct_store?: number
+          exclude_marketing_fixed_cost_names?: string[]
           fixed_cost_allocation?: string
+          fixed_cost_store_ids?: string[]
           id?: number
           packaging_cost_per_shipped_order?: number
           simples_rate_pct?: number
@@ -5052,7 +5056,9 @@ export type Database = {
           commission_pct_live?: number
           commission_pct_online?: number
           commission_pct_store?: number
+          exclude_marketing_fixed_cost_names?: string[]
           fixed_cost_allocation?: string
+          fixed_cost_store_ids?: string[]
           id?: number
           packaging_cost_per_shipped_order?: number
           simples_rate_pct?: number
