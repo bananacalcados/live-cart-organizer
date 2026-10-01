@@ -1552,6 +1552,41 @@ export type Database = {
             referencedColumns: ["first_live_sale_id"]
           },
           {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
             foreignKeyName: "automation_pos_followups_step_id_fkey"
             columns: ["step_id"]
             isOneToOne: false
@@ -2487,6 +2522,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "cash_flow_entries_reconciled_with_id_fkey"
@@ -4649,6 +4719,41 @@ export type Database = {
             referencedColumns: ["first_live_sale_id"]
           },
           {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
             foreignKeyName: "delivery_costs_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
@@ -4916,6 +5021,42 @@ export type Database = {
         Update: {
           category?: string
           unit_cost_brl?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dre_parameters: {
+        Row: {
+          commission_pct_live: number
+          commission_pct_online: number
+          commission_pct_store: number
+          fixed_cost_allocation: string
+          id: number
+          packaging_cost_per_shipped_order: number
+          simples_rate_pct: number
+          tax_regime: string
+          updated_at: string
+        }
+        Insert: {
+          commission_pct_live?: number
+          commission_pct_online?: number
+          commission_pct_store?: number
+          fixed_cost_allocation?: string
+          id?: number
+          packaging_cost_per_shipped_order?: number
+          simples_rate_pct?: number
+          tax_regime?: string
+          updated_at?: string
+        }
+        Update: {
+          commission_pct_live?: number
+          commission_pct_online?: number
+          commission_pct_store?: number
+          fixed_cost_allocation?: string
+          id?: number
+          packaging_cost_per_shipped_order?: number
+          simples_rate_pct?: number
+          tax_regime?: string
           updated_at?: string
         }
         Relationships: []
@@ -7937,6 +8078,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "fiscal_documents_troca_devolucao_id_fkey"
@@ -13537,6 +13713,41 @@ export type Database = {
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
           },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
         ]
       }
       paypal_payments: {
@@ -14359,6 +14570,41 @@ export type Database = {
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
           },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
         ]
       }
       pos_customers: {
@@ -14543,6 +14789,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_exchanges_seller_id_fkey"
@@ -15043,6 +15324,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_payment_receipts_store_id_fkey"
@@ -15861,6 +16177,41 @@ export type Database = {
             referencedColumns: ["first_live_sale_id"]
           },
           {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
             foreignKeyName: "pos_returns_seller_id_fkey"
             columns: ["seller_id"]
             isOneToOne: false
@@ -15885,6 +16236,8 @@ export type Database = {
           category: string | null
           cest_snapshot: string | null
           cfop_snapshot: string | null
+          cost_price_at_sale: number | null
+          cost_source: string | null
           created_at: string
           csosn_icms: string | null
           cst_cofins: string | null
@@ -15916,6 +16269,8 @@ export type Database = {
           category?: string | null
           cest_snapshot?: string | null
           cfop_snapshot?: string | null
+          cost_price_at_sale?: number | null
+          cost_source?: string | null
           created_at?: string
           csosn_icms?: string | null
           cst_cofins?: string | null
@@ -15947,6 +16302,8 @@ export type Database = {
           category?: string | null
           cest_snapshot?: string | null
           cfop_snapshot?: string | null
+          cost_price_at_sale?: number | null
+          cost_source?: string | null
           created_at?: string
           csosn_icms?: string | null
           cst_cofins?: string | null
@@ -15991,6 +16348,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
         ]
       }
@@ -16926,6 +17318,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_stock_adjustments_seller_id_fkey"
@@ -20573,6 +21000,41 @@ export type Database = {
             referencedColumns: ["first_live_sale_id"]
           },
           {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
             foreignKeyName: "tiny_stock_sync_errors_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
@@ -20899,6 +21361,41 @@ export type Database = {
             referencedColumns: ["first_live_sale_id"]
           },
           {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
             foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
             columns: ["pedido_original_id"]
             isOneToOne: false
@@ -20918,6 +21415,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_live_first_purchase_cohort"
             referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "trocas_devolucoes_venda_nova_doc_id_fkey"
@@ -22891,6 +23423,106 @@ export type Database = {
         }
         Relationships: []
       }
+      v_sale_base: {
+        Row: {
+          channel: string | null
+          date: string | null
+          revenue: number | null
+          sale_id: string | null
+          store_id: string | null
+          store_key: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_sale_cogs: {
+        Row: {
+          channel: string | null
+          cogs: number | null
+          cogs_is_estimated: boolean | null
+          date: string | null
+          revenue: number | null
+          sale_id: string | null
+          store_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_sale_discounts: {
+        Row: {
+          cashback_redeemed: number | null
+          discount_amount: number | null
+          sale_id: string | null
+        }
+        Insert: {
+          cashback_redeemed?: never
+          discount_amount?: never
+          sale_id?: string | null
+        }
+        Update: {
+          cashback_redeemed?: never
+          discount_amount?: never
+          sale_id?: string | null
+        }
+        Relationships: []
+      }
+      v_sale_payment_fees: {
+        Row: {
+          fee_amount: number | null
+          fee_rule_missing: boolean | null
+          sale_id: string | null
+        }
+        Relationships: []
+      }
+      v_sale_returns: {
+        Row: {
+          returned_amount: number | null
+          sale_id: string | null
+        }
+        Relationships: []
+      }
+      v_sale_shipping: {
+        Row: {
+          is_shipped: boolean | null
+          sale_id: string | null
+          shipping_charged: number | null
+          shipping_paid: number | null
+        }
+        Insert: {
+          is_shipped?: never
+          sale_id?: string | null
+          shipping_charged?: never
+          shipping_paid?: never
+        }
+        Update: {
+          is_shipped?: never
+          sale_id?: string | null
+          shipping_charged?: never
+          shipping_paid?: never
+        }
+        Relationships: []
+      }
+      v_sale_taxes: {
+        Row: {
+          sale_id: string | null
+          tax_amount: number | null
+        }
+        Relationships: []
+      }
       vip_group_membership_stats: {
         Row: {
           customers: number | null
@@ -23553,6 +24185,15 @@ export type Database = {
       dispatch_unit_cost_for: {
         Args: { p_category: string; p_provider: string }
         Returns: number
+      }
+      dre_period: {
+        Args: {
+          p_channel?: string
+          p_from: string
+          p_store_id?: string
+          p_to: string
+        }
+        Returns: Json
       }
       enqueue_campanha_envios_guarded: {
         Args: {
@@ -24867,6 +25508,13 @@ export type Database = {
           customer_id: string
           handle: string
           whatsapp: string
+        }[]
+      }
+      resolve_item_current_cost: {
+        Args: { p_barcode: string; p_sku: string; p_tiny: string }
+        Returns: {
+          cost: number
+          source: string
         }[]
       }
       resolve_meta_template_category: {
