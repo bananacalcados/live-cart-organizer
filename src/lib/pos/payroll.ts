@@ -449,12 +449,28 @@ export function computePayroll(input: ComputeInput): PayrollResult {
   }
 
 
-  // 3) Híbridas: total de todas as lives
+  // 3) Híbridas: total de todas as lives, POR EVENTO, respeitando opt-outs
   for (const p of people) {
     if (!p.is_active || !p.receives_all_lives) continue;
     const row = rows.get(p.id);
-    if (row) row.channels.live_all += liveTotalNet;
+    if (!row) continue;
+    for (const info of livePool.values()) {
+      const included = !info.eventId || !optOutSet.has(`${p.id}::${info.eventId}`);
+      const credited = included ? info.net : 0;
+      row.channels.live_all += credited;
+      row.liveEvents.push({
+        eventId: info.eventId,
+        storeKey: info.storeKey,
+        storeId: info.storeId,
+        net: info.net,
+        participants: 1,
+        quota: info.net,
+        included,
+        credited,
+      });
+    }
   }
+  void liveTotalNet;
 
   // 4) Total, meta, atingimento, comissão
   const goalByPerson = new Map<string, number>();
