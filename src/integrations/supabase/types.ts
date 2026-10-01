@@ -951,6 +951,45 @@ export type Database = {
         }
         Relationships: []
       }
+      appmax_installations: {
+        Row: {
+          app_numeric_id: number | null
+          env: string
+          external_id: string
+          external_key: string | null
+          installed_at: string | null
+          last_error: string | null
+          merchant_client_id: string | null
+          merchant_client_secret: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          app_numeric_id?: number | null
+          env: string
+          external_id?: string
+          external_key?: string | null
+          installed_at?: string | null
+          last_error?: string | null
+          merchant_client_id?: string | null
+          merchant_client_secret?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          app_numeric_id?: number | null
+          env?: string
+          external_id?: string
+          external_key?: string | null
+          installed_at?: string | null
+          last_error?: string | null
+          merchant_client_id?: string | null
+          merchant_client_secret?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       automation_ai_sessions: {
         Row: {
           created_at: string
