@@ -66,6 +66,17 @@ async function withNetworkRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   throw lastErr;
 }
 
+
+/** Link de Atendimento VIP: marca só a última linha do bloco (texto/imagem/vídeo). */
+function tagVipLink(rows: any[], startIdx: number, block: any) {
+  const mode = block?.vipLinkMode;
+  if (!['product', 'general'].includes(mode) || !['text', 'image', 'video'].includes(block.type)) return;
+  const last = rows.length - 1;
+  if (last < startIdx) return;
+  rows[last].vip_link_mode = mode;
+  rows[last].vip_link_product = mode === 'product' ? (block.vipLinkProduct || null) : null;
+}
+
 interface CampaignDetailPanelProps {
   campaignId: string;
   onBack: () => void;
@@ -264,6 +275,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
       const allInserts: any[] = [];
       for (const block of data.blocks) {
+        const vipStart = allInserts.length;
+        try {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (let i = 0; i < block.mediaItems.length; i++) {
             const item = block.mediaItems[i];
@@ -421,6 +434,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
       const allInserts: any[] = [];
       for (const block of data.blocks) {
+        const vipStart = allInserts.length;
+        try {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (const item of block.mediaItems) {
             allInserts.push({
