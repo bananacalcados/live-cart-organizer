@@ -8546,6 +8546,8 @@ export type Database = {
           sent_count: number
           sent_group_ids: string[] | null
           status: string
+          vip_link_mode: string | null
+          vip_link_product: Json | null
           whatsapp_number_id: string | null
         }
         Insert: {
@@ -8573,6 +8575,8 @@ export type Database = {
           sent_count?: number
           sent_group_ids?: string[] | null
           status?: string
+          vip_link_mode?: string | null
+          vip_link_product?: Json | null
           whatsapp_number_id?: string | null
         }
         Update: {
@@ -8600,6 +8604,8 @@ export type Database = {
           sent_count?: number
           sent_group_ids?: string[] | null
           status?: string
+          vip_link_mode?: string | null
+          vip_link_product?: Json | null
           whatsapp_number_id?: string | null
         }
         Relationships: [
@@ -21866,6 +21872,204 @@ export type Database = {
         }
         Relationships: []
       }
+      vip_link_clicks: {
+        Row: {
+          campaign_id: string | null
+          code: string | null
+          created_at: string
+          dest_number_id: string | null
+          group_db_id: string | null
+          id: string
+          is_bot: boolean
+          link_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          code?: string | null
+          created_at?: string
+          dest_number_id?: string | null
+          group_db_id?: string | null
+          id?: string
+          is_bot?: boolean
+          link_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          code?: string | null
+          created_at?: string
+          dest_number_id?: string | null
+          group_db_id?: string | null
+          id?: string
+          is_bot?: boolean
+          link_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_link_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "vip_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vip_link_conversations: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          group_db_id: string | null
+          group_name: string | null
+          id: string
+          link_id: string | null
+          match_method: string
+          message_id: string | null
+          phone: string | null
+          phone_key: string | null
+          product: Json | null
+          product_title: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          group_db_id?: string | null
+          group_name?: string | null
+          id?: string
+          link_id?: string | null
+          match_method: string
+          message_id?: string | null
+          phone?: string | null
+          phone_key?: string | null
+          product?: Json | null
+          product_title?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          group_db_id?: string | null
+          group_name?: string | null
+          id?: string
+          link_id?: string | null
+          match_method?: string
+          message_id?: string | null
+          phone?: string | null
+          phone_key?: string | null
+          product?: Json | null
+          product_title?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_link_conversations_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "vip_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vip_link_daily_destination: {
+        Row: {
+          created_at: string
+          day: string
+          set_by: string | null
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          set_by?: string | null
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          set_by?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_link_daily_destination_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vip_link_daily_destination_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vip_links: {
+        Row: {
+          campaign_id: string | null
+          click_count: number
+          code: string
+          created_at: string
+          dest_day: string
+          dispatch_id: string | null
+          group_db_id: string | null
+          group_name: string | null
+          id: string
+          message_text: string
+          mode: string
+          product: Json | null
+          product_title: string | null
+          scheduled_message_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          click_count?: number
+          code: string
+          created_at?: string
+          dest_day: string
+          dispatch_id?: string | null
+          group_db_id?: string | null
+          group_name?: string | null
+          id?: string
+          message_text: string
+          mode: string
+          product?: Json | null
+          product_title?: string | null
+          scheduled_message_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          click_count?: number
+          code?: string
+          created_at?: string
+          dest_day?: string
+          dispatch_id?: string | null
+          group_db_id?: string | null
+          group_name?: string | null
+          id?: string
+          message_text?: string
+          mode?: string
+          product?: Json | null
+          product_title?: string | null
+          scheduled_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_links_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: true
+            referencedRelation: "group_campaign_block_dispatches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vip_orphan_contacts: {
         Row: {
           created_at: string
@@ -25897,6 +26101,42 @@ export type Database = {
           redirect_count: number
           slug: string
         }[]
+      }
+      vip_link_get_or_create: {
+        Args: { p_dispatch_id: string }
+        Returns: string
+      }
+      vip_link_phone_key: { Args: { p_phone: string }; Returns: string }
+      vip_link_register_click: {
+        Args: {
+          p_campaign: string
+          p_code: string
+          p_dest: string
+          p_group: string
+          p_is_bot: boolean
+          p_link_id: string
+          p_ua: string
+        }
+        Returns: undefined
+      }
+      vip_link_resolve: {
+        Args: { p_code: string }
+        Returns: {
+          campaign_id: string
+          dest_number_id: string
+          group_db_id: string
+          link_id: string
+          message_text: string
+          phone_display: string
+          provider: string
+          uazapi_owner: string
+          wasender_phone_number: string
+        }[]
+      }
+      vip_link_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
+      vip_set_daily_destination: {
+        Args: { p_day: string; p_force?: boolean; p_number_id: string }
+        Returns: Json
       }
       wa_conv_rebuild: {
         Args: { p_number_id: string; p_phone: string }
