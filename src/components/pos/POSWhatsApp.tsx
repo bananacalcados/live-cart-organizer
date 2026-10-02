@@ -153,9 +153,19 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   // metade da conversa, então em grupo lemos TODAS as instâncias.
   const isGroupChat = !!selectedPhone && selectedPhone.replace(/\D/g, '').length >= 15;
   const messagesNumberId = isGroupChat ? undefined : selectedConvNumberId;
-  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, messagesNumberId);
+  const { messages, setMessages, refresh: refreshMessages, hasOlder, loadOlder, loadingOlder, isLoading: messagesLoading } = useChatMessages(selectedPhone, messagesNumberId);
   // Histórico arquivado sob demanda ("Ler msgs antigas") — fora do polling.
   const archiveLoader = useArchivedMessages(selectedPhone, messagesNumberId, messages);
+  // Conversa que só existe no arquivo: tabela viva vazia → carrega o arquivo sozinho.
+  const autoArchiveKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPhone || messagesLoading || messages.length > 0) return;
+    if (archiveLoader.messages.length > 0 || archiveLoader.loading || archiveLoader.exhausted) return;
+    const k = `${selectedPhone}|${messagesNumberId ?? ''}`;
+    if (autoArchiveKeyRef.current === k) return;
+    autoArchiveKeyRef.current = k;
+    archiveLoader.load();
+  }, [selectedPhone, messagesNumberId, messagesLoading, messages.length, archiveLoader]);
   const chatMessages = useMemo(
     () => (archiveLoader.messages.length > 0 ? [...archiveLoader.messages, ...messages] : messages),
     [archiveLoader.messages, messages],
@@ -2637,6 +2647,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
               <ChatView
                 messages={chatMessages}
+                older={{ hasOlder, loadOlder, loading: loadingOlder }}
                 archive={{
                   load: archiveLoader.load,
                   loading: archiveLoader.loading,
