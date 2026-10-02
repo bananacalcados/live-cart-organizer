@@ -371,6 +371,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         for (const k of allKeys) full[k] = row[k] ?? null;
         full.disable_link_preview = !!row.disable_link_preview;
         full.mention_all = !!row.mention_all;
+        if ('vip_link_mode' in full) full.vip_link_mode = row.vip_link_mode || 'none';
         if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
         return full;
       });
@@ -524,6 +525,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         const full: any = {};
         for (const k of allKeysNow) full[k] = row[k] ?? null;
         full.mention_all = !!row.mention_all;
+        if ('vip_link_mode' in full) full.vip_link_mode = row.vip_link_mode || 'none';
         full.disable_link_preview = !!row.disable_link_preview;
         if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
         return full;
