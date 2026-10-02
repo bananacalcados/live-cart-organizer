@@ -4,25 +4,22 @@ import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
 import type { Message } from '@/components/chat/ChatTypes';
 
 /**
- * useChatMessages — carrega mensagens de UMA conversa (phone + numberId opcional)
- * com auto-refresh via broadcast e polling de status (✓✓).
+ * useChatMessages — carrega a JANELA MAIS RECENTE de mensagens de UMA conversa
+ * (phone + numberId opcional) com auto-refresh via broadcast e polling de status.
  *
- * - `numberId` = string  → filtra por aquela instância (modo POS/Eventos)
- * - `numberId` = null    → filtra `is null` (legado sem instância)
- * - `numberId` = undefined → ignora filtro (todas as instâncias deste phone)
- *
- * - Broadcast: refetch quando bate qualquer evento (filtragem fina poderia ser feita
- *   no payload — hoje o POS já faz refetch geral, mantemos paridade).
- * - Polling: 15s para refletir status `sent → delivered → read`.
+ * - Consulta em ordem DESC com limite (`windowSize`, inicia em 300) e inverte no
+ *   cliente. Antes era ASC sem limite: a API cortava em 1000 e devolvia as MAIS
+ *   ANTIGAS, então conversas grandes (grupos) "paravam no tempo".
+ * - `hasOlder` = veio a janela cheia; `loadOlder()` aumenta a janela em +300.
+ * - `numberId` string → instância; null → `is null`; undefined → todas.
  */
 export interface UseChatMessagesOptions {
-  /** Filtra mensagens por essa lista de variações do telefone (útil pra cross-9-digit). Se omitido, usa apenas `phone`. */
   phoneVariations?: string[];
-  /** Desativa o polling de 15s. Default: false. */
   disablePolling?: boolean;
-  /** Desativa o broadcast. Default: false. */
   disableBroadcast?: boolean;
 }
+
+const WINDOW_STEP = 300;
 
 export function useChatMessages(
   phone: string | null | undefined,
@@ -32,15 +29,14 @@ export function useChatMessages(
   const { phoneVariations, disablePolling = false, disableBroadcast = false } = options;
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [windowSize, setWindowSize] = useState(WINDOW_STEP);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
-  // Chave única da conversa atual. Muda quando o usuário troca de chat.
   const conversationKey = `${phone ?? ''}|${numberId ?? ''}|${phoneVariations?.join(',') ?? ''}`;
-  // Guarda a chave da requisição mais recente para descartar respostas fora de ordem.
   const latestKeyRef = useRef(conversationKey);
-  // Assinatura do último conjunto de mensagens renderizado. Usada para evitar
-  // re-render/scroll desnecessários quando o refetch traz exatamente os mesmos dados
-  // (causa do "piscar" do chat a cada polling/broadcast).
   const sigRef = useRef('');
+  const windowRef = useRef(WINDOW_STEP);
 
   const buildSignature = (rows: Message[]) =>
     rows
@@ -50,20 +46,21 @@ export function useChatMessages(
       )
       .join('|');
 
-  // `silent = true` → atualização em segundo plano (polling/broadcast): não mexe no
-  // estado de loading e só troca o array de mensagens se algo realmente mudou.
   const load = useCallback(async (silent = false) => {
     if (!phone) {
       sigRef.current = '';
       setMessages([]);
+      setHasOlder(false);
       return;
     }
     const requestKey = conversationKey;
+    const size = windowRef.current;
     if (!silent) setIsLoading(true);
     let query = supabase
       .from('whatsapp_messages')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(size);
 
     if (phoneVariations && phoneVariations.length > 0) {
       query = query.in('phone', phoneVariations);
@@ -78,46 +75,53 @@ export function useChatMessages(
     }
 
     const { data } = await query;
-    // Descarta respostas de uma conversa que já não está mais aberta (race condition).
     if (latestKeyRef.current !== requestKey) return;
-    const rows = (data as Message[]) || [];
+    const rows = ((data as Message[]) || []).slice().reverse();
+    setHasOlder(rows.length >= size);
     const sig = buildSignature(rows);
-    // Só atualiza o estado (e dispara re-render/auto-scroll) quando os dados mudaram.
     if (sig !== sigRef.current) {
       sigRef.current = sig;
       setMessages(rows);
     }
     if (!silent) setIsLoading(false);
-  }, [phone, numberId, conversationKey, phoneVariations?.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phone, numberId, conversationKey, phoneVariations?.join('|'), windowSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ao trocar de conversa: limpa imediatamente o histórico antigo e marca a nova chave
-  // como a mais recente, evitando que mensagens do chat anterior fiquem visíveis.
   useEffect(() => {
     latestKeyRef.current = conversationKey;
     sigRef.current = '';
+    windowRef.current = WINDOW_STEP;
+    setWindowSize(WINDOW_STEP);
+    setHasOlder(false);
     setMessages([]);
     if (phone) setIsLoading(true);
   }, [conversationKey, phone]);
 
-  // Initial + reactive load (mostra loading apenas na carga inicial/troca de conversa)
   useEffect(() => {
     load(false);
   }, [load]);
 
-  // Realtime via broadcast (low CPU, replaces postgres_changes)
+  const loadOlder = useCallback(async () => {
+    if (!phone || loadingOlder) return;
+    setLoadingOlder(true);
+    windowRef.current += WINDOW_STEP;
+    try {
+      await load(true);
+    } finally {
+      setWindowSize(windowRef.current);
+      setLoadingOlder(false);
+    }
+  }, [phone, loadingOlder, load]);
+
   useWaMessageBroadcast((payload) => {
     if (disableBroadcast) return;
     if (!phone) return;
-    // Optional fine filter: only refetch if payload phone matches
     if (payload?.phone) {
       const variations = phoneVariations && phoneVariations.length > 0 ? phoneVariations : [phone];
       if (!variations.includes(payload.phone)) return;
     }
-    // Atualização silenciosa: não pisca o chat se nada mudou.
     load(true);
   });
 
-  // Status polling (✓✓ refresh) — silencioso para não recarregar a tela
   useEffect(() => {
     if (disablePolling || !phone) return;
     const interval = setInterval(() => load(true), 15000);
@@ -129,5 +133,8 @@ export function useChatMessages(
     setMessages,
     isLoading,
     refresh: load,
+    hasOlder,
+    loadOlder,
+    loadingOlder,
   };
 }

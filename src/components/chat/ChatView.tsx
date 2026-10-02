@@ -99,6 +99,8 @@ interface ChatViewProps {
   hideTagsBar?: boolean;
   /** Botão "Ler msgs antigas" (histórico arquivado sob demanda). */
   archive?: { load: () => void; loading: boolean; exhausted: boolean; loadedCount: number };
+  /** Janela da tabela viva: "Carregar mensagens anteriores". */
+  older?: { hasOlder: boolean; loadOlder: () => Promise<void>; loading: boolean };
   /** Em grupos: clicar no nome do participante abre a conversa individual com ele. */
   onOpenParticipant?: (phone: string, name?: string | null) => void;
 }
@@ -133,6 +135,7 @@ export function ChatView({
   onExtraSent,
   hideTagsBar,
   archive,
+  older,
   onOpenParticipant,
 }: ChatViewProps) {
   /**
@@ -931,7 +934,29 @@ export function ChatView({
         }}
       >
         <div className="p-3 w-full max-w-full overflow-hidden">
-          {archive && conversation && (
+          {older?.hasOlder && conversation && (
+            <div className="flex justify-center mb-2">
+              <button
+                type="button"
+                onClick={async (e) => {
+                  let el: HTMLElement | null = e.currentTarget.parentElement;
+                  while (el && !(el.scrollHeight > el.clientHeight && /(auto|scroll)/.test(getComputedStyle(el).overflowY))) el = el.parentElement;
+                  const prevH = el?.scrollHeight ?? 0;
+                  const prevTop = el?.scrollTop ?? 0;
+                  await older.loadOlder();
+                  requestAnimationFrame(() => requestAnimationFrame(() => {
+                    if (el) el.scrollTop = el.scrollHeight - prevH + prevTop;
+                  }));
+                }}
+                disabled={older.loading}
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-[#075E54] shadow-sm hover:bg-white disabled:opacity-60 dark:bg-black/40 dark:text-[#00a884]"
+              >
+                {older.loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Carregar mensagens anteriores
+              </button>
+            </div>
+          )}
+          {archive && conversation && !older?.hasOlder && (
             <div className="flex justify-center mb-2">
               {archive.exhausted ? (
                 archive.loadedCount > 0 && (

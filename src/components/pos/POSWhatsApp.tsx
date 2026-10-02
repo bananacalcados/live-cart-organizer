@@ -141,6 +141,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   // segurança para NÃO re-renderizar a lista (evita "piscar") quando o refetch
   // traz exatamente os mesmos dados.
   const convSigRef = useRef('');
+  const groupHeadsRef = useRef<Map<string, any>>(new Map());
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
   const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
@@ -153,9 +154,19 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   // metade da conversa, então em grupo lemos TODAS as instâncias.
   const isGroupChat = !!selectedPhone && selectedPhone.replace(/\D/g, '').length >= 15;
   const messagesNumberId = isGroupChat ? undefined : selectedConvNumberId;
-  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, messagesNumberId);
+  const { messages, setMessages, refresh: refreshMessages, hasOlder, loadOlder, loadingOlder, isLoading: messagesLoading } = useChatMessages(selectedPhone, messagesNumberId);
   // Histórico arquivado sob demanda ("Ler msgs antigas") — fora do polling.
   const archiveLoader = useArchivedMessages(selectedPhone, messagesNumberId, messages);
+  // Conversa que só existe no arquivo: tabela viva vazia → carrega o arquivo sozinho.
+  const autoArchiveKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedPhone || messagesLoading || messages.length > 0) return;
+    if (archiveLoader.messages.length > 0 || archiveLoader.loading || archiveLoader.exhausted) return;
+    const k = `${selectedPhone}|${messagesNumberId ?? ''}`;
+    if (autoArchiveKeyRef.current === k) return;
+    autoArchiveKeyRef.current = k;
+    archiveLoader.load();
+  }, [selectedPhone, messagesNumberId, messagesLoading, messages.length, archiveLoader]);
   const chatMessages = useMemo(
     () => (archiveLoader.messages.length > 0 ? [...archiveLoader.messages, ...messages] : messages),
     [archiveLoader.messages, messages],
@@ -1058,6 +1069,21 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           has_incoming: prev.has_incoming || r.has_incoming,
         });
       }
+      // Mensagem do grupo pode ter sido gravada por instância de fora da loja:
+      // usa a cabeça mais recente e a soma de não lidos de TODAS as instâncias.
+      const heads = groupHeadsRef.current;
+      for (const [key, r] of byGroup) {
+        const h = heads.get(key);
+        if (!h) continue;
+        const merged: any = { ...r, unread_count: Number(h.unread_count) || 0 };
+        if (h.last_message_at && new Date(h.last_message_at).getTime() > new Date(r.last_message_at).getTime()) {
+          merged.last_message = h.last_message;
+          merged.last_message_at = h.last_message_at;
+          merged.direction = h.last_direction;
+          merged.sender_name = h.sender_name ?? r.sender_name;
+        }
+        byGroup.set(key, merged);
+      }
       for (const r of byGroup.values()) out.push(r);
       return out;
     })();
@@ -1146,12 +1172,17 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           ? { numberIds: storeNumberIds, includeUnassigned: false }
           : { numberIds: storeNumberIds, includeUnassigned: storeNumbers.some(n => n.provider === 'zapi') };
 
-      const [regular, dispatch] = await Promise.all([
+      const [regular, dispatch, heads] = await Promise.all([
         fetchConversationRows({ ...scope, dispatchOnly: false }),
         needsDispatch ? fetchConversationRows({ ...scope, dispatchOnly: true }) : Promise.resolve({ rows: [], error: null }),
+        // Cabeças dos grupos considerando TODAS as instâncias (~80 linhas).
+        (supabase.rpc as any)('get_group_conversation_heads').then((r: any) => r, () => ({ data: null })),
       ]);
 
       if (regular.error) { console.error('Error loading conversations:', regular.error); return; }
+      const headMap = new Map<string, any>();
+      for (const h of ((heads as any)?.data || []) as any[]) headMap.set(String(h.phone), h);
+      groupHeadsRef.current = headMap;
       // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
       // acontece no effect abaixo SEM nova ida ao servidor.
       setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[] });
@@ -1369,6 +1400,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       const ids = storeNumberIdsRef.current;
       if (ids.length === 0) return true; // loja sem instâncias configuradas vê tudo
       if (!p.whatsapp_number_id) return true; // sem instância (IG/legado): decide no filtro da lista
+      // Grupo: a mensagem pode ter sido gravada por instância de outra loja.
+      if ((p as any).is_group || String(p.phone || '').replace(/\D/g, '').length >= 15) return true;
       return ids.includes(p.whatsapp_number_id);
     },
   });
@@ -2635,6 +2668,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
               <ChatView
                 messages={chatMessages}
+                older={{ hasOlder, loadOlder, loading: loadingOlder }}
                 archive={{
                   load: archiveLoader.load,
                   loading: archiveLoader.loading,

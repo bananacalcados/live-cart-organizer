@@ -16,6 +16,7 @@ import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { TeamChatPinnedItem } from "./TeamChatPinnedItem";
 import { ConversationRow, formatConversationTime, getInitials } from "./ConversationRow";
 import { useDebouncedSearchInput } from "@/hooks/useDebouncedSearchInput";
+import { buildConversationMatcher, canSearchHistory, searchConversationsFast, type FastSearchResult } from "@/lib/chat/conversationSearch";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -111,28 +112,16 @@ export const ConversationList = memo(function ConversationList({
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Busca global no banco (todas as instâncias, inclusive finalizadas/arquivadas)
-  type GlobalResult = {
-    phone: string;
-    whatsapp_number_id: string | null;
-    instance_label: string | null;
-    sender_name: string | null;
-    last_message: string | null;
-    last_message_at: string | null;
-    message_count: number;
-    is_finished: boolean;
-    is_archived: boolean;
-  };
+  type GlobalResult = FastSearchResult;
   const [globalResults, setGlobalResults] = useState<GlobalResult[] | null>(null);
   const [globalLoading, setGlobalLoading] = useState(false);
 
   const runGlobalSearch = async (term?: string) => {
     const q = (term ?? searchQuery).trim();
-    if (q.length < 3) return;
+    if (!canSearchHistory(q)) return;
     setGlobalLoading(true);
     try {
-      const { data, error } = await supabase.rpc("search_all_conversations", { p_query: q });
-      if (error) throw error;
-      setGlobalResults((data || []) as GlobalResult[]);
+      setGlobalResults(await searchConversationsFast(q));
     } catch (e) {
       console.error("Erro na busca global de conversas:", e);
       setGlobalResults([]);
@@ -164,9 +153,7 @@ export const ConversationList = memo(function ConversationList({
   // Apply filters — memoizado: uma única passagem, só recalcula quando a lista
   // ou algum filtro muda (antes: 5 passagens a cada render da tela).
   const filteredConversations = useMemo(() => {
-    const q = searchQuery.trim();
-    const qLower = q.toLowerCase();
-    const cleanedQuery = q.replace(/\D/g, '');
+    const matcher = buildConversationMatcher(searchQuery);
     return conversations.filter(c => {
       if (chatFilter === 'contacts' && c.isGroup) return false;
       if (chatFilter === 'groups' && !c.isGroup) return false;
@@ -197,10 +184,8 @@ export const ConversationList = memo(function ConversationList({
         if (!isLiveCustomer(c.phone)) return false;
       }
 
-      if (q === '') return true;
-      const nameMatch = !!c.customerName?.toLowerCase().includes(qLower);
-      const phoneMatch = cleanedQuery.length > 0 ? c.phone.includes(cleanedQuery) : false;
-      return nameMatch || phoneMatch;
+      if (!matcher) return true;
+      return matcher(c.phone, [c.customerName]);
     });
   }, [conversations, chatFilter, instanceFilter, statusFilter, liveFilterActive, isLiveCustomer, searchQuery]);
 
@@ -516,7 +501,12 @@ export const ConversationList = memo(function ConversationList({
                         {r.is_archived && (
                           <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-amber-400/25 text-amber-700 dark:text-amber-400">Arquivada</span>
                         )}
-                        <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-[#00a884]/15 text-[#00a884]">{r.message_count} msg</span>
+                        {r.is_dispatch_only && (
+                          <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-sky-400/20 text-sky-700 dark:text-sky-300">Disparo</span>
+                        )}
+                        {r.only_in_archive && (
+                          <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-[#00a884]/15 text-[#00a884]">Só no arquivo</span>
+                        )}
                       </div>
                     </div>
                     {r.last_message_at && (

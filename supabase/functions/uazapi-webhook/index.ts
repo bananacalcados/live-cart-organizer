@@ -123,8 +123,11 @@ function buildAdReferral(ext: Record<string, unknown>): Record<string, unknown> 
 function mapMediaType(t: string | null): string | null {
   switch ((t || "").toLowerCase()) {
     case "image":
+    case "motion_photo":
       return "image";
     case "video":
+    case "motion_video":
+    case "ptv":
       return "video";
     case "audio":
     case "ptt":
@@ -136,6 +139,16 @@ function mapMediaType(t: string | null): string | null {
     default:
       return null;
   }
+}
+
+/** Fallback: deduz o tipo a partir do messageType (ex.: "ImageMessage"). */
+function mediaTypeFromMessageType(mt: string): string | null {
+  const s = (mt || "").toLowerCase();
+  if (s.includes("image")) return "image";
+  if (s.includes("video")) return "video";
+  if (s.includes("audio") || s.includes("ptt")) return "audio";
+  if (s.includes("document")) return "document";
+  return null;
 }
 
 /**
@@ -491,6 +504,26 @@ serve(async (req) => {
     // Figurinha: alguns payloads da uazapi não trazem `mediaType`, só o
     // messageType "stickerMessage". Sem isso a figurinha caía como "vazia".
     if (!sysMediaType && messageType.includes("sticker")) sysMediaType = "image";
+    if (!sysMediaType && !messageType.includes("poll")) sysMediaType = mediaTypeFromMessageType(messageType);
+
+    // Mensagem EDITADA: atualiza o texto da original em vez de inserir/descartar.
+    const editedOf = asString((message as AnyObj).edited);
+    if (editedOf) {
+      const ec = (typeof message.content === "object" ? (message.content as AnyObj) : {}) || {};
+      const newText = text || asString(ec.caption) || asString(ec.text) || "";
+      if (newText) {
+        const { data: upd } = await supabase
+          .from("whatsapp_messages")
+          .update({ message: newText })
+          .eq("message_id", editedOf)
+          .eq("phone", phone)
+          .select("id");
+        if (upd && upd.length > 0) {
+          await markSkip("edited_applied");
+          return ok({ skipped: "edited_applied" });
+        }
+      }
+    }
 
     // Reação (emoji) chega sem texto e sem mídia — antes era descartada.
     const reactionText =

@@ -22258,6 +22258,36 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_archive_conversations: {
+        Row: {
+          has_incoming: boolean
+          last_message: string | null
+          last_message_at: string | null
+          message_count: number
+          phone: string
+          sender_name: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          has_incoming?: boolean
+          last_message?: string | null
+          last_message_at?: string | null
+          message_count?: number
+          phone: string
+          sender_name?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          has_incoming?: boolean
+          last_message?: string | null
+          last_message_at?: string | null
+          message_count?: number
+          phone?: string
+          sender_name?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_auto_replies: {
         Row: {
           created_at: string | null
@@ -24838,6 +24868,18 @@ export type Database = {
         Returns: Json
       }
       get_events_performance: { Args: { p_mes_ref: string }; Returns: Json }
+      get_group_conversation_heads: {
+        Args: never
+        Returns: {
+          last_direction: string
+          last_message: string
+          last_message_at: string
+          phone: string
+          sender_name: string
+          unread_count: number
+          whatsapp_number_id: string
+        }[]
+      }
       get_group_dispatch_ready_instances: {
         Args: never
         Returns: {
@@ -25857,6 +25899,22 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      search_conversations_fast: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          instance_label: string
+          is_archived: boolean
+          is_dispatch_only: boolean
+          is_finished: boolean
+          is_group: boolean
+          last_message: string
+          last_message_at: string
+          only_in_archive: boolean
+          phone: string
+          sender_name: string
+          whatsapp_number_id: string
+        }[]
+      }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
@@ -26137,6 +26195,10 @@ export type Database = {
       vip_set_daily_destination: {
         Args: { p_day: string; p_force?: boolean; p_number_id: string }
         Returns: Json
+      }
+      wa_archive_summary_refresh: {
+        Args: { p_phones: string[] }
+        Returns: undefined
       }
       wa_conv_rebuild: {
         Args: { p_number_id: string; p_phone: string }
