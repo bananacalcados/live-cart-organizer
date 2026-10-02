@@ -1804,8 +1804,20 @@ serve(async (req) => {
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
     if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
+      // Conta nova (AppStore OAuth2) tem prioridade; a chave antiga (api/v3) fica como reserva.
+      const appmaxV2Inst = await getAppmaxV2Installation();
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
-      if (appmaxToken) {
+      if (appmaxV2Inst) {
+        console.log(`[FALLBACK] APPMAX usando conta nova (AppStore OAuth2).`);
+        const appmaxResult = await chargeAppmaxV2(chargeParams, products, appmaxV2Inst, clientIp, linkGatewayId);
+        if (appmaxResult.success) {
+          console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
+          result = appmaxResult;
+        } else if (appmaxResult.error) {
+          fallbackErrors.push(`APPMAX: ${appmaxResult.error}`);
+          console.log(`[FALLBACK] APPMAX NAO processou (${appmaxResult.error}).`);
+        }
+      } else if (appmaxToken) {
         const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
         if (appmaxResult.success) {
           console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
