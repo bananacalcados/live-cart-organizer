@@ -141,6 +141,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   // segurança para NÃO re-renderizar a lista (evita "piscar") quando o refetch
   // traz exatamente os mesmos dados.
   const convSigRef = useRef('');
+  const groupHeadsRef = useRef<Map<string, any>>(new Map());
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
   const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
@@ -1068,6 +1069,21 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           has_incoming: prev.has_incoming || r.has_incoming,
         });
       }
+      // Mensagem do grupo pode ter sido gravada por instância de fora da loja:
+      // usa a cabeça mais recente e a soma de não lidos de TODAS as instâncias.
+      const heads = groupHeadsRef.current;
+      for (const [key, r] of byGroup) {
+        const h = heads.get(key);
+        if (!h) continue;
+        const merged: any = { ...r, unread_count: Number(h.unread_count) || 0 };
+        if (h.last_message_at && new Date(h.last_message_at).getTime() > new Date(r.last_message_at).getTime()) {
+          merged.last_message = h.last_message;
+          merged.last_message_at = h.last_message_at;
+          merged.direction = h.last_direction;
+          merged.sender_name = h.sender_name ?? r.sender_name;
+        }
+        byGroup.set(key, merged);
+      }
       for (const r of byGroup.values()) out.push(r);
       return out;
     })();
@@ -1156,12 +1172,17 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           ? { numberIds: storeNumberIds, includeUnassigned: false }
           : { numberIds: storeNumberIds, includeUnassigned: storeNumbers.some(n => n.provider === 'zapi') };
 
-      const [regular, dispatch] = await Promise.all([
+      const [regular, dispatch, heads] = await Promise.all([
         fetchConversationRows({ ...scope, dispatchOnly: false }),
         needsDispatch ? fetchConversationRows({ ...scope, dispatchOnly: true }) : Promise.resolve({ rows: [], error: null }),
+        // Cabeças dos grupos considerando TODAS as instâncias (~80 linhas).
+        (supabase.rpc as any)('get_group_conversation_heads').then((r: any) => r, () => ({ data: null })),
       ]);
 
       if (regular.error) { console.error('Error loading conversations:', regular.error); return; }
+      const headMap = new Map<string, any>();
+      for (const h of ((heads as any)?.data || []) as any[]) headMap.set(String(h.phone), h);
+      groupHeadsRef.current = headMap;
       // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
       // acontece no effect abaixo SEM nova ida ao servidor.
       setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[] });
