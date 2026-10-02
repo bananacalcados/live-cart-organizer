@@ -99,6 +99,8 @@ interface ChatViewProps {
   hideTagsBar?: boolean;
   /** Botão "Ler msgs antigas" (histórico arquivado sob demanda). */
   archive?: { load: () => void; loading: boolean; exhausted: boolean; loadedCount: number };
+  /** Janela da tabela viva: "Carregar mensagens anteriores". */
+  older?: { hasOlder: boolean; loadOlder: () => Promise<void>; loading: boolean };
   /** Em grupos: clicar no nome do participante abre a conversa individual com ele. */
   onOpenParticipant?: (phone: string, name?: string | null) => void;
 }
@@ -133,6 +135,7 @@ export function ChatView({
   onExtraSent,
   hideTagsBar,
   archive,
+  older,
   onOpenParticipant,
 }: ChatViewProps) {
   /**
