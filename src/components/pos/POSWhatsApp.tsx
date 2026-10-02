@@ -1369,6 +1369,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       const ids = storeNumberIdsRef.current;
       if (ids.length === 0) return true; // loja sem instâncias configuradas vê tudo
       if (!p.whatsapp_number_id) return true; // sem instância (IG/legado): decide no filtro da lista
+      // Grupo: a mensagem pode ter sido gravada por instância de outra loja.
+      if ((p as any).is_group || String(p.phone || '').replace(/\D/g, '').length >= 15) return true;
       return ids.includes(p.whatsapp_number_id);
     },
   });
