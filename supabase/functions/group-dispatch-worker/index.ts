@@ -36,6 +36,29 @@ serve(async (req) => {
   const varsCache = new Map<string, Record<string, string>>();
   const providerCache = new Map<string, string>();
   const blockCache = new Map<string, any>();
+  let vipBaseUrl: string | null = null;
+
+  // Link de Atendimento VIP (aditivo): só age quando o bloco tem vip_link_mode product/general.
+  async function applyVipLink(block: any, job: any, content: string): Promise<string> {
+    const mode = block.vip_link_mode;
+    if (mode !== "product" && mode !== "general") return content;
+    if (block.message_type === "poll" || block.message_type === "contact" || block.message_type === "audio") return content;
+    try {
+      const { data: code, error } = await supabase.rpc("vip_link_get_or_create", { p_dispatch_id: job.id });
+      if (error) throw error;
+      if (!code) return content.replace(/\{\{link_atendimento\}\}/g, "");
+      if (vipBaseUrl === null) {
+        const { data: s } = await supabase.from("app_settings").select("value").eq("key", "vip_link_base_url").maybeSingle();
+        vipBaseUrl = (typeof s?.value === "string" && s.value) || "https://checkout.bananacalcados.com.br/g/";
+      }
+      const url = `${vipBaseUrl}${String(code).toLowerCase()}`;
+      if (/\{\{link_atendimento\}\}/.test(content)) return content.replace(/\{\{link_atendimento\}\}/g, url);
+      return `${content}${content ? "\n\n" : ""}👉 Para pedir, toque aqui: ${url}`;
+    } catch (e) {
+      console.error("[vip-link] falha ao criar link, enviando sem link:", e);
+      return content.replace(/\{\{link_atendimento\}\}/g, "");
+    }
+  }
 
   // ===== Helpers =====
   const dispatchFilter = (q: any, job: any) =>
@@ -339,7 +362,7 @@ serve(async (req) => {
 
     const vars = job.campaign_id ? await getCampaignVars(job.campaign_id) : {};
     const provider = await getProvider(job.whatsapp_number_id);
-    const content = replaceVars(block.message_content || "", vars, job.group_name || "");
+    const content = await applyVipLink(block, job, replaceVars(block.message_content || "", vars, job.group_name || ""));
 
     // Envio com 1 retry
     let res = await sendBlock(provider, block, job, content);

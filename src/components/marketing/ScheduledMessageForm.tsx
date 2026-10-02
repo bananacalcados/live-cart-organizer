@@ -22,6 +22,7 @@ import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { VipLinkBlockControls, VipDayLock, VIP_LINK_PLACEHOLDER, type VipLinkMode, type VipLinkProduct } from "./VipLinkControls";
 
 export interface MediaItem {
   url: string;
@@ -41,6 +42,9 @@ export interface MessageBlock {
   contactPhone?: string;
   /** Envia o link SEM a miniatura de prévia (só para blocos de texto). */
   disableLinkPreview?: boolean;
+  /** Link de Atendimento VIP (texto/imagem/vídeo). */
+  vipLinkMode?: VipLinkMode;
+  vipLinkProduct?: VipLinkProduct | null;
 }
 
 export interface ScheduledMessageData {
@@ -70,6 +74,8 @@ interface EditingMessage {
   disable_link_preview?: boolean | null;
   contact_name?: string | null;
   contact_phone?: string | null;
+  vip_link_mode?: string | null;
+  vip_link_product?: any;
 }
 
 interface MessageTemplate {
@@ -126,12 +132,14 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     contactName: '',
     contactPhone: '',
     disableLinkPreview: false,
+    vipLinkMode: 'none',
+    vipLinkProduct: null,
   };
 }
 
 // ─── Individual Block Editor ───
 function BlockEditor({
-  block, onChange, onRemove, onMoveUp, onMoveDown, isFirst, isLast, onOpenShopify,
+  block, onChange, onRemove, onMoveUp, onMoveDown, isFirst, isLast, onOpenShopify, onPickShopifyForLink,
 }: {
   block: MessageBlock;
   onChange: (b: MessageBlock) => void;
@@ -141,6 +149,7 @@ function BlockEditor({
   isFirst: boolean;
   isLast: boolean;
   onOpenShopify: (blockId: string) => void;
+  onPickShopifyForLink: (blockId: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -351,6 +360,14 @@ function BlockEditor({
                 />
               </div>
             )}
+            <VipLinkBlockControls
+              mode={block.vipLinkMode || 'none'}
+              product={block.vipLinkProduct || null}
+              text={block.content}
+              onChange={(m, p) => onChange({ ...block, vipLinkMode: m, vipLinkProduct: p })}
+              onInsertPlaceholder={() => onChange({ ...block, content: block.content.includes(VIP_LINK_PLACEHOLDER) ? block.content : `${block.content}${block.content ? '\n' : ''}${VIP_LINK_PLACEHOLDER}` })}
+              onPickShopify={() => onPickShopifyForLink(block.id)}
+            />
           </>
         )}
 
@@ -409,6 +426,25 @@ function BlockEditor({
               </div>
             )}
             <p className="text-[10px] text-muted-foreground">{block.mediaItems.length}/10 arquivos</p>
+            {(block.type === 'image' || block.type === 'video') && (
+              <VipLinkBlockControls
+                mode={block.vipLinkMode || 'none'}
+                product={block.vipLinkProduct || null}
+                text={block.mediaItems[block.mediaItems.length - 1]?.caption || ''}
+                onChange={(m, p) => onChange({ ...block, vipLinkMode: m, vipLinkProduct: p })}
+                onInsertPlaceholder={() => {
+                  const last = block.mediaItems.length - 1;
+                  if (last < 0) { toast.error('Adicione a foto/vídeo primeiro'); return; }
+                  const items = block.mediaItems.map((it, i) => i === last && !it.caption.includes(VIP_LINK_PLACEHOLDER)
+                    ? { ...it, caption: `${it.caption}${it.caption ? '\n' : ''}${VIP_LINK_PLACEHOLDER}` } : it);
+                  onChange({ ...block, mediaItems: items });
+                }}
+                onPickShopify={() => onPickShopifyForLink(block.id)}
+              />
+            )}
+            {(block.vipLinkMode || 'none') !== 'none' && block.mediaItems.length > 1 && (
+              <p className="text-[10px] text-muted-foreground">O link vai na legenda do último arquivo.</p>
+            )}
           </>
         )}
 
@@ -570,6 +606,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [showShopifyPicker, setShowShopifyPicker] = useState(false);
   const [shopifySendMode, setShopifySendMode] = useState<"photo_only" | "link">("photo_only");
   const [shopifyTargetBlockId, setShopifyTargetBlockId] = useState<string | null>(null);
+  const [shopifyForLink, setShopifyForLink] = useState(false);
+  const [dayLocked, setDayLocked] = useState(false);
+  const hasVipLink = blocks.some(b => (b.vipLinkMode || 'none') !== 'none');
 
   // Load editing message (legacy single → one block)
   useEffect(() => {
@@ -589,6 +628,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       }
       b.contactName = editingMessage.contact_name || '';
       b.contactPhone = editingMessage.contact_phone || '';
+      b.vipLinkMode = (editingMessage.vip_link_mode as VipLinkMode) || 'none';
+      b.vipLinkProduct = editingMessage.vip_link_product || null;
       setBlocks([b]);
       setSendSpeed(editingMessage.send_speed || 'normal');
       const d = new Date(editingMessage.scheduled_at);
@@ -682,6 +723,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       }
     }
     if (!scheduledDate) { toast.error("Selecione uma data"); return false; }
+    for (const b of blocks) {
+      if (b.vipLinkMode === 'product' && !b.vipLinkProduct?.title?.trim()) {
+        toast.error("Link do produto: vincule um produto ou informe o nome"); return false;
+      }
+    }
+    if (hasVipLink && !dayLocked) { toast.error("Defina a instância de atendimento do dia"); return false; }
     return true;
   };
 
@@ -794,7 +841,15 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   // Shopify
+  const openShopifyForLink = (blockId: string) => {
+    setShopifyForLink(true);
+    setShopifyTargetBlockId(blockId);
+    setShowShopifyPicker(true);
+    loadShopifyProducts();
+  };
+
   const openShopifyPicker = (blockId: string) => {
+    setShopifyForLink(false);
     setShopifyTargetBlockId(blockId);
     setShowShopifyPicker(true);
     loadShopifyProducts();
@@ -810,14 +865,27 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const selectShopifyProduct = (product: ShopifyProduct, imageUrl: string) => {
     const targetBlock = blocks.find(b => b.id === shopifyTargetBlockId);
     if (!targetBlock) return;
+    const n: any = product.node;
+    const linkProduct: VipLinkProduct = {
+      source: 'shopify', shopify_product_id: n.id, title: n.title,
+      price: n.priceRange?.minVariantPrice?.amount ?? null, image_url: imageUrl || null,
+    };
+    if (shopifyForLink) {
+      updateBlock(targetBlock.id, { ...targetBlock, vipLinkMode: 'product', vipLinkProduct: linkProduct });
+      setShowShopifyPicker(false);
+      setShopifyForLink(false);
+      toast.success("Produto vinculado ao link!");
+      return;
+    }
 
     if (shopifySendMode === 'photo_only') {
       if (targetBlock.type === 'image') {
-        updateBlock(targetBlock.id, { ...targetBlock, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
+        updateBlock(targetBlock.id, { ...targetBlock, vipLinkProduct: targetBlock.vipLinkProduct || linkProduct, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
       } else if (targetBlock.type === 'text') {
         // Add a new image block
         const nb = createBlock('image');
         nb.mediaItems = [{ url: imageUrl, caption: '' }];
+        nb.vipLinkProduct = linkProduct;
         setBlocks(prev => [...prev, nb]);
       }
     } else {
@@ -896,9 +964,19 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                 isFirst={idx === 0}
                 isLast={idx === blocks.length - 1}
                 onOpenShopify={openShopifyPicker}
+                onPickShopifyForLink={openShopifyForLink}
               />
             ))}
           </div>
+
+          {hasVipLink && (
+            <VipDayLock
+              day={scheduledDate || new Date()}
+              onState={setDayLocked}
+              contactPhones={blocks.filter(b => b.type === 'contact').map(b => b.contactPhone || '')}
+              onUseForContacts={(phone, label) => setBlocks(prev => prev.map(b => b.type === 'contact' ? { ...b, contactPhone: phone, contactName: b.contactName || label } : b))}
+            />
+          )}
 
           {/* Add block buttons */}
           <div className="flex flex-wrap gap-1.5">

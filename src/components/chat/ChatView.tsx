@@ -52,6 +52,7 @@ import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
+import { VipOriginBanner } from "./VipOriginBanner";
 import { LeadFieldsSummary } from '@/components/chat/LeadFieldsSummary';
 import { ChatExtraSender } from "./ChatExtraSender";
 import { SpellSuggestionBar } from "./SpellSuggestionBar";
@@ -907,6 +908,7 @@ export function ChatView({
       {conversation && !conversation.isGroup && (
         <AiTransferBanner phone={conversation.phone} />
       )}
+      {conversation && !conversation.isGroup && <VipOriginBanner phone={conversation.phone} />}
 
       {/* Lead do Typebot (crediário): campos padronizados captados */}
       {conversation && !conversation.isGroup && (

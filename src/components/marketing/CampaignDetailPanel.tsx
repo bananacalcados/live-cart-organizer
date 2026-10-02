@@ -66,6 +66,17 @@ async function withNetworkRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> 
   throw lastErr;
 }
 
+
+/** Link de Atendimento VIP: marca só a última linha do bloco (texto/imagem/vídeo). */
+function tagVipLink(rows: any[], startIdx: number, block: any) {
+  const mode = block?.vipLinkMode;
+  if (!['product', 'general'].includes(mode) || !['text', 'image', 'video'].includes(block.type)) return;
+  const last = rows.length - 1;
+  if (last < startIdx) return;
+  rows[last].vip_link_mode = mode;
+  rows[last].vip_link_product = mode === 'product' ? (block.vipLinkProduct || null) : null;
+}
+
 interface CampaignDetailPanelProps {
   campaignId: string;
   onBack: () => void;
@@ -264,6 +275,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
       const allInserts: any[] = [];
       for (const block of data.blocks) {
+        const vipStart = allInserts.length;
+        try {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (let i = 0; i < block.mediaItems.length; i++) {
             const item = block.mediaItems[i];
@@ -348,6 +361,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           });
           offset++;
         }
+        } finally { tagVipLink(allInserts, vipStart, block); }
       }
       // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert:
       // colunas ausentes viram NULL (e não o DEFAULT), quebrando NOT NULL como disable_link_preview.
@@ -357,6 +371,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         for (const k of allKeys) full[k] = row[k] ?? null;
         full.disable_link_preview = !!row.disable_link_preview;
         full.mention_all = !!row.mention_all;
+        if ('vip_link_mode' in full) full.vip_link_mode = row.vip_link_mode || 'none';
         if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
         return full;
       });
@@ -421,6 +436,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
       const allInserts: any[] = [];
       for (const block of data.blocks) {
+        const vipStart = allInserts.length;
+        try {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (const item of block.mediaItems) {
             allInserts.push({
@@ -500,6 +517,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           });
           offset++;
         }
+        } finally { tagVipLink(allInserts, vipStart, block); }
       }
       // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert.
       const allKeysNow = Array.from(new Set(allInserts.flatMap(r => Object.keys(r))));
@@ -507,6 +525,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         const full: any = {};
         for (const k of allKeysNow) full[k] = row[k] ?? null;
         full.mention_all = !!row.mention_all;
+        if ('vip_link_mode' in full) full.vip_link_mode = row.vip_link_mode || 'none';
         full.disable_link_preview = !!row.disable_link_preview;
         if ('poll_max_options' in full && full.poll_max_options === null) full.poll_max_options = 1;
         return full;
@@ -582,6 +601,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
+      vip_link_mode: ['product', 'general'].includes((block as any)?.vipLinkMode) ? (block as any).vipLinkMode : 'none',
+      vip_link_product: (block as any)?.vipLinkMode === 'product' ? ((block as any).vipLinkProduct || null) : null,
       contact_name: (block as any)?.contactName?.trim() || null,
       contact_phone: String((block as any)?.contactPhone || '').replace(/\D/g, '') || null,
       whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
