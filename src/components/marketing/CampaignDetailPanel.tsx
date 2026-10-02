@@ -361,6 +361,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           });
           offset++;
         }
+        } finally { tagVipLink(allInserts, vipStart, block); }
       }
       // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert:
       // colunas ausentes viram NULL (e não o DEFAULT), quebrando NOT NULL como disable_link_preview.
@@ -515,6 +516,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           });
           offset++;
         }
+        } finally { tagVipLink(allInserts, vipStart, block); }
       }
       // PostgREST exige o mesmo conjunto de colunas em todas as linhas do insert.
       const allKeysNow = Array.from(new Set(allInserts.flatMap(r => Object.keys(r))));
@@ -597,6 +599,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
+      vip_link_mode: ['product', 'general'].includes((block as any)?.vipLinkMode) ? (block as any).vipLinkMode : 'none',
+      vip_link_product: (block as any)?.vipLinkMode === 'product' ? ((block as any).vipLinkProduct || null) : null,
       contact_name: (block as any)?.contactName?.trim() || null,
       contact_phone: String((block as any)?.contactPhone || '').replace(/\D/g, '') || null,
       whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
