@@ -43,6 +43,7 @@ const LiveRedirectPage = lazy(() => import("./pages/LiveRedirectPage"));
 const LiveWhatsAppRedirectPage = lazy(() => import("./pages/LiveWhatsAppRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
 const ConfortoLP = lazy(() => import("./pages/ConfortoLP"));
+const VipGoRedirect = lazy(() => import("./pages/VipGoRedirect"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking"));
 
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
@@ -118,6 +119,7 @@ const App = () => (
               <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/ao-vivo/:slug" element={<LiveRedirectPage />} />
+              <Route path="/g/:code" element={<VipGoRedirect />} />
               <Route path="/zap/:slug" element={<LiveWhatsAppRedirectPage />} />
 
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
