@@ -1,3 +1,4 @@
+import { VipAttendanceLinksPanel } from "./VipAttendanceLinksPanel";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -352,6 +353,7 @@ export function GroupsVipManager() {
           <TabsTrigger value="links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links</TabsTrigger>
           <TabsTrigger value="orphans" className="gap-1"><UserX className="h-3.5 w-3.5" />Base de Órfãos</TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
+          <TabsTrigger value="attendance_links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links de atendimento</TabsTrigger>
         </TabsList>
 
         {/* BASE DE ÓRFÃOS TAB */}
@@ -365,6 +367,10 @@ export function GroupsVipManager() {
         </TabsContent>
 
         {/* DASHBOARD TAB */}
+        <TabsContent value="attendance_links" className="space-y-4">
+          <VipAttendanceLinksPanel />
+        </TabsContent>
+
         <TabsContent value="dashboard" className="space-y-4">
           <VipGroupsAnalyticsDashboard />
         </TabsContent>
