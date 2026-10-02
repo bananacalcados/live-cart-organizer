@@ -259,9 +259,13 @@ serve(async (req) => {
     const status = (data.status || "").toLowerCase();
     const telephone = data.telephone || data.phone || data.customer?.telephone || data.customer?.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
-    const gatewayTotal = Number(
+    // Envelope novo (AppStore, conta nova) tem event_type e valores em CENTAVOS;
+    // o formato antigo (api/v3) traz valores em reais.
+    const isNewEnvelope = !!payload.event_type;
+    const rawTotal = Number(
       data.total ?? data.total_paid ?? data.amount ?? data.value ?? data.order?.total ?? NaN,
     );
+    const gatewayTotal = isNewEnvelope && Number.isFinite(rawTotal) ? rawTotal / 100 : rawTotal;
     const gatewayTotalSafe = Number.isFinite(gatewayTotal) && gatewayTotal > 0 ? gatewayTotal : null;
 
     console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}, Total: ${gatewayTotalSafe}`);
@@ -284,7 +288,7 @@ serve(async (req) => {
 
     // Determinar se é pagamento confirmado ou falha
     const isPaid = APPMAX_PAID_STATUSES.includes(status) || PAID_EVENTS.includes(event);
-    const isFailed = APPMAX_FAILED_STATUSES.includes(status);
+    const isFailed = APPMAX_FAILED_STATUSES.includes(status) || FAILED_EVENTS.includes(event);
 
     if (!isPaid && !isFailed) {
       console.log(`AppMax status "${status}" / event "${event}" not actionable, skipping.`);
