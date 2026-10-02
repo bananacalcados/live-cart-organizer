@@ -343,7 +343,7 @@ serve(async (req) => {
         });
       }
       if (isPaid && !record.is_paid) {
-        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const payTypeRaw = (data.payment_info?.pix ? "pix" : data.payment_info?.credit_card ? "credit_card" : (data.payment_type || data.payment?.type || data.type || "")).toString().toLowerCase();
         const payLabel = normalizeGatewayPaymentLabel({
           gateway: "appmax",
           paymentMethodId: payTypeRaw.includes("pix") ? "pix" : "credit_card",
@@ -399,7 +399,7 @@ serve(async (req) => {
       }
       if (isPaid && record.status !== "paid" && record.status !== "completed") {
         // Detecta o método real de pagamento a partir do payload AppMax (PIX vs Cartão).
-        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const payTypeRaw = (data.payment_info?.pix ? "pix" : data.payment_info?.credit_card ? "credit_card" : (data.payment_type || data.payment?.type || data.type || "")).toString().toLowerCase();
         const appmaxPaymentMethod = payTypeRaw.includes("pix")
           ? "PIX"
           : (payTypeRaw.includes("credit") || payTypeRaw.includes("cart") || payTypeRaw.includes("cartao"))
