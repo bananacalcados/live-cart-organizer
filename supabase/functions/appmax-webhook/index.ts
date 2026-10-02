@@ -44,10 +44,31 @@ const IGNORED_EVENTS = [
   "OrderPendingIntegration",
   "CustomerCreated",
   "CustomerInterested",
+  // Conta nova (AppStore) — envelope snake_case
+  "order_authorized",
+  "order_authorized_with_delay",
+  "payment_authorized_with_delay",
+  "order_billet_created",
+  "order_billet_overdue",
+  "order_pending_integration",
+  "order_pix_created",
+  "customer_created",
+  "customer_interested",
+  "customer_contacted",
 ];
 
 // Eventos que confirmam pagamento
-const PAID_EVENTS = ["OrderApproved", "OrderPaid", "OrderIntegrated"];
+const PAID_EVENTS = [
+  "OrderApproved", "OrderPaid", "OrderIntegrated",
+  // Conta nova (AppStore)
+  "order_approved", "order_paid", "order_integrated", "order_paid_by_pix",
+];
+
+// Eventos de falha/estorno da conta nova (AppStore)
+const FAILED_EVENTS = [
+  "order_refund", "order_partial_refund", "payment_not_authorized",
+  "order_refused_by_risk", "order_pix_expired",
+];
 
 // Tiny ERP desativado — criação automática de pedido no Tiny removida (no-op).
 async function autoCreateTinyOrder(_supabase: any, _saleId: string, _supabaseUrl: string, _supabaseKey: string) {
