@@ -348,3 +348,6 @@ verify_jwt = false
 
 [functions.meta-ads-sync]
 verify_jwt = false
+
+[functions.vip-go]
+verify_jwt = false
