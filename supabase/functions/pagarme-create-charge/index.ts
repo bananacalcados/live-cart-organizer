@@ -987,6 +987,233 @@ async function chargeAppmax(
   }
 }
 
+// ── APPMAX v2 (AppStore OAuth2 — conta nova) ────────────────────
+// Usa as credenciais da loja geradas na instalação do app (appmax_installations),
+// com token OAuth2 de 1h. Fluxo: customer → order → tokenize → credit-card.
+interface AppmaxV2Installation {
+  merchant_client_id: string;
+  merchant_client_secret: string;
+}
+
+async function getAppmaxV2Installation(): Promise<AppmaxV2Installation | null> {
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data, error } = await supabase
+      .from("appmax_installations")
+      .select("merchant_client_id, merchant_client_secret")
+      .eq("env", "production")
+      .eq("status", "installed")
+      .maybeSingle();
+    if (error) {
+      console.error("APPMAX v2 installation lookup error:", error.message);
+      return null;
+    }
+    if (data?.merchant_client_id && data?.merchant_client_secret) return data as AppmaxV2Installation;
+  } catch (e) {
+    console.error("APPMAX v2 installation lookup exception:", e);
+  }
+  return null;
+}
+
+async function appmaxV2Token(clientId: string, clientSecret: string): Promise<string> {
+  const r = await fetch("https://auth.appmax.com.br/oauth2/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+  const t = await r.text();
+  if (!r.ok) throw new Error(`oauth2/token [${r.status}]: ${t.substring(0, 200)}`);
+  return JSON.parse(t).access_token;
+}
+
+async function chargeAppmaxV2(
+  params: ChargeRequest,
+  products: Array<{ title: string; price: number; quantity: number }>,
+  installation: AppmaxV2Installation,
+  clientIp: string | null,
+  linkGatewayId?: LinkGatewayIdFn,
+): Promise<ChargeResult> {
+  const safeParams = { ...params, card: maskCard(params.card) };
+  const base = "https://api.appmax.com.br";
+  const cpf = params.customer.cpf.replace(/\D/g, "");
+  const phone = params.customer.phone.replace(/\D/g, "").slice(-11);
+
+  try {
+    const token = await appmaxV2Token(installation.merchant_client_id, installation.merchant_client_secret);
+    const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+
+    // 1. Customer
+    const custRes = await fetch(`${base}/v1/customers`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        first_name: params.customer.name.split(" ")[0],
+        last_name: params.customer.name.split(" ").slice(1).join(" ") || ".",
+        email: params.customer.email || `${cpf}@cliente.bananacalcados.com.br`,
+        phone,
+        ip: clientIp || "0.0.0.0",
+        document_number: cpf,
+        address: {
+          postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
+          street: params.billingAddress.street,
+          number: params.billingAddress.number,
+          complement: "",
+          district: params.billingAddress.neighborhood,
+          city: params.billingAddress.city,
+          state: params.billingAddress.state,
+        },
+      }),
+    });
+    const custData = await custRes.json();
+    console.log("APPMAX v2 customer response:", JSON.stringify(custData).substring(0, 500));
+    const customerId = custData?.data?.customer?.id ?? custData?.data?.id;
+    if (!custRes.ok || !customerId) {
+      return { success: false, gateway: "appmax", error: `AppMax v2 customer error: ${JSON.stringify(custData).substring(0, 200)}` };
+    }
+
+    // 2. Order (valores em centavos)
+    const totalCents = Math.round(params.totalAmountCents);
+    const productsTotalCents = products.reduce((s, p) => s + Math.round(p.price * 100) * p.quantity, 0);
+    const ratio = productsTotalCents > 0 ? totalCents / productsTotalCents : 1;
+    const orderProducts = products.map((p, i) => ({
+      sku: `sku_${i}`,
+      name: p.title.substring(0, 200),
+      quantity: p.quantity,
+      unit_value: Math.round(Math.round(p.price * 100) * ratio),
+      type: "physical",
+    }));
+
+    const orderRes = await fetch(`${base}/v1/orders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        customer_id: customerId,
+        products_value: totalCents,
+        discount_value: 0,
+        shipping_value: 0, // frete já embutido nos preços via ratio
+        products: orderProducts,
+      }),
+    });
+    const orderData = await orderRes.json();
+    console.log("APPMAX v2 order response:", JSON.stringify(orderData).substring(0, 500));
+    const appmaxOrderId = orderData?.data?.order?.id ?? orderData?.data?.id;
+    if (!orderRes.ok || !appmaxOrderId) {
+      return { success: false, gateway: "appmax", error: `AppMax v2 order error: ${JSON.stringify(orderData).substring(0, 200)}` };
+    }
+
+    // Vincula IMEDIATAMENTE, antes de processar o cartão.
+    if (linkGatewayId) await linkGatewayId("appmax", String(appmaxOrderId));
+
+    // 3. Tokenize card
+    const month = String(params.card.expMonth ?? "").replace(/\D/g, "").slice(-2).padStart(2, "0");
+    const rawYear = String(params.card.expYear ?? "").replace(/\D/g, "");
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+
+    const tokRes = await fetch(`${base}/v1/payments/tokenize`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        payment_data: {
+          credit_card: {
+            number: params.card.number.replace(/\s/g, ""),
+            cvv: params.card.cvv,
+            expiration_month: month,
+            expiration_year: year,
+            holder_name: params.card.holderName,
+          },
+        },
+      }),
+    });
+    const tokData = await tokRes.json();
+    console.log("APPMAX v2 tokenize response:", JSON.stringify(tokData).substring(0, 300));
+    const cardToken = tokData?.data?.token;
+    if (!tokRes.ok || !cardToken) {
+      return {
+        success: false,
+        gateway: "appmax",
+        error: `AppMax v2 tokenize error: ${JSON.stringify(tokData).substring(0, 200)}`,
+        ...categorizeDecline("dados do cartão inválidos"),
+      };
+    }
+
+    // 4. Payment
+    const payRes = await fetch(`${base}/v1/payments/credit-card`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        order_id: appmaxOrderId,
+        customer_id: customerId,
+        payment_data: {
+          credit_card: {
+            token: cardToken,
+            holder_document_number: cpf,
+            holder_name: params.card.holderName,
+            installments: params.installments,
+            soft_descriptor: "BANANACALCADOS",
+          },
+        },
+      }),
+    });
+    const payData = await payRes.json();
+    console.log("APPMAX v2 payment response:", JSON.stringify(payData).substring(0, 500));
+
+    let status = String(
+      payData?.data?.status ?? payData?.data?.order?.status ?? payData?.data?.payment?.status ?? "",
+    ).toLowerCase();
+    const txId = String(payData?.data?.payment?.id ?? payData?.data?.id ?? appmaxOrderId);
+
+    // 201 sem status explícito → consulta o pedido para saber o desfecho
+    if (payRes.ok && !status) {
+      try {
+        const stRes = await fetch(`${base}/v1/orders/${appmaxOrderId}`, { headers });
+        const stData = await stRes.json();
+        status = String(stData?.data?.order?.status ?? stData?.data?.status ?? "").toLowerCase();
+        console.log(`APPMAX v2 order status lookup: ${status}`);
+      } catch (e) {
+        console.error("APPMAX v2 order status lookup error:", e);
+      }
+    }
+
+    if (payRes.ok && ["aprovado", "approved", "paid", "pago", "integrado"].includes(status)) {
+      return { success: true, gateway: "appmax", transactionId: txId };
+    }
+
+    // Autorizado sem captura = pré-autorização. Aguarda webhook final da AppMax.
+    if (payRes.ok && ["autorizado", "authorized", "pre_authorized"].includes(status)) {
+      return {
+        success: false,
+        pending: true,
+        gateway: "appmax",
+        transactionId: txId,
+        error: "Pagamento em análise pela operadora.",
+        stopCascade: true,
+        declineCategory: "risk",
+      };
+    }
+
+    const errRaw = payData?.error?.message || payData?.message ||
+      (typeof payData?.errors?.message === "string" ? payData.errors.message : null) ||
+      `AppMax v2 payment declined (status: ${status || "desconhecido"})`;
+    const errMsg = typeof errRaw === "string" ? errRaw : JSON.stringify(errRaw).substring(0, 200);
+    return {
+      success: false,
+      gateway: "appmax",
+      error: errMsg,
+      ...categorizeDecline(errMsg),
+    };
+  } catch (e) {
+    console.error("APPMAX v2 exception:", e, "params:", JSON.stringify(safeParams).substring(0, 300));
+    return { success: false, gateway: "appmax", error: `AppMax v2 exception: ${e.message}` };
+  }
+}
+
 // ── Main handler ────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -1577,8 +1804,20 @@ serve(async (req) => {
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
     if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
+      // Conta nova (AppStore OAuth2) tem prioridade; a chave antiga (api/v3) fica como reserva.
+      const appmaxV2Inst = await getAppmaxV2Installation();
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
-      if (appmaxToken) {
+      if (appmaxV2Inst) {
+        console.log(`[FALLBACK] APPMAX usando conta nova (AppStore OAuth2).`);
+        const appmaxResult = await chargeAppmaxV2(chargeParams, products, appmaxV2Inst, clientIp, linkGatewayId);
+        if (appmaxResult.success) {
+          console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
+          result = appmaxResult;
+        } else if (appmaxResult.error) {
+          fallbackErrors.push(`APPMAX: ${appmaxResult.error}`);
+          console.log(`[FALLBACK] APPMAX NAO processou (${appmaxResult.error}).`);
+        }
+      } else if (appmaxToken) {
         const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
         if (appmaxResult.success) {
           console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);

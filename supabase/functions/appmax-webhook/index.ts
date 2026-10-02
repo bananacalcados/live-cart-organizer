@@ -44,10 +44,31 @@ const IGNORED_EVENTS = [
   "OrderPendingIntegration",
   "CustomerCreated",
   "CustomerInterested",
+  // Conta nova (AppStore) — envelope snake_case
+  "order_authorized",
+  "order_authorized_with_delay",
+  "payment_authorized_with_delay",
+  "order_billet_created",
+  "order_billet_overdue",
+  "order_pending_integration",
+  "order_pix_created",
+  "customer_created",
+  "customer_interested",
+  "customer_contacted",
 ];
 
 // Eventos que confirmam pagamento
-const PAID_EVENTS = ["OrderApproved", "OrderPaid", "OrderIntegrated"];
+const PAID_EVENTS = [
+  "OrderApproved", "OrderPaid", "OrderIntegrated",
+  // Conta nova (AppStore)
+  "order_approved", "order_paid", "order_integrated", "order_paid_by_pix",
+];
+
+// Eventos de falha/estorno da conta nova (AppStore)
+const FAILED_EVENTS = [
+  "order_refund", "order_partial_refund", "payment_not_authorized",
+  "order_refused_by_risk", "order_pix_expired",
+];
 
 // Tiny ERP desativado — criação automática de pedido no Tiny removida (no-op).
 async function autoCreateTinyOrder(_supabase: any, _saleId: string, _supabaseUrl: string, _supabaseKey: string) {
@@ -238,9 +259,13 @@ serve(async (req) => {
     const status = (data.status || "").toLowerCase();
     const telephone = data.telephone || data.phone || data.customer?.telephone || data.customer?.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
-    const gatewayTotal = Number(
+    // Envelope novo (AppStore, conta nova) tem event_type e valores em CENTAVOS;
+    // o formato antigo (api/v3) traz valores em reais.
+    const isNewEnvelope = !!payload.event_type;
+    const rawTotal = Number(
       data.total ?? data.total_paid ?? data.amount ?? data.value ?? data.order?.total ?? NaN,
     );
+    const gatewayTotal = isNewEnvelope && Number.isFinite(rawTotal) ? rawTotal / 100 : rawTotal;
     const gatewayTotalSafe = Number.isFinite(gatewayTotal) && gatewayTotal > 0 ? gatewayTotal : null;
 
     console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}, Total: ${gatewayTotalSafe}`);
@@ -263,7 +288,7 @@ serve(async (req) => {
 
     // Determinar se é pagamento confirmado ou falha
     const isPaid = APPMAX_PAID_STATUSES.includes(status) || PAID_EVENTS.includes(event);
-    const isFailed = APPMAX_FAILED_STATUSES.includes(status);
+    const isFailed = APPMAX_FAILED_STATUSES.includes(status) || FAILED_EVENTS.includes(event);
 
     if (!isPaid && !isFailed) {
       console.log(`AppMax status "${status}" / event "${event}" not actionable, skipping.`);
@@ -318,7 +343,7 @@ serve(async (req) => {
         });
       }
       if (isPaid && !record.is_paid) {
-        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const payTypeRaw = (data.payment_info?.pix ? "pix" : data.payment_info?.credit_card ? "credit_card" : (data.payment_type || data.payment?.type || data.type || "")).toString().toLowerCase();
         const payLabel = normalizeGatewayPaymentLabel({
           gateway: "appmax",
           paymentMethodId: payTypeRaw.includes("pix") ? "pix" : "credit_card",
@@ -374,7 +399,7 @@ serve(async (req) => {
       }
       if (isPaid && record.status !== "paid" && record.status !== "completed") {
         // Detecta o método real de pagamento a partir do payload AppMax (PIX vs Cartão).
-        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const payTypeRaw = (data.payment_info?.pix ? "pix" : data.payment_info?.credit_card ? "credit_card" : (data.payment_type || data.payment?.type || data.type || "")).toString().toLowerCase();
         const appmaxPaymentMethod = payTypeRaw.includes("pix")
           ? "PIX"
           : (payTypeRaw.includes("credit") || payTypeRaw.includes("cart") || payTypeRaw.includes("cartao"))
