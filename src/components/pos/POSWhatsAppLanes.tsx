@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X, Users } from "lucide-react";
+import { Search, Sparkles, MailWarning, Clock, Radio, Headphones, CheckCircle2, CheckSquare, X, Users, History as HistoryIcon } from "lucide-react";
+import { buildConversationMatcher, canSearchHistory, searchConversationsFast, type FastSearchResult } from "@/lib/chat/conversationSearch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LaneSection } from "@/components/chat/LaneSection";
@@ -212,15 +213,15 @@ export function POSWhatsAppLanes({
     const graceLeft = new Map<string, number>();
     const manual = new Set<string>();
     const prev = previousLaneRef.current;
+    const matcher = buildConversationMatcher(q);
 
     let hiddenDispatch = 0;
     for (const conv of conversations) {
-      if (conv.isArchived) continue;
-      if (q) {
-        const hay = `${conv.customerName || ""} ${contactNames[conv.phone] || ""} ${conv.phone} ${conv.lastMessage || ""}`.toLowerCase();
-        if (!hay.includes(q)) continue;
-      }
+      // Durante a busca, arquivadas aparecem (na linha Finalizadas).
+      if (conv.isArchived && !matcher) continue;
+      if (matcher && !matcher(conv.phone, [conv.customerName, contactNames[conv.phone]], conv.lastMessage)) continue;
       const key = conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || "none"}`;
+      if (conv.isArchived) { out.finished.push(conv); continue; }
       const manualMarkFirst = getManualLane?.(conv.phone, conv.whatsapp_number_id) || null;
       const silentDispatch =
         conv.lastIsMassDispatch === true &&
@@ -228,7 +229,7 @@ export function POSWhatsAppLanes({
         !manualMarkFirst &&
         !liveStageMap[conv.phone] &&
         !hasActiveSupport?.(conv.phone);
-      if (silentDispatch) {
+      if (silentDispatch && !matcher) {
         hiddenDispatch++;
         if (!showSilentDispatch) continue;
       }
@@ -340,6 +341,35 @@ export function POSWhatsAppLanes({
   }, [lanes]);
 
   const selectedConvs = useMemo(() => allVisible.filter((c) => checked.has(convKey(c))), [allVisible, checked]);
+
+  // Busca no histórico completo (viva + arquivo), debounce ~400ms, descarta respostas antigas.
+  const [historyResults, setHistoryResults] = useState<FastSearchResult[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyReqRef = useRef(0);
+  useEffect(() => {
+    const term = searchQuery.trim();
+    const req = ++historyReqRef.current;
+    if (!canSearchHistory(term)) { setHistoryResults([]); setHistoryLoading(false); return; }
+    setHistoryLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const rows = await searchConversationsFast(term);
+        if (req === historyReqRef.current) setHistoryResults(rows);
+      } catch (e) {
+        console.error("[lanes] busca no histórico falhou", e);
+        if (req === historyReqRef.current) setHistoryResults([]);
+      } finally {
+        if (req === historyReqRef.current) setHistoryLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+  const historyExtra = useMemo(() => {
+    if (historyResults.length === 0) return [];
+    const shown = new Set<string>();
+    for (const lane of CHAT_LANE_ORDER) for (const c of lanes.out[lane]) shown.add(`${c.phone}__${c.whatsapp_number_id || "none"}`);
+    return historyResults.filter((r) => !shown.has(`${r.phone}__${r.whatsapp_number_id || "none"}`));
+  }, [historyResults, lanes]);
   const selectedFinishable = selectedConvs.filter((c) => !lanes.out.finished.includes(c));
   const canBulk = !!(onBulkMoveLane || onBulkFinish);
 
@@ -450,6 +480,38 @@ export function POSWhatsAppLanes({
         )}
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
+        {historyLoading && historyExtra.length === 0 && (
+          <p className="px-1 text-[11px] text-muted-foreground">Buscando no histórico completo…</p>
+        )}
+        {historyExtra.length > 0 && (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+              <HistoryIcon className="h-3.5 w-3.5" /> Histórico completo
+              <span className="rounded-full bg-muted px-1.5 text-muted-foreground">{historyExtra.length}</span>
+            </div>
+            <div className="flex snap-x gap-2 overflow-x-auto pb-1.5">
+              {historyExtra.map((r) => (
+                <button
+                  key={`${r.phone}__${r.whatsapp_number_id || "none"}`}
+                  type="button"
+                  onClick={() => onSelectConversation(r.phone, r.whatsapp_number_id)}
+                  className="w-[200px] shrink-0 snap-start rounded-lg border border-border/60 bg-background px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
+                >
+                  <div className="truncate text-xs font-semibold text-foreground">{r.sender_name || contactNames[r.phone] || r.phone}</div>
+                  <div className="truncate text-[10px] text-muted-foreground">{r.phone}</div>
+                  {r.last_message && <div className="truncate text-[10px] text-muted-foreground">{r.last_message}</div>}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {r.instance_label && <span className="rounded bg-primary/10 px-1 text-[9px] font-semibold text-primary">{r.instance_label}</span>}
+                    {r.is_finished && <span className="rounded bg-muted px-1 text-[9px] font-semibold text-muted-foreground">Finalizada</span>}
+                    {r.is_archived && <span className="rounded bg-accent px-1 text-[9px] font-semibold text-accent-foreground">Arquivada</span>}
+                    {r.is_dispatch_only && <span className="rounded bg-secondary px-1 text-[9px] font-semibold text-secondary-foreground">Disparo</span>}
+                    {r.only_in_archive && <span className="rounded bg-muted px-1 text-[9px] font-semibold text-foreground">Só no arquivo</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {CHAT_LANE_ORDER.map((lane) => {
           const items = lanes.out[lane];
           const meta = CHAT_LANE_META[lane];
