@@ -599,14 +599,6 @@ function CardPaymentForm({
   const [showSummary, setShowSummary] = useState(false);
   const [approved, setApproved] = useState(false);
   const summaryManualRef = useRef(false);
-  const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
-  useEffect(() => {
-    if (readyToPay && !summaryManualRef.current) setShowSummary(true);
-    if (!readyToPay) {
-      summaryManualRef.current = false;
-      setShowSummary(false);
-    }
-  }, [readyToPay]);
 
   /**
    * Confirmação GRANDE: tela cheia por ~2,5 s antes do callback. O fluxo
@@ -661,6 +653,18 @@ function CardPaymentForm({
   const chargeAmount = isDebit ? amount : selectedOption.chargeAmount;
   const displayTotal = isDebit ? amount : selectedOption.totalAmount;
   const selectedInstallmentAmount = isDebit ? amount : selectedOption.installmentAmount;
+
+  // Tudo pronto pra pagar: cartão completo + parcela escolhida + sem divergência
+  // de crédito/débito. Quando vira true (e a pessoa não pediu para editar), o
+  // formulário colapsa no resumo com o botão gigante.
+  const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
+  useEffect(() => {
+    if (readyToPay && !summaryManualRef.current) setShowSummary(true);
+    if (!readyToPay) {
+      summaryManualRef.current = false;
+      setShowSummary(false);
+    }
+  }, [readyToPay]);
 
 
 
