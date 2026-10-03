@@ -84,7 +84,7 @@ describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)"
 
     expect(await screen.findByText(/falta só apertar o botão/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /CLIQUE AQUI PARA CONCLUIR PAGAMENTO/i })).toBeInTheDocument();
-    expect(screen.getByText(/à vista/i)).toBeInTheDocument();
+    expect(screen.getByText(/à vista • R\$/i)).toBeInTheDocument();
   });
 
   it("Editar dados do cartão volta ao formulário mantendo o botão com a frase final", async () => {
