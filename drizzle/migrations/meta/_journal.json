@@ -15,6 +15,13 @@
       "when": 1790960571658,
       "tag": "0001_chat_group_heads_and_fast_search",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791057613568,
+      "tag": "0002_grade_report_non_shoe_sizes",
+      "breakpoints": true
     }
   ]
 }
