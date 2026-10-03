@@ -531,7 +531,7 @@ function CardPaymentForm({
         const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+          approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
         // Check if attempt finished (failed)
@@ -545,7 +545,7 @@ function CardPaymentForm({
         }
         if (attempt && attempt.status === "success") {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+          approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
       } catch {}
@@ -591,6 +591,41 @@ function CardPaymentForm({
     return null;
   })();
 
+  // ── Etapa final: resumo + botão gigante ──────────────────────────────
+  // Quando TODOS os dados estão completos, o formulário colapsa num resumo
+  // com o botão grande "CLIQUE AQUI PARA CONCLUIR PAGAMENTO".
+  // Visual apenas: o clique chama o MESMO handleSubmit de antes — nenhuma
+  // validação, gateway ou confirmação muda.
+  const [showSummary, setShowSummary] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const summaryManualRef = useRef(false);
+
+  /**
+   * Confirmação GRANDE: tela cheia por ~2,5 s antes do callback. O fluxo
+   * (webhook, gateways, dedupe) continua exatamente o mesmo — só a
+   * apresentação ao cliente muda.
+   */
+  const approve = (info: Parameters<typeof onPaymentConfirmed>[0]) => {
+    setApproved(true);
+    window.setTimeout(() => {
+      setApproved(false);
+      onPaymentConfirmed(info);
+    }, 2500);
+  };
+
+  const successOverlay = approved ? (
+    <div className="fixed inset-0 z-[10001] bg-emerald-950/95 flex items-center justify-center p-6" style={{ pointerEvents: "all" }}>
+      <div className="text-center space-y-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="mx-auto w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center">
+          <CheckCircle2 className="h-14 w-14 text-white" />
+        </div>
+        <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">Pagamento concluído!</h2>
+        <p className="text-lg font-bold text-emerald-300">Obrigado! Seu pedido foi pago com sucesso.</p>
+        <p className="text-xs text-emerald-200/70">Continuando em instantes...</p>
+      </div>
+    </div>
+  ) : null;
+
   useEffect(() => {
     if (isDebit || !amount || amount <= 0) return;
     let cancelled = false;
@@ -618,6 +653,18 @@ function CardPaymentForm({
   const chargeAmount = isDebit ? amount : selectedOption.chargeAmount;
   const displayTotal = isDebit ? amount : selectedOption.totalAmount;
   const selectedInstallmentAmount = isDebit ? amount : selectedOption.installmentAmount;
+
+  // Tudo pronto pra pagar: cartão completo + parcela escolhida + sem divergência
+  // de crédito/débito. Quando vira true (e a pessoa não pediu para editar), o
+  // formulário colapsa no resumo com o botão gigante.
+  const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
+  useEffect(() => {
+    if (readyToPay && !summaryManualRef.current) setShowSummary(true);
+    if (!readyToPay) {
+      summaryManualRef.current = false;
+      setShowSummary(false);
+    }
+  }, [readyToPay]);
 
 
 
@@ -773,7 +820,7 @@ function CardPaymentForm({
       if (data?.already_paid) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success("Pagamento já confirmado!");
-        onPaymentConfirmed({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+        approve({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
         return;
       }
 
@@ -796,7 +843,7 @@ function CardPaymentForm({
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         onStepEvent?.("card_approved", { method: isDebit ? "debit_card" : "credit_card", amount, gateway: data.gateway || null });
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
-        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+        approve({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
       }
@@ -811,7 +858,7 @@ function CardPaymentForm({
           if (freshOrder?.is_paid) {
             sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
-            onPaymentConfirmed({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+            approve({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
             return;
           }
         } catch (_) { /* ignore poll error */ }
@@ -827,20 +874,29 @@ function CardPaymentForm({
   };
 
   // ── Processing overlay ──
+  // Tela cheia: impossível não perceber que o pagamento está sendo processado.
   if (isProcessing) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-6 text-center space-y-3">
-          <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
-          <h3 className="font-bold text-lg text-amber-800 dark:text-amber-300">Processando seu pagamento...</h3>
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            Estamos verificando com a operadora do seu cartão de {isDebit ? "débito" : "crédito"}.
-          </p>
-          <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
-            ⚠️ Não feche esta página. Isso pode levar alguns segundos.
-          </p>
+      <>
+        {successOverlay}
+        <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ pointerEvents: "all" }}>
+          <div className="bg-card rounded-2xl border-2 border-amber-400 shadow-2xl p-8 max-w-sm w-full text-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-amber-500 mx-auto" />
+            <h3 className="font-black text-2xl uppercase tracking-tight">Pagando seu pedido...</h3>
+            <p className="text-sm text-muted-foreground">
+              Estamos verificando com a operadora do seu cartão de {isDebit ? "débito" : "crédito"}.
+            </p>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-3">
+              <p className="text-sm font-extrabold text-amber-700 dark:text-amber-400">
+                ⚠️ NÃO FECHE ESTA PÁGINA
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Pode levar alguns segundos. A confirmação aparece aqui.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -874,6 +930,45 @@ function CardPaymentForm({
         </div>
       )}
 
+      {readyToPay && showSummary ? (
+        <div className="rounded-2xl border-2 border-emerald-500/70 bg-emerald-500/10 p-4 space-y-3 shadow-lg shadow-emerald-500/10">
+          <p className="text-center text-xs font-extrabold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+            ✅ Cartão preenchido — falta só apertar o botão
+          </p>
+          <Button
+            onClick={handleSubmit}
+            className="w-full h-20 sm:h-24 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse border-b-4 border-emerald-800"
+            size="lg"
+          >
+            <span className="flex flex-col items-center leading-tight py-1">
+              <span className="flex items-center gap-2 text-lg sm:text-xl font-black">
+                <Lock className="h-6 w-6 shrink-0" /> CLIQUE AQUI PARA CONCLUIR PAGAMENTO
+              </span>
+              <span className="text-sm font-bold opacity-90">
+                {isDebit || selectedInstallments === 1
+                  ? `à vista • R$ ${selectedInstallmentAmount.toFixed(2)}`
+                  : `${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)} • Total R$ ${displayTotal.toFixed(2)}`}
+              </span>
+            </span>
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            💳 {cardName.trim().toUpperCase()} •••• {cardNumber.replace(/\D/g, "").slice(-4)} ·{" "}
+            {isDebit || selectedInstallments === 1 ? "à vista" : `${selectedInstallments}x`}
+            {!isDebit && selectedOption?.hasInterest ? " (com juros)" : " (sem juros)"}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              summaryManualRef.current = true;
+              setShowSummary(false);
+            }}
+            className="w-full text-center text-xs text-muted-foreground underline"
+          >
+            Editar dados do cartão
+          </button>
+        </div>
+      ) : (
+      <>
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
@@ -970,11 +1065,13 @@ function CardPaymentForm({
         <Button
           onClick={handleSubmit}
           disabled={isProcessing || !!mismatch || (!isDebit && !selectedInstallments)}
-          className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
+          className={`w-full h-14 text-lg font-semibold ${readyToPay ? "bg-emerald-600 text-white hover:bg-emerald-500" : formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
           size="lg"
         >
           <Lock className="h-5 w-5 mr-2" />
-          {!isDebit && !selectedInstallments
+          {readyToPay
+            ? "CLIQUE AQUI PARA CONCLUIR PAGAMENTO"
+            : !isDebit && !selectedInstallments
             ? "Selecione as parcelas"
             : isDebit || selectedInstallments === 1
             ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
@@ -984,6 +1081,8 @@ function CardPaymentForm({
           {formComplete ? "CLIQUE PRA PAGAR" : "Preencha os dados do cartão acima"}
         </p>
       </div>
+      </>
+      )}
     </div>
   );
 }
