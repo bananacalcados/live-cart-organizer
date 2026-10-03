@@ -178,6 +178,144 @@ Deno.serve(async (req) => {
               return norm(v.size) || norm(v.color) || "Único";
             };
 
+            // ---------- caminho GraphQL para opções ligadas a metacampo ----------
+            const gql = async (query: string, variables: Record<string, unknown> = {}) => {
+              for (let attempt = 0; attempt < 5; attempt++) {
+                const res = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/graphql.json`, {
+                  method: "POST", headers, body: JSON.stringify({ query, variables }),
+                });
+                const j = await res.json().catch(() => ({}));
+                const throttled = res.status === 429 || (j?.errors || []).some((e: any) => e?.extensions?.code === "THROTTLED");
+                if (!throttled) return j;
+                await sleep(1000 * (attempt + 1));
+              }
+              return {};
+            };
+            const productGid = `gid://shopify/Product/${shopifyProductId}`;
+            const optInfo = await gql(
+              `query($id:ID!){ product(id:$id){ options{ name linkedMetafield{ namespace key } optionValues{ name linkedMetafieldValue } } } }`,
+              { id: productGid },
+            );
+            const gqlOptions: any[] = optInfo?.data?.product?.options || [];
+            const hasLinked = gqlOptions.some((o) => o.linkedMetafield);
+            const gqlQueue: any[] = [];
+
+            const colorGidCache = new Map<string, string>();
+            let colorObjects: any[] | null = null;
+            const fold = (s: string) => norm(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const loadColorObjects = async () => {
+              if (colorObjects) return colorObjects;
+              colorObjects = [];
+              let after: string | null = null;
+              for (let page = 0; page < 10; page++) {
+                const j: any = await gql(
+                  `query($after:String){ metaobjects(type:"shopify--color-pattern", first:250, after:$after){ nodes{ id handle fields{ key value } } pageInfo{ hasNextPage endCursor } } }`,
+                  { after },
+                );
+                const conn = j?.data?.metaobjects;
+                for (const n of conn?.nodes || []) {
+                  const f = Object.fromEntries((n.fields || []).map((x: any) => [x.key, x.value]));
+                  colorObjects.push({ id: n.id, label: f.label || "", f });
+                }
+                if (!conn?.pageInfo?.hasNextPage) break;
+                after = conn.pageInfo.endCursor;
+              }
+              return colorObjects;
+            };
+            const HEX: Record<string, string> = {
+              preto: "#000000", branco: "#FFFFFF", "off white": "#F5F1E6", caramelo: "#A0612B", telha: "#B5523B",
+              marrom: "#6B4226", "marrom escuro": "#4A2C17", bege: "#E8D093", nude: "#E3BC9A", dourado: "#D4AF37",
+              prata: "#C0C0C0", cinza: "#808080", azul: "#1E50A0", marinho: "#1B2A4A", vermelho: "#C0392B",
+              rosa: "#E8A0B4", verde: "#2E7D32", amarelo: "#F2C94C", vinho: "#6D1A36", laranja: "#E67E22",
+            };
+            const colorGidFor = async (name: string, metafieldValues: any[]): Promise<string | null> => {
+              const key = fold(name);
+              if (colorGidCache.has(key)) return colorGidCache.get(key)!;
+              const objs = await loadColorObjects();
+              let found = objs.find((o) => fold(o.label) === key);
+              if (!found) {
+                // Herda a família de cor de um padrão parecido (1ª palavra) ou do 1º existente.
+                const first = key.split(/[\s/]+/)[0];
+                const similar = objs.find((o) => fold(o.label).split(/[\s/]+/)[0] === first) || objs.find((o) => o.f.color_taxonomy_reference);
+                const hex = HEX[key] || HEX[first] || similar?.f?.color || "#808080";
+                const fields: any[] = [
+                  { key: "label", value: norm(name) },
+                  { key: "color", value: hex },
+                ];
+                if (similar?.f?.color_taxonomy_reference) fields.push({ key: "color_taxonomy_reference", value: similar.f.color_taxonomy_reference });
+                if (similar?.f?.pattern_taxonomy_reference) fields.push({ key: "pattern_taxonomy_reference", value: similar.f.pattern_taxonomy_reference });
+                const handle = key.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `cor-${Date.now()}`;
+                const cj: any = await gql(
+                  `mutation($m:MetaobjectCreateInput!){ metaobjectCreate(metaobject:$m){ metaobject{ id } userErrors{ field message } } }`,
+                  { m: { type: "shopify--color-pattern", handle, fields } },
+                );
+                const id = cj?.data?.metaobjectCreate?.metaobject?.id;
+                if (!id) {
+                  console.error("metaobjectCreate falhou:", JSON.stringify(cj?.data?.metaobjectCreate?.userErrors || cj?.errors));
+                  return null;
+                }
+                found = { id, label: norm(name), f: {} };
+                objs.push(found);
+              }
+              colorGidCache.set(key, found.id);
+              return found.id;
+            };
+
+            const createViaGraphql = async (queue: any[]) => {
+              let created = 0;
+              const errors: string[] = [];
+              const inputs: any[] = [];
+              const owners: any[] = [];
+              for (const v of queue) {
+                const optionValues: any[] = [];
+                let failed = false;
+                for (const opt of gqlOptions) {
+                  const value = optionValueFor(String(opt.name || ""), v);
+                  if (opt.linkedMetafield) {
+                    // Reaproveita valor já ligado no produto com o mesmo nome.
+                    const gid = await colorGidFor(value, opt.optionValues || []);
+                    if (!gid) { failed = true; break; }
+                    optionValues.push({ optionName: opt.name, linkedMetafieldValue: gid });
+                  } else {
+                    optionValues.push({ optionName: opt.name, name: value });
+                  }
+                }
+                if (failed) { errors.push(`${v.sku || v.gtin}: não foi possível criar a cor "${v.color}" no padrão de cores da Shopify`); continue; }
+                inputs.push({
+                  optionValues,
+                  barcode: v.gtin || null,
+                  price: String(v.sale_price_override ?? masterRow?.sale_price ?? 0),
+                  inventoryItem: {
+                    sku: v.sku || null,
+                    tracked: true,
+                    requiresShipping: true,
+                    measurement: { weight: { value: Number(v.weight_kg_override ?? masterRow?.weight_kg ?? 0), unit: "KILOGRAMS" } },
+                  },
+                });
+                owners.push(v);
+              }
+              for (let i = 0; i < inputs.length; i += 50) {
+                const chunk = inputs.slice(i, i + 50);
+                const own = owners.slice(i, i + 50);
+                const j: any = await gql(
+                  `mutation($pid:ID!,$v:[ProductVariantsBulkInput!]!){ productVariantsBulkCreate(productId:$pid, variants:$v){ productVariants{ id barcode inventoryItem{ sku } } userErrors{ field message } } }`,
+                  { pid: productGid, v: chunk },
+                );
+                const res = j?.data?.productVariantsBulkCreate;
+                const ue = res?.userErrors || [];
+                if (ue.length || !res) errors.push(...(ue.length ? ue.map((e: any) => e.message) : [JSON.stringify(j?.errors || j)]));
+                for (const pv of res?.productVariants || []) {
+                  const owner = own.find((o) => (o.gtin && norm(o.gtin) === norm(pv.barcode)) || (o.sku && o.sku === pv.inventoryItem?.sku));
+                  if (!owner) continue;
+                  const numId = String(pv.id).split("/").pop()!;
+                  await supabase.from("product_variants").update({ shopify_variant_id: numId }).eq("id", owner.id);
+                  owner.shopify_variant_id = numId;
+                  created++;
+                }
+              }
+              return { created, errors };
+            };
+
             for (const v of pending) {
               // 1. Já existe lá? Vincula pelo código de barras ou SKU.
               const match = existing.find(
@@ -194,6 +332,8 @@ Deno.serve(async (req) => {
                 variantsLinked++;
                 continue;
               }
+
+              if (hasLinked) { gqlQueue.push(v); continue; }
 
               // 2. Cria a nova variação no produto existente.
               const payload: Record<string, unknown> = {
@@ -230,6 +370,16 @@ Deno.serve(async (req) => {
                 variantCreateErrors.push(`${v.sku || v.gtin || "variação"}: ${detail}`);
                 console.error("Erro ao criar variante na Shopify:", detail);
               }
+            }
+
+            // Opções ligadas a metacampo (ex.: "Cor" ligada ao padrão de cor da
+            // categoria): a API REST recusa ("Cannot set name for an option value
+            // linked to a metafield"). Cria pela GraphQL, apontando a cor para o
+            // metaobjeto do padrão de cor (busca pelo nome; cria se não existir).
+            if (gqlQueue.length) {
+              const r = await createViaGraphql(gqlQueue);
+              variantsCreated += r.created;
+              variantCreateErrors.push(...r.errors);
             }
           }
         }
