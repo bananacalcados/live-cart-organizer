@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { toast } from "sonner";
+import { useCartBuildingTracker, useCartBuildingWatcher } from "@/hooks/events/useCartBuildingPresence";
 
 const QUERO_RE = /quero/i;
 const norm = (h?: string | null) => (h || "").replace(/^@+/, "").trim().toLowerCase();
@@ -28,6 +29,8 @@ export interface OrderIntentCard {
   comments: LiveComment[]; // todos do dia, ordem cronológica
   queroCount: number;
   lastQuero: LiveComment;
+  /** 1º QUERO ainda pendente (depois da última exclusão) — base do contador de minutos. */
+  firstPendingQuero: LiveComment;
   profilePic: string | null;
 }
 
@@ -139,6 +142,8 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
         comments: list,
         queroCount: queros.length,
         lastQuero,
+        firstPendingQuero:
+          queros.find((q) => !dismissedAt || new Date(q.created_at) > new Date(dismissedAt)) || lastQuero,
         profilePic: list.find((c) => c.profile_pic_url)?.profile_pic_url || null,
       });
     });
@@ -180,6 +185,18 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
 
   const active = cards.find((c) => c.username === openUser) || null;
 
+  // Presença: anuncia "montando pedido" só enquanto a lateral de montar estiver aberta.
+  useCartBuildingTracker(eventId, active?.username, !!active && orderOpen);
+  const building = useCartBuildingWatcher(eventId);
+
+  // Relógio leve para o contador de minutos (1 atualização a cada 15 s).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (cards.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [cards.length]);
+
   const openCard = (u: string) => {
     setOpenUser(u);
     setOrderOpen(false);
@@ -196,15 +213,23 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
         </div>
       ) : (
         <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
-          {cards.map((c) => (
+          {cards.map((c) => {
+            const builders = building.get(c.username) || [];
+            const mins = Math.max(0, Math.floor((now - new Date(c.firstPendingQuero.created_at).getTime()) / 60000));
+            return (
             <div
               key={c.username}
               role="button"
               tabIndex={0}
               onClick={() => openCard(c.username)}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openCard(c.username)}
-              className="group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-l-4 border-l-amber-400 bg-card px-3 py-2 text-left transition-colors hover:bg-accent"
+              className={cn("group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-l-4 border-l-amber-400 bg-card px-3 py-2 text-left transition-colors hover:bg-accent", builders.length > 0 && "border-l-emerald-500 ring-2 ring-emerald-500/60")}
             >
+              {builders.length > 0 && (
+                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white animate-pulse">
+                  🛒 Montando pedido: {builders.join(", ")}
+                </div>
+              )}
               <button
                 type="button"
                 title="Excluir card"
@@ -224,15 +249,24 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
                 {c.queroCount} QUERO · {c.comments.length} comentário{c.comments.length !== 1 ? "s" : ""}
               </span>
+              {builders.length === 0 && (
+                <span className={cn(
+                  "mt-1 rounded px-1.5 py-0.5 text-center text-[11px] font-extrabold uppercase",
+                  mins >= 5 ? "bg-destructive/15 text-destructive" : "bg-amber-400/20 text-amber-700 dark:text-amber-300",
+                )}>
+                  {mins} {mins === 1 ? "minuto" : "minutos"} sem montar carrinho
+                </span>
+              )}
               <span className="mt-auto text-[10px] text-muted-foreground">
-                há {formatDistanceToNowStrict(new Date(c.lastQuero.created_at), { locale: ptBR })}
+                último QUERO há {formatDistanceToNowStrict(new Date(c.lastQuero.created_at), { locale: ptBR })}
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <Dialog open={!!active} onOpenChange={(v) => !v && setOpenUser(null)}>
+      <Dialog open={!!active} onOpenChange={(v) => { if (!v) { setOpenUser(null); setOrderOpen(false); } }}>
         <DialogContent className={cn("max-h-[92vh] p-0", orderOpen ? "max-w-[1200px]" : "max-w-lg")}>
           {active && (
             <div className="flex h-[85vh]">
