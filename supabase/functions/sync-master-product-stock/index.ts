@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
             };
             const productGid = `gid://shopify/Product/${shopifyProductId}`;
             const optInfo = await gql(
-              `query($id:ID!){ product(id:$id){ options{ name linkedMetafield{ namespace key } optionValues{ name linkedMetafieldValue } } } }`,
+              `query($id:ID!){ product(id:$id){ options{ id name linkedMetafield{ namespace key } optionValues{ name linkedMetafieldValue } } } }`,
               { id: productGid },
             );
             const gqlOptions: any[] = optInfo?.data?.product?.options || [];
@@ -261,6 +261,19 @@ Deno.serve(async (req) => {
               return found.id;
             };
 
+            // Cor local → nome da cor já usado na Shopify (pelas variações já vinculadas).
+            const shopColorByLocal = new Map<string, string>();
+            {
+              const colorPos = options.findIndex((o: any) => /cor|color|colour/i.test(String(o.name || "")));
+              if (colorPos >= 0) {
+                for (const lv of variants as any[]) {
+                  if (!lv.shopify_variant_id || !lv.color) continue;
+                  const ev = existing.find((e: any) => String(e.id) === String(lv.shopify_variant_id));
+                  const name = ev?.[`option${colorPos + 1}`];
+                  if (name && !shopColorByLocal.has(fold(lv.color))) shopColorByLocal.set(fold(lv.color), String(name));
+                }
+              }
+            }
             const createViaGraphql = async (queue: any[]) => {
               let created = 0;
               const errors: string[] = [];
@@ -272,10 +285,28 @@ Deno.serve(async (req) => {
                 for (const opt of gqlOptions) {
                   const value = optionValueFor(String(opt.name || ""), v);
                   if (opt.linkedMetafield) {
-                    // Reaproveita valor já ligado no produto com o mesmo nome.
+                    // 1) Mesma cor local já vendida lá com outro nome (ex.: "Branco/Marinho" → "Azul-marinho")?
+                    const known = shopColorByLocal.get(fold(v.color || ""));
+                    if (known && (opt.optionValues || []).some((ov: any) => ov.name === known)) {
+                      optionValues.push({ optionName: opt.name, name: known });
+                      continue;
+                    }
+                    // 2) Valor do padrão de cor (metaobjeto) — adiciona à opção do produto se faltar.
                     const gid = await colorGidFor(value, opt.optionValues || []);
                     if (!gid) { failed = true; break; }
-                    optionValues.push({ optionName: opt.name, linkedMetafieldValue: gid });
+                    let ov = (opt.optionValues || []).find((x: any) => x.linkedMetafieldValue === gid);
+                    if (!ov) {
+                      const uj: any = await gql(
+                        `mutation($pid:ID!,$oid:ID!,$gid:String!){ productOptionUpdate(productId:$pid, option:{id:$oid}, optionValuesToAdd:[{linkedMetafieldValue:$gid}]){ product{ options{ id optionValues{ name linkedMetafieldValue } } } userErrors{ message } } }`,
+                        { pid: productGid, oid: opt.id, gid },
+                      );
+                      const upd = (uj?.data?.productOptionUpdate?.product?.options || []).find((o: any) => o.id === opt.id);
+                      if (upd) opt.optionValues = upd.optionValues;
+                      ov = (opt.optionValues || []).find((x: any) => x.linkedMetafieldValue === gid);
+                      if (!ov) console.error("productOptionUpdate falhou:", JSON.stringify(uj?.data?.productOptionUpdate?.userErrors || uj?.errors));
+                    }
+                    if (!ov) { failed = true; break; }
+                    optionValues.push({ optionName: opt.name, name: ov.name });
                   } else {
                     optionValues.push({ optionName: opt.name, name: value });
                   }
