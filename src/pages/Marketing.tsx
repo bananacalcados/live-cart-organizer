@@ -33,32 +33,33 @@ import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 
-import { CampaignDetail } from "@/components/marketing/CampaignDetail";
+import { lazyTab, lazyNamed } from "@/lib/lazyTab";
+// Abas pesadas: baixadas só quando abertas (velocidade de abertura do módulo).
+const CampaignDetail = lazyNamed(() => import("@/components/marketing/CampaignDetail"), "CampaignDetail");
 import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpanded";
-import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
+const AutomationFlowBuilder = lazyNamed(() => import("@/components/marketing/AutomationFlowBuilder"), "AutomationFlowBuilder");
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
-import { SectorManager } from "@/components/marketing/SectorManager";
-import { AttendanceRulesSettings } from "@/components/settings/AttendanceRulesSettings";
-import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
-import { LiveSessionManager } from "@/components/LiveSessionManager";
-import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
+const SectorManager = lazyNamed(() => import("@/components/marketing/SectorManager"), "SectorManager");
+const AttendanceRulesSettings = lazyNamed(() => import("@/components/settings/AttendanceRulesSettings"), "AttendanceRulesSettings");
+const GroupsVipManager = lazyNamed(() => import("@/components/marketing/GroupsVipManager"), "GroupsVipManager");
+const LiveSessionManager = lazyNamed(() => import("@/components/LiveSessionManager"), "LiveSessionManager");
+const MassTemplateDispatcher = lazyNamed(() => import("@/components/marketing/MassTemplateDispatcher"), "MassTemplateDispatcher");
 
-import { PrizeManager } from "@/components/marketing/PrizeManager";
-import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
-import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
-import { LinkPageManager } from "@/components/marketing/LinkPageManager";
+const PrizeManager = lazyNamed(() => import("@/components/marketing/PrizeManager"), "PrizeManager");
+const CatalogLandingPageCreator = lazyNamed(() => import("@/components/marketing/CatalogLandingPageCreator"), "CatalogLandingPageCreator");
+const MarketingCalendar = lazyNamed(() => import("@/components/marketing/MarketingCalendar"), "MarketingCalendar");
+const LinkPageManager = lazyNamed(() => import("@/components/marketing/LinkPageManager"), "LinkPageManager");
 import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTemplateSelector";
-import * as XLSX from "@e965/xlsx";
-import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
-import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
+const PushNotificationPanel = lazyTab(() => import("@/components/marketing/PushNotificationPanel"));
+const CatalogLeadPageCreator = lazyNamed(() => import("@/components/marketing/CatalogLeadPageCreator"), "CatalogLeadPageCreator");
 import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
-import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
-import WhatsAppAdKeywords from "@/components/marketing/WhatsAppAdKeywords";
-import LiveCampaignsManager from "@/components/marketing/LiveCampaignsManager";
-import { MarketingAttributionDashboard } from "@/components/marketing/MarketingAttributionDashboard";
-import AdCampaignManager from "@/components/marketing/AdCampaignManager";
-import { TriggersManager } from "@/components/marketing/TriggersManager";
-import InstagramCommentAutomation from "@/components/marketing/InstagramCommentAutomation";
+const LeadsAnalyticsDashboard = lazyNamed(() => import("@/components/marketing/LeadsAnalyticsDashboard"), "LeadsAnalyticsDashboard");
+const WhatsAppAdKeywords = lazyTab(() => import("@/components/marketing/WhatsAppAdKeywords"));
+const LiveCampaignsManager = lazyTab(() => import("@/components/marketing/LiveCampaignsManager"));
+const MarketingAttributionDashboard = lazyNamed(() => import("@/components/marketing/MarketingAttributionDashboard"), "MarketingAttributionDashboard");
+const AdCampaignManager = lazyTab(() => import("@/components/marketing/AdCampaignManager"));
+const TriggersManager = lazyNamed(() => import("@/components/marketing/TriggersManager"), "TriggersManager");
+const InstagramCommentAutomation = lazyTab(() => import("@/components/marketing/InstagramCommentAutomation"));
 import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
 import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 
@@ -1595,7 +1596,9 @@ export default function Marketing() {
                 <Input type="number" value={ordersMax} onChange={e => setOrdersMax(e.target.value)} className="h-9" placeholder="Pedidos máx" title="Número máximo de pedidos" />
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
-                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={async () => {
+                  const xlsxModule: any = await import('@e965/xlsx');
+                  const XLSX = xlsxModule.default || xlsxModule;
                   const exportData = filtered.map(c => {
                     const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
                     const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
