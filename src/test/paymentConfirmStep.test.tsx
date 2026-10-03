@@ -23,11 +23,12 @@ const config: InstallmentConfig = {
   monthly_interest_rate: 0,
 };
 
+// Os Labels do formulário não têm htmlFor — os inputs são encontrados pelo placeholder.
 function fillCard() {
-  fireEvent.change(screen.getByLabelText(/nome no cartão/i), { target: { value: "Maria A Silva" } });
-  fireEvent.change(screen.getByLabelText(/número do cartão/i), { target: { value: "4111111111111111" } });
-  fireEvent.change(screen.getByLabelText(/validade/i), { target: { value: "12/30" } });
-  fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: "123" } });
+  fireEvent.change(screen.getByPlaceholderText("JOÃO SILVA"), { target: { value: "Maria A Silva" } });
+  fireEvent.change(screen.getByPlaceholderText("0000 0000 0000 0000"), { target: { value: "4111111111111111" } });
+  fireEvent.change(screen.getByPlaceholderText("MM/AA"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByPlaceholderText("123"), { target: { value: "123" } });
 }
 
 beforeEach(() => {
@@ -47,14 +48,15 @@ describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)"
       />,
     );
     fireEvent.click(screen.getByText("Cartão de crédito"));
-    await waitFor(() => screen.getByLabelText(/nome no cartão/i));
+    await waitFor(() => screen.getByPlaceholderText("JOÃO SILVA"));
 
     // Antes de completar: botão pede as parcelas, sem o resumo.
     expect(screen.queryByText(/falta só apertar o botão/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Selecione as parcelas/i })).toBeInTheDocument();
 
     fillCard();
-    fireEvent.change(screen.getByLabelText(/parcelas/i), { target: { value: "3" } });
+    const select = document.querySelector("select")!;
+    fireEvent.change(select, { target: { value: "3" } });
 
     // Resumo aparece com a frase final e o valor das parcelas.
     expect(await screen.findByText(/falta só apertar o botão/i)).toBeInTheDocument();
@@ -76,7 +78,7 @@ describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)"
       />,
     );
     fireEvent.click(screen.getByText("Cartão de débito"));
-    await waitFor(() => screen.getByLabelText(/nome no cartão/i));
+    await waitFor(() => screen.getByPlaceholderText("JOÃO SILVA"));
 
     fillCard();
 
@@ -97,12 +99,12 @@ describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)"
       />,
     );
     fireEvent.click(screen.getByText("Cartão de débito"));
-    await waitFor(() => screen.getByLabelText(/nome no cartão/i));
+    await waitFor(() => screen.getByPlaceholderText("JOÃO SILVA"));
     fillCard();
     fireEvent.click(await screen.findByText(/editar dados do cartão/i));
 
     // Formulário volta visível, com botão verde e a mesma frase final.
-    expect(screen.getByLabelText(/nome no cartão/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("JOÃO SILVA")).toBeInTheDocument();
     const btn = screen.getByRole("button", { name: /CLIQUE AQUI PARA CONCLUIR PAGAMENTO/i });
     expect(btn).toBeInTheDocument();
   });
