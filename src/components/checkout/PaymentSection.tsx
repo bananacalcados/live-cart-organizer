@@ -870,20 +870,29 @@ function CardPaymentForm({
   };
 
   // ── Processing overlay ──
+  // Tela cheia: impossível não perceber que o pagamento está sendo processado.
   if (isProcessing) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-6 text-center space-y-3">
-          <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
-          <h3 className="font-bold text-lg text-amber-800 dark:text-amber-300">Processando seu pagamento...</h3>
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            Estamos verificando com a operadora do seu cartão de {isDebit ? "débito" : "crédito"}.
-          </p>
-          <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
-            ⚠️ Não feche esta página. Isso pode levar alguns segundos.
-          </p>
+      <>
+        {successOverlay}
+        <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ pointerEvents: "all" }}>
+          <div className="bg-card rounded-2xl border-2 border-amber-400 shadow-2xl p-8 max-w-sm w-full text-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-amber-500 mx-auto" />
+            <h3 className="font-black text-2xl uppercase tracking-tight">Pagando seu pedido...</h3>
+            <p className="text-sm text-muted-foreground">
+              Estamos verificando com a operadora do seu cartão de {isDebit ? "débito" : "crédito"}.
+            </p>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-3">
+              <p className="text-sm font-extrabold text-amber-700 dark:text-amber-400">
+                ⚠️ NÃO FECHE ESTA PÁGINA
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Pode levar alguns segundos. A confirmação aparece aqui.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -917,6 +926,45 @@ function CardPaymentForm({
         </div>
       )}
 
+      {readyToPay && showSummary ? (
+        <div className="rounded-2xl border-2 border-emerald-500/70 bg-emerald-500/10 p-4 space-y-3 shadow-lg shadow-emerald-500/10">
+          <p className="text-center text-xs font-extrabold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+            ✅ Cartão preenchido — falta só apertar o botão
+          </p>
+          <Button
+            onClick={handleSubmit}
+            className="w-full h-20 sm:h-24 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse border-b-4 border-emerald-800"
+            size="lg"
+          >
+            <span className="flex flex-col items-center leading-tight py-1">
+              <span className="flex items-center gap-2 text-lg sm:text-xl font-black">
+                <Lock className="h-6 w-6 shrink-0" /> CLIQUE AQUI PARA CONCLUIR PAGAMENTO
+              </span>
+              <span className="text-sm font-bold opacity-90">
+                {isDebit || selectedInstallments === 1
+                  ? `à vista • R$ ${selectedInstallmentAmount.toFixed(2)}`
+                  : `${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)} • Total R$ ${displayTotal.toFixed(2)}`}
+              </span>
+            </span>
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            💳 {cardName.trim().toUpperCase()} •••• {cardNumber.replace(/\D/g, "").slice(-4)} ·{" "}
+            {isDebit || selectedInstallments === 1 ? "à vista" : `${selectedInstallments}x`}
+            {!isDebit && selectedOption?.hasInterest ? " (com juros)" : " (sem juros)"}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              summaryManualRef.current = true;
+              setShowSummary(false);
+            }}
+            className="w-full text-center text-xs text-muted-foreground underline"
+          >
+            Editar dados do cartão
+          </button>
+        </div>
+      ) : (
+      <>
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
@@ -1013,11 +1061,13 @@ function CardPaymentForm({
         <Button
           onClick={handleSubmit}
           disabled={isProcessing || !!mismatch || (!isDebit && !selectedInstallments)}
-          className={`w-full h-14 text-lg font-semibold ${formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
+          className={`w-full h-14 text-lg font-semibold ${readyToPay ? "bg-emerald-600 text-white hover:bg-emerald-500" : formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
           size="lg"
         >
           <Lock className="h-5 w-5 mr-2" />
-          {!isDebit && !selectedInstallments
+          {readyToPay
+            ? "CLIQUE AQUI PARA CONCLUIR PAGAMENTO"
+            : !isDebit && !selectedInstallments
             ? "Selecione as parcelas"
             : isDebit || selectedInstallments === 1
             ? `Pagar à vista R$ ${selectedInstallmentAmount.toFixed(2)}`
@@ -1027,6 +1077,8 @@ function CardPaymentForm({
           {formComplete ? "CLIQUE PRA PAGAR" : "Preencha os dados do cartão acima"}
         </p>
       </div>
+      </>
+      )}
     </div>
   );
 }
