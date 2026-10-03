@@ -531,7 +531,7 @@ function CardPaymentForm({
         const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+          approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
         // Check if attempt finished (failed)
@@ -545,7 +545,7 @@ function CardPaymentForm({
         }
         if (attempt && attempt.status === "success") {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
-          onPaymentConfirmed({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+          approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
       } catch {}
@@ -590,6 +590,49 @@ function CardPaymentForm({
     if (isDebit && !cardCaps.hasDebit && cardCaps.hasCredit) return "credit";
     return null;
   })();
+
+  // ── Etapa final: resumo + botão gigante ──────────────────────────────
+  // Quando TODOS os dados estão completos, o formulário colapsa num resumo
+  // com o botão grande "CLIQUE AQUI PARA CONCLUIR PAGAMENTO".
+  // Visual apenas: o clique chama o MESMO handleSubmit de antes — nenhuma
+  // validação, gateway ou confirmação muda.
+  const [showSummary, setShowSummary] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const summaryManualRef = useRef(false);
+  const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
+  useEffect(() => {
+    if (readyToPay && !summaryManualRef.current) setShowSummary(true);
+    if (!readyToPay) {
+      summaryManualRef.current = false;
+      setShowSummary(false);
+    }
+  }, [readyToPay]);
+
+  /**
+   * Confirmação GRANDE: tela cheia por ~2,5 s antes do callback. O fluxo
+   * (webhook, gateways, dedupe) continua exatamente o mesmo — só a
+   * apresentação ao cliente muda.
+   */
+  const approve = (info: Parameters<typeof onPaymentConfirmed>[0]) => {
+    setApproved(true);
+    window.setTimeout(() => {
+      setApproved(false);
+      onPaymentConfirmed(info);
+    }, 2500);
+  };
+
+  const successOverlay = approved ? (
+    <div className="fixed inset-0 z-[10001] bg-emerald-950/95 flex items-center justify-center p-6" style={{ pointerEvents: "all" }}>
+      <div className="text-center space-y-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="mx-auto w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center">
+          <CheckCircle2 className="h-14 w-14 text-white" />
+        </div>
+        <h2 className="text-3xl sm:text-4xl font-black text-white uppercase tracking-tight">Pagamento concluído!</h2>
+        <p className="text-lg font-bold text-emerald-300">Obrigado! Seu pedido foi pago com sucesso.</p>
+        <p className="text-xs text-emerald-200/70">Continuando em instantes...</p>
+      </div>
+    </div>
+  ) : null;
 
   useEffect(() => {
     if (isDebit || !amount || amount <= 0) return;
@@ -773,7 +816,7 @@ function CardPaymentForm({
       if (data?.already_paid) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success("Pagamento já confirmado!");
-        onPaymentConfirmed({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+        approve({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
         return;
       }
 
@@ -796,7 +839,7 @@ function CardPaymentForm({
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
         onStepEvent?.("card_approved", { method: isDebit ? "debit_card" : "credit_card", amount, gateway: data.gateway || null });
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
-        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+        approve({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
       }
@@ -811,7 +854,7 @@ function CardPaymentForm({
           if (freshOrder?.is_paid) {
             sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
-            onPaymentConfirmed({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
+            approve({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
             return;
           }
         } catch (_) { /* ignore poll error */ }
