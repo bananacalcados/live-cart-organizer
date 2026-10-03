@@ -26,6 +26,9 @@ export function lazyTab<P extends object>(
 }
 
 /** Atalho para módulos com export nomeado. */
-export function lazyNamed<M, K extends keyof M>(loader: () => Promise<M>, name: K) {
-  return lazyTab(() => loader().then((m) => ({ default: m[name] as any })));
+export function lazyNamed<M, K extends keyof M>(
+  loader: () => Promise<M>,
+  name: K,
+): M[K] {
+  return lazyTab(() => loader().then((m) => ({ default: m[name] as any }))) as unknown as M[K];
 }
