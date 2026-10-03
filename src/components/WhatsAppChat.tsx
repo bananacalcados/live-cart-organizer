@@ -684,8 +684,23 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // operador trocou de instância enquanto o fetch anterior estava em voo). Sem
   // isso o histórico "voltava sozinho" para a instância anterior.
   const loadSeqRef = useRef(0);
+  // Janela: só as N mensagens MAIS RECENTES (antes vinha o histórico inteiro,
+  // em ordem crescente e cortado em 1000 — lento e às vezes sem as últimas).
+  const MSG_WINDOW_STEP = 150;
+  const windowSizeRef = useRef(MSG_WINDOW_STEP);
+  const hasOlderLiveRef = useRef(false);
+  const msgSigRef = useRef('');
+  // Instância resolvida da conversa (cache por telefone): evita 1 consulta extra a cada recarga.
+  const resolvedNumberRef = useRef<{ key: string; id: string | null } | null>(null);
+  const applyMessages = (rows: Message[]) => {
+    const sig = rows.length + '|' + rows.map((m) => `${m.id}:${m.status ?? ''}`).join(',');
+    if (sig === msgSigRef.current) return; // nada mudou: não re-renderiza nem rola a tela
+    msgSigRef.current = sig;
+    setMessages(rows);
+  };
   const loadMessages = async () => {
     const seq = ++loadSeqRef.current;
+    const windowSize = windowSizeRef.current;
 
     // Modo Instagram: a conversa é o Direct (phone = ID do IG da cliente) na
     // conta de Instagram escolhida — nunca mistura com o WhatsApp.
@@ -696,11 +711,15 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         .eq('phone', igUserId)
         .eq('whatsapp_number_id', overrideNumberId);
       if (hideInstagramComments) igQuery = igQuery.not('message', 'like', '💬 Comentário%');
-      const { data: igData, error: igErr } = await igQuery.order('created_at', { ascending: true });
+      const { data: igData, error: igErr } = await igQuery.order('created_at', { ascending: false }).limit(windowSize);
       if (seq !== loadSeqRef.current) return;
       activeNumberIdRef.current = overrideNumberId;
       if (igErr) console.error('Error loading Instagram messages:', igErr);
-      else setMessages((igData as Message[]) || []);
+      else {
+        const rows = ((igData as Message[]) || []).reverse();
+        hasOlderLiveRef.current = rows.length >= windowSize;
+        applyMessages(rows);
+      }
       setIsLoading(false);
       return;
     }
@@ -708,7 +727,10 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     // Quando o operador troca a instância manualmente, o histórico deve ser o
     // daquela instância. Sem override, resolve pela última mensagem da conversa.
     let convNumberId: string | null = overrideNumberId || conversationNumberId;
-    if (!convNumberId) {
+    const resolveKey = phoneVariations.join(',');
+    if (!convNumberId && resolvedNumberRef.current?.key === resolveKey) {
+      convNumberId = resolvedNumberRef.current.id;
+    } else if (!convNumberId) {
       const { data: instRow } = await supabase
         .from('whatsapp_messages')
         .select('whatsapp_number_id')
@@ -719,6 +741,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         .maybeSingle();
       if (seq !== loadSeqRef.current) return;
       convNumberId = (instRow as any)?.whatsapp_number_id ?? null;
+      resolvedNumberRef.current = { key: resolveKey, id: convNumberId };
     }
 
     // Load messages scoped to that instance (mirrors pages/Chat.tsx L416-418).
@@ -735,14 +758,16 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       ? query.eq('whatsapp_number_id', convNumberId)
       : query.is('whatsapp_number_id', null);
 
-    const { data, error } = await query.order('created_at', { ascending: true });
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(windowSize);
     if (seq !== loadSeqRef.current) return; // resposta obsoleta
     activeNumberIdRef.current = convNumberId;
 
     if (error) {
       console.error('Error loading messages:', error);
     } else {
-      setMessages((data as Message[]) || []);
+      const rows = ((data as Message[]) || []).reverse();
+      hasOlderLiveRef.current = rows.length >= windowSize;
+      applyMessages(rows);
     }
     setIsLoading(false);
   };
@@ -756,6 +781,14 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // Usa o índice (phone, whatsapp_number_id, created_at) — não gera polling.
   const loadArchivedMessages = async () => {
     if (isLoadingArchive || archiveExhausted) return;
+    // Ainda há mensagens recentes não carregadas: amplia a janela antes de ir ao arquivo
+    // (assim não fica buraco entre as recentes e as arquivadas).
+    if (hasOlderLiveRef.current && archivedMessages.length === 0) {
+      setIsLoadingArchive(true);
+      windowSizeRef.current += MSG_WINDOW_STEP * 2;
+      try { await loadMessagesRef.current(); } finally { setIsLoadingArchive(false); }
+      return;
+    }
     setIsLoadingArchive(true);
     try {
       const oldest = archivedMessages[0]?.created_at ?? messages[0]?.created_at ?? null;
@@ -789,6 +822,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   useEffect(() => {
     setIsLoading(true);
+    windowSizeRef.current = MSG_WINDOW_STEP;
+    hasOlderLiveRef.current = false;
+    msgSigRef.current = '';
     setMessages([]);
     setArchivedMessages([]);
     setArchiveExhausted(false);
@@ -875,7 +911,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   // Status (✓✓) refresh: refetch every 15s while open (via ref → sem closure velho).
   useEffect(() => {
-    const interval = setInterval(() => loadMessagesRef.current(), 15000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadMessagesRef.current();
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
