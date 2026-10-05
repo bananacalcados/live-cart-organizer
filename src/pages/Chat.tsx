@@ -341,14 +341,19 @@ export default function ChatPage() {
     return { convs, phoneMessages };
   }, [orders, customers, getContactName, crmMap]);
 
+  // Derivações primitivas fora do callback: com filtro multi-instância ativo a
+  // busca SEMPRE cobre todas as instâncias (o filtro é aplicado na memória),
+  // então selecionar uma conversa (que seta numberFilter) não refaz a RPC nem
+  // tira instâncias da lista. Só muda a busca na transição entre "nenhuma
+  // selecionada" e "alguma selecionada" quando há número específico no filtro
+  // simples — comportamento original preservado.
+  const useMulti = multiInstanceFilter.length > 0;
+  const effectiveNumberId = (!useMulti && numberFilter !== 'all') ? numberFilter : null;
+  const needsDispatch = statusFilter === 'dispatch';
+
   // ── Load conversations via RPC - only load dispatch when that tab is active ──
   const loadConversations = useCallback(async () => {
-    // Multi-instance: if specific instances selected, load all and filter client-side
-    // Single instance legacy: use numberFilter for backward compat
-    // Multi-instância: busca tudo e filtra na memória (na derivação abaixo).
-    const numberId = numberFilter !== 'all' ? numberFilter : undefined; // multi seleciona força numberFilter='all'
-
-    const needsDispatch = statusFilter === 'dispatch';
+    const numberId = effectiveNumberId || undefined;
 
     // Load regular conversations always; dispatch only when tab is active
     const regularPromise = supabase.rpc('get_conversations', {
@@ -370,7 +375,7 @@ export default function ChatPage() {
     const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
 
     setRawRows(allRows);
-  }, [numberFilter, statusFilter]);
+  }, [effectiveNumberId, needsDispatch]);
 
   useEffect(() => {
     loadConversations();
