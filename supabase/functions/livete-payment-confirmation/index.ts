@@ -190,9 +190,10 @@ serve(async (req) => {
     let trackingLine = '';
     try {
       let ship: any = null;
-      // 2 tentativas: a venda no PDV pode estar sendo criada neste exato momento.
-      for (let attempt = 0; attempt < 2 && !ship; attempt++) {
-        if (attempt > 0) await new Promise((r) => setTimeout(r, 2500));
+      // A venda no PDV (e o rastreio) pode nascer até ~40 s depois do pagamento
+      // (ex.: pagamento marcado manualmente). Esperamos até ~48 s antes de desistir.
+      for (let attempt = 0; attempt < 13 && !ship; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
         const saleIds: string[] = [orderId];
         const { data: linkedSale } = await supabase
           .from('pos_sales')
