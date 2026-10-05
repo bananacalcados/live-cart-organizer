@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { useConversationRowsSync } from "@/lib/chat/conversationSync";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -40,8 +41,9 @@ export function GlobalWhatsAppChat() {
   const [editNameValue, setEditNameValue] = useState("");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   // Raw RPC rows (busca) — a lista exibida é montada a partir delas sem rede.
-  const [rawRows, setRawRows] = useState<any[]>([]);
   
+  // Carga completa ao abrir e a cada 10 min; recargas seguintes são incrementais.
+  const { rows: rawRows, loadIncremental } = useConversationRowsSync({ enabled: isOpen, numberId: null, dispatchOnly: false });
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
   const { events } = useEventStore();
@@ -126,22 +128,11 @@ export function GlobalWhatsAppChat() {
     return { convs, phoneMessages };
   };
 
-  // BUSCA: só depende do que muda a consulta (parâmetros fixos) e dos gatilhos
-  // de recarga que já existiam (abrir, selecionar conversa, mensagem nova).
+  // INCREMENTAL: ao selecionar conversa e em mensagem nova (onde antes recarregava tudo).
   useEffect(() => {
     if (!isOpen) return;
-    let alive = true;
-    const loadConversations = async () => {
-      const regularResult = await supabase.rpc('get_conversations', {
-        p_number_id: null,
-        p_dispatch_only: false,
-      });
-      if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
-      if (alive) setRawRows(regularResult.data || []);
-    };
-    loadConversations();
-    return () => { alive = false; };
-  }, [isOpen, selectedPhone, selectedConvNumberId, waMsgTick]);
+    void loadIncremental();
+  }, [isOpen, selectedPhone, selectedConvNumberId, waMsgTick, loadIncremental]);
 
   // MONTAGEM: sem rede. Remonta quando nomes, pedidos, clientes, eventos ou números mudam.
   useEffect(() => {

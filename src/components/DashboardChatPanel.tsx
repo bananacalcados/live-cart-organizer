@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { useConversationRowsSync, isSameOpenPhone } from "@/lib/chat/conversationSync";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -48,7 +49,10 @@ export function DashboardChatPanel() {
   const [selectedIgHandle, setSelectedIgHandle] = useState<string | null>(null);
   const fetchedPicsRef = useRef<Set<string>>(new Set());
   // Linhas cruas da busca (RPC + DMs do Instagram); a lista é montada sem rede.
-  const [rawRows, setRawRows] = useState<{ rpc: any[]; ig: any[] }>({ rpc: [], ig: [] });
+  // Parte RPC: carga completa ao montar/10 min, depois incremental. DMs do IG: consulta direta em toda atualização.
+  const { rows: rpcRows, loadIncremental: rpcIncremental } = useConversationRowsSync({ enabled: true, numberId: null, dispatchOnly: false });
+  const [igRows, setIgRows] = useState<any[]>([]);
+  const rawRows = useMemo(() => ({ rpc: rpcRows, ig: igRows }), [rpcRows, igRows]);
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -99,23 +103,22 @@ export function DashboardChatPanel() {
     return map;
   }, [orders]);
 
-  const loadConversations = useCallback(async () => {
-    // Regular WhatsApp conversations: use RPC summary (no full table scan).
-    const [{ data: rpcRows, error: rpcErr }, igResult] = await Promise.all([
-      supabase.rpc('get_conversations', { p_number_id: null, p_dispatch_only: false }),
-      // Instagram conversations stay on a scoped direct query (channel='instagram')
-      // because they need handle-level aggregation that the RPC doesn't do.
-      supabase
-        .from("whatsapp_messages")
-        .select("phone, message, media_type, direction, status, created_at, sender_name, whatsapp_number_id, is_group, channel")
-        .eq("channel", "instagram")
-        .order("created_at", { ascending: false })
-        .limit(500),
-    ]);
-
-    if (rpcErr) { console.error("Error loading conversations:", rpcErr); return; }
-    setRawRows({ rpc: (rpcRows || []) as any[], ig: (igResult.data || []) as any[] });
+  const loadIgRows = useCallback(async () => {
+    // Instagram conversations stay on a scoped direct query (channel='instagram')
+    // because they need handle-level aggregation that the RPC doesn't do.
+    const { data } = await supabase
+      .from("whatsapp_messages")
+      .select("phone, message, media_type, direction, status, created_at, sender_name, whatsapp_number_id, is_group, channel")
+      .eq("channel", "instagram")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    setIgRows((data || []) as any[]);
   }, []);
+
+  /** Atualização: RPC incremental + DMs do IG. */
+  const loadConversations = useCallback(async () => {
+    await Promise.all([rpcIncremental(), loadIgRows()]);
+  }, [rpcIncremental, loadIgRows]);
 
   // MONTAGEM: sem rede. Remonta quando nomes, pedidos, números ou enriquecimento mudam.
   useEffect(() => {
@@ -239,7 +242,7 @@ export function DashboardChatPanel() {
   // Open chat refetches immediately; conversation list reload is debounced.
   useWaMessageBroadcast(() => {
     if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-  });
+  }, { filter: (p) => isSameOpenPhone(p?.phone, selectedPhone) });
   useWaMessageBroadcast(() => {
     loadConversations();
   }, { debounceMs: 800 });

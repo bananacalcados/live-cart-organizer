@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { useConversationRowsSync, conversationRowKey, isSameOpenPhone } from "@/lib/chat/conversationSync";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -146,8 +147,6 @@ export default function ChatPage() {
   }, []);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  /** Linhas cruas da RPC get_conversations. A lista exibida é DERIVADA delas na memória. */
-  const [rawRows, setRawRows] = useState<any[]>([]);
   const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
@@ -166,6 +165,26 @@ export default function ChatPage() {
   const [numberFilter, setNumberFilter] = useState<string>('all');
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
+
+  // Derivações primitivas: com filtro multi-instância ativo a busca SEMPRE cobre
+  // todas as instâncias (o filtro é aplicado na memória), então selecionar uma
+  // conversa (que seta numberFilter) não refaz a RPC nem tira instâncias da lista.
+  const useMulti = multiInstanceFilter.length > 0;
+  const effectiveNumberId = (!useMulti && numberFilter !== 'all') ? numberFilter : null;
+  const needsDispatch = statusFilter === 'dispatch';
+
+  // Linhas cruas: carga completa ao abrir/trocar parâmetros/10 min; recargas
+  // seguintes são INCREMENTAIS (só o que mudou). Watermarks separados.
+  const regularSync = useConversationRowsSync({ enabled: true, numberId: effectiveNumberId, dispatchOnly: false });
+  const dispatchSync = useConversationRowsSync({ enabled: needsDispatch, numberId: effectiveNumberId, dispatchOnly: true });
+  /** União regular + disparos (regular vence em chave repetida). A lista exibida é DERIVADA na memória. */
+  const rawRows = useMemo(() => {
+    const reg = regularSync.rows;
+    const disp = dispatchSync.rows;
+    if (disp.length === 0) return reg;
+    const keys = new Set(reg.map(conversationRowKey));
+    return [...reg, ...disp.filter((r: any) => !keys.has(conversationRowKey(r)))];
+  }, [regularSync.rows, dispatchSync.rows]);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [editingName, setEditingName] = useState(false);
@@ -341,45 +360,13 @@ export default function ChatPage() {
     return { convs, phoneMessages };
   }, [orders, customers, getContactName, crmMap]);
 
-  // Derivações primitivas fora do callback: com filtro multi-instância ativo a
-  // busca SEMPRE cobre todas as instâncias (o filtro é aplicado na memória),
-  // então selecionar uma conversa (que seta numberFilter) não refaz a RPC nem
-  // tira instâncias da lista. Só muda a busca na transição entre "nenhuma
-  // selecionada" e "alguma selecionada" quando há número específico no filtro
-  // simples — comportamento original preservado.
-  const useMulti = multiInstanceFilter.length > 0;
-  const effectiveNumberId = (!useMulti && numberFilter !== 'all') ? numberFilter : null;
-  const needsDispatch = statusFilter === 'dispatch';
-
-  // ── Load conversations via RPC - only load dispatch when that tab is active ──
-  const loadConversations = useCallback(async () => {
-    const numberId = effectiveNumberId || undefined;
-
-    // Load regular conversations always; dispatch only when tab is active
-    const regularPromise = supabase.rpc('get_conversations', {
-      p_number_id: numberId || null,
-      p_dispatch_only: false,
-    });
-
-    const dispatchPromise = needsDispatch
-      ? supabase.rpc('get_conversations', {
-          p_number_id: numberId || null,
-          p_dispatch_only: true,
-        })
-      : Promise.resolve({ data: [], error: null });
-
-    const [regularResult, dispatchResult] = await Promise.all([regularPromise, dispatchPromise]);
-
-    if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
-
-    const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
-
-    setRawRows(allRows);
-  }, [effectiveNumberId, needsDispatch]);
-
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+  const { loadIncremental: regularIncremental } = regularSync;
+  const { loadIncremental: dispatchIncremental } = dispatchSync;
+  /** Recarga INCREMENTAL (broadcast / onTransferred). */
+  const loadConversations = useCallback(() => {
+    void regularIncremental();
+    void dispatchIncremental();
+  }, [regularIncremental, dispatchIncremental]);
 
   // Monta a lista na MEMÓRIA a partir das linhas cruas (sem rede). Nomes, CRM,
   // finalizadas/arquivadas/pagamento e atribuições só remontam — não refazem a RPC.
@@ -399,7 +386,7 @@ export default function ChatPage() {
   useWaMessageBroadcast(() => {
     const active = activeConversationRef.current;
     if (active.phone) loadMessages(active.phone, false, active.numberId);
-  });
+  }, { filter: (p) => isSameOpenPhone(p?.phone, activeConversationRef.current.phone) });
   useWaMessageBroadcast(() => {
     loadConversations();
   }, { debounceMs: 800 });
