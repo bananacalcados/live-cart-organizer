@@ -2136,7 +2136,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs">Etapas do atendimento (rodízio automático)</DropdownMenuLabel>
-                {FUNNEL_STEPS.filter((s) => s.value > 0).map((s) => {
+                {templateSteps.filter((s) => s.value > 0 && s.kind !== 'payment_link').map((s) => {
                   const count = templates
                     .filter((t) => Number(t.funnel_step) === s.value)
                     .reduce((n, t) => n + (t.variants?.length || 1), 0);

@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useTemplateStore, MessageTemplate, FUNNEL_STEPS } from "@/stores/templateStore";
+import { useTemplateStore, MessageTemplate } from "@/stores/templateStore";
 import { STAGES, OrderStage } from "@/types/order";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,41 @@ interface TemplateManagerProps {
 }
 
 export function TemplateManager({ trigger }: TemplateManagerProps) {
-  const { templates, isLoading, fetchTemplates, addTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
+  const { templates, isLoading, fetchTemplates, addTemplate, updateTemplate, deleteTemplate, steps, fetchSteps, addStep, deleteStep } = useTemplateStore();
+  const [newStepLabel, setNewStepLabel] = useState("");
+  const [addingStep, setAddingStep] = useState(false);
+  const stepOptions = [{ value: 0, label: "Nenhuma etapa", kind: null as string | null, sort_order: 0 }, ...steps];
+  const selectedStepKind = steps.find((s) => s.value === funnelStep)?.kind ?? null;
+
+  const handleAddStep = async () => {
+    const label = newStepLabel.trim();
+    if (!label) return;
+    setAddingStep(true);
+    try {
+      const st = await addStep(label);
+      setFunnelStep(st.value);
+      setNewStepLabel("");
+      toast.success("Etapa criada");
+    } catch {
+      toast.error("Erro ao criar etapa");
+    } finally {
+      setAddingStep(false);
+    }
+  };
+
+  const handleDeleteStep = async (value: number) => {
+    if (templates.some((t) => Number(t.funnel_step) === value)) {
+      toast.error("Essa etapa tem mensagens. Mova ou exclua as mensagens antes.");
+      return;
+    }
+    try {
+      await deleteStep(value);
+      if (funnelStep === value) setFunnelStep(0);
+      toast.success("Etapa excluída");
+    } catch {
+      toast.error("Erro ao excluir etapa");
+    }
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -49,7 +83,8 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
 
   useEffect(() => {
     fetchTemplates();
-  }, [fetchTemplates]);
+    fetchSteps();
+  }, [fetchTemplates, fetchSteps]);
 
   const handleEdit = (template: MessageTemplate) => {
     setEditingTemplate(template);
@@ -197,7 +232,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                       <div className="flex flex-wrap gap-1 mt-1">
                         {Number(template.funnel_step) > 0 && (
                           <Badge variant="outline" className="text-xs border-primary text-primary">
-                            {FUNNEL_STEPS.find((s) => s.value === Number(template.funnel_step))?.label}
+                            {steps.find((s) => s.value === Number(template.funnel_step))?.label || `Etapa ${template.funnel_step}`}
                             {" · "}{template.variants?.length || 1} redação(ões)
                           </Badge>
                         )}
@@ -288,19 +323,49 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
               <div className="space-y-2">
                 <Label>Etapa do atendimento (rodízio)</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {FUNNEL_STEPS.map((s) => (
-                    <Button
-                      key={s.value}
-                      type="button"
-                      variant={funnelStep === s.value ? "default" : "outline"}
-                      size="sm"
-                      className="justify-start text-xs h-auto py-2"
-                      onClick={() => setFunnelStep(s.value)}
-                    >
-                      {s.label}
-                    </Button>
+                  {stepOptions.map((s) => (
+                    <div key={s.value} className="relative">
+                      <Button
+                        type="button"
+                        variant={funnelStep === s.value ? "default" : "outline"}
+                        size="sm"
+                        className="w-full justify-start text-xs h-auto py-2 whitespace-normal text-left"
+                        onClick={() => setFunnelStep(s.value)}
+                      >
+                        {s.label}
+                      </Button>
+                      {s.value > 4 && !s.kind && (
+                        <button
+                          type="button"
+                          title="Excluir etapa"
+                          className="absolute -top-1.5 -right-1.5 rounded-full bg-background border p-0.5 text-destructive"
+                          onClick={() => handleDeleteStep(s.value)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nova etapa (ex.: Pós-venda)"
+                    value={newStepLabel}
+                    onChange={(e) => setNewStepLabel(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddStep(); } }}
+                    className="h-8 text-xs"
+                  />
+                  <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={handleAddStep} disabled={addingStep || !newStepLabel.trim()}>
+                    {addingStep ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Criar etapa
+                  </Button>
+                </div>
+                {selectedStepKind === "payment_link" && (
+                  <p className="text-xs rounded-md border border-primary/40 bg-primary/5 p-2">
+                    Estas redações são usadas pelo botão <b>Enviar link Pagamento</b> da Live, em rodízio.
+                    Use <b>{"{member_area_link}"}</b> (área de membros já logada) ou <b>{"{checkout_link}"}</b> para o link,
+                    e <b>{"{{nome}}"}</b>, <b>{"{instagram}"}</b>, <b>{"{total}"}</b>, <b>{"{products}"}</b>.
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Mensagens da mesma etapa entram no rodízio: a cada envio o sistema usa
                   uma redação diferente, reduzindo o risco de bloqueio.
