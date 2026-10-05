@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MessageCircle, X, ChevronLeft, Phone, Users, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,8 @@ export function GlobalWhatsAppChat() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
+  // Raw RPC rows (busca) — a lista exibida é montada a partir delas sem rede.
+  const [rawRows, setRawRows] = useState<any[]>([]);
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -50,17 +52,28 @@ export function GlobalWhatsAppChat() {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // Telefones da lista montada com chave estável (só muda quando o conjunto muda).
+  const conversationPhonesKey = useMemo(
+    () => Array.from(new Set(conversations.map(c => c.phone).filter(Boolean))).sort().join('|'),
+    [conversations],
+  );
+
   useEffect(() => {
-    if (!isOpen || conversations.length === 0) return;
+    if (!isOpen || !conversationPhonesKey) return;
     let alive = true;
     const loadChatContacts = async () => {
-      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const phones = conversationPhonesKey.split('|');
       const { names } = await resolveChatContacts(phones);
-      if (alive) setChatContacts(prev => ({ ...prev, ...names }));
+      if (!alive) return;
+      setChatContacts(prev => {
+        let changed = false;
+        for (const k in names) { if (prev[k] !== names[k]) { changed = true; break; } }
+        return changed ? { ...prev, ...names } : prev;
+      });
     };
     loadChatContacts();
     return () => { alive = false; };
-  }, [isOpen, conversations]);
+  }, [isOpen, conversationPhonesKey]);
 
   // Helper to map RPC rows to Conversation objects
   const mapRowsToConvs = (rows: any[]) => {
@@ -113,28 +126,33 @@ export function GlobalWhatsAppChat() {
     return { convs, phoneMessages };
   };
 
+  // BUSCA: só depende do que muda a consulta (parâmetros fixos) e dos gatilhos
+  // de recarga que já existiam (abrir, selecionar conversa, mensagem nova).
   useEffect(() => {
     if (!isOpen) return;
-
+    let alive = true;
     const loadConversations = async () => {
       const regularResult = await supabase.rpc('get_conversations', {
         p_number_id: null,
         p_dispatch_only: false,
       });
-
       if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
-
-      const isCommentMessage = (msg?: string | null) =>
-        !!msg && /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
-      const filteredRows = (regularResult.data || []).filter((row: any) => !isCommentMessage(row.last_message));
-
-      const { convs, phoneMessages } = mapRowsToConvs(filteredRows);
-      convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      setConversations(enrichConversations(convs, phoneMessages));
+      if (alive) setRawRows(regularResult.data || []);
     };
-
     loadConversations();
-  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers, waMsgTick]);
+    return () => { alive = false; };
+  }, [isOpen, selectedPhone, selectedConvNumberId, waMsgTick]);
+
+  // MONTAGEM: sem rede. Remonta quando nomes, pedidos, clientes, eventos ou números mudam.
+  useEffect(() => {
+    const isCommentMessage = (msg?: string | null) =>
+      !!msg && /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
+    const filteredRows = rawRows.filter((row: any) => !isCommentMessage(row.last_message));
+    const { convs, phoneMessages } = mapRowsToConvs(filteredRows);
+    convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
+    setConversations(enrichConversations(convs, phoneMessages));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, orders, customers, events, chatContacts, enrichConversations, metaNumbers]);
 
   // New WhatsApp messages: broadcast-based (postgres_changes on
   // whatsapp_messages was removed to cut DB CPU).
