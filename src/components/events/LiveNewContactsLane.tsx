@@ -276,19 +276,14 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       if (document.visibilityState === "visible") load();
     }, 20000);
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        load();
-        loadActivity();
-      }
+      if (document.visibilityState === "visible") load();
     };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
     };
-  }, [eventId, load, loadActivity]);
+  }, [eventId, load]);
 
   // Identidade conhecida na base (clientes da live, CRM, cadastros, leads, contatos) — 1 RPC indexada, com cache.
   const [identities, setIdentities] = useState<Map<string, KnownIdentity | null>>(new Map());
