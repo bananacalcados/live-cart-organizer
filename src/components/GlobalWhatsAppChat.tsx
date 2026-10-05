@@ -52,10 +52,10 @@ export function GlobalWhatsAppChat() {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
-  // Telefones derivados das linhas cruas com chave estável (só muda quando o conjunto muda).
+  // Telefones da lista montada com chave estável (só muda quando o conjunto muda).
   const conversationPhonesKey = useMemo(
-    () => Array.from(new Set(rawRows.map((r: any) => r.phone).filter(Boolean))).sort().join('|'),
-    [rawRows],
+    () => Array.from(new Set(conversations.map(c => c.phone).filter(Boolean))).sort().join('|'),
+    [conversations],
   );
 
   useEffect(() => {
