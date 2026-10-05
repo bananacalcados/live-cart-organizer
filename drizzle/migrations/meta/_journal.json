@@ -43,6 +43,13 @@
       "when": 1791212765485,
       "tag": "0005_rfm_legacy_changed_only_and_temp_cron",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791214231261,
+      "tag": "0006_message_funnel_steps",
+      "breakpoints": true
     }
   ]
 }
