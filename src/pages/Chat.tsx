@@ -146,6 +146,8 @@ export default function ChatPage() {
   }, []);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  /** Linhas cruas da RPC get_conversations. A lista exibida é DERIVADA delas na memória. */
+  const [rawRows, setRawRows] = useState<any[]>([]);
   const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
@@ -230,7 +232,15 @@ export default function ChatPage() {
     });
   }, []);
   // CRM phone lookup for conversation names
-  const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
+  // Derivado das linhas cruas com chave estável: só muda quando o CONJUNTO de telefones muda.
+  const conversationPhonesKey = useMemo(
+    () => Array.from(new Set(rawRows.map((r: any) => r.phone as string).filter(Boolean))).join('|'),
+    [rawRows],
+  );
+  const conversationPhones = useMemo(
+    () => (conversationPhonesKey ? conversationPhonesKey.split('|') : []),
+    [conversationPhonesKey],
+  );
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
 
   // ── Fetch numbers and contacts on mount ──
@@ -253,7 +263,12 @@ export default function ChatPage() {
     let alive = true;
     const loadContacts = async () => {
       const { names } = await resolveChatContacts(conversationPhones);
-      if (alive) setChatContacts(prev => ({ ...prev, ...names }));
+      if (!alive) return;
+      // Só cria objeto novo se algum nome realmente mudou (evita remontar a lista à toa).
+      setChatContacts(prev => {
+        const changed = Object.entries(names).some(([k, v]) => prev[k] !== v);
+        return changed ? { ...prev, ...names } : prev;
+      });
     };
     loadContacts();
     return () => { alive = false; };
@@ -330,8 +345,8 @@ export default function ChatPage() {
   const loadConversations = useCallback(async () => {
     // Multi-instance: if specific instances selected, load all and filter client-side
     // Single instance legacy: use numberFilter for backward compat
-    const useMulti = multiInstanceFilter.length > 0;
-    const numberId = (!useMulti && numberFilter !== 'all') ? numberFilter : undefined;
+    // Multi-instância: busca tudo e filtra na memória (na derivação abaixo).
+    const numberId = (multiInstanceFilterRef.current.length === 0 && numberFilter !== 'all') ? numberFilter : undefined;
 
     const needsDispatch = statusFilter === 'dispatch';
 
@@ -352,23 +367,25 @@ export default function ChatPage() {
 
     if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
 
-    let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
-    
-    // Client-side multi-instance filter
-    if (useMulti) {
-      allRows = allRows.filter((row: any) => 
-        multiInstanceFilter.includes(row.whatsapp_number_id)
-      );
-    }
+    const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
 
-    const { convs, phoneMessages } = mapRowsToConvs(allRows);
-
-    setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
-  }, [numberFilter, multiInstanceFilter, statusFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
+    setRawRows(allRows);
+  }, [numberFilter, statusFilter]);
 
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Monta a lista na MEMÓRIA a partir das linhas cruas (sem rede). Nomes, CRM,
+  // finalizadas/arquivadas/pagamento e atribuições só remontam — não refazem a RPC.
+  // Fica num efeito (e não useMemo) porque enrichConversations chama ensureFinished.
+  useEffect(() => {
+    const rows = multiInstanceFilter.length > 0
+      ? rawRows.filter((row: any) => multiInstanceFilter.includes(row.whatsapp_number_id))
+      : rawRows;
+    const { convs, phoneMessages } = mapRowsToConvs(rows);
+    setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
+  }, [rawRows, multiInstanceFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
 
   // New WhatsApp messages: broadcast-based (postgres_changes was removed
   // from this table to cut DB CPU). See useWaMessageBroadcast.
