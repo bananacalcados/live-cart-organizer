@@ -47,6 +47,8 @@ export function DashboardChatPanel() {
   const [profilePics, setProfilePics] = useState<Record<string, string>>({});
   const [selectedIgHandle, setSelectedIgHandle] = useState<string | null>(null);
   const fetchedPicsRef = useRef<Set<string>>(new Set());
+  // Linhas cruas da busca (RPC + DMs do Instagram); a lista é montada sem rede.
+  const [rawRows, setRawRows] = useState<{ rpc: any[]; ig: any[] }>({ rpc: [], ig: [] });
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -56,19 +58,29 @@ export function DashboardChatPanel() {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // Telefones derivados das linhas cruas com chave estável (só muda quando o conjunto muda).
+  const conversationPhonesKey = useMemo(
+    () => Array.from(new Set(rawRows.rpc.map((r: any) => r.phone).filter(Boolean))).sort().join("|"),
+    [rawRows],
+  );
+
   useEffect(() => {
-    if (conversations.length === 0) return;
+    if (!conversationPhonesKey) return;
     let alive = true;
+    const mergeIfChanged = (prev: Record<string, string>, next: Record<string, string>) => {
+      for (const k in next) { if (prev[k] !== next[k]) return { ...prev, ...next }; }
+      return prev;
+    };
     const loadChatContacts = async () => {
-      const phones = conversations.map(c => c.phone).filter(Boolean);
+      const phones = conversationPhonesKey.split("|");
       const { names, pics } = await resolveChatContacts(phones);
       if (!alive) return;
-      setChatContacts(prev => ({ ...prev, ...names }));
-      setProfilePics(prev => ({ ...prev, ...pics }));
+      setChatContacts(prev => mergeIfChanged(prev, names));
+      setProfilePics(prev => mergeIfChanged(prev, pics));
     };
     loadChatContacts();
     return () => { alive = false; };
-  }, [conversations]);
+  }, [conversationPhonesKey]);
 
   // Build a map of normalized phone → instagram handle from current event orders
   const orderPhoneMap = useMemo(() => {
@@ -102,6 +114,12 @@ export function DashboardChatPanel() {
     ]);
 
     if (rpcErr) { console.error("Error loading conversations:", rpcErr); return; }
+    setRawRows({ rpc: (rpcRows || []) as any[], ig: (igResult.data || []) as any[] });
+  }, []);
+
+  // MONTAGEM: sem rede. Remonta quando nomes, pedidos, números ou enriquecimento mudam.
+  useEffect(() => {
+    const rpcRows = rawRows.rpc;
 
     const convs: Conversation[] = [];
     const phoneMessages = new Map<string, { direction: string }[]>();
@@ -143,7 +161,7 @@ export function DashboardChatPanel() {
     }
 
     // ===== Instagram conversations (aggregated by @handle) =====
-    const igData = igResult.data || [];
+    const igData = rawRows.ig;
     const igMap = new Map<string, { messages: any[]; unread: number; igUserId: string }>();
     for (const msg of igData as any[]) {
       const rawHandle = (msg.sender_name || "").toString().trim().toLowerCase();
@@ -186,7 +204,11 @@ export function DashboardChatPanel() {
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
     const enriched = enrichConversations(convs, phoneMessages);
     setConversations(enriched);
+  }, [rawRows, orderPhoneMap, chatContacts, metaNumbers, enrichConversations, orders]);
 
+  // Fotos de perfil Z-API faltantes (guardado por fetchedPicsRef: cada telefone só é pedido uma vez).
+  useEffect(() => {
+    const enriched = conversations;
     // Fetch profile pics for Z-API conversations missing pics
     const phonesNeedingPics = enriched
       .filter(c => !c.isGroup && !profilePics[c.phone] && !fetchedPicsRef.current.has(c.phone) && c.lastIncomingInstance === "zapi")
@@ -199,11 +221,15 @@ export function DashboardChatPanel() {
         body: { phones: phonesNeedingPics, whatsapp_number_id: metaNumbers.find(n => n.provider === "zapi")?.id },
       }).then(({ data }) => {
         if (data?.photos) {
-          setProfilePics(prev => ({ ...prev, ...data.photos }));
+          setProfilePics(prev => {
+            for (const k in data.photos) { if (prev[k] !== data.photos[k]) return { ...prev, ...data.photos }; }
+            return prev;
+          });
         }
       }).catch(() => {});
     }
-  }, [orderPhoneMap, chatContacts, metaNumbers, enrichConversations, orders, profilePics]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations]);
 
   useEffect(() => {
     loadConversations();
