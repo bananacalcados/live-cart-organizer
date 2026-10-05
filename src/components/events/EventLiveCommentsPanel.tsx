@@ -23,6 +23,8 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // Cache da pontuação de participação por @ (vale para a sessão da página).
+/** Pedidos de outras lives por cliente (chave evento|cliente). */
+const pastOrdersCache = new Map<string, any[]>();
 const scoreCache = new Map<string, { score: number; category: string; liveCount: number } | null>();
 
 interface LiveComment {
@@ -527,7 +529,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           ? `Live localizada: ${found} comentários (${inserted} novos).`
           : "Live localizada, sem comentário novo agora.");
       }
-      await loadComments({ silent: true });
+      if (inserted > 0) await loadComments({ silent: true });
     } catch (e: any) {
       console.warn("instagram-live-sync failed", e);
       if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
