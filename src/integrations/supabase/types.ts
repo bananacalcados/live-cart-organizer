@@ -24756,6 +24756,30 @@ export type Database = {
         }
         Returns: Json
       }
+      get_conversations_since: {
+        Args: {
+          p_dispatch_only?: boolean
+          p_number_id?: string
+          p_since?: string
+        }
+        Returns: {
+          channel: string
+          direction: string
+          has_incoming: boolean
+          has_outgoing: boolean
+          is_dispatch_only: boolean
+          is_group: boolean
+          last_is_mass_dispatch: boolean
+          last_message: string
+          last_message_at: string
+          phone: string
+          sender_name: string
+          status: string
+          unread_count: number
+          updated_at: string
+          whatsapp_number_id: string
+        }[]
+      }
       get_customer_active_prizes: {
         Args: { p_include_history?: boolean; p_phone: string }
         Returns: {
