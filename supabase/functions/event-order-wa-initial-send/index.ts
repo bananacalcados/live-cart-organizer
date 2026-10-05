@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     // viaNumberId (opcional) sobrescreve a instância do evento.
     // Modo CONTATO (sem pedido): informe eventId + phone (+ name opcional) —
     // usado na linha "Novos contatos" da live para quem só digitou o WhatsApp.
-    const { orderId, viaNumberId, eventId: contactEventId, phone: contactPhone, name: contactName } = await req.json();
+    const { orderId, viaNumberId, eventId: contactEventId, phone: contactPhone, name: contactName, purpose } = await req.json();
     if (!orderId && !(contactEventId && contactPhone)) {
       return json({ error: "orderId ou (eventId + phone) required" }, 400);
     }
@@ -73,9 +73,30 @@ Deno.serve(async (req) => {
       .eq("id", order.event_id)
       .maybeSingle();
 
-    const variants: Variant[] = (((ev as any)?.wa_initial_variants as Variant[]) || []).filter(
+    let variants: Variant[] = (((ev as any)?.wa_initial_variants as Variant[]) || []).filter(
       (v) => v && typeof v.text === "string" && v.text.trim().length > 0,
     );
+
+    // Botão "Enviar link Pagamento": usa as redações da etapa "Link de pagamento"
+    // das Mensagens Prontas (rodízio por instância). Sem redações lá, usa as do evento.
+    let paymentStep: number | null = null;
+    if (purpose === "payment_link") {
+      const { data: stepRow } = await supabase
+        .from("message_funnel_steps").select("value").eq("kind", "payment_link").maybeSingle();
+      if (stepRow?.value) {
+        const { data: tpls } = await supabase
+          .from("message_templates").select("message, variants")
+          .eq("funnel_step", stepRow.value).order("created_at", { ascending: true });
+        const texts = ((tpls as any[]) || []).flatMap((t) => {
+          const vs = Array.isArray(t.variants) ? t.variants : [];
+          return vs.length ? vs : [t.message];
+        }).map((x: unknown) => String(x ?? "").trim()).filter(Boolean);
+        if (texts.length) {
+          variants = texts.map((text) => ({ text }));
+          paymentStep = Number(stepRow.value);
+        }
+      }
+    }
     if (variants.length === 0) {
       return json({ error: "Nenhuma variação de mensagem configurada no evento (etapa MENSAGEM)." }, 400);
     }
@@ -94,7 +115,9 @@ Deno.serve(async (req) => {
     }
 
     // ---- Rodízio ----
-    const { data: idxData } = await supabase.rpc("next_event_wa_initial_variant", { p_event_id: order.event_id });
+    const { data: idxData } = paymentStep !== null
+      ? await supabase.rpc("next_template_variant", { p_step: paymentStep, p_scope: numberId, p_count: variants.length })
+      : await supabase.rpc("next_event_wa_initial_variant", { p_event_id: order.event_id });
     let idx = typeof idxData === "number" ? idxData : 0;
     if (idx < 0 || idx >= variants.length) idx = idx % variants.length;
     const variant = variants[idx];
@@ -140,7 +163,14 @@ Deno.serve(async (req) => {
       "{total}": `R$${total.toFixed(2)}`,
       "{order_id}": orderId ? String(orderId).slice(0, 8) : "",
     };
-    const text = variant.text.replace(/\{[a-z_]+\}/g, (m) => (m in tokens ? tokens[m] : m)).trim();
+    // Variáveis no formato das Mensagens Prontas ({{nome}} etc.) também valem aqui.
+    const dbl: Record<string, string> = {
+      nome: displayName || "", primeiro_nome: displayName || "", instagram: igName || "",
+      total: `R$${total.toFixed(2)}`, produtos: productLines,
+    };
+    const text = variant.text
+      .replace(/\{\{([a-z_]+)\}\}/gi, (m, k) => (k.toLowerCase() in dbl ? dbl[k.toLowerCase()] : m))
+      .replace(/\{[a-z_]+\}/g, (m) => (m in tokens ? tokens[m] : m)).trim();
 
     const mediaUrl = variant.media_url || null;
     const mediaType = mediaUrl ? (variant.media_type || "image") : "text";

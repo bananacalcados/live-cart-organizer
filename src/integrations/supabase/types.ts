@@ -12078,6 +12078,30 @@ export type Database = {
         }
         Relationships: []
       }
+      message_funnel_steps: {
+        Row: {
+          created_at: string
+          kind: string | null
+          label: string
+          sort_order: number
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          kind?: string | null
+          label: string
+          sort_order?: number
+          value: number
+        }
+        Update: {
+          created_at?: string
+          kind?: string | null
+          label?: string
+          sort_order?: number
+          value?: number
+        }
+        Relationships: []
+      }
       message_templates: {
         Row: {
           created_at: string

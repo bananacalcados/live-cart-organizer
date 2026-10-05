@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { useTemplateStore, applyTemplateVariables, pickStepMessage, FUNNEL_STEPS } from "@/stores/templateStore";
+import { useTemplateStore, applyTemplateVariables, pickStepMessage } from "@/stores/templateStore";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
@@ -167,7 +167,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   );
   const dbOrders = useDbOrderStore((s) => s.orders);
   const dbOrder = useMemo(() => dbOrders.find((o) => o.id === order.id) || null, [dbOrders, order.id]);
-  const { getTemplatesByStage, templates } = useTemplateStore();
+  const { getTemplatesByStage, templates, steps: templateSteps, fetchSteps: fetchTemplateSteps } = useTemplateStore();
+  useEffect(() => { fetchTemplateSteps(); }, [fetchTemplateSteps]);
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
 
   // ── Bind chat to the instance of the existing conversation ──
@@ -2136,7 +2137,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs">Etapas do atendimento (rodízio automático)</DropdownMenuLabel>
-                {FUNNEL_STEPS.filter((s) => s.value > 0).map((s) => {
+                {templateSteps.filter((s) => s.value > 0 && s.kind !== 'payment_link').map((s) => {
                   const count = templates
                     .filter((t) => Number(t.funnel_step) === s.value)
                     .reduce((n, t) => n + (t.variants?.length || 1), 0);
