@@ -167,7 +167,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   );
   const dbOrders = useDbOrderStore((s) => s.orders);
   const dbOrder = useMemo(() => dbOrders.find((o) => o.id === order.id) || null, [dbOrders, order.id]);
-  const { getTemplatesByStage, templates } = useTemplateStore();
+  const { getTemplatesByStage, templates, steps: templateSteps, fetchSteps: fetchTemplateSteps } = useTemplateStore();
+  useEffect(() => { fetchTemplateSteps(); }, [fetchTemplateSteps]);
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
 
   // ── Bind chat to the instance of the existing conversation ──

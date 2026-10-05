@@ -34,7 +34,6 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const [newStepLabel, setNewStepLabel] = useState("");
   const [addingStep, setAddingStep] = useState(false);
   const stepOptions = [{ value: 0, label: "Nenhuma etapa", kind: null as string | null, sort_order: 0 }, ...steps];
-  const selectedStepKind = steps.find((s) => s.value === funnelStep)?.kind ?? null;
 
   const handleAddStep = async () => {
     const label = newStepLabel.trim();
@@ -359,7 +358,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                     {addingStep ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Criar etapa
                   </Button>
                 </div>
-                {selectedStepKind === "payment_link" && (
+                {steps.find((st) => st.value === funnelStep)?.kind === "payment_link" && (
                   <p className="text-xs rounded-md border border-primary/40 bg-primary/5 p-2">
                     Estas redações são usadas pelo botão <b>Enviar link Pagamento</b> da Live, em rodízio.
                     Use <b>{"{member_area_link}"}</b> (área de membros já logada) ou <b>{"{checkout_link}"}</b> para o link,
