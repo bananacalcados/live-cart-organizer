@@ -346,7 +346,7 @@ export default function ChatPage() {
     // Multi-instance: if specific instances selected, load all and filter client-side
     // Single instance legacy: use numberFilter for backward compat
     // Multi-instância: busca tudo e filtra na memória (na derivação abaixo).
-    const numberId = (multiInstanceFilterRef.current.length === 0 && numberFilter !== 'all') ? numberFilter : undefined;
+    const numberId = numberFilter !== 'all' ? numberFilter : undefined; // multi seleciona força numberFilter='all'
 
     const needsDispatch = statusFilter === 'dispatch';
 
@@ -409,21 +409,7 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
-  useEffect(() => {
-    setConversations(prev => {
-      if (prev.length === 0) return prev;
-      return prev.map(c => {
-        const finishedAt = getFinishedAtFor(finishedAtByPhone, c.phone, c.whatsapp_number_id);
-        return {
-          ...c,
-          isFinished: Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime()),
-          isArchived: archivedPhones.has(c.phone),
-          isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
-        };
-      });
-    });
-  }, [finishedAtByPhone, archivedPhones, awaitingPaymentPhones]);
+  // (Re-enriquecimento por finalizadas/arquivadas/pagamento agora acontece na derivação acima.)
 
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
