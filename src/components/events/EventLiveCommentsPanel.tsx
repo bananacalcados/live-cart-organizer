@@ -701,12 +701,32 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         const paidDatesByHandle = new Map<string, Set<string>>();
         const openDatesByHandle = new Map<string, Set<string>>();
         const cancelledDatesByHandle = new Map<string, Set<string>>();
-        for (let i = 0; i < customerIds.length; i += oBatch) {
-          const batch = customerIds.slice(i, i + oBatch);
-          const { data } = await supabase
+        // Pedidos de OUTRAS lives mudam pouco: busca 1x por cliente (cache).
+        // Os pedidos DESTA live vêm da memória (já atualizados em tempo real).
+        const cacheKeyPrefix = `${eventId}|`;
+        const missing = customerIds.filter((cid) => !pastOrdersCache.has(cacheKeyPrefix + cid));
+        for (let i = 0; i < missing.length; i += oBatch) {
+          const batch = missing.slice(i, i + oBatch);
+          const { data, error } = await supabase
             .from("orders")
             .select("id, customer_id, event_id, stage, is_paid, paid_externally, paid_at, created_at, events(name, start_date, created_at)")
-            .in("customer_id", batch);
+            .in("customer_id", batch)
+            .neq("event_id", eventId);
+          if (error) continue;
+          const byCid = new Map<string, any[]>();
+          batch.forEach((cid) => byCid.set(cid, []));
+          (data || []).forEach((o: any) => byCid.get(o.customer_id)?.push(o));
+          byCid.forEach((rows, cid) => pastOrdersCache.set(cacheKeyPrefix + cid, rows));
+        }
+        if (cancelled) return;
+        const allRows: any[] = [];
+        customerIds.forEach((cid) => allRows.push(...(pastOrdersCache.get(cacheKeyPrefix + cid) || [])));
+        for (const o of orders) {
+          const cid = o.customer_id || (o.customer as any)?.id;
+          if (cid && idToHandle.has(cid)) allRows.push({ ...o, customer_id: cid, event_id: eventId });
+        }
+        {
+          const data = allRows;
           (data || []).forEach((o: any) => {
             const h = idToHandle.get(o.customer_id);
             if (!h) return;
