@@ -704,6 +704,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
         : `R$ ${totalValue.toFixed(2)} à vista`,
       produtos: productsList || 'Nenhum produto',
       produtos_curto: order.products.map((p) => `${p.quantity}x ${p.title}`).join(', '),
+      endereco,
     };
   };
 
