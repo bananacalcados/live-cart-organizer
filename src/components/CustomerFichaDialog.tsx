@@ -512,7 +512,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       //    com rodízio de variações e tokens {checkout_link} / {member_area_link}.
       const { data: waData, error: waError } = await supabase.functions.invoke(
         "event-order-wa-initial-send",
-        { body: { orderId: order.id } },
+        { body: { orderId: order.id, purpose: "payment_link" } },
       );
       const waErrMsg =
         (waError as any)?.message || (waData as { error?: string } | null)?.error || null;

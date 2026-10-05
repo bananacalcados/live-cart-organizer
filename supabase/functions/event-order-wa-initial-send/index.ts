@@ -163,7 +163,14 @@ Deno.serve(async (req) => {
       "{total}": `R$${total.toFixed(2)}`,
       "{order_id}": orderId ? String(orderId).slice(0, 8) : "",
     };
-    const text = variant.text.replace(/\{[a-z_]+\}/g, (m) => (m in tokens ? tokens[m] : m)).trim();
+    // Variáveis no formato das Mensagens Prontas ({{nome}} etc.) também valem aqui.
+    const dbl: Record<string, string> = {
+      nome: displayName || "", primeiro_nome: displayName || "", instagram: igName || "",
+      total: `R$${total.toFixed(2)}`, produtos: productLines,
+    };
+    const text = variant.text
+      .replace(/\{\{([a-z_]+)\}\}/gi, (m, k) => (k.toLowerCase() in dbl ? dbl[k.toLowerCase()] : m))
+      .replace(/\{[a-z_]+\}/g, (m) => (m in tokens ? tokens[m] : m)).trim();
 
     const mediaUrl = variant.media_url || null;
     const mediaType = mediaUrl ? (variant.media_type || "image") : "text";
