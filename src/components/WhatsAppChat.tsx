@@ -662,6 +662,32 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       : Math.max(1, Math.min(evMax, 6));
     const parcela = maxParcelas > 0 ? totalValue / maxParcelas : totalValue;
 
+    // {{endereco}} = endereço da ficha do cliente (mesmos campos do modal do
+    // WhatsApp). Fica vazio quando a ficha ainda não tem endereço cadastrado.
+    const cust = (dbOrder?.customer as any) || {};
+    const cleanAddr = (v: unknown) => String(v || '').trim();
+    const addrStreet = cleanAddr(cust.address);
+    const hasRealAddress = addrStreet && addrStreet !== 'Pendente';
+    const addrParts: string[] = [];
+    if (hasRealAddress) {
+      let line1 = addrStreet;
+      const num = cleanAddr(cust.address_number);
+      if (num && num !== '0') line1 += `, ${num}`;
+      const compl = cleanAddr(cust.complement);
+      if (compl) line1 += ` - ${compl}`;
+      addrParts.push(line1);
+      const bairro = cleanAddr(cust.neighborhood);
+      if (bairro) addrParts.push(bairro);
+      const cidade = cleanAddr(cust.city);
+      const uf = cleanAddr(cust.state);
+      if (cidade || uf) addrParts.push([cidade, uf].filter(Boolean).join('/'));
+      const cepDigits = cleanAddr(cust.cep).replace(/\D/g, '');
+      if (cepDigits && cepDigits !== '00000000') {
+        addrParts.push(`CEP ${cepDigits.replace(/^(\d{5})(\d{3})$/, '$1-$2')}`);
+      }
+    }
+    const endereco = addrParts.join(', ');
+
     return {
       nome: firstName,
       nome_completo: fullName,
