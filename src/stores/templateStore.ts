@@ -262,6 +262,7 @@ export function applyTemplateVariables(
     valor_parcela?: string;
     parcelamento?: string;
     produtos_curto?: string;
+    endereco?: string;
   }
 ): string {
   let result = template;
@@ -293,6 +294,7 @@ export function applyTemplateVariables(
   result = result.replace(/\{\{parcelas_max\}\}/gi, variables.parcelas_max || '');
   result = result.replace(/\{\{valor_parcela\}\}/gi, variables.valor_parcela || '');
   result = result.replace(/\{\{parcelamento\}\}/gi, variables.parcelamento || '');
+  result = result.replace(/\{\{endereco\}\}/gi, variables.endereco || '');
   
   return result;
 }

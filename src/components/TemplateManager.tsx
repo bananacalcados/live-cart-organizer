@@ -168,6 +168,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     { name: '{{valor_parcela}}', desc: 'Valor de cada parcela' },
     { name: '{{produtos}}', desc: 'Lista de produtos' },
     { name: '{{produtos_curto}}', desc: 'Produtos em uma linha' },
+    { name: '{{endereco}}', desc: 'Endereço da ficha (rua, nº, bairro, cidade/UF, CEP)' },
   ];
 
   const emojiVariables = [
