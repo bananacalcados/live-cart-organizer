@@ -22,7 +22,25 @@ export const FUNNEL_STEPS = [
   { value: 3, label: 'Etapa 3 — Forma de pagamento' },
 ] as const;
 
+export interface FunnelStep {
+  value: number;
+  label: string;
+  /** 'payment_link' = etapa usada pelo botão "Enviar link Pagamento" (fixa). */
+  kind: string | null;
+  sort_order: number;
+}
+
+const DEFAULT_STEPS: FunnelStep[] = [
+  { value: 1, label: 'Etapa 1 — Nome e endereço', kind: null, sort_order: 1 },
+  { value: 2, label: 'Etapa 2 — CPF e e-mail', kind: null, sort_order: 2 },
+  { value: 3, label: 'Etapa 3 — Forma de pagamento', kind: null, sort_order: 3 },
+];
+
 interface TemplateStore {
+  steps: FunnelStep[];
+  fetchSteps: () => Promise<void>;
+  addStep: (label: string) => Promise<FunnelStep>;
+  deleteStep: (value: number) => Promise<void>;
   templates: MessageTemplate[];
   isLoading: boolean;
   fetchTemplates: () => Promise<void>;
@@ -49,6 +67,33 @@ function normalizeTemplate(row: any): MessageTemplate {
 export const useTemplateStore = create<TemplateStore>((set, get) => ({
   templates: [],
   isLoading: false,
+  steps: DEFAULT_STEPS,
+
+  fetchSteps: async () => {
+    const { data, error } = await (supabase as any)
+      .from('message_funnel_steps')
+      .select('value, label, kind, sort_order')
+      .order('sort_order', { ascending: true });
+    if (error) { console.error('Error fetching steps:', error); return; }
+    if (data?.length) set({ steps: data as FunnelStep[] });
+  },
+
+  addStep: async (label) => {
+    const cur = get().steps;
+    const value = Math.max(4, ...cur.map((s) => s.value)) + 1;
+    const sort_order = Math.max(0, ...cur.map((s) => s.sort_order)) + 1;
+    const row = { value, label: label.trim(), kind: null, sort_order };
+    const { error } = await (supabase as any).from('message_funnel_steps').insert(row);
+    if (error) throw error;
+    set({ steps: [...cur, row] });
+    return row;
+  },
+
+  deleteStep: async (value) => {
+    const { error } = await (supabase as any).from('message_funnel_steps').delete().eq('value', value);
+    if (error) throw error;
+    set((st) => ({ steps: st.steps.filter((s) => s.value !== value) }));
+  },
 
   fetchTemplates: async () => {
     set({ isLoading: true });
