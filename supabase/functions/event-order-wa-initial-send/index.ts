@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
     const checkoutLink = order.cart_link || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
 
-    const memberAreaLink = variant.text.includes("{member_area_link}")
+    const memberAreaLink = /\{member_area_link\}|\{\{\s*(link_carrinho|link_area_membros)\s*\}\}/i.test(variant.text)
       ? await issueMagicLink(supabase, waPhone, undefined, orderId || null).catch(() => MEMBER_AREA_PUBLIC)
       : MEMBER_AREA_PUBLIC;
 
@@ -167,6 +167,8 @@ Deno.serve(async (req) => {
     const dbl: Record<string, string> = {
       nome: displayName || "", primeiro_nome: displayName || "", instagram: igName || "",
       total: `R$${total.toFixed(2)}`, produtos: productLines,
+      // No botão "Enviar link Pagamento" o link do carrinho é a Área de Membros já autenticada.
+      link_carrinho: memberAreaLink, link_area_membros: memberAreaLink,
     };
     const text = variant.text
       .replace(/\{\{([a-z_]+)\}\}/gi, (m, k) => (k.toLowerCase() in dbl ? dbl[k.toLowerCase()] : m))
