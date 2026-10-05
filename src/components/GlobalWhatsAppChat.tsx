@@ -43,7 +43,7 @@ export function GlobalWhatsAppChat() {
   // Raw RPC rows (busca) — a lista exibida é montada a partir delas sem rede.
   
   // Carga completa ao abrir e a cada 10 min; recargas seguintes são incrementais.
-  const { rows: rawRows, loadIncremental } = useConversationRowsSync({ enabled: isOpen, numberId: null, dispatchOnly: false });
+  const { rows: rawRows, loadIncremental } = useConversationRowsSync({ enabled: isOpen, numberId: null, dispatchOnly: false, keepRowsWhenDisabled: true });
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
   const { events } = useEventStore();

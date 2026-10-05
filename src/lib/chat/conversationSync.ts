@@ -37,11 +37,35 @@ export async function fetchConversationsSince(params: {
   return { rows: (fb.data || []) as Row[], full: true, error: null };
 }
 
-/** Substitui por chave e acrescenta novas. `incoming` vazio → devolve `prev` (mesma referência). */
+const ts = (r: Row) => (r?.updated_at ? Date.parse(r.updated_at) : NaN);
+
+/**
+ * Substitui por chave e acrescenta novas. Nunca troca uma linha por versão mais
+ * antiga (resposta fora de ordem). Devolve `prev` (mesma referência) quando
+ * `incoming` está vazio ou todas as linhas já existem com o mesmo `updated_at`.
+ */
 export function mergeConversationRows(prev: Row[], incoming: Row[]): Row[] {
   if (!incoming || incoming.length === 0) return prev;
+  const prevByKey = new Map<string, Row>();
+  for (const r of prev) prevByKey.set(conversationRowKey(r), r);
+
   const byKey = new Map<string, Row>();
-  for (const r of incoming) byKey.set(conversationRowKey(r), r);
+  let changed = false;
+  for (const r of incoming) {
+    const k = conversationRowKey(r);
+    const old = prevByKey.get(k);
+    if (old) {
+      const to = ts(old), tn = ts(r);
+      if (!Number.isNaN(to) && !Number.isNaN(tn)) {
+        if (to > tn) continue; // existente é mais nova: mantém
+        if (to === tn) continue; // mesma versão: nada muda
+      }
+    }
+    byKey.set(k, r);
+    changed = true;
+  }
+  if (!changed) return prev;
+
   const next: Row[] = [];
   for (const r of prev) {
     const k = conversationRowKey(r);
@@ -78,33 +102,68 @@ export function isSameOpenPhone(payloadPhone: string | null | undefined, openPho
 /**
  * Linhas de UMA consulta (numberId + dispatchOnly) com carga completa ao habilitar/
  * trocar parâmetros e a cada 10 min (pausado com aba oculta), e incremental sob demanda.
- * Guarda de geração descarta respostas antigas; sem watermark não há incremental.
+ * Guarda de geração descarta respostas antigas. Sem watermark: espera a carga completa
+ * em andamento (e roda a incremental pendente ao fim) ou faz uma carga completa.
+ * `keepRowsWhenDisabled`: ao desabilitar, mantém as linhas em memória (só para de sincronizar).
  */
-export function useConversationRowsSync(opts: { enabled: boolean; numberId: string | null; dispatchOnly: boolean | null }) {
-  const { enabled, numberId, dispatchOnly } = opts;
+export function useConversationRowsSync(opts: {
+  enabled: boolean;
+  numberId: string | null;
+  dispatchOnly: boolean | null;
+  keepRowsWhenDisabled?: boolean;
+}) {
+  const { enabled, numberId, dispatchOnly, keepRowsWhenDisabled = false } = opts;
   const [rows, setRows] = useState<Row[]>(EMPTY);
   const genRef = useRef(0);
   const wmRef = useRef<string | null>(null);
-  const paramsRef = useRef({ enabled, numberId, dispatchOnly });
-  paramsRef.current = { enabled, numberId, dispatchOnly };
+  const fullInFlightRef = useRef(false);
+  const pendingIncrementalRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paramsRef = useRef({ enabled, numberId, dispatchOnly, keepRowsWhenDisabled });
+  paramsRef.current = { enabled, numberId, dispatchOnly, keepRowsWhenDisabled };
+  const incrementalRef = useRef<() => Promise<void>>(async () => {});
 
-  const loadFull = useCallback(async () => {
+  const clearRetry = () => {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+  };
+
+  const loadFull = useCallback(async (isRetry = false) => {
     const p = paramsRef.current;
     if (!p.enabled) return;
+    clearRetry();
     const gen = ++genRef.current;
     wmRef.current = null;
+    fullInFlightRef.current = true;
     const res = await fetchConversationsSince({ numberId: p.numberId, dispatchOnly: p.dispatchOnly, since: null });
-    if (gen !== genRef.current) return;
-    if (res.error) { console.error("Error loading conversations:", res.error); return; }
+    if (gen !== genRef.current) return; // geração nova assumiu (ela controla fullInFlight)
+    fullInFlightRef.current = false;
+    if (res.error) {
+      console.error("Error loading conversations:", res.error);
+      if (!isRetry) {
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          if (gen === genRef.current && paramsRef.current.enabled) void loadFull(true);
+        }, 5000);
+      }
+      return;
+    }
     setRows(res.rows);
     wmRef.current = nextWatermark(null, res.rows);
+    if (pendingIncrementalRef.current) {
+      pendingIncrementalRef.current = false;
+      void incrementalRef.current();
+    }
   }, []);
 
   const loadIncremental = useCallback(async () => {
     const p = paramsRef.current;
     if (!p.enabled) return;
     const wm = wmRef.current;
-    if (!wm) return; // carga completa em andamento (ou sem updated_at) já resolve
+    if (!wm) {
+      if (fullInFlightRef.current) { pendingIncrementalRef.current = true; return; }
+      await loadFull(); // sem watermark: degrada para carga completa, nunca fica parada
+      return;
+    }
     const gen = genRef.current;
     const res = await fetchConversationsSince({ numberId: p.numberId, dispatchOnly: p.dispatchOnly, since: sinceFrom(wm) });
     if (gen !== genRef.current) return;
@@ -114,15 +173,19 @@ export function useConversationRowsSync(opts: { enabled: boolean; numberId: stri
       wmRef.current = nextWatermark(null, res.rows);
       return;
     }
-    if (res.rows.length > 0) setRows((prev) => mergeConversationRows(prev, res.rows));
+    setRows((prev) => mergeConversationRows(prev, res.rows));
     wmRef.current = nextWatermark(wm, res.rows);
   }, [loadFull]);
+  incrementalRef.current = loadIncremental;
 
   useEffect(() => {
     if (!enabled) {
       genRef.current++;
       wmRef.current = null;
-      setRows(EMPTY);
+      fullInFlightRef.current = false;
+      pendingIncrementalRef.current = false;
+      clearRetry();
+      if (!paramsRef.current.keepRowsWhenDisabled) setRows(EMPTY);
       return;
     }
     void loadFull();
@@ -133,6 +196,8 @@ export function useConversationRowsSync(opts: { enabled: boolean; numberId: stri
     const id = setInterval(() => { if (!document.hidden) void loadFull(); }, FULL_RESYNC_MS);
     return () => clearInterval(id);
   }, [enabled, loadFull]);
+
+  useEffect(() => () => clearRetry(), []);
 
   return { rows, loadFull, loadIncremental };
 }
