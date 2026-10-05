@@ -29,6 +29,13 @@
       "when": 1791211645819,
       "tag": "0003_get_conversations_since",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791211995768,
+      "tag": "0004_get_conversations_since_union_index",
+      "breakpoints": true
     }
   ]
 }
