@@ -18,10 +18,16 @@ serve(async (req) => {
     );
 
     console.log('Recalculating RFM scores (legacy zoppy_customers)...');
-    const { data, error } = await supabase.rpc('calculate_rfm_scores');
-    if (error) {
-      console.error('RFM (zoppy) calculation error:', error);
-      throw error;
+    // Legado NÃO é fatal: em erro, registra e segue para o unificado (fonte de verdade).
+    let data: any = null;
+    let legacyError: string | null = null;
+    try {
+      const res = await supabase.rpc('calculate_rfm_scores');
+      if (res.error) throw res.error;
+      data = res.data;
+    } catch (e) {
+      legacyError = (e as any)?.message || String(e);
+      console.error('RFM (zoppy) calculation error (não fatal):', e);
     }
 
     // New source of truth: customers_unified
@@ -37,6 +43,7 @@ serve(async (req) => {
       count: unified?.updated || 0,
       segments: unified?.segments || {},
       legacy: { count: data?.updated || 0, segments: data?.segments || {} },
+      legacy_error: legacyError,
       message: `RFM recalculado: ${unified?.updated || 0} clientes (matriz unificada), ${data?.updated || 0} (legado)`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {

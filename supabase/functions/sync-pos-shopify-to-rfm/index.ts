@@ -63,6 +63,52 @@ function nameSimilarity(a: string, b: string): number {
   return matches / Math.max(tokensA.length, tokensB.length);
 }
 
+const NUMERIC_FIELDS = new Set(['total_orders', 'total_spent', 'avg_ticket']);
+const DATE_FIELDS = new Set(['first_purchase_at', 'last_purchase_at']);
+
+function sameValue(field: string, a: any, b: any): boolean {
+  if (NUMERIC_FIELDS.has(field)) return Math.abs(Number(a ?? 0) - Number(b ?? 0)) < 0.005;
+  if (DATE_FIELDS.has(field)) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return Date.parse(a) === Date.parse(b);
+  }
+  return (a ?? null) === (b ?? null);
+}
+
+// Mantém só linhas novas ou com algum campo escrito diferente do gravado.
+// Se a leitura das existentes falhar, devolve o lote inteiro (nunca deixa de sincronizar).
+async function filterChangedRows(supabase: any, source: string, batch: any[]): Promise<{ rows: any[]; unchanged: number }> {
+  if (batch.length === 0) return { rows: batch, unchanged: 0 };
+  const cols = new Set<string>(['zoppy_id']);
+  for (const r of batch) for (const k of Object.keys(r)) cols.add(k);
+  const existing = new Map<string, any>();
+  try {
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase.from('zoppy_customers')
+        .select([...cols].join(','))
+        .eq('source', source)
+        .order('zoppy_id')
+        .range(from, from + 999);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const r of data) existing.set(r.zoppy_id, r);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+  } catch (e) {
+    console.error(`[${source}] falha ao ler existentes, enviando tudo:`, e);
+    return { rows: batch, unchanged: 0 };
+  }
+  const rows = batch.filter((r) => {
+    const old = existing.get(r.zoppy_id);
+    if (!old) return true;
+    return Object.keys(r).some((k) => !sameValue(k, r[k], old[k]));
+  });
+  return { rows, unchanged: batch.length - rows.length };
+}
+
 const TIME_LIMIT_MS = 55_000;
 const NAME_SIMILARITY_THRESHOLD = 0.5; // At least 50% of name tokens must match
 
@@ -80,6 +126,8 @@ serve(async (req) => {
     const months = body.months || 24;
     let posCount = 0;
     let tinyOnlineCount = 0;
+    let posUnchanged = 0;
+    let tinyUnchanged = 0;
 
     // ── 1. Sync POS completed sales with CPF-first rematching ──
     if (mode === 'pos' || mode === 'all') {
@@ -158,8 +206,11 @@ serve(async (req) => {
 
         // Upsert with SET semantics: onConflict replaces the stored totals with the
         // freshly recomputed values (never accumulates).
-        for (let i = 0; i < upsertBatch.length; i += 100) {
-          const chunk = upsertBatch.slice(i, i + 100);
+        const posFiltered = await filterChangedRows(supabase, 'pos', upsertBatch);
+        posUnchanged = posFiltered.unchanged;
+        console.log(`POS: ${upsertBatch.length} calculados, ${posFiltered.rows.length} novos/alterados enviados, ${posUnchanged} ignorados (sem mudança)`);
+        for (let i = 0; i < posFiltered.rows.length; i += 100) {
+          const chunk = posFiltered.rows.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
           if (error) console.error('POS upsert error:', error);
           else posCount += chunk.length;
@@ -245,8 +296,11 @@ serve(async (req) => {
         }
 
         // Upsert with SET semantics (onConflict replaces totals, never accumulates).
-        for (let i = 0; i < newBatch.length; i += 100) {
-          const chunk = newBatch.slice(i, i + 100);
+        const tinyFiltered = await filterChangedRows(supabase, 'tiny_online', newBatch);
+        tinyUnchanged = tinyFiltered.unchanged;
+        console.log(`Tiny: ${newBatch.length} calculados, ${tinyFiltered.rows.length} novos/alterados enviados, ${tinyUnchanged} ignorados (sem mudança)`);
+        for (let i = 0; i < tinyFiltered.rows.length; i += 100) {
+          const chunk = tinyFiltered.rows.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
           if (error) console.error('Tiny upsert error:', error);
           else tinyOnlineCount += chunk.length;
@@ -271,6 +325,8 @@ serve(async (req) => {
       success: true,
       pos_customers_synced: posCount,
       tiny_online_customers_synced: tinyOnlineCount,
+      pos_unchanged: posUnchanged,
+      tiny_unchanged: tinyUnchanged,
       message: `✅ SET mode (idempotente) — POS: ${posCount}, Tiny: ${tinyOnlineCount}`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
