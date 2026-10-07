@@ -1593,7 +1593,32 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
   // Build SendRoute compatible with useChatSender
   const buildSendRoute = (): SendRoute | null => {
-    const selectedChannel = getSelectedChannel();
+    // Abre a conversa de WhatsApp (não Instagram) do cliente ligado, na instância em que já há histórico.
+  const openWhatsAppForPhone = async (ph: string) => {
+    const key = normalizePhoneKey(ph);
+    const existing = mergedConversations.find((c: any) =>
+      normalizePhoneKey(c.phone) === key && c.channel !== "instagram" && c.channel !== "messenger" && !isInstagramConvKey(String(c.phone || "")));
+    if (existing) {
+      await handleSelectConversationImpl(existing.phone, (existing as any).whatsapp_number_id ?? null);
+      return;
+    }
+    let numberId: string | null = null;
+    let phone = ph;
+    try {
+      const { data } = await supabase
+        .from("whatsapp_messages")
+        .select("phone, whatsapp_number_id")
+        .eq("phone", ph)
+        .not("whatsapp_number_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) { numberId = (data as any).whatsapp_number_id; phone = (data as any).phone || ph; }
+    } catch { /* abre sem instância: o seletor aparece */ }
+    if (numberId && !storeNumbers.some((n) => n.id === numberId) && !metaNumbers.some((n) => n.id === numberId && n.provider !== "instagram")) numberId = null;
+    await handleSelectConversationImpl(phone, numberId);
+  };
+  const selectedChannel = getSelectedChannel();
     const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
     const internal = getCurrentSendRoute();
     if (!internal) return null;
@@ -2782,7 +2807,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                   candidates: igLink.candidates,
                   onConfirm: (ph) => saveIgLink(ph, "confirmed"),
                   onReject: (ph) => saveIgLink(ph, "rejected"),
-                  onOpenWhatsApp: (ph) => { setSelectedConvKey(null); setSelectedPhone(ph); },
+                  onOpenWhatsApp: (ph) => { void openWhatsAppForPhone(ph); },
                 } : undefined}
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
