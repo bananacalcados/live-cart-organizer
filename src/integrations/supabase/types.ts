@@ -9233,6 +9233,42 @@ export type Database = {
           },
         ]
       }
+      instagram_customer_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          id: string
+          ig_user_id: string
+          phone: string | null
+          status: string
+          updated_at: string
+          username_norm: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          id?: string
+          ig_user_id: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          username_norm?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          id?: string
+          ig_user_id?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          username_norm?: string | null
+        }
+        Relationships: []
+      }
       instagram_dm_reads: {
         Row: {
           id: string
@@ -25878,6 +25914,16 @@ export type Database = {
           customer_id: string
           handle: string
           whatsapp: string
+        }[]
+      }
+      resolve_instagram_customer: {
+        Args: { p_ig_user_id: string; p_username: string }
+        Returns: {
+          confirmed: boolean
+          instagram: string
+          name: string
+          phone: string
+          source: string
         }[]
       }
       resolve_item_current_cost: {
