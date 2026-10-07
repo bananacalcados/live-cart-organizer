@@ -1083,8 +1083,33 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_dispatch_job_audience: {
+        Row: {
+          job_id: string
+          phone: string
+          pos: number
+          recipient: Json
+          status: string
+        }
+        Insert: {
+          job_id: string
+          phone: string
+          pos: number
+          recipient: Json
+          status?: string
+        }
+        Update: {
+          job_id?: string
+          phone?: string
+          pos?: number
+          recipient?: Json
+          status?: string
+        }
+        Relationships: []
+      }
       automation_dispatch_jobs: {
         Row: {
+          audience_cached_at: string | null
           batch_size: number
           completed_at: string | null
           created_at: string
@@ -1102,6 +1127,7 @@ export type Database = {
           total_audience: number
         }
         Insert: {
+          audience_cached_at?: string | null
           batch_size?: number
           completed_at?: string | null
           created_at?: string
@@ -1119,6 +1145,7 @@ export type Database = {
           total_audience?: number
         }
         Update: {
+          audience_cached_at?: string | null
           batch_size?: number
           completed_at?: string | null
           created_at?: string
