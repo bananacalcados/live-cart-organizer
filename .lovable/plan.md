@@ -1,59 +1,92 @@
-# Auditoria (somente leitura) — prontidão para Análise do App Meta
+# Auditoria (somente leitura) — instalar o sistema do zero para outra empresa
 
-Nenhum arquivo foi alterado. Aprovar este documento não dispara nenhuma implementação: ele é só o inventário pedido.
+Nenhum código foi alterado. Aprovar este documento não dispara implementação: ele é só o inventário pedido. Valores de segredos não são mostrados.
 
-## 1. Páginas públicas
-- Política de Privacidade: **não existe** (nenhuma rota em `src/App.tsx`).
-- Termos de Serviço: **não existe**.
-- Instruções/endpoint de Exclusão de Dados: **não existe** (nem página, nem callback de exclusão).
+## 1. Estrutura do banco no código
+a) `supabase/migrations`: **943 arquivos**, de 08/02/2026 a 01/10/2026. **Não recriam o banco inteiro do zero de forma confiável**:
+- o histórico é incremental e acumulado;
+- há objetos criados fora das migrações (item c);
+- 46 migrações citam a referência deste projeto.
 
-## 2. WhatsApp Cloud API
-a) **Por instância, na tabela** `whatsapp_numbers`: colunas `access_token`, `business_account_id` (WABA), `phone_number_id`, `provider`, `is_default`, `phone_display`. Leitura do token está bloqueada no front (só service_role e view `whatsapp_numbers_safe`). Não há coluna de empresa/tenant.
-b) **Existe**: `src/components/admin/MetaInstanceManager.tsx` (cadastro manual de token, WABA e Phone Number ID).
-c) Envio via `graph.facebook.com/v21.0/{phone_number_id}/messages`: `meta-whatsapp-send`, `meta-whatsapp-send-template`, `meta-template-send`, `dispatch-worker`, `automation-dispatch-audience` (+ `_shared/meta-fallback.ts`).
-d) `supabase/functions/meta-whatsapp-webhook`: identifica a instância por `value.metadata.phone_number_id` → `whatsapp_numbers.phone_number_id`; se não achar, usa `display_phone_number`.
+O banco real tem 400 tabelas, 25 views, 492 funções, 299 gatilhos e 594 políticas. Não foi feita uma comparação objeto por objeto entre as migrações e o banco.
 
-## 3. Modelos (templates)
-- Listar/status: **existe** — `meta-whatsapp-get-templates` (`/{waba}/message_templates`, paginado, motivo de rejeição via `meta_template_status_log`).
-- Criar: **existe** — `meta-whatsapp-create-template`, `meta-whatsapp-upload-header` (`/{app}/uploads`); telas `src/components/MetaTemplateCreator.tsx`, `src/components/admin/SimpleTemplatesPanel.tsx`, `CarouselTemplatesLadder.tsx`.
-- Status atualizado em tempo real: **parcial** (webhook grava o status no log; o construtor consulta ao vivo).
-- Envio para número avulso de teste: **parcial** — há envio de teste em `MassTemplateDispatcher.tsx`, `CampaignBuilder.tsx` e `AutomationFlowBuilder.tsx`; não existe tela dedicada a isso.
+b) `drizzle/`: o `schema.ts` é um arquivo vazio, só para a ferramenta funcionar. `drizzle/migrations` tem 5 migrações recentes (0000 a 0004: links VIP, busca do chat, grade, `get_conversations_since`), aplicadas pela ferramenta de migração do Lovable. São **mudanças reais no banco** e ficam fora de `supabase/migrations`. Uma instalação nova precisa aplicar as duas pastas.
 
-## 4. Chat
-- Envio livre pela Cloud API: **existe** (`WhatsAppChat.tsx`, `src/pages/Chat.tsx`, `useChatSender.ts` → `meta-whatsapp-send`).
-- Mostra o número/instância usado: **existe** (etiqueta da instância + `useConversationInstance`).
-- Aviso da janela de 24h: **parcial** (há menções em `WhatsAppChat.tsx`; o bloqueio é feito pelo erro que a Meta devolve).
+c) Fora das migrações:
+- **Tarefas agendadas:** 46 no banco, mas só 12 aparecem em 11 migrações.
+- **Pastas de arquivos:** 11 no banco, só 3 em migração.
+- Extensões `pg_cron`, `pg_net`, `pg_trgm` e `unaccent` estão em migração.
+- Índices e funções criados por SQL direto: não confirmado objeto a objeto.
 
-## 5. Instagram / Live
-- Comentários da live:
-  - (a) extensão do Chrome `extension/content.js` (Livete Anotador), que lê o texto da página do Instagram, sem usar a API;
-  - (b) `instagram-live-sync`: `/{ig_id}/live_media` ou `/me/live_media` com o campo comments (graph.facebook e graph.instagram v25);
-  - (c) webhook `meta-messenger-webhook` (`object=instagram`, comentários, DMs, respostas a stories).
-- DM: **existe** — `/me/messages` em graph.instagram v25 (`instagram-dm-send`, `-send-buttons`, `-send-bulk-dm`, `-resend-live-dm`, `meta-messenger-send`); resposta privada (`recipient.comment_id`); leitura de conversas por `/me/conversations`.
-- Resposta pública a comentário: **existe** — `/{comment_id}/replies` (`instagram-comment-reply`, automação de comentários).
-- Live Video API do Facebook: **não existe**.
-- Outros: `/me` (v23) em `instagram-account-connect`, `/{media}` e `instagram-list-media`, `instagram-token-refresh`.
-- Permissões prováveis, conforme a documentação da Meta (não aparecem no código): `instagram_business_basic`, `instagram_business_manage_messages`, `instagram_business_manage_comments`; para live_media/webhooks via Facebook também `instagram_basic`, `instagram_manage_comments`, `instagram_manage_messages`, `pages_messaging`, `pages_show_list`, `pages_read_engagement`.
+d) Dados iniciais em migrações: 164 arquivos têm `INSERT`. Exemplos:
+- `dre_parameters` (`20261001012811_...sql`);
+- `app_settings` (`20260922234312_...sql`, `20260923183456_...sql`);
+- `fiscal_sequences` (`20260507202140_...sql`).
 
-## 6. Marketing / Páginas / Catálogo / Leads
-- `act_{id}/insights` (`meta-ads-sync`, `meta-ads-sync-spend`) → `ads_read`.
-- `/me/adaccounts`, `/me/businesses`, `/me`, `debug_token` (`meta-ads-list-accounts`) → `ads_read`/`business_management`.
-- `oauth/access_token` com `fb_exchange_token` (renovação do token de anúncios) → nenhuma permissão nova.
-- `/{dataset}/events` (CAPI: `meta-capi-*`) → `ads_management`, ou token de sistema do dataset.
-- Leadgen: **não existe**. Catálogo da Meta: **não existe** (o que há é da Shopify). Páginas: apenas Messenger `/me/messages`.
+Nenhum `INSERT` de `user_roles`, `companies` ou `pos_stores` foi encontrado. Os demais 164 arquivos não foram revisados um a um em busca de dados próprios da Banana.
 
-## 7. Login do Facebook
-- SDK (FB.init / FB.login), `config_id`, troca de `code` por token, Cadastro Incorporado: **não existem**.
-- Todos os tokens são colados manualmente (Admin > instâncias / contas do Instagram / segredos). O único fluxo automático é a troca de token de longa duração em `meta-ads-sync`.
-- O script em `connect.facebook.net` que aparece no código é só o Pixel (`src/lib/metaPixel.ts`, landing pages).
+## 2. Tarefas agendadas
+- **46** no banco; **34** chamam a URL fixa deste projeto dentro do SQL.
+- Só 12 estão definidas em migrações. As outras 34 existem apenas no banco atual.
 
-## 8. IDs fixos da Banana
-- Conta de anúncios `2253897104825255`, usada como padrão em `supabase/functions/meta-ads-sync/index.ts:71`.
-- Dataset CAPI `1346445220878187` em `meta-capi-offline/index.ts:27` e `meta-capi-offline-backfill/index.ts:13`.
-- URL do backend fixa em `extension/content.js`.
-- O valor exemplo `1009921908860145` em `MetaInstanceManager.tsx:279` é apenas texto de exemplo no campo.
-- WABA, Phone Number ID, ID de página e ID do Instagram ficam no banco, não no código.
-- A plataforma não tem separação por empresa (tenant) para os dados da Meta.
+## 3. Armazenamento (pastas de arquivos)
+- No banco: `whatsapp-media`, `marketing-attachments`, `chat-media`, `payment-receipts`, `product-images`, `media`, `fiscal-certificates`, `event-landing-assets`, `financial-receipts`, `fiscal-documents`, `boletos` (11).
+- Criadas em migração: só `media`, `whatsapp-media` e `financial-receipts`. As outras 8 foram criadas à parte.
 
-## 9. Idioma
-- Não existe i18n (nenhuma biblioteca de tradução); a interface é toda em português fixo.
+## 4. Fixo da Banana fora do banco
+a) URL do backend escrita à mão: 46 funções, `index.html` (1), `extension/content.js` (1), `public/*.js` (2), `src` (2, fora do client gerado).
+b) Domínios: `bananacalcados.com.br` em ~106 arquivos; `lovable.app` em ~50.
+c) Outros dados fixos:
+- lojas Shopify `banana-calcados.myshopify.com` (2) e `ftx2e2-np.myshopify.com` (4);
+- conta de anúncios `2253897104825255` (`meta-ads-sync`);
+- dataset CAPI `1346445220878187` (`meta-capi-offline*`);
+- 1 arquivo com CNPJ formatado;
+- "Pérola" em 39 arquivos;
+- o Pixel vem do segredo `VITE_META_PIXEL_ID` e por página; não foi encontrado ID de Pixel fixo no código.
+
+d) Marca: título "GESTOR BANANA", descrição e autor no `index.html`; `public/manifest.json`; textos de IA citando "Banana Store/Brasil" (ex.: `ai-group-content`, `ai-vip-strategy`).
+e) Páginas só da Banana: `/banana-verao`, `/banana-verao-gv`, `/live-consumidor`, `/live-ortopedicos`, `/live-ortopedicos-abril`, `/lp/conforto`.
+
+## 5. Segredos lidos pelas funções (só nomes)
+- **Backend:** SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, SUPABASE_PUBLISHABLE_KEY.
+- **IA:** LOVABLE_API_KEY (**18 funções**), ANTHROPIC_API_KEY, OPENAI_API_KEY.
+- **Meta:**
+  - WhatsApp: META_WHATSAPP_ACCESS_TOKEN, META_WHATSAPP_PHONE_NUMBER_ID, META_WHATSAPP_BUSINESS_ACCOUNT_ID, META_WHATSAPP_VERIFY_TOKEN;
+  - Página/Instagram: META_PAGE_ACCESS_TOKEN, META_INSTAGRAM_USERNAME, INSTAGRAM_USERNAME, IG_USERNAME;
+  - Aplicativo: META_APP_ID, META_APP_SECRET;
+  - Anúncios: META_ADS_ACCESS_TOKEN, META_ADS_ACCOUNT_ID;
+  - CAPI: META_CAPI_ACCESS_TOKEN, META_CAPI_TOKEN, META_CAPI_INTERNAL_SECRET, META_OFFLINE_CAPI_TOKEN;
+  - Testes: META_TEST_EVENT_CODE, META_CAPI_TEST_EVENT_CODE, META_OFFLINE_TEST_EVENT_CODE.
+- **WhatsApp não oficial:** ZAPI_TOKEN, ZAPI_INSTANCE_ID, ZAPI_CLIENT_TOKEN, UAZAPI_SUBDOMAIN, UAZAPI_ADMIN_TOKEN, WASENDER_API_TOKEN.
+- **Shopify:** SHOPIFY_STORE_DOMAIN, SHOPIFY_DOMAIN, SHOPIFY_ACCESS_TOKEN, SHOPIFY_ADMIN_TOKEN, SHOPIFY_ADMIN_ACCESS_TOKEN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, SHOPIFY_WEBHOOK_SECRET.
+- **Pagamentos:**
+  - Mercado Pago: MERCADOPAGO_ACCESS_TOKEN, MERCADOPAGO_PUBLIC_KEY, MERCADOPAGO_WEBHOOK_SECRET, MERCADOPAGO_PLATFORM_ID, MERCADOPAGO_INTEGRATOR_ID, MP_POINT_ACCESS_TOKEN;
+  - Pagar.me: PAGARME_SECRET_KEY, PAGARME_PUBLIC_KEY;
+  - AppMax: APPMAX_ACCESS_TOKEN;
+  - Vindi: VINDI_API_KEY;
+  - PayPal: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_BASE_URL;
+  - AustPay: AUSTPAY_API_KEY, AUSTPAY_MERCHANT_ID, AUSTPAY_ENV, AUSTPAY_PROVIDER, AUSTPAY_WEBHOOK_SECRET.
+- **Yampi:** YAMPI_USER_TOKEN, YAMPI_USER_SECRET_KEY, YAMPI_STORE_ALIAS, YAMPI_ALIAS, YAMPI_API_TOKEN.
+- **ERP e frete:** TINY_ERP_TOKEN, TINY_APP_CLIENT_ID, TINY_APP_CLIENT_SECRET, FRENET_TOKEN, FRENET_WEBHOOK_TOKEN, MELHOR_ENVIO_TOKEN, CORREIOS_EMPRESA_CODIGO, CORREIOS_EMPRESA_SENHA.
+- **Fiscal e outros:** BRASILNFE_WEBHOOK_SECRET, TELEGRAM_BOT_TOKEN, MCP_AGENT_KEY, CASHBACK_INTEGRATION_SECRET, AGENTE2_PAGAMENTO_CONFIRMADO, VITE_META_PIXEL_ID.
+
+## 6. Primeira instalação
+- **Primeiro administrador:** não existe processo. Nenhuma migração cria um papel de administrador, e `admin-create-user` exige já haver um admin logado. Hoje seria preciso inserir à mão em `user_roles`.
+- **Linhas iniciais necessárias:** pela leitura do código (não foi testado com banco vazio), `companies`, `pos_stores`, `app_settings` (várias chaves), `dre_parameters` (id 1), `fiscal_sequences`, `whatsapp_numbers` e um vínculo de usuário a loja/vendedora.
+- **Assistente de configuração inicial:** não existe.
+
+## 7. Entradas externas (o endereço muda em outra instalação)
+- **Meta:** `meta-whatsapp-webhook`, `meta-messenger-webhook`.
+- **WhatsApp não oficial:** `uazapi-webhook`, `zapi-webhook`, `wasender-webhook`.
+- **Pagamentos:** `payment-webhook`, `pagarme-webhook`, `appmax-webhook`, `appmax-install`, `paypal-webhook`, `point-webhook`, `austpay-webhook`.
+- **Lojas e pedidos:** `shopify-webhook`, `shopify-oauth-callback`, `yampi-webhook`, `legacy-order-webhook`, `criar-pedido-externo`.
+- **Fiscal e frete:** `brasilnfe-webhook`, `shipment-frenet-webhook`.
+- **Outros:** `telegram-financial-webhook`, `mcp-server`.
+- **Links públicos:** `live-redirect`, `live-whatsapp-redirect`, `vip-go`, `group-redirect-link`, `shipment-tracking-public`.
+
+## 8. Tamanho
+- Edge functions: **300**.
+- Tabelas: **400** (mais 25 views e 492 funções).
+- Migrações: **943** (`supabase/migrations`) + **5** (`drizzle/migrations`).
+- Tarefas agendadas: **46**.
+- Pastas de arquivos: **11**.
