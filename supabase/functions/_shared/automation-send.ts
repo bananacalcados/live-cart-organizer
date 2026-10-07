@@ -86,12 +86,14 @@ export async function sendAutomationJob(
       const txt = await res.text().catch(() => "");
       throw new Error(`interactive send failed (${res.status}): ${txt.slice(0, 400)}`);
     }
+    const iOut: any = await res.json().catch(() => ({}));
     await supabase.from("whatsapp_messages").insert({
       phone,
       message: bodyText,
       direction: "outgoing",
       status: "sent",
       whatsapp_number_id: whatsappNumberId || null,
+      message_id: iOut?.messageId || null,
     });
     return;
   }
