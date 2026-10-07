@@ -162,7 +162,21 @@ Deno.serve(async (req) => {
         console.error("[automation-queue-worker] claim error:", claimErr);
         break;
       }
-      if (!jobs || jobs.length === 0) break;
+      if (!jobs || jobs.length === 0) {
+        // Nada vencido agora. Se houver bloco que vence ainda dentro desta
+        // execução (ex.: próximo bloco aguardando o intervalo de 10s do
+        // contato), espera um pouco em vez de deixar para o próximo minuto.
+        const horizon = new Date(startedAt + RUN_BUDGET_MS - 3000).toISOString();
+        const { data: soon } = await supabase
+          .from("automation_message_queue")
+          .select("id")
+          .eq("status", "pending")
+          .lte("scheduled_at", horizon)
+          .limit(1);
+        if (!soon || soon.length === 0) break;
+        await sleep(3000);
+        continue;
+      }
 
       for (const job of jobs as any[]) {
         processed++;
