@@ -90,6 +90,12 @@ interface Props {
   onExitFullScreen?: () => void;
 }
 
+/** IDs de conversa do Instagram são numéricos longos (telefone BR tem no máx. 13 dígitos). */
+const isInstagramConvKey = (k: string) => /^\d{14,}$/.test(k);
+interface IgLinkCandidate { phone: string; name?: string; instagram?: string; confirmed: boolean }
+interface IgLinkState { igUserId: string; username: string; candidates: IgLinkCandidate[]; chosen: IgLinkCandidate | null }
+const igResolveCache = new Map<string, IgLinkState>();
+
 interface CrmCustomerData {
   name?: string;
   instagram?: string;
@@ -195,6 +201,9 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
+  const [igLink, setIgLink] = useState<IgLinkState | null>(null);
+  const [igLinkReload, setIgLinkReload] = useState(0);
+  const igLinkPhone = igLink && igLink.igUserId === selectedPhone ? igLink.chosen?.phone ?? null : null;
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
 
@@ -825,9 +834,11 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       setShowCrmPanel(false);
       return;
     }
+    // Conversa do Instagram ligada a um cliente: usa o WhatsApp do cadastro.
+    const lookupPhone = (isInstagramConvKey(selectedPhone) && igLinkPhone) ? igLinkPhone : selectedPhone;
 
     const loadCrmData = async () => {
-      const cleanPhone = selectedPhone.replace(/\D/g, '');
+      const cleanPhone = lookupPhone.replace(/\D/g, '');
       const suffix = cleanPhone.slice(-8);
       
       // Search customers, pos_customers, zoppy_customers, campaign_leads and PDV/live sales
@@ -1005,7 +1016,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       // Cashback disponível (cupons ativos: não usados e dentro da validade)
       let resolvedCashback: CrmCustomerData["cashback"] | undefined;
       const { data: cbRows } = await supabase.rpc("lookup_cashback_by_phones" as any, {
-        p_phones: [selectedPhone],
+        p_phones: [lookupPhone],
       });
       const cbRow = (cbRows || [])[0] as any;
       if (cbRow && Number(cbRow.total_available) > 0) {
@@ -1037,7 +1048,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
 
     loadCrmData();
-  }, [selectedPhone, chatContacts, contactPhotos]);
+  }, [selectedPhone, chatContacts, contactPhotos, igLinkPhone]);
 
   // Helper to map RPC rows to Conversation objects (same pattern as Chat page)
   const mapRowsToConvs = useMemo(() => (rows: any[]) => {
