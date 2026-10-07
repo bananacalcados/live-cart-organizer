@@ -161,10 +161,17 @@ serve(async (req) => {
     const presetKeys = (triggerConfig.audience_rfm_preset_keys as string[]) || [];
     const cooldownDays = Math.max(0, parseInt(String(triggerConfig.audience_cooldown_days ?? 0)) || 0);
 
+    // Jobs encadeados: a audiência é montada UMA vez e guardada em
+    // automation_dispatch_job_audience; os lotes seguintes só leem a fila.
+    const useCache = !!(jobId && !dryRun);
+    let fullAudience: any[] = [];
+    let totalAudience = 0;
+    let alreadySentCount = 0;
+    if (!useCache || !job?.audience_cached_at) {
     // Fetch already-sent phones for this flow to avoid duplicates
     const alreadySentRows = await fetchAllRows(supabase, 'automation_dispatch_sent', 'phone', { flow_id: [flowId] });
     const seenPhones = new Set<string>(alreadySentRows.map((r: any) => r.phone));
-    const alreadySentCount = seenPhones.size;
+    alreadySentCount = seenPhones.size;
     console.log(`[dispatch] Already sent to ${alreadySentCount} phones for this flow`);
 
     // Cooldown filter: exclude phones that received MASS DISPATCHES (broadcasts or other automations) in the last N days.
@@ -300,13 +307,29 @@ serve(async (req) => {
     // Bloqueio cross-instância: nunca dispara automação para contato bloqueado
     // em qualquer instância.
     const blockedSuffixes = await loadBlockedSuffixes(supabase);
-    const fullAudience = blockedSuffixes.size > 0
+    fullAudience = blockedSuffixes.size > 0
       ? builtAudience.filter((a) => !isBlocked(blockedSuffixes, a.phone))
       : builtAudience;
-    const totalAudience = fullAudience.length;
+    totalAudience = fullAudience.length;
 
     console.log(`[dispatch] New audience (after dedup): ${totalAudience}, offset: ${offset}, batchSize: ${batchSize}`);
 
+    if (useCache) {
+      // Guarda a fila do job uma única vez (lotes de 1000, ordem preservada).
+      for (let i = 0; i < fullAudience.length; i += 1000) {
+        const rows = fullAudience.slice(i, i + 1000).map((r: any, k: number) => ({
+          job_id: jobId, pos: i + k, phone: r.phone, recipient: r,
+        }));
+        const { error: insErr } = await supabase
+          .from('automation_dispatch_job_audience')
+          .upsert(rows, { onConflict: 'job_id,pos', ignoreDuplicates: true });
+        if (insErr) throw new Error(`cache audiência: ${insErr.message}`);
+      }
+      await supabase.from('automation_dispatch_jobs')
+        .update({ audience_cached_at: new Date().toISOString() }).eq('id', jobId);
+      console.log(`[dispatch] Audience cached for job ${jobId}: ${fullAudience.length} rows`);
+    }
+    }
 
     // Dry run: return counts
     if (dryRun) {
@@ -315,13 +338,28 @@ serve(async (req) => {
       });
     }
 
-    // Slice audience for this batch.
-    // IMPORTANTE: a audiência é RECALCULADA a cada lote e já exclui quem
-    // recebeu (automation_dispatch_sent). Portanto, em jobs encadeados o
-    // offset NÃO pode ser aplicado de novo — isso pulava a mesma quantidade
-    // de contatos já enviados e encerrava o disparo na metade da lista.
-    const sliceStart = jobId ? 0 : offset;
-    const batch = fullAudience.slice(sliceStart, sliceStart + batchSize);
+    // Lote atual. Em jobs: lê os próximos pendentes da fila guardada
+    // (sem remontar a audiência). Fora de job: fatia pelo offset.
+    let batch: any[] = [];
+    let cachedPositions: number[] = [];
+    if (useCache) {
+      const CACHE_BATCH = 800;
+      const [{ data: pend, error: pErr }, { count: pendCount }] = await Promise.all([
+        supabase.from('automation_dispatch_job_audience')
+          .select('pos, recipient')
+          .eq('job_id', jobId).eq('status', 'pending')
+          .order('pos').limit(CACHE_BATCH),
+        supabase.from('automation_dispatch_job_audience')
+          .select('pos', { count: 'exact', head: true })
+          .eq('job_id', jobId).eq('status', 'pending'),
+      ]);
+      if (pErr) throw new Error(`fila audiência: ${pErr.message}`);
+      batch = (pend || []).map((r: any) => r.recipient);
+      cachedPositions = (pend || []).map((r: any) => r.pos);
+      totalAudience = pendCount ?? batch.length;
+    } else {
+      batch = fullAudience.slice(offset, offset + batchSize);
+    }
 
 
     if (batch.length === 0) {
@@ -351,7 +389,8 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    const CONCURRENCY = 20;
+    const CONCURRENCY = 40;
+    let attempted = 0;
     const CHUNK_DELAY_MS = 150;
 
     // Pre-fetch Meta credentials ONCE (avoid per-recipient sub-edge-function calls that hit rate limits)
@@ -808,6 +847,7 @@ serve(async (req) => {
       }
       const chunk = batch.slice(i, i + CONCURRENCY);
       await Promise.all(chunk.map(r => processRecipient(r)));
+      attempted += chunk.length;
       console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
       // Throttle: wait 2s between chunks to respect Meta API rate limits
       if (i + CONCURRENCY < batch.length) {
@@ -815,6 +855,16 @@ serve(async (req) => {
       }
     }
 
+    // Marca na fila do job quem já foi processado (enviado, falha ou pulado).
+    if (useCache && attempted > 0) {
+      const donePos = cachedPositions.slice(0, attempted);
+      for (let i = 0; i < donePos.length; i += 500) {
+        await supabase.from('automation_dispatch_job_audience')
+          .update({ status: 'done' })
+          .eq('job_id', jobId).in('pos', donePos.slice(i, i + 500));
+      }
+      totalAudience = Math.max(totalAudience, attempted);
+    }
     const processed = sent + failed + skipped;
     const remaining = Math.max(0, totalAudience - processed);
     const nextOffset = jobId ? 0 : offset + processed;
