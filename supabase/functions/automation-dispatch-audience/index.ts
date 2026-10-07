@@ -389,7 +389,8 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    const CONCURRENCY = 20;
+    const CONCURRENCY = 40;
+    let attempted = 0;
     const CHUNK_DELAY_MS = 150;
 
     // Pre-fetch Meta credentials ONCE (avoid per-recipient sub-edge-function calls that hit rate limits)
@@ -846,6 +847,7 @@ serve(async (req) => {
       }
       const chunk = batch.slice(i, i + CONCURRENCY);
       await Promise.all(chunk.map(r => processRecipient(r)));
+      attempted += chunk.length;
       console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
       // Throttle: wait 2s between chunks to respect Meta API rate limits
       if (i + CONCURRENCY < batch.length) {
@@ -853,6 +855,16 @@ serve(async (req) => {
       }
     }
 
+    // Marca na fila do job quem já foi processado (enviado, falha ou pulado).
+    if (useCache && attempted > 0) {
+      const donePos = cachedPositions.slice(0, attempted);
+      for (let i = 0; i < donePos.length; i += 500) {
+        await supabase.from('automation_dispatch_job_audience')
+          .update({ status: 'done' })
+          .eq('job_id', jobId).in('pos', donePos.slice(i, i + 500));
+      }
+      totalAudience = Math.max(totalAudience, attempted);
+    }
     const processed = sent + failed + skipped;
     const remaining = Math.max(0, totalAudience - processed);
     const nextOffset = jobId ? 0 : offset + processed;
