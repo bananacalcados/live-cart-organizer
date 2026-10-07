@@ -50,6 +50,13 @@
       "when": 1791214231261,
       "tag": "0006_message_funnel_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791394233264,
+      "tag": "0007_automation_queue_preserve_block_order",
+      "breakpoints": true
     }
   ]
 }
