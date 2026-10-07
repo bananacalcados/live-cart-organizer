@@ -2777,6 +2777,13 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 customerName={selectedConversation?.customerName}
                 photoUrl={contactPhotos[selectedPhone]}
                 data={crmData}
+                igLink={igLink && igLink.igUserId === selectedPhone && igLink.candidates.length > 0 ? {
+                  chosen: igLink.chosen,
+                  candidates: igLink.candidates,
+                  onConfirm: (ph) => saveIgLink(ph, "confirmed"),
+                  onReject: (ph) => saveIgLink(ph, "rejected"),
+                  onOpenWhatsApp: (ph) => { setSelectedConvKey(null); setSelectedPhone(ph); },
+                } : undefined}
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
