@@ -1352,6 +1352,7 @@ export type Database = {
           locked_until: string | null
           payload: Json
           phone: string
+          queue_seq: number
           recipient_data: Json
           reschedule_count: number
           scheduled_at: string
@@ -1373,6 +1374,7 @@ export type Database = {
           locked_until?: string | null
           payload?: Json
           phone: string
+          queue_seq?: number
           recipient_data?: Json
           reschedule_count?: number
           scheduled_at?: string
@@ -1394,6 +1396,7 @@ export type Database = {
           locked_until?: string | null
           payload?: Json
           phone?: string
+          queue_seq?: number
           recipient_data?: Json
           reschedule_count?: number
           scheduled_at?: string
@@ -24276,6 +24279,7 @@ export type Database = {
           locked_until: string | null
           payload: Json
           phone: string
+          queue_seq: number
           recipient_data: Json
           reschedule_count: number
           scheduled_at: string
