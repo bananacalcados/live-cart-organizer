@@ -1943,6 +1943,50 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mergedConversations, selectedConvKey, selectedPhone],
   );
+  // Conversa do Instagram: liga ao cliente da live pelo @ (1 consulta ao abrir, cache em memória).
+  const igUsername = useMemo(() => {
+    if (!selectedPhone || !isInstagramConvKey(selectedPhone)) return null;
+    const raw = String(selectedConversation?.customerName || chatContacts[selectedPhone] || "").trim();
+    return raw.startsWith("@") ? raw : null;
+  }, [selectedPhone, selectedConversation?.customerName, chatContacts]);
+  useEffect(() => {
+    if (!selectedPhone || !igUsername) { setIgLink(null); return; }
+    const key = `${selectedPhone}|${igUsername}|${igLinkReload}`;
+    const cached = igResolveCache.get(key);
+    if (cached) { setIgLink(cached); return; }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("resolve_instagram_customer" as any, {
+        p_username: igUsername,
+        p_ig_user_id: selectedPhone,
+      });
+      if (cancelled || error) return;
+      const candidates = ((data || []) as any[]).map((r) => ({
+        phone: String(r.phone || "").replace(/\D/g, ""),
+        name: r.name || undefined,
+        instagram: r.instagram || undefined,
+        confirmed: !!r.confirmed,
+      })).filter((c) => c.phone.length >= 10);
+      const value: IgLinkState = {
+        igUserId: selectedPhone,
+        username: igUsername,
+        candidates,
+        chosen: candidates.length === 1 || candidates[0]?.confirmed ? candidates[0] : null,
+      };
+      igResolveCache.set(key, value);
+      setIgLink(value);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPhone, igUsername, igLinkReload]);
+  const saveIgLink = useCallback(async (phone: string, status: "confirmed" | "rejected") => {
+    if (!igLink) return;
+    await supabase.from("instagram_customer_links" as any).upsert(
+      { ig_user_id: igLink.igUserId, username_norm: igLink.username.replace(/^@/, "").toLowerCase(), phone, status, updated_at: new Date().toISOString() } as any,
+      { onConflict: "ig_user_id,phone" } as any,
+    );
+    igResolveCache.clear();
+    setIgLinkReload((n) => n + 1);
+  }, [igLink]);
   const selectedChannel = getSelectedChannel();
   const requiresInstanceSelection = selectedChannel !== "instagram" && selectedChannel !== "messenger" && !selectedSendNumber;
   const totalUnread = useMemo(() => conversations.reduce((sum, c) => sum + c.unreadCount, 0), [conversations]);
