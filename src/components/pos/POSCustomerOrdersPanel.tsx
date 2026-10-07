@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export interface POSCustomerOrder {
   id: string;
@@ -48,6 +49,14 @@ interface Props {
   riskBadges?: ReactNode;
   liveOrderPanel?: ReactNode;
   renderOrderActions: (order: POSCustomerOrder) => ReactNode;
+  /** Conversa do Instagram ligada a cliente que já comprou (pelo @). */
+  igLink?: {
+    chosen: { phone: string; name?: string; confirmed: boolean } | null;
+    candidates: { phone: string; name?: string; instagram?: string; confirmed: boolean }[];
+    onConfirm: (phone: string) => void;
+    onReject: (phone: string) => void;
+    onOpenWhatsApp: (phone: string) => void;
+  };
 }
 
 const initials = (name?: string) =>
@@ -62,6 +71,7 @@ export function POSCustomerOrdersPanel({
   riskBadges,
   liveOrderPanel,
   renderOrderActions,
+  igLink,
 }: Props) {
   const paidOrders = (data?.orders || []).filter((order) => order.paymentState === "paid");
   const unpaidOrders = (data?.orders || []).filter((order) => order.paymentState === "unpaid");
@@ -88,8 +98,39 @@ export function POSCustomerOrdersPanel({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         {liveOrderPanel}
 
+        {igLink ? (
+          <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+            {igLink.chosen ? (
+              <>
+                <p className="font-bold text-primary">Cliente da live{igLink.chosen.confirmed ? " · vínculo confirmado" : ""}</p>
+                <p className="mt-0.5">{igLink.chosen.name || "Cliente"} · WhatsApp {igLink.chosen.phone}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => igLink.onOpenWhatsApp(igLink.chosen!.phone)}>Abrir conversa no WhatsApp</Button>
+                  {!igLink.chosen.confirmed ? <Button size="sm" variant="outline" onClick={() => igLink.onConfirm(igLink.chosen!.phone)}>Confirmar</Button> : null}
+                  <Button size="sm" variant="ghost" onClick={() => igLink.onReject(igLink.chosen!.phone)}>Não é essa pessoa</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-bold text-primary">Mais de um cliente com este @ — escolha:</p>
+                <div className="mt-2 space-y-1.5">
+                  {igLink.candidates.map((c) => (
+                    <div key={c.phone} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{c.name || "Cliente"} · {c.phone}</span>
+                      <span className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => igLink.onConfirm(c.phone)}>É esta</Button>
+                        <Button size="sm" variant="ghost" onClick={() => igLink.onReject(c.phone)}>Não</Button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Info icon={<Phone className="h-4 w-4" />} label="WhatsApp" value={phone} />
+          <Info icon={<Phone className="h-4 w-4" />} label="WhatsApp" value={igLink?.chosen?.phone || phone} />
           <Info icon={<CreditCard className="h-4 w-4" />} label="CPF" value={data?.cpf || "Não informado"} />
           {data?.email ? <Info icon={<Mail className="h-4 w-4" />} label="E-mail" value={data.email} /> : null}
           <Info className="sm:col-span-2" icon={<MapPin className="h-4 w-4" />} label="Endereço" value={data?.address || "Não informado"} />
