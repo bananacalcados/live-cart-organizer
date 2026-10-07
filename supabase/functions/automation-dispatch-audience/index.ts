@@ -161,10 +161,17 @@ serve(async (req) => {
     const presetKeys = (triggerConfig.audience_rfm_preset_keys as string[]) || [];
     const cooldownDays = Math.max(0, parseInt(String(triggerConfig.audience_cooldown_days ?? 0)) || 0);
 
+    // Jobs encadeados: a audiência é montada UMA vez e guardada em
+    // automation_dispatch_job_audience; os lotes seguintes só leem a fila.
+    const useCache = !!(jobId && !dryRun);
+    let fullAudience: any[] = [];
+    let totalAudience = 0;
+    let alreadySentCount = 0;
+    if (!useCache || !job?.audience_cached_at) {
     // Fetch already-sent phones for this flow to avoid duplicates
     const alreadySentRows = await fetchAllRows(supabase, 'automation_dispatch_sent', 'phone', { flow_id: [flowId] });
     const seenPhones = new Set<string>(alreadySentRows.map((r: any) => r.phone));
-    const alreadySentCount = seenPhones.size;
+    alreadySentCount = seenPhones.size;
     console.log(`[dispatch] Already sent to ${alreadySentCount} phones for this flow`);
 
     // Cooldown filter: exclude phones that received MASS DISPATCHES (broadcasts or other automations) in the last N days.
