@@ -86,12 +86,14 @@ export async function sendAutomationJob(
       const txt = await res.text().catch(() => "");
       throw new Error(`interactive send failed (${res.status}): ${txt.slice(0, 400)}`);
     }
+    const iOut: any = await res.json().catch(() => ({}));
     await supabase.from("whatsapp_messages").insert({
       phone,
       message: bodyText,
       direction: "outgoing",
       status: "sent",
       whatsapp_number_id: whatsappNumberId || null,
+      message_id: iOut?.messageId || null,
     });
     return;
   }
@@ -123,15 +125,17 @@ export async function sendAutomationJob(
     if (!r.ok || out?.error) {
       throw new Error(`${provider} send failed (${r.status}): ${String(out?.message || out?.error || "").slice(0, 400)}`);
     }
-    await supabase.from("whatsapp_messages").insert({
+    const { error: logErr } = await supabase.from("whatsapp_messages").insert({
       phone,
-      message: payload.message || null,
+      message: payload.message || "",
       media_url: payload.mediaUrl || null,
+      media_type: payload.mediaUrl ? (payload.mediaType || "image") : "text",
       direction: "outgoing",
       status: "sent",
       whatsapp_number_id: whatsappNumberId || null,
       message_id: out?.messageId || null,
     });
+    if (logErr) console.error("[automation-send] log insert failed:", logErr.message);
     return;
   }
 
@@ -151,14 +155,18 @@ export async function sendAutomationJob(
     const txt = await res.text().catch(() => "");
     throw new Error(`text send failed (${res.status}): ${txt.slice(0, 400)}`);
   }
-  await supabase.from("whatsapp_messages").insert({
+  const metaOut: any = await res.json().catch(() => ({}));
+  const { error: logErr } = await supabase.from("whatsapp_messages").insert({
     phone,
-    message: payload.message || null,
+    message: payload.message || "",
     media_url: payload.mediaUrl || null,
+    media_type: payload.mediaUrl ? (payload.mediaType || "document") : "text",
     direction: "outgoing",
     status: "sent",
     whatsapp_number_id: whatsappNumberId || null,
+    message_id: metaOut?.messageId || null,
   });
+  if (logErr) console.error("[automation-send] log insert failed:", logErr.message);
 }
 
 /** Errors that must never be retried (config / policy / permanent media issues). */
