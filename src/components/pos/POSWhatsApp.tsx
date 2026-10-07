@@ -90,6 +90,12 @@ interface Props {
   onExitFullScreen?: () => void;
 }
 
+/** IDs de conversa do Instagram são numéricos longos (telefone BR tem no máx. 13 dígitos). */
+const isInstagramConvKey = (k: string) => /^\d{14,}$/.test(k);
+interface IgLinkCandidate { phone: string; name?: string; instagram?: string; confirmed: boolean }
+interface IgLinkState { igUserId: string; username: string; candidates: IgLinkCandidate[]; chosen: IgLinkCandidate | null }
+const igResolveCache = new Map<string, IgLinkState>();
+
 interface CrmCustomerData {
   name?: string;
   instagram?: string;
@@ -195,6 +201,9 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
+  const [igLink, setIgLink] = useState<IgLinkState | null>(null);
+  const [igLinkReload, setIgLinkReload] = useState(0);
+  const igLinkPhone = igLink && igLink.igUserId === selectedPhone ? igLink.chosen?.phone ?? null : null;
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
 
@@ -825,9 +834,11 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       setShowCrmPanel(false);
       return;
     }
+    // Conversa do Instagram ligada a um cliente: usa o WhatsApp do cadastro.
+    const lookupPhone = (isInstagramConvKey(selectedPhone) && igLinkPhone) ? igLinkPhone : selectedPhone;
 
     const loadCrmData = async () => {
-      const cleanPhone = selectedPhone.replace(/\D/g, '');
+      const cleanPhone = lookupPhone.replace(/\D/g, '');
       const suffix = cleanPhone.slice(-8);
       
       // Search customers, pos_customers, zoppy_customers, campaign_leads and PDV/live sales
@@ -1005,7 +1016,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       // Cashback disponível (cupons ativos: não usados e dentro da validade)
       let resolvedCashback: CrmCustomerData["cashback"] | undefined;
       const { data: cbRows } = await supabase.rpc("lookup_cashback_by_phones" as any, {
-        p_phones: [selectedPhone],
+        p_phones: [lookupPhone],
       });
       const cbRow = (cbRows || [])[0] as any;
       if (cbRow && Number(cbRow.total_available) > 0) {
@@ -1037,7 +1048,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
 
     loadCrmData();
-  }, [selectedPhone, chatContacts, contactPhotos]);
+  }, [selectedPhone, chatContacts, contactPhotos, igLinkPhone]);
 
   // Helper to map RPC rows to Conversation objects (same pattern as Chat page)
   const mapRowsToConvs = useMemo(() => (rows: any[]) => {
@@ -1943,6 +1954,50 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mergedConversations, selectedConvKey, selectedPhone],
   );
+  // Conversa do Instagram: liga ao cliente da live pelo @ (1 consulta ao abrir, cache em memória).
+  const igUsername = useMemo(() => {
+    if (!selectedPhone || !isInstagramConvKey(selectedPhone)) return null;
+    const raw = String(selectedConversation?.customerName || chatContacts[selectedPhone] || "").trim();
+    return raw.startsWith("@") ? raw : null;
+  }, [selectedPhone, selectedConversation?.customerName, chatContacts]);
+  useEffect(() => {
+    if (!selectedPhone || !igUsername) { setIgLink(null); return; }
+    const key = `${selectedPhone}|${igUsername}|${igLinkReload}`;
+    const cached = igResolveCache.get(key);
+    if (cached) { setIgLink(cached); return; }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("resolve_instagram_customer" as any, {
+        p_username: igUsername,
+        p_ig_user_id: selectedPhone,
+      });
+      if (cancelled || error) return;
+      const candidates = ((data || []) as any[]).map((r) => ({
+        phone: String(r.phone || "").replace(/\D/g, ""),
+        name: r.name || undefined,
+        instagram: r.instagram || undefined,
+        confirmed: !!r.confirmed,
+      })).filter((c) => c.phone.length >= 10);
+      const value: IgLinkState = {
+        igUserId: selectedPhone,
+        username: igUsername,
+        candidates,
+        chosen: candidates.length === 1 || candidates[0]?.confirmed ? candidates[0] : null,
+      };
+      igResolveCache.set(key, value);
+      setIgLink(value);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPhone, igUsername, igLinkReload]);
+  const saveIgLink = useCallback(async (phone: string, status: "confirmed" | "rejected") => {
+    if (!igLink) return;
+    await supabase.from("instagram_customer_links" as any).upsert(
+      { ig_user_id: igLink.igUserId, username_norm: igLink.username.replace(/^@/, "").toLowerCase(), phone, status, updated_at: new Date().toISOString() } as any,
+      { onConflict: "ig_user_id,phone" } as any,
+    );
+    igResolveCache.clear();
+    setIgLinkReload((n) => n + 1);
+  }, [igLink]);
   const selectedChannel = getSelectedChannel();
   const requiresInstanceSelection = selectedChannel !== "instagram" && selectedChannel !== "messenger" && !selectedSendNumber;
   const totalUnread = useMemo(() => conversations.reduce((sum, c) => sum + c.unreadCount, 0), [conversations]);
@@ -2722,6 +2777,13 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 customerName={selectedConversation?.customerName}
                 photoUrl={contactPhotos[selectedPhone]}
                 data={crmData}
+                igLink={igLink && igLink.igUserId === selectedPhone && igLink.candidates.length > 0 ? {
+                  chosen: igLink.chosen,
+                  candidates: igLink.candidates,
+                  onConfirm: (ph) => saveIgLink(ph, "confirmed"),
+                  onReject: (ph) => saveIgLink(ph, "rejected"),
+                  onOpenWhatsApp: (ph) => { setSelectedConvKey(null); setSelectedPhone(ph); },
+                } : undefined}
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
