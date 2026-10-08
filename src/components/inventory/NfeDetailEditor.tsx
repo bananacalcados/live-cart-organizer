@@ -436,6 +436,29 @@ export function NfeDetailEditor({
                 Marque as linhas de um mesmo modelo e agrupe-as em um produto pai (novo ou existente).
               </p>
 
+      {showProductForm && productInitial && (
+        <ProductMasterForm
+          embedded
+          key={productFormItemIds.join(',')}
+          open={showProductForm}
+          initialStoreId={stockStoreId}
+          onOpenChange={(v) => { setShowProductForm(v); if (!v) { load(); onChanged?.(); } }}
+          initial={productInitial}
+          onCreated={async (masterId) => {
+            if (productFormItemIds.length > 0) {
+              await supabase
+                .from("purchase_invoice_items")
+                .update({ master_id: masterId })
+                .in("id", productFormItemIds);
+            }
+            await supabase.from("purchase_invoices").update({ status: "products_created" }).eq("id", invoiceId);
+            setProductFormItemIds([]);
+            setSelectedIds(new Set());
+            toast.success("Produto criado e linhas vinculadas.");
+          }}
+        />
+      )}
+
               <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                 {items.map((it) => {
                   const isLinked = !!it.master_id || !!it.linked_parent_sku;
@@ -561,27 +584,6 @@ export function NfeDetailEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {showProductForm && productInitial && (
-        <ProductMasterForm
-          open={showProductForm}
-          initialStoreId={stockStoreId}
-          onOpenChange={(v) => { setShowProductForm(v); if (!v) load(); }}
-          initial={productInitial}
-          onCreated={async (masterId) => {
-            if (productFormItemIds.length > 0) {
-              await supabase
-                .from("purchase_invoice_items")
-                .update({ master_id: masterId })
-                .in("id", productFormItemIds);
-            }
-            await supabase.from("purchase_invoices").update({ status: "products_created" }).eq("id", invoiceId);
-            setProductFormItemIds([]);
-            setSelectedIds(new Set());
-            toast.success("Produto criado e linhas vinculadas.");
-          }}
-        />
-      )}
 
       <ExistingParentSearchDialog
         open={showSearch}
