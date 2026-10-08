@@ -158,7 +158,6 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         .select("id, created_at, entered_phone, phone, real_phone, superseded, lead:event_leads(name)")
         .in("link_id", linkIds)
         .not("entered_phone", "is", null)
-        .not("phone", "is", null) // só quem falou no WhatsApp vira card
         .order("created_at", { ascending: false })
         .limit(500);
       setRows(((data || []) as unknown as ClickRow[]).filter((r) => !r.superseded));
@@ -328,8 +327,8 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     for (const r of rows) {
       // Só quem realmente falou no WhatsApp (clique casado com mensagem).
       // Quem clicou e digitou o telefone mas nunca mandou mensagem não vira card.
-      if (!r.phone) continue;
-      const phone = r.real_phone || r.phone || "";
+      // Quem digitou o telefone mas não chamou também vira card, com aviso grande.
+      const phone = r.real_phone || r.phone || r.entered_phone || "";
       const key = suffix8(phone);
       if (!key || key.length < 8) continue;
       if (excludeKeys.has(key)) continue;
@@ -351,6 +350,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         lastIncomingAt: act?.lastIn || null,
       };
       if (!existing) byKey.set(key, contact);
+      else if (!existing.talked && contact.talked) byKey.set(key, { ...contact, name: contact.name || existing.name });
       else if (!existing.name && contact.name) byKey.set(key, { ...existing, name: contact.name });
     }
     const list = [...byKey.values()];
@@ -447,6 +447,13 @@ export function LiveContactCards({
           <span className="absolute -left-1.5 -top-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
             Não lida
           </span>
+        )}
+
+        {!c.talked && !isDoubts && (
+          <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-red-600 px-2 py-1.5 text-center text-[11px] font-black uppercase leading-tight tracking-wide text-white">
+            ⚠️ Não chegou no WhatsApp
+            <div className="text-[9px] font-semibold normal-case tracking-normal opacity-90">Clicou no link e não chamou — mande mensagem</div>
+          </div>
         )}
 
         {(onMoveToDoubts || onBackToNew) && (
