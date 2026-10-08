@@ -35,6 +35,8 @@ interface ProductMasterFormProps {
   onOpenChange: (v: boolean) => void;
   onCreated?: (masterId: string) => void;
   initialStoreId?: string;
+  /** Renderiza dentro da tela atual (sem abrir outra janela). */
+  embedded?: boolean;
   initial?: {
     name?: string;
     description?: string;
@@ -47,7 +49,7 @@ interface ProductMasterFormProps {
   };
 }
 
-export function ProductMasterForm({ open, onOpenChange, onCreated, initial, initialStoreId }: ProductMasterFormProps) {
+export function ProductMasterForm({ open, onOpenChange, onCreated, initial, initialStoreId, embedded }: ProductMasterFormProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -300,16 +302,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Novo Produto (Pai/Filhos)
-          </DialogTitle>
-        </DialogHeader>
-
+  const body = (
         <div className="space-y-6">
           {/* Pai */}
           <Card>
@@ -628,16 +621,45 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
             </CardContent>
           </Card>
         </div>
+  );
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-            Criar Produto
-          </Button>
-        </DialogFooter>
+  const actions = (
+    <>
+      <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+        Cancelar
+      </Button>
+      <Button onClick={handleSave} disabled={saving}>
+        {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+        Criar Produto
+      </Button>
+    </>
+  );
+
+  if (embedded) {
+    if (!open) return null;
+    return (
+      <div className="rounded-lg border-2 border-primary/40 bg-muted/20 p-3 space-y-4">
+        <div className="flex items-center gap-2 font-semibold">
+          <Package className="h-5 w-5" />
+          Novo Produto Pai com {variants.length} variação(ões) selecionada(s)
+        </div>
+        {body}
+        <div className="flex justify-end gap-2">{actions}</div>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Novo Produto (Pai/Filhos)
+          </DialogTitle>
+        </DialogHeader>
+        {body}
+        <DialogFooter>{actions}</DialogFooter>
       </DialogContent>
     </Dialog>
   );
