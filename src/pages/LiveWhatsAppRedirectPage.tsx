@@ -309,6 +309,18 @@ export default function LiveWhatsAppRedirectPage() {
             </a>
           </>
         )}
+        {status === "waiting_order" && (
+          <>
+            <div style={{ fontSize: "2.2rem", marginBottom: ".75rem" }}>⏳</div>
+            <h2 style={{ margin: "0 0 .75rem", fontSize: "1.3rem" }}>Estamos anotando seu pedido...</h2>
+            <p style={{ margin: "0 0 .75rem", fontSize: "1rem", lineHeight: 1.4 }}>
+              Aguarde nesta tela. Assim que o seu pedido aparecer, o WhatsApp abre sozinho.
+            </p>
+            <p style={{ margin: 0, fontSize: ".85rem", opacity: 0.8 }}>
+              Não feche esta página. Isso leva só alguns minutos.
+            </p>
+          </>
+        )}
         {status === "no_order" && (
           <div style={{ background: "#b91c1c", borderRadius: 14, padding: "1.5rem 1.25rem", textAlign: "left" }}>
             <div style={{ fontSize: "2.4rem", textAlign: "center", marginBottom: ".5rem" }}>⚠️</div>
