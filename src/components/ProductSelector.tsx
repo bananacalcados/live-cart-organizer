@@ -77,6 +77,21 @@ export function ProductSelector({
     }
   });
 
+  // A carga inicial traz só os 250 primeiros produtos da loja. Ao buscar, consulta
+  // a Shopify pelo termo para achar produtos novos que ficaram fora dessa lista.
+  const [remoteProducts, setRemoteProducts] = useState<ShopifyProduct[]>([]);
+  useEffect(() => {
+    const term = debouncedSearch.trim();
+    if (term.length < 2) { setRemoteProducts([]); return; }
+    let cancelled = false;
+    const words = term.replace(/["']/g, "").split(/\s+/).filter(Boolean);
+    const q = /^[a-z0-9\-]+$/i.test(term) && term.length >= 4
+      ? `${term} OR sku:${term} OR barcode:${term}`
+      : words.map((w) => `title:*${w}*`).join(" AND ");
+    fetchProducts(50, q).then((res) => { if (!cancelled) setRemoteProducts(res); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch]);
+
   // Filter products when search changes
   useEffect(() => {
     if (!debouncedSearch.trim()) {
@@ -86,7 +101,12 @@ export function ProductSelector({
     const q = debouncedSearch.trim().toLowerCase();
     const isSkuOrGtin = /^[a-z0-9\-]+$/i.test(q) && q.length >= 4 && !q.includes(" ");
 
-    const filtered = allProducts.filter((p) => {
+    const seen = new Set(allProducts.map((p) => p.node.id));
+    const pool = [...allProducts, ...remoteProducts.filter((p) => !seen.has(p.node.id))];
+    const words = q.split(/\s+/).filter(Boolean);
+    const filtered = pool.filter((p) => {
+      const title = p.node.title.toLowerCase();
+      if (title.includes(q) || words.every((w) => title.includes(w))) return true;
       if (p.node.title.toLowerCase().includes(q)) return true;
       return p.node.variants.edges.some(
         (v) =>
