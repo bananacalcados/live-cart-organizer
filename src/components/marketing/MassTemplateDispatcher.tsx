@@ -641,6 +641,7 @@ export function MassTemplateDispatcher() {
           .from('lp_leads')
           .select('id, name, phone, campaign_tag, source, created_at')
           .not('phone', 'is', null)
+          .is('dispatch_excluded_reason', null)
           .order('created_at', { ascending: false })
           .range(leadsFrom, leadsFrom + leadsPageSize - 1);
         if (leadsErr || !leadsPage || leadsPage.length === 0) break;
