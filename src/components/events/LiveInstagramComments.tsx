@@ -167,24 +167,26 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const loadCarts = useCallback(async () => {
     if (!eventId) return;
 
-    // 1) Carrega base de clientes com Instagram (normaliza @ e maiúsculas)
-    const PAGE = 1000;
+    // 1) Busca SÓ os clientes dos @ que comentaram (antes baixava a base inteira
+    //    de clientes com Instagram a cada novo comentário — pesava no banco todo).
     const handleToCustomers = new Map<string, any[]>();
-    for (let from = 0; ; from += PAGE) {
+    const wanted = Array.from(new Set(commentsRef.current.map(c => cleanHandle(c.username)).filter(Boolean)));
+    const esc = (h: string) => h.replace(/[,()"\\]/g, "");
+    for (let i = 0; i < wanted.length; i += 100) {
+      const batch = wanted.slice(i, i + 100).map(esc).filter(Boolean);
+      if (!batch.length) continue;
       const { data } = await supabase
         .from("customers")
         .select("id, instagram_handle, whatsapp")
-        .not("instagram_handle", "is", null)
-        .range(from, from + PAGE - 1);
-      if (!data || data.length === 0) break;
-      for (const c of data as any[]) {
+        .or(batch.flatMap(h => [`instagram_handle.ilike.${h}`, `instagram_handle.ilike.@${h}`]).join(","))
+        .limit(1000);
+      for (const c of (data || []) as any[]) {
         const key = cleanHandle(c.instagram_handle);
         if (!key) continue;
         const arr = handleToCustomers.get(key) || [];
         arr.push(c);
         handleToCustomers.set(key, arr);
       }
-      if (data.length < PAGE) break;
     }
 
     // 2) Só busca pedidos dos @ que aparecem nos comentários (atual + históricos)
@@ -326,9 +328,22 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     [comments]
   );
 
+  // Agrupa recargas: no máximo 1 a cada 5 s, mesmo com muitos comentários/pedidos chegando.
+  const cartsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLoadCarts = useCallback(() => {
+    if (cartsTimerRef.current) return;
+    cartsTimerRef.current = setTimeout(() => {
+      cartsTimerRef.current = null;
+      void loadCarts();
+    }, 5000);
+  }, [loadCarts]);
+  useEffect(() => () => { if (cartsTimerRef.current) clearTimeout(cartsTimerRef.current); }, []);
+
+  const firstCartsLoadRef = useRef(true);
   useEffect(() => {
     commentsRef.current = comments;
-    loadCarts();
+    if (firstCartsLoadRef.current) { firstCartsLoadRef.current = false; void loadCarts(); }
+    else scheduleLoadCarts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handlesKey, loadCarts]);
 
@@ -375,10 +390,10 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         console.log(`[LiveComments] Realtime status: ${status}`);
       });
 
-    // Polling fallback a cada 15s — caso o realtime caia, garante que a UI atualiza sem F5
+    // Polling fallback a cada 30s (pausa com a aba oculta) — caso o realtime caia
     const pollInterval = setInterval(() => {
-      loadComments();
-    }, 15000);
+      if (!document.hidden) loadComments();
+    }, 30000);
 
     return () => {
       clearInterval(pollInterval);
@@ -396,11 +411,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         table: "orders",
         filter: `event_id=eq.${eventId}`,
       }, () => {
-        loadCarts();
+        scheduleLoadCarts();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [eventId, loadCarts]);
+  }, [eventId, scheduleLoadCarts]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return comments;
