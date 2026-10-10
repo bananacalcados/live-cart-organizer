@@ -49,6 +49,8 @@ interface Props {
   riskBadges?: ReactNode;
   liveOrderPanel?: ReactNode;
   renderOrderActions: (order: POSCustomerOrder) => ReactNode;
+  /** Ações extras para pedidos ainda não pagos (ex.: pré-selecionar parcelas do link). */
+  renderUnpaidActions?: (order: POSCustomerOrder) => ReactNode;
   /** Conversa do Instagram ligada a cliente que já comprou (pelo @). */
   igLink?: {
     chosen: { phone: string; name?: string; confirmed: boolean } | null;
@@ -71,6 +73,7 @@ export function POSCustomerOrdersPanel({
   riskBadges,
   liveOrderPanel,
   renderOrderActions,
+  renderUnpaidActions,
   igLink,
 }: Props) {
   const paidOrders = (data?.orders || []).filter((order) => order.paymentState === "paid");
@@ -192,7 +195,7 @@ export function POSCustomerOrdersPanel({
               </div>
               <div className="space-y-2 opacity-90">
                 {unpaidOrders.map((order) => (
-                  <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} />
+                  <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} renderUnpaidActions={renderUnpaidActions} />
                 ))}
               </div>
             </div>
@@ -207,10 +210,12 @@ function OrderCard({
   order,
   statusLabels,
   renderOrderActions,
+  renderUnpaidActions,
 }: {
   order: POSCustomerOrder;
   statusLabels: Record<string, string>;
   renderOrderActions: (order: POSCustomerOrder) => ReactNode;
+  renderUnpaidActions?: (order: POSCustomerOrder) => ReactNode;
 }) {
   return (
     <div
@@ -252,6 +257,9 @@ function OrderCard({
             <p className="text-[11px] font-semibold text-destructive">
               Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
             </p>
+          ) : null}
+          {order.paymentState === "unpaid" ? (
+            renderUnpaidActions?.(order) ?? null
           ) : (
             renderOrderActions(order)
           )}
