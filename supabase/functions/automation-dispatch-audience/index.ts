@@ -36,6 +36,9 @@ async function fetchAllRows(supabase: ReturnType<typeof createClient>, table: st
         }
       }
     }
+    // Leads marcados como excluídos de disparo (já cliente / 7+ disparos sem compra) não entram.
+    if (table === 'lp_leads') query = query.is('dispatch_excluded_reason', null);
+    }
     const { data, error } = await query;
     if (error || !data || data.length === 0) { hasMore = false; break; }
     allData.push(...data);
