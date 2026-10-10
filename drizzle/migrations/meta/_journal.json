@@ -92,6 +92,13 @@
       "when": 1791643491693,
       "tag": "0012_pos_sale_price_adjustments",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791651254301,
+      "tag": "0013_customer_means_buyer",
+      "breakpoints": true
     }
   ]
 }
