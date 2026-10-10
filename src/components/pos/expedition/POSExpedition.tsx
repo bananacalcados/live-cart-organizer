@@ -35,6 +35,7 @@ import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
+import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
 import { expeditionPriorityRank, isValadaresOrder, isSedexOrder, isStorePickupOrder } from "@/lib/expeditionPriority";
 
 
@@ -100,6 +101,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
   const [testBusy, setTestBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [priceAdjOpen, setPriceAdjOpen] = useState(false);
+  const [priceAdj, setPriceAdj] = useState<Record<string, { refund_amount: number }>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   /** Expedir os pedidos de TODAS as lojas a partir desta tela (a loja de origem de cada pedido é preservada). */
@@ -233,12 +236,32 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     return { from: fromD?.toISOString(), to: toD?.toISOString() };
   }, [filterExpDate, filterExpDay, filterExpFrom, filterExpTo]);
 
+  const revertPriceAdj = async (saleId: string) => {
+    if (!confirm("Desfazer a redução de valor deste pedido?")) return;
+    const { error } = await supabase.rpc("revert_sale_price_adjustment" as any, { p_sale_id: saleId });
+    if (error) return toast.error(error.message);
+    toast.success("Redução desfeita");
+    load();
+  };
+
   const load = async () => {
     if (!storeId) return;
     setLoading(true);
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
       setOrders(rows);
+      // Reduções de valor ativas dos pedidos visíveis (1 consulta, IN único).
+      const ids = rows.map((r) => r.id).slice(0, 500);
+      if (ids.length) {
+        const { data: adj } = await supabase
+          .from("pos_sale_price_adjustments" as any)
+          .select("sale_id, refund_amount")
+          .in("sale_id", ids)
+          .is("reverted_at", null);
+        const m: Record<string, { refund_amount: number }> = {};
+        for (const a of (adj as any[]) || []) m[a.sale_id] = { refund_amount: Number(a.refund_amount) };
+        setPriceAdj(m);
+      } else setPriceAdj({});
       await loadCounts();
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
@@ -1008,6 +1031,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                 {selected.size} selecionado(s) — {bulkEligible.length} pronto(s) para avançar
               </span>
               <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {stage === "novo" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold"
+                    disabled={bulkBusy || bulkSelectedOrders.length === 0}
+                    onClick={() => setPriceAdjOpen(true)}
+                  >
+                    REDUZIR VALOR ({bulkSelectedOrders.length})
+                  </Button>
+                )}
                 {stage === "preparacao" && (
                   <Button
                     size="sm"
@@ -1232,6 +1266,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           <div className="mt-1 text-base font-semibold text-pos-muted-text flex items-center gap-3 flex-wrap">
                             <span>{o.items.length} item(ns)</span>
                             <span>{brl(o.total)}</span>
+                            {priceAdj[o.id] && (
+                              <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Badge className="bg-rose-600 text-white text-sm font-black">
+                                  VALOR REDUZIDO -{brl(priceAdj[o.id].refund_amount)}
+                                </Badge>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => revertPriceAdj(o.id)}>
+                                  Desfazer
+                                </Button>
+                              </span>
+                            )}
                             {stage === "concluido" ? (
                               <>
                                 <span className="flex items-center gap-1">
@@ -1650,6 +1694,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       )}
 
 
+      <ExpPriceAdjustmentDialog
+        open={priceAdjOpen}
+        onOpenChange={setPriceAdjOpen}
+        orders={bulkSelectedOrders.map((o) => ({ id: o.id, customer_name: o.customer_name, total: Number(o.total) || 0 }))}
+        onDone={() => { setSelected(new Set()); load(); }}
+      />
       <ExpDeleteOrderDialog
         order={deleteOrder}
         open={!!deleteOrder}
