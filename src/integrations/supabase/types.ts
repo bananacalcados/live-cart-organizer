@@ -13440,6 +13440,7 @@ export type Database = {
           pickup_store_id: string | null
           pos_routing_claimed_at: string | null
           pos_sale_id: string | null
+          preselected_installments: number | null
           products: Json
           release_to_expedition: boolean
           shipping_cost: number | null
@@ -13510,6 +13511,7 @@ export type Database = {
           pickup_store_id?: string | null
           pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
+          preselected_installments?: number | null
           products?: Json
           release_to_expedition?: boolean
           shipping_cost?: number | null
@@ -13580,6 +13582,7 @@ export type Database = {
           pickup_store_id?: string | null
           pos_routing_claimed_at?: string | null
           pos_sale_id?: string | null
+          preselected_installments?: number | null
           products?: Json
           release_to_expedition?: boolean
           shipping_cost?: number | null

@@ -1,0 +1,2 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS preselected_installments smallint;
+COMMENT ON COLUMN public.orders.preselected_installments IS 'Parcelas que o link de pagamento já abre selecionadas (escolhidas pela vendedora). Nulo = cliente escolhe.';
