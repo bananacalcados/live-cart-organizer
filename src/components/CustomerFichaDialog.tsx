@@ -1,3 +1,4 @@
+import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -734,6 +735,9 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             total={getOrderFinalValue(order)}
             maxInstallments={6}
           />
+        )}
+        {isRealOrder && !order.is_paid && (
+          <LiveInstallmentPreselect orderId={order.id} value={(order as any).preselected_installments ?? null} />
         )}
         {isRealOrder && <SplitPartsSummary orderId={order.id} />}
 

@@ -171,7 +171,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         const cpf = cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
 
         if (!cancelled) {
-          setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).checkout_installment_config ?? null])));
+          setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).preselected_installments ?? null])));
           setUnifiedId(unified?.id || undefined);
           setData({
             name,
@@ -218,7 +218,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
     statusLabels={statusLabels}
     riskBadges={(chargebacks.length || exchanges.length) ? <div className="flex flex-wrap gap-1">{exchanges.length > 0 && <CustomerExchangeBadge exchanges={exchanges} size="sm" />}{chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}</div> : null}
     renderUnpaidActions={(item) => item.orderName === "Pedido da Live" && item.id in liveConfigs
-      ? <LiveInstallmentPreselect orderId={item.id} config={liveConfigs[item.id]} onSaved={(cfg) => setLiveConfigs((prev) => ({ ...prev, [item.id]: cfg }))} />
+      ? <LiveInstallmentPreselect orderId={item.id} value={liveConfigs[item.id]} onSaved={(v) => setLiveConfigs((prev) => ({ ...prev, [item.id]: v }))} />
       : null}
     renderOrderActions={(item) => item.kind === "pos_sale" ? <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} /> : null}
   />;

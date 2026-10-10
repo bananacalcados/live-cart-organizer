@@ -99,6 +99,13 @@
       "when": 1791651254301,
       "tag": "0013_customer_means_buyer",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791652310912,
+      "tag": "0014_orders_preselected_installments",
+      "breakpoints": true
     }
   ]
 }
