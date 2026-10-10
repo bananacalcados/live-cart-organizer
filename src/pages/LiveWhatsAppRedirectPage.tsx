@@ -37,7 +37,15 @@ function maskPhone(digits: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order";
+type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order" | "waiting_order";
+
+/**
+ * A cliente costuma clicar ANTES da equipe salvar o pedido com os 4 dígitos
+ * (mediana de ~3 min). Em vez de mostrar "não localizamos" na hora, a página
+ * tenta de novo sozinha a cada 15 s por até 6 minutos.
+ */
+const WAIT_RETRY_MS = 15_000;
+const WAIT_MAX_TRIES = 24;
 
 export default function LiveWhatsAppRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -48,6 +56,9 @@ export default function LiveWhatsAppRedirectPage() {
   const [remembered, setRemembered] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const waitTriesRef = useRef(0);
+  const waitTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (waitTimerRef.current) window.clearTimeout(waitTimerRef.current); }, []);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const fnUrl = `${supabaseUrl}/functions/v1/live-whatsapp-redirect`;
@@ -129,8 +140,9 @@ export default function LiveWhatsAppRedirectPage() {
     window.location.href = target;
   };
 
-  const confirm = async (e?: React.FormEvent) => {
+  const confirm = async (e?: React.FormEvent, isRetry = false) => {
     e?.preventDefault();
+    if (!isRetry) waitTriesRef.current = 0;
     const local = normalizeLocal(digits);
     if (!local) {
       setFieldError("Confere o número? Precisa ter DDD + 9 dígitos.");
@@ -138,7 +150,7 @@ export default function LiveWhatsAppRedirectPage() {
       return;
     }
     setFieldError(null);
-    setStatus("confirming");
+    if (!isRetry) setStatus("confirming");
     try {
       localStorage.setItem(PHONE_STORAGE_KEY, local);
     } catch {
@@ -161,6 +173,13 @@ export default function LiveWhatsAppRedirectPage() {
         return;
       }
       if (data?.error === "no_order") {
+        // Pedido pode estar sendo anotado agora: espera e tenta de novo.
+        if (waitTriesRef.current < WAIT_MAX_TRIES) {
+          waitTriesRef.current += 1;
+          setStatus("waiting_order");
+          waitTimerRef.current = window.setTimeout(() => void confirm(undefined, true), WAIT_RETRY_MS);
+          return;
+        }
         setStatus("no_order");
         return;
       }
@@ -290,6 +309,18 @@ export default function LiveWhatsAppRedirectPage() {
             </a>
           </>
         )}
+        {status === "waiting_order" && (
+          <>
+            <div style={{ fontSize: "2.2rem", marginBottom: ".75rem" }}>⏳</div>
+            <h2 style={{ margin: "0 0 .75rem", fontSize: "1.3rem" }}>Estamos anotando seu pedido...</h2>
+            <p style={{ margin: "0 0 .75rem", fontSize: "1rem", lineHeight: 1.4 }}>
+              Aguarde nesta tela. Assim que o seu pedido aparecer, o WhatsApp abre sozinho.
+            </p>
+            <p style={{ margin: 0, fontSize: ".85rem", opacity: 0.8 }}>
+              Não feche esta página. Isso leva só alguns minutos.
+            </p>
+          </>
+        )}
         {status === "no_order" && (
           <div style={{ background: "#b91c1c", borderRadius: 14, padding: "1.5rem 1.25rem", textAlign: "left" }}>
             <div style={{ fontSize: "2.4rem", textAlign: "center", marginBottom: ".5rem" }}>⚠️</div>
@@ -313,6 +344,13 @@ export default function LiveWhatsAppRedirectPage() {
               style={{ ...btn, background: "white", color: "#b91c1c" }}
             >
               TENTAR OUTRO NÚMERO
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirm()}
+              style={{ ...btn, background: "transparent", border: "2px solid white", marginTop: ".75rem" }}
+            >
+              JÁ COMENTEI — TENTAR DE NOVO
             </button>
           </div>
         )}
