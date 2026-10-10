@@ -1694,6 +1694,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       )}
 
 
+      <ExpPriceAdjustmentDialog
+        open={priceAdjOpen}
+        onOpenChange={setPriceAdjOpen}
+        orders={bulkSelectedOrders.map((o) => ({ id: o.id, customer_name: o.customer_name, total: Number(o.total) || 0 }))}
+        onDone={() => { setSelected(new Set()); load(); }}
+      />
       <ExpDeleteOrderDialog
         order={deleteOrder}
         open={!!deleteOrder}
