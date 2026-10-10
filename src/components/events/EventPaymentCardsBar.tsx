@@ -282,7 +282,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
       if (!cancelled) setIgUnread(res);
     };
     load();
-    const t = setInterval(load, 20000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, 60000);
     return () => { cancelled = true; clearInterval(t); };
   }, [igHandlesKey, currentUserId, igRefresh]);
 

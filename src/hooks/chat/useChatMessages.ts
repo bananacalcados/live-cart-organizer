@@ -124,7 +124,7 @@ export function useChatMessages(
 
   useEffect(() => {
     if (disablePolling || !phone) return;
-    const interval = setInterval(() => load(true), 15000);
+    const interval = setInterval(() => { if (!document.hidden) load(true); }, 30000);
     return () => clearInterval(interval);
   }, [phone, disablePolling, load]);
 
