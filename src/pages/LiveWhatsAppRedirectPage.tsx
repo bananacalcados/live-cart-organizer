@@ -58,6 +58,7 @@ export default function LiveWhatsAppRedirectPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const waitTriesRef = useRef(0);
   const waitTimerRef = useRef<number | null>(null);
+  const ddd55AckRef = useRef<string | null>(null);
   useEffect(() => () => { if (waitTimerRef.current) window.clearTimeout(waitTimerRef.current); }, []);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -146,6 +147,13 @@ export default function LiveWhatsAppRedirectPage() {
     const local = normalizeLocal(digits);
     if (!local) {
       setFieldError("Confere o número? Precisa ter DDD + 9 dígitos.");
+      inputRef.current?.focus();
+      return;
+    }
+    // DDD 55 é raro e quase sempre é o código do país digitado no lugar do DDD.
+    if (!isRetry && local.startsWith("55") && ddd55AckRef.current !== local) {
+      ddd55AckRef.current = local;
+      setFieldError("Seu DDD é mesmo 55? Se não for, apague o 55 e digite o DDD da sua cidade. Se for, toque em CONFIRMAR de novo.");
       inputRef.current?.focus();
       return;
     }
