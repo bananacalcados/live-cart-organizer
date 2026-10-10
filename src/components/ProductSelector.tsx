@@ -145,7 +145,7 @@ export function ProductSelector({
     }
 
     setProducts(filtered);
-  }, [debouncedSearch, allProducts]);
+  }, [debouncedSearch, allProducts, remoteProducts]);
 
   const loadAllProducts = async () => {
     setLoading(true);
