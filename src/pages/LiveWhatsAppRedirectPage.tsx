@@ -140,8 +140,9 @@ export default function LiveWhatsAppRedirectPage() {
     window.location.href = target;
   };
 
-  const confirm = async (e?: React.FormEvent) => {
+  const confirm = async (e?: React.FormEvent, isRetry = false) => {
     e?.preventDefault();
+    if (!isRetry) waitTriesRef.current = 0;
     const local = normalizeLocal(digits);
     if (!local) {
       setFieldError("Confere o número? Precisa ter DDD + 9 dígitos.");
@@ -149,7 +150,7 @@ export default function LiveWhatsAppRedirectPage() {
       return;
     }
     setFieldError(null);
-    setStatus("confirming");
+    if (!isRetry) setStatus("confirming");
     try {
       localStorage.setItem(PHONE_STORAGE_KEY, local);
     } catch {
@@ -172,6 +173,13 @@ export default function LiveWhatsAppRedirectPage() {
         return;
       }
       if (data?.error === "no_order") {
+        // Pedido pode estar sendo anotado agora: espera e tenta de novo.
+        if (waitTriesRef.current < WAIT_MAX_TRIES) {
+          waitTriesRef.current += 1;
+          setStatus("waiting_order");
+          waitTimerRef.current = window.setTimeout(() => void confirm(undefined, true), WAIT_RETRY_MS);
+          return;
+        }
         setStatus("no_order");
         return;
       }
