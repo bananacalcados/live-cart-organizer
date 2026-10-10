@@ -30,7 +30,7 @@ function isInternalRequest(req: Request, serviceKey: string) {
   );
 }
 
-const MAX_WORKERS_PER_DISPATCH = 8; // raised: each worker is HTTP-bound, DB ops are bulk
+const MAX_WORKERS_PER_DISPATCH = 4; // reduzido (10/10): 8 workers derrubavam o banco compartilhado
 const JOBS_PER_WORKER = 600; // 1 worker now covers ~600 pending jobs in 50s (BATCH=45)
 
 serve(async (req) => {

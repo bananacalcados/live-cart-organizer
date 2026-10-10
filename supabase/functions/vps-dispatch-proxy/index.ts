@@ -111,7 +111,7 @@ serve(async (req) => {
     // Kick several workers immediately (fire and forget) so big audiences start
     // draining within seconds instead of waiting for the 30s orchestrator cron.
     // Workers self-coordinate via lease lock — extra workers just find nothing.
-    const INITIAL_WORKERS = 4;
+    const INITIAL_WORKERS = 2;
     for (let i = 0; i < INITIAL_WORKERS; i++) {
       fetch(`${supabaseUrl}/functions/v1/dispatch-worker`, {
         method: 'POST',
