@@ -16397,6 +16397,7 @@ export type Database = {
           id: string
           ncm_snapshot: string | null
           origem_mercadoria: number | null
+          original_unit_price: number | null
           product_name: string
           quantity: number
           sale_id: string
@@ -16430,6 +16431,7 @@ export type Database = {
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
+          original_unit_price?: number | null
           product_name: string
           quantity?: number
           sale_id: string
@@ -16463,6 +16465,7 @@ export type Database = {
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
+          original_unit_price?: number | null
           product_name?: string
           quantity?: number
           sale_id?: string
@@ -16526,6 +16529,114 @@ export type Database = {
           },
           {
             foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+        ]
+      }
+      pos_sale_price_adjustments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          items_before: Json
+          mode: string
+          reason: string
+          refund_amount: number
+          refund_done_at: string | null
+          reverted_at: string | null
+          reverted_by: string | null
+          sale_id: string
+          total_after: number
+          total_before: number
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items_before?: Json
+          mode: string
+          reason: string
+          refund_amount: number
+          refund_done_at?: string | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          sale_id: string
+          total_after: number
+          total_before: number
+          value: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          items_before?: Json
+          mode?: string
+          reason?: string
+          refund_amount?: number
+          refund_done_at?: string | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          sale_id?: string
+          total_after?: number
+          total_before?: number
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "v_sale_taxes"
@@ -24069,6 +24180,15 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: Json
       }
+      apply_sale_price_adjustment: {
+        Args: {
+          p_mode: string
+          p_reason: string
+          p_sale_ids: string[]
+          p_value: number
+        }
+        Returns: Json
+      }
       apply_shopify_links: { Args: { _links: Json }; Returns: number }
       apply_split_payment: {
         Args: { _gateway: string; _split_id: string; _tx_id: string }
@@ -25986,6 +26106,10 @@ export type Database = {
         Returns: undefined
       }
       revert_merge_batch: { Args: { p_batch_id: string }; Returns: Json }
+      revert_sale_price_adjustment: {
+        Args: { p_sale_id: string }
+        Returns: undefined
+      }
       sample_variant_normalization: {
         Args: { p_limit?: number }
         Returns: {

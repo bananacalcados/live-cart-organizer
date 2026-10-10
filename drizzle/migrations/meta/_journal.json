@@ -85,6 +85,13 @@
       "when": 1791595034500,
       "tag": "0011_lp_leads_dispatch_exclusion",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791643491693,
+      "tag": "0012_pos_sale_price_adjustments",
+      "breakpoints": true
     }
   ]
 }
