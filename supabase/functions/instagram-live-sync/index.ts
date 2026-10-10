@@ -93,7 +93,10 @@ function classifyComment(text: string): { is_order: boolean; type: string; confi
   return { is_order: false, type: "comment", confidence: 0.5 };
 }
 
+// Orçamento total da execução: passou de 20 s, para de chamar a Meta e responde com o que já tem.
+let runDeadline = 0;
 async function graphJson(url: string): Promise<{ ok: boolean; status: number; data: any; text: string }> {
+  if (runDeadline && Date.now() > runDeadline) return { ok: false, status: 504, data: null, text: "time budget exceeded" };
   // Teto de 10 s por chamada à Meta: sem isso a função ficava pendurada até o
   // limite de 150 s do servidor e a tela recebia erro 504.
   let res: Response;
@@ -162,6 +165,7 @@ async function fetchLiveMediaForAccount(account: IgAccountRow, token: string) {
 }
 
 Deno.serve(async (req) => {
+  runDeadline = Date.now() + 20_000;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
