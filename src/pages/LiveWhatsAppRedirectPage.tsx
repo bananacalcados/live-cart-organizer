@@ -345,6 +345,13 @@ export default function LiveWhatsAppRedirectPage() {
             >
               TENTAR OUTRO NÚMERO
             </button>
+            <button
+              type="button"
+              onClick={() => void confirm()}
+              style={{ ...btn, background: "transparent", border: "2px solid white", marginTop: ".75rem" }}
+            >
+              JÁ COMENTEI — TENTAR DE NOVO
+            </button>
           </div>
         )}
         {status === "paused" && (
