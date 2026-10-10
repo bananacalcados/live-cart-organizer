@@ -505,18 +505,22 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       setLiveSyncStatus("Sincronizando live...");
     }
     try {
+      // Desiste em 25 s: se a Meta ou o servidor estiverem lentos, a próxima
+      // rodada tenta de novo (o webhook continua trazendo os comentários).
       const { data, error } = await supabase.functions.invoke("instagram-live-sync", {
         body: { eventId },
-      });
+        signal: AbortSignal.timeout(25_000),
+      } as any);
       if (error) {
-        // 404 = nenhuma live ativa / conta IG não configurada. Estado normal
-        // fora do ar — não é erro de runtime.
+        // 404 = nenhuma live ativa / conta IG não configurada; 5xx/timeout = lentidão
+        // momentânea. Ambos são estados normais — não derrubam a tela.
         const status = (error as any)?.context?.status;
         if (status === 404) {
           if (!opts?.silent) setLiveSyncStatus("Nenhuma live ativa no Instagram agora.");
           return;
         }
-        throw error;
+        if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
+        return;
       }
       if ((data as any)?.ok === false) {
         if (!opts?.silent) setLiveSyncStatus("Nenhuma live ativa no Instagram agora.");
@@ -553,7 +557,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     syncLiveCommentsFromMeta({ silent: true });
     const t = setInterval(() => {
       if (document.visibilityState === "visible") syncLiveCommentsFromMeta({ silent: true });
-    }, 15000);
+    }, 30000);
     return () => clearInterval(t);
   }, [eventId, toDate, syncLiveCommentsFromMeta]);
 
