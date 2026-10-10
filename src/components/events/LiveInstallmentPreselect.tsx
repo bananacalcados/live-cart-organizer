@@ -1,37 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   orderId: string;
-  config: Record<string, any> | null;
-  onSaved: (config: Record<string, any> | null) => void;
+  value: number | null;
+  onSaved?: (value: number | null) => void;
 }
 
-/**
- * Pré-seleciona as parcelas que já aparecem marcadas no link de pagamento.
- * Guardado em orders.checkout_installment_config.preselected_installments —
- * não altera a regra de parcelamento do link (teto/sem juros).
- */
-export function LiveInstallmentPreselect({ orderId, config, onSaved }: Props) {
-  const current = Number(config?.preselected_installments) || 0;
+/** Parcelas que o link de pagamento já abre selecionadas (orders.preselected_installments). */
+export function LiveInstallmentPreselect({ orderId, value, onSaved }: Props) {
+  const [current, setCurrent] = useState<number>(Number(value) || 0);
   const [saving, setSaving] = useState(false);
+  useEffect(() => { setCurrent(Number(value) || 0); }, [value]);
 
-  const save = async (value: number) => {
+  const save = async (next: number) => {
+    const prev = current;
+    setCurrent(next);
     setSaving(true);
-    const next: Record<string, any> = { ...(config || {}) };
-    if (value > 0) next.preselected_installments = value;
-    else delete next.preselected_installments;
-    const payload = Object.keys(next).length ? next : null;
-    const { error } = await supabase.from("orders").update({ checkout_installment_config: payload } as any).eq("id", orderId);
+    const { error } = await supabase.from("orders").update({ preselected_installments: next > 0 ? next : null } as any).eq("id", orderId);
     setSaving(false);
     if (error) {
+      console.error("[LiveInstallmentPreselect]", error);
+      setCurrent(prev);
       toast.error("Não consegui salvar as parcelas");
       return;
     }
-    onSaved(payload);
-    toast.success(value > 0 ? `Link vai abrir com ${value}x selecionado` : "Pré-seleção removida");
+    onSaved?.(next > 0 ? next : null);
+    toast.success(next > 0 ? `Link vai abrir com ${next}x selecionado` : "Pré-seleção removida");
   };
 
   return (

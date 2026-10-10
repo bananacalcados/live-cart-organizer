@@ -1063,7 +1063,7 @@ export default function TransparentCheckout() {
       // Regra do próprio pedido/link: substitui o padrão (aceita 0 sem juros).
       setOrderInstallmentConfig(parseInstallmentRule(order.checkout_installment_config));
       {
-        const pre = Number(order.checkout_installment_config?.preselected_installments);
+        const pre = Number(order.preselected_installments);
         setPreselectedInstallments(Number.isFinite(pre) && pre >= 1 && pre <= 12 ? Math.round(pre) : null);
       }
 
