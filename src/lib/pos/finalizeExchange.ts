@@ -258,8 +258,10 @@ export async function finalizeExchange(
       .reduce((s, c) => s + c.quantidade, 0);
     totalReturn = totalOriginalQty > 0 && returnedQty >= totalOriginalQty;
 
-    // Cancelamento total só quando 100% dos itens voltaram; parcial mantém o pedido.
-    if (totalReturn) {
+    // Cancelamento total só em DEVOLUÇÃO com 100% dos itens de volta.
+    // Em TROCA o pedido original fica ativo: o faturamento permanece no dia da
+    // compra original (conciliação bancária) e o dia da troca só recebe a diferença.
+    if (totalReturn && motivo_cancelamento === "devolucao") {
       await supabase
         .from("pos_sales")
         .update({
@@ -452,11 +454,13 @@ export async function ensureExchangeMirrorSale(p: EnsureMirrorParams): Promise<{
     const subtotal = Number(p.valor_reposicao || 0) || subtotalItens;
     const credito = Number(p.valor_devolvido || 0);
     const diferenca = Number((subtotal - credito).toFixed(2));
-    // Pedido original cancelado por inteiro → espelho com valor cheio; parcial → crédito como desconto.
-    const mirrorDiscount = totalReturn ? 0 : credito;
-    const mirrorTotal = totalReturn ? subtotal : Math.max(0, diferenca);
-    const mirrorPayment = totalReturn ? "troca" : (diferenca > 0.009 ? "troca_com_diferenca" : "troca");
-    const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id}${totalReturn ? " (cancelado integralmente)" : ""} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
+    // O pedido original NUNCA é cancelado numa troca (o faturamento fica no dia da compra).
+    // A venda-espelho só fatura a diferença a mais; o crédito entra como desconto.
+    void totalReturn;
+    const mirrorDiscount = Math.min(credito, subtotal);
+    const mirrorTotal = Math.max(0, diferenca);
+    const mirrorPayment = diferenca > 0.009 ? "troca_com_diferenca" : "troca";
+    const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
 
     let mirrorCustomerName: string | null = null;
     if (cliente_id) {
