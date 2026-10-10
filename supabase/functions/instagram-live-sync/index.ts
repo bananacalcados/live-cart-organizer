@@ -94,8 +94,15 @@ function classifyComment(text: string): { is_order: boolean; type: string; confi
 }
 
 async function graphJson(url: string): Promise<{ ok: boolean; status: number; data: any; text: string }> {
-  const res = await fetch(url);
-  const text = await res.text();
+  // Teto de 10 s por chamada à Meta: sem isso a função ficava pendurada até o
+  // limite de 150 s do servidor e a tela recebia erro 504.
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  } catch (e) {
+    return { ok: false, status: 504, data: null, text: String((e as Error)?.message || e) };
+  }
+  const text = await res.text().catch(() => "");
   let data: any = null;
   try {
     data = text ? JSON.parse(text) : null;
