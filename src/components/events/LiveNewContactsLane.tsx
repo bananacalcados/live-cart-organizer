@@ -160,7 +160,14 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         .not("entered_phone", "is", null)
         .order("created_at", { ascending: false })
         .limit(500);
-      setRows(((data || []) as unknown as ClickRow[]).filter((r) => !r.superseded));
+      const next = ((data || []) as unknown as ClickRow[]).filter((r) => !r.superseded);
+      // Mantém a mesma referência se nada mudou (evita recalcular telas e refazer buscas).
+      setRows((prev) =>
+        prev.length === next.length &&
+        prev.every((r, i) => r.id === next[i].id && r.phone === next[i].phone && r.real_phone === next[i].real_phone)
+          ? prev
+          : next,
+      );
     } finally {
       setLoading(false);
     }
@@ -247,6 +254,8 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   // recarrega quando alguém que digitou o número e ainda não falou manda a 1ª mensagem.
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  const incomingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (incomingTimer.current) clearTimeout(incomingTimer.current); }, []);
   useWaMessageBroadcast((p) => {
     if (p?.event === "wa_msg_update") return;
     const k = suffix8(p?.phone);
@@ -265,7 +274,14 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       });
       return;
     }
-    if (p.direction === "incoming") load();
+    // Durante disparos em massa chegam centenas de respostas por minuto: agrupa
+    // todas em no máximo 1 recarga a cada 8 s (antes era 1 recarga por mensagem).
+    if (p.direction === "incoming" && !incomingTimer.current) {
+      incomingTimer.current = setTimeout(() => {
+        incomingTimer.current = null;
+        load();
+      }, 8000);
+    }
   });
 
   // Fallback: polling leve a cada 20s (aba visível) + refresh ao voltar para a aba.
@@ -273,7 +289,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     if (!eventId) return;
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") load();
-    }, 20000);
+    }, 60000);
     const onVisible = () => {
       if (document.visibilityState === "visible") load();
     };
