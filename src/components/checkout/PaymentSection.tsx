@@ -486,6 +486,9 @@ function CardPaymentForm({
   const cardNumberRef = useRef<HTMLInputElement>(null);
   const expiryRef = useRef<HTMLInputElement>(null);
   const cvvRef = useRef<HTMLInputElement>(null);
+  const installmentsRef = useRef<HTMLSelectElement>(null);
+  // Cliente tocou em PAGAR sem escolher parcelas: destaca o campo em vermelho.
+  const [installmentsError, setInstallmentsError] = useState(false);
 
   // ── Validação visível dos campos do cartão ────────────────────────────
   const isCardNameValid = cardName.trim().length >= 2;
@@ -696,7 +699,16 @@ function CardPaymentForm({
     if (processingRef.current) return;
 
     if (!isDebit && !selectedInstallments) {
-      toast.error("Selecione as parcelas");
+      // Antes o botão ficava cinza e travado ("Selecione as parcelas") e a
+      // cliente achava que não havia botão de pagar. Agora leva até o campo.
+      setInstallmentsError(true);
+      toast.error("Escolha em quantas vezes quer pagar");
+      const el = installmentsRef.current;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus();
+        try { (el as any).showPicker?.(); } catch { /* navegador sem showPicker */ }
+      }
       return;
     }
 
