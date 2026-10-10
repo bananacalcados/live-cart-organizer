@@ -9,6 +9,7 @@ import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import { invalidateExchangeRegistry, useExchangeRegistry } from "@/hooks/useExchangeRegistry";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { isSalePaid } from "@/lib/salePaymentState";
+import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
 import type { DbOrder } from "@/types/database";
 
 interface Props {
@@ -48,6 +49,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   const [data, setData] = useState<POSCustomerPanelData | null>(null);
   const [unifiedId, setUnifiedId] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [liveConfigs, setLiveConfigs] = useState<Record<string, any>>({});
   const { byPhone: cbByPhone, byCpf: cbByCpf, byHandle: cbByHandle, refresh: refreshChargebacks } = useChargebackRegistry();
   const { byPhone: exByPhone, byCpf: exByCpf, byHandle: exByHandle, bySale: exBySale, refresh: refreshExchanges } = useExchangeRegistry();
 
@@ -169,6 +171,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         const cpf = cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
 
         if (!cancelled) {
+          setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).checkout_installment_config ?? null])));
           setUnifiedId(unified?.id || undefined);
           setData({
             name,
@@ -214,6 +217,9 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
     data={data}
     statusLabels={statusLabels}
     riskBadges={(chargebacks.length || exchanges.length) ? <div className="flex flex-wrap gap-1">{exchanges.length > 0 && <CustomerExchangeBadge exchanges={exchanges} size="sm" />}{chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}</div> : null}
+    renderUnpaidActions={(item) => item.orderName === "Pedido da Live" && item.id in liveConfigs
+      ? <LiveInstallmentPreselect orderId={item.id} config={liveConfigs[item.id]} onSaved={(cfg) => setLiveConfigs((prev) => ({ ...prev, [item.id]: cfg }))} />
+      : null}
     renderOrderActions={(item) => item.kind === "pos_sale" ? <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} /> : null}
   />;
 }
