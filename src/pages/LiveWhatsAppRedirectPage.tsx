@@ -37,7 +37,15 @@ function maskPhone(digits: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
-type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order";
+type Status = "loading" | "ask_phone" | "confirming" | "redirecting" | "inapp" | "paused" | "error" | "no_order" | "waiting_order";
+
+/**
+ * A cliente costuma clicar ANTES da equipe salvar o pedido com os 4 dígitos
+ * (mediana de ~3 min). Em vez de mostrar "não localizamos" na hora, a página
+ * tenta de novo sozinha a cada 15 s por até 6 minutos.
+ */
+const WAIT_RETRY_MS = 15_000;
+const WAIT_MAX_TRIES = 24;
 
 export default function LiveWhatsAppRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -48,6 +56,9 @@ export default function LiveWhatsAppRedirectPage() {
   const [remembered, setRemembered] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const waitTriesRef = useRef(0);
+  const waitTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (waitTimerRef.current) window.clearTimeout(waitTimerRef.current); }, []);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const fnUrl = `${supabaseUrl}/functions/v1/live-whatsapp-redirect`;
