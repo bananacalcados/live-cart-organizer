@@ -831,6 +831,7 @@ export default function TransparentCheckout() {
     monthly_interest_rate: 2.49,
   });
   const [orderInstallmentConfig, setOrderInstallmentConfig] = useState<InstallmentConfig | null>(null);
+  const [preselectedInstallments, setPreselectedInstallments] = useState<number | null>(null);
   const [eventInstallment, setEventInstallment] = useState<{ minVal: number; maxInst: number } | null>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [splitBalance, setSplitBalance] = useState<number | null>(null);
@@ -1061,6 +1062,10 @@ export default function TransparentCheckout() {
 
       // Regra do próprio pedido/link: substitui o padrão (aceita 0 sem juros).
       setOrderInstallmentConfig(parseInstallmentRule(order.checkout_installment_config));
+      {
+        const pre = Number(order.checkout_installment_config?.preselected_installments);
+        setPreselectedInstallments(Number.isFinite(pre) && pre >= 1 && pre <= 12 ? Math.round(pre) : null);
+      }
 
 
       const products = (order.products || []) as unknown as OrderProduct[];
@@ -1621,6 +1626,7 @@ export default function TransparentCheckout() {
                       onBack={() => setCurrentStep(2)}
                       onProcessingChange={setIsPaymentProcessing}
                       onStepEvent={trackStep}
+                      preselectedInstallments={preselectedInstallments}
                     />
                     </SplitPaymentPanel>
                   )}

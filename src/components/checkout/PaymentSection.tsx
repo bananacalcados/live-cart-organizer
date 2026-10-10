@@ -84,7 +84,10 @@ export function StepPayment({
   stepBadge = "3 de 3",
   prizeAppliedCents = 0,
   onStepEvent,
+  preselectedInstallments,
 }: {
+  /** Parcelas pré-escolhidas pela vendedora no modal da Live. */
+  preselectedInstallments?: number | null;
   orderId: string;
   amount: number;
   products: OrderProduct[];
@@ -167,6 +170,7 @@ export function StepPayment({
                     onStepEvent={onStepEvent}
                     onProcessingChange={onProcessingChange}
                     mode="credit"
+                    preselectedInstallments={preselectedInstallments}
                     onSwitchMode={(m) => { setSelectedMethod(m === "debit" ? "debit" : "card"); setShowAllMethods(false); }}
                   />
                </div>
@@ -456,8 +460,9 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
 // ── Card Payment Form (step 3) — crédito e débito ───────────────
 function CardPaymentForm({
   orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
-  mode = "credit", onSwitchMode, prizeAppliedCents = 0, onStepEvent,
+  mode = "credit", onSwitchMode, prizeAppliedCents = 0, onStepEvent, preselectedInstallments,
 }: {
+  preselectedInstallments?: number | null;
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onProcessingChange?: (processing: boolean) => void;
@@ -657,6 +662,16 @@ function CardPaymentForm({
   // Tudo pronto pra pagar: cartão completo + parcela escolhida + sem divergência
   // de crédito/débito. Quando vira true (e a pessoa não pediu para editar), o
   // formulário colapsa no resumo com o botão gigante.
+  // Pré-seleção feita pela vendedora: aplica uma vez, se a opção existir no link.
+  const preselectAppliedRef = useRef(false);
+  useEffect(() => {
+    if (isDebit || preselectAppliedRef.current || installments || !preselectedInstallments) return;
+    if (builtOptions.some((o) => o.installments === preselectedInstallments)) {
+      preselectAppliedRef.current = true;
+      setInstallments(String(preselectedInstallments));
+    }
+  }, [isDebit, installments, preselectedInstallments, builtOptions]);
+
   const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
   useEffect(() => {
     if (readyToPay && !summaryManualRef.current) setShowSummary(true);
