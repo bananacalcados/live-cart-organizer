@@ -31,6 +31,7 @@ import { SavedAudiencePicker } from "@/components/marketing/SavedAudiencePicker"
 import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
 import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 import { TouchLimitsReference } from "@/components/marketing/TouchLimitsReference";
+import { CampaignExclusionFilter } from "@/components/marketing/CampaignExclusionFilter";
 
 /**
  * Extrai o DDD (2 dígitos) de um telefone em qualquer formato.
@@ -279,6 +280,7 @@ export function MassTemplateDispatcher() {
 
   // Saved audience (campanha_publicos) — filtro adicional final
   const [savedAudienceSuffixes, setSavedAudienceSuffixes] = useState<Set<string> | null>(null);
+  const [campaignExcludeSuffixes, setCampaignExcludeSuffixes] = useState<Set<string> | null>(null);
   const [savedAudienceMeta, setSavedAudienceMeta] = useState<{ id: string; nome: string } | null>(null);
   // Quando o público salvo é modo phone_list (lista fixa criada pelo Estrategista),
   // usamos a lista bruta como fonte direta — bypass do baseRecipients (CRM/leads).
@@ -1086,7 +1088,7 @@ export function MassTemplateDispatcher() {
   }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, liveBuyerMode, liveBuyerSuffixes, lastPurchaseMode, lastPurchaseDays, tempBySuffix]);
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
-  const filteredRecipients = useMemo((): Recipient[] => {
+  const cooldownStageRecipients = useMemo((): Recipient[] => {
     // Modo phone_list: a lista fixa é a fonte da verdade — ignora filtros de CRM/leads.
     let out: Recipient[] = phoneListRecipients ? phoneListRecipients : baseRecipients;
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
@@ -1106,10 +1108,18 @@ export function MassTemplateDispatcher() {
     return out;
   }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes, phoneListRecipients]);
 
-
+  // Exclusão por campanha: tira quem estava em campanhas de disparo escolhidas.
+  const filteredRecipients = useMemo((): Recipient[] => {
+    if (!campaignExcludeSuffixes || campaignExcludeSuffixes.size === 0) return cooldownStageRecipients;
+    return cooldownStageRecipients.filter(r => {
+      const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
+      return !campaignExcludeSuffixes.has(suffix);
+    });
+  }, [cooldownStageRecipients, campaignExcludeSuffixes]);
 
   // How many of the CURRENT audience were actually removed by the cooldown
-  const cooldownRemovedFromAudience = baseRecipients.length - filteredRecipients.length;
+  const cooldownRemovedFromAudience = baseRecipients.length - cooldownStageRecipients.length;
+  const campaignExcludeRemoved = cooldownStageRecipients.length - filteredRecipients.length;
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -2680,6 +2690,8 @@ export function MassTemplateDispatcher() {
                 </Button>
               </div>
             )}
+
+            <CampaignExclusionFilter onChange={setCampaignExcludeSuffixes} removedCount={campaignExcludeRemoved} />
 
             {/* Cooldown Filter */}
             <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
