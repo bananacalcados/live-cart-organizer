@@ -161,10 +161,13 @@ serve(async (req) => {
           .eq("event_id", eventId)
           .neq("stage", "cancelled");
         if (ordErr) console.error("[live-whatsapp-redirect] orders lookup error:", ordErr);
+        // Se o pedido já tem WhatsApp na ficha, exige os 8 últimos dígitos
+        // iguais (evita que outra cliente com os mesmos 4 finais passe).
+        // Só aceita os 4 dígitos sozinhos quando a ficha ainda não tem WhatsApp.
         const hasOrder = (evOrders || []).some((o: any) => {
-          if (o.phone_last4 && String(o.phone_last4) === last4) return true;
           const w = String(o.customer?.whatsapp || "").replace(/\D/g, "");
-          return w.length >= 8 && w.slice(-8) === suffix8;
+          if (w.length >= 8) return w.slice(-8) === suffix8;
+          return !!o.phone_last4 && String(o.phone_last4) === last4;
         });
         if (!hasOrder) {
           return json({ error: "no_order", phone: norm.e164 }, 200);
