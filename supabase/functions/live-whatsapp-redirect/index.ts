@@ -125,15 +125,16 @@ serve(async (req) => {
           });
       }
 
-      // Vinculação pelos 4 últimos dígitos: se houver exatamente um pedido desta
-      // live com o mesmo final, grava o WhatsApp digitado no cadastro, marca o
-      // pedido como vinculado e identifica o @ da cliente.
+      // Identifica o @ da cliente pelos 4 últimos dígitos SEM gravar nada.
+      // O telefone digitado não é verificado (cliente pode errar o DDD); o
+      // cadastro só recebe o WhatsApp quando a mensagem real chega
+      // (live_zap_after_match → live_link_order_verified com o número real).
       let handle: string | null = null;
       const eventId = click.event_id || link.event_id || null;
       if (saved && eventId) {
-        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_verified", {
+        const { data: linkRes, error: linkErr } = await supabase.rpc("live_link_order_by_last4", {
           p_event_id: eventId,
-          p_phone: norm.e164,
+          p_phone_e164: norm.e164,
         });
         if (linkErr) console.error("[live-whatsapp-redirect] link verified error:", linkErr);
         const orderId = (linkRes as any)?.order_id;
