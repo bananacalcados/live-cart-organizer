@@ -1,0 +1,2 @@
+ALTER TABLE public.lp_leads ADD COLUMN IF NOT EXISTS dispatch_excluded_reason text, ADD COLUMN IF NOT EXISTS dispatch_excluded_at timestamptz;
+COMMENT ON COLUMN public.lp_leads.dispatch_excluded_reason IS 'Se preenchido, o lead não entra no público "Leads" do disparo em massa (ja_cliente | 7_disparos_sem_compra). O lead continua guardado.';

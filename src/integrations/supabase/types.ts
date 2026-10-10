@@ -11411,6 +11411,8 @@ export type Database = {
           converted: boolean | null
           converted_at: string | null
           created_at: string
+          dispatch_excluded_at: string | null
+          dispatch_excluded_reason: string | null
           email: string | null
           event_id: string | null
           fbc: string | null
@@ -11437,6 +11439,8 @@ export type Database = {
           converted?: boolean | null
           converted_at?: string | null
           created_at?: string
+          dispatch_excluded_at?: string | null
+          dispatch_excluded_reason?: string | null
           email?: string | null
           event_id?: string | null
           fbc?: string | null
@@ -11463,6 +11467,8 @@ export type Database = {
           converted?: boolean | null
           converted_at?: string | null
           created_at?: string
+          dispatch_excluded_at?: string | null
+          dispatch_excluded_reason?: string | null
           email?: string | null
           event_id?: string | null
           fbc?: string | null
