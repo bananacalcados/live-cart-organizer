@@ -611,12 +611,14 @@ serve(async (req) => {
             console.error('Error saving comment:', error);
           } else {
             console.log(`Saved Instagram comment from ${username || fromId}: ${text.slice(0, 50)}`);
+          }
 
-            // ── Also save into live_comments for active IG live event ──
-            // This is what enables the Private Reply auto-discovery in the DM modal.
+          // ── Save into live_comments (independe do resultado em whatsapp_messages) ──
+          // O painel do evento lê SÓ live_comments, então todo comentário que antes
+          // aparecia por whatsapp_messages precisa cair aqui também.
+          {
             try {
-              // Critério: o evento marcado como "Live em curso agora" (live_active_until > now()).
-              // Esse flag é ligado manualmente na UI e expira em 8h.
+              // 1º: evento marcado como "Live em curso agora" (live_active_until > now()).
               const { data: activeEvent } = await supabase
                 .from('events')
                 .select('id, name')
@@ -625,11 +627,24 @@ serve(async (req) => {
                 .limit(1)
                 .maybeSingle();
 
-              if (activeEvent && comment.id && username) {
+              // 2º (fallback): live começou antes de alguém clicar "Ativar Live" →
+              // usa os eventos cuja data é hoje (horário de Brasília).
+              let targetEvents: { id: string; name: string }[] = activeEvent ? [activeEvent as any] : [];
+              if (targetEvents.length === 0) {
+                const todayBrt = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+                const { data: todayEvents } = await supabase
+                  .from('events')
+                  .select('id, name')
+                  .eq('start_date', todayBrt)
+                  .limit(5);
+                targetEvents = (todayEvents || []) as any[];
+              }
+
+              for (const ev of comment.id && username ? targetEvents : []) {
                 const { error: lcErr } = await supabase
                   .from('live_comments')
                   .insert({
-                    event_id: activeEvent.id,
+                    event_id: ev.id,
                     comment_id: comment.id,
                     username: username,
                     comment_text: text,
@@ -639,12 +654,15 @@ serve(async (req) => {
                 if (lcErr && lcErr.code !== '23505') {
                   console.error('Error saving to live_comments:', lcErr);
                 } else if (!lcErr) {
-                  console.log(`Saved IG comment to live_comments (event ${activeEvent.name}): ${comment.id}`);
+                  console.log(`Saved IG comment to live_comments (event ${ev.name}): ${comment.id}`);
                 }
               }
             } catch (lcExc) {
               console.error('live_comments insert exception:', lcExc);
             }
+          }
+
+          if (!error) {
 
             // Process comment automation rules (auto-reply, DM, flows)
             try {

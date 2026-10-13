@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
-  MessageCircle, CheckCheck, MessageSquareX, Send, Target
+  MessageCircle, CheckCheck, MessageSquareX, Send, Target, RefreshCw
 } from "lucide-react";
 
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
@@ -22,6 +22,8 @@ import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 
+const PRESENTER_ORDER_COLUMNS =
+  "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
 
 
 interface PresenterAlert {
@@ -135,25 +137,14 @@ export default function PresenterDashboard() {
   }, [eventId]);
 
   // Load orders and metrics
-  const loadOrders = useCallback(async () => {
-    if (!eventId) return;
-    const { data: ordersData } = await supabase
-      .from("orders")
-      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+  // Linhas cruas + clientes ficam em refs: a carga completa roda só na abertura
+  // (e no botão Recarregar); o tempo real troca só o pedido que mudou.
+  const rawOrdersRef = useRef<any[]>([]);
+  const customerMapRef = useRef(new Map<string, { name: string | null; whatsapp: string | null }>());
 
-    if (!ordersData) return;
-
-    // Get customer info
-    const customerIds = [...new Set(ordersData.map(o => o.customer_id))];
-    const { data: customers } = await supabase
-      .from("customers")
-      .select("id, instagram_handle, whatsapp")
-      .in("id", customerIds);
-
-    const customerMap = new Map((customers || []).map(c => [c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }]));
-
+  const recomputeOrders = useCallback(() => {
+    const ordersData = rawOrdersRef.current;
+    const customerMap = customerMapRef.current;
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
       const subtotal = orderNetValue(o as any);
@@ -183,14 +174,66 @@ export default function PresenterDashboard() {
     const totalRevenue = paidOrders.reduce((s, o) => s + orderNetValue(o as any), 0);
     const pendingOrders = ordersData.filter((o) => !isRevenuePaid(o as any) && o.stage !== "cancelled");
 
-
     setMetrics({
       totalPaid: paidOrders.length,
       totalRevenue,
       avgTicket: paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0,
       pendingCount: pendingOrders.length,
     });
-  }, [eventId]);
+  }, []);
+
+  const loadCustomers = useCallback(async (ids: string[]) => {
+    const missing = [...new Set(ids.filter((id) => id && !customerMapRef.current.has(id)))];
+    if (!missing.length) return;
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, instagram_handle, whatsapp")
+      .in("id", missing);
+    (customers || []).forEach((c) => customerMapRef.current.set(c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }));
+  }, []);
+
+  const loadOrders = useCallback(async () => {
+    if (!eventId) return;
+    const { data: ordersData } = await supabase
+      .from("orders")
+      .select(PRESENTER_ORDER_COLUMNS)
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (!ordersData) return;
+    rawOrdersRef.current = ordersData as any[];
+    customerMapRef.current = new Map();
+    await loadCustomers(ordersData.map((o: any) => o.customer_id));
+    recomputeOrders();
+  }, [eventId, loadCustomers, recomputeOrders]);
+
+  // Atualiza um único pedido vindo do tempo real (sem recarregar a lista).
+  const applyOrderChange = useCallback(async (payload: any) => {
+    const id = (payload.new as any)?.id || (payload.old as any)?.id;
+    if (!id) return;
+    if (payload.eventType === "DELETE") {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+      recomputeOrders();
+      return;
+    }
+    const { data: row } = await supabase
+      .from("orders")
+      .select(PRESENTER_ORDER_COLUMNS)
+      .eq("id", id)
+      .maybeSingle();
+    if (!row) {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+    } else if ((row as any).event_id !== eventId) {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+    } else {
+      await loadCustomers([(row as any).customer_id]);
+      const rest = rawOrdersRef.current.filter((o) => o.id !== id);
+      rawOrdersRef.current = [row as any, ...rest].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    recomputeOrders();
+  }, [eventId, loadCustomers, recomputeOrders]);
 
   // Leads da live que AINDA NÃO clicaram no botão de redirecionamento do WhatsApp (/zap)
   const loadNoClickLeads = useCallback(async () => {
@@ -250,28 +293,31 @@ export default function PresenterDashboard() {
     loadNoClickLeads();
   }, [loadAlerts, loadOrders, loadNoClickLeads]);
 
-  // Atualiza os cards quando alguém clica no link /zap
+  // Atualiza os cards quando alguém clica no link /zap (só cliques deste evento;
+  // recargas agrupadas em no máximo 1 a cada 10 s).
   useEffect(() => {
     if (!eventId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => { timer = null; void loadNoClickLeads(); }, 10_000);
+    };
     const channel = supabase
       .channel(`presenter-zap-clicks-${eventId}`)
       .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "live_whatsapp_clicks",
-      }, () => {
-        loadNoClickLeads();
-      })
+        filter: `event_id=eq.${eventId}`,
+      }, schedule)
       .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "event_leads",
         filter: `event_id=eq.${eventId}`,
-      }, () => {
-        loadNoClickLeads();
-      })
+      }, schedule)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
   }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
@@ -295,7 +341,7 @@ export default function PresenterDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [eventId, playNotificationSound]);
 
-  // Realtime for orders
+  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar)
   useEffect(() => {
     if (!eventId) return;
     const channel = supabase
@@ -306,13 +352,13 @@ export default function PresenterDashboard() {
         table: "orders",
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
-        loadOrders();
+        void applyOrderChange(payload);
         void maybeNotifyAwaitingConfirmation(payload.new as any);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [eventId, loadOrders]);
+  }, [eventId, applyOrderChange]);
 
   const maybeNotifyAwaitingConfirmation = useCallback(async (row: any) => {
     if (!row?.id || row.stage !== "awaiting_confirmation") return;
@@ -382,6 +428,15 @@ export default function PresenterDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Recarregar pedidos"
+            onClick={() => { void loadOrders(); void loadNoClickLeads(); }}
+            className="text-foreground hover:bg-muted"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
