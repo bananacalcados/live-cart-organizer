@@ -22,6 +22,8 @@ import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 
+const PRESENTER_ORDER_COLUMNS =
+  "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
 
 
 interface PresenterAlert {
@@ -291,28 +293,31 @@ export default function PresenterDashboard() {
     loadNoClickLeads();
   }, [loadAlerts, loadOrders, loadNoClickLeads]);
 
-  // Atualiza os cards quando alguém clica no link /zap
+  // Atualiza os cards quando alguém clica no link /zap (só cliques deste evento;
+  // recargas agrupadas em no máximo 1 a cada 10 s).
   useEffect(() => {
     if (!eventId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => { timer = null; void loadNoClickLeads(); }, 10_000);
+    };
     const channel = supabase
       .channel(`presenter-zap-clicks-${eventId}`)
       .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "live_whatsapp_clicks",
-      }, () => {
-        loadNoClickLeads();
-      })
+        filter: `event_id=eq.${eventId}`,
+      }, schedule)
       .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "event_leads",
         filter: `event_id=eq.${eventId}`,
-      }, () => {
-        loadNoClickLeads();
-      })
+      }, schedule)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
   }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
@@ -336,7 +341,7 @@ export default function PresenterDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [eventId, playNotificationSound]);
 
-  // Realtime for orders
+  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar)
   useEffect(() => {
     if (!eventId) return;
     const channel = supabase
@@ -347,13 +352,13 @@ export default function PresenterDashboard() {
         table: "orders",
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
-        loadOrders();
+        void applyOrderChange(payload);
         void maybeNotifyAwaitingConfirmation(payload.new as any);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [eventId, loadOrders]);
+  }, [eventId, applyOrderChange]);
 
   const maybeNotifyAwaitingConfirmation = useCallback(async (row: any) => {
     if (!row?.id || row.stage !== "awaiting_confirmation") return;
