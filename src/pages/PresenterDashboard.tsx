@@ -135,25 +135,14 @@ export default function PresenterDashboard() {
   }, [eventId]);
 
   // Load orders and metrics
-  const loadOrders = useCallback(async () => {
-    if (!eventId) return;
-    const { data: ordersData } = await supabase
-      .from("orders")
-      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+  // Linhas cruas + clientes ficam em refs: a carga completa roda só na abertura
+  // (e no botão Recarregar); o tempo real troca só o pedido que mudou.
+  const rawOrdersRef = useRef<any[]>([]);
+  const customerMapRef = useRef(new Map<string, { name: string | null; whatsapp: string | null }>());
 
-    if (!ordersData) return;
-
-    // Get customer info
-    const customerIds = [...new Set(ordersData.map(o => o.customer_id))];
-    const { data: customers } = await supabase
-      .from("customers")
-      .select("id, instagram_handle, whatsapp")
-      .in("id", customerIds);
-
-    const customerMap = new Map((customers || []).map(c => [c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }]));
-
+  const recomputeOrders = useCallback(() => {
+    const ordersData = rawOrdersRef.current;
+    const customerMap = customerMapRef.current;
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
       const subtotal = orderNetValue(o as any);
@@ -183,14 +172,66 @@ export default function PresenterDashboard() {
     const totalRevenue = paidOrders.reduce((s, o) => s + orderNetValue(o as any), 0);
     const pendingOrders = ordersData.filter((o) => !isRevenuePaid(o as any) && o.stage !== "cancelled");
 
-
     setMetrics({
       totalPaid: paidOrders.length,
       totalRevenue,
       avgTicket: paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0,
       pendingCount: pendingOrders.length,
     });
-  }, [eventId]);
+  }, []);
+
+  const loadCustomers = useCallback(async (ids: string[]) => {
+    const missing = [...new Set(ids.filter((id) => id && !customerMapRef.current.has(id)))];
+    if (!missing.length) return;
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, instagram_handle, whatsapp")
+      .in("id", missing);
+    (customers || []).forEach((c) => customerMapRef.current.set(c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }));
+  }, []);
+
+  const loadOrders = useCallback(async () => {
+    if (!eventId) return;
+    const { data: ordersData } = await supabase
+      .from("orders")
+      .select(PRESENTER_ORDER_COLUMNS)
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (!ordersData) return;
+    rawOrdersRef.current = ordersData as any[];
+    customerMapRef.current = new Map();
+    await loadCustomers(ordersData.map((o: any) => o.customer_id));
+    recomputeOrders();
+  }, [eventId, loadCustomers, recomputeOrders]);
+
+  // Atualiza um único pedido vindo do tempo real (sem recarregar a lista).
+  const applyOrderChange = useCallback(async (payload: any) => {
+    const id = (payload.new as any)?.id || (payload.old as any)?.id;
+    if (!id) return;
+    if (payload.eventType === "DELETE") {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+      recomputeOrders();
+      return;
+    }
+    const { data: row } = await supabase
+      .from("orders")
+      .select(PRESENTER_ORDER_COLUMNS)
+      .eq("id", id)
+      .maybeSingle();
+    if (!row) {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+    } else if ((row as any).event_id !== eventId) {
+      rawOrdersRef.current = rawOrdersRef.current.filter((o) => o.id !== id);
+    } else {
+      await loadCustomers([(row as any).customer_id]);
+      const rest = rawOrdersRef.current.filter((o) => o.id !== id);
+      rawOrdersRef.current = [row as any, ...rest].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    recomputeOrders();
+  }, [eventId, loadCustomers, recomputeOrders]);
 
   // Leads da live que AINDA NÃO clicaram no botão de redirecionamento do WhatsApp (/zap)
   const loadNoClickLeads = useCallback(async () => {
