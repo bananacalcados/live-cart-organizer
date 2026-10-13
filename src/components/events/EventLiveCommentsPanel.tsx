@@ -431,8 +431,6 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     // Refresh em background (polling) não deve piscar o painel nem resetar o scroll
     if (!opts?.silent && firstLoadRef.current) setLoading(true);
 
-    const startIso = new Date(`${fromDate}T00:00:00`).toISOString();
-    const endIso = new Date(`${toDate}T23:59:59.999`).toISOString();
 
     // Só live_comments: o webhook do Meta grava todo comentário do Instagram
     // também em live_comments (evento ativo, ou evento do dia como reserva).
@@ -440,8 +438,6 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       .from("live_comments")
       .select("id, comment_id, username, comment_text, profile_pic_url, is_order, ai_classification, created_at")
       .eq("event_id", eventId)
-      .gte("created_at", startIso)
-      .lte("created_at", endIso)
       .order("created_at", { ascending: false })
       .limit(2000);
 
