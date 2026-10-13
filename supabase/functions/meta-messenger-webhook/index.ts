@@ -635,8 +635,7 @@ serve(async (req) => {
                 const { data: todayEvents } = await supabase
                   .from('events')
                   .select('id, name')
-                  .gte('start_date', `${todayBrt}T00:00:00-03:00`)
-                  .lte('start_date', `${todayBrt}T23:59:59.999-03:00`)
+                  .eq('start_date', todayBrt)
                   .limit(5);
                 targetEvents = (todayEvents || []) as any[];
               }
