@@ -64,6 +64,10 @@ const classificationConfig: Record<string, { label: string; icon: typeof Message
 };
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
+/** Cache de @ → cliente compartilhado entre montagens do painel. */
+const presenterHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt: number }>();
+/** @ sem cadastro voltam a ser consultados após 45 s (cliente pode se cadastrar depois de comentar). */
+const PRESENTER_NEGATIVE_TTL_MS = 45_000;
 
 export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCommentsProps) {
   const [comments, setComments] = useState<LiveComment[]>([]);
@@ -169,24 +173,35 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
     // 1) Busca SÓ os clientes dos @ que comentaram (antes baixava a base inteira
     //    de clientes com Instagram a cada novo comentário — pesava no banco todo).
-    const handleToCustomers = new Map<string, any[]>();
+    //    Resolve via RPC resolve_ig_handles (índice por @ normalizado) e guarda em
+    //    cache de módulo: só @ novos (ou "sem cadastro" vencido) vão ao banco.
     const wanted = Array.from(new Set(commentsRef.current.map(c => cleanHandle(c.username)).filter(Boolean)));
-    const esc = (h: string) => h.replace(/[,()"\\]/g, "");
-    for (let i = 0; i < wanted.length; i += 100) {
-      const batch = wanted.slice(i, i + 100).map(esc).filter(Boolean);
-      if (!batch.length) continue;
-      const { data } = await supabase
-        .from("customers")
-        .select("id, instagram_handle, whatsapp")
-        .or(batch.flatMap(h => [`instagram_handle.ilike.${h}`, `instagram_handle.ilike.@${h}`]).join(","))
-        .limit(1000);
-      for (const c of (data || []) as any[]) {
-        const key = cleanHandle(c.instagram_handle);
-        if (!key) continue;
-        const arr = handleToCustomers.get(key) || [];
-        arr.push(c);
-        handleToCustomers.set(key, arr);
+    const now = Date.now();
+    const toResolve = wanted.filter((h) => {
+      const c = presenterHandleCache.get(h);
+      if (!c) return true;
+      if (c.customerId) return false;
+      return now - c.checkedAt > PRESENTER_NEGATIVE_TTL_MS;
+    });
+    for (let i = 0; i < toResolve.length; i += 300) {
+      const batch = toResolve.slice(i, i + 300);
+      const { data, error } = await supabase.rpc("resolve_ig_handles", { _handles: batch });
+      if (error) break;
+      const found = new Set<string>();
+      for (const r of (data || []) as any[]) {
+        const h = cleanHandle(r.handle || "");
+        if (!h) continue;
+        found.add(h);
+        presenterHandleCache.set(h, { customerId: r.customer_id || null, whatsapp: r.whatsapp || null, checkedAt: now });
       }
+      batch.forEach((h) => {
+        if (!found.has(h)) presenterHandleCache.set(h, { customerId: null, whatsapp: null, checkedAt: now });
+      });
+    }
+    const handleToCustomers = new Map<string, any[]>();
+    for (const h of wanted) {
+      const c = presenterHandleCache.get(h);
+      if (c?.customerId) handleToCustomers.set(h, [{ id: c.customerId, instagram_handle: h, whatsapp: c.whatsapp }]);
     }
 
     // 2) Só busca pedidos dos @ que aparecem nos comentários (atual + históricos)
