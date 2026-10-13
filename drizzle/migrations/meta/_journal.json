@@ -120,6 +120,13 @@
       "when": 1791923561305,
       "tag": "0016_events_perf_block1",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791923860405,
+      "tag": "0017_live_sync_via_existing_minute_worker",
+      "breakpoints": true
     }
   ]
 }
