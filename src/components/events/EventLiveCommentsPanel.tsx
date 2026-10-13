@@ -434,34 +434,16 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     const startIso = new Date(`${fromDate}T00:00:00`).toISOString();
     const endIso = new Date(`${toDate}T23:59:59.999`).toISOString();
 
-    const [lcRes, waRes] = await Promise.all([
-      // 1) live_comments do evento (quando "Ativar Live" foi usado)
-      supabase
-        .from("live_comments")
-        .select("id, comment_id, username, comment_text, profile_pic_url, is_order, ai_classification, created_at")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: false })
-        .limit(2000),
-      // 2) Comentários de vídeo que chegaram pelo webhook do Meta.
-      //    IMPORTANTE: o Meta classifica de forma INCONSISTENTE os comentários de
-      //    uma live — muitos chegam rotulados como "Reel"/"post" (media_product_type
-      //    REELS/post) mesmo tendo sido feitos no vídeo AO VIVO. Por isso NÃO dá para
-      //    filtrar só "💬 Comentário no Live:%": isso derruba comentários reais da live.
-      //    Puxamos todos os prefixos "💬 Comentário no <surface>:" dentro da faixa de
-      //    datas do evento (que já delimita o período da live). Story reply não usa
-      //    esse prefixo, então continua de fora.
-      supabase
-        .from("whatsapp_messages")
-        .select("id, sender_name, message, created_at")
-        .eq("channel", "instagram")
-        .eq("direction", "incoming")
-        .ilike("message", "💬 Comentário no %")
-        .gte("created_at", startIso)
-        .lte("created_at", endIso)
-        .order("created_at", { ascending: false })
-        .limit(5000),
-
-    ]);
+    // Só live_comments: o webhook do Meta grava todo comentário do Instagram
+    // também em live_comments (evento ativo, ou evento do dia como reserva).
+    const lcRes = await supabase
+      .from("live_comments")
+      .select("id, comment_id, username, comment_text, profile_pic_url, is_order, ai_classification, created_at")
+      .eq("event_id", eventId)
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
+      .order("created_at", { ascending: false })
+      .limit(2000);
 
     const merged: LiveComment[] = [];
     const seen = new Set<string>();
@@ -474,21 +456,6 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     };
 
     for (const row of (lcRes.data as LiveComment[]) || []) pushUnique(row);
-
-    for (const row of (waRes.data as any[]) || []) {
-      const username = (row.sender_name || "").toString();
-      if (!username.startsWith("@")) continue;
-      pushUnique({
-        id: row.id,
-        comment_id: row.id,
-        username,
-        comment_text: stripCommentPrefix(row.message),
-        profile_pic_url: null,
-        is_order: null,
-        ai_classification: null,
-        created_at: row.created_at,
-      });
-    }
 
     merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     // Só troca o array (e re-renderiza/reseta scroll) quando o conteúdo realmente mudou
@@ -533,7 +500,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           ? `Live localizada: ${found} comentários (${inserted} novos).`
           : "Live localizada, sem comentário novo agora.");
       }
-      if (inserted > 0) await loadComments({ silent: true });
+      // Novos comentários chegam pelo tempo real (INSERT em live_comments).
     } catch (e: any) {
       console.warn("instagram-live-sync failed", e);
       if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
@@ -541,25 +508,14 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       liveSyncInFlightRef.current = false;
       if (!opts?.silent) setLiveSyncing(false);
     }
-  }, [eventId, loadComments]);
+  }, [eventId]);
 
   useEffect(() => {
     loadComments();
   }, [loadComments]);
 
-  // Redundância definitiva para Live ao vivo: além do webhook, consulta direto o
-  // endpoint de vídeos ao vivo da Meta enquanto o painel está aberto. A Meta só
-  // permite ler comentários de live enquanto a transmissão está acontecendo.
-  useEffect(() => {
-    if (!eventId) return;
-    const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
-    if (!isToToday) return;
-    syncLiveCommentsFromMeta({ silent: true });
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") syncLiveCommentsFromMeta({ silent: true });
-    }, 30000);
-    return () => clearInterval(t);
-  }, [eventId, toDate, syncLiveCommentsFromMeta]);
+  // A sincronização direta com a Meta roda no servidor (cron a cada 1 min para
+  // eventos com live_active_until > now()). O botão "Sync" continua manual.
 
   // Clientes banidos (instagram_handle) — para a TAG de BANIDO
   const loadBanned = useCallback(async () => {
@@ -900,68 +856,27 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           });
         },
       )
-      // Comentários da LIVE chegam pelo webhook do Meta em whatsapp_messages.
-      // Inserimos em tempo real (sem recarregar tudo), preservando o scroll.
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "whatsapp_messages", filter: "channel=eq.instagram" },
-        (payload) => {
-          const row = payload.new as any;
-          if (row?.direction !== "incoming") return;
-          const message = (row?.message || "").toString();
-          // O Meta rotula os comentários da live de forma INCONSISTENTE
-          // ("Live", "Reel" ou "post"). Aceitamos qualquer prefixo
-          // "💬 Comentário no <surface>:" — igual à consulta inicial —
-          // senão comentários reais da live entram só no polling de 60s
-          // (é o que causava os comentários "defasados").
-          if (!/^💬\s*Coment[áa]rio\s+no\s+[^:]+:/i.test(message)) return;
-          const username = (row?.sender_name || "").toString();
-          if (!username.startsWith("@")) return;
-          const created = (row?.created_at as string) || new Date().toISOString();
-          // Respeita a faixa de datas selecionada (pente fino)
-          if (fromDate && created < new Date(`${fromDate}T00:00:00`).toISOString()) return;
-          if (toDate && created > new Date(`${toDate}T23:59:59.999`).toISOString()) return;
-          const nc: LiveComment = {
-            id: row.id,
-            comment_id: row.id,
-            username,
-            comment_text: stripCommentPrefix(message),
-            profile_pic_url: null,
-            is_order: null,
-            ai_classification: null,
-            created_at: created,
-          };
-          setComments((prev) => {
-            const dupKey = `${cleanHandle(nc.username)}|${(nc.comment_text || "").toLowerCase().trim()}|${nc.created_at.slice(0, 16)}`;
-            const exists = prev.some(
-              (x) =>
-                x.id === nc.id ||
-                `${cleanHandle(x.username)}|${(x.comment_text || "").toLowerCase().trim()}|${x.created_at.slice(0, 16)}` === dupKey,
-            );
-            if (exists) return prev;
-            const next = [nc, ...prev];
-            next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-            return next;
-          });
-        },
-      )
+      // Comentários do webhook do Meta também são gravados em live_comments
+      // (meta-messenger-webhook), então chegam pelo INSERT acima.
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [eventId, fromDate, toDate]);
+  }, [eventId]);
 
-  // Polling de segurança (60s) como fallback do realtime quando o "Até" é hoje.
-  // Silencioso: não pisca o painel nem reseta o scroll (só troca o array se mudou).
+  // Sem polling: recarrega só se a aba ficou oculta por mais de 5 min
+  // (o tempo real pode ter caído nesse intervalo).
   useEffect(() => {
     if (!eventId) return;
-    const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
-    if (!isToToday) return;
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") loadComments({ silent: true });
-    }, 60000);
-    return () => clearInterval(t);
-  }, [eventId, toDate, loadComments]);
+    let hiddenAt: number | null = null;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 5 * 60_000) loadComments({ silent: true });
+      hiddenAt = null;
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [eventId, loadComments]);
 
   // Mapa handle -> pedido NÃO PAGO mais recente deste evento
   const unpaidOrderByHandle = useMemo(() => {
@@ -1069,6 +984,14 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         >
           <RefreshCw className={cn("h-3.5 w-3.5", liveSyncing && "animate-spin")} />
           Sync
+        </button>
+        <button
+          type="button"
+          onClick={() => loadComments({ silent: true })}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+          title="Recarregar a lista de comentários"
+        >
+          Recarregar
         </button>
         <span className="ml-auto rounded-full bg-pink-500/15 px-2 py-0.5 text-xs font-semibold text-pink-600 dark:text-pink-300">
           {comments.length}
