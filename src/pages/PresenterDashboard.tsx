@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
-  MessageCircle, CheckCheck, MessageSquareX, Send, Target
+  MessageCircle, CheckCheck, MessageSquareX, Send, Target, RefreshCw
 } from "lucide-react";
 
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
@@ -428,6 +428,15 @@ export default function PresenterDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Recarregar pedidos"
+            onClick={() => { void loadOrders(); void loadNoClickLeads(); }}
+            className="text-foreground hover:bg-muted"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
