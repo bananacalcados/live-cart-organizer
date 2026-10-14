@@ -104,11 +104,11 @@ export function EventStockAlerts({ eventId }: EventStockAlertsProps) {
       {pendingAlerts.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-destructive flex items-center gap-1">
-            <AlertTriangle className="h-4 w-4 animate-pulse" />
+            <AlertTriangle className="h-4 w-4" />
             Alertas Pendentes ({pendingAlerts.length})
           </h3>
           {pendingAlerts.map((alert) => (
-            <Card key={alert.id} className="border-destructive/50 bg-destructive/5 animate-pulse">
+            <Card key={alert.id} className="border-destructive/50 bg-destructive/5">
               <CardContent className="p-3">
                 <div className="flex items-center gap-3">
                   {alert.image_url && (

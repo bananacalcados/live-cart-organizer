@@ -412,7 +412,7 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
+    <div className="presenter-no-blink min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
       {/* Main content */}
       <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}

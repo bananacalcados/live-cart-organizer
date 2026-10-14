@@ -235,7 +235,7 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               className={cn("group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-l-4 border-l-amber-400 bg-card px-3 py-2 text-left transition-colors hover:bg-accent", builders.length > 0 && "border-l-emerald-500 ring-2 ring-emerald-500/60")}
             >
               {builders.length > 0 && (
-                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white animate-pulse">
+                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white">
                   🛒 Montando pedido: {builders.join(", ")}
                 </div>
               )}
