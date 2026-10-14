@@ -6637,6 +6637,7 @@ export type Database = {
           meta_template_name: string | null
           name: string
           operation_mode: string
+          overlay_token: string | null
           setup_completed: boolean
           start_date: string | null
           store_ids: string[] | null
@@ -6691,6 +6692,7 @@ export type Database = {
           meta_template_name?: string | null
           name: string
           operation_mode?: string
+          overlay_token?: string | null
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -6745,6 +6747,7 @@ export type Database = {
           meta_template_name?: string | null
           name?: string
           operation_mode?: string
+          overlay_token?: string | null
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -10752,6 +10755,91 @@ export type Database = {
           event_id?: string
           id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      live_overlay_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: number
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: number
+          kind: string
+          payload?: Json
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: number
+          kind?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_overlay_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_overlay_settings: {
+        Row: {
+          config: Json
+          event_id: string
+          hidden: boolean
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          event_id: string
+          hidden?: boolean
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          event_id?: string
+          hidden?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_overlay_settings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_overlay_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
         }
         Relationships: []
       }
@@ -25791,6 +25879,11 @@ export type Database = {
         }[]
       }
       normalize_wa_status: { Args: { raw: string }; Returns: string }
+      overlay_pull: {
+        Args: { p_after_id?: number; p_token: string }
+        Returns: Json
+      }
+      overlay_raffle_count: { Args: { p_event_id: string }; Returns: number }
       parse_brand_from_name: { Args: { p_name: string }; Returns: string }
       parse_category_from_name: { Args: { p_name: string }; Returns: string }
       parse_payment_methods: { Args: { p_text: string }; Returns: string[] }
@@ -26116,6 +26209,7 @@ export type Database = {
         Args: { p_sale_id: string }
         Returns: undefined
       }
+      rotate_overlay_token: { Args: { p_event_id: string }; Returns: string }
       sample_variant_normalization: {
         Args: { p_limit?: number }
         Returns: {
