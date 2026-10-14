@@ -604,16 +604,38 @@ serve(async (req) => {
                     .limit(5);
 
                   // Defensive: confirm suffix actually matches (LIKE pattern is anchored at end)
-                  const pendingReply = pendingReplies?.find(pr => {
+                  let pendingReply = pendingReplies?.find(pr => {
                     const prSuffix = pr.phone.replace(/\D/g, '').slice(-8);
                     return prSuffix === phoneSuffix;
                   }) || null;
+
+                  // Clique tardio: o botão do template continua no WhatsApp da cliente
+                  // depois que a janela de espera (24h) venceu. Se ela clicar num botão
+                  // que existe na automação (até 30 dias e ainda não respondido), segue o fluxo.
+                  if (!pendingReply && isButtonReply && buttonText) {
+                    const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+                    const { data: latePending } = await supabase
+                      .from('automation_pending_replies')
+                      .select('*')
+                      .eq('is_active', false)
+                      .is('answered_at', null)
+                      .gt('created_at', since)
+                      .like('phone', `%${phoneSuffix}`)
+                      .order('created_at', { ascending: false })
+                      .limit(5);
+                    pendingReply = (latePending || []).find(pr =>
+                      pr.phone.replace(/\D/g, '').slice(-8) === phoneSuffix &&
+                      Object.keys((pr.button_branches || {}) as Record<string, string>)
+                        .some(k => !k.startsWith('__') && k.toLowerCase() === buttonText)
+                    ) || null;
+                    if (pendingReply) console.log(`[late-click] ${phone} clicou "${buttonText}" após a janela — seguindo fluxo ${pendingReply.flow_id}`);
+                  }
 
                   if (pendingReply) {
                     automationFlowHandled = true;
                     console.log(`Found pending reply for ${phone}, type=${msg.type}, text: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
                     // Mark as consumed
-                    await supabase.from('automation_pending_replies').update({ is_active: false }).eq('id', pendingReply.id);
+                    await supabase.from('automation_pending_replies').update({ is_active: false, answered_at: new Date().toISOString() }).eq('id', pendingReply.id);
 
                     // Determine which branch to follow
                     const branches = (pendingReply.button_branches || {}) as Record<string, string>;

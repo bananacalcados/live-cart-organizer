@@ -498,3 +498,13 @@
 .animate-pix-blink {
   animation: pix-blink 0.9s ease-in-out infinite;
 }
+
+/* Painel da Apresentadora: nada pisca (pedido da apresentadora — incomoda a visão).
+   Destaques ficam só pela cor. Spinners de carregamento (animate-spin) continuam. */
+.presenter-no-blink .animate-pulse,
+.presenter-no-blink .animate-ping,
+.presenter-no-blink .animate-bounce,
+.presenter-no-blink [class*="blink"],
+.presenter-no-blink [class*="flash"] {
+  animation: none !important;
+}

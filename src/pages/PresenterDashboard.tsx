@@ -412,7 +412,7 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
+    <div className="presenter-no-blink min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
       {/* Main content */}
       <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}
@@ -606,7 +606,7 @@ export default function PresenterDashboard() {
                 <Bell className="h-5 w-5 text-primary" />
                 <h2 className="text-lg font-bold">Alertas</h2>
                 {unreadCount > 0 && (
-                  <Badge variant="destructive" className="animate-pulse">{unreadCount} novos</Badge>
+                  <Badge variant="destructive">{unreadCount} novos</Badge>
                 )}
               </div>
               <ScrollArea className="h-[calc(100vh-380px)]">

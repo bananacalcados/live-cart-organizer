@@ -54,7 +54,16 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
   const load = useCallback(async () => {
     if (!eventId) return;
     setLoading(true);
-    const start = new Date();
+    // Dia da live = dia do comentário mais recente do evento (não "hoje"),
+    // para o painel funcionar mesmo quando o evento foi criado em outra data.
+    const { data: latest } = await supabase
+      .from("live_comments")
+      .select("created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const start = latest?.created_at ? new Date(latest.created_at) : new Date();
     start.setHours(0, 0, 0, 0);
     const all: LiveComment[] = [];
     for (let from = 0; from < 20000; from += 1000) {
@@ -226,7 +235,7 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               className={cn("group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-l-4 border-l-amber-400 bg-card px-3 py-2 text-left transition-colors hover:bg-accent", builders.length > 0 && "border-l-emerald-500 ring-2 ring-emerald-500/60")}
             >
               {builders.length > 0 && (
-                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white animate-pulse">
+                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white">
                   🛒 Montando pedido: {builders.join(", ")}
                 </div>
               )}
