@@ -73,6 +73,7 @@ interface Draft {
   audience: "payers" | "participants";
   min_purchase_value: number;
   max_spins_per_customer: number;
+  max_pay_minutes: number | null;
   require_otp: boolean;
   segments: DraftSegment[];
 }
@@ -81,6 +82,7 @@ const emptyDraft = (): Draft => ({
   name: "Roleta dos Pagadores",
   audience: "payers",
   min_purchase_value: 150,
+  max_pay_minutes: null,
   max_spins_per_customer: 1,
   require_otp: false,
   segments: DEFAULT_SEGMENTS.map((s) => ({ ...s })),
@@ -153,6 +155,7 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
         name: draft.name.trim(),
         audience: draft.audience,
         min_purchase_value: draft.audience === "payers" ? draft.min_purchase_value : 0,
+        max_pay_minutes: draft.audience === "payers" ? draft.max_pay_minutes : null,
         max_spins_per_customer: draft.max_spins_per_customer,
         require_otp: draft.require_otp,
       })
@@ -387,6 +390,7 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                 />
               </div>
               {draft.audience === "payers" ? (
+                <>
                 <div className="space-y-1">
                   <Label className="text-xs">Compra mínima no evento (R$)</Label>
                   <Input
@@ -396,6 +400,24 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                     className="h-9"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Pagou em até (min) — vazio = sem limite</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Sem limite"
+                    value={draft.max_pay_minutes ?? ""}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setDraft({ ...draft, max_pay_minutes: e.target.value && n > 0 ? Math.floor(n) : null });
+                    }}
+                    className="h-9"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Conta do pedido montado até o pagamento. Só vale o 1º pedido da cliente na live.
+                  </p>
+                </div>
+                </>
               ) : (
                 <div className="space-y-1">
                   <Label className="text-xs">Confirmar WhatsApp (OTP)</Label>
