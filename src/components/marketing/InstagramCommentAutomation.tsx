@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { IgVarTextarea } from "./IgVarTextarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -825,9 +826,9 @@ export default function InstagramCommentAutomation() {
               </div>
               {form.action_reply_comment && (
                 <div className="space-y-2">
-                  <Textarea
+                  <IgVarTextarea
                     value={form.reply_comment_text}
-                    onChange={(e) => setForm({ ...form, reply_comment_text: e.target.value })}
+                    onValueChange={(v) => setForm({ ...form, reply_comment_text: v })}
                     placeholder="Oi {username}! Que bom que gostou! 💕 Vou te chamar no direct!"
                     className="text-sm"
                     rows={2}
@@ -857,11 +858,11 @@ export default function InstagramCommentAutomation() {
                     )}
                     {form.reply_comment_variations.map((v, i) => (
                       <div key={i} className="flex items-start gap-1">
-                        <Textarea
+                        <IgVarTextarea
                           value={v}
-                          onChange={(e) => {
+                          onValueChange={(val) => {
                             const next = [...form.reply_comment_variations];
-                            next[i] = e.target.value;
+                            next[i] = val;
                             setForm({ ...form, reply_comment_variations: next });
                           }}
                           placeholder={`Variação ${i + 1}`}
@@ -903,9 +904,9 @@ export default function InstagramCommentAutomation() {
               </div>
               {form.action_send_dm && (
                 <div className="space-y-2">
-                  <Textarea
+                  <IgVarTextarea
                     value={form.dm_message_text}
-                    onChange={(e) => setForm({ ...form, dm_message_text: e.target.value })}
+                    onValueChange={(v) => setForm({ ...form, dm_message_text: v })}
                     placeholder="Oi {username}! Vi que você comentou no nosso post 💕 Posso te ajudar com alguma coisa?"
                     className="text-sm"
                     rows={3}
@@ -1051,7 +1052,7 @@ export default function InstagramCommentAutomation() {
             </div>
 
             <p className="text-[11px] text-muted-foreground">
-              Variáveis disponíveis: <code>{"{username}"}</code> (nome do usuário), <code>{"{comment}"}</code> (texto do comentário)
+              Use os botões abaixo de cada texto para inserir variáveis: @ da pessoa, usuário, comentário e saudação.
             </p>
           </div>
 
