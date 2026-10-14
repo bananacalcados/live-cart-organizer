@@ -624,6 +624,29 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   const normalizedPhone = normalizeBRPhone(phone);
   const phoneVariations = buildPhoneVariations(phone);
 
+  // Endereço para {{endereco}}: a ficha (customers) não guarda endereço — ele
+  // fica no cadastro preenchido no carrinho (customer_registrations). Busca uma
+  // vez por pedido: deste pedido; senão o último cadastro do mesmo cliente.
+  const [regAddress, setRegAddress] = useState<any>(null);
+  const regCustomerId = (dbOrder as any)?.customer_id || null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cols = 'address, address_number, complement, neighborhood, city, state, cep';
+      let { data } = await supabase.from('customer_registrations').select(cols)
+        .eq('order_id', order.id).not('address', 'is', null).order('created_at', { ascending: false }).limit(1);
+      let row: any = data?.[0] || null;
+      if (!row && regCustomerId) {
+        ({ data } = await supabase.from('customer_registrations').select(cols)
+          .eq('customer_id', regCustomerId).not('address', 'is', null).order('created_at', { ascending: false }).limit(1));
+        row = data?.[0] || null;
+      }
+      if (!cancelled) setRegAddress(row);
+    })();
+    return () => { cancelled = true; };
+  }, [order.id, regCustomerId]);
+
+
   const getTemplateVariables = () => {
     // Total REAL do pedido (mesma conta do checkout): subtotal − desconto + frete.
     // Sem isso a mensagem mostrava o valor cheio e confundia a cliente.
@@ -664,7 +687,8 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
     // {{endereco}} = endereço da ficha do cliente (mesmos campos do modal do
     // WhatsApp). Fica vazio quando a ficha ainda não tem endereço cadastrado.
-    const cust = (dbOrder?.customer as any) || {};
+    const baseCust = (dbOrder?.customer as any) || {};
+    const cust = String(baseCust.address || '').trim() ? baseCust : (regAddress || {});
     const cleanAddr = (v: unknown) => String(v || '').trim();
     const addrStreet = cleanAddr(cust.address);
     const hasRealAddress = addrStreet && addrStreet !== 'Pendente';
