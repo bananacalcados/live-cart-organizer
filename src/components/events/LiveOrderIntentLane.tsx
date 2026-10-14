@@ -32,6 +32,8 @@ export interface OrderIntentCard {
   /** 1º QUERO ainda pendente (depois da última exclusão) — base do contador de minutos. */
   firstPendingQuero: LiveComment;
   profilePic: string | null;
+  /** Já existe carrinho/pedido para esse @ (só usado quando keepWithOrder). */
+  hasOrder?: boolean;
 }
 
 function highlight(text: string) {
@@ -46,7 +48,12 @@ function highlight(text: string) {
 }
 
 /** Cards da linha PEDIDOS: quem comentou QUERO na live de hoje e ainda não tem pedido. */
-export function useLiveOrderIntents(eventId: string | undefined, orderHandles: Set<string>) {
+export function useLiveOrderIntents(
+  eventId: string | undefined,
+  orderHandles: Set<string>,
+  opts?: { keepWithOrder?: boolean },
+) {
+  const keepWithOrder = !!opts?.keepWithOrder;
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [dismissals, setDismissals] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
@@ -140,7 +147,8 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
     }
     const out: OrderIntentCard[] = [];
     byUser.forEach((list, u) => {
-      if (orderHandles.has(u)) return;
+      const hasOrder = orderHandles.has(u);
+      if (hasOrder && !keepWithOrder) return;
       const queros = list.filter((c) => QUERO_RE.test(c.comment_text || ""));
       if (queros.length === 0) return;
       const dismissedAt = dismissals.get(u);
@@ -154,10 +162,11 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
         firstPendingQuero:
           queros.find((q) => !dismissedAt || new Date(q.created_at) > new Date(dismissedAt)) || lastQuero,
         profilePic: list.find((c) => c.profile_pic_url)?.profile_pic_url || null,
+        hasOrder,
       });
     });
     return out.sort((a, b) => b.lastQuero.created_at.localeCompare(a.lastQuero.created_at));
-  }, [comments, dismissals, orderHandles]);
+  }, [comments, dismissals, orderHandles, keepWithOrder]);
 
   const dismiss = useCallback(
     async (username: string) => {
@@ -234,6 +243,11 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openCard(c.username)}
               className={cn("group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-l-4 border-l-amber-400 bg-card px-3 py-2 text-left transition-colors hover:bg-accent", builders.length > 0 && "border-l-emerald-500 ring-2 ring-emerald-500/60")}
             >
+              {c.hasOrder && (
+                <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-primary px-2 py-2 text-center text-sm font-extrabold uppercase tracking-wide text-primary-foreground">
+                  ✅ Carrinho criado
+                </div>
+              )}
               {builders.length > 0 && (
                 <div className="-mx-3 -mt-2 mb-1 rounded-t-md bg-emerald-600 px-2 py-1.5 text-center text-xs font-extrabold uppercase tracking-wide text-white">
                   🛒 Montando pedido: {builders.join(", ")}

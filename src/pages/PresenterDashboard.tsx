@@ -84,7 +84,7 @@ export default function PresenterDashboard() {
     ),
     [orders],
   );
-  const orderIntents = useLiveOrderIntents(eventId, orderHandles);
+  const orderIntents = useLiveOrderIntents(eventId, orderHandles, { keepWithOrder: true });
 
   const suffix8 = (p?: string | null) => {
     const d = (p || "").replace(/\D/g, "");
