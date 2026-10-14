@@ -446,9 +446,7 @@ export async function processCommentAutomation(
       if (!actionId) continue;
 
       try {
-        const replyText = replyTemplate
-          .replace("{username}", usernameClean)
-          .replace("{comment}", comment.text);
+        const replyText = applyIgVars(replyTemplate, usernameClean, comment.text);
 
         const res = await fetch(
           `https://graph.instagram.com/v25.0/${comment.commentId}/replies`,
@@ -490,9 +488,7 @@ export async function processCommentAutomation(
       if (!actionId) continue;
 
       try {
-        const dmText = dmBaseText
-          .replace(/\{username\}/g, usernameClean)
-          .replace(/\{comment\}/g, comment.text)
+        const dmText = applyIgVars(dmBaseText, usernameClean, comment.text)
           .replace(/\{last4\}/g, phoneLast4)
           .replace(/\{phone\}/g, extractedPhone || "");
 
@@ -720,9 +716,7 @@ export async function processStoryReplyAutomation(
       if (!actionId) continue;
 
       try {
-        const dmText = rule.dm_message_text
-          .replace("{username}", usernameClean)
-          .replace("{comment}", reply.text);
+        const dmText = applyIgVars(rule.dm_message_text, usernameClean, reply.text);
 
         // Botões opcionais (button template). Máx 3 botões pela Meta.
         // Mesmo comportamento da automação de comentários: se houver botões
@@ -941,3 +935,15 @@ export async function handleCommentButtonPostback(
 }
 
 
+
+
+/** Variáveis dos textos da automação do IG (todas as ocorrências). */
+export function applyIgVars(tpl: string, username: string, commentText: string): string {
+  const h = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
+  const saud = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  return String(tpl || "")
+    .replaceAll("{@username}", username ? `@${username}` : "")
+    .replaceAll("{username}", username)
+    .replaceAll("{comment}", commentText || "")
+    .replaceAll("{saudacao}", saud);
+}
