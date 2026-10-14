@@ -1,5 +1,5 @@
 export interface OverlayItem { id: string; text: string; enabled: boolean }
-export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta";
+export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel";
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
 export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
@@ -7,6 +7,7 @@ export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
   raffle_bar: { x: 40, y: 330, width: 1000, font_size: 36, align: "center" },
   alert: { x: 32, y: 820, width: 600, font_size: 42, align: "left" },
   cta: { x: 40, y: 1389, width: 1000, font_size: 42, align: "center" },
+  wheel: { x: 140, y: 560, width: 800, font_size: 56, align: "center" },
 };
 export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
@@ -19,6 +20,7 @@ export interface OverlayConfig {
   paid_alert: { enabled: boolean; template: string; duration_seconds: number };
   assembled_alert: { enabled: boolean; template: string; duration_seconds: number };
   cta: { enabled: boolean; interval_minutes: number; items: OverlayItem[] };
+  wheel: { enabled: boolean; title_template: string; result_seconds: number };
 }
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
@@ -38,6 +40,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
     duration_seconds: 8,
   },
   cta: { enabled: true, interval_minutes: 10, items: [] },
+  wheel: { enabled: true, title_template: "🎰 Roleta de @{handle}", result_seconds: 8 },
 };
 
 /** Junta o config salvo com os padrões, para nunca faltar campo. */
@@ -51,6 +54,7 @@ export function withOverlayDefaults(raw: any): OverlayConfig {
     paid_alert: { ...d.paid_alert, ...(c.paid_alert || {}) },
     assembled_alert: { ...d.assembled_alert, ...(c.assembled_alert || {}) },
     cta: { ...d.cta, ...(c.cta || {}), items: c.cta?.items || [] },
+    wheel: { ...d.wheel, ...(c.wheel || {}) },
   };
 }
 
