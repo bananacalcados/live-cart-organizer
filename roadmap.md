@@ -28,5 +28,5 @@
 ## Ajustes do Overlay da Live
 - [x] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
 - [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
-- [ ] Posições e larguras arrastáveis, fontes, guias e salvamento independente em config.layout.
-- [ ] Verificar persistência no overlay real, quebra de texto, restauração e entregar print da edição.
+- [x] Posições e larguras arrastáveis, fontes, guias e salvamento independente em config.layout.
+- [x] Verificar persistência no overlay real, quebra de texto, restauração e entregar print da edição.
