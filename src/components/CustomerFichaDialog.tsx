@@ -593,8 +593,10 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           );
         })()}
         {isRealOrder && (
-          <OrderCashbackBox order={order} phone={form.whatsapp || order.customer?.whatsapp || ""} />
-          <CustomerActivePrizesBox phone={form.whatsapp || order.customer?.whatsapp || ""} />
+          <>
+            <OrderCashbackBox order={order} phone={form.whatsapp || order.customer?.whatsapp || ""} />
+            <CustomerActivePrizesBox phone={form.whatsapp || order.customer?.whatsapp || ""} />
+          </>
         )}
         {!isRealOrder && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">
