@@ -1487,6 +1487,7 @@ export type Database = {
       }
       automation_pending_replies: {
         Row: {
+          answered_at: string | null
           button_branches: Json | null
           created_at: string
           expires_at: string
@@ -1500,6 +1501,7 @@ export type Database = {
           whatsapp_number_id: string | null
         }
         Insert: {
+          answered_at?: string | null
           button_branches?: Json | null
           created_at?: string
           expires_at?: string
@@ -1513,6 +1515,7 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Update: {
+          answered_at?: string | null
           button_branches?: Json | null
           created_at?: string
           expires_at?: string

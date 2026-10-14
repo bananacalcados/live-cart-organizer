@@ -1,0 +1,1 @@
+ALTER TABLE public.automation_pending_replies ADD COLUMN IF NOT EXISTS answered_at timestamptz;
