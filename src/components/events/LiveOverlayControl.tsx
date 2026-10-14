@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
-import { DEFAULT_OVERLAY_CONFIG, OverlayConfig, OverlayItem, withOverlayDefaults } from "@/lib/liveOverlay";
+import { DEFAULT_OVERLAY_CONFIG, DEFAULT_OVERLAY_LAYOUT, OverlayConfig, OverlayItem, OverlayLayout, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayLayoutEditor } from "./OverlayLayoutEditor";
 
 const sb = supabase as any;
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -51,6 +52,25 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   const [hidden, setHidden] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const [editPositions, setEditPositions] = useState(false);
+  const [layoutSaving, setLayoutSaving] = useState(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  const changeLayout = (layout: OverlayLayout) => setCfg((c) => ({ ...c, layout }));
+  // Serialize writes; merge only layout into the latest saved config, never draft form values.
+  const saveLayout = (layout: OverlayLayout) => {
+    changeLayout(layout);
+    setLayoutSaving(true);
+    saveQueue.current = saveQueue.current.then(async () => {
+      const { data, error: readError } = await sb.from("live_overlay_settings").select("config").eq("event_id", eventId).single();
+      if (readError) throw readError;
+      if (JSON.stringify(withOverlayDefaults(data.config).layout) === JSON.stringify(layout) && data.config?.layout) return;
+      const { error } = await sb.from("live_overlay_settings").update({ config: { ...data.config, layout }, updated_at: new Date().toISOString() }).eq("event_id", eventId);
+      if (error) throw error;
+    }).catch(() => { toast.error("Não foi possível salvar as posições. Tente novamente."); });
+    const pending = saveQueue.current;
+    void pending.then(() => { if (saveQueue.current === pending) setLayoutSaving(false); });
+  };
 
   const loadDefaultTemplate = async (): Promise<OverlayConfig> => {
     const { data } = await sb.from("live_overlay_templates").select("config").eq("is_default", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -83,6 +103,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   };
 
   const apply = async () => {
+    await saveQueue.current;
     const { error } = await sb.from("live_overlay_settings").upsert({ event_id: eventId, config: cfg, hidden, updated_at: new Date().toISOString() });
     if (error) return toast.error("Não foi possível aplicar");
     setDirty(false);
@@ -202,16 +223,24 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
         </Card>
 
         <div className="sticky bottom-0 flex flex-wrap gap-2 border-t bg-background py-3">
-          <Button onClick={apply} disabled={!dirty}>Aplicar</Button>
+          <Button onClick={apply} disabled={!dirty || layoutSaving}>Aplicar</Button>
           <Button variant="outline" onClick={loadDefault}>Carregar modelo padrão</Button>
           <Button variant="outline" onClick={saveAsDefault}>Salvar como modelo padrão</Button>
           {dirty && <span className="self-center text-xs text-muted-foreground">Alterações ainda não aplicadas na live</span>}
         </div>
       </div>
 
-      <div className="lg:w-[340px]">
+      <div className="lg:w-[340px] shrink-0">
         <div className="sticky top-4">
-          <p className="mb-2 text-sm font-medium">Prévia</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">Prévia</p>
+            <div className="flex items-center gap-2"><Label htmlFor="edit-overlay-positions">Editar posições</Label><Switch id="edit-overlay-positions" checked={editPositions} onCheckedChange={setEditPositions} /></div>
+          </div>
+          {editPositions ? <>
+            <OverlayLayoutEditor config={cfg} onChange={changeLayout} onSave={saveLayout} />
+            <Button variant="outline" className="mt-3 gap-2" onClick={() => saveLayout(DEFAULT_OVERLAY_LAYOUT)}><RefreshCw className="h-4 w-4" />Restaurar posições padrão</Button>
+            <p role="status" className="mt-2 text-xs text-muted-foreground">{layoutSaving ? "Salvando posições…" : "Posições aplicadas na live"}</p>
+          </> :
           <div className="relative overflow-hidden rounded-xl bg-muted-foreground/40" style={{ width: 324, height: 576 }}>
             {token && (
               <iframe
@@ -221,7 +250,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
                 style={{ width: 1080, height: 1920, transform: "scale(0.3)", transformOrigin: "0 0", border: 0, background: "transparent" }}
               />
             )}
-          </div>
+          </div>}
         </div>
       </div>
     </div>

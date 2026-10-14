@@ -8,6 +8,10 @@
 
 @layer base {
   :root {
+    --overlay-surface: 0 0% 0%;
+    --overlay-text: 0 0% 100%;
+    --overlay-progress: 45 96% 56%;
+    --overlay-text-shadow: 0 2px 6px hsl(var(--overlay-surface) / 0.9);
     /* Bold Black & Yellow System */
     --background: 45 10% 97%;
     --foreground: 0 0% 8%;
@@ -507,4 +511,20 @@
 .presenter-no-blink [class*="blink"],
 .presenter-no-blink [class*="flash"] {
   animation: none !important;
+}
+
+.overlay-panel {
+  background: hsl(var(--overlay-surface) / 0.6);
+  color: hsl(var(--overlay-text));
+  text-shadow: var(--overlay-text-shadow);
+  border-radius: 24px;
+  padding: 20px 32px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.overlay-progress-track { background: hsl(var(--overlay-text) / 0.25); }
+.overlay-progress-fill { background: hsl(var(--overlay-progress)); }
+.overlay-guide {
+  background: repeating-linear-gradient(135deg, hsl(var(--muted-foreground) / 0.25) 0 10px, transparent 10px 25px);
 }
