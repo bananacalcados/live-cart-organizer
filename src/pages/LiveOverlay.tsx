@@ -12,6 +12,7 @@ interface Alert { key: number; text: string; duration: number }
  */
 export default function LiveOverlay() {
   const { token } = useParams();
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [config, setConfig] = useState<OverlayConfig | null>(null);
   const [hidden, setHidden] = useState(false);
   const [raffleCount, setRaffleCount] = useState(0);
@@ -24,6 +25,16 @@ export default function LiveOverlay() {
   const ctaTimer = useRef<number | null>(null);
   const cfgRef = useRef<OverlayConfig | null>(null);
   const cfgKey = useRef("");
+
+  useEffect(() => {
+    const resize = () => setViewport((current) => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      return current.width === width && current.height === height ? current : { width, height };
+    });
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
 
   // Fundo transparente para o OBS
   useEffect(() => {
@@ -120,11 +131,14 @@ export default function LiveOverlay() {
   const tickerText = tickerItems.length ? tickerItems[tickerIdx % tickerItems.length].text : "";
 
   const panel = "bg-black/60 text-white rounded-3xl px-8 py-5 [text-shadow:0_2px_6px_rgba(0,0,0,0.9)]";
+  const scale = Math.min(viewport.width / 1080, viewport.height / 1920);
+  const offset = (viewport.width - 1080 * scale) / 2;
 
   return (
+    <div className="fixed inset-0 overflow-hidden">
     <div
-      className="relative overflow-hidden font-sans"
-      style={{ width: 1080, height: 1920, background: "transparent", opacity: hidden ? 0 : 1, transition: "opacity 600ms ease" }}
+      className="absolute top-0 overflow-hidden font-sans"
+      style={{ width: 1080, height: 1920, left: offset, transform: `scale(${scale})`, transformOrigin: "top left", background: "transparent", opacity: hidden ? 0 : 1, transition: "opacity 600ms ease" }}
     >
       {config.ticker.enabled && tickerText && (
         <div className="absolute left-10 right-10 flex justify-center" style={{ top: 200 }}>
@@ -165,6 +179,7 @@ export default function LiveOverlay() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
