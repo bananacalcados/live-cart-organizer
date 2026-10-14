@@ -222,6 +222,21 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Roleta ao vivo</CardTitle>
+            <Switch checked={cfg.wheel.enabled} onCheckedChange={(v) => update("wheel", { enabled: v })} />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1"><Label>Título (use {"{handle}"} para o @)</Label>
+              <Input value={cfg.wheel.title_template} onChange={(e) => update("wheel", { title_template: e.target.value })} /></div>
+            <div className="flex items-center gap-2"><Label>Prêmio fica na tela por (segundos)</Label>
+              <Input type="number" className="w-24" min={3} value={cfg.wheel.result_seconds} onChange={(e) => update("wheel", { result_seconds: Number(e.target.value) || 8 })} /></div>
+            <p className="text-xs text-muted-foreground">O giro é feito na aba Roleta do evento, no botão "Girar ao vivo" de cada cliente.</p>
+          </CardContent>
+        </Card>
+
+
         <div className="sticky bottom-0 flex flex-wrap gap-2 border-t bg-background py-3">
           <Button onClick={apply} disabled={!dirty || layoutSaving}>Aplicar</Button>
           <Button variant="outline" onClick={loadDefault}>Carregar modelo padrão</Button>
