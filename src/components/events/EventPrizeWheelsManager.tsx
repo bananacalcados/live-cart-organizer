@@ -37,6 +37,7 @@ interface Wheel {
   is_active: boolean;
   min_purchase_value: number;
   require_otp: boolean;
+  max_pay_minutes?: number | null;
   max_spins_per_customer: number;
   segments?: Segment[];
 }
@@ -197,6 +198,7 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
         audience: s.audience,
         min_purchase_value: s.min_purchase_value,
         max_spins_per_customer: s.max_spins_per_customer,
+        max_pay_minutes: s.max_pay_minutes ?? null,
         require_otp: s.require_otp,
       })
       .select("id")
@@ -598,6 +600,25 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                       }
                       className="h-9"
                     />
+                  </div>
+                )}
+                {wheel.audience === "payers" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pagou em até (min) — vazio = sem limite</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="Sem limite"
+                      value={wheel.max_pay_minutes ?? ""}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        patchWheel(wheel.id, { max_pay_minutes: e.target.value && n > 0 ? Math.floor(n) : null });
+                      }}
+                      className="h-9"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Conta do pedido montado até o pagamento. Só vale o 1º pedido da cliente na live.
+                    </p>
                   </div>
                 )}
                 <div className="space-y-1">

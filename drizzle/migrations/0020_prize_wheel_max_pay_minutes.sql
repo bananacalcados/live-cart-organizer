@@ -1,0 +1,2 @@
+ALTER TABLE public.event_prize_wheels ADD COLUMN IF NOT EXISTS max_pay_minutes integer;
+COMMENT ON COLUMN public.event_prize_wheels.max_pay_minutes IS 'Pagadores: só elegível se o 1º pedido do cliente no evento foi pago em até N minutos após ser montado (null = sem limite)';

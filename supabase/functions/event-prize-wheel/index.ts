@@ -124,6 +124,30 @@ Deno.serve(async (req) => {
       }, 0);
     }
 
+    // Pagador rápido: só o 1º pedido da cliente no evento conta; precisa ter sido
+    // pago em até N minutos depois de montado (created_at → paid_at).
+    async function firstOrderPaidFast(eventId: string, ph: string, maxMin: number) {
+      const suf = suffix8(ph);
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id")
+        .not("whatsapp", "is", null)
+        .ilike("whatsapp", `%${suf}`);
+      const ids = (customers || []).map((c: any) => c.id);
+      if (!ids.length) return false;
+      const { data: first } = await supabase
+        .from("orders")
+        .select("created_at, paid_at, is_paid")
+        .eq("event_id", eventId)
+        .in("customer_id", ids)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!first || !first.is_paid || !first.paid_at) return false;
+      const diff = new Date(first.paid_at).getTime() - new Date(first.created_at).getTime();
+      return diff <= maxMin * 60_000;
+    }
+
     async function spinsUsed(wheelId: string, ph: string) {
       const { count } = await supabase
         .from("event_prize_spins")
@@ -188,6 +212,9 @@ Deno.serve(async (req) => {
             } else if (paidTotal < Number(w.min_purchase_value || 0)) {
               eligible = false;
               reason = `Compre a partir de R$ ${Number(w.min_purchase_value).toFixed(2)} neste evento para girar.`;
+            } else if (w.max_pay_minutes && !(await firstOrderPaidFast(ev.id, phone, w.max_pay_minutes))) {
+              eligible = false;
+              reason = `Esta roleta é para quem pagou o primeiro pedido da live em até ${w.max_pay_minutes} minutos.`;
             }
           }
         } else if (w.audience === "payers") {
@@ -271,7 +298,13 @@ Deno.serve(async (req) => {
             ok: false,
             error: `Esta roleta exige compras a partir de R$ ${Number(wheel.min_purchase_value).toFixed(2)} neste evento.`,
           });
-        }
+      }
+      if (wheel.max_pay_minutes && !(await firstOrderPaidFast(wheel.event_id, phone, wheel.max_pay_minutes))) {
+        return json({
+          ok: false,
+          error: `Esta roleta é para quem pagou o primeiro pedido da live em até ${wheel.max_pay_minutes} minutos.`,
+        });
+      }
       }
 
 

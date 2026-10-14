@@ -6157,6 +6157,7 @@ export type Database = {
           event_id: string
           id: string
           is_active: boolean
+          max_pay_minutes: number | null
           max_spins_per_customer: number
           min_purchase_value: number
           name: string
@@ -6171,6 +6172,7 @@ export type Database = {
           event_id: string
           id?: string
           is_active?: boolean
+          max_pay_minutes?: number | null
           max_spins_per_customer?: number
           min_purchase_value?: number
           name: string
@@ -6185,6 +6187,7 @@ export type Database = {
           event_id?: string
           id?: string
           is_active?: boolean
+          max_pay_minutes?: number | null
           max_spins_per_customer?: number
           min_purchase_value?: number
           name?: string
