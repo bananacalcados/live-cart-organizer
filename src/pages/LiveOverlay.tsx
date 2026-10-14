@@ -20,6 +20,9 @@ export default function LiveOverlay() {
   const [tickerIdx, setTickerIdx] = useState(0);
   const [alert, setAlert] = useState<Alert | null>(null);
   const [cta, setCta] = useState<string | null>(null);
+  const [spin, setSpin] = useState<{ key: number; handle: string; text: string; done: boolean } | null>(null);
+  const spinQueue = useRef<{ key: number; handle: string; labels: string[]; winner: string }[]>([]);
+  const spinBusy = useRef(false);
   const lastId = useRef(0);
   const queue = useRef<Alert[]>([]);
   const ctaIdx = useRef(0);
@@ -54,6 +57,28 @@ export default function LiveOverlay() {
     ctaTimer.current = window.setTimeout(() => setCta(null), 12000);
   };
 
+  // Roleta: troca o texto do prêmio cada vez mais devagar até parar no sorteado
+  const runSpin = () => {
+    if (spinBusy.current) return;
+    const s = spinQueue.current.shift();
+    if (!s) return;
+    spinBusy.current = true;
+    const labels = s.labels.length ? s.labels : [s.winner];
+    let i = 0; let delay = 70; let elapsed = 0;
+    const step = () => {
+      if (elapsed >= 6000) {
+        setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true });
+        const secs = Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
+        window.setTimeout(() => { setSpin(null); spinBusy.current = false; runSpin(); }, secs * 1000);
+        return;
+      }
+      setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false });
+      i += 1; elapsed += delay; delay = Math.min(450, delay * 1.08);
+      window.setTimeout(step, delay);
+    };
+    step();
+  };
+
   // Polling
   useEffect(() => {
     if (!token) return;
@@ -81,6 +106,9 @@ export default function LiveOverlay() {
           queue.current.push({ key: e.id, text: fill(cfg.paid_alert.template, e.payload), duration: cfg.paid_alert.duration_seconds });
         } else if (e.kind === "assembled" && cfg.assembled_alert.enabled && e.payload?.handle) {
           queue.current.push({ key: e.id, text: fill(cfg.assembled_alert.template, e.payload), duration: cfg.assembled_alert.duration_seconds });
+        } else if (e.kind === "wheel_spin" && cfg.wheel.enabled && e.payload?.winner_label) {
+          spinQueue.current.push({ key: e.id, handle: e.payload.handle || "cliente", labels: (e.payload.labels || []).filter(Boolean), winner: e.payload.winner_label });
+          runSpin();
         } else if (e.kind === "cta_now" && e.payload?.text) {
           showCta(e.payload.text);
         }
@@ -169,6 +197,15 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.alert} blockKey="alert">
           <div key={alert.key} className={`${panel} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ lineHeight: 1.2 }}>
             {alert.text}
+          </div>
+        </OverlayBlock>
+      )}
+
+      {spin && (
+        <OverlayBlock position={config.layout.wheel} blockKey="wheel">
+          <div key={spin.key} className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
+            <div style={{ fontSize: "0.6em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
+            <div className={spin.done ? "overlay-wheel-winner mt-3" : "mt-3"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
           </div>
         </OverlayBlock>
       )}
