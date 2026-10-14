@@ -1,6 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
+import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+import { requireUser } from "../_shared/require-user.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,6 +169,12 @@ async function fetchLiveMediaForAccount(account: IgAccountRow, token: string) {
 Deno.serve(async (req) => {
   runDeadline = Date.now() + 20_000;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Só o worker (x-cron-secret / service role) ou usuário logado do app.
+  if (!(await isAuthorizedCron(req))) {
+    const auth = await requireUser(req);
+    if (!auth.ok) return json({ error: "unauthorized" }, 401);
+  }
 
   try {
     const supabase = createClient(
