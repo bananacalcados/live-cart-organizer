@@ -44,7 +44,7 @@ export function WheelLiveSpinList({ wheelId }: { wheelId: string }) {
     });
     setBusy(null);
     if (error || !data?.ok) { toast.error(error ? await readError(error) : data?.error || "Não foi possível girar"); return; }
-    toast.success(`@${r.handle || "cliente"} ganhou: ${data.prize?.label}`);
+    toast.success(`@${(r.handle || "cliente").replace(/^@/, "")} ganhou: ${data.prize?.label}`);
     setRows((prev) => (prev || []).map((x) => x.phone !== r.phone ? x : {
       ...x, spins_used: x.spins_used + 1, prizes: [...x.prizes, data.prize?.label], can_spin: false,
     }));
@@ -66,7 +66,7 @@ export function WheelLiveSpinList({ wheelId }: { wheelId: string }) {
           {rows.map((r) => (
             <div key={r.phone} className="flex items-center justify-between gap-2 py-2 text-sm">
               <div className="min-w-0">
-                <p className="font-semibold truncate">@{r.handle || "sem @"} <span className="text-xs font-normal text-muted-foreground">{mask(r.phone)}</span></p>
+                <p className="font-semibold truncate">@{(r.handle || "sem @").replace(/^@/, "")} <span className="text-xs font-normal text-muted-foreground">{mask(r.phone)}</span></p>
                 <p className="text-xs text-muted-foreground">
                   Pagou {brl(r.paid_total)}{r.first_paid_minutes !== null ? ` · 1º pedido pago em ${r.first_paid_minutes} min` : ""}
                 </p>
