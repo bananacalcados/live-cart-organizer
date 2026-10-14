@@ -124,6 +124,30 @@ Deno.serve(async (req) => {
       }, 0);
     }
 
+    // Pagador rápido: só o 1º pedido da cliente no evento conta; precisa ter sido
+    // pago em até N minutos depois de montado (created_at → paid_at).
+    async function firstOrderPaidFast(eventId: string, ph: string, maxMin: number) {
+      const suf = suffix8(ph);
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id")
+        .not("whatsapp", "is", null)
+        .ilike("whatsapp", `%${suf}`);
+      const ids = (customers || []).map((c: any) => c.id);
+      if (!ids.length) return false;
+      const { data: first } = await supabase
+        .from("orders")
+        .select("created_at, paid_at, is_paid")
+        .eq("event_id", eventId)
+        .in("customer_id", ids)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!first || !first.is_paid || !first.paid_at) return false;
+      const diff = new Date(first.paid_at).getTime() - new Date(first.created_at).getTime();
+      return diff <= maxMin * 60_000;
+    }
+
     async function spinsUsed(wheelId: string, ph: string) {
       const { count } = await supabase
         .from("event_prize_spins")

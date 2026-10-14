@@ -198,6 +198,7 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
         audience: s.audience,
         min_purchase_value: s.min_purchase_value,
         max_spins_per_customer: s.max_spins_per_customer,
+        max_pay_minutes: s.max_pay_minutes ?? null,
         require_otp: s.require_otp,
       })
       .select("id")
