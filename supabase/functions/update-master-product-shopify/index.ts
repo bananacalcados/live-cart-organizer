@@ -144,15 +144,94 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Atualiza variantes (preço, peso, sku, barcode)
+    // 2. Atualiza variantes (preço, peso, sku, barcode) e CRIA as novas
     let variantUpdates = 0;
     let variantErrors = 0;
+    let variantsCreated = 0;
+    const createErrors: string[] = [];
 
-    for (const v of variants) {
-      if (!v.shopify_variant_id) {
-        // Variante criada localmente que ainda não tem ID Shopify — ignora
+    const checkJson = await checkRes.json().catch(() => ({}));
+    const shopProduct = checkJson?.product || {};
+    const optionNames: string[] = (shopProduct.options || []).map((o: any) => String(o.name || ""));
+    const existingCombos = new Set<string>(
+      (shopProduct.variants || []).map((sv: any) =>
+        [sv.option1, sv.option2, sv.option3].map((x: any) => String(x ?? "").trim().toLowerCase()).join("|")
+      ),
+    );
+    const norm = (s: any) => String(s ?? "").replace(/\s+/g, " ").trim();
+    const optValueFor = (v: any, name: string) => {
+      const n = name.toLowerCase();
+      if (n.includes("cor") || n.includes("color")) return norm(v.color) || "Único";
+      if (n.includes("tam") || n.includes("size")) return norm(v.size) || "Único";
+      return norm(v.size) || norm(v.color) || "Único";
+    };
+
+    // Estoque compartilhado (soma de todas as lojas por GTIN)
+    const newOnes = variants.filter((v: any) => !v.shopify_variant_id);
+    const stockByGtin: Record<string, number> = {};
+    const newGtins = newOnes.map((v: any) => v.gtin).filter(Boolean);
+    if (newGtins.length) {
+      const { data: posRows } = await supabase.from("pos_products").select("barcode, stock").in("barcode", newGtins);
+      for (const r of posRows || []) {
+        const k = String(r.barcode);
+        stockByGtin[k] = (stockByGtin[k] || 0) + (Number(r.stock) || 0);
+      }
+    }
+    let locationId: number | null = null;
+    if (newOnes.length) {
+      const locRes = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/locations.json`, {
+        headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN },
+      });
+      const locJson = await locRes.json().catch(() => ({}));
+      locationId = (locJson.locations || []).find((l: any) => l.active)?.id ?? locJson.locations?.[0]?.id ?? null;
+    }
+
+    for (const v of newOnes as any[]) {
+      const opts: Record<string, string> = {};
+      const names = optionNames.length && optionNames[0] !== "Title" ? optionNames : ["Tamanho"];
+      names.forEach((name, i) => { opts[`option${i + 1}`] = optValueFor(v, name); });
+      const comboKey = [opts.option1, opts.option2, opts.option3].map((x) => String(x ?? "").trim().toLowerCase()).join("|");
+      if (existingCombos.has(comboKey)) {
+        createErrors.push(`${Object.values(opts).join(" / ")} já existe na Shopify`);
         continue;
       }
+      const cRes = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/products/${shopifyProductId}/variants.json`, {
+        method: "POST",
+        headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variant: {
+            ...opts,
+            sku: v.sku,
+            barcode: v.gtin,
+            price: (v.sale_price_override ?? master.sale_price ?? 0).toString(),
+            inventory_management: "shopify",
+            weight: Number(v.weight_kg_override ?? master.weight_kg ?? 0),
+            weight_unit: "kg",
+            requires_shipping: true,
+          },
+        }),
+      });
+      const cJson = await cRes.json().catch(() => ({}));
+      if (!cRes.ok || !cJson?.variant?.id) {
+        console.error("Erro criando variante:", JSON.stringify(cJson));
+        createErrors.push(`${Object.values(opts).join(" / ")}: ${JSON.stringify(cJson?.errors ?? cJson)}`);
+        continue;
+      }
+      existingCombos.add(comboKey);
+      variantsCreated++;
+      await supabase.from("product_variants").update({ shopify_variant_id: String(cJson.variant.id) }).eq("id", v.id);
+      const qty = v.gtin && stockByGtin[String(v.gtin)] !== undefined ? stockByGtin[String(v.gtin)] : (Number(v.initial_stock) || 0);
+      if (locationId && cJson.variant.inventory_item_id) {
+        await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`, {
+          method: "POST",
+          headers: { "X-Shopify-Access-Token": SHOPIFY_TOKEN, "Content-Type": "application/json" },
+          body: JSON.stringify({ location_id: locationId, inventory_item_id: cJson.variant.inventory_item_id, available: qty }),
+        }).catch((e) => console.error("estoque:", e));
+      }
+    }
+
+    for (const v of variants) {
+      if (!v.shopify_variant_id) continue;
       const price = (v.sale_price_override ?? master.sale_price ?? 0).toString();
       const weight = v.weight_kg_override ?? master.weight_kg ?? 0;
 
@@ -189,9 +268,11 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Produto atualizado na Shopify: ${variantUpdates} variantes atualizadas${variantErrors > 0 ? `, ${variantErrors} erros` : ""}`,
+        message: `Produto atualizado na Shopify: ${variantUpdates} variantes atualizadas, ${variantsCreated} novas criadas${variantErrors + createErrors.length > 0 ? `, ${variantErrors + createErrors.length} erros` : ""}`,
         shopify_product_id: shopifyProductId,
         variants_updated: variantUpdates,
+        variants_created: variantsCreated,
+        create_errors: createErrors,
         variant_errors: variantErrors,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
