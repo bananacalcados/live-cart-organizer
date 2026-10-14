@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { LiveOverlayControl } from "@/components/events/LiveOverlayControl";
 import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { useNavigate, Link } from "react-router-dom";
 import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
@@ -368,10 +367,6 @@ const Index = () => {
                     Carrinhos
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="overlay" className="gap-1">
-                  <Zap className="h-3 w-3" />
-                  Overlay
-                </TabsTrigger>
                 <TabsTrigger value="ig-comments" className="gap-1">
                   <Instagram className="h-3 w-3" />
                   Comentários IG
@@ -464,10 +459,6 @@ const Index = () => {
 
             <TabsContent value="ig-comments">
               {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
-            </TabsContent>
-
-            <TabsContent value="overlay">
-              {currentEventId && <LiveOverlayControl eventId={currentEventId} />}
             </TabsContent>
 
             <TabsContent value="member-leads">

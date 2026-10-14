@@ -13,6 +13,8 @@ import {
 import { cn } from "@/lib/utils";
 import { EventBuyerOriginMatrix } from "./EventBuyerOriginMatrix";
 import { EventLiveRepurchase } from "./EventLiveRepurchase";
+import { LiveOverlayControl } from "./LiveOverlayControl";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DashboardData {
   total_orders: number;
@@ -121,7 +123,15 @@ export function EventInnerDashboard({ eventId }: Props) {
   const [primary, ...secondary] = metrics;
 
   return (
-    <div className="container py-2 space-y-2">
+    <Tabs key={eventId} defaultValue="dashboard" className="container py-2 space-y-2">
+      <TabsList>
+        <TabsTrigger value="dashboard">Resumo do evento</TabsTrigger>
+        <TabsTrigger value="overlay">Overlay da Live</TabsTrigger>
+      </TabsList>
+      <TabsContent value="overlay">
+        <LiveOverlayControl key={eventId} eventId={eventId} />
+      </TabsContent>
+      <TabsContent value="dashboard" className="space-y-2">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Card className="p-4 col-span-2 lg:col-span-2 border-primary/30">
           <div className="flex items-center gap-2">
@@ -146,6 +156,7 @@ export function EventInnerDashboard({ eventId }: Props) {
       <div className="container py-2">
         <EventLiveRepurchase eventId={eventId} />
       </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
