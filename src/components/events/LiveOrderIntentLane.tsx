@@ -54,7 +54,16 @@ export function useLiveOrderIntents(eventId: string | undefined, orderHandles: S
   const load = useCallback(async () => {
     if (!eventId) return;
     setLoading(true);
-    const start = new Date();
+    // Dia da live = dia do comentário mais recente do evento (não "hoje"),
+    // para o painel funcionar mesmo quando o evento foi criado em outra data.
+    const { data: latest } = await supabase
+      .from("live_comments")
+      .select("created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const start = latest?.created_at ? new Date(latest.created_at) : new Date();
     start.setHours(0, 0, 0, 0);
     const all: LiveComment[] = [];
     for (let from = 0; from < 20000; from += 1000) {
