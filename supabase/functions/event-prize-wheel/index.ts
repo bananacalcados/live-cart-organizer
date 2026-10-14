@@ -212,6 +212,9 @@ Deno.serve(async (req) => {
             } else if (paidTotal < Number(w.min_purchase_value || 0)) {
               eligible = false;
               reason = `Compre a partir de R$ ${Number(w.min_purchase_value).toFixed(2)} neste evento para girar.`;
+            } else if (w.max_pay_minutes && !(await firstOrderPaidFast(ev.id, phone, w.max_pay_minutes))) {
+              eligible = false;
+              reason = `Esta roleta é para quem pagou o primeiro pedido da live em até ${w.max_pay_minutes} minutos.`;
             }
           }
         } else if (w.audience === "payers") {
@@ -295,7 +298,13 @@ Deno.serve(async (req) => {
             ok: false,
             error: `Esta roleta exige compras a partir de R$ ${Number(wheel.min_purchase_value).toFixed(2)} neste evento.`,
           });
-        }
+      }
+      if (wheel.max_pay_minutes && !(await firstOrderPaidFast(wheel.event_id, phone, wheel.max_pay_minutes))) {
+        return json({
+          ok: false,
+          error: `Esta roleta é para quem pagou o primeiro pedido da live em até ${wheel.max_pay_minutes} minutos.`,
+        });
+      }
       }
 
 
