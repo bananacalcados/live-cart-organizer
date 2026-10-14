@@ -488,9 +488,7 @@ export async function processCommentAutomation(
       if (!actionId) continue;
 
       try {
-        const dmText = dmBaseText
-          .replace(/\{username\}/g, usernameClean)
-          .replace(/\{comment\}/g, comment.text)
+        const dmText = applyIgVars(dmBaseText, usernameClean, comment.text)
           .replace(/\{last4\}/g, phoneLast4)
           .replace(/\{phone\}/g, extractedPhone || "");
 
