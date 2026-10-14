@@ -267,8 +267,86 @@ Deno.serve(async (req) => {
     }
 
 
+    /** Equipe logada (giro ao vivo pelo painel). */
+    async function isStaff() {
+      const auth = req.headers.get("Authorization") || "";
+      const tk = auth.replace(/^Bearer\s+/i, "");
+      if (!tk) return false;
+      const { data } = await supabase.auth.getUser(tk);
+      return !!data?.user?.id;
+    }
+
+    // ---------- LISTA DE ELEGÍVEIS (equipe) ----------
+    if (action === "eligible_list") {
+      if (!(await isStaff())) return json({ ok: false, error: "unauthorized" }, 401);
+      const wheelId = String(body?.wheel_id || "");
+      const { data: wheel } = await supabase
+        .from("event_prize_wheels")
+        .select("id, event_id, audience, min_purchase_value, max_pay_minutes, max_spins_per_customer")
+        .eq("id", wheelId)
+        .maybeSingle();
+      if (!wheel) return json({ ok: false, error: "Roleta não encontrada" });
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("id, created_at, paid_at, is_paid, products, customer:customers(instagram_handle, whatsapp)")
+        .eq("event_id", wheel.event_id)
+        .order("created_at", { ascending: true })
+        .limit(2000);
+      const byPhone = new Map<string, any>();
+      for (const o of orders || []) {
+        const c: any = (o as any).customer;
+        const ph = normalizePhone(c?.whatsapp || "");
+        if (!ph) continue;
+        const k = suffix8(ph);
+        let row = byPhone.get(k);
+        if (!row) {
+          const mins = o.is_paid && o.paid_at
+            ? (new Date(o.paid_at).getTime() - new Date(o.created_at).getTime()) / 60000
+            : null;
+          row = { phone: ph, handle: c?.instagram_handle || null, paid_total: 0, first_paid_minutes: mins };
+          byPhone.set(k, row);
+        }
+        if (!row.handle && c?.instagram_handle) row.handle = c.instagram_handle;
+        if (o.is_paid) {
+          const items = Array.isArray(o.products) ? o.products : [];
+          row.paid_total += items.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+        }
+      }
+      const { data: spins } = await supabase
+        .from("event_prize_spins")
+        .select("phone_suffix, prize_label, created_at")
+        .eq("wheel_id", wheel.id)
+        .order("created_at", { ascending: true })
+        .limit(2000);
+      const spinMap = new Map<string, string[]>();
+      for (const sp of spins || []) {
+        const arr = spinMap.get(sp.phone_suffix) || [];
+        arr.push(sp.prize_label);
+        spinMap.set(sp.phone_suffix, arr);
+      }
+      const min = Number(wheel.min_purchase_value || 0);
+      const list = [...byPhone.values()]
+        .filter((r) => r.paid_total > 0 && r.paid_total >= min)
+        .filter((r) => !wheel.max_pay_minutes || (r.first_paid_minutes !== null && r.first_paid_minutes <= wheel.max_pay_minutes))
+        .map((r) => {
+          const prizes = spinMap.get(suffix8(r.phone)) || [];
+          return {
+            ...r,
+            first_paid_minutes: r.first_paid_minutes === null ? null : Math.round(r.first_paid_minutes),
+            spins_used: prizes.length,
+            prizes,
+            can_spin: prizes.length < wheel.max_spins_per_customer,
+          };
+        })
+        .sort((a, b) => (a.first_paid_minutes ?? 9e9) - (b.first_paid_minutes ?? 9e9))
+        .slice(0, 200);
+      return json({ ok: true, list });
+    }
+
     // ---------- SPIN ----------
-    if (action === "spin") {
+    const staffSpin = action === "staff_spin";
+    if (staffSpin && !(await isStaff())) return json({ ok: false, error: "unauthorized" }, 401);
+    if (action === "spin" || staffSpin) {
       if (!phone) return json({ ok: false, error: "Telefone inválido" });
       const wheelId = String(body?.wheel_id || "");
       const name = String(body?.name || "").trim().slice(0, 120) || null;
@@ -400,7 +478,7 @@ Deno.serve(async (req) => {
                 .from("orders")
                 .select("id")
                 .eq("event_id", wheel.event_id)
-                .eq("is_paid", false)
+                .neq("stage", "cancelled")
                 .in("customer_id", ids)
                 .order("created_at", { ascending: false })
                 .limit(5);
@@ -429,6 +507,20 @@ Deno.serve(async (req) => {
         prize_id: prizeId,
         prize_label: winner.label,
       });
+
+      if (staffSpin) {
+        try {
+          const handle = String(body?.handle || "").replace(/^@/, "").slice(0, 60) || name || "cliente";
+          const labels = segments.map((s: any) => String(s.label));
+          await supabase.from("live_overlay_events").insert({
+            event_id: wheel.event_id,
+            kind: "wheel_spin",
+            payload: { handle, labels, winner_label: winner.label },
+          });
+        } catch (e) {
+          console.error("[event-prize-wheel] overlay", (e as Error).message);
+        }
+      }
 
       return json({
         ok: true,

@@ -528,3 +528,4 @@
 .overlay-guide {
   background: repeating-linear-gradient(135deg, hsl(var(--muted-foreground) / 0.25) 0 10px, transparent 10px 25px);
 }
+.overlay-wheel-winner { color: hsl(var(--overlay-progress)); }

@@ -30,3 +30,10 @@
 - [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
 - [x] Posições e larguras arrastáveis, fontes, guias e salvamento independente em config.layout.
 - [x] Verificar persistência no overlay real, quebra de texto, restauração e entregar print da edição.
+
+## Roleta ao vivo no Overlay
+- [x] Campo "Pagou em até (min)" ao criar roleta
+- [x] Lista de quem pode girar + botão Girar ao vivo
+- [x] Bloco Roleta no Overlay (texto trocando até o prêmio)
+- [x] Prêmio físico vai como brinde no pedido (também pago) e aparece na Expedição
+- [x] Prêmios de desconto/frete na Ficha da Live e no chat do PDV

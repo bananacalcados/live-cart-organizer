@@ -19,6 +19,7 @@ import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { OrderCashbackBox } from "@/components/events/OrderCashbackBox";
+import { CustomerActivePrizesBox } from "@/components/prizes/CustomerActivePrizes";
 
 /** Envia pela instância configurada na Live (nunca pela Z-API padrão, que pode estar vencida). */
 async function sendViaLiveInstance(eventId: string | null | undefined, phone: string, message: string) {
@@ -592,7 +593,10 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           );
         })()}
         {isRealOrder && (
-          <OrderCashbackBox order={order} phone={form.whatsapp || order.customer?.whatsapp || ""} />
+          <>
+            <OrderCashbackBox order={order} phone={form.whatsapp || order.customer?.whatsapp || ""} />
+            <CustomerActivePrizesBox phone={form.whatsapp || order.customer?.whatsapp || ""} />
+          </>
         )}
         {!isRealOrder && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 mb-3">

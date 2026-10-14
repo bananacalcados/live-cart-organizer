@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { WheelLiveSpinList } from "./WheelLiveSpinList";
 import { Copy, Loader2, Plus, Save, Trash2, Trophy, Users, Wallet } from "lucide-react";
 
 interface Segment {
@@ -670,6 +671,8 @@ export function EventPrizeWheelsManager({ eventId }: { eventId: string }) {
                   </div>
                 )}
               </div>
+
+              {wheel.audience === "payers" && <WheelLiveSpinList wheelId={wheel.id} />}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

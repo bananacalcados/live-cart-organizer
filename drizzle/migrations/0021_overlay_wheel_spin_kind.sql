@@ -1,0 +1,2 @@
+ALTER TABLE public.live_overlay_events DROP CONSTRAINT live_overlay_events_kind_check;
+ALTER TABLE public.live_overlay_events ADD CONSTRAINT live_overlay_events_kind_check CHECK (kind = ANY (ARRAY['paid','assembled','cta_now','raffle_update','wheel_spin']));
