@@ -1,5 +1,19 @@
 export interface OverlayItem { id: string; text: string; enabled: boolean }
+export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta";
+export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
+export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
+export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
+  ticker: { x: 40, y: 200, width: 1000, font_size: 40, align: "center" },
+  raffle_bar: { x: 40, y: 330, width: 1000, font_size: 36, align: "center" },
+  alert: { x: 32, y: 820, width: 600, font_size: 42, align: "left" },
+  cta: { x: 40, y: 1389, width: 1000, font_size: 42, align: "center" },
+};
+export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
+  const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
+  return { ...raw, width, x: Math.min(1080 - width, Math.max(0, Number(raw.x) || 0)), y: Math.min(1919, Math.max(0, Number(raw.y) || 0)), font_size: Math.min(160, Math.max(16, Number(raw.font_size) || 40)), align: ["left", "center", "right"].includes(raw.align) ? raw.align : "center" };
+}
 export interface OverlayConfig {
+  layout: OverlayLayout;
   ticker: { enabled: boolean; interval_seconds: number; items: OverlayItem[] };
   raffle_bar: { enabled: boolean; text_template: string; goal_enabled: boolean; goal_count: number; goal_text: string };
   paid_alert: { enabled: boolean; template: string; duration_seconds: number };
@@ -8,6 +22,7 @@ export interface OverlayConfig {
 }
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
+  layout: DEFAULT_OVERLAY_LAYOUT,
   ticker: { enabled: true, interval_seconds: 6, items: [] },
   raffle_bar: {
     enabled: true,
@@ -30,6 +45,7 @@ export function withOverlayDefaults(raw: any): OverlayConfig {
   const c = raw || {};
   const d = DEFAULT_OVERLAY_CONFIG;
   return {
+    layout: Object.fromEntries((Object.keys(DEFAULT_OVERLAY_LAYOUT) as OverlayBlockKey[]).map((key) => [key, normalizeOverlayPosition({ ...DEFAULT_OVERLAY_LAYOUT[key], ...(c.layout?.[key] || {}) })])) as OverlayLayout,
     ticker: { ...d.ticker, ...(c.ticker || {}), items: c.ticker?.items || [] },
     raffle_bar: { ...d.raffle_bar, ...(c.raffle_bar || {}) },
     paid_alert: { ...d.paid_alert, ...(c.paid_alert || {}) },

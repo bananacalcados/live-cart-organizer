@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { OverlayConfig, fill, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
 interface Alert { key: number; text: string; duration: number }
@@ -130,7 +131,7 @@ export default function LiveOverlay() {
   const pct = rb.goal_count > 0 ? Math.min(100, (raffleCount / rb.goal_count) * 100) : 0;
   const tickerText = tickerItems.length ? tickerItems[tickerIdx % tickerItems.length].text : "";
 
-  const panel = "bg-black/60 text-white rounded-3xl px-8 py-5 [text-shadow:0_2px_6px_rgba(0,0,0,0.9)]";
+  const panel = "overlay-panel";
   const scale = Math.min(viewport.width / 1080, viewport.height / 1920);
   const offset = (viewport.width - 1080 * scale) / 2;
 
@@ -141,43 +142,43 @@ export default function LiveOverlay() {
       style={{ width: 1080, height: 1920, left: offset, transform: `scale(${scale})`, transformOrigin: "top left", background: "transparent", opacity: hidden ? 0 : 1, transition: "opacity 600ms ease" }}
     >
       {config.ticker.enabled && tickerText && (
-        <div className="absolute left-10 right-10 flex justify-center" style={{ top: 200 }}>
-          <div key={tickerIdx} className={`${panel} text-center font-bold animate-in fade-in duration-700`} style={{ fontSize: 40 }}>
+        <OverlayBlock position={config.layout.ticker} blockKey="ticker">
+          <div key={tickerIdx} className={`${panel} font-bold animate-in fade-in duration-700`}>
             {tickerText}
           </div>
-        </div>
+        </OverlayBlock>
       )}
 
       {rb.enabled && (
-        <div className="absolute left-10 right-10 flex justify-center" style={{ top: 330 }}>
-          <div className={`${panel} w-full text-center font-bold`} style={{ fontSize: 36 }}>
+        <OverlayBlock position={config.layout.raffle_bar} blockKey="raffle_bar">
+          <div className={`${panel} w-full font-bold`}>
             {fill(rb.text_template, { count: raffleCount })}
             {rb.goal_enabled && rb.goal_count > 0 && (
               <>
-                <div className="mt-3 h-6 w-full overflow-hidden rounded-full bg-white/25">
-                  <div className="h-full rounded-full bg-amber-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                <div className="overlay-progress-track mt-3 h-6 w-full overflow-hidden rounded-full">
+                  <div className="overlay-progress-fill h-full rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                 </div>
-                {remaining > 0 && <div className="mt-2" style={{ fontSize: 34 }}>{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
+                {remaining > 0 && <div className="mt-2">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
               </>
             )}
           </div>
-        </div>
+        </OverlayBlock>
       )}
 
       {alert && (
-        <div className="absolute left-8" style={{ top: 820, maxWidth: 560 }}>
-          <div key={alert.key} className={`${panel} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ fontSize: 42, lineHeight: 1.2 }}>
+        <OverlayBlock position={config.layout.alert} blockKey="alert">
+          <div key={alert.key} className={`${panel} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ lineHeight: 1.2 }}>
             {alert.text}
           </div>
-        </div>
+        </OverlayBlock>
       )}
 
       {cta && (
-        <div className="absolute left-10 right-10 flex justify-center" style={{ bottom: 440 }}>
-          <div className={`${panel} text-center font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ fontSize: 42 }}>
+        <OverlayBlock position={config.layout.cta} blockKey="cta">
+          <div className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`}>
             {cta}
           </div>
-        </div>
+        </OverlayBlock>
       )}
     </div>
     </div>
