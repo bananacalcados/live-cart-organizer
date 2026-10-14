@@ -26,5 +26,5 @@
 - [x] Link de Atendimento nos Grupos VIP (link por grupo, trava do dia, painel e faixa no chat)
 
 ## Ajustes do Overlay da Live
-- [ ] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
-- [ ] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
+- [x] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
+- [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
