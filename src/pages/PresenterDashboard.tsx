@@ -606,7 +606,7 @@ export default function PresenterDashboard() {
                 <Bell className="h-5 w-5 text-primary" />
                 <h2 className="text-lg font-bold">Alertas</h2>
                 {unreadCount > 0 && (
-                  <Badge variant="destructive" className="animate-pulse">{unreadCount} novos</Badge>
+                  <Badge variant="destructive">{unreadCount} novos</Badge>
                 )}
               </div>
               <ScrollArea className="h-[calc(100vh-380px)]">
