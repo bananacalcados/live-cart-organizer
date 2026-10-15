@@ -13,6 +13,8 @@ const PAID_SALE_STATUSES = new Set([
 /** Considera paga apenas a venda com pagamento confirmado (paid_at ou status de pago). */
 export function isSalePaid(sale: { status?: string | null; paid_at?: string | null } | null | undefined): boolean {
   if (!sale) return false;
+  const st = String(sale.status || "").toLowerCase();
+  if (st === "cancelled" || st === "canceled" || st === "cancelado") return false;
   if (sale.paid_at) return true;
   return PAID_SALE_STATUSES.has(String(sale.status || "").toLowerCase());
 }
