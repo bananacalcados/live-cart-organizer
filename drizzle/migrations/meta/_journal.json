@@ -162,6 +162,13 @@
       "when": 1792009130066,
       "tag": "0022_lp_leads_auto_exclude_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792082278425,
+      "tag": "0023_migration",
+      "breakpoints": true
     }
   ]
 }

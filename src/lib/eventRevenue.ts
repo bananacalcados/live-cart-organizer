@@ -32,7 +32,7 @@ export function orderNetValue(order: RevenueOrderLike): number {
   return Math.max(0, subtotal - discount);
 }
 
-/** Pedido cancelado não entra em nenhuma métrica. */
+/** Pedido cancelado: conta no total e no denominador da conversão, nunca como pago/recebido. */
 export function isCancelledOrder(order: RevenueOrderLike): boolean {
   return order.stage === "cancelled";
 }
@@ -52,10 +52,11 @@ export interface EventRevenueSummary {
   conversionRate: number;
 }
 
-/** Resumo padronizado: cancelados fora, desconto aplicado, mesmo critério de pago. */
+/** Resumo padronizado: cancelados no total/conversão, desconto aplicado, mesmo critério de pago. */
 export function summarizeEventRevenue(orders: RevenueOrderLike[]): EventRevenueSummary {
-  const active = orders.filter((o) => !isCancelledOrder(o));
-  const paid = active.filter((o) => isRevenuePaid(o));
+  // Cancelados entram no total e na conversão (conversão real); só o recebido os exclui.
+  const active = orders;
+  const paid = orders.filter((o) => isRevenuePaid(o));
 
   const totalValue = active.reduce((s, o) => s + orderNetValue(o), 0);
   const receivedValue = paid.reduce((s, o) => s + orderNetValue(o), 0);
