@@ -730,6 +730,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         toast.success("Pedido atualizado!");
       } else {
+        // Nunca cria pedido vazio: ele duplica o card da cliente e não gera link.
+        if (localProducts.length === 0) {
+          toast.error("Adicione pelo menos um produto antes de criar o pedido.");
+          return;
+        }
         // Create or get customer
         const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
         const newCustomer = await createOrUpdateCustomer(effectiveHandle, normalizedWa, fullName);
