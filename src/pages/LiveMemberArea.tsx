@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useShopifyVariantImages } from "@/hooks/useShopifyVariantImages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -201,6 +202,7 @@ export default function LiveMemberArea() {
 
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
+  const imgOf = useShopifyVariantImages(state?.order?.products);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
   /** Evita reenvio automático em loop do código de cadastro. */
@@ -1735,8 +1737,8 @@ export default function LiveMemberArea() {
             {o.products.map((p: any, i: number) => (
               <div key={i} className="flex items-center gap-3 rounded-xl bg-primary/10 p-3">
                 <div className="h-14 w-14 rounded-xl bg-card flex items-center justify-center overflow-hidden shrink-0">
-                  {p.image ? (
-                    <img src={p.image} alt={p.title} className="h-full w-full object-cover" />
+                  {imgOf(p) ? (
+                    <img src={imgOf(p)} alt={p.title} className="h-full w-full object-cover" />
                   ) : (
                     <ShoppingBag className="h-6 w-6 text-primary" />
                   )}
@@ -2189,8 +2191,8 @@ export default function LiveMemberArea() {
             <>
               {order.products.map((p: any, i: number) => (
                 <div key={i} className="flex gap-3 items-center border-b border-border/60 pb-3 last:border-0">
-                  {p.image && (
-                    <img src={p.image} alt={p.title} className="w-16 h-16 rounded-lg object-cover" />
+                  {imgOf(p) && (
+                    <img src={imgOf(p)} alt={p.title} className="w-16 h-16 rounded-lg object-cover" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{p.title}</p>
@@ -2351,7 +2353,7 @@ export default function LiveMemberArea() {
                             variant: p.variant,
                             price: Number(p.effective_price ?? p.price ?? 0),
                             quantity: Number(p.quantity || 1),
-                            image: p.image,
+                            image: imgOf(p),
                           }))}
                           form={payForm}
                           installmentConfig={installmentConfig}
