@@ -1916,6 +1916,8 @@ serve(async (req) => {
           error_message: result.error || null,
           split_start_gateway: split.splitOn ? split.start : null,
           gateways_tried: gatewaysTried.length ? gatewaysTried : null,
+          // Motivo da recusa de cada gateway que falhou antes do final (observabilidade da cascata).
+          metadata: fallbackErrors.length ? { fallback_errors: fallbackErrors } : {},
         } as any)
         .eq("transaction_id", paymentAttemptId)
         .eq("status", "processing")
