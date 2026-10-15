@@ -1869,7 +1869,13 @@ serve(async (req) => {
     const finalAttemptStatus = result.success ? "success" : (result.pending ? "pending" : "failed");
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts")
-        .update({ status: finalAttemptStatus, gateway: result.gateway || null, error_message: result.error || null } as any)
+        .update({
+          status: finalAttemptStatus,
+          gateway: result.gateway || null,
+          error_message: result.error || null,
+          split_start_gateway: split.splitOn ? split.start : null,
+          gateways_tried: gatewaysTried.length ? gatewaysTried : null,
+        } as any)
         .eq("transaction_id", paymentAttemptId)
         .eq("status", "processing")
         .then(() => {});
