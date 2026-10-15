@@ -8435,6 +8435,60 @@ export type Database = {
           },
         ]
       }
+      gateway_split_config: {
+        Row: {
+          enabled: boolean
+          id: boolean
+          percentages: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          id?: boolean
+          percentages?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          id?: boolean
+          percentages?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      gateway_split_config_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          new_enabled: boolean | null
+          new_percentages: Json | null
+          old_enabled: boolean | null
+          old_percentages: Json | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: number
+          new_enabled?: boolean | null
+          new_percentages?: Json | null
+          old_enabled?: boolean | null
+          old_percentages?: Json | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: number
+          new_enabled?: boolean | null
+          new_percentages?: Json | null
+          old_enabled?: boolean | null
+          old_percentages?: Json | null
+        }
+        Relationships: []
+      }
       group_campaign_block_dispatches: {
         Row: {
           attempts: number
