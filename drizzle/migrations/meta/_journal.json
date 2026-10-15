@@ -176,6 +176,13 @@
       "when": 1792083289256,
       "tag": "0024_gateway_split_config",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792084258950,
+      "tag": "0025_gateway_split_attempt_tracking",
+      "breakpoints": true
     }
   ]
 }

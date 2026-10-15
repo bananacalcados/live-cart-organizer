@@ -14463,10 +14463,12 @@ export type Database = {
           customer_phone: string | null
           error_message: string | null
           gateway: string | null
+          gateways_tried: string[] | null
           id: string
           metadata: Json | null
           payment_method: string
           sale_id: string
+          split_start_gateway: string | null
           status: string
           store_id: string | null
           transaction_id: string | null
@@ -14479,10 +14481,12 @@ export type Database = {
           customer_phone?: string | null
           error_message?: string | null
           gateway?: string | null
+          gateways_tried?: string[] | null
           id?: string
           metadata?: Json | null
           payment_method: string
           sale_id: string
+          split_start_gateway?: string | null
           status?: string
           store_id?: string | null
           transaction_id?: string | null
@@ -14495,10 +14499,12 @@ export type Database = {
           customer_phone?: string | null
           error_message?: string | null
           gateway?: string | null
+          gateways_tried?: string[] | null
           id?: string
           metadata?: Json | null
           payment_method?: string
           sale_id?: string
+          split_start_gateway?: string | null
           status?: string
           store_id?: string | null
           transaction_id?: string | null
@@ -24946,6 +24952,17 @@ export type Database = {
         Returns: Json
       }
       format_customer_code: { Args: { seq_val: number }; Returns: string }
+      gateway_split_stats: {
+        Args: { p_days?: number }
+        Returns: {
+          approval_rate: number
+          approved: number
+          approved_amount: number
+          attempts: number
+          gateway: string
+          plano_b_approved: number
+        }[]
+      }
       gen_shipment_public_code: { Args: never; Returns: string }
       gen_unique_ean13: { Args: never; Returns: string }
       gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
