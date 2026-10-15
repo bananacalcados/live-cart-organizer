@@ -9,6 +9,7 @@ import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
+import { resolveCardOrder, type CardGateway } from "../_shared/gateway-split.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
@@ -1753,82 +1754,86 @@ serve(async (req) => {
       }
     }
 
-    if (chargeParams.mpCardToken) {
-      console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
-      result = await chargeMercadoPago(chargeParams, products, supabase, clientIp, linkGatewayId);
-      if (result.success) {
-        mpAccountIdForOrder = result.mpAccountId || null;
-        console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
-      } else if (result.error) {
-        mpDeclineRaw = result.error;
-        fallbackErrors.push(`MercadoPago: ${result.error}`);
-        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). ${result.stopCascade ? "Bloqueando cascata." : "Tentando Pagar.me..."}`);
-      }
-    } else {
-      console.log("[CASCATA] Sem token MP (SDK não carregou) — iniciando direto no Pagar.me.");
-      result = { success: false, gateway: "mercadopago" };
-    }
+    // Ordem da cascata: padrão (MP → Pagar.me → VINDI → AppMax) ou, com a divisão
+    // ligada em Administração, começando no gateway sorteado para este pedido.
+    // Débito nunca usa a divisão: só Mercado Pago.
+    const split = isDebitCharge
+      ? { order: ["mercadopago"] as CardGateway[], start: null, splitOn: false }
+      : await resolveCardOrder(supabase, params.orderId);
+    console.log(`[CASCATA] ordem=${split.order.join(" → ")} divisão=${split.splitOn ? `ligada (início: ${split.start})` : "desligada"}`);
 
-    if (!result.success && result.isSandbox) {
-      console.log("[CASCATA] Conta Mercado Pago em sandbox — bloqueando fallback para gateways reais.");
-      result.error = result.error || "O teste no Mercado Pago sandbox falhou antes de chegar aos gateways reais.";
-    }
+    result = { success: false, gateway: split.order[0] };
+    let attempted = 0;
+    for (const gw of split.order) {
+      if (result.success || result.isSandbox || result.stopCascade) break;
+      if (isDebitCharge && gw !== "mercadopago") break;
 
-    // Gateway #2: Pagar.me
-    const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
-      result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp, linkGatewayId);
-    }
-
-    // Fallback chain: Pagar.me -> VINDI -> AppMax
-    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
-      if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
-      console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
-
-
-      const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
-      if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
-        if (vindiResult.success) {
-          console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
-          result = vindiResult;
+      if (gw === "mercadopago") {
+        if (!chargeParams.mpCardToken) {
+          console.log("[CASCATA] Sem token MP (SDK não carregou) — pulando Mercado Pago.");
+          continue;
+        }
+        console.log("[CASCATA] Tentando Mercado Pago...");
+        const r = await chargeMercadoPago(chargeParams, products, supabase, clientIp, linkGatewayId);
+        attempted++;
+        result = r;
+        if (r.success) {
+          mpAccountIdForOrder = r.mpAccountId || null;
+          console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${r.transactionId}).`);
+        } else if (r.error) {
+          mpDeclineRaw = r.error;
+          fallbackErrors.push(`MercadoPago: ${r.error}`);
+          console.log(`[CASCATA] Mercado Pago NAO processou (${r.error}).${r.stopCascade ? " Bloqueando cascata." : ""}`);
+        }
+        if (r.isSandbox && !r.success) {
+          console.log("[CASCATA] Conta Mercado Pago em sandbox — bloqueando fallback para gateways reais.");
+          result.error = result.error || "O teste no Mercado Pago sandbox falhou antes de chegar aos gateways reais.";
+        }
+      } else if (gw === "pagarme") {
+        const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
+        console.log("[CASCATA] Tentando Pagar.me...");
+        const r = await chargePagarme(chargeParams, products, pagarmeKey, clientIp, linkGatewayId);
+        attempted++;
+        result = r;
+        if (!r.success && r.error) {
+          fallbackErrors.push(`Pagar.me: ${r.error}`);
+          console.log(`[CASCATA] Pagar.me NAO processou (${r.error}).`);
+        }
+      } else if (gw === "vindi") {
+        const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
+        if (!vindiKey) { console.log("[CASCATA] VINDI não configurada. Pulando."); continue; }
+        const r = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
+        attempted++;
+        if (r.success) {
+          console.log(`[CASCATA] VINDI/Yapay APROVOU (tx: ${r.transactionId}).`);
+          result = r;
         } else {
-          if (vindiResult.error) fallbackErrors.push(`VINDI: ${vindiResult.error}`);
-          console.log(`[FALLBACK] VINDI/Yapay NAO processou (${vindiResult.error}).`);
+          if (r.error) fallbackErrors.push(`VINDI: ${r.error}`);
+          console.log(`[CASCATA] VINDI/Yapay NAO processou (${r.error}).`);
         }
-      } else {
-        console.log("[FALLBACK] VINDI API key not configured. Skipping.");
+      } else if (gw === "appmax") {
+        // Conta nova (AppStore OAuth2) tem prioridade; a chave antiga (api/v3) fica como reserva.
+        const appmaxV2Inst = await getAppmaxV2Installation();
+        const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
+        let r: ChargeResult | null = null;
+        if (appmaxV2Inst) r = await chargeAppmaxV2(chargeParams, products, appmaxV2Inst, clientIp, linkGatewayId);
+        else if (appmaxToken) r = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
+        else { console.log("[CASCATA] APPMAX não configurada. Pulando."); continue; }
+        attempted++;
+        if (r.success) {
+          console.log(`[CASCATA] APPMAX APROVOU (tx: ${r.transactionId}).`);
+          result = r;
+        } else {
+          if (r.error) fallbackErrors.push(`APPMAX: ${r.error}`);
+          console.log(`[CASCATA] APPMAX NAO processou (${r.error}).`);
+          // Pré-autorização/pagamento em andamento da AppMax também para a cascata.
+          if (r.pending || r.stopCascade) result = r;
+          else if (!result.error) result = r;
+        }
       }
     }
-
-    // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
-    if (!result.success && !result.isSandbox && !result.stopCascade && !isDebitCharge) {
-      console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
-      // Conta nova (AppStore OAuth2) tem prioridade; a chave antiga (api/v3) fica como reserva.
-      const appmaxV2Inst = await getAppmaxV2Installation();
-      const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
-      if (appmaxV2Inst) {
-        console.log(`[FALLBACK] APPMAX usando conta nova (AppStore OAuth2).`);
-        const appmaxResult = await chargeAppmaxV2(chargeParams, products, appmaxV2Inst, clientIp, linkGatewayId);
-        if (appmaxResult.success) {
-          console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
-          result = appmaxResult;
-        } else if (appmaxResult.error) {
-          fallbackErrors.push(`APPMAX: ${appmaxResult.error}`);
-          console.log(`[FALLBACK] APPMAX NAO processou (${appmaxResult.error}).`);
-        }
-      } else if (appmaxToken) {
-        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
-        if (appmaxResult.success) {
-          console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
-          result = appmaxResult;
-        } else if (appmaxResult.error) {
-          fallbackErrors.push(`APPMAX: ${appmaxResult.error}`);
-          console.log(`[FALLBACK] APPMAX NAO processou (${appmaxResult.error}).`);
-        }
-      } else {
-        console.log("[FALLBACK] APPMAX access token not configured. Skipping.");
-      }
+    if (attempted === 0 && !result.success && !result.error) {
+      result.error = "Nenhum gateway disponível para processar o cartão.";
     }
 
     if (!result.success) {
