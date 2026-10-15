@@ -25,6 +25,7 @@ import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccoun
 import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
+import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
@@ -229,7 +230,7 @@ export default function Admin() {
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
             <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
-            <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Mercado Pago</TabsTrigger>
+            <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Pagamentos</TabsTrigger>
             <TabsTrigger value="fiscal" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Fiscal</TabsTrigger>
             <TabsTrigger value="acessos" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Acessos</TabsTrigger>
           </TabsList>
@@ -453,6 +454,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="mercadopago" className="mt-4 space-y-6">
+            <GatewaySplitPanel />
             <MercadoPagoAccountsManager />
             <PointTerminalsPanel />
           </TabsContent>
