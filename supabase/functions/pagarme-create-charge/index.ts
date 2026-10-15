@@ -1764,6 +1764,7 @@ serve(async (req) => {
 
     result = { success: false, gateway: split.order[0] };
     let attempted = 0;
+    const gatewaysTried: string[] = [];
     for (const gw of split.order) {
       if (result.success || result.isSandbox || result.stopCascade) break;
       if (isDebitCharge && gw !== "mercadopago") break;
