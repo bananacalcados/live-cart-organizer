@@ -1807,6 +1807,7 @@ serve(async (req) => {
         if (!vindiKey) { console.log("[CASCATA] VINDI não configurada. Pulando."); continue; }
         const r = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         if (r.success) {
           console.log(`[CASCATA] VINDI/Yapay APROVOU (tx: ${r.transactionId}).`);
           result = r;
@@ -1823,6 +1824,7 @@ serve(async (req) => {
         else if (appmaxToken) r = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
         else { console.log("[CASCATA] APPMAX não configurada. Pulando."); continue; }
         attempted++;
+        gatewaysTried.push(gw);
         if (r.success) {
           console.log(`[CASCATA] APPMAX APROVOU (tx: ${r.transactionId}).`);
           result = r;
