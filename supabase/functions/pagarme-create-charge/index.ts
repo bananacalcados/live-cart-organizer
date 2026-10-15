@@ -1764,6 +1764,7 @@ serve(async (req) => {
 
     result = { success: false, gateway: split.order[0] };
     let attempted = 0;
+    const gatewaysTried: string[] = [];
     for (const gw of split.order) {
       if (result.success || result.isSandbox || result.stopCascade) break;
       if (isDebitCharge && gw !== "mercadopago") break;
@@ -1776,6 +1777,7 @@ serve(async (req) => {
         console.log("[CASCATA] Tentando Mercado Pago...");
         const r = await chargeMercadoPago(chargeParams, products, supabase, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         result = r;
         if (r.success) {
           mpAccountIdForOrder = r.mpAccountId || null;
@@ -1794,6 +1796,7 @@ serve(async (req) => {
         console.log("[CASCATA] Tentando Pagar.me...");
         const r = await chargePagarme(chargeParams, products, pagarmeKey, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         result = r;
         if (!r.success && r.error) {
           fallbackErrors.push(`Pagar.me: ${r.error}`);
@@ -1804,6 +1807,7 @@ serve(async (req) => {
         if (!vindiKey) { console.log("[CASCATA] VINDI não configurada. Pulando."); continue; }
         const r = await chargeVindi(chargeParams, products, vindiKey, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         if (r.success) {
           console.log(`[CASCATA] VINDI/Yapay APROVOU (tx: ${r.transactionId}).`);
           result = r;
@@ -1820,6 +1824,7 @@ serve(async (req) => {
         else if (appmaxToken) r = await chargeAppmax(chargeParams, products, appmaxToken, clientIp, linkGatewayId);
         else { console.log("[CASCATA] APPMAX não configurada. Pulando."); continue; }
         attempted++;
+        gatewaysTried.push(gw);
         if (r.success) {
           console.log(`[CASCATA] APPMAX APROVOU (tx: ${r.transactionId}).`);
           result = r;
@@ -1864,7 +1869,13 @@ serve(async (req) => {
     const finalAttemptStatus = result.success ? "success" : (result.pending ? "pending" : "failed");
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts")
-        .update({ status: finalAttemptStatus, gateway: result.gateway || null, error_message: result.error || null } as any)
+        .update({
+          status: finalAttemptStatus,
+          gateway: result.gateway || null,
+          error_message: result.error || null,
+          split_start_gateway: split.splitOn ? split.start : null,
+          gateways_tried: gatewaysTried.length ? gatewaysTried : null,
+        } as any)
         .eq("transaction_id", paymentAttemptId)
         .eq("status", "processing")
         .then(() => {});
