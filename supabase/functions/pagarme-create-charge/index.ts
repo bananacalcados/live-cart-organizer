@@ -9,6 +9,7 @@ import { resolvePayerEmail } from "../_shared/payer-email.ts";
 import { enrichPayerIdentity, isRealFullName } from "../_shared/payer-identity.ts";
 import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
+import { resolveCardOrder, type CardGateway } from "../_shared/gateway-split.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
