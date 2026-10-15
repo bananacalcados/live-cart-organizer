@@ -12,7 +12,7 @@ const GATEWAYS = [
   { key: "mercadopago", label: "Mercado Pago", disabled: false },
   { key: "pagarme", label: "Pagar.me", disabled: false },
   { key: "appmax", label: "AppMax", disabled: false },
-  { key: "austpay", label: "AustPay", note: "Só cartão — se recusar, segue o plano B" },
+  { key: "austpay", label: "AustPay", disabled: false, note: "Só cartão — se recusar, segue o plano B" },
 ] as const;
 
 type Pct = Record<string, number>;
