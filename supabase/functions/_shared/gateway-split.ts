@@ -4,8 +4,9 @@
 // Os demais seguem a ordem fixa da cascata como plano B.
 
 export const DEFAULT_CARD_ORDER = ["mercadopago", "pagarme", "vindi", "appmax"] as const;
-export type CardGateway = typeof DEFAULT_CARD_ORDER[number];
-const SPLITTABLE = ["mercadopago", "pagarme", "appmax"] as const;
+// AustPay só entra na fila quando é o gateway SORTEADO (nunca como reserva dos outros).
+export type CardGateway = typeof DEFAULT_CARD_ORDER[number] | "austpay";
+const SPLITTABLE = ["mercadopago", "pagarme", "appmax", "austpay"] as const;
 
 /** Hash estável 0..99 do id do pedido (FNV-1a). */
 export function bucketFor(orderId: string): number {
@@ -31,7 +32,7 @@ export function pickStartGateway(orderId: string, pct: Record<string, number>): 
 
 export function buildCardOrder(start: CardGateway | null): CardGateway[] {
   if (!start) return [...DEFAULT_CARD_ORDER];
-  return [start, ...DEFAULT_CARD_ORDER.filter((g) => g !== start)];
+  return [start, ...DEFAULT_CARD_ORDER.filter((g) => g !== start)] as CardGateway[];
 }
 
 /** Lê a configuração; qualquer erro devolve a ordem padrão (comportamento de hoje). */

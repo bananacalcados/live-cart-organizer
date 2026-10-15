@@ -72,7 +72,12 @@ serve(async (req) => {
     if (!orderId) throw new Error("orderId is required");
     if (!(amount > 0)) throw new Error("amount must be greater than zero");
 
-    const enabled = await isAustpayEnabled(supabase);
+    // Liberada pela chave geral OU por ter % na divisão de gateways (só cartão).
+    let enabled = await isAustpayEnabled(supabase);
+    if (!enabled) {
+      const { data: split } = await supabase.from("gateway_split_config").select("enabled, percentages").eq("id", true).maybeSingle();
+      enabled = !!split?.enabled && Number((split?.percentages as Record<string, number> | null)?.austpay || 0) > 0;
+    }
     if (!enabled) {
       return new Response(JSON.stringify({ error: "austpay_disabled" }), {
         status: 503,
@@ -176,6 +181,11 @@ serve(async (req) => {
     }
 
     const approved = isAustpayApproved(status);
+    // Motivo real da recusa (docs Rinne): acquirer_response_code do banco + status_reason da AustPay.
+    const acqCode = String(tx?.acquirer_response_code || tx?.provider_response_code || "");
+    const ACQ: Record<string, string> = { "51": "saldo insuficiente", "05": "não autorizada pelo banco", "54": "cartão vencido", "14": "cartão inválido", "57": "transação não permitida para o cartão", "59": "suspeita de fraude", "61": "acima do limite", "62": "cartão bloqueado" };
+    const REASON: Record<string, string> = { CHALLENGE_NOT_ALLOWED: "banco pediu 3DS (desafio) e está desligado", ACQUIRER_TIMEOUT: "banco não respondeu a tempo" };
+    const reasonText = [acqCode ? `código ${acqCode}${ACQ[acqCode] ? ` (${ACQ[acqCode]})` : ""}` : "", tx?.status_reason ? (REASON[tx.status_reason] || String(tx.status_reason)) : ""].filter(Boolean).join(" · ");
     console.log(`[austpay-card] tx=${txId} status=${status} pedido=${orderId}`);
 
     if (!approved) {
@@ -184,10 +194,10 @@ serve(async (req) => {
         payment_method: mode === "debit" ? "debit_card" : "credit_card",
         gateway: "austpay",
         status: "failed",
-        error_message: `AustPay recusou: ${status} ${tx?.status_reason || ""}`.trim(),
+        error_message: `AustPay recusou: ${status}${reasonText ? ` — ${reasonText}` : ""}`,
         amount,
         transaction_id: txId || null,
-        metadata: { source: "austpay-charge-card", status },
+        metadata: { source: "austpay-charge-card", status, status_reason: tx?.status_reason || null, acquirer_response_code: acqCode || null },
       });
     }
 
@@ -196,7 +206,8 @@ serve(async (req) => {
         gateway: "austpay",
         approved,
         status,
-        statusReason: tx?.status_reason || null,
+        statusReason: reasonText || tx?.status_reason || null,
+        acquirerResponseCode: acqCode || null,
         transactionId: txId,
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },

@@ -68,8 +68,12 @@ serve(async (req) => {
     }
 
     const event = String(body?.event || body?.type || "");
-    const data = body?.data || body?.transaction || body || {};
-    const txId = String(data?.id || data?.transaction_id || "");
+    // Formato oficial (docs Rinne): { id: <id do EVENTO>, type, payload: { transaction_id, old_status, new_status } }.
+    // Nunca usar body.id como transação — é o id do evento.
+    const p = body?.payload || {};
+    const data = body?.data || body?.transaction || {};
+    const txId = String(p?.transaction_id || data?.transaction_id || data?.id || "");
+    if (p?.new_status && !data?.status) data.status = p.new_status;
     if (!txId) return json({ ok: true, skipped: "no_transaction_id" });
 
     console.log(`[austpay-webhook] evento=${event} tx=${txId}`);
