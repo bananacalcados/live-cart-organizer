@@ -1157,7 +1157,7 @@ async function chargeAppmaxV2(
             holder_document_number: cpf,
             holder_name: params.card.holderName,
             installments: params.installments,
-            soft_descriptor: "BANANACALCADOS",
+            soft_descriptor: "BANANACALCAD", // AppMax: máx. 13 caracteres
           },
         },
       }),
@@ -1200,7 +1200,7 @@ async function chargeAppmaxV2(
     }
 
     const errRaw = payData?.error?.message || payData?.message ||
-      (typeof payData?.errors?.message === "string" ? payData.errors.message : null) ||
+      (payData?.errors?.message ? payData.errors.message : null) ||
       `AppMax v2 payment declined (status: ${status || "desconhecido"})`;
     const errMsg = typeof errRaw === "string" ? errRaw : JSON.stringify(errRaw).substring(0, 200);
     return {
