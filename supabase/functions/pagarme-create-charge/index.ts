@@ -1777,6 +1777,7 @@ serve(async (req) => {
         console.log("[CASCATA] Tentando Mercado Pago...");
         const r = await chargeMercadoPago(chargeParams, products, supabase, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         result = r;
         if (r.success) {
           mpAccountIdForOrder = r.mpAccountId || null;
@@ -1795,6 +1796,7 @@ serve(async (req) => {
         console.log("[CASCATA] Tentando Pagar.me...");
         const r = await chargePagarme(chargeParams, products, pagarmeKey, clientIp, linkGatewayId);
         attempted++;
+        gatewaysTried.push(gw);
         result = r;
         if (!r.success && r.error) {
           fallbackErrors.push(`Pagar.me: ${r.error}`);
