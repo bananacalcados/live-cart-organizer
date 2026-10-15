@@ -11,6 +11,7 @@ const GATEWAY_LABELS: Record<string, string> = {
   appmax: "AppMax",
   vindi: "Vindi",
   austpay: "AustPay",
+  member_area: "Área de membros",
 };
 
 type Row = {
