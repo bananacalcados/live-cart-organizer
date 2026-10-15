@@ -202,6 +202,7 @@ export default function LiveMemberArea() {
 
   const [name, setName] = useState("");
   const [state, setState] = useState<MemberState | null>(null);
+  const imgOf = useShopifyVariantImages(state?.order?.products);
   const [otpOpen, setOtpOpen] = useState(false);
   const [otp, setOtp] = useState("");
   /** Evita reenvio automático em loop do código de cadastro. */
