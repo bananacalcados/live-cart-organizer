@@ -1022,12 +1022,12 @@ async function getAppmaxV2Installation(): Promise<AppmaxV2Installation | null> {
 async function appmaxV2Token(clientId: string, clientSecret: string): Promise<string> {
   const r = await fetch("https://auth.appmax.com.br/oauth2/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       grant_type: "client_credentials",
       client_id: clientId,
       client_secret: clientSecret,
-    }),
+    }).toString(),
   });
   const t = await r.text();
   if (!r.ok) throw new Error(`oauth2/token [${r.status}]: ${t.substring(0, 200)}`);
