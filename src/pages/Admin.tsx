@@ -26,6 +26,7 @@ import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
 import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
+import { GatewaySplitStatsPanel } from "@/components/admin/GatewaySplitStatsPanel";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
@@ -455,6 +456,7 @@ export default function Admin() {
 
           <TabsContent value="mercadopago" className="mt-4 space-y-6">
             <GatewaySplitPanel />
+            <GatewaySplitStatsPanel />
             <MercadoPagoAccountsManager />
             <PointTerminalsPanel />
           </TabsContent>
