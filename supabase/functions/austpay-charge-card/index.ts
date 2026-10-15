@@ -72,7 +72,12 @@ serve(async (req) => {
     if (!orderId) throw new Error("orderId is required");
     if (!(amount > 0)) throw new Error("amount must be greater than zero");
 
-    const enabled = await isAustpayEnabled(supabase);
+    // Liberada pela chave geral OU por ter % na divisão de gateways (só cartão).
+    let enabled = await isAustpayEnabled(supabase);
+    if (!enabled) {
+      const { data: split } = await supabase.from("gateway_split_config").select("enabled, percentages").eq("id", true).maybeSingle();
+      enabled = !!split?.enabled && Number((split?.percentages as Record<string, number> | null)?.austpay || 0) > 0;
+    }
     if (!enabled) {
       return new Response(JSON.stringify({ error: "austpay_disabled" }), {
         status: 503,

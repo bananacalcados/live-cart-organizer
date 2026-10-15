@@ -1815,6 +1815,47 @@ serve(async (req) => {
           if (r.error) fallbackErrors.push(`VINDI: ${r.error}`);
           console.log(`[CASCATA] VINDI/Yapay NAO processou (${r.error}).`);
         }
+      } else if (gw === "austpay") {
+        // AustPay (só cartão): chamada à função própria; se recusar/falhar, segue o plano B.
+        let r: ChargeResult;
+        try {
+          const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/austpay-charge-card`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              origin: "https://checkout.bananacalcados.com.br",
+            },
+            body: JSON.stringify({
+              orderId: params.orderId,
+              amount: (chargeParams.totalAmountCents || 0) / 100,
+              installments: chargeParams.installments || 1,
+              mode: "credit",
+              card: {
+                number: chargeParams.card.number,
+                cvv: chargeParams.card.cvv,
+                expMonth: String(chargeParams.card.expMonth),
+                expYear: String(chargeParams.card.expYear),
+                holderName: chargeParams.card.holderName,
+              },
+              holder: { name: chargeParams.customer?.name, cpf: chargeParams.customer?.cpf, email: chargeParams.customer?.email },
+            }),
+          });
+          const d = await resp.json().catch(() => ({}));
+          r = d?.approved
+            ? { success: true, gateway: "austpay", transactionId: String(d.transactionId || "") }
+            : { success: false, gateway: "austpay", error: d?.error || `Recusado: ${d?.status || resp.status}${d?.statusReason ? ` (${d.statusReason})` : ""}` };
+        } catch (e) {
+          r = { success: false, gateway: "austpay", error: (e as Error).message };
+        }
+        if (r.error === "austpay_disabled" || r.error === "austpay_not_configured") {
+          console.log(`[CASCATA] AustPay indisponível (${r.error}). Pulando.`);
+          continue;
+        }
+        attempted++;
+        gatewaysTried.push(gw);
+        if (r.success) { console.log(`[CASCATA] AUSTPAY APROVOU (tx: ${r.transactionId}).`); result = r; }
+        else { fallbackErrors.push(`AustPay: ${r.error}`); console.log(`[CASCATA] AUSTPAY NAO processou (${r.error}).`); if (!result.error) result = r; }
       } else if (gw === "appmax") {
         // Conta nova (AppStore OAuth2) tem prioridade; a chave antiga (api/v3) fica como reserva.
         const appmaxV2Inst = await getAppmaxV2Installation();
