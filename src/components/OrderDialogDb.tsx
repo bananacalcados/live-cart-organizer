@@ -730,6 +730,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         toast.success("Pedido atualizado!");
       } else {
+        // Nunca cria pedido vazio: ele duplica o card da cliente e não gera link.
+        if (localProducts.length === 0) {
+          toast.error("Adicione pelo menos um produto antes de criar o pedido.");
+          return;
+        }
         // Create or get customer
         const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
         const newCustomer = await createOrUpdateCustomer(effectiveHandle, normalizedWa, fullName);
@@ -739,7 +744,24 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         }
 
         // Check for existing active order in this event
-        const activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
+        let activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
+        if (!activeOrder) {
+          // A lista da tela pode estar desatualizada: confere no banco antes de criar outro pedido.
+          const { data: dbActive } = await supabase
+            .from("orders")
+            .select("id")
+            .eq("event_id", eventId)
+            .eq("customer_id", newCustomer.id)
+            .eq("is_paid", false)
+            .neq("stage", "cancelled")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (dbActive?.id) {
+            await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+            activeOrder = useDbOrderStore.getState().orders.find((o) => o.id === dbActive.id);
+          }
+        }
         if (activeOrder) {
           for (const product of localProducts) {
             await useDbOrderStore.getState().addProductToOrder(activeOrder.id, product);
