@@ -175,7 +175,14 @@ serve(async (req) => {
           : Array.isArray(raw?.participants) ? raw.participants
             : Array.isArray(raw?.group?.participants) ? raw.group.participants
               : Array.isArray(raw?.data?.participants) ? raw.data.participants : [];
-        const phones = Array.from(new Set(parts.map((p) => phoneFromParticipant(p)).filter(Boolean)));
+        const phones = Array.from(new Set(parts.map((p: any) => {
+          for (const c of [p?.phone, p?.PhoneNumber, p?.phoneNumber, p?.number]) {
+            const d = String(c || "").replace(/\D/g, "");
+            if (d.length >= 10 && d.length <= 15) return d;
+          }
+          const j = String(p?.JID || p?.jid || p?.id || "");
+          return j.includes("@s.whatsapp.net") || j.includes("@c.us") ? j.replace(/\D/g, "") : "";
+        }).filter(Boolean)));
         return json({ success: true, phones });
       }
       case "inviteLink":
