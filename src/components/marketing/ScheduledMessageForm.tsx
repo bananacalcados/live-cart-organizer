@@ -150,6 +150,7 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     disableLinkPreview: false,
     vipLinkMode: 'none',
     vipLinkProduct: null,
+    mediaBrief: '',
   };
 }
 
@@ -442,6 +443,12 @@ function BlockEditor({
               </div>
             )}
             <p className="text-[10px] text-muted-foreground">{block.mediaItems.length}/10 arquivos</p>
+            <Input
+              placeholder="Descrição da mídia (para rascunho): ex. foto do Confort preto, fundo branco"
+              value={block.mediaBrief || ''}
+              onChange={e => onChange({ ...block, mediaBrief: e.target.value })}
+              className="text-xs"
+            />
             {(block.type === 'image' || block.type === 'video') && (
               <VipLinkBlockControls
                 mode={block.vipLinkMode || 'none'}
@@ -598,7 +605,7 @@ function BlockEditor({
 }
 
 // ─── Main Composer ───
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, onSaveDraft, editingMessage, editingGroupMessages, onUpdate, onUpdateGroup, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
   const [showOtherCampaigns, setShowOtherCampaigns] = useState(false);
   const [selectedOtherCampaignId, setSelectedOtherCampaignId] = useState<string | null>(null);
   const [isSchedulingOther, setIsSchedulingOther] = useState(false);
