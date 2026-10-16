@@ -1049,11 +1049,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
       
       if (result.success && newGroupId) {
+        // Grava a chave da instância no mesmo formato da sincronização:
+        // Z-API usa zapi_instance_id; uazapi/WaSender usam o id da instância.
+        const instInfo = campaignNumberId ? await fetchInstanceInfo(campaignNumberId) : null;
+        const instKey = instInfo
+          ? ((instInfo.provider || 'zapi') === 'zapi' ? (instInfo.zapi_instance_id || instInfo.id) : instInfo.id)
+          : null;
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
           group_id: newGroupId,
           name: newGroupName.trim(),
           is_vip: true,
           is_active: true,
+          instance_id: instKey,
           participant_count: selectedGroupContacts.length,
           max_participants: 1024,
         }).select().single();
