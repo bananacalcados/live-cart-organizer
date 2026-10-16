@@ -17,15 +17,17 @@ Deno.serve(async (req) => {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const res = await austpayFetch(cfg, "/v1/transactions?limit=1", { method: "GET" });
-    const text = await res.text();
+    const results: any = {};
+    for (const which of ["sandbox", "production"] as const) {
+      const alt = { ...cfg, baseUrl: which === "production" ? AUSTPAY_PROD_BASE : AUSTPAY_SANDBOX_BASE };
+      const r = await austpayFetch(alt, "/v1/transactions?limit=1", { method: "GET" });
+      const t = await r.text();
+      results[which] = { status: r.status, ok: r.ok, body: t.slice(0, 400) };
+    }
     return new Response(JSON.stringify({
-      ok: res.ok,
-      env: cfg.env,
       provider: cfg.provider,
       hasMerchant: !!cfg.merchantId,
-      status: res.status,
-      body: text.slice(0, 600),
+      results,
     }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
