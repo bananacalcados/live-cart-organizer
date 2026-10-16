@@ -70,7 +70,9 @@ function formatCEP(v: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 function formatPhone(v: string) {
-  const d = v.replace(/\D/g, "").slice(0, 11);
+  let raw = v.replace(/\D/g, "");
+  if (raw.startsWith("55") && raw.length >= 12) raw = raw.slice(2);
+  const d = raw.slice(0, 11);
   if (d.length <= 2) return `(${d}`;
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
