@@ -1,7 +1,7 @@
 // Teste temporário de autenticação da chave AustPay/Rinne em produção.
 // Faz UMA chamada de leitura (GET /v1/transactions) e devolve status + trecho
 // da resposta. Nunca devolve a chave.
-import { getAustpayConfig, austpayFetch } from "../_shared/austpay.ts";
+import { getAustpayConfig, austpayFetch, AUSTPAY_SANDBOX_BASE, AUSTPAY_PROD_BASE } from "../_shared/austpay.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
