@@ -485,7 +485,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       });
       const { error } = await supabase.from('group_campaign_scheduled_messages').insert(normalized as any);
       if (error) throw error;
-      toast.success(`${offset} mensagem(ns) agendada(s)!`);
+      toast.success(asDraft ? `${offset} mensagem(ns) salva(s) como rascunho!` : `${offset} mensagem(ns) agendada(s)!`);
     } else {
       // Legacy fallback
       if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
