@@ -731,11 +731,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const multiMediaTypes = ['image', 'video', 'document'];
     const rows: any[] = [];
     for (const block of blocks as any[]) {
+      const vip = { vip_link_mode: block.vipLinkMode || 'none', vip_link_product: block.vipLinkProduct || null };
       if (multiMediaTypes.includes(block.type) && block.mediaItems?.length) {
         for (const item of block.mediaItems) {
           rows.push({
             message_type: block.type, message_content: item.caption || null, media_url: item.url,
-            media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview,
+            media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip,
           });
         }
       } else if (block.type === 'text') {
@@ -755,8 +756,6 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         scheduled_at: scheduledAtIso,
         send_speed: data.sendSpeed,
         mention_all: data.mentionAll,
-        vip_link_mode: data.vipLinkMode || 'none',
-        vip_link_product: data.vipLinkProduct || null,
       };
       if (i < existing.length) {
         const { error } = await supabase.from('group_campaign_scheduled_messages').update(payload as any).eq('id', existing[i].id);
