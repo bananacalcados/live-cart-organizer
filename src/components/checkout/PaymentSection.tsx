@@ -964,12 +964,12 @@ function CardPaymentForm({
           </p>
           <Button
             onClick={handleSubmit}
-            className="w-full h-20 sm:h-24 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse border-b-4 border-emerald-800"
+            className="w-full h-auto min-h-20 sm:min-h-24 whitespace-normal px-3 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse border-b-4 border-emerald-800"
             size="lg"
           >
-            <span className="flex flex-col items-center leading-tight py-1">
-              <span className="flex items-center gap-2 text-lg sm:text-xl font-black">
-                <Lock className="h-6 w-6 shrink-0" /> CLIQUE AQUI PARA CONCLUIR PAGAMENTO
+            <span className="flex w-full min-w-0 flex-col items-center leading-tight py-2 gap-1">
+              <span className="flex items-center justify-center gap-2 text-base sm:text-xl font-black text-center break-words">
+                <Lock className="h-5 w-5 shrink-0" /> <span>CLIQUE AQUI PARA CONCLUIR PAGAMENTO</span>
               </span>
               <span className="text-sm font-bold opacity-90">
                 {isDebit || selectedInstallments === 1
