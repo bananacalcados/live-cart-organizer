@@ -1314,6 +1314,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 );
               })}
             </div>
+            {unavailableTargetGroups.length > 0 && (
+              <div className="space-y-1.5 pt-2">
+                <p className="text-xs font-medium text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Grupos indisponíveis nesta instância ({unavailableTargetGroups.length})
+                </p>
+                {unavailableTargetGroups.map(g => (
+                  <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg border border-destructive/40 bg-destructive/5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{g.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{g.is_active === false ? 'Grupo não existe mais no WhatsApp' : 'Pertence a outra instância'}</p>
+                    </div>
+                    <Badge variant="destructive" className="text-[10px] shrink-0">Indisponível</Badge>
+                    <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => toggleGroupInCampaign(g.id)}>
+                      Remover da campanha
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* MESSAGES TAB */}
