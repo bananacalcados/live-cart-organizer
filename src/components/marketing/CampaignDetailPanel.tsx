@@ -1946,7 +1946,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               <p className="text-xs font-medium text-muted-foreground">
                 {calendarSelectedDay 
                   ? `MENSAGENS DE ${format(calendarSelectedDay, "dd/MM/yyyy")}` 
-                  : `TODAS AS MENSAGENS (${messages.length})`}
+                  : `TODAS AS MENSAGENS (${messages.filter(m => m.status !== 'draft' && m.status !== 'grouped').length})`}
               </p>
               <div className="flex gap-1.5">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={openImportDialog}>
@@ -2220,11 +2220,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       <ScheduledMessageForm
         open={showMessageForm}
-        onOpenChange={open => { setShowMessageForm(open); if (!open) setEditingMessage(null); }}
+        onOpenChange={open => { setShowMessageForm(open); if (!open) { setEditingMessage(null); setEditingGroup(null); } }}
         onSubmit={handleAddMessage}
         onSendNow={handleSendNow}
+        onSaveDraft={handleSaveDraft}
         editingMessage={editingMessage}
+        editingGroupMessages={editingGroup}
         onUpdate={handleUpdateMessage}
+        onUpdateGroup={handleUpdateGroupMessage}
         campaignId={campaignId}
         otherCampaigns={otherCampaignGroups.map(c => ({ id: c.id, name: c.name }))}
         onScheduleToCampaign={handleScheduleToCampaign}
