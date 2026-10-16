@@ -45,6 +45,8 @@ export interface MessageBlock {
   /** Link de Atendimento VIP (texto/imagem/vídeo). */
   vipLinkMode?: VipLinkMode;
   vipLinkProduct?: VipLinkProduct | null;
+  /** Descrição da mídia que falta subir (blocos de mídia em rascunho). */
+  mediaBrief?: string;
 }
 
 export interface ScheduledMessageData {
@@ -55,7 +57,7 @@ export interface ScheduledMessageData {
   mediaItems: MediaItem[];
   pollOptions: string[];
   pollMaxOptions: number;
-  scheduledAt: Date;
+  scheduledAt: Date | null;
   scheduledTime: string;
   sendSpeed: string;
   mentionAll: boolean;
@@ -69,13 +71,19 @@ interface EditingMessage {
   message_content: string | null;
   media_url: string | null;
   poll_options: any;
-  scheduled_at: string;
+  poll_max_options?: number | null;
+  scheduled_at: string | null;
   send_speed: string;
   disable_link_preview?: boolean | null;
   contact_name?: string | null;
   contact_phone?: string | null;
   vip_link_mode?: string | null;
   vip_link_product?: any;
+  message_group_id?: string | null;
+  block_order?: number | null;
+  created_by?: string | null;
+  draft_batch?: string | null;
+  media_brief?: string | null;
 }
 
 interface MessageTemplate {
@@ -92,8 +100,14 @@ interface ScheduledMessageFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ScheduledMessageData) => Promise<void>;
   onSendNow?: (data: ScheduledMessageData) => Promise<void>;
+  /** Salva como rascunho (status 'draft') — permite faltar mídia/horário. */
+  onSaveDraft?: (data: ScheduledMessageData) => Promise<void>;
   editingMessage?: EditingMessage | null;
+  /** Todos os blocos da mensagem em edição (mesmo message_group_id), ordenados por block_order. */
+  editingGroupMessages?: EditingMessage[] | null;
   onUpdate?: (id: string, data: ScheduledMessageData) => Promise<void>;
+  /** Salva a mensagem INTEIRA (todos os blocos do grupo) preservando ids e metadados. */
+  onUpdateGroup?: (anchorId: string, data: ScheduledMessageData) => Promise<void>;
   campaignId?: string;
   otherCampaigns?: { id: string; name: string }[];
   onScheduleToCampaign?: (data: ScheduledMessageData, targetCampaignId: string) => Promise<void>;
