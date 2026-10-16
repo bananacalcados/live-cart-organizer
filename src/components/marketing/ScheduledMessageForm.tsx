@@ -100,10 +100,10 @@ interface ScheduledMessageFormProps {
 }
 
 const VARIABLES = [
-  { name: "link_live", label: "Link da Live" },
   { name: "nome_grupo", label: "Nome do Grupo" },
   { name: "data_hoje", label: "Data de Hoje" },
   { name: "horario", label: "Horário Atual" },
+  { name: "link_atendimento", label: "Link de Atendimento" },
 ];
 
 const BLOCK_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
@@ -642,6 +642,17 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   useEffect(() => { if (open) fetchTemplates(); }, [open]);
 
+  // Variáveis reais cadastradas na campanha atual
+  const [campaignVarNames, setCampaignVarNames] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open || !campaignId) return;
+    supabase.from("campaign_variables").select("variable_name").eq("campaign_id", campaignId)
+      .then(({ data }) => {
+        const names = (data || []).map((v: any) => String(v.variable_name)).filter(Boolean).sort();
+        setCampaignVarNames(prev => prev.join("|") === names.join("|") ? prev : names);
+      });
+  }, [open, campaignId]);
+
   // Ao fechar o modal, limpa o painel de "outra campanha" e o formulário (exceto edição)
   useEffect(() => {
     if (!open) {
@@ -1009,7 +1020,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               <Variable className="h-3.5 w-3.5" /> Inserir Variável
             </Label>
             <div className="flex flex-wrap gap-1">
-              {VARIABLES.map(v => (
+              {[...campaignVarNames.map(n => ({ name: n, label: n })), ...VARIABLES].map(v => (
                 <Button key={v.name} variant="outline" size="sm" className="text-[10px] h-6 px-2"
                   onClick={() => insertVariable(v.name)}>
                   {`{{${v.name}}}`}
