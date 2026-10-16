@@ -26,8 +26,8 @@
 - [x] Link de Atendimento nos Grupos VIP (link por grupo, trava do dia, painel e faixa no chat)
 
 ## Expedição — gateways
-- [ ] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
-- [ ] Ampliar Reduzir valor e conferir a tela sem alterar pedidos.
+- [x] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
+- [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
 ## Ajustes do Overlay da Live
 - [x] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
