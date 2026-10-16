@@ -633,35 +633,48 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [dayLocked, setDayLocked] = useState(false);
   const hasVipLink = blocks.some(b => (b.vipLinkMode || 'none') !== 'none');
 
-  // Load editing message (legacy single → one block)
+  // Load editing message(s). Quando editingGroupMessages vem preenchido, abre a
+  // MENSAGEM INTEIRA (todos os blocos do message_group_id), preservando a ordem.
   useEffect(() => {
-    if (editingMessage) {
-      const b = createBlock(editingMessage.message_type as MessageBlock['type']);
-      b.content = editingMessage.message_content || '';
-      // For image/video/document types, load media_url into mediaItems array
+    const rows = (editingGroupMessages && editingGroupMessages.length > 0)
+      ? [...editingGroupMessages].sort((a, b) => (a.block_order ?? 0) - (b.block_order ?? 0))
+      : (editingMessage ? [editingMessage] : null);
+    if (rows) {
       const multiMediaTypes = ['image', 'video', 'document'];
-      if (multiMediaTypes.includes(editingMessage.message_type) && editingMessage.media_url) {
-        b.mediaItems = [{ url: editingMessage.media_url, caption: editingMessage.message_content || '' }];
-        b.content = ''; // caption is stored in mediaItems
+      const loaded = rows.map(row => {
+        const b = createBlock(row.message_type as MessageBlock['type']);
+        b.content = row.message_content || '';
+        if (multiMediaTypes.includes(row.message_type) && row.media_url) {
+          b.mediaItems = [{ url: row.media_url, caption: row.message_content || '' }];
+          b.content = ''; // caption is stored in mediaItems
+        }
+        b.mediaUrl = row.media_url || '';
+        b.disableLinkPreview = !!row.disable_link_preview;
+        if (row.poll_options) {
+          b.pollOptions = Array.isArray(row.poll_options) ? row.poll_options : ['', ''];
+        }
+        if (row.poll_max_options != null) b.pollMaxOptions = row.poll_max_options;
+        b.contactName = row.contact_name || '';
+        b.contactPhone = row.contact_phone || '';
+        b.vipLinkMode = (row.vip_link_mode as VipLinkMode) || 'none';
+        b.vipLinkProduct = row.vip_link_product || null;
+        b.mediaBrief = row.media_brief || '';
+        return b;
+      });
+      setBlocks(loaded);
+      setSendSpeed(rows[0].send_speed || 'normal');
+      if (rows[0].scheduled_at) {
+        const d = new Date(rows[0].scheduled_at);
+        setScheduledDate(d);
+        setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+      } else {
+        setScheduledDate(undefined);
+        setScheduledTime('12:00');
       }
-      b.mediaUrl = editingMessage.media_url || '';
-      b.disableLinkPreview = !!editingMessage.disable_link_preview;
-      if (editingMessage.poll_options) {
-        b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
-      }
-      b.contactName = editingMessage.contact_name || '';
-      b.contactPhone = editingMessage.contact_phone || '';
-      b.vipLinkMode = (editingMessage.vip_link_mode as VipLinkMode) || 'none';
-      b.vipLinkProduct = editingMessage.vip_link_product || null;
-      setBlocks([b]);
-      setSendSpeed(editingMessage.send_speed || 'normal');
-      const d = new Date(editingMessage.scheduled_at);
-      setScheduledDate(d);
-      setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
     } else {
       resetForm();
     }
-  }, [editingMessage, open]);
+  }, [editingMessage, editingGroupMessages, open]);
 
   useEffect(() => { if (open) fetchTemplates(); }, [open]);
 
