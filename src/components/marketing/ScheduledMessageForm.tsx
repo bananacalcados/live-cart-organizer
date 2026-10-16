@@ -827,7 +827,6 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     // Rascunho: permite salvar sem mídia/horário (validação fica para a aprovação).
     const isDraftEdit = !!editingGroupMessages?.length;
     if (!isDraftEdit && !validate()) return;
-    if (isDraftEdit && !scheduledDate) { toast.error("Selecione uma data (ou salve sem horário direto no banco)"); return; }
     setIsSaving(true);
     try {
       if (isDraftEdit && onUpdateGroup) {
