@@ -165,6 +165,19 @@ serve(async (req) => {
         if (!jid) return json({ error: "groupJid obrigatório" }, 400);
         r = await uazapiInstance("/group/info", token, { method: "POST", body: { groupjid: jid } });
         break;
+      case "participantPhones": {
+        // Lista de telefones dos participantes (mesmo parse de dddStats/syncMembers).
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        const info = await uazapiInstance("/group/info", token, { method: "POST", body: { groupjid: jid } });
+        if (!info.ok) return json({ error: "Falha ao buscar participantes", details: info.data }, info.status);
+        const raw: any = info.data;
+        const parts: any[] = Array.isArray(raw?.Participants) ? raw.Participants
+          : Array.isArray(raw?.participants) ? raw.participants
+            : Array.isArray(raw?.group?.participants) ? raw.group.participants
+              : Array.isArray(raw?.data?.participants) ? raw.data.participants : [];
+        const phones = Array.from(new Set(parts.map((p) => phoneFromParticipant(p)).filter(Boolean)));
+        return json({ success: true, phones });
+      }
       case "inviteLink":
         if (!jid) return json({ error: "groupJid obrigatório" }, 400);
         r = await uazapiInstance("/group/invitelink", token, { method: "POST", body: { groupjid: jid } });
@@ -197,7 +210,8 @@ serve(async (req) => {
         if (!jid) return json({ error: "groupJid obrigatório" }, 400);
         const payload: Record<string, unknown> = { number: jid, text: body.message };
         if (Array.isArray(body.mentions) && body.mentions.length > 0) {
-          payload.mentions = body.mentions.map((m: string) => formatUazapiNumber(m));
+          // uazapi: mentions = números separados por vírgula (menção oculta, não aparece no texto).
+          payload.mentions = body.mentions.map((m: string) => String(m).replace(/\D/g, "")).filter(Boolean).join(",");
         }
         // Opcional: sem miniatura de link quando linkPreview === false.
         if (body.linkPreview === false) payload.linkPreview = false;
