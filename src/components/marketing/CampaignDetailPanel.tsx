@@ -172,6 +172,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [variables, setVariables] = useState<CampaignVariable[]>([]);
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [editingMessage, setEditingMessage] = useState<ScheduledMessage | null>(null);
+  const [editingGroup, setEditingGroup] = useState<ScheduledMessage[] | null>(null);
+  // Rascunhos: filtros, seleção múltipla e diálogo de aprovação
+  const [msgStatusFilter, setMsgStatusFilter] = useState<'all' | 'draft' | 'pending' | 'sent' | 'cancelled'>('all');
+  const [msgBatchFilter, setMsgBatchFilter] = useState<string>('all');
+  const [msgDayFilter, setMsgDayFilter] = useState<string | null>(null);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approvePreview, setApprovePreview] = useState<{ ids: string[] } | null>(null);
+  const [pastScheduleAck, setPastScheduleAck] = useState(false);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
