@@ -1396,7 +1396,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart); // 0=Sun
 
-  const getMessagesForDay = (day: Date) => messages.filter(m => isSameDay(new Date(m.scheduled_at), day));
+  const getMessagesForDay = (day: Date) => messages.filter(m => m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
 
   if (showBulkSettings) {
     return <CampaignBulkSettings campaignId={campaignId} targetGroups={campaign?.target_groups || []} onBack={() => setShowBulkSettings(false)} />;
@@ -1929,7 +1929,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                         <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
                           m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
                         )}>
-                          {format(new Date(m.scheduled_at), "HH:mm")}
+                          {m.scheduled_at ? format(new Date(m.scheduled_at), "HH:mm") : '--:--'}
                         </div>
                       ))}
                       {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
