@@ -19,6 +19,23 @@ Deno.serve(async (req) => {
     const { data: role } = await sb.from("user_roles").select("role").eq("user_id", auth.user.id).eq("role", "admin").maybeSingle();
     if (!role) return json({ error: "Somente administração" }, 403);
     const body = await req.json();
+    if (Array.isArray(body.paymentIds)) {
+      if (body.paymentIds.length > 20 || body.paymentIds.some((id: unknown) => typeof id !== "string" || !/^\d{1,30}$/.test(id))) return json({ error: "Pagamentos inválidos" }, 400);
+      const accounts = await listAllMpAccountsForPolling(sb);
+      const results = [];
+      for (const id of body.paymentIds) {
+        let proof: any = { id, verified: false };
+        for (const account of accounts) {
+          const response = await mpGetPayment(account.access_token, id);
+          if (!response.ok) continue;
+          const payment = await response.json();
+          proof = { id, verified: true, status: payment.status, real: payment.live_mode, amount: payment.transaction_amount, reference: payment.external_reference };
+          break;
+        }
+        results.push(proof);
+      }
+      return json({ results });
+    }
     const entity = body.entity === "sales" ? "sales" : "orders";
     const offset = Number(body.offset || 0);
     const since = String(body.since || "2026-10-15T00:00:00Z");
