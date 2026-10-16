@@ -209,12 +209,21 @@ serve(async (req) => {
 
         const { error } = await supabase
           .from('whatsapp_groups')
-          .upsert(rowsWithPrevious, { onConflict: 'group_id,instance_id', ignoreDuplicates: false });
+          .upsert(rowsWithPrevious.map((x: any) => ({ ...x, is_active: true })), { onConflict: 'group_id,instance_id', ignoreDuplicates: false });
 
         if (error) {
           console.error('Error syncing groups to DB:', error);
         } else {
           console.log(`Synced ${rows.length} groups to DB`);
+          // Desativa grupos desta instância que não vieram na listagem completa
+          // (só quando a listagem não foi filtrada nem cortada pelo teto de 500).
+          if (!(filterGroupIds && filterGroupIds.length) && allGroups.length < 500) {
+            const live = new Set(rows.map((r: any) => groupDigits(r.group_id)));
+            const { data: mine } = await supabase.from('whatsapp_groups')
+              .select('id, group_id').eq('instance_id', instanceId).eq('is_active', true);
+            const stale = (mine || []).filter((m: any) => !live.has(groupDigits(m.group_id))).map((m: any) => m.id);
+            if (stale.length) await supabase.from('whatsapp_groups').update({ is_active: false }).in('id', stale);
+          }
           const { data: updatedGroups } = await supabase
             .from('whatsapp_groups')
             .select('id, participant_count')
