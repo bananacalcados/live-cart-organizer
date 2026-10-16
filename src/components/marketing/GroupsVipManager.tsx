@@ -63,6 +63,7 @@ interface InstanceInfo {
   is_active: boolean;
   is_online: boolean | null;
   zapi_instance_id: string | null;
+  uazapi_instance_name?: string | null;
 }
 
 
@@ -119,14 +120,14 @@ export function GroupsVipManager() {
   const fetchInstances = useCallback(async () => {
     const { data } = await supabase
       .from('whatsapp_numbers_safe')
-      .select('id, label, provider, is_active, is_online, zapi_instance_id');
+      .select('id, label, provider, is_active, is_online, zapi_instance_id, uazapi_instance_name');
     setInstances((data || []) as InstanceInfo[]);
   }, []);
 
   // Resolve o instance_id de um grupo (uuid moderno OU zapi_instance_id legado).
   const resolveInstance = useCallback((instanceId: string | null): InstanceInfo | null => {
     if (!instanceId) return null;
-    return instances.find(i => i.id === instanceId || i.zapi_instance_id === instanceId) || null;
+    return instances.find(i => i.id === instanceId || i.zapi_instance_id === instanceId || i.uazapi_instance_name === instanceId) || null;
   }, [instances]);
 
   const fetchGroups = useCallback(async () => {
