@@ -740,13 +740,13 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           });
         }
       } else if (block.type === 'text') {
-        rows.push({ message_type: 'text', message_content: block.content, media_url: null, disable_link_preview: !!block.disableLinkPreview, media_brief: null });
+        rows.push({ message_type: 'text', message_content: block.content, media_url: null, disable_link_preview: !!block.disableLinkPreview, media_brief: null, ...vip });
       } else if (block.type === 'poll') {
-        rows.push({ message_type: 'poll', message_content: block.content, media_url: null, poll_options: block.pollOptions.filter((o: string) => o.trim()), poll_max_options: block.pollMaxOptions, disable_link_preview: !!block.disableLinkPreview, media_brief: null });
+        rows.push({ message_type: 'poll', message_content: block.content, media_url: null, poll_options: block.pollOptions.filter((o: string) => o.trim()), poll_max_options: block.pollMaxOptions, disable_link_preview: !!block.disableLinkPreview, media_brief: null, ...vip });
       } else if (block.type === 'contact') {
-        rows.push({ message_type: 'contact', message_content: block.contactName || null, contact_name: block.contactName || null, contact_phone: String(block.contactPhone || '').replace(/\D/g, '') || null, media_url: null, disable_link_preview: false, media_brief: null });
+        rows.push({ message_type: 'contact', message_content: block.contactName || null, contact_name: block.contactName || null, contact_phone: String(block.contactPhone || '').replace(/\D/g, '') || null, media_url: null, disable_link_preview: false, media_brief: null, ...vip });
       } else if (block.type === 'audio') {
-        rows.push({ message_type: 'audio', message_content: null, media_url: block.mediaUrl || null, media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview });
+        rows.push({ message_type: 'audio', message_content: null, media_url: block.mediaUrl || null, media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip });
       }
     }
     // Atualiza blocos existentes por posição; insere os excedentes; remove os que sobraram.
