@@ -693,6 +693,133 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchMessages();
   };
 
+  // ============ RASCUNHOS (aprovação em massa) ============
+  const handleSaveDraft = async (data: ScheduledMessageData) => {
+    await insertScheduledMessage(data, undefined, undefined, { asDraft: true });
+    await fetchMessages();
+  };
+
+  /** Retorna todos os blocos da mesma mensagem (message_group_id), ordenados. */
+  const groupBlocksOf = (msg: ScheduledMessage): ScheduledMessage[] => {
+    if (!msg.message_group_id) return [msg];
+    return messages
+      .filter(m => m.message_group_id === msg.message_group_id)
+      .sort((a, b) => (a.block_order ?? 0) - (b.block_order ?? 0));
+  };
+
+  /** Salva a mensagem INTEIRA (todos os blocos do grupo), preservando ids e metadados. */
+  const handleUpdateGroupMessage = async (anchorId: string, data: ScheduledMessageData) => {
+    const anchor = messages.find(m => m.id === anchorId);
+    if (!anchor) throw new Error('Mensagem não encontrada');
+    const existing = groupBlocksOf(anchor);
+    const groupId = anchor.message_group_id || null;
+    const blocks = data.blocks || [];
+    if (blocks.length === 0) throw new Error('A mensagem precisa de pelo menos 1 bloco');
+    const [hours, minutes] = data.scheduledTime.split(':').map(Number);
+    const scheduledAtIso = data.scheduledAt
+      ? (() => { const d = new Date(data.scheduledAt); d.setHours(hours, minutes, 0, 0); return d.toISOString(); })()
+      : null;
+    const multiMediaTypes = ['image', 'video', 'document'];
+    const rows: any[] = [];
+    for (const block of blocks as any[]) {
+      if (multiMediaTypes.includes(block.type) && block.mediaItems?.length) {
+        for (const item of block.mediaItems) {
+          rows.push({
+            message_type: block.type, message_content: item.caption || null, media_url: item.url,
+            media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview,
+          });
+        }
+      } else if (block.type === 'text') {
+        rows.push({ message_type: 'text', message_content: block.content, media_url: null, disable_link_preview: !!block.disableLinkPreview, media_brief: null });
+      } else if (block.type === 'poll') {
+        rows.push({ message_type: 'poll', message_content: block.content, media_url: null, poll_options: block.pollOptions.filter((o: string) => o.trim()), poll_max_options: block.pollMaxOptions, disable_link_preview: !!block.disableLinkPreview, media_brief: null });
+      } else if (block.type === 'contact') {
+        rows.push({ message_type: 'contact', message_content: block.contactName || null, contact_name: block.contactName || null, contact_phone: String(block.contactPhone || '').replace(/\D/g, '') || null, media_url: null, disable_link_preview: false, media_brief: null });
+      } else if (block.type === 'audio') {
+        rows.push({ message_type: 'audio', message_content: null, media_url: block.mediaUrl || null, media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview });
+      }
+    }
+    // Atualiza blocos existentes por posição; insere os excedentes; remove os que sobraram.
+    for (let i = 0; i < rows.length; i++) {
+      const payload = {
+        ...rows[i],
+        scheduled_at: scheduledAtIso,
+        send_speed: data.sendSpeed,
+        mention_all: data.mentionAll,
+        vip_link_mode: data.vipLinkMode || 'none',
+        vip_link_product: data.vipLinkProduct || null,
+      };
+      if (i < existing.length) {
+        const { error } = await supabase.from('group_campaign_scheduled_messages').update(payload as any).eq('id', existing[i].id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          ...payload,
+          campaign_id: campaignId,
+          whatsapp_number_id: anchor.whatsapp_number_id || (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
+          message_group_id: groupId,
+          block_order: i,
+          created_by: anchor.created_by || 'user',
+          draft_batch: anchor.draft_batch || null,
+          status: i === 0 ? anchor.status : 'grouped',
+        } as any);
+        if (error) throw error;
+      }
+    }
+    for (let i = rows.length; i < existing.length; i++) {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').delete().eq('id', existing[i].id);
+      if (error) throw error;
+    }
+    toast.success("Rascunho atualizado!");
+    await fetchMessages();
+  };
+
+  /** Abre o editor com a mensagem INTEIRA (todos os blocos do grupo). */
+  const openEditGroup = (msg: ScheduledMessage) => {
+    setEditingGroup(groupBlocksOf(msg));
+    setEditingMessage(msg);
+    setShowMessageForm(true);
+  };
+
+  const approveDrafts = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setIsApproving(true);
+    try {
+      const { data: results, error } = await (supabase as any).rpc('approve_group_drafts', { p_ids: ids, p_approved_by: 'usuario' });
+      if (error) throw error;
+      const rows = (results || []) as { id: string; ok: boolean; reason: string }[];
+      const okCount = rows.filter(r => r.ok && r.reason === 'approved').length;
+      const pastCount = rows.filter(r => r.ok && r.reason === 'past_schedule').length;
+      const blocked = rows.filter(r => !r.ok);
+      if (okCount > 0) toast.success(`${okCount} rascunho(s) aprovado(s) e agendado(s)!`);
+      if (pastCount > 0) toast.warning(`${pastCount} mensagem(ns) com horário no passado serão enviadas imediatamente.`);
+      if (blocked.length > 0) {
+        toast.error(`${blocked.length} bloqueada(s): ${blocked.map(b => DRAFT_BLOCK_REASONS[b.reason] || b.reason).join('; ')}`);
+      }
+      setSelectedDraftIds([]);
+      await fetchMessages();
+    } catch (e: any) { toast.error(e.message || "Erro ao aprovar"); }
+    finally { setIsApproving(false); setApprovePreview(null); }
+  };
+
+  const backToDraft = async (msg: ScheduledMessage) => {
+    const { error } = await supabase.from('group_campaign_scheduled_messages')
+      .update({ status: 'draft', approved_at: null, approved_by: null } as any)
+      .eq('id', msg.id).eq('status', 'pending');
+    if (error) { toast.error(error.message); return; }
+    toast.success("Voltou para rascunho.");
+    await fetchMessages();
+  };
+
+  const deleteDraftGroup = async (msg: ScheduledMessage) => {
+    const blocks = groupBlocksOf(msg);
+    const { error } = await supabase.from('group_campaign_scheduled_messages')
+      .delete().in('id', blocks.map(b => b.id));
+    if (error) { toast.error(error.message); return; }
+    toast.success("Rascunho excluído.");
+    await fetchMessages();
+  };
+
   const handleUpdateMessage = async (id: string, data: ScheduledMessageData) => {
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
     const scheduledAt = new Date(data.scheduledAt);
