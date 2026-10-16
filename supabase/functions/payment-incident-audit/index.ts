@@ -87,6 +87,32 @@ Deno.serve(async (req) => {
             }
           } catch { /* No provider response is not proof. */ }
         }
+        if (!proofs.some(p => p.approved) && row.appmax_order_id) {
+          const legacyToken = Deno.env.get("APPMAX_ACCESS_TOKEN");
+          if (legacyToken) {
+            try {
+              const response = await fetch(`https://admin.appmax.com.br/api/v3/order/${encodeURIComponent(row.appmax_order_id)}`, { headers: { "access-token": legacyToken } });
+              if (response.ok) {
+                const payload = await response.json();
+                const order = payload.data?.order || payload.data;
+                const status = String(order?.status || "").toLowerCase();
+                proofs.push({ gateway: "appmax", status, legacy: true, orderId: String(order?.id || ""), approved: String(order?.id || "") === String(row.appmax_order_id) && ["aprovado", "approved", "paid", "pago", "integrado"].includes(status) });
+              }
+            } catch { /* Missing proof remains unresolved. */ }
+          }
+        }
+        if (!proofs.some(p => p.approved) && row.pagarme_order_id) {
+          const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY");
+          if (pagarmeKey) {
+            try {
+              const response = await fetch(`https://api.pagar.me/core/v5/orders/${encodeURIComponent(row.pagarme_order_id)}`, { headers: { Authorization: `Basic ${btoa(pagarmeKey + ":")}` } });
+              if (response.ok) {
+                const order = await response.json();
+                proofs.push({ gateway: "pagarme", status: order.status, amount: Number(order.amount || 0) / 100, approved: order.id === row.pagarme_order_id && order.status === "paid" });
+              }
+            } catch { /* Missing proof remains unresolved. */ }
+          }
+        }
         return { id: row.id, name: row.customer_name, result: proofs.some(p => p.approved) ? "provider_confirmed" : "needs_review", proofs, source: row.payment_confirmed_source || row.payment_method, hasRecordedSuccess: evidence.length > 0 };
       })));
     }
