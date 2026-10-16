@@ -36,6 +36,7 @@ import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 import { authHeaders } from "@/lib/authHeaders";
+import { fetchInstanceInfo, instanceKeys, syncInstanceGroups } from "@/lib/marketing/instanceGroups";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
 const isTransientNetworkError = (e: unknown): boolean => {
@@ -301,7 +302,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setOtherCampaignGroups((data || []) as any);
   }, [campaignId]);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups, fetchOtherCampaignGroups]);
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchOtherCampaignGroups]);
 
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
@@ -1132,7 +1133,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return groupDigitsToOtherCampaigns.get(digits) || [];
   };
 
-  const filteredAllGroups = dedupedAllGroups.filter(g => {
+  const unavailableTargetGroups = allGroups.filter(g => targetGroups.includes(g.id) && !availableGroupIds.has(g.id));
+  const filteredAllGroups = dedupedAllGroups.filter(g => availableGroupIds.has(g.id)).filter(g => {
     if (!groupSearch) return true;
     return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
   });
@@ -1182,7 +1184,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
-        <Tabs defaultValue="strategy" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="strategy" className="text-xs">Estratégia</TabsTrigger>
             <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
@@ -1240,40 +1242,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
-              <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
-              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
-                setIsSyncingFromZapi(true);
-                try {
-                  const { numbers, selectedNumberId: numId } = useWhatsAppNumberStore.getState();
-                  const provider = numbers.find(n => n.id === numId)?.provider || "zapi";
-                  if (provider === "wasender" || provider === "uazapi") {
-                    const fn = provider === "uazapi" ? "uazapi-groups" : "wasender-groups";
-                    const { data, error } = await supabase.functions.invoke(fn, {
-                      body: { action: "list", syncToDb: true, whatsapp_number_id: numId },
-                    });
-                    if (error) throw error;
-                    if (data?.success) { toast.success(`${data.total ?? 0} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
-                    else toast.error(data?.error || "Erro ao sincronizar");
-                  } else {
-                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
-                      method: 'POST',
-                      headers: await authHeaders(),
-                      body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
-                    });
-                    const data = await res.json();
-                    if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
-                    else toast.error(data.error || "Erro ao sincronizar");
-                  }
-                } catch { toast.error("Erro ao sincronizar"); }
-                finally { setIsSyncingFromZapi(false); }
-              }} disabled={isSyncingFromZapi}>
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => syncCampaignGroups(false)} disabled={isSyncingFromZapi || !campaignNumberId}>
                 <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromZapi ? 'animate-spin' : ''}`} />
-                Sincronizar do WhatsApp
+                Atualizar grupos
               </Button>
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
                 <Plus className="h-3.5 w-3.5" /> Criar Grupo
               </Button>
             </div>
+            {!campaignNumberId && (
+              <Alert><AlertTriangle className="h-4 w-4" /><AlertDescription className="text-xs">Selecione a instância da campanha para ver os grupos</AlertDescription></Alert>
+            )}
+            {campaignNumberId && groupsStale && (
+              <Alert className="border-amber-500/50 bg-amber-500/10"><AlertTriangle className="h-4 w-4 text-amber-500" /><AlertDescription className="text-xs text-amber-700 dark:text-amber-400">Lista pode estar desatualizada — não consegui falar com a instância agora.</AlertDescription></Alert>
+            )}
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
               {filteredAllGroups.map(g => {
