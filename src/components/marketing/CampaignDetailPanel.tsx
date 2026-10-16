@@ -1131,8 +1131,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const loadOtherCampaignMessages = async (otherCampaignId: string) => {
     setSelectedImportCampaign(otherCampaignId);
     setSelectedImportMsgs([]);
+    // Rascunhos (e blocos sem horário) não entram na importação.
     const { data } = await supabase.from('group_campaign_scheduled_messages')
-      .select('*').eq('campaign_id', otherCampaignId).order('scheduled_at', { ascending: true });
+      .select('*').eq('campaign_id', otherCampaignId).neq('status', 'draft')
+      .not('scheduled_at', 'is', null).order('scheduled_at', { ascending: true });
     setOtherMessages((data || []) as ScheduledMessage[]);
     if (data && data.length > 0) {
       const first = new Date(data[0].scheduled_at);
