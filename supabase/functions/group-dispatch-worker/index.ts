@@ -379,7 +379,7 @@ serve(async (req) => {
       return true;
     }
 
-    const block = await getBlock(job);
+    let block = await getBlock(job);
     if (!block) {
       await supabase.from("group_campaign_block_dispatches")
         .update({ status: "failed", error_message: "block_not_found", locked_until: null })
