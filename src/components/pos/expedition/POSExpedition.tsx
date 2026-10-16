@@ -37,6 +37,8 @@ import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
 import { expeditionPriorityRank, isValadaresOrder, isSedexOrder, isStorePickupOrder } from "@/lib/expeditionPriority";
+import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGateway";
+import { CreditCard, BadgePercent } from "lucide-react";
 
 
 
@@ -109,6 +111,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [allStores, setAllStores] = useState(false);
   const effectiveStore = allStores ? "all" : storeId;
   const [filterOrigin, setFilterOrigin] = useState<string>("all");
+  const [filterGateway, setFilterGateway] = useState("all");
   const [filterAvulso, setFilterAvulso] = useState<string>("all");
   const [filterShipping, setFilterShipping] = useState<string>("all");
   const [filterTest, setFilterTest] = useState<string>("include");
@@ -122,7 +125,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     setSelected(new Set());
     setProductSearch("");
-  }, [stage, storeId, allStores]);
+  }, [stage, storeId, allStores, filterGateway]);
 
 
   const runTestAction = async (action: "create" | "purge") => {
@@ -248,7 +251,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!storeId) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange);
+      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway);
       setOrders(rows);
       // Reduções de valor ativas dos pedidos visíveis (1 consulta, IN único).
       const ids = rows.map((r) => r.id).slice(0, 500);
@@ -273,7 +276,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage, finishedRange]);
+  }, [storeId, allStores, stage, finishedRange, filterGateway]);
 
   // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
   // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
@@ -302,7 +305,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage]);
+  }, [storeId, allStores, stage, finishedRange, filterGateway]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -869,6 +872,21 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           </button>
         </div>
 
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
+          <label htmlFor="expedition-gateway" className="text-sm font-black text-pos-text uppercase">Gateway de pagamento</label>
+          <Select value={filterGateway} onValueChange={setFilterGateway}>
+            <SelectTrigger id="expedition-gateway" className="h-12 w-full sm:w-80 text-base font-bold border-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os gateways</SelectItem>
+              {EXPEDITION_GATEWAYS.map((gateway) => (
+                <SelectItem key={gateway.value} value={gateway.value}>{gateway.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {showFilters && (
           <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -994,6 +1012,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                 variant="ghost"
                 onClick={() => {
                   setFilterOrigin("all");
+                  setFilterGateway("all");
                   setFilterAvulso("all");
                   setFilterShipping("all");
                   setFilterPeriod("all");
@@ -1033,12 +1052,13 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               <div className="ml-auto flex items-center gap-2 flex-wrap">
                 {stage === "novo" && (
                   <Button
-                    size="sm"
+                    size="lg"
                     variant="outline"
-                    className="font-bold"
+                    className="min-h-14 h-auto py-3 px-6 text-lg font-black border-2 border-exp-check text-exp-check bg-exp-check/10 hover:bg-exp-check/20 whitespace-normal"
                     disabled={bulkBusy || bulkSelectedOrders.length === 0}
                     onClick={() => setPriceAdjOpen(true)}
                   >
+                    <BadgePercent className="h-6 w-6 mr-2 shrink-0" />
                     REDUZIR VALOR ({bulkSelectedOrders.length})
                   </Button>
                 )}
@@ -1195,6 +1215,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
+                          <div className="mb-3 flex flex-wrap gap-2" aria-label="Gateway do pagamento">
+                            {[...new Set((o.group_order_ids?.length ? list.filter((sale) => o.group_order_ids?.includes(sale.id)) : [o]).map((sale) => sale.payment_gateway))].map((gateway) => (
+                              <Badge key={gateway || "unknown"} variant="outline" className={`max-w-full min-h-12 px-4 py-2 border-2 rounded-md text-lg font-black uppercase whitespace-normal break-words ${gateway ? "bg-exp-prep/15 border-exp-prep text-exp-prep" : "bg-pos-elevated border-pos-border text-pos-muted-text"}`}>
+                                <CreditCard className="h-6 w-6 mr-2 shrink-0" />
+                                {expeditionGatewayLabel(gateway)}
+                              </Badge>
+                            ))}
+                          </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-2xl font-black text-pos-text truncate">
                               {o.customer_name || "Sem nome"}
