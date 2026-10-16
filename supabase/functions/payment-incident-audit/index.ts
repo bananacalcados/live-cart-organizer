@@ -60,6 +60,22 @@ Deno.serve(async (req) => {
             } catch { /* Preserve unverified instead of approving. */ }
           }
         }
+        // A later rejected/cancelled attempt may overwrite the stored ID.
+        // Search only this exact reference before declaring it unverified.
+        if (!proofs.some(p => p.approved)) {
+          for (const account of accounts) {
+            try {
+              const response = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(row.id)}&limit=100&sort=date_created&criteria=desc`, { headers: { Authorization: `Bearer ${account.access_token}` } });
+              if (!response.ok) continue;
+              const payload = await response.json();
+              for (const payment of payload.results || []) {
+                if (payment.external_reference !== row.id || payment.status !== "approved" || payment.live_mode !== true) continue;
+                proofs.push({ gateway: "mercadopago", status: payment.status, real: true, reference: payment.external_reference, amount: payment.transaction_amount, approved: true, foundByReference: true });
+              }
+              if (proofs.some(p => p.approved)) break;
+            } catch { /* Keep unresolved if search fails. */ }
+          }
+        }
         if (row.appmax_order_id && appmaxToken) {
           try {
             const response = await fetch(`https://api.appmax.com.br/v1/orders/${encodeURIComponent(row.appmax_order_id)}`, { headers: { Authorization: `Bearer ${appmaxToken}` } });
