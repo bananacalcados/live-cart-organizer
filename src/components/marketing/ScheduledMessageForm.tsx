@@ -99,11 +99,13 @@ interface ScheduledMessageFormProps {
   onScheduleToCampaign?: (data: ScheduledMessageData, targetCampaignId: string) => Promise<void>;
 }
 
+// {{link_atendimento}} não entra aqui: o botão do bloco (VipLinkBlockControls)
+// só aparece quando o bloco tem link de atendimento, e a validação bloqueia o
+// uso da variável em bloco sem link.
 const VARIABLES = [
   { name: "nome_grupo", label: "Nome do Grupo" },
   { name: "data_hoje", label: "Data de Hoje" },
   { name: "horario", label: "Horário Atual" },
-  { name: "link_atendimento", label: "Link de Atendimento" },
 ];
 
 const BLOCK_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
@@ -731,6 +733,11 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
         const digits = (b.contactPhone || '').replace(/\D/g, '');
         if (!b.contactName?.trim()) { toast.error("Informe o nome do cartão de contato"); return false; }
         if (digits.length < 10) { toast.error("Número do contato inválido (use DDI + DDD)"); return false; }
+      }
+      const blockText = [b.content, ...b.pollOptions, ...b.mediaItems.map(m => m.caption)].join("\n");
+      if ((b.vipLinkMode || 'none') === 'none' && /\{\{\s*link[-_]atendimento\s*\}\}/i.test(blockText)) {
+        toast.error("Este bloco usa {{link_atendimento}} mas está sem link de atendimento");
+        return false;
       }
     }
     if (!scheduledDate) { toast.error("Selecione uma data"); return false; }

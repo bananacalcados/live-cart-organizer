@@ -135,7 +135,7 @@ serve(async (req) => {
 
       const { data: groups } = await supabase
         .from('whatsapp_groups')
-        .select('id, group_id, name, instance_id, participant_count, max_participants, is_full')
+        .select('id, group_id, name, instance_id, participant_count, max_participants, is_full, is_active')
         .in('id', targetGroupIds);
 
       if (!groups || groups.length === 0) continue;
@@ -173,7 +173,11 @@ serve(async (req) => {
       }
 
       // ─── 4. Lógica original: criar standby se grupo perto do limite ───
-      const standbyGroups = groups.filter((g: any) => g.participant_count < STANDBY_MAX_COUNT);
+      // Mesma regra do auto-create-vip-group: reserva só conta se estiver ativo,
+      // não cheio e com menos de 50 pessoas.
+      const standbyGroups = groups.filter((g: any) =>
+        g.is_active !== false && !g.is_full && (g.participant_count || 0) < STANDBY_MAX_COUNT
+      );
       const hasStandby = standbyGroups.length > 0;
 
       const nearFullGroups = groups.filter((g: any) =>
