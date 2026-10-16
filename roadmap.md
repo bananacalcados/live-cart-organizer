@@ -25,6 +25,10 @@
 - [x] Respostas citadas no WhatsApp da Live: exibir citação recebida, responder mensagem anterior e enviar vínculo por provider
 - [x] Link de Atendimento nos Grupos VIP (link por grupo, trava do dia, painel e faixa no chat)
 
+## Expedição — gateways
+- [ ] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
+- [ ] Ampliar Reduzir valor e conferir a tela sem alterar pedidos.
+
 ## Ajustes do Overlay da Live
 - [x] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
 - [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
