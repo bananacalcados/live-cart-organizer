@@ -998,20 +998,54 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return <Badge className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white shrink-0">🟢 Disponível</Badge>;
   };
 
+  const SAVED_CONTACTS_KEY = 'vip_group_saved_contacts';
+  const [savedContacts, setSavedContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+
+  const persistSavedContacts = async (list: { phone: string; name: string; short: string }[]) => {
+    const { data: existing } = await supabase.from('app_settings').select('id').eq('key', SAVED_CONTACTS_KEY).maybeSingle();
+    const res = existing
+      ? await supabase.from('app_settings').update({ value: list as any }).eq('id', existing.id)
+      : await supabase.from('app_settings').insert({ key: SAVED_CONTACTS_KEY, value: list as any });
+    if (res.error) { toast.error("Não consegui salvar o contato"); return false; }
+    setSavedContacts(list);
+    return true;
+  };
+
+  const addSavedContact = async () => {
+    let digits = newContactPhone.replace(/\D/g, '');
+    if (digits.length === 10 || digits.length === 11) digits = '55' + digits;
+    if (digits.length < 12) { toast.error("Número inválido. Use DDD + número"); return; }
+    const name = newContactName.trim() || digits;
+    if (savedContacts.some(c => c.phone === digits)) { toast.info("Esse número já está salvo"); return; }
+    const contact = { phone: digits, name, short: name };
+    if (await persistSavedContacts([...savedContacts, contact])) {
+      setNewContactName(""); setNewContactPhone("");
+      setSelectedGroupContacts(prev => prev.some(c => c.phone === digits) ? prev : [...prev, contact]);
+      toast.success("Contato salvo");
+    }
+  };
+
+  const removeSavedContact = async (phone: string) => {
+    await persistSavedContacts(savedContacts.filter(c => c.phone !== phone));
+    setSelectedGroupContacts(prev => prev.filter(c => c.phone !== phone));
+  };
+
   const loadZapiContacts = async () => {
     if (zapiContactsLoaded) return;
     setZapiContactsLoading(true);
     try {
+      const { data: saved } = await supabase.from('app_settings').select('value').eq('key', SAVED_CONTACTS_KEY).maybeSingle();
+      if (Array.isArray(saved?.value)) setSavedContacts(saved!.value as any);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`, {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({}),
       });
-      const data = await res.json();
-      if (data.success && data.contacts) {
-        setZapiContacts(data.contacts);
-        setZapiContactsLoaded(true);
-      }
+      const data = await res.json().catch(() => null);
+      if (data?.success && data.contacts) setZapiContacts(data.contacts);
+      setZapiContactsLoaded(true);
     } catch { /* ignore */ }
     finally { setZapiContactsLoading(false); }
   };
@@ -1019,6 +1053,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   useEffect(() => {
     if (showCreateGroup && !zapiContactsLoaded) loadZapiContacts();
   }, [showCreateGroup]);
+
+  const allPickerContacts = useMemo(() => {
+    const seen = new Set(savedContacts.map(c => c.phone));
+    return [...savedContacts, ...zapiContacts.filter(c => !seen.has(c.phone))];
+  }, [savedContacts, zapiContacts]);
 
   const filteredZapiContacts = useMemo(() => {
     if (!contactSearchQuery.trim()) return zapiContacts.slice(0, 50);
