@@ -6,6 +6,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+import { validAustpayPaymentProof } from "../_shared/payment-proof.ts";
 import {
   austpayGetTransaction,
   fromCents,
@@ -79,24 +80,20 @@ serve(async (req) => {
     console.log(`[austpay-webhook] evento=${event} tx=${txId}`);
 
     // Reconsulta obrigatória: nunca confiamos só no corpo do webhook.
-    let status = String(data?.status || "");
-    let amount = Number(data?.amount || 0);
-    let externalRef = String(data?.external_reference || "");
     const cfg = await resolveAustpayConfig(supabase);
-    if (cfg) {
-      try {
-        const res = await austpayGetTransaction(cfg, txId);
-        if (res.ok) {
-          const tx = await res.json();
-          status = String(tx?.status || status);
-          amount = Number(tx?.amount || amount);
-          externalRef = String(tx?.external_reference || externalRef);
-        } else {
-          console.warn(`[austpay-webhook] reconsulta falhou (${res.status}) — usando dados do webhook.`);
-        }
-      } catch (e) {
-        console.warn("[austpay-webhook] reconsulta com erro:", e);
-      }
+    if (!cfg || cfg.env !== "production") return json({ ok: false, skipped: "production_required" }, 503);
+    const res = await austpayGetTransaction(cfg, txId);
+    if (!res.ok) return json({ ok: false, skipped: "transaction_unverified" }, 503);
+    const tx = await res.json();
+    const status = String(tx?.status || "");
+    const amount = Number(tx?.amount || 0);
+    const externalRef = String(tx?.external_reference || "");
+    const { data: invalidated, error: invalidationError } = await supabase.from("pos_checkout_attempts")
+      .select("id").eq("sale_id", externalRef).eq("transaction_id", txId).eq("status", "invalidated").limit(1);
+    if (invalidationError) return json({ ok: false, skipped: "invalidation_unverified" }, 503);
+    if (invalidated?.length) return json({ ok: true, skipped: "invalidated_transaction" });
+    if (status !== "APPROVED") {
+      return json({ ok: true, skipped: "not_captured", status });
     }
 
     if (!isAustpayApproved(status)) {
@@ -104,34 +101,40 @@ serve(async (req) => {
       return json({ ok: true, skipped: true, status });
     }
 
-    const amountBrl = amount > 1000 ? fromCents(amount) : amount; // API trabalha em centavos
+    const amountBrl = fromCents(amount);
 
     // ── Pedido (orders) ──
     let orderRow: any = null;
     {
       const { data: byTx } = await supabase
         .from("orders")
-        .select("id, is_paid, pickup_store_id")
+        .select("id, is_paid, pickup_store_id, stage, products, discount_type, discount_value, shipping_cost, free_shipping")
         .eq("austpay_transaction_id", txId)
         .limit(1);
       orderRow = byTx?.[0] || null;
       if (!orderRow && externalRef) {
         const { data: byRef } = await supabase
           .from("orders")
-          .select("id, is_paid, pickup_store_id")
+          .select("id, is_paid, pickup_store_id, stage, products, discount_type, discount_value, shipping_cost, free_shipping")
           .eq("id", externalRef)
           .maybeSingle();
         if (byRef) {
           orderRow = byRef;
-          await supabase.from("orders").update({ austpay_transaction_id: txId }).eq("id", byRef.id);
         }
       }
     }
 
     if (orderRow) {
       if (orderRow.is_paid) return json({ ok: true, skipped: "already_paid", order_id: orderRow.id });
+      if (orderRow.stage === "cancelled") return json({ ok: true, skipped: "cancelled_order" });
+      const subtotal = (orderRow.products || []).reduce((sum: number, item: any) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+      const discount = orderRow.discount_type === "percentage" ? subtotal * Number(orderRow.discount_value || 0) / 100 : Number(orderRow.discount_value || 0);
+      const expectedAmountCents = Math.round((subtotal - discount + (orderRow.free_shipping ? 0 : Number(orderRow.shipping_cost || 0))) * 100);
+      if (!validAustpayPaymentProof({ environment: cfg.env, responseOk: res.ok, transactionId: String(tx.id || tx.transaction_id || ""), expectedTransactionId: txId, reference: externalRef, expectedReference: orderRow.id, status, amountCents: amount, expectedAmountCents })) {
+        return json({ ok: true, skipped: "payment_proof_mismatch" });
+      }
 
-      await supabase
+      const { data: changedOrder, error: updateError } = await supabase
         .from("orders")
         .update({
           is_paid: true,
@@ -139,7 +142,9 @@ serve(async (req) => {
           payment_confirmed_source: "austpay-webhook",
           austpay_transaction_id: txId,
         })
-        .eq("id", orderRow.id);
+        .eq("id", orderRow.id).eq("is_paid", false).neq("stage", "cancelled").select("id").maybeSingle();
+      if (updateError) throw updateError;
+      if (!changedOrder) return json({ ok: true, skipped: "unchanged" });
 
       let loja = "centro";
       if (orderRow.pickup_store_id) {
@@ -157,13 +162,13 @@ serve(async (req) => {
 
       await supabase.from("pos_checkout_attempts").insert({
         sale_id: orderRow.id,
-        payment_method: "pix",
+        payment_method: String(tx.payment_method || "credit_card"),
         status: "success",
         amount: amountBrl,
         gateway: "austpay",
         transaction_id: txId,
         error_message: `Webhook AustPay: pagamento aprovado (${txId})`,
-        metadata: { source: "webhook", gateway: "austpay", status },
+        metadata: { source: "webhook", gateway: "austpay", status, payment_environment: cfg.env },
       });
 
       console.log(`[austpay-webhook] pedido ${orderRow.id} marcado como pago`);
@@ -173,7 +178,7 @@ serve(async (req) => {
     // ── Venda do PDV (pos_sales) ──
     const { data: sales } = await supabase
       .from("pos_sales")
-      .select("id, status, store_id")
+      .select("id, status, store_id, total")
       .eq("austpay_transaction_id", txId)
       .limit(1);
     const sale = sales?.[0] || null;
@@ -185,34 +190,40 @@ serve(async (req) => {
     if (sale.status === "paid" || sale.status === "completed") {
       return json({ ok: true, skipped: "already_paid", sale_id: sale.id });
     }
+    if (sale.status === "cancelled") return json({ ok: true, skipped: "cancelled_sale" });
+    if (!validAustpayPaymentProof({ environment: cfg.env, responseOk: res.ok, transactionId: String(tx.id || tx.transaction_id || ""), expectedTransactionId: txId, reference: externalRef, expectedReference: sale.id, status, amountCents: amount, expectedAmountCents: Math.round(Number(sale.total) * 100) })) {
+      return json({ ok: true, skipped: "payment_proof_mismatch" });
+    }
 
-    await supabase
+    const { data: changedSale, error: saleError } = await supabase
       .from("pos_sales")
       .update({
         status: "paid",
         paid_at: new Date().toISOString(),
         payment_gateway: "austpay",
-        payment_method: "PIX",
+        payment_method: tx.payment_method === "PIX" ? "PIX" : "Cartão de Crédito",
         notes: `🔔 Webhook AustPay: pagamento aprovado (${txId})`,
       })
-      .eq("id", sale.id);
+      .eq("id", sale.id).not("status", "in", '("paid","completed","cancelled")').select("id").maybeSingle();
+    if (saleError) throw saleError;
+    if (!changedSale) return json({ ok: true, skipped: "unchanged" });
 
     await supabase.from("pos_checkout_attempts").insert({
       sale_id: sale.id,
       store_id: sale.store_id,
-      payment_method: "pix",
+      payment_method: String(tx.payment_method || "credit_card"),
       status: "success",
       amount: amountBrl,
       gateway: "austpay",
       transaction_id: txId,
       error_message: `Webhook AustPay: pagamento aprovado (${txId})`,
-      metadata: { source: "webhook", gateway: "austpay", status },
+      metadata: { source: "webhook", gateway: "austpay", status, payment_environment: cfg.env },
     });
 
     console.log(`[austpay-webhook] venda ${sale.id} marcada como paga`);
     return json({ ok: true, sale_id: sale.id });
   } catch (error) {
     console.error("[austpay-webhook] erro:", error);
-    return json({ ok: true, error: (error as Error)?.message || String(error) });
+    return json({ ok: false, error: "Não foi possível verificar o pagamento." }, 503);
   }
 });

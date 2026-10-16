@@ -26,6 +26,8 @@
 - [x] Link de Atendimento nos Grupos VIP (link por grupo, trava do dia, painel e faixa no chat)
 
 ## Expedição — gateways
+- [ ] Retirar Zorma da Expedição e impedir reaplicação de aprovação de teste.
+- [ ] Auditar pagamentos após o incidente, incluindo os quatro pedidos AustPay de teste, sem novas cobranças ou mensagens.
 - [x] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
 - [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
