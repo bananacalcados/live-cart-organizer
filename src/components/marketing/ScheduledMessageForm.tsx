@@ -45,6 +45,8 @@ export interface MessageBlock {
   /** Link de Atendimento VIP (texto/imagem/vídeo). */
   vipLinkMode?: VipLinkMode;
   vipLinkProduct?: VipLinkProduct | null;
+  /** Descrição da mídia que falta subir (blocos de mídia em rascunho). */
+  mediaBrief?: string;
 }
 
 export interface ScheduledMessageData {
@@ -55,7 +57,7 @@ export interface ScheduledMessageData {
   mediaItems: MediaItem[];
   pollOptions: string[];
   pollMaxOptions: number;
-  scheduledAt: Date;
+  scheduledAt: Date | null;
   scheduledTime: string;
   sendSpeed: string;
   mentionAll: boolean;
@@ -69,13 +71,19 @@ interface EditingMessage {
   message_content: string | null;
   media_url: string | null;
   poll_options: any;
-  scheduled_at: string;
+  poll_max_options?: number | null;
+  scheduled_at: string | null;
   send_speed: string;
   disable_link_preview?: boolean | null;
   contact_name?: string | null;
   contact_phone?: string | null;
   vip_link_mode?: string | null;
   vip_link_product?: any;
+  message_group_id?: string | null;
+  block_order?: number | null;
+  created_by?: string | null;
+  draft_batch?: string | null;
+  media_brief?: string | null;
 }
 
 interface MessageTemplate {
@@ -92,8 +100,14 @@ interface ScheduledMessageFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ScheduledMessageData) => Promise<void>;
   onSendNow?: (data: ScheduledMessageData) => Promise<void>;
+  /** Salva como rascunho (status 'draft') — permite faltar mídia/horário. */
+  onSaveDraft?: (data: ScheduledMessageData) => Promise<void>;
   editingMessage?: EditingMessage | null;
+  /** Todos os blocos da mensagem em edição (mesmo message_group_id), ordenados por block_order. */
+  editingGroupMessages?: EditingMessage[] | null;
   onUpdate?: (id: string, data: ScheduledMessageData) => Promise<void>;
+  /** Salva a mensagem INTEIRA (todos os blocos do grupo) preservando ids e metadados. */
+  onUpdateGroup?: (anchorId: string, data: ScheduledMessageData) => Promise<void>;
   campaignId?: string;
   otherCampaigns?: { id: string; name: string }[];
   onScheduleToCampaign?: (data: ScheduledMessageData, targetCampaignId: string) => Promise<void>;
@@ -136,6 +150,7 @@ function createBlock(type: MessageBlock['type']): MessageBlock {
     disableLinkPreview: false,
     vipLinkMode: 'none',
     vipLinkProduct: null,
+    mediaBrief: '',
   };
 }
 
@@ -428,6 +443,12 @@ function BlockEditor({
               </div>
             )}
             <p className="text-[10px] text-muted-foreground">{block.mediaItems.length}/10 arquivos</p>
+            <Input
+              placeholder="Descrição da mídia (para rascunho): ex. foto do Confort preto, fundo branco"
+              value={block.mediaBrief || ''}
+              onChange={e => onChange({ ...block, mediaBrief: e.target.value })}
+              className="text-xs"
+            />
             {(block.type === 'image' || block.type === 'video') && (
               <VipLinkBlockControls
                 mode={block.vipLinkMode || 'none'}
@@ -584,7 +605,7 @@ function BlockEditor({
 }
 
 // ─── Main Composer ───
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, onSaveDraft, editingMessage, editingGroupMessages, onUpdate, onUpdateGroup, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
   const [showOtherCampaigns, setShowOtherCampaigns] = useState(false);
   const [selectedOtherCampaignId, setSelectedOtherCampaignId] = useState<string | null>(null);
   const [isSchedulingOther, setIsSchedulingOther] = useState(false);
@@ -612,35 +633,48 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [dayLocked, setDayLocked] = useState(false);
   const hasVipLink = blocks.some(b => (b.vipLinkMode || 'none') !== 'none');
 
-  // Load editing message (legacy single → one block)
+  // Load editing message(s). Quando editingGroupMessages vem preenchido, abre a
+  // MENSAGEM INTEIRA (todos os blocos do message_group_id), preservando a ordem.
   useEffect(() => {
-    if (editingMessage) {
-      const b = createBlock(editingMessage.message_type as MessageBlock['type']);
-      b.content = editingMessage.message_content || '';
-      // For image/video/document types, load media_url into mediaItems array
+    const rows = (editingGroupMessages && editingGroupMessages.length > 0)
+      ? [...editingGroupMessages].sort((a, b) => (a.block_order ?? 0) - (b.block_order ?? 0))
+      : (editingMessage ? [editingMessage] : null);
+    if (rows) {
       const multiMediaTypes = ['image', 'video', 'document'];
-      if (multiMediaTypes.includes(editingMessage.message_type) && editingMessage.media_url) {
-        b.mediaItems = [{ url: editingMessage.media_url, caption: editingMessage.message_content || '' }];
-        b.content = ''; // caption is stored in mediaItems
+      const loaded = rows.map(row => {
+        const b = createBlock(row.message_type as MessageBlock['type']);
+        b.content = row.message_content || '';
+        if (multiMediaTypes.includes(row.message_type) && row.media_url) {
+          b.mediaItems = [{ url: row.media_url, caption: row.message_content || '' }];
+          b.content = ''; // caption is stored in mediaItems
+        }
+        b.mediaUrl = row.media_url || '';
+        b.disableLinkPreview = !!row.disable_link_preview;
+        if (row.poll_options) {
+          b.pollOptions = Array.isArray(row.poll_options) ? row.poll_options : ['', ''];
+        }
+        if (row.poll_max_options != null) b.pollMaxOptions = row.poll_max_options;
+        b.contactName = row.contact_name || '';
+        b.contactPhone = row.contact_phone || '';
+        b.vipLinkMode = (row.vip_link_mode as VipLinkMode) || 'none';
+        b.vipLinkProduct = row.vip_link_product || null;
+        b.mediaBrief = row.media_brief || '';
+        return b;
+      });
+      setBlocks(loaded);
+      setSendSpeed(rows[0].send_speed || 'normal');
+      if (rows[0].scheduled_at) {
+        const d = new Date(rows[0].scheduled_at);
+        setScheduledDate(d);
+        setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+      } else {
+        setScheduledDate(undefined);
+        setScheduledTime('12:00');
       }
-      b.mediaUrl = editingMessage.media_url || '';
-      b.disableLinkPreview = !!editingMessage.disable_link_preview;
-      if (editingMessage.poll_options) {
-        b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
-      }
-      b.contactName = editingMessage.contact_name || '';
-      b.contactPhone = editingMessage.contact_phone || '';
-      b.vipLinkMode = (editingMessage.vip_link_mode as VipLinkMode) || 'none';
-      b.vipLinkProduct = editingMessage.vip_link_product || null;
-      setBlocks([b]);
-      setSendSpeed(editingMessage.send_speed || 'normal');
-      const d = new Date(editingMessage.scheduled_at);
-      setScheduledDate(d);
-      setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
     } else {
       resetForm();
     }
-  }, [editingMessage, open]);
+  }, [editingMessage, editingGroupMessages, open]);
 
   useEffect(() => { if (open) fetchTemplates(); }, [open]);
 
@@ -789,13 +823,33 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   const handleUpdate = async () => {
-    if (!editingMessage || !onUpdate || !validate()) return;
+    if (!editingMessage) return;
+    // Rascunho: permite salvar sem mídia/horário (validação fica para a aprovação).
+    const isDraftEdit = !!editingGroupMessages?.length;
+    if (!isDraftEdit && !validate()) return;
     setIsSaving(true);
     try {
-      await onUpdate(editingMessage.id, buildData());
+      if (isDraftEdit && onUpdateGroup) {
+        await onUpdateGroup(editingMessage.id, buildData());
+      } else if (onUpdate) {
+        await onUpdate(editingMessage.id, buildData());
+      }
       resetForm();
       onOpenChange(false);
     } catch { toast.error("Erro ao salvar"); }
+    finally { setIsSaving(false); }
+  };
+
+  // Rascunho: NÃO roda validate() — pode faltar mídia, horário etc.
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    setIsSaving(true);
+    try {
+      await onSaveDraft(buildData());
+      resetForm();
+      onOpenChange(false);
+      toast.success("Rascunho salvo! Ele só vai para o envio depois da aprovação.");
+    } catch (e: any) { toast.error("Erro ao salvar rascunho: " + (e?.message || "desconhecido")); }
     finally { setIsSaving(false); }
   };
 
@@ -1128,6 +1182,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          {!editingMessage && onSaveDraft && (
+            <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-1">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Salvar como rascunho
+            </Button>
+          )}
           {!editingMessage && onSendNow && (
             <Button variant="secondary" onClick={handleSendNow} disabled={isSaving} className="gap-1">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

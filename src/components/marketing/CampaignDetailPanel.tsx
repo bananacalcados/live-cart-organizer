@@ -89,13 +89,24 @@ interface ScheduledMessage {
   message_content: string | null;
   media_url: string | null;
   poll_options: any;
-  scheduled_at: string;
+  scheduled_at: string | null;
   status: string;
   sent_at: string | null;
   send_speed: string;
   sent_count: number;
   failed_count: number;
   created_at: string;
+  message_group_id?: string | null;
+  block_order?: number | null;
+  created_by?: string | null;
+  draft_batch?: string | null;
+  media_brief?: string | null;
+  draft_notes?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  vip_link_mode?: string | null;
+  contact_phone?: string | null;
+  whatsapp_number_id?: string | null;
 }
 
 interface RedirectLink {
@@ -117,12 +128,37 @@ interface CampaignVariable {
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
+  draft: <Edit className="h-3.5 w-3.5 text-amber-600" />,
   pending: <Clock className="h-3.5 w-3.5 text-amber-500" />,
   sending: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />,
   sent: <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />,
   failed: <XCircle className="h-3.5 w-3.5 text-red-500" />,
   cancelled: <XCircle className="h-3.5 w-3.5 text-muted-foreground" />,
 };
+
+/** Motivos de bloqueio da aprovação de rascunho → texto amigável. */
+const DRAFT_BLOCK_REASONS: Record<string, string> = {
+  missing_media: 'Bloco de mídia sem arquivo (suba a mídia)',
+  poll_needs_2_options: 'Enquete com menos de 2 opções',
+  missing_contact_phone: 'Cartão de contato sem número',
+  missing_schedule: 'Sem data/horário agendado',
+  missing_instance: 'Campanha/mensagem sem instância de WhatsApp',
+  vip_link_without_mode: 'Usa {{link_atendimento}} sem link de atendimento',
+  not_draft: 'Não está mais em rascunho',
+  not_found: 'Mensagem não encontrada',
+};
+
+/** Validação local (espelho da approve_group_drafts) para montar o resumo antes de aprovar. */
+function validateDraftLocally(anchor: ScheduledMessage, siblings: ScheduledMessage[], campaignNumberId: string | null): string | null {
+  const blocks = siblings.length ? siblings : [anchor];
+  if (blocks.some(b => ['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url)) return 'missing_media';
+  if (blocks.some(b => b.message_type === 'poll' && (!Array.isArray(b.poll_options) || b.poll_options.length < 2))) return 'poll_needs_2_options';
+  if (blocks.some(b => b.message_type === 'contact' && !b.contact_phone)) return 'missing_contact_phone';
+  if (!anchor.scheduled_at) return 'missing_schedule';
+  if (!anchor.whatsapp_number_id && !campaignNumberId) return 'missing_instance';
+  if (anchor.vip_link_mode === 'none' && blocks.some(b => (b.message_content || '').includes('{{link_atendimento}}'))) return 'vip_link_without_mode';
+  return null;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   text: "📝 Texto", image: "🖼️ Imagem", video: "🎬 Vídeo",
@@ -136,6 +172,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [variables, setVariables] = useState<CampaignVariable[]>([]);
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [editingMessage, setEditingMessage] = useState<ScheduledMessage | null>(null);
+  const [editingGroup, setEditingGroup] = useState<ScheduledMessage[] | null>(null);
+  // Rascunhos: filtros, seleção múltipla e diálogo de aprovação
+  const [msgStatusFilter, setMsgStatusFilter] = useState<'all' | 'draft' | 'pending' | 'sent' | 'cancelled'>('all');
+  const [msgBatchFilter, setMsgBatchFilter] = useState<string>('all');
+  const [msgDayFilter, setMsgDayFilter] = useState<string | null>(null);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approvePreview, setApprovePreview] = useState<{ ids: string[] } | null>(null);
+  const [pastScheduleAck, setPastScheduleAck] = useState(false);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
@@ -316,11 +361,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     data: ScheduledMessageData,
     targetCampaignId?: string,
     targetNumberId?: string | null,
+    opts?: { asDraft?: boolean },
   ) => {
     const cid = targetCampaignId || campaignId;
+    const asDraft = !!opts?.asDraft;
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
-    const scheduledAt = new Date(data.scheduledAt);
-    scheduledAt.setHours(hours, minutes, 0, 0);
+    // Rascunho pode ser salvo sem horário (scheduled_at fica nulo até a aprovação).
+    const scheduledAtIso = data.scheduledAt
+      ? (() => { const d = new Date(data.scheduledAt); d.setHours(hours, minutes, 0, 0); return d.toISOString(); })()
+      : null;
+    // Rascunho: bloco 0 = 'draft', irmãos = 'grouped' (nunca 'pending' sem aprovação).
+    const statusFor = (offset: number, gid: string | null) =>
+      asDraft
+        ? (offset === 0 ? 'draft' : (gid ? 'grouped' : 'draft'))
+        : (offset === 0 ? 'pending' : (gid ? 'grouped' : 'pending'));
     const campaignNumberId = targetNumberId || (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     const multiMediaTypes = ['image', 'video', 'document'];
@@ -341,14 +395,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               message_type: block.type,
               message_content: item.caption || null,
               media_url: item.url,
-              scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+              media_brief: (block as any).mediaBrief || null,
+              scheduled_at: scheduledAtIso,
               disable_link_preview: !!(block as any).disableLinkPreview,
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
               whatsapp_number_id: campaignNumberId,
               message_group_id: messageGroupId,
               block_order: offset,
-              status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+              created_by: 'user',
+              status: statusFor(offset, messageGroupId),
             });
             offset++;
           }
@@ -358,13 +414,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_type: 'text',
             message_content: block.content,
             disable_link_preview: !!block.disableLinkPreview,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'poll') {
@@ -374,14 +431,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: block.content,
             poll_options: block.pollOptions.filter(o => o.trim()),
             poll_max_options: block.pollMaxOptions,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'contact') {
@@ -391,14 +449,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: null,
             contact_name: (block as any).contactName?.trim() || null,
             contact_phone: String((block as any).contactPhone || '').replace(/\D/g, '') || null,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             disable_link_preview: false,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'audio') {
@@ -406,14 +465,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             campaign_id: cid,
             message_type: 'audio',
             media_url: block.mediaUrl,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            media_brief: (block as any).mediaBrief || null,
+            scheduled_at: scheduledAtIso,
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         }
@@ -433,26 +494,28 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       });
       const { error } = await supabase.from('group_campaign_scheduled_messages').insert(normalized as any);
       if (error) throw error;
-      toast.success(`${offset} mensagem(ns) agendada(s)!`);
+      toast.success(asDraft ? `${offset} mensagem(ns) salva(s) como rascunho!` : `${offset} mensagem(ns) agendada(s)!`);
     } else {
       // Legacy fallback
       if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
         for (let i = 0; i < data.mediaItems.length; i++) {
           const item = data.mediaItems[i];
-          const itemTime = new Date(scheduledAt.getTime() + i * 5000);
+          const itemTime = scheduledAtIso ? new Date(new Date(scheduledAtIso).getTime() + i * 5000).toISOString() : null;
           const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
             campaign_id: cid,
             message_type: data.messageType,
             message_content: item.caption || null,
             media_url: item.url,
-            scheduled_at: itemTime.toISOString(),
+            scheduled_at: itemTime,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
+            created_by: 'user',
+            status: asDraft ? 'draft' : 'pending',
           } as any);
           if (error) throw error;
         }
-        toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
+        toast.success(asDraft ? `${data.mediaItems.length} arquivo(s) salvo(s) como rascunho!` : `${data.mediaItems.length} arquivo(s) agendado(s)!`);
       } else {
         const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: cid,
@@ -461,13 +524,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           media_url: data.mediaUrl || null,
           poll_options: data.messageType === 'poll' ? data.pollOptions : null,
           poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-          scheduled_at: scheduledAt.toISOString(),
+          scheduled_at: scheduledAtIso,
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
           whatsapp_number_id: campaignNumberId,
+          created_by: 'user',
+          status: asDraft ? 'draft' : 'pending',
         } as any);
         if (error) throw error;
-        toast.success("Mensagem agendada!");
+        toast.success(asDraft ? "Rascunho salvo!" : "Mensagem agendada!");
       }
     }
     if (cid === campaignId) fetchMessages();
@@ -635,6 +700,132 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       }
     }
     fetchMessages();
+  };
+
+  // ============ RASCUNHOS (aprovação em massa) ============
+  const handleSaveDraft = async (data: ScheduledMessageData) => {
+    await insertScheduledMessage(data, undefined, undefined, { asDraft: true });
+    await fetchMessages();
+  };
+
+  /** Retorna todos os blocos da mesma mensagem (message_group_id), ordenados. */
+  const groupBlocksOf = (msg: ScheduledMessage): ScheduledMessage[] => {
+    if (!msg.message_group_id) return [msg];
+    return messages
+      .filter(m => m.message_group_id === msg.message_group_id)
+      .sort((a, b) => (a.block_order ?? 0) - (b.block_order ?? 0));
+  };
+
+  /** Salva a mensagem INTEIRA (todos os blocos do grupo), preservando ids e metadados. */
+  const handleUpdateGroupMessage = async (anchorId: string, data: ScheduledMessageData) => {
+    const anchor = messages.find(m => m.id === anchorId);
+    if (!anchor) throw new Error('Mensagem não encontrada');
+    const existing = groupBlocksOf(anchor);
+    const groupId = anchor.message_group_id || null;
+    const blocks = data.blocks || [];
+    if (blocks.length === 0) throw new Error('A mensagem precisa de pelo menos 1 bloco');
+    const [hours, minutes] = data.scheduledTime.split(':').map(Number);
+    const scheduledAtIso = data.scheduledAt
+      ? (() => { const d = new Date(data.scheduledAt); d.setHours(hours, minutes, 0, 0); return d.toISOString(); })()
+      : null;
+    const multiMediaTypes = ['image', 'video', 'document'];
+    const rows: any[] = [];
+    for (const block of blocks as any[]) {
+      const vip = { vip_link_mode: block.vipLinkMode || 'none', vip_link_product: block.vipLinkProduct || null };
+      if (multiMediaTypes.includes(block.type) && block.mediaItems?.length) {
+        for (const item of block.mediaItems) {
+          rows.push({
+            message_type: block.type, message_content: item.caption || null, media_url: item.url,
+            media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip,
+          });
+        }
+      } else if (block.type === 'text') {
+        rows.push({ message_type: 'text', message_content: block.content, media_url: null, disable_link_preview: !!block.disableLinkPreview, media_brief: null, ...vip });
+      } else if (block.type === 'poll') {
+        rows.push({ message_type: 'poll', message_content: block.content, media_url: null, poll_options: block.pollOptions.filter((o: string) => o.trim()), poll_max_options: block.pollMaxOptions, disable_link_preview: !!block.disableLinkPreview, media_brief: null, ...vip });
+      } else if (block.type === 'contact') {
+        rows.push({ message_type: 'contact', message_content: block.contactName || null, contact_name: block.contactName || null, contact_phone: String(block.contactPhone || '').replace(/\D/g, '') || null, media_url: null, disable_link_preview: false, media_brief: null, ...vip });
+      } else if (block.type === 'audio') {
+        rows.push({ message_type: 'audio', message_content: null, media_url: block.mediaUrl || null, media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip });
+      }
+    }
+    // Atualiza blocos existentes por posição; insere os excedentes; remove os que sobraram.
+    for (let i = 0; i < rows.length; i++) {
+      const payload = {
+        ...rows[i],
+        scheduled_at: scheduledAtIso,
+        send_speed: data.sendSpeed,
+        mention_all: data.mentionAll,
+      };
+      if (i < existing.length) {
+        const { error } = await supabase.from('group_campaign_scheduled_messages').update(payload as any).eq('id', existing[i].id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          ...payload,
+          campaign_id: campaignId,
+          whatsapp_number_id: anchor.whatsapp_number_id || (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
+          message_group_id: groupId,
+          block_order: i,
+          created_by: anchor.created_by || 'user',
+          draft_batch: anchor.draft_batch || null,
+          status: i === 0 ? anchor.status : 'grouped',
+        } as any);
+        if (error) throw error;
+      }
+    }
+    for (let i = rows.length; i < existing.length; i++) {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').delete().eq('id', existing[i].id);
+      if (error) throw error;
+    }
+    toast.success("Rascunho atualizado!");
+    await fetchMessages();
+  };
+
+  /** Abre o editor com a mensagem INTEIRA (todos os blocos do grupo). */
+  const openEditGroup = (msg: ScheduledMessage) => {
+    setEditingGroup(groupBlocksOf(msg));
+    setEditingMessage(msg);
+    setShowMessageForm(true);
+  };
+
+  const approveDrafts = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setIsApproving(true);
+    try {
+      const { data: results, error } = await (supabase as any).rpc('approve_group_drafts', { p_ids: ids, p_approved_by: 'usuario' });
+      if (error) throw error;
+      const rows = (results || []) as { id: string; ok: boolean; reason: string }[];
+      const okCount = rows.filter(r => r.ok && r.reason !== 'past_schedule').length;
+      const pastCount = rows.filter(r => r.ok && r.reason === 'past_schedule').length;
+      const blocked = rows.filter(r => !r.ok);
+      if (okCount > 0) toast.success(`${okCount} rascunho(s) aprovado(s) e agendado(s)!`);
+      if (pastCount > 0) toast.warning(`${pastCount} mensagem(ns) com horário no passado serão enviadas imediatamente.`);
+      if (blocked.length > 0) {
+        toast.error(`${blocked.length} bloqueada(s): ${blocked.map(b => DRAFT_BLOCK_REASONS[b.reason] || b.reason).join('; ')}`);
+      }
+      setSelectedDraftIds([]);
+      await fetchMessages();
+    } catch (e: any) { toast.error(e.message || "Erro ao aprovar"); }
+    finally { setIsApproving(false); setApprovePreview(null); }
+  };
+
+  const backToDraft = async (msg: ScheduledMessage) => {
+    const { error } = await supabase.from('group_campaign_scheduled_messages')
+      .update({ status: 'draft', approved_at: null, approved_by: null } as any)
+      .eq('id', msg.id).eq('status', 'pending');
+    if (error) { toast.error(error.message); return; }
+    toast.success("Voltou para rascunho.");
+    await fetchMessages();
+  };
+
+  const deleteDraftGroup = async (msg: ScheduledMessage) => {
+    const blocks = groupBlocksOf(msg);
+    const { error } = await supabase.from('group_campaign_scheduled_messages')
+      .delete().in('id', blocks.map(b => b.id));
+    if (error) { toast.error(error.message); return; }
+    toast.success("Rascunho excluído.");
+    await fetchMessages();
   };
 
   const handleUpdateMessage = async (id: string, data: ScheduledMessageData) => {
@@ -939,8 +1130,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const loadOtherCampaignMessages = async (otherCampaignId: string) => {
     setSelectedImportCampaign(otherCampaignId);
     setSelectedImportMsgs([]);
+    // Rascunhos (e blocos sem horário) não entram na importação.
     const { data } = await supabase.from('group_campaign_scheduled_messages')
-      .select('*').eq('campaign_id', otherCampaignId).order('scheduled_at', { ascending: true });
+      .select('*').eq('campaign_id', otherCampaignId).neq('status', 'draft')
+      .not('scheduled_at', 'is', null).order('scheduled_at', { ascending: true });
     setOtherMessages((data || []) as ScheduledMessage[]);
     if (data && data.length > 0) {
       const first = new Date(data[0].scheduled_at);
@@ -1204,7 +1397,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart); // 0=Sun
 
-  const getMessagesForDay = (day: Date) => messages.filter(m => isSameDay(new Date(m.scheduled_at), day));
+  const getMessagesForDay = (day: Date) => messages.filter(m => m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
 
   if (showBulkSettings) {
     return <CampaignBulkSettings campaignId={campaignId} targetGroups={campaign?.target_groups || []} onBack={() => setShowBulkSettings(false)} />;
@@ -1378,101 +1571,329 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
           {/* MESSAGES TAB */}
           <TabsContent value="messages" className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">MENSAGENS ({messages.length})</p>
-            <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
-            {messages.length === 0 ? (
-              <Card><CardContent className="py-8 text-center">
-                <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-xs text-muted-foreground">Nenhuma mensagem agendada</p>
-              </CardContent></Card>
-            ) : (
-              <div className="space-y-2">
-                {messages.map(msg => (
-                  <Card key={msg.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            {STATUS_ICONS[msg.status]}
-                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
-                            </Badge>
-                            {msg.status === 'sent' && (
-                              <span className="text-[10px] text-muted-foreground">
-                                ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
-                              </span>
-                            )}
-                          </div>
-                          <ScrollArea className="max-h-[200px]">
-                            {msg.media_url && ['image'].includes(msg.message_type) && (
-                              <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
-                            )}
-                            {msg.media_url && msg.message_type === 'video' && (
-                              <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
-                            )}
-                            {msg.media_url && msg.message_type === 'audio' && (
-                              <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
-                            )}
-                            {msg.media_url && msg.message_type === 'document' && (
-                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
-                                📄 {msg.media_url.split('/').pop()}
-                              </a>
-                            )}
-                            {msg.message_content && (
-                              <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
-                            )}
-                            {msg.poll_options && Array.isArray(msg.poll_options) && (
-                              <div className="mt-1 space-y-0.5">
-                                {msg.poll_options.map((opt: string, i: number) => (
-                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
-                                ))}
+            {(() => {
+              // Rascunhos NÃO contam nos totais de agendadas/pendentes.
+              const nonDraft = messages.filter(m => m.status !== 'draft' && m.status !== 'grouped');
+              const drafts = messages.filter(m => m.status === 'draft');
+              const batches = Array.from(new Set(drafts.map(d => d.draft_batch).filter(Boolean))) as string[];
+              const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
+
+              // Faixa dos próximos 14 dias: pendentes x rascunhos por dia.
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const next14 = Array.from({ length: 14 }, (_, i) => {
+                const d = new Date(today); d.setDate(d.getDate() + i);
+                const key = format(d, 'yyyy-MM-dd');
+                const dayMsgs = messages.filter(m => m.scheduled_at && format(new Date(m.scheduled_at), 'yyyy-MM-dd') === key);
+                return {
+                  key, date: d,
+                  pending: dayMsgs.filter(m => m.status === 'pending').length,
+                  draft: dayMsgs.filter(m => m.status === 'draft').length,
+                };
+              });
+
+              const filtered = messages.filter(m => {
+                if (m.status === 'grouped') return false; // blocos irmãos não aparecem soltos
+                if (msgStatusFilter === 'draft' && m.status !== 'draft') return false;
+                if (msgStatusFilter === 'pending' && m.status !== 'pending') return false;
+                if (msgStatusFilter === 'sent' && m.status !== 'sent') return false;
+                if (msgStatusFilter === 'cancelled' && m.status !== 'cancelled' && m.status !== 'failed') return false;
+                if (msgBatchFilter !== 'all' && m.draft_batch !== msgBatchFilter) return false;
+                if (msgDayFilter && (!m.scheduled_at || format(new Date(m.scheduled_at), 'yyyy-MM-dd') !== msgDayFilter)) return false;
+                return true;
+              });
+              const visibleDrafts = filtered.filter(m => m.status === 'draft');
+
+              // Resumo da aprovação em massa (validação local espelha approve_group_drafts).
+              const previewRows = (approvePreview?.ids || []).map(id => {
+                const msg = messages.find(m => m.id === id)!;
+                const reason = validateDraftLocally(msg, groupBlocksOf(msg), campaignNumberId);
+                const isPast = !reason && msg.scheduled_at && new Date(msg.scheduled_at).getTime() < Date.now();
+                return { msg, reason, isPast: !!isPast };
+              });
+              const previewOk = previewRows.filter(r => !r.reason);
+              const previewPast = previewOk.filter(r => r.isPast);
+              const previewBlocked = previewRows.filter(r => r.reason);
+              const approvableIds = previewOk.filter(r => !r.isPast || pastScheduleAck).map(r => r.msg.id);
+
+              return (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      MENSAGENS ({nonDraft.length}){drafts.length > 0 && ` · ${drafts.length} rascunho(s)`}
+                    </p>
+                    <div className="flex gap-1 flex-wrap">
+                      {([['all', 'Todos'], ['draft', 'Rascunhos'], ['pending', 'Pendentes'], ['sent', 'Enviadas'], ['cancelled', 'Canceladas']] as const).map(([v, label]) => (
+                        <Button key={v} size="sm" variant={msgStatusFilter === v ? 'default' : 'outline'}
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => { setMsgStatusFilter(v); if (v !== 'draft' && v !== 'all') setMsgBatchFilter('all'); }}>
+                          {label}{v === 'draft' && drafts.length > 0 ? ` (${drafts.length})` : ''}
+                        </Button>
+                      ))}
+                      {batches.length > 0 && (
+                        <Select value={msgBatchFilter} onValueChange={setMsgBatchFilter}>
+                          <SelectTrigger className="h-6 text-[10px] w-[150px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos os lotes</SelectItem>
+                            {batches.map(b => <SelectItem key={b} value={b}>📦 {b}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Faixa dos próximos 14 dias */}
+                  <div className="grid grid-cols-7 sm:grid-cols-14 gap-1" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
+                    {next14.map(day => {
+                      const total = day.pending + day.draft;
+                      const isHeavy = total > 2;
+                      const isSelected = msgDayFilter === day.key;
+                      return (
+                        <button key={day.key}
+                          onClick={() => setMsgDayFilter(isSelected ? null : day.key)}
+                          className={cn(
+                            "rounded border p-1 text-center transition-colors",
+                            isHeavy ? "bg-amber-500/15 border-amber-500/40" : "bg-muted/30",
+                            isSelected && "ring-2 ring-primary border-primary"
+                          )}>
+                          <p className="text-[9px] font-medium">{format(day.date, 'dd/MM')}</p>
+                          <p className="text-[9px] text-muted-foreground">{format(day.date, 'EEE', { locale: ptBR })}</p>
+                          <p className="text-[10px] font-semibold">{day.pending > 0 ? day.pending : '—'}</p>
+                          {day.draft > 0 && <p className="text-[9px] text-amber-600 font-medium">✏️ {day.draft}</p>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {msgDayFilter && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setMsgDayFilter(null)}>
+                      Limpar filtro de dia
+                    </Button>
+                  )}
+
+                  <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
+
+                  {/* Barra de ações dos rascunhos selecionados */}
+                  {selectedDraftIds.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                      <p className="text-xs font-medium">{selectedDraftIds.length} rascunho(s) selecionado(s)</p>
+                      <Button size="sm" className="h-7 text-xs gap-1"
+                        onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: selectedDraftIds }); }}>
+                        <CheckCircle className="h-3 w-3" /> Aprovar selecionados ({selectedDraftIds.length})
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
+                        Selecionar todos os rascunhos do filtro
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
+                        onClick={async () => {
+                          const toDelete = messages.filter(m => selectedDraftIds.includes(m.id));
+                          for (const m of toDelete) await deleteDraftGroup(m);
+                          setSelectedDraftIds([]);
+                        }}>
+                        Excluir selecionados
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedDraftIds([])}>
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+
+                  {filtered.length === 0 ? (
+                    <Card><CardContent className="py-8 text-center">
+                      <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-xs text-muted-foreground">
+                        {messages.length === 0 ? 'Nenhuma mensagem agendada' : 'Nenhuma mensagem neste filtro'}
+                      </p>
+                    </CardContent></Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {filtered.map(msg => {
+                        const isDraft = msg.status === 'draft';
+                        const siblings = isDraft ? groupBlocksOf(msg) : [];
+                        const missingMedia = isDraft && siblings.some(b => ['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url);
+                        return (
+                          <Card key={msg.id} className={cn(isDraft && "border-amber-500/40")}>
+                            <CardContent className="p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                {isDraft && (
+                                  <Checkbox className="mt-1 shrink-0"
+                                    checked={selectedDraftIds.includes(msg.id)}
+                                    onCheckedChange={v => setSelectedDraftIds(prev => v ? [...prev, msg.id] : prev.filter(x => x !== msg.id))} />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    {STATUS_ICONS[msg.status]}
+                                    <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {msg.scheduled_at ? format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR }) : 'sem horário'}
+                                    </Badge>
+                                    {isDraft && <Badge className="text-[10px] bg-amber-500/20 text-amber-700 border-amber-500/40">Rascunho</Badge>}
+                                    {isDraft && msg.created_by === 'claude' && <Badge variant="secondary" className="text-[10px]">Claude</Badge>}
+                                    {isDraft && msg.draft_batch && <Badge variant="outline" className="text-[10px]">📦 {msg.draft_batch}</Badge>}
+                                    {siblings.length > 1 && <Badge variant="outline" className="text-[10px]">{siblings.length} blocos</Badge>}
+                                    {msg.status === 'sent' && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {missingMedia && (
+                                    <p className="text-[11px] font-semibold text-amber-600 mb-1">⚠️ Falta subir mídia</p>
+                                  )}
+                                  {isDraft && msg.media_brief && (
+                                    <p className="text-[10px] text-muted-foreground mb-1">🖼️ Mídia: {msg.media_brief}</p>
+                                  )}
+                                  {isDraft && msg.draft_notes && (
+                                    <p className="text-[10px] text-muted-foreground mb-1">📝 {msg.draft_notes}</p>
+                                  )}
+                                  <ScrollArea className="max-h-[200px]">
+                                    {msg.media_url && ['image'].includes(msg.message_type) && (
+                                      <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'video' && (
+                                      <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'audio' && (
+                                      <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'document' && (
+                                      <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                        📄 {msg.media_url.split('/').pop()}
+                                      </a>
+                                    )}
+                                    {msg.message_content && (
+                                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                                    )}
+                                    {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                      <div className="mt-1 space-y-0.5">
+                                        {msg.poll_options.map((opt: string, i: number) => (
+                                          <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {isDraft && siblings.length > 1 && (
+                                      <div className="mt-1 space-y-0.5 border-t pt-1">
+                                        {siblings.slice(1).map(b => (
+                                          <p key={b.id} className="text-[10px] text-muted-foreground">
+                                            ↳ {TYPE_LABELS[b.message_type] || b.message_type}
+                                            {['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url && ' ⚠️ sem mídia'}
+                                            {b.message_content ? ` · ${b.message_content.slice(0, 60)}` : ''}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </ScrollArea>
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  {isDraft && (
+                                    <>
+                                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1"
+                                        onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: [msg.id] }); }}>
+                                        <CheckCircle className="h-3 w-3" /> Aprovar
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Editar rascunho"
+                                        onClick={() => openEditGroup(msg)}>
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir rascunho"
+                                        onClick={() => deleteDraftGroup(msg)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {msg.status === 'pending' && (
+                                    <>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Editar"
+                                        onClick={() => msg.message_group_id ? openEditGroup(msg) : (setEditingGroup(null), setEditingMessage(msg), setShowMessageForm(true))}>
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Voltar para rascunho"
+                                        onClick={() => backToDraft(msg)}>
+                                        <Clock className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7"
+                                        onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
+                                        {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                        onClick={() => cancelMessage(msg.id)}>
+                                        <XCircle className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {msg.status === 'sent' && (
+                                    <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                                      onClick={() => duplicateMessage(msg)}>
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                                    <>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                        onClick={() => duplicateMessage(msg)}>
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                        onClick={() => deleteMessage(msg.id)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </ScrollArea>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
-                          {msg.status === 'pending' && (
-                            <>
-                              <Button variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => { setEditingMessage(msg); setShowMessageForm(true); }}>
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
-                                {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                onClick={() => cancelMessage(msg.id)}>
-                                <XCircle className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                          {msg.status === 'sent' && (
-                            <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
-                              onClick={() => duplicateMessage(msg)}>
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
-                            <>
-                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
-                                onClick={() => duplicateMessage(msg)}>
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                onClick={() => deleteMessage(msg.id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Diálogo-resumo da aprovação em massa */}
+                  <Dialog open={!!approvePreview} onOpenChange={o => !o && setApprovePreview(null)}>
+                    <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+                      <DialogHeader><DialogTitle className="text-sm">Aprovar rascunhos</DialogTitle></DialogHeader>
+                      <div className="space-y-3">
+                        <p className="text-xs">
+                          <strong>{previewOk.length}</strong> serão aprovadas e agendadas
+                          {previewBlocked.length > 0 && <> · <strong className="text-destructive">{previewBlocked.length} bloqueada(s)</strong></>}
+                        </p>
+                        {previewBlocked.length > 0 && (
+                          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 space-y-1">
+                            {previewBlocked.map(r => (
+                              <p key={r.msg.id} className="text-[11px]">
+                                ❌ {r.msg.scheduled_at ? format(new Date(r.msg.scheduled_at), 'dd/MM HH:mm') : 'sem horário'} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type}: {DRAFT_BLOCK_REASONS[r.reason!] || r.reason}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        {previewPast.length > 0 && (
+                          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-2 space-y-2">
+                            <p className="text-[11px] font-semibold text-red-600">
+                              ⚠️ {previewPast.length} mensagem(ns) com horário no passado serão ENVIADAS IMEDIATAMENTE após aprovar:
+                            </p>
+                            {previewPast.map(r => (
+                              <p key={r.msg.id} className="text-[11px]">
+                                • {format(new Date(r.msg.scheduled_at!), 'dd/MM HH:mm')} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type}
+                              </p>
+                            ))}
+                            <label className="flex items-center gap-2 text-[11px] font-medium">
+                              <Checkbox checked={pastScheduleAck} onCheckedChange={v => setPastScheduleAck(!!v)} />
+                              Entendi — incluir essas mensagens no envio imediato
+                            </label>
+                          </div>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setApprovePreview(null)}>Cancelar</Button>
+                        <Button onClick={() => approveDrafts(approvableIds)} disabled={isApproving || approvableIds.length === 0} className="gap-1">
+                          {isApproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                          Aprovar {approvableIds.length > 0 ? `(${approvableIds.length})` : ''}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              );
+            })()}
           </TabsContent>
 
           {/* CALENDAR TAB */}
@@ -1509,7 +1930,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                         <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
                           m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
                         )}>
-                          {format(new Date(m.scheduled_at), "HH:mm")}
+                          {m.scheduled_at ? format(new Date(m.scheduled_at), "HH:mm") : '--:--'}
                         </div>
                       ))}
                       {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
@@ -1526,7 +1947,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               <p className="text-xs font-medium text-muted-foreground">
                 {calendarSelectedDay 
                   ? `MENSAGENS DE ${format(calendarSelectedDay, "dd/MM/yyyy")}` 
-                  : `TODAS AS MENSAGENS (${messages.length})`}
+                  : `TODAS AS MENSAGENS (${messages.filter(m => m.status !== 'draft' && m.status !== 'grouped').length})`}
               </p>
               <div className="flex gap-1.5">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={openImportDialog}>
@@ -1800,11 +2221,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       <ScheduledMessageForm
         open={showMessageForm}
-        onOpenChange={open => { setShowMessageForm(open); if (!open) setEditingMessage(null); }}
+        onOpenChange={open => { setShowMessageForm(open); if (!open) { setEditingMessage(null); setEditingGroup(null); } }}
         onSubmit={handleAddMessage}
         onSendNow={handleSendNow}
+        onSaveDraft={handleSaveDraft}
         editingMessage={editingMessage}
+        editingGroupMessages={editingGroup}
         onUpdate={handleUpdateMessage}
+        onUpdateGroup={handleUpdateGroupMessage}
         campaignId={campaignId}
         otherCampaigns={otherCampaignGroups.map(c => ({ id: c.id, name: c.name }))}
         onScheduleToCampaign={handleScheduleToCampaign}
