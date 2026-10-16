@@ -26,8 +26,9 @@
 - [x] Link de Atendimento nos Grupos VIP (link por grupo, trava do dia, painel e faixa no chat)
 
 ## Expedição — gateways
-- [ ] Retirar Zorma da Expedição e impedir reaplicação de aprovação de teste.
-- [ ] Auditar pagamentos após o incidente, incluindo os quatro pedidos AustPay de teste, sem novas cobranças ou mensagens.
+- [x] Retirar Zorma e Soila da Expedição e invalidar as quatro aprovações sandbox; guard de cache e webhook corrigidos, 13 testes e conferência real concluídos.
+- [x] Auditar 612 pedidos e 697 vendas desde 22/09 nas operadoras, sem cobranças ou mensagens; 600 pedidos com aprovação real localizada incluindo partes.
+- [ ] Fechar conciliação dos casos não automáticos: dois pedidos manuais, saldo pendente da Neta, dois importados Shopify e diferenças de troca — depende de comprovantes/baixas externas da loja. Estornos/contestação localizados preservados sem reversão automática.
 - [x] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
 - [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
