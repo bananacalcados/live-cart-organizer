@@ -823,13 +823,34 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   const handleUpdate = async () => {
-    if (!editingMessage || !onUpdate || !validate()) return;
+    if (!editingMessage) return;
+    // Rascunho: permite salvar sem mídia/horário (validação fica para a aprovação).
+    const isDraftEdit = !!editingGroupMessages?.length;
+    if (!isDraftEdit && !validate()) return;
+    if (isDraftEdit && !scheduledDate) { toast.error("Selecione uma data (ou salve sem horário direto no banco)"); return; }
     setIsSaving(true);
     try {
-      await onUpdate(editingMessage.id, buildData());
+      if (isDraftEdit && onUpdateGroup) {
+        await onUpdateGroup(editingMessage.id, buildData());
+      } else if (onUpdate) {
+        await onUpdate(editingMessage.id, buildData());
+      }
       resetForm();
       onOpenChange(false);
     } catch { toast.error("Erro ao salvar"); }
+    finally { setIsSaving(false); }
+  };
+
+  // Rascunho: NÃO roda validate() — pode faltar mídia, horário etc.
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    setIsSaving(true);
+    try {
+      await onSaveDraft(buildData());
+      resetForm();
+      onOpenChange(false);
+      toast.success("Rascunho salvo! Ele só vai para o envio depois da aprovação.");
+    } catch (e: any) { toast.error("Erro ao salvar rascunho: " + (e?.message || "desconhecido")); }
     finally { setIsSaving(false); }
   };
 
@@ -1162,6 +1183,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          {!editingMessage && onSaveDraft && (
+            <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-1">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Salvar como rascunho
+            </Button>
+          )}
           {!editingMessage && onSendNow && (
             <Button variant="secondary" onClick={handleSendNow} disabled={isSaving} className="gap-1">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
