@@ -291,7 +291,8 @@ export async function fetchExpeditionOrders(
     // pedidos ainda não concluídos (expedition_finished_at = null).
     if (finishedRange?.from) q = q.gte("expedition_finished_at", finishedRange.from);
     if (finishedRange?.to) q = q.lte("expedition_finished_at", finishedRange.to);
-    return filterExpeditionGateway(q, gateway);
+    // PostgREST's generated select type is too deep for a recursive generic constraint.
+    return filterExpeditionGateway(q as any, gateway);
   };
 
 
