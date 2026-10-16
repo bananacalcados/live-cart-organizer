@@ -144,3 +144,19 @@ export function detectCardBrand(numberDigits: string): string {
 export function austpayGetTransaction(cfg: AustpayConfig, transactionId: string): Promise<Response> {
   return austpayFetch(cfg, `/v1/transactions/${transactionId}`);
 }
+
+/**
+ * Igual ao getAustpayConfig, mas o modo (teste/produção) pode ser ligado pelo
+ * sistema em app_settings.austpay_env — esse valor vence o segredo AUSTPAY_ENV.
+ */
+export async function resolveAustpayConfig(supabase: any): Promise<AustpayConfig | null> {
+  const cfg = getAustpayConfig();
+  if (!cfg) return null;
+  try {
+    const { data } = await supabase.from("app_settings").select("value").eq("key", "austpay_env").maybeSingle();
+    const raw = String(data?.value ?? "").replace(/"/g, "").trim().toLowerCase();
+    if (raw === "production") return { ...cfg, env: "production", baseUrl: AUSTPAY_PROD_BASE };
+    if (raw === "sandbox") return { ...cfg, env: "sandbox", baseUrl: AUSTPAY_SANDBOX_BASE };
+  } catch (_) { /* mantém o segredo */ }
+  return cfg;
+}

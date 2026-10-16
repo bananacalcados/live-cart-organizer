@@ -13,7 +13,7 @@ import {
   austpayRequestId,
   austpayTransactionsPath,
   detectCardBrand,
-  getAustpayConfig,
+  getAustpayConfig, resolveAustpayConfig,
   isAustpayApproved,
   isAustpayEnabled,
   toCents,
@@ -84,7 +84,7 @@ serve(async (req) => {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    const cfg = getAustpayConfig();
+    const cfg = await resolveAustpayConfig(supabase);
     if (!cfg) {
       return new Response(JSON.stringify({ error: "austpay_not_configured" }), {
         status: 503,

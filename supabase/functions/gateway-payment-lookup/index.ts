@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMpAccountForOrder } from "../_shared/mp-account.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
-import { austpayGetTransaction, fromCents, getAustpayConfig } from "../_shared/austpay.ts";
+import { austpayGetTransaction, fromCents, getAustpayConfig, resolveAustpayConfig } from "../_shared/austpay.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -111,7 +111,7 @@ serve(async (req) => {
     if (order.austpay_transaction_id) {
       const txId = String(order.austpay_transaction_id);
       const entry: any = { gateway: "austpay", paymentId: txId };
-      const cfg = getAustpayConfig();
+      const cfg = await resolveAustpayConfig(supabase);
       if (!cfg) {
         entry.error = "AustPay não configurada para consulta.";
       } else {
