@@ -1060,10 +1060,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, [savedContacts, zapiContacts]);
 
   const filteredZapiContacts = useMemo(() => {
-    if (!contactSearchQuery.trim()) return zapiContacts.slice(0, 50);
+    if (!contactSearchQuery.trim()) return allPickerContacts.slice(0, 50);
     const q = contactSearchQuery.toLowerCase();
-    return zapiContacts.filter(c => c.name.toLowerCase().includes(q) || c.short.toLowerCase().includes(q) || c.phone.includes(q)).slice(0, 50);
-  }, [zapiContacts, contactSearchQuery]);
+    return allPickerContacts.filter(c => c.name.toLowerCase().includes(q) || c.short.toLowerCase().includes(q) || c.phone.includes(q)).slice(0, 50);
+  }, [allPickerContacts, contactSearchQuery]);
 
   const toggleGroupContact = (contact: { phone: string; name: string; short: string }) => {
     setSelectedGroupContacts(prev => {
@@ -1826,6 +1826,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 </div>
               )}
 
+              <div className="flex gap-1.5">
+                <Input placeholder="Nome" value={newContactName} onChange={e => setNewContactName(e.target.value)} className="h-9 text-sm" />
+                <Input placeholder="DDD + número" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addSavedContact(); }} className="h-9 text-sm" />
+                <Button type="button" size="sm" variant="secondary" onClick={addSavedContact} className="h-9 shrink-0">Salvar contato</Button>
+              </div>
+
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -1864,9 +1870,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                             <p className="font-medium truncate">{c.short || c.name}</p>
                             <p className="text-xs text-muted-foreground">{c.phone}</p>
                           </div>
-                          {isSelected && (
-                            <Badge variant="default" className="text-[10px] flex-shrink-0">✓</Badge>
-                          )}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {isSelected && <Badge variant="default" className="text-[10px]">✓</Badge>}
+                            {savedContacts.some(sc => sc.phone === c.phone) && (
+                              <span role="button" title="Remover contato salvo" onClick={(e) => { e.stopPropagation(); removeSavedContact(c.phone); }} className="text-muted-foreground hover:text-destructive">
+                                <XCircle className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
@@ -1875,7 +1886,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               </ScrollArea>
 
               <p className="text-[10px] text-muted-foreground">
-                {zapiContacts.length} contatos · {selectedGroupContacts.length} selecionado(s)
+                {allPickerContacts.length} contatos · {selectedGroupContacts.length} selecionado(s)
               </p>
             </div>
           </div>
