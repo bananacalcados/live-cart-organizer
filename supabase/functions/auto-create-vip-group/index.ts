@@ -1,316 +1,185 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * Cria automaticamente um grupo reserva (standby) para uma campanha VIP,
+ * SEMPRE pela instância da campanha (group_campaigns.whatsapp_number_id),
+ * roteando pelo provedor (uazapi → uazapi-groups; Z-API → zapi-group-settings).
+ * Chamado por cron-check-vip-groups e group-redirect-link (servidor, service role).
+ */
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+const json = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+const STANDBY_MAX_COUNT = 50;
+const MIN_INTERVAL_MS = 30 * 60 * 1000;
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const auth = req.headers.get("Authorization") || "";
+  if (auth !== `Bearer ${serviceKey}`) return json({ error: "unauthorized" }, 401);
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const callFn = async (fn: string, body: Record<string, unknown>) => {
+    try {
+      const r = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      const ok = r.ok && data?.success !== false && !data?.error;
+      return { ok, data, error: ok ? null : (data?.error || `http_${r.status}`) };
+    } catch (e) {
+      return { ok: false, data: null, error: String(e) };
+    }
+  };
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const { campaign_id } = await req.json().catch(() => ({}));
+    if (!campaign_id) return json({ error: "campaign_id is required" }, 400);
 
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const zapiToken = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-    if (!instanceId || !zapiToken || !clientToken) {
-      return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { campaign_id } = await req.json();
-    if (!campaign_id) {
-      return new Response(
-        JSON.stringify({ error: 'campaign_id is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 1. Fetch campaign with template settings
     const { data: campaign, error: campErr } = await supabase
-      .from('group_campaigns')
-      .select('id, name, target_groups, total_groups, group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_id, group_pin_duration')
-      .eq('id', campaign_id)
-      .single();
-
+      .from("group_campaigns")
+      .select("id, name, target_groups, whatsapp_number_id, group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_text, group_pin_duration")
+      .eq("id", campaign_id)
+      .maybeSingle();
     if (campErr || !campaign) {
-      return new Response(
-        JSON.stringify({ error: 'Campaign not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error("[auto-create] campanha não encontrada", campErr);
+      return json({ error: "Campaign not found" }, 404);
+    }
+    const c: any = campaign;
+    if (!c.whatsapp_number_id) return json({ error: "Campanha sem instância de WhatsApp definida" }, 400);
+
+    const { data: inst } = await supabase
+      .from("whatsapp_numbers")
+      .select("id, provider, zapi_instance_id, uazapi_instance_name, is_active")
+      .eq("id", c.whatsapp_number_id)
+      .maybeSingle();
+    if (!inst) return json({ error: "Instância da campanha não encontrada" }, 400);
+    const provider = inst.provider || "zapi";
+    if (provider !== "uazapi" && provider !== "zapi") {
+      return json({ error: `Criação automática não suportada para o provedor ${provider}` }, 400);
     }
 
-    const targetGroupIds: string[] = campaign.target_groups || [];
+    const targetIds: string[] = c.target_groups || [];
+    const { data: groups } = targetIds.length
+      ? await supabase.from("whatsapp_groups")
+          .select("id, name, participant_count, is_active, is_full, invite_link, created_at")
+          .in("id", targetIds)
+      : { data: [] as any[] };
 
-    // 2. Check if there are non-full groups
-    const { data: nonFullGroups } = await supabase
-      .from('whatsapp_groups')
-      .select('id')
-      .in('id', targetGroupIds.length > 0 ? targetGroupIds : ['__none__'])
-      .lt('participant_count', 1000)
-      .eq('is_full', false)
-      .limit(1);
-
-    if (nonFullGroups && nonFullGroups.length > 0) {
-      return new Response(
-        JSON.stringify({ success: true, skipped: true, reason: 'Campaign still has non-full groups' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // ── Proteções contra duplicidade ──
+    const standby = (groups || []).find((g: any) => g.is_active !== false && !g.is_full && (g.participant_count || 0) < STANDBY_MAX_COUNT);
+    if (standby) {
+      return json({ success: true, skipped: true, reason: "standby_exists",
+        group: { id: standby.id, name: standby.name, invite_link: standby.invite_link } });
+    }
+    const lastCreated = (groups || []).reduce((m: number, g: any) => Math.max(m, g.created_at ? Date.parse(g.created_at) : 0), 0);
+    if (lastCreated && Date.now() - lastCreated < MIN_INTERVAL_MS) {
+      return json({ success: true, skipped: true, reason: "created_less_than_30min_ago" });
     }
 
-    // 3. Find a seed participant from existing campaign groups
-    let seedPhone: string | null = null;
+    // ── Nome sequencial: maior #n já usado + 1 ──
+    const baseName = String(c.group_name_template || c.name || "VIP").replace(/\s*#\d+\s*$/, "").trim();
+    let maxN = 0;
+    for (const g of groups || []) {
+      const m = String(g.name || "").match(/#(\d+)\s*$/);
+      if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+    }
+    const newName = `${baseName} #${Math.max(maxN, (groups || []).length) + 1}`;
 
-    // First try admin phones from campaign settings
-    const adminPhones: string[] = (campaign as any).group_admin_phones || [];
-    if (adminPhones.length > 0) {
-      seedPhone = adminPhones[0];
-      console.log(`Using saved admin phone as seed: ${seedPhone}`);
+    const adminPhones: string[] = (c.group_admin_phones || []).map((p: string) => String(p).replace(/\D/g, "")).filter(Boolean);
+    if (adminPhones.length === 0) {
+      return json({ error: "Cadastre ao menos 1 telefone de admin na campanha para criar grupos automaticamente" }, 400);
     }
 
-    // If no saved admin, look at existing groups
-    if (!seedPhone) {
-      for (const gId of targetGroupIds) {
-        const { data: group } = await supabase
-          .from('whatsapp_groups')
-          .select('group_id')
-          .eq('id', gId)
-          .single();
-
-        if (!group) continue;
-
-        const participantsUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/group-participants/${group.group_id}`;
-        const partRes = await fetch(participantsUrl, {
-          method: 'GET',
-          headers: { 'Client-Token': clientToken },
-        });
-
-        if (!partRes.ok) continue;
-        const participants = await partRes.json();
-
-        if (Array.isArray(participants) && participants.length > 0) {
-          const admin = participants.find((p: any) => p.isAdmin || p.isSuperAdmin);
-          const candidate = admin || participants.find((p: any) => p.phone);
-          if (candidate?.phone) {
-            seedPhone = candidate.phone;
-            console.log(`Found seed participant ${seedPhone} (admin: ${!!admin}) from group ${group.group_id}`);
-            break;
-          }
-        }
-      }
-    }
-
-    if (!seedPhone) {
-      // Fallback: try Z-API contacts
-      const contactsUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}/contacts?page=1&pageSize=5`;
-      const contactsRes = await fetch(contactsUrl, {
-        method: 'GET',
-        headers: { 'Client-Token': clientToken },
-      });
-      if (contactsRes.ok) {
-        const contacts = await contactsRes.json();
-        if (Array.isArray(contacts) && contacts.length > 0) {
-          seedPhone = contacts[0].phone;
-          console.log(`Using fallback contact as seed: ${seedPhone}`);
-        }
-      }
-    }
-
-    if (!seedPhone) {
-      return new Response(
-        JSON.stringify({ error: 'Could not find a seed participant for the new group' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 4. Normalize phone
-    const normalizeBrPhone = (p: string): string => {
-      let clean = p.replace(/\D/g, '');
-      if (!clean.startsWith('55') && clean.length <= 11) clean = '55' + clean;
-      if (clean.startsWith('55') && clean.length === 12) {
-        const ddd = clean.substring(2, 4);
-        const local = clean.substring(4);
-        if (['9', '8', '7', '6'].includes(local[0])) {
-          clean = '55' + ddd + '9' + local;
-        }
-      }
-      return clean;
-    };
-
-    const normalizedPhone = normalizeBrPhone(seedPhone);
-
-    // 5. Determine group name from saved template or campaign name
-    const existingCount = targetGroupIds.length;
-    const baseName = (campaign as any).group_name_template || campaign.name || 'VIP';
-    const nextNumber = existingCount + 1;
-    const newGroupName = `${baseName} #${nextNumber}`;
-
-    console.log(`Creating auto group "${newGroupName}" with seed phone ${normalizedPhone}`);
-
-    // 6. Create group via Z-API
-    const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${zapiToken}`;
-    const createRes = await fetch(`${baseUrl}/create-group`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-      body: JSON.stringify({
-        autoInvite: true,
-        groupName: newGroupName,
-        phones: [normalizedPhone],
-      }),
-    });
-
-    const createData = await createRes.json();
-    const newGroupId = createData?.phone || createData?.groupId;
-
-    if (!newGroupId) {
-      console.error('Failed to create group:', createData);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create group', details: createData }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Group created: ${newGroupId}`);
-
-    // 7. Apply saved campaign settings
-    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-    // Set permissions
-    const sendMsgMode = (campaign as any).group_only_admins_send ? 'admins' : 'all';
-    await fetch(`${baseUrl}/update-group-settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-      body: JSON.stringify({ groupId: newGroupId, settings: { sendMessages: sendMsgMode } }),
-    });
-    await delay(1000);
-
-    const addMode = (campaign as any).group_only_admins_add ? 'admins' : 'all';
-    await fetch(`${baseUrl}/update-group-settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-      body: JSON.stringify({ groupId: newGroupId, settings: { editGroup: addMode } }),
-    });
-    await delay(1000);
-
-    // Set photo if configured
-    if ((campaign as any).group_photo_url) {
-      await fetch(`${baseUrl}/update-group-photo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-        body: JSON.stringify({ groupId: newGroupId, groupPhoto: (campaign as any).group_photo_url }),
-      });
-      await delay(1000);
-    }
-
-    // Set description if configured
-    if ((campaign as any).group_description) {
-      await fetch(`${baseUrl}/update-group-description`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-        body: JSON.stringify({ groupId: newGroupId, groupDescription: (campaign as any).group_description }),
-      });
-      await delay(1000);
-    }
-
-    // Add and promote admin phones
-    for (const adminPhone of adminPhones) {
-      const normalized = normalizeBrPhone(adminPhone);
-      // Skip if it's the seed phone (already in the group)
-      if (normalized === normalizedPhone) {
-        // Just promote
-        await fetch(`${baseUrl}/promote-participant`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-          body: JSON.stringify({ groupId: newGroupId, phone: normalized }),
-        });
-      } else {
-        // Add first, then promote
-        await fetch(`${baseUrl}/add-participant`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-          body: JSON.stringify({ groupId: newGroupId, phone: normalized }),
-        });
-        await delay(1500);
-        await fetch(`${baseUrl}/promote-participant`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Client-Token': clientToken },
-          body: JSON.stringify({ groupId: newGroupId, phone: normalized }),
-        });
-      }
-      await delay(1000);
-    }
-
-    // 8. Get invite link
+    // ── Criação ──
+    let newJid: string | null = null;
     let inviteLink: string | null = null;
-    try {
-      const inviteRes = await fetch(`${baseUrl}/group-invite-link/${newGroupId}`, {
-        method: 'GET',
-        headers: { 'Client-Token': clientToken },
-      });
-      const inviteData = await inviteRes.json();
-      inviteLink = inviteData?.invitationLink || inviteData?.link || null;
-      console.log(`Invite link: ${inviteLink}`);
-    } catch (e) {
-      console.error('Error getting invite link:', e);
+    if (provider === "uazapi") {
+      const r = await callFn("uazapi-groups", { action: "create", name: newName, participants: adminPhones, whatsapp_number_id: inst.id });
+      const d: any = r.data?.data || {};
+      newJid = d?.group?.JID || d?.JID || d?.jid || d?.group?.jid || d?.id || null;
+      if (!r.ok || !newJid) {
+        console.error("[auto-create] falha ao criar grupo uazapi", r.error, r.data);
+        return json({ error: "Failed to create group", details: r.data }, 500);
+      }
+    } else {
+      const r = await callFn("zapi-group-settings", { action: "create", groupName: newName, phones: adminPhones, whatsapp_number_id: inst.id });
+      newJid = r.data?.groupId || r.data?.data?.phone || r.data?.data?.groupId || null;
+      inviteLink = r.data?.data?.invitationLink || null;
+      if (!r.ok || !newJid) {
+        console.error("[auto-create] falha ao criar grupo Z-API", r.error, r.data);
+        return json({ error: "Failed to create group", details: r.data }, 500);
+      }
     }
+    console.log(`[auto-create] grupo "${newName}" criado (${provider}) jid=${newJid} campanha=${c.id}`);
 
-    // 9. Save group to DB
-    const { data: newGroup } = await supabase
-      .from('whatsapp_groups')
-      .insert({
-        group_id: newGroupId,
-        name: newGroupName,
-        is_vip: true,
-        is_active: true,
-        participant_count: 1 + adminPhones.length,
-        max_participants: 1024,
-        invite_link: inviteLink,
-        only_admins_send: (campaign as any).group_only_admins_send || false,
-        only_admins_add: (campaign as any).group_only_admins_add || false,
-      })
-      .select()
-      .single();
-
-    if (!newGroup) {
-      return new Response(
-        JSON.stringify({ error: 'Group created on WhatsApp but failed to save to DB' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Grava IMEDIATAMENTE (evita recriação se alguma configuração falhar)
+    const instanceKey = provider === "zapi" ? (inst.zapi_instance_id || inst.id) : inst.id;
+    const { data: newGroup, error: insErr } = await supabase.from("whatsapp_groups").insert({
+      group_id: newJid, name: newName, is_vip: true, is_active: true,
+      instance_id: instanceKey, participant_count: adminPhones.length + 1, max_participants: 1024,
+      invite_link: inviteLink,
+      only_admins_send: !!c.group_only_admins_send, only_admins_add: !!c.group_only_admins_add,
+      description: c.group_description || null, photo_url: c.group_photo_url || null,
+    }).select("id").single();
+    if (insErr || !newGroup) {
+      console.error("[auto-create] grupo criado no WhatsApp mas não salvo", insErr);
+      return json({ error: "Group created on WhatsApp but failed to save to DB", group_id: newJid }, 500);
     }
+    const updated = [...targetIds, newGroup.id];
+    await supabase.from("group_campaigns").update({ target_groups: updated, total_groups: updated.length }).eq("id", c.id);
 
-    // 10. Add to campaign
-    const updatedTargetGroups = [...targetGroupIds, newGroup.id];
-    await supabase
-      .from('group_campaigns')
-      .update({
-        target_groups: updatedTargetGroups,
-        total_groups: updatedTargetGroups.length,
-      })
-      .eq('id', campaign_id);
+    // ── Configurações (falhas só registram) ──
+    const errors: string[] = [];
+    const step = async (label: string, p: Promise<{ ok: boolean; error: any }>) => {
+      const r = await p;
+      if (!r.ok) errors.push(`${label}: ${r.error}`);
+      await delay(1000);
+    };
+    const wid = inst.id;
+    if (provider === "uazapi") {
+      if (c.group_description) await step("descrição", callFn("uazapi-groups", { action: "updateDescription", groupJid: newJid, description: c.group_description, whatsapp_number_id: wid }));
+      if (c.group_photo_url) await step("foto", callFn("uazapi-groups", { action: "updateImage", groupJid: newJid, image: c.group_photo_url, whatsapp_number_id: wid }));
+      await step("só admins enviam", callFn("uazapi-groups", { action: "updateAnnounce", groupJid: newJid, announce: !!c.group_only_admins_send, whatsapp_number_id: wid }));
+      await step("só admins adicionam", callFn("uazapi-groups", { action: "updateMemberAddMode", groupJid: newJid, adminsOnly: !!c.group_only_admins_add, whatsapp_number_id: wid }));
+      await step("promover admins", callFn("uazapi-groups", { action: "updateParticipants", groupJid: newJid, participantAction: "promote", participants: adminPhones, whatsapp_number_id: wid }));
+      if (c.group_pin_message_text) await step("fixar mensagem", callFn("uazapi-groups", { action: "pinMessage", groupJid: newJid, message: c.group_pin_message_text, pinDuration: c.group_pin_duration || "7_days", whatsapp_number_id: wid }));
+      const inv = await callFn("uazapi-groups", { action: "inviteLink", groupJid: newJid, whatsapp_number_id: wid });
+      const d: any = inv.data?.data || {};
+      inviteLink = d?.InviteLink || d?.inviteLink || d?.invite_link || d?.link || d?.group?.invite_link || null;
+      if (!inviteLink) errors.push("link de convite: não retornado");
+    } else {
+      if (c.group_description) await step("descrição", callFn("zapi-group-settings", { action: "update-description", groupId: newJid, value: c.group_description, whatsapp_number_id: wid }));
+      if (c.group_photo_url) await step("foto", callFn("zapi-group-settings", { action: "update-photo", groupId: newJid, value: c.group_photo_url, whatsapp_number_id: wid }));
+      await step("só admins enviam", callFn("zapi-group-settings", { action: "set-messages-admins-only", groupId: newJid, value: String(!!c.group_only_admins_send), whatsapp_number_id: wid }));
+      await step("só admins adicionam", callFn("zapi-group-settings", { action: "set-add-admins-only", groupId: newJid, value: String(!!c.group_only_admins_add), whatsapp_number_id: wid }));
+      for (const ph of adminPhones) await step(`promover ${ph}`, callFn("zapi-group-settings", { action: "promote-admin", groupId: newJid, phone: ph, whatsapp_number_id: wid }));
+      if (c.group_pin_message_text) {
+        const sent = await callFn("zapi-send-group-message", { groupId: newJid, type: "text", message: c.group_pin_message_text, whatsapp_number_id: wid });
+        const messageId = sent.data?.messageId || sent.data?.data?.messageId || sent.data?.zaapId || null;
+        if (messageId) await step("fixar mensagem", callFn("zapi-group-settings", { action: "pin-message", groupId: newJid, messageId, pinDuration: c.group_pin_duration || "7_days", whatsapp_number_id: wid }));
+        else errors.push("fixar mensagem: envio sem ID");
+      }
+    }
+    if (inviteLink) await supabase.from("whatsapp_groups").update({ invite_link: inviteLink }).eq("id", newGroup.id);
 
-    console.log(`Auto-created group "${newGroupName}" with all campaign settings applied`);
+    if (errors.length) console.warn(`[auto-create] grupo "${newName}" criado com falhas de configuração:`, errors);
+    else console.log(`[auto-create] grupo "${newName}" configurado com sucesso`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        group: { id: newGroup.id, group_id: newGroupId, name: newGroupName, invite_link: inviteLink },
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ success: true, group: { id: newGroup.id, group_id: newJid, name: newName, invite_link: inviteLink }, config_errors: errors });
   } catch (error) {
-    console.error('Error auto-creating group:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("[auto-create] erro:", error);
+    return json({ error: "Internal server error", details: (error as Error).message }, 500);
   }
 });

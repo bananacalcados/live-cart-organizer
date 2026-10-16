@@ -36,6 +36,28 @@ serve(async (req) => {
   const varsCache = new Map<string, Record<string, string>>();
   const providerCache = new Map<string, string>();
   const blockCache = new Map<string, any>();
+  const participantsCache = new Map<string, string[] | null>();
+
+  // Participantes do grupo (uazapi) para "marcar todos" — 1 busca por grupo por execução.
+  async function getUazapiParticipants(groupJid: string, numberId: string | null): Promise<string[] | null> {
+    const key = `${numberId}:${groupJid}`;
+    if (participantsCache.has(key)) return participantsCache.get(key)!;
+    let phones: string[] | null = null;
+    try {
+      const r = await fetch(`${supabaseUrl}/functions/v1/uazapi-groups`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "participantPhones", groupJid, whatsapp_number_id: numberId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && Array.isArray(d?.phones) && d.phones.length > 0) phones = d.phones;
+      else console.warn(`[mention_all] sem participantes para ${groupJid}; enviando sem menção`, d?.error || r.status);
+    } catch (e) {
+      console.warn(`[mention_all] falha ao buscar participantes de ${groupJid}; enviando sem menção`, e);
+    }
+    participantsCache.set(key, phones);
+    return phones;
+  }
   let vipBaseUrl: string | null = null;
 
   // Link de Atendimento VIP (aditivo): só age quando o bloco tem vip_link_mode product/general.
@@ -66,6 +88,9 @@ serve(async (req) => {
       ? q.eq("message_group_id", job.message_group_id)
       : q.eq("scheduled_message_id", job.scheduled_message_id);
 
+  // "-" e "_" equivalentes, sem diferenciar maiúsculas: {{link_live}} = {{link-live}} = {{LINK_LIVE}}
+  const normVar = (n: string) => String(n || "").trim().toLowerCase().replace(/-/g, "_");
+
   async function getCampaignVars(campaignId: string): Promise<Record<string, string>> {
     if (varsCache.has(campaignId)) return varsCache.get(campaignId)!;
     const { data } = await supabase
@@ -73,10 +98,10 @@ serve(async (req) => {
       .select("variable_name, variable_value")
       .eq("campaign_id", campaignId);
     const vars: Record<string, string> = {};
-    if (data) for (const v of data) vars[v.variable_name] = v.variable_value;
+    if (data) for (const v of data) vars[normVar(v.variable_name)] = v.variable_value;
     const now = new Date();
-    vars["data_hoje"] = now.toLocaleDateString("pt-BR");
-    vars["horario"] = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    vars[normVar("data_hoje")] = now.toLocaleDateString("pt-BR");
+    vars[normVar("horario")] = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     varsCache.set(campaignId, vars);
     return vars;
   }
@@ -120,11 +145,11 @@ serve(async (req) => {
   }
 
   const replaceVars = (text: string, vars: Record<string, string>, groupName: string): string => {
-    let result = text || "";
-    for (const [k, v] of Object.entries(vars)) {
-      result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-    }
-    return result.replace(/\{\{nome_grupo\}\}/g, groupName);
+    return (text || "").replace(/\{\{\s*([\w-]+)\s*\}\}/g, (m, name) => {
+      const k = normVar(name);
+      if (k === "nome_grupo") return groupName;
+      return Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : m;
+    });
   };
 
   async function callFn(fnName: string, body: Record<string, unknown>) {
@@ -145,7 +170,9 @@ serve(async (req) => {
     const isPoll = block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2;
     const isContact = block.message_type === "contact" && block.contact_phone;
     const isMedia = block.message_type !== "text" && block.message_type !== "contact" && block.media_url;
-    const pollSel = block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1;
+    // poll_max_options = 0 → múltiplas respostas (todas as opções); N > 0 → N.
+    const pollOptCount = Array.isArray(block.poll_options) ? block.poll_options.length : 1;
+    const pollSel = block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : pollOptCount;
     // Sem miniatura de link (opcional, só texto). WaSender não suporta → ignorado.
     const noPreview = block.disable_link_preview === true;
 
@@ -186,14 +213,16 @@ serve(async (req) => {
           poll: { question: content || "Enquete", options: block.poll_options, selectableCount: pollSel },
         });
       }
+      const mentions = block.mention_all ? await getUazapiParticipants(groupId, numberId) : null;
       if (isMedia) {
         return callFn("uazapi-send-media", {
           phone: groupId, mediaUrl: block.media_url, mediaType: block.message_type, caption: content, whatsapp_number_id: numberId,
+          ...(mentions ? { mentions } : {}),
         });
       }
-      if (block.mention_all) {
+      if (mentions) {
         return callFn("uazapi-groups", {
-          action: "sendMessage", groupJid: groupId, message: content, whatsapp_number_id: numberId,
+          action: "sendMessage", groupJid: groupId, message: content, whatsapp_number_id: numberId, mentions,
           ...(noPreview ? { linkPreview: false } : {}),
         });
       }
@@ -350,7 +379,7 @@ serve(async (req) => {
       return true;
     }
 
-    const block = await getBlock(job);
+    let block = await getBlock(job);
     if (!block) {
       await supabase.from("group_campaign_block_dispatches")
         .update({ status: "failed", error_message: "block_not_found", locked_until: null })
@@ -363,6 +392,9 @@ serve(async (req) => {
     const vars = job.campaign_id ? await getCampaignVars(job.campaign_id) : {};
     const provider = await getProvider(job.whatsapp_number_id);
     const content = await applyVipLink(block, job, replaceVars(block.message_content || "", vars, job.group_name || ""));
+    if (Array.isArray(block.poll_options)) {
+      block = { ...block, poll_options: block.poll_options.map((o: string) => replaceVars(String(o ?? ""), vars, job.group_name || "")) };
+    }
 
     // Envio com 1 retry
     let res = await sendBlock(provider, block, job, content);

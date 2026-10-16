@@ -37,7 +37,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, mediaUrl, mediaType, caption, fileName, whatsapp_number_id, quotedMessageId } =
+    const { phone, mediaUrl, mediaType, caption, fileName, whatsapp_number_id, quotedMessageId, mentions } =
       await req.json();
     if (!phone || !mediaUrl) {
       return new Response(JSON.stringify({ error: "Phone and mediaUrl are required" }), {
@@ -67,6 +67,9 @@ serve(async (req) => {
     if (caption) payload.text = caption;
     if (type === "document" && fileName) payload.docName = fileName;
     if (quotedMessageId) payload.replyid = quotedMessageId;
+    if (Array.isArray(mentions) && mentions.length > 0) {
+      payload.mentions = mentions.map((m: string) => String(m).replace(/\D/g, "")).filter(Boolean).join(",");
+    }
 
     const r = await uazapiInstance("/send/media", token, { method: "POST", body: payload });
     if (!r.ok) {

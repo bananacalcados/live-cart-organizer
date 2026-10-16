@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { resolveInstanceByKey, runGroupAction, type InstanceInfo, type GroupAction } from "@/lib/marketing/instanceGroups";
 import { toast } from "sonner";
 import { Settings, Image, Type, FileText, Users, Shield, UserPlus, UserMinus, Crown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,27 +52,35 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
   const [isSaving, setIsSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
 
+  // Instância do grupo (resolvida por whatsapp_groups.instance_id) → roteia pelo provedor real.
+  const [inst, setInst] = useState<InstanceInfo | null>(null);
+  const [instState, setInstState] = useState<'loading' | 'ok' | 'missing'>('loading');
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setInstState('loading');
+    (async () => {
+      const { data } = await supabase.from('whatsapp_groups').select('instance_id').eq('id', group.id).maybeSingle();
+      const info = await resolveInstanceByKey((data as any)?.instance_id);
+      if (!alive) return;
+      setInst(info);
+      setInstState(info ? 'ok' : 'missing');
+    })();
+    return () => { alive = false; };
+  }, [open, group.id]);
+  const disabled = instState !== 'ok';
+
   const callGroupSettings = async (action: string, extraParams: Record<string, string> = {}) => {
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-      method: 'POST',
-      headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, groupId: group.group_id, ...extraParams }),
-    });
-    return res.json();
+    if (!inst) return { success: false, error: 'Instância do grupo não encontrada' };
+    return runGroupAction(inst, group.group_id, action as GroupAction, extraParams.phone ?? extraParams.value);
   };
 
   const loadParticipants = async () => {
     setIsLoadingParticipants(true);
     try {
       const data = await callGroupSettings('get-participants');
-      if (data.success && data.data) {
-        const list = Array.isArray(data.data) ? data.data : (data.data.participants || []);
-        setParticipants(list.map((p: any) => ({
-          phone: p.phone || p.id?.replace('@c.us', '') || '',
-          name: p.name || p.pushName || '',
-          isAdmin: p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin,
-        })));
-      }
+      if (data.success && Array.isArray(data.data)) setParticipants(data.data);
+      else toast.error(data.error || "Erro ao carregar participantes");
     } catch { toast.error("Erro ao carregar participantes"); }
     finally { setIsLoadingParticipants(false); }
   };
@@ -100,14 +109,16 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
 
   const handleToggleAdminsSend = async (val: boolean) => {
     setOnlyAdminsSend(val);
-    await callGroupSettings('set-messages-admins-only', { value: String(val) });
+    const r = await callGroupSettings('set-messages-admins-only', { value: String(val) });
+    if (!r.success) { setOnlyAdminsSend(!val); toast.error(r.error || "Erro"); return; }
     await supabase.from('whatsapp_groups').update({ only_admins_send: val }).eq('id', group.id);
     toast.success(val ? "Somente admins podem enviar" : "Todos podem enviar");
   };
 
   const handleToggleAdminsAdd = async (val: boolean) => {
     setOnlyAdminsAdd(val);
-    await callGroupSettings('set-add-admins-only', { value: String(val) });
+    const r = await callGroupSettings('set-add-admins-only', { value: String(val) });
+    if (!r.success) { setOnlyAdminsAdd(!val); toast.error(r.error || "Erro"); return; }
     await supabase.from('whatsapp_groups').update({ only_admins_add: val }).eq('id', group.id);
     toast.success(val ? "Somente admins adicionam" : "Todos podem adicionar");
   };
@@ -152,8 +163,13 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
           </DialogTitle>
         </DialogHeader>
 
+        {instState === 'missing' && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+            Não achei a instância de WhatsApp deste grupo. Sincronize os grupos da instância e tente de novo. As ações no WhatsApp estão desativadas.
+          </div>
+        )}
         <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-6 pb-4">
+          <fieldset disabled={disabled} className="space-y-6 pb-4 disabled:opacity-60">
             {/* Photo */}
             <div className="space-y-2">
               <Label className="flex items-center gap-1 text-xs font-medium"><Image className="h-3.5 w-3.5" /> Foto do Grupo</Label>
@@ -275,7 +291,7 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
                 </div>
               )}
             </div>
-          </div>
+          </fieldset>
         </ScrollArea>
       </DialogContent>
     </Dialog>
