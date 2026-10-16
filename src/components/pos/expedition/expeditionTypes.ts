@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+import { filterExpeditionGateway } from "@/lib/expeditionGateway";
 
 
 export type ExpStage =
@@ -266,6 +267,7 @@ export async function fetchExpeditionOrders(
   storeId: string,
   stage: ExpStage,
   finishedRange?: { from?: string; to?: string },
+  gateway = "all",
 ): Promise<ExpOrder[]> {
   const allStores = storeId === "all";
   const SALE_COLS =
@@ -289,7 +291,8 @@ export async function fetchExpeditionOrders(
     // pedidos ainda não concluídos (expedition_finished_at = null).
     if (finishedRange?.from) q = q.gte("expedition_finished_at", finishedRange.from);
     if (finishedRange?.to) q = q.lte("expedition_finished_at", finishedRange.to);
-    return q;
+    // PostgREST's generated select type is too deep for a recursive generic constraint.
+    return filterExpeditionGateway(q as any, gateway);
   };
 
 
