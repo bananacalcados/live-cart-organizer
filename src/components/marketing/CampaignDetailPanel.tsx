@@ -1078,22 +1078,35 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     if (selectedGroupContacts.length === 0) { toast.error("Selecione pelo menos 1 participante"); return; }
     setIsCreatingGroup(true);
     try {
-      const phones = selectedGroupContacts.map(c => c.phone);
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones }),
-      });
-      const result = await res.json();
-      const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
-      
-      if (result.success && newGroupId) {
-        // Grava a chave da instância no mesmo formato da sincronização:
-        // Z-API usa zapi_instance_id; uazapi/WaSender usam o id da instância.
-        const instInfo = campaignNumberId ? await fetchInstanceInfo(campaignNumberId) : null;
-        const instKey = instInfo
-          ? ((instInfo.provider || 'zapi') === 'zapi' ? (instInfo.zapi_instance_id || instInfo.id) : instInfo.id)
-          : null;
+      const phones = selectedGroupContacts.map(c => String(c.phone).replace(/\D/g, ''));
+      if (!campaignNumberId) { toast.error("Selecione a instância da campanha antes de criar o grupo"); return; }
+      const instInfo = await fetchInstanceInfo(campaignNumberId);
+      if (!instInfo) { toast.error("Instância da campanha não encontrada"); return; }
+      const provider = instInfo.provider || 'zapi';
+      let result: any;
+      let newGroupId: string | null = null;
+      if (provider === 'uazapi') {
+        const { data, error } = await supabase.functions.invoke('uazapi-groups', {
+          body: { action: 'create', name: newGroupName.trim(), participants: phones, whatsapp_number_id: instInfo.id },
+        });
+        result = data || { success: false, error: error?.message };
+        const d: any = data?.data || {};
+        newGroupId = d?.group?.JID || d?.JID || d?.jid || d?.group?.jid || d?.id || null;
+      } else if (provider === 'zapi') {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+          method: 'POST',
+          headers: await authHeaders(),
+          body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones, whatsapp_number_id: instInfo.id }),
+        });
+        result = await res.json().catch(() => ({ success: false }));
+        newGroupId = result.groupId || result.data?.phone || result.data?.groupId || null;
+      } else {
+        toast.error(`Criar grupo não é suportado para o provedor ${provider}`);
+        return;
+      }
+
+      if (result?.success !== false && !result?.error && newGroupId) {
+        const instKey = provider === 'zapi' ? (instInfo.zapi_instance_id || instInfo.id) : instInfo.id;
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
           group_id: newGroupId,
           name: newGroupName.trim(),
