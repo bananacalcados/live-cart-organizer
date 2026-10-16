@@ -1570,101 +1570,329 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
           {/* MESSAGES TAB */}
           <TabsContent value="messages" className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">MENSAGENS ({messages.length})</p>
-            <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
-            {messages.length === 0 ? (
-              <Card><CardContent className="py-8 text-center">
-                <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-xs text-muted-foreground">Nenhuma mensagem agendada</p>
-              </CardContent></Card>
-            ) : (
-              <div className="space-y-2">
-                {messages.map(msg => (
-                  <Card key={msg.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            {STATUS_ICONS[msg.status]}
-                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
-                            </Badge>
-                            {msg.status === 'sent' && (
-                              <span className="text-[10px] text-muted-foreground">
-                                ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
-                              </span>
-                            )}
-                          </div>
-                          <ScrollArea className="max-h-[200px]">
-                            {msg.media_url && ['image'].includes(msg.message_type) && (
-                              <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
-                            )}
-                            {msg.media_url && msg.message_type === 'video' && (
-                              <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
-                            )}
-                            {msg.media_url && msg.message_type === 'audio' && (
-                              <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
-                            )}
-                            {msg.media_url && msg.message_type === 'document' && (
-                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
-                                📄 {msg.media_url.split('/').pop()}
-                              </a>
-                            )}
-                            {msg.message_content && (
-                              <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
-                            )}
-                            {msg.poll_options && Array.isArray(msg.poll_options) && (
-                              <div className="mt-1 space-y-0.5">
-                                {msg.poll_options.map((opt: string, i: number) => (
-                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
-                                ))}
+            {(() => {
+              // Rascunhos NÃO contam nos totais de agendadas/pendentes.
+              const nonDraft = messages.filter(m => m.status !== 'draft' && m.status !== 'grouped');
+              const drafts = messages.filter(m => m.status === 'draft');
+              const batches = Array.from(new Set(drafts.map(d => d.draft_batch).filter(Boolean))) as string[];
+              const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
+
+              // Faixa dos próximos 14 dias: pendentes x rascunhos por dia.
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const next14 = Array.from({ length: 14 }, (_, i) => {
+                const d = new Date(today); d.setDate(d.getDate() + i);
+                const key = format(d, 'yyyy-MM-dd');
+                const dayMsgs = messages.filter(m => m.scheduled_at && format(new Date(m.scheduled_at), 'yyyy-MM-dd') === key);
+                return {
+                  key, date: d,
+                  pending: dayMsgs.filter(m => m.status === 'pending').length,
+                  draft: dayMsgs.filter(m => m.status === 'draft').length,
+                };
+              });
+
+              const filtered = messages.filter(m => {
+                if (m.status === 'grouped') return false; // blocos irmãos não aparecem soltos
+                if (msgStatusFilter === 'draft' && m.status !== 'draft') return false;
+                if (msgStatusFilter === 'pending' && m.status !== 'pending') return false;
+                if (msgStatusFilter === 'sent' && m.status !== 'sent') return false;
+                if (msgStatusFilter === 'cancelled' && m.status !== 'cancelled' && m.status !== 'failed') return false;
+                if (msgBatchFilter !== 'all' && m.draft_batch !== msgBatchFilter) return false;
+                if (msgDayFilter && (!m.scheduled_at || format(new Date(m.scheduled_at), 'yyyy-MM-dd') !== msgDayFilter)) return false;
+                return true;
+              });
+              const visibleDrafts = filtered.filter(m => m.status === 'draft');
+
+              // Resumo da aprovação em massa (validação local espelha approve_group_drafts).
+              const previewRows = (approvePreview?.ids || []).map(id => {
+                const msg = messages.find(m => m.id === id)!;
+                const reason = validateDraftLocally(msg, groupBlocksOf(msg), campaignNumberId);
+                const isPast = !reason && msg.scheduled_at && new Date(msg.scheduled_at).getTime() < Date.now();
+                return { msg, reason, isPast: !!isPast };
+              });
+              const previewOk = previewRows.filter(r => !r.reason);
+              const previewPast = previewOk.filter(r => r.isPast);
+              const previewBlocked = previewRows.filter(r => r.reason);
+              const approvableIds = previewOk.filter(r => !r.isPast || pastScheduleAck).map(r => r.msg.id);
+
+              return (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      MENSAGENS ({nonDraft.length}){drafts.length > 0 && ` · ${drafts.length} rascunho(s)`}
+                    </p>
+                    <div className="flex gap-1 flex-wrap">
+                      {([['all', 'Todos'], ['draft', 'Rascunhos'], ['pending', 'Pendentes'], ['sent', 'Enviadas'], ['cancelled', 'Canceladas']] as const).map(([v, label]) => (
+                        <Button key={v} size="sm" variant={msgStatusFilter === v ? 'default' : 'outline'}
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => { setMsgStatusFilter(v); if (v !== 'draft' && v !== 'all') setMsgBatchFilter('all'); }}>
+                          {label}{v === 'draft' && drafts.length > 0 ? ` (${drafts.length})` : ''}
+                        </Button>
+                      ))}
+                      {batches.length > 0 && (
+                        <Select value={msgBatchFilter} onValueChange={setMsgBatchFilter}>
+                          <SelectTrigger className="h-6 text-[10px] w-[150px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos os lotes</SelectItem>
+                            {batches.map(b => <SelectItem key={b} value={b}>📦 {b}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Faixa dos próximos 14 dias */}
+                  <div className="grid grid-cols-7 sm:grid-cols-14 gap-1" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
+                    {next14.map(day => {
+                      const total = day.pending + day.draft;
+                      const isHeavy = total > 2;
+                      const isSelected = msgDayFilter === day.key;
+                      return (
+                        <button key={day.key}
+                          onClick={() => setMsgDayFilter(isSelected ? null : day.key)}
+                          className={cn(
+                            "rounded border p-1 text-center transition-colors",
+                            isHeavy ? "bg-amber-500/15 border-amber-500/40" : "bg-muted/30",
+                            isSelected && "ring-2 ring-primary border-primary"
+                          )}>
+                          <p className="text-[9px] font-medium">{format(day.date, 'dd/MM')}</p>
+                          <p className="text-[9px] text-muted-foreground">{format(day.date, 'EEE', { locale: ptBR })}</p>
+                          <p className="text-[10px] font-semibold">{day.pending > 0 ? day.pending : '—'}</p>
+                          {day.draft > 0 && <p className="text-[9px] text-amber-600 font-medium">✏️ {day.draft}</p>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {msgDayFilter && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setMsgDayFilter(null)}>
+                      Limpar filtro de dia
+                    </Button>
+                  )}
+
+                  <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
+
+                  {/* Barra de ações dos rascunhos selecionados */}
+                  {selectedDraftIds.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                      <p className="text-xs font-medium">{selectedDraftIds.length} rascunho(s) selecionado(s)</p>
+                      <Button size="sm" className="h-7 text-xs gap-1"
+                        onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: selectedDraftIds }); }}>
+                        <CheckCircle className="h-3 w-3" /> Aprovar selecionados ({selectedDraftIds.length})
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
+                        Selecionar todos os rascunhos do filtro
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
+                        onClick={async () => {
+                          const toDelete = messages.filter(m => selectedDraftIds.includes(m.id));
+                          for (const m of toDelete) await deleteDraftGroup(m);
+                          setSelectedDraftIds([]);
+                        }}>
+                        Excluir selecionados
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedDraftIds([])}>
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+
+                  {filtered.length === 0 ? (
+                    <Card><CardContent className="py-8 text-center">
+                      <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-xs text-muted-foreground">
+                        {messages.length === 0 ? 'Nenhuma mensagem agendada' : 'Nenhuma mensagem neste filtro'}
+                      </p>
+                    </CardContent></Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {filtered.map(msg => {
+                        const isDraft = msg.status === 'draft';
+                        const siblings = isDraft ? groupBlocksOf(msg) : [];
+                        const missingMedia = isDraft && siblings.some(b => ['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url);
+                        return (
+                          <Card key={msg.id} className={cn(isDraft && "border-amber-500/40")}>
+                            <CardContent className="p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                {isDraft && (
+                                  <Checkbox className="mt-1 shrink-0"
+                                    checked={selectedDraftIds.includes(msg.id)}
+                                    onCheckedChange={v => setSelectedDraftIds(prev => v ? [...prev, msg.id] : prev.filter(x => x !== msg.id))} />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    {STATUS_ICONS[msg.status]}
+                                    <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {msg.scheduled_at ? format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR }) : 'sem horário'}
+                                    </Badge>
+                                    {isDraft && <Badge className="text-[10px] bg-amber-500/20 text-amber-700 border-amber-500/40">Rascunho</Badge>}
+                                    {isDraft && msg.created_by === 'claude' && <Badge variant="secondary" className="text-[10px]">Claude</Badge>}
+                                    {isDraft && msg.draft_batch && <Badge variant="outline" className="text-[10px]">📦 {msg.draft_batch}</Badge>}
+                                    {siblings.length > 1 && <Badge variant="outline" className="text-[10px]">{siblings.length} blocos</Badge>}
+                                    {msg.status === 'sent' && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {missingMedia && (
+                                    <p className="text-[11px] font-semibold text-amber-600 mb-1">⚠️ Falta subir mídia</p>
+                                  )}
+                                  {isDraft && msg.media_brief && (
+                                    <p className="text-[10px] text-muted-foreground mb-1">🖼️ Mídia: {msg.media_brief}</p>
+                                  )}
+                                  {isDraft && msg.draft_notes && (
+                                    <p className="text-[10px] text-muted-foreground mb-1">📝 {msg.draft_notes}</p>
+                                  )}
+                                  <ScrollArea className="max-h-[200px]">
+                                    {msg.media_url && ['image'].includes(msg.message_type) && (
+                                      <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'video' && (
+                                      <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'audio' && (
+                                      <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                                    )}
+                                    {msg.media_url && msg.message_type === 'document' && (
+                                      <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                        📄 {msg.media_url.split('/').pop()}
+                                      </a>
+                                    )}
+                                    {msg.message_content && (
+                                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                                    )}
+                                    {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                      <div className="mt-1 space-y-0.5">
+                                        {msg.poll_options.map((opt: string, i: number) => (
+                                          <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {isDraft && siblings.length > 1 && (
+                                      <div className="mt-1 space-y-0.5 border-t pt-1">
+                                        {siblings.slice(1).map(b => (
+                                          <p key={b.id} className="text-[10px] text-muted-foreground">
+                                            ↳ {TYPE_LABELS[b.message_type] || b.message_type}
+                                            {['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url && ' ⚠️ sem mídia'}
+                                            {b.message_content ? ` · ${b.message_content.slice(0, 60)}` : ''}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </ScrollArea>
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  {isDraft && (
+                                    <>
+                                      <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1"
+                                        onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: [msg.id] }); }}>
+                                        <CheckCircle className="h-3 w-3" /> Aprovar
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Editar rascunho"
+                                        onClick={() => openEditGroup(msg)}>
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir rascunho"
+                                        onClick={() => deleteDraftGroup(msg)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {msg.status === 'pending' && (
+                                    <>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Editar"
+                                        onClick={() => msg.message_group_id ? openEditGroup(msg) : (setEditingGroup(null), setEditingMessage(msg), setShowMessageForm(true))}>
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Voltar para rascunho"
+                                        onClick={() => backToDraft(msg)}>
+                                        <Clock className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="outline" size="icon" className="h-7 w-7"
+                                        onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
+                                        {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                        onClick={() => cancelMessage(msg.id)}>
+                                        <XCircle className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {msg.status === 'sent' && (
+                                    <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                                      onClick={() => duplicateMessage(msg)}>
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                                    <>
+                                      <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                        onClick={() => duplicateMessage(msg)}>
+                                        <Copy className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                        onClick={() => deleteMessage(msg.id)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </ScrollArea>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
-                          {msg.status === 'pending' && (
-                            <>
-                              <Button variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => { setEditingMessage(msg); setShowMessageForm(true); }}>
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
-                                {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                onClick={() => cancelMessage(msg.id)}>
-                                <XCircle className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                          {msg.status === 'sent' && (
-                            <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
-                              onClick={() => duplicateMessage(msg)}>
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
-                            <>
-                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
-                                onClick={() => duplicateMessage(msg)}>
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                onClick={() => deleteMessage(msg.id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Diálogo-resumo da aprovação em massa */}
+                  <Dialog open={!!approvePreview} onOpenChange={o => !o && setApprovePreview(null)}>
+                    <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+                      <DialogHeader><DialogTitle className="text-sm">Aprovar rascunhos</DialogTitle></DialogHeader>
+                      <div className="space-y-3">
+                        <p className="text-xs">
+                          <strong>{previewOk.length}</strong> serão aprovadas e agendadas
+                          {previewBlocked.length > 0 && <> · <strong className="text-destructive">{previewBlocked.length} bloqueada(s)</strong></>}
+                        </p>
+                        {previewBlocked.length > 0 && (
+                          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 space-y-1">
+                            {previewBlocked.map(r => (
+                              <p key={r.msg.id} className="text-[11px]">
+                                ❌ {r.msg.scheduled_at ? format(new Date(r.msg.scheduled_at), 'dd/MM HH:mm') : 'sem horário'} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type}: {DRAFT_BLOCK_REASONS[r.reason!] || r.reason}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        {previewPast.length > 0 && (
+                          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-2 space-y-2">
+                            <p className="text-[11px] font-semibold text-red-600">
+                              ⚠️ {previewPast.length} mensagem(ns) com horário no passado serão ENVIADAS IMEDIATAMENTE após aprovar:
+                            </p>
+                            {previewPast.map(r => (
+                              <p key={r.msg.id} className="text-[11px]">
+                                • {format(new Date(r.msg.scheduled_at!), 'dd/MM HH:mm')} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type}
+                              </p>
+                            ))}
+                            <label className="flex items-center gap-2 text-[11px] font-medium">
+                              <Checkbox checked={pastScheduleAck} onCheckedChange={v => setPastScheduleAck(!!v)} />
+                              Entendi — incluir essas mensagens no envio imediato
+                            </label>
+                          </div>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setApprovePreview(null)}>Cancelar</Button>
+                        <Button onClick={() => approveDrafts(approvableIds)} disabled={isApproving || approvableIds.length === 0} className="gap-1">
+                          {isApproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                          Aprovar {approvableIds.length > 0 ? `(${approvableIds.length})` : ''}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </>
+              );
+            })()}
           </TabsContent>
 
           {/* CALENDAR TAB */}
