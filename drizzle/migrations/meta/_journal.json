@@ -190,6 +190,13 @@
       "when": 1792085282389,
       "tag": "0026_gateway_split_allow_austpay",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792192676820,
+      "tag": "0027_allow_verified_sandbox_incident_reversal",
+      "breakpoints": true
     }
   ]
 }
