@@ -491,20 +491,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
         for (let i = 0; i < data.mediaItems.length; i++) {
           const item = data.mediaItems[i];
-          const itemTime = new Date(scheduledAt.getTime() + i * 5000);
+          const itemTime = scheduledAtIso ? new Date(new Date(scheduledAtIso).getTime() + i * 5000).toISOString() : null;
           const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
             campaign_id: cid,
             message_type: data.messageType,
             message_content: item.caption || null,
             media_url: item.url,
-            scheduled_at: itemTime.toISOString(),
+            scheduled_at: itemTime,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
+            created_by: 'user',
+            status: asDraft ? 'draft' : 'pending',
           } as any);
           if (error) throw error;
         }
-        toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
+        toast.success(asDraft ? `${data.mediaItems.length} arquivo(s) salvo(s) como rascunho!` : `${data.mediaItems.length} arquivo(s) agendado(s)!`);
       } else {
         const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: cid,
@@ -513,13 +515,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           media_url: data.mediaUrl || null,
           poll_options: data.messageType === 'poll' ? data.pollOptions : null,
           poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-          scheduled_at: scheduledAt.toISOString(),
+          scheduled_at: scheduledAtIso,
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
           whatsapp_number_id: campaignNumberId,
+          created_by: 'user',
+          status: asDraft ? 'draft' : 'pending',
         } as any);
         if (error) throw error;
-        toast.success("Mensagem agendada!");
+        toast.success(asDraft ? "Rascunho salvo!" : "Mensagem agendada!");
       }
     }
     if (cid === campaignId) fetchMessages();
