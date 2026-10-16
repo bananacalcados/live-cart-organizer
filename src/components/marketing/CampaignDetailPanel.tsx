@@ -89,13 +89,24 @@ interface ScheduledMessage {
   message_content: string | null;
   media_url: string | null;
   poll_options: any;
-  scheduled_at: string;
+  scheduled_at: string | null;
   status: string;
   sent_at: string | null;
   send_speed: string;
   sent_count: number;
   failed_count: number;
   created_at: string;
+  message_group_id?: string | null;
+  block_order?: number | null;
+  created_by?: string | null;
+  draft_batch?: string | null;
+  media_brief?: string | null;
+  draft_notes?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  vip_link_mode?: string | null;
+  contact_phone?: string | null;
+  whatsapp_number_id?: string | null;
 }
 
 interface RedirectLink {
@@ -117,12 +128,37 @@ interface CampaignVariable {
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
+  draft: <Edit className="h-3.5 w-3.5 text-amber-600" />,
   pending: <Clock className="h-3.5 w-3.5 text-amber-500" />,
   sending: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />,
   sent: <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />,
   failed: <XCircle className="h-3.5 w-3.5 text-red-500" />,
   cancelled: <XCircle className="h-3.5 w-3.5 text-muted-foreground" />,
 };
+
+/** Motivos de bloqueio da aprovação de rascunho → texto amigável. */
+const DRAFT_BLOCK_REASONS: Record<string, string> = {
+  missing_media: 'Bloco de mídia sem arquivo (suba a mídia)',
+  poll_needs_2_options: 'Enquete com menos de 2 opções',
+  missing_contact_phone: 'Cartão de contato sem número',
+  missing_schedule: 'Sem data/horário agendado',
+  missing_instance: 'Campanha/mensagem sem instância de WhatsApp',
+  vip_link_without_mode: 'Usa {{link_atendimento}} sem link de atendimento',
+  not_draft: 'Não está mais em rascunho',
+  not_found: 'Mensagem não encontrada',
+};
+
+/** Validação local (espelho da approve_group_drafts) para montar o resumo antes de aprovar. */
+function validateDraftLocally(anchor: ScheduledMessage, siblings: ScheduledMessage[], campaignNumberId: string | null): string | null {
+  const blocks = siblings.length ? siblings : [anchor];
+  if (blocks.some(b => ['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url)) return 'missing_media';
+  if (blocks.some(b => b.message_type === 'poll' && (!Array.isArray(b.poll_options) || b.poll_options.length < 2))) return 'poll_needs_2_options';
+  if (blocks.some(b => b.message_type === 'contact' && !b.contact_phone)) return 'missing_contact_phone';
+  if (!anchor.scheduled_at) return 'missing_schedule';
+  if (!anchor.whatsapp_number_id && !campaignNumberId) return 'missing_instance';
+  if (anchor.vip_link_mode === 'none' && blocks.some(b => (b.message_content || '').includes('{{link_atendimento}}'))) return 'vip_link_without_mode';
+  return null;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   text: "📝 Texto", image: "🖼️ Imagem", video: "🎬 Vídeo",
