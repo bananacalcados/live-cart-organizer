@@ -225,10 +225,65 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setVariables((data || []) as CampaignVariable[]);
   }, [campaignId]);
 
+  // Grupos disponíveis = grupos ATIVOS da instância da campanha.
+  // Grupos da campanha fora desse filtro entram em allGroups só para a seção "indisponíveis".
+  const campaignNumberId: string | null = (campaign as any)?.whatsapp_number_id || null;
+  const campaignLoadedKey = campaign ? (campaignNumberId || 'none') : null;
+  const targetsRef = useRef<string[]>([]);
+  targetsRef.current = campaign?.target_groups || [];
+  const [availableGroupIds, setAvailableGroupIds] = useState<Set<string>>(new Set());
+  const [groupsStale, setGroupsStale] = useState(false);
+  const [activeTab, setActiveTab] = useState("strategy");
+  const GROUP_COLS = 'id, group_id, name, photo_url, participant_count, previous_participant_count, max_participants, is_active, instance_id';
+
   const fetchAllGroups = useCallback(async () => {
-    const { data } = await supabase.from('whatsapp_groups').select('id, group_id, name, photo_url, participant_count, previous_participant_count, max_participants').order('name');
-    setAllGroups(data || []);
-  }, []);
+    let avail: any[] = [];
+    if (campaignNumberId) {
+      const info = await fetchInstanceInfo(campaignNumberId);
+      const keys = info ? instanceKeys(info) : [campaignNumberId];
+      const { data } = await supabase.from('whatsapp_groups').select(GROUP_COLS)
+        .in('instance_id', keys).eq('is_active', true).order('name');
+      avail = data || [];
+    }
+    const ids = new Set(avail.map((g: any) => g.id));
+    const missing = targetsRef.current.filter(id => !ids.has(id));
+    let extra: any[] = [];
+    if (missing.length) {
+      const { data } = await supabase.from('whatsapp_groups').select(GROUP_COLS).in('id', missing);
+      extra = data || [];
+    }
+    setAvailableGroupIds(ids);
+    setAllGroups([...avail, ...extra]);
+  }, [campaignNumberId]);
+
+  const syncCampaignGroups = useCallback(async (silent: boolean) => {
+    if (!campaignNumberId) return;
+    setIsSyncingFromZapi(true);
+    try {
+      const info = await fetchInstanceInfo(campaignNumberId);
+      if (!info) throw new Error('Instância não encontrada');
+      const r = await syncInstanceGroups(info);
+      setGroupsStale(false);
+      if (!silent) toast.success(`${r.total} grupos atualizados da instância`);
+    } catch (e) {
+      console.error('sync grupos falhou:', e);
+      setGroupsStale(true);
+      toast.error('Não consegui buscar os grupos da instância agora. Mostrando a última lista salva.');
+    } finally {
+      await fetchAllGroups();
+      setIsSyncingFromZapi(false);
+    }
+  }, [campaignNumberId, fetchAllGroups]);
+
+  useEffect(() => {
+    if (campaignLoadedKey === null) return;
+    fetchAllGroups();
+  }, [campaignLoadedKey, fetchAllGroups]);
+
+  useEffect(() => {
+    if (activeTab === 'groups' && campaignNumberId) syncCampaignGroups(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, campaignNumberId]);
 
   // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
   const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] | null; whatsapp_number_id?: string | null; status?: string | null; created_at?: string }[]>([]);
