@@ -4,7 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
-import { austpayFetch, getAustpayConfig, toCents } from "../_shared/austpay.ts";
+import { austpayFetch, getAustpayConfig, resolveAustpayConfig, toCents } from "../_shared/austpay.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +46,7 @@ serve(async (req) => {
     }
     if (!txId) return json({ error: "Transação AustPay não encontrada para este pedido." }, 400);
 
-    const cfg = getAustpayConfig();
+    const cfg = await resolveAustpayConfig(supabase);
     if (!cfg) return json({ error: "AustPay não configurada." }, 503);
 
     const body: Record<string, unknown> = {};

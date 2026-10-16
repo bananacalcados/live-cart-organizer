@@ -10,7 +10,7 @@ import {
   austpayFetch,
   austpayRequestId,
   austpayTransactionsPath,
-  getAustpayConfig,
+  getAustpayConfig, resolveAustpayConfig,
   isAustpayEnabled,
   toCents,
 } from "../_shared/austpay.ts";
@@ -77,7 +77,7 @@ serve(async (req) => {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
-    const cfg = getAustpayConfig();
+    const cfg = await resolveAustpayConfig(supabase);
     if (!cfg) {
       return new Response(JSON.stringify({ error: "austpay_not_configured" }), {
         status: 503,

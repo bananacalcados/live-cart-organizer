@@ -9,7 +9,7 @@ import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import {
   austpayGetTransaction,
   fromCents,
-  getAustpayConfig,
+  getAustpayConfig, resolveAustpayConfig,
   isAustpayApproved,
 } from "../_shared/austpay.ts";
 
@@ -82,7 +82,7 @@ serve(async (req) => {
     let status = String(data?.status || "");
     let amount = Number(data?.amount || 0);
     let externalRef = String(data?.external_reference || "");
-    const cfg = getAustpayConfig();
+    const cfg = await resolveAustpayConfig(supabase);
     if (cfg) {
       try {
         const res = await austpayGetTransaction(cfg, txId);
