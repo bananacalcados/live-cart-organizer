@@ -386,14 +386,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               message_type: block.type,
               message_content: item.caption || null,
               media_url: item.url,
-              scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+              media_brief: (block as any).mediaBrief || null,
+              scheduled_at: scheduledAtIso,
               disable_link_preview: !!(block as any).disableLinkPreview,
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
               whatsapp_number_id: campaignNumberId,
               message_group_id: messageGroupId,
               block_order: offset,
-              status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+              created_by: 'user',
+              status: statusFor(offset, messageGroupId),
             });
             offset++;
           }
@@ -403,13 +405,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_type: 'text',
             message_content: block.content,
             disable_link_preview: !!block.disableLinkPreview,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'poll') {
@@ -419,14 +422,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: block.content,
             poll_options: block.pollOptions.filter(o => o.trim()),
             poll_max_options: block.pollMaxOptions,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'contact') {
@@ -436,14 +440,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: null,
             contact_name: (block as any).contactName?.trim() || null,
             contact_phone: String((block as any).contactPhone || '').replace(/\D/g, '') || null,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            scheduled_at: scheduledAtIso,
             disable_link_preview: false,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         } else if (block.type === 'audio') {
@@ -451,14 +456,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             campaign_id: cid,
             message_type: 'audio',
             media_url: block.mediaUrl,
-            scheduled_at: new Date(scheduledAt.getTime()).toISOString(),
+            media_brief: (block as any).mediaBrief || null,
+            scheduled_at: scheduledAtIso,
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
-            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
           });
           offset++;
         }
