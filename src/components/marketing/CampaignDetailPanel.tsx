@@ -352,11 +352,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     data: ScheduledMessageData,
     targetCampaignId?: string,
     targetNumberId?: string | null,
+    opts?: { asDraft?: boolean },
   ) => {
     const cid = targetCampaignId || campaignId;
+    const asDraft = !!opts?.asDraft;
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
-    const scheduledAt = new Date(data.scheduledAt);
-    scheduledAt.setHours(hours, minutes, 0, 0);
+    // Rascunho pode ser salvo sem horário (scheduled_at fica nulo até a aprovação).
+    const scheduledAtIso = data.scheduledAt
+      ? (() => { const d = new Date(data.scheduledAt); d.setHours(hours, minutes, 0, 0); return d.toISOString(); })()
+      : null;
+    // Rascunho: bloco 0 = 'draft', irmãos = 'grouped' (nunca 'pending' sem aprovação).
+    const statusFor = (offset: number, gid: string | null) =>
+      asDraft
+        ? (offset === 0 ? 'draft' : (gid ? 'grouped' : 'draft'))
+        : (offset === 0 ? 'pending' : (gid ? 'grouped' : 'pending'));
     const campaignNumberId = targetNumberId || (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     const multiMediaTypes = ['image', 'video', 'document'];
