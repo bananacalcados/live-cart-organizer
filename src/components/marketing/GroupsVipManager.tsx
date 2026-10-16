@@ -669,6 +669,7 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
         <p className="text-sm font-medium truncate">{group.name}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">{group.participant_count}/{group.max_participants}</span>
+          {group.is_active === false && <Badge variant="destructive" className="text-[10px]">Inativo</Badge>}
           <Badge variant="outline" className="text-[10px] gap-0.5">
             <Smartphone className="h-2.5 w-2.5" />{instanceLabel}
           </Badge>

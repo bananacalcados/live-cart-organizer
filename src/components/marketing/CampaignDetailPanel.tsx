@@ -36,6 +36,7 @@ import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 import { authHeaders } from "@/lib/authHeaders";
+import { fetchInstanceInfo, instanceKeys, syncInstanceGroups } from "@/lib/marketing/instanceGroups";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
 const isTransientNetworkError = (e: unknown): boolean => {
@@ -225,10 +226,65 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setVariables((data || []) as CampaignVariable[]);
   }, [campaignId]);
 
+  // Grupos disponíveis = grupos ATIVOS da instância da campanha.
+  // Grupos da campanha fora desse filtro entram em allGroups só para a seção "indisponíveis".
+  const campaignNumberId: string | null = (campaign as any)?.whatsapp_number_id || null;
+  const campaignLoadedKey = campaign ? (campaignNumberId || 'none') : null;
+  const targetsRef = useRef<string[]>([]);
+  targetsRef.current = campaign?.target_groups || [];
+  const [availableGroupIds, setAvailableGroupIds] = useState<Set<string>>(new Set());
+  const [groupsStale, setGroupsStale] = useState(false);
+  const [activeTab, setActiveTab] = useState("strategy");
+  const GROUP_COLS = 'id, group_id, name, photo_url, participant_count, previous_participant_count, max_participants, is_active, instance_id';
+
   const fetchAllGroups = useCallback(async () => {
-    const { data } = await supabase.from('whatsapp_groups').select('id, group_id, name, photo_url, participant_count, previous_participant_count, max_participants').order('name');
-    setAllGroups(data || []);
-  }, []);
+    let avail: any[] = [];
+    if (campaignNumberId) {
+      const info = await fetchInstanceInfo(campaignNumberId);
+      const keys = info ? instanceKeys(info) : [campaignNumberId];
+      const { data } = await supabase.from('whatsapp_groups').select(GROUP_COLS)
+        .in('instance_id', keys).eq('is_active', true).order('name');
+      avail = data || [];
+    }
+    const ids = new Set(avail.map((g: any) => g.id));
+    const missing = targetsRef.current.filter(id => !ids.has(id));
+    let extra: any[] = [];
+    if (missing.length) {
+      const { data } = await supabase.from('whatsapp_groups').select(GROUP_COLS).in('id', missing);
+      extra = data || [];
+    }
+    setAvailableGroupIds(ids);
+    setAllGroups([...avail, ...extra]);
+  }, [campaignNumberId]);
+
+  const syncCampaignGroups = useCallback(async (silent: boolean) => {
+    if (!campaignNumberId) return;
+    setIsSyncingFromZapi(true);
+    try {
+      const info = await fetchInstanceInfo(campaignNumberId);
+      if (!info) throw new Error('Instância não encontrada');
+      const r = await syncInstanceGroups(info);
+      setGroupsStale(false);
+      if (!silent) toast.success(`${r.total} grupos atualizados da instância`);
+    } catch (e) {
+      console.error('sync grupos falhou:', e);
+      setGroupsStale(true);
+      toast.error('Não consegui buscar os grupos da instância agora. Mostrando a última lista salva.');
+    } finally {
+      await fetchAllGroups();
+      setIsSyncingFromZapi(false);
+    }
+  }, [campaignNumberId, fetchAllGroups]);
+
+  useEffect(() => {
+    if (campaignLoadedKey === null) return;
+    fetchAllGroups();
+  }, [campaignLoadedKey, fetchAllGroups]);
+
+  useEffect(() => {
+    if (activeTab === 'groups' && campaignNumberId) syncCampaignGroups(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, campaignNumberId]);
 
   // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
   const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] | null; whatsapp_number_id?: string | null; status?: string | null; created_at?: string }[]>([]);
@@ -246,7 +302,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setOtherCampaignGroups((data || []) as any);
   }, [campaignId]);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups, fetchOtherCampaignGroups]);
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchOtherCampaignGroups]);
 
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
@@ -1077,7 +1133,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return groupDigitsToOtherCampaigns.get(digits) || [];
   };
 
-  const filteredAllGroups = dedupedAllGroups.filter(g => {
+  const unavailableTargetGroups = allGroups.filter(g => targetGroups.includes(g.id) && !availableGroupIds.has(g.id));
+  const filteredAllGroups = dedupedAllGroups.filter(g => availableGroupIds.has(g.id)).filter(g => {
     if (!groupSearch) return true;
     return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
   });
@@ -1127,7 +1184,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
-        <Tabs defaultValue="strategy" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="strategy" className="text-xs">Estratégia</TabsTrigger>
             <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
@@ -1185,40 +1242,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
-              <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
-              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
-                setIsSyncingFromZapi(true);
-                try {
-                  const { numbers, selectedNumberId: numId } = useWhatsAppNumberStore.getState();
-                  const provider = numbers.find(n => n.id === numId)?.provider || "zapi";
-                  if (provider === "wasender" || provider === "uazapi") {
-                    const fn = provider === "uazapi" ? "uazapi-groups" : "wasender-groups";
-                    const { data, error } = await supabase.functions.invoke(fn, {
-                      body: { action: "list", syncToDb: true, whatsapp_number_id: numId },
-                    });
-                    if (error) throw error;
-                    if (data?.success) { toast.success(`${data.total ?? 0} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
-                    else toast.error(data?.error || "Erro ao sincronizar");
-                  } else {
-                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
-                      method: 'POST',
-                      headers: await authHeaders(),
-                      body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
-                    });
-                    const data = await res.json();
-                    if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
-                    else toast.error(data.error || "Erro ao sincronizar");
-                  }
-                } catch { toast.error("Erro ao sincronizar"); }
-                finally { setIsSyncingFromZapi(false); }
-              }} disabled={isSyncingFromZapi}>
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => syncCampaignGroups(false)} disabled={isSyncingFromZapi || !campaignNumberId}>
                 <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromZapi ? 'animate-spin' : ''}`} />
-                Sincronizar do WhatsApp
+                Atualizar grupos
               </Button>
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
                 <Plus className="h-3.5 w-3.5" /> Criar Grupo
               </Button>
             </div>
+            {!campaignNumberId && (
+              <Alert><AlertTriangle className="h-4 w-4" /><AlertDescription className="text-xs">Selecione a instância da campanha para ver os grupos</AlertDescription></Alert>
+            )}
+            {campaignNumberId && groupsStale && (
+              <Alert className="border-amber-500/50 bg-amber-500/10"><AlertTriangle className="h-4 w-4 text-amber-500" /><AlertDescription className="text-xs text-amber-700 dark:text-amber-400">Lista pode estar desatualizada — não consegui falar com a instância agora.</AlertDescription></Alert>
+            )}
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
               {filteredAllGroups.map(g => {
@@ -1259,6 +1296,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 );
               })}
             </div>
+            {unavailableTargetGroups.length > 0 && (
+              <div className="space-y-1.5 pt-2">
+                <p className="text-xs font-medium text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Grupos indisponíveis nesta instância ({unavailableTargetGroups.length})
+                </p>
+                {unavailableTargetGroups.map(g => (
+                  <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg border border-destructive/40 bg-destructive/5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{g.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{g.is_active === false ? 'Grupo não existe mais no WhatsApp' : 'Pertence a outra instância'}</p>
+                    </div>
+                    <Badge variant="destructive" className="text-[10px] shrink-0">Indisponível</Badge>
+                    <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => toggleGroupInCampaign(g.id)}>
+                      Remover da campanha
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* MESSAGES TAB */}

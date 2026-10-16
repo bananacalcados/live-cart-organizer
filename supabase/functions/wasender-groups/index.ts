@@ -137,10 +137,22 @@ serve(async (req) => {
 
               const { error } = await supabase
                 .from("whatsapp_groups")
-                .upsert(rows, { onConflict: "group_id,instance_id", ignoreDuplicates: false });
+                .upsert(rows.map((x) => ({ ...x, is_active: true })), { onConflict: "group_id,instance_id", ignoreDuplicates: false });
               if (error) console.error("[wasender-groups] sync error:", error.message);
               else console.log(`[wasender-groups] synced ${rows.length} groups`);
-              return json({ success: true, data: r.data, total: rows.length });
+              let deactivated = 0;
+              if (!error && body.whatsapp_number_id) {
+                const liveDigits = new Set(rows.map((x: any) => groupDigits(x.group_id)));
+                const { data: mine } = await supabase
+                  .from("whatsapp_groups").select("id, group_id")
+                  .eq("instance_id", instanceId).eq("is_active", true);
+                const stale = (mine || []).filter((m: any) => !liveDigits.has(groupDigits(m.group_id))).map((m: any) => m.id);
+                if (stale.length) {
+                  await supabase.from("whatsapp_groups").update({ is_active: false }).in("id", stale);
+                  deactivated = stale.length;
+                }
+              }
+              return json({ success: true, data: r.data, total: rows.length, deactivated });
             }
           } catch (e) {
             console.error("[wasender-groups] syncToDb falhou:", (e as Error).message);
