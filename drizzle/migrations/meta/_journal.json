@@ -197,6 +197,13 @@
       "when": 1792192676820,
       "tag": "0027_allow_verified_sandbox_incident_reversal",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792194714597,
+      "tag": "0028_group_scheduled_drafts_approval",
+      "breakpoints": true
     }
   ]
 }

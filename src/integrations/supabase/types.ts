@@ -8615,17 +8615,23 @@ export type Database = {
       }
       group_campaign_scheduled_messages: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           block_order: number | null
           campaign_id: string
           contact_name: string | null
           contact_phone: string | null
           created_at: string
+          created_by: string
           disable_link_preview: boolean
+          draft_batch: string | null
+          draft_notes: string | null
           execution_count: number
           failed_count: number
           id: string
           last_execution_at: string | null
           locked_until: string | null
+          media_brief: string | null
           media_url: string | null
           mention_all: boolean
           message_content: string | null
@@ -8644,17 +8650,23 @@ export type Database = {
           whatsapp_number_id: string | null
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           block_order?: number | null
           campaign_id: string
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          created_by?: string
           disable_link_preview?: boolean
+          draft_batch?: string | null
+          draft_notes?: string | null
           execution_count?: number
           failed_count?: number
           id?: string
           last_execution_at?: string | null
           locked_until?: string | null
+          media_brief?: string | null
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
@@ -8673,17 +8685,23 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           block_order?: number | null
           campaign_id?: string
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
+          created_by?: string
           disable_link_preview?: boolean
+          draft_batch?: string | null
+          draft_notes?: string | null
           execution_count?: number
           failed_count?: number
           id?: string
           last_execution_at?: string | null
           locked_until?: string | null
+          media_brief?: string | null
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
@@ -24356,6 +24374,14 @@ export type Database = {
         Returns: {
           skipped_empty: number
           updated_count: number
+        }[]
+      }
+      approve_group_drafts: {
+        Args: { p_approved_by: string; p_ids: string[] }
+        Returns: {
+          id: string
+          ok: boolean
+          reason: string
         }[]
       }
       archive_inactive_ads_conversations: {
