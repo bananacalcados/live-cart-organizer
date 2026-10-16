@@ -796,7 +796,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const { data: results, error } = await (supabase as any).rpc('approve_group_drafts', { p_ids: ids, p_approved_by: 'usuario' });
       if (error) throw error;
       const rows = (results || []) as { id: string; ok: boolean; reason: string }[];
-      const okCount = rows.filter(r => r.ok && r.reason === 'approved').length;
+      const okCount = rows.filter(r => r.ok && r.reason !== 'past_schedule').length;
       const pastCount = rows.filter(r => r.ok && r.reason === 'past_schedule').length;
       const blocked = rows.filter(r => !r.ok);
       if (okCount > 0) toast.success(`${okCount} rascunho(s) aprovado(s) e agendado(s)!`);
