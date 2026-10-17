@@ -15,4 +15,11 @@ describe("overlay layout", () => {
     expect(p.font_size).toBe(160);
     expect(normalizeOverlayPosition({ ...p, width: 0, x: -40 }).x).toBe(0);
   });
+  it("ships blocks at double the old text size so the live audience can read them", () => {
+    expect(DEFAULT_OVERLAY_LAYOUT.ticker.font_size).toBe(80);
+    expect(DEFAULT_OVERLAY_LAYOUT.raffle_bar.font_size).toBe(72);
+    expect(DEFAULT_OVERLAY_LAYOUT.alert.font_size).toBe(84);
+    expect(DEFAULT_OVERLAY_LAYOUT.cta.font_size).toBe(84);
+    expect(DEFAULT_OVERLAY_LAYOUT.wheel.font_size).toBe(112);
+  });
 });

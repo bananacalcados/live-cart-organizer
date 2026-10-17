@@ -205,7 +205,7 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
           <div key={spin.key} className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
             <div style={{ fontSize: "0.6em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
-            <div className={spin.done ? "overlay-wheel-winner mt-3" : "mt-3"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
+            <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
           </div>
         </OverlayBlock>
       )}
