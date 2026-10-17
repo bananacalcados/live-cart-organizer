@@ -3,6 +3,20 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { StepPayment, type CustomerFormData, type InstallmentConfig } from "@/components/checkout/PaymentSection";
 
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    functions: { invoke },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }) }),
+  },
+}));
+vi.mock("@/lib/mercadopago", () => ({
+  initMercadoPago: async () => false,
+  tokenizeCardMP: async () => null,
+  getCardCapabilities: async () => null,
+}));
+vi.mock("@/lib/metaPixel", () => ({ trackPixelEvent: vi.fn() }));
+
 const form: CustomerFormData = {
   fullName: "Maria Aparecida da Silva",
   email: "maria@teste.com",
@@ -33,9 +47,24 @@ function fillCard() {
 
 beforeEach(() => {
   cleanup();
+  invoke.mockClear();
 });
 
 describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)", () => {
+  it("envia exatamente 10 parcelas fixadas pela equipe após editar os dados do cartão", async () => {
+    render(<StepPayment orderId="teste-fixo" amount={500} products={[]} form={form}
+      installmentConfig={{ ...config, max_installments: 10, interest_free_installments: 10 }}
+      preselectedInstallments={10} onPaymentConfirmed={vi.fn()} />);
+    fireEvent.click(screen.getByText("Cartão de crédito"));
+    fillCard();
+    fireEvent.click(await screen.findByText(/editar dados do cartão/i));
+    fireEvent.change(screen.getByPlaceholderText("JOÃO SILVA"), { target: { value: "Maria Silva" } });
+    fireEvent.click(screen.getByRole("button", { name: /CLIQUE AQUI PARA CONCLUIR PAGAMENTO/i }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("pagarme-create-charge", expect.objectContaining({
+      body: expect.objectContaining({ installments: 10, totalAmountCents: 50000, baseAmountCents: 50000 }),
+    })));
+  });
+
   it("cartão de crédito: mostra o resumo com o botão gigante quando tudo está preenchido", async () => {
     render(
       <StepPayment
