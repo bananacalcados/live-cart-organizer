@@ -33,7 +33,7 @@
 - [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
 ## Ajustes do Overlay da Live
-- [ ] Preservar parcelas escolhidas pela equipe na área de membros e impedir nova seleção; testar sem cobrança.
+- [x] Preservar parcelas escolhidas pela equipe na área de membros e impedir nova seleção; 9 testes passaram, tela com dados interceptados manteve 10x após editar o cartão; sem cobrança real.
 - [x] Corrigir escolha de parcelas no celular e texto do botão após editar o cartão; 3 testes passaram, troca 3x→6x e botão conferidos em celular/desktop sem cobrança.
 - [x] Adaptar o canvas às fontes OBS e verificar 800x600, 1080x1920 e 540x960.
 - [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
