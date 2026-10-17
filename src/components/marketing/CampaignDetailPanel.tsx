@@ -1425,7 +1425,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart); // 0=Sun
 
-  const getMessagesForDay = (day: Date) => messages.filter(m => m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
+  const getMessagesForDay = (day: Date) => messages.filter(m => m.status !== 'grouped' && m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
 
   if (showBulkSettings) {
     return <CampaignBulkSettings campaignId={campaignId} targetGroups={campaign?.target_groups || []} onBack={() => setShowBulkSettings(false)} />;
@@ -1700,16 +1700,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
 
                   {/* Barra de ações dos rascunhos selecionados */}
-                  {selectedDraftIds.length > 0 && (
+                  {(selectedDraftIds.length > 0 || visibleDrafts.length > 0) && (
                     <div className="flex items-center gap-2 flex-wrap rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
+                        Selecionar todos os rascunhos do filtro ({visibleDrafts.length})
+                      </Button>
+                      {selectedDraftIds.length > 0 && (<>
                       <p className="text-xs font-medium">{selectedDraftIds.length} rascunho(s) selecionado(s)</p>
                       <Button size="sm" className="h-7 text-xs gap-1"
                         onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: selectedDraftIds }); }}>
                         <CheckCircle className="h-3 w-3" /> Aprovar selecionados ({selectedDraftIds.length})
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs"
-                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
-                        Selecionar todos os rascunhos do filtro
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
                         onClick={async () => {
@@ -1722,6 +1723,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedDraftIds([])}>
                         Limpar
                       </Button>
+                      </>)}
                     </div>
                   )}
 
@@ -1805,6 +1807,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                             ↳ {TYPE_LABELS[b.message_type] || b.message_type}
                                             {['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url && ' ⚠️ sem mídia'}
                                             {b.message_content ? ` · ${b.message_content.slice(0, 60)}` : ''}
+                                            {b.media_brief ? ` · 🖼️ ${b.media_brief}` : ''}
                                           </p>
                                         ))}
                                       </div>
@@ -1990,8 +1993,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             {/* Message list below calendar */}
             {(() => {
               const displayMsgs = calendarSelectedDay 
-                ? messages.filter(m => isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
-                : messages;
+                ? messages.filter(m => m.status !== 'grouped' && m.scheduled_at && isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
+                : messages.filter(m => m.status !== 'grouped' && m.scheduled_at);
               
               if (displayMsgs.length === 0) return (
                 <Card><CardContent className="py-6 text-center">
