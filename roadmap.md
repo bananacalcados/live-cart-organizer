@@ -32,6 +32,9 @@
 - [x] Destacar gateway pago em cada pedido e adicionar filtro no servidor.
 - [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
+## Correção de pagamento em 10x
+- [ ] Identificar e corrigir o bloqueio das parcelas fixas sem mudar condições combinadas nem efetuar cobrança.
+
 ## Ajustes do Overlay da Live
 - [x] Preservar parcelas escolhidas pela equipe na área de membros e impedir nova seleção; 9 testes passaram, tela com dados interceptados manteve 10x após editar o cartão; sem cobrança real.
 - [x] Corrigir escolha de parcelas no celular e texto do botão após editar o cartão; 3 testes passaram, troca 3x→6x e botão conferidos em celular/desktop sem cobrança.
