@@ -75,6 +75,28 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
     return runGroupAction(inst, group.group_id, action as GroupAction, extraParams.phone ?? extraParams.value);
   };
 
+  // Ações de escrita passam pela FILA de ações de grupo (ritmo anti-ban no
+  // servidor). Leitura de participantes continua direta.
+  const enqueueAction = async (actionType: GroupAdminActionType, payload: Record<string, unknown>) => {
+    if (!inst) { toast.error('Instância do grupo não encontrada'); return false; }
+    try {
+      await enqueueGroupAdminActions([{
+        whatsapp_number_id: inst.id,
+        group_db_id: group.id,
+        group_jid: group.group_id,
+        group_name_snapshot: group.name,
+        action_type: actionType,
+        payload,
+        requested_by: 'user',
+      }]);
+      toast.success('Ação adicionada à fila — executa em instantes, respeitando o ritmo anti-ban.');
+      return true;
+    } catch {
+      toast.error('Erro ao enfileirar ação');
+      return false;
+    }
+  };
+
   const loadParticipants = async () => {
     setIsLoadingParticipants(true);
     try {
@@ -88,39 +110,34 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
   const handleUpdatePhoto = async () => {
     if (!photoUrl.trim()) return;
     setActionLoading('photo');
-    const data = await callGroupSettings('update-photo', { value: photoUrl });
-    if (data.success) toast.success("Foto atualizada!"); else toast.error("Erro ao atualizar foto");
+    await enqueueAction('set_photo', { photo_url: photoUrl });
     setActionLoading('');
   };
 
   const handleUpdateName = async () => {
     setActionLoading('name');
-    const data = await callGroupSettings('update-name', { value: newName });
-    if (data.success) { toast.success("Nome atualizado!"); onUpdate(); } else toast.error("Erro");
+    if (await enqueueAction('rename', { name: newName })) onUpdate();
     setActionLoading('');
   };
 
   const handleUpdateDescription = async () => {
     setActionLoading('desc');
-    const data = await callGroupSettings('update-description', { value: newDescription });
-    if (data.success) toast.success("Descrição atualizada!"); else toast.error("Erro");
+    await enqueueAction('set_description', { description: newDescription });
     setActionLoading('');
   };
 
   const handleToggleAdminsSend = async (val: boolean) => {
     setOnlyAdminsSend(val);
-    const r = await callGroupSettings('set-messages-admins-only', { value: String(val) });
-    if (!r.success) { setOnlyAdminsSend(!val); toast.error(r.error || "Erro"); return; }
+    const ok = await enqueueAction('set_only_admins_send', { enabled: val });
+    if (!ok) { setOnlyAdminsSend(!val); return; }
     await supabase.from('whatsapp_groups').update({ only_admins_send: val }).eq('id', group.id);
-    toast.success(val ? "Somente admins podem enviar" : "Todos podem enviar");
   };
 
   const handleToggleAdminsAdd = async (val: boolean) => {
     setOnlyAdminsAdd(val);
-    const r = await callGroupSettings('set-add-admins-only', { value: String(val) });
-    if (!r.success) { setOnlyAdminsAdd(!val); toast.error(r.error || "Erro"); return; }
+    const ok = await enqueueAction('set_only_admins_add', { enabled: val });
+    if (!ok) { setOnlyAdminsAdd(!val); return; }
     await supabase.from('whatsapp_groups').update({ only_admins_add: val }).eq('id', group.id);
-    toast.success(val ? "Somente admins adicionam" : "Todos podem adicionar");
   };
 
   const handleSaveLocal = async () => {
@@ -137,20 +154,20 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
 
   const handleParticipantAction = async (phone: string, action: string) => {
     setActionLoading(`${action}-${phone}`);
-    const data = await callGroupSettings(action, { phone });
-    if (data.success) {
-      toast.success("Ação executada!");
-      loadParticipants();
-    } else toast.error("Erro na ação");
+    const map: Record<string, GroupAdminActionType> = {
+      'promote-admin': 'promote_admin',
+      'demote-admin': 'demote_admin',
+      'remove-participant': 'remove_participant',
+    };
+    const t = map[action];
+    if (t) await enqueueAction(t, { phone });
     setActionLoading('');
   };
 
   const handleAddParticipant = async () => {
     if (!newPhone.trim()) return;
     setActionLoading('add');
-    const data = await callGroupSettings('add-participant', { phone: newPhone.replace(/\D/g, '') });
-    if (data.success) { toast.success("Participante adicionado!"); setNewPhone(""); loadParticipants(); }
-    else toast.error("Erro ao adicionar");
+    if (await enqueueAction('add_participant', { phone: newPhone.replace(/\D/g, '') })) setNewPhone("");
     setActionLoading('');
   };
 

@@ -574,7 +574,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeConfirmed}>Confirmar e aplicar</AlertDialogAction>
+            <AlertDialogAction onClick={executeConfirmed}>Confirmar e enfileirar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
