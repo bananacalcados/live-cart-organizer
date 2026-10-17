@@ -84,6 +84,7 @@ interface EditingMessage {
   created_by?: string | null;
   draft_batch?: string | null;
   media_brief?: string | null;
+  status?: string | null;
 }
 
 interface MessageTemplate {
@@ -474,6 +475,12 @@ function BlockEditor({
         {/* ── AUDIO BLOCK ── */}
         {block.type === 'audio' && (
           <>
+            <Input
+              placeholder="Descrição da mídia (para rascunho): ex. áudio da vendedora chamando pra live"
+              value={block.mediaBrief || ''}
+              onChange={e => onChange({ ...block, mediaBrief: e.target.value })}
+              className="text-xs"
+            />
             {!block.mediaUrl && !audioPreviewUrl && !isRecording && (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
@@ -736,7 +743,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   // Build submit data from blocks
-  const buildData = (dateOverride?: Date, timeOverride?: string): ScheduledMessageData => {
+  const buildData = (dateOverride?: Date, timeOverride?: string, asDraft = false): ScheduledMessageData => {
     const first = blocks[0];
     return {
       messageType: first.type,
@@ -745,7 +752,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       mediaItems: first.mediaItems,
       pollOptions: first.pollOptions.filter(o => o.trim()),
       pollMaxOptions: first.pollMaxOptions,
-      scheduledAt: dateOverride || scheduledDate || new Date(),
+      // Rascunho sem data escolhida: scheduled_at fica nulo (nunca 'hoje' implícito).
+      scheduledAt: dateOverride || scheduledDate || (asDraft ? null : new Date()),
       scheduledTime: timeOverride || scheduledTime,
       sendSpeed,
       mentionAll,
@@ -825,14 +833,16 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const handleUpdate = async () => {
     if (!editingMessage) return;
     // Rascunho: permite salvar sem mídia/horário (validação fica para a aprovação).
-    const isDraftEdit = !!editingGroupMessages?.length;
-    if (!isDraftEdit && !validate()) return;
+    // Só rascunho pode ser salvo sem validação; mensagem pendente (mesmo multi-bloco) é validada.
+    const isGroupEdit = !!editingGroupMessages?.length;
+    const isDraft = editingMessage.status === 'draft';
+    if (!isDraft && !validate()) return;
     setIsSaving(true);
     try {
-      if (isDraftEdit && onUpdateGroup) {
-        await onUpdateGroup(editingMessage.id, buildData());
+      if (isGroupEdit && onUpdateGroup) {
+        await onUpdateGroup(editingMessage.id, buildData(undefined, undefined, isDraft));
       } else if (onUpdate) {
-        await onUpdate(editingMessage.id, buildData());
+        await onUpdate(editingMessage.id, buildData(undefined, undefined, isDraft));
       }
       resetForm();
       onOpenChange(false);
@@ -845,7 +855,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     if (!onSaveDraft) return;
     setIsSaving(true);
     try {
-      await onSaveDraft(buildData());
+      await onSaveDraft(buildData(undefined, undefined, true));
       resetForm();
       onOpenChange(false);
       toast.success("Rascunho salvo! Ele só vai para o envio depois da aprovação.");

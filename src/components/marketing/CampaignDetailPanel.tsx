@@ -349,6 +349,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchOtherCampaignGroups]);
 
+  // Ao mudar filtro, mantém selecionados só os rascunhos que continuam visíveis.
+  useEffect(() => {
+    setSelectedDraftIds(prev => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter(id => {
+        const m = messages.find(x => x.id === id);
+        if (!m || m.status !== 'draft') return false;
+        if (msgStatusFilter !== 'all' && msgStatusFilter !== 'draft') return false;
+        if (msgBatchFilter !== 'all' && m.draft_batch !== msgBatchFilter) return false;
+        if (msgDayFilter && (!m.scheduled_at || format(new Date(m.scheduled_at), 'yyyy-MM-dd') !== msgDayFilter)) return false;
+        return true;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [msgStatusFilter, msgBatchFilter, msgDayFilter, messages]);
+
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
     const interval = setInterval(() => {
@@ -387,7 +403,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       for (const block of data.blocks) {
         const vipStart = allInserts.length;
         try {
-        if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
+        if (asDraft && multiMediaTypes.includes(block.type) && block.mediaItems.length === 0) {
+          // Rascunho: bloco de mídia sem arquivo vira 1 linha com media_url nulo (preserva legenda e media_brief).
+          allInserts.push({
+            campaign_id: cid,
+            message_type: block.type,
+            message_content: block.content || null,
+            media_url: null,
+            media_brief: (block as any).mediaBrief || null,
+            scheduled_at: scheduledAtIso,
+            disable_link_preview: !!(block as any).disableLinkPreview,
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+            whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            created_by: 'user',
+            status: statusFor(offset, messageGroupId),
+          });
+          offset++;
+        } else if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (let i = 0; i < block.mediaItems.length; i++) {
             const item = block.mediaItems[i];
             allInserts.push({
@@ -739,6 +774,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip,
           });
         }
+      } else if (multiMediaTypes.includes(block.type)) {
+        // Bloco de mídia sem arquivo: mantém 1 linha (media_url nulo) para não deslocar/apagar os demais blocos.
+        rows.push({
+          message_type: block.type, message_content: block.content || null, media_url: null,
+          media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip,
+        });
       } else if (block.type === 'text') {
         rows.push({ message_type: 'text', message_content: block.content, media_url: null, disable_link_preview: !!block.disableLinkPreview, media_brief: null, ...vip });
       } else if (block.type === 'poll') {
@@ -749,15 +790,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         rows.push({ message_type: 'audio', message_content: null, media_url: block.mediaUrl || null, media_brief: block.mediaBrief || null, disable_link_preview: !!block.disableLinkPreview, ...vip });
       }
     }
+    // Rascunho de bloco único que ganhou blocos: cria o message_group_id e grava no anchor também.
+    const finalGroupId = groupId || (rows.length > 1 ? crypto.randomUUID() : null);
     // Atualiza blocos existentes por posição; insere os excedentes; remove os que sobraram.
     for (let i = 0; i < rows.length; i++) {
-      const payload = {
+      const payload: any = {
         ...rows[i],
         scheduled_at: scheduledAtIso,
         send_speed: data.sendSpeed,
         mention_all: data.mentionAll,
       };
       if (i < existing.length) {
+        if (!groupId && finalGroupId) { payload.message_group_id = finalGroupId; payload.block_order = i; }
         const { error } = await supabase.from('group_campaign_scheduled_messages').update(payload as any).eq('id', existing[i].id);
         if (error) throw error;
       } else {
@@ -765,7 +809,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           ...payload,
           campaign_id: campaignId,
           whatsapp_number_id: anchor.whatsapp_number_id || (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
-          message_group_id: groupId,
+          message_group_id: finalGroupId,
           block_order: i,
           created_by: anchor.created_by || 'user',
           draft_batch: anchor.draft_batch || null,
@@ -778,7 +822,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const { error } = await supabase.from('group_campaign_scheduled_messages').delete().eq('id', existing[i].id);
       if (error) throw error;
     }
-    toast.success("Rascunho atualizado!");
+    toast.success(anchor.status === 'draft' ? "Rascunho atualizado!" : "Mensagem atualizada!");
     await fetchMessages();
   };
 
@@ -844,7 +888,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       media_url: block?.mediaItems?.[0]?.url || block?.mediaUrl || data.mediaUrl || null,
       poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
       poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
-      scheduled_at: scheduledAt.toISOString(),
+      scheduled_at: data.scheduledAt ? scheduledAt.toISOString() : null,
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
@@ -1397,7 +1441,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart); // 0=Sun
 
-  const getMessagesForDay = (day: Date) => messages.filter(m => m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
+  const getMessagesForDay = (day: Date) => messages.filter(m => m.status !== 'grouped' && m.scheduled_at && isSameDay(new Date(m.scheduled_at), day));
 
   if (showBulkSettings) {
     return <CampaignBulkSettings campaignId={campaignId} targetGroups={campaign?.target_groups || []} onBack={() => setShowBulkSettings(false)} />;
@@ -1672,16 +1716,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
 
                   {/* Barra de ações dos rascunhos selecionados */}
-                  {selectedDraftIds.length > 0 && (
+                  {(selectedDraftIds.length > 0 || visibleDrafts.length > 0) && (
                     <div className="flex items-center gap-2 flex-wrap rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
+                        Selecionar todos os rascunhos do filtro ({visibleDrafts.length})
+                      </Button>
+                      {selectedDraftIds.length > 0 && (<>
                       <p className="text-xs font-medium">{selectedDraftIds.length} rascunho(s) selecionado(s)</p>
                       <Button size="sm" className="h-7 text-xs gap-1"
                         onClick={() => { setPastScheduleAck(false); setApprovePreview({ ids: selectedDraftIds }); }}>
                         <CheckCircle className="h-3 w-3" /> Aprovar selecionados ({selectedDraftIds.length})
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs"
-                        onClick={() => setSelectedDraftIds(visibleDrafts.map(d => d.id))}>
-                        Selecionar todos os rascunhos do filtro
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
                         onClick={async () => {
@@ -1694,6 +1739,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedDraftIds([])}>
                         Limpar
                       </Button>
+                      </>)}
                     </div>
                   )}
 
@@ -1777,6 +1823,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                             ↳ {TYPE_LABELS[b.message_type] || b.message_type}
                                             {['image', 'video', 'audio', 'document'].includes(b.message_type) && !b.media_url && ' ⚠️ sem mídia'}
                                             {b.message_content ? ` · ${b.message_content.slice(0, 60)}` : ''}
+                                            {b.media_brief ? ` · 🖼️ ${b.media_brief}` : ''}
                                           </p>
                                         ))}
                                       </div>
@@ -1962,8 +2009,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             {/* Message list below calendar */}
             {(() => {
               const displayMsgs = calendarSelectedDay 
-                ? messages.filter(m => isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
-                : messages;
+                ? messages.filter(m => m.status !== 'grouped' && m.scheduled_at && isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
+                : messages.filter(m => m.status !== 'grouped' && m.scheduled_at);
               
               if (displayMsgs.length === 0) return (
                 <Card><CardContent className="py-6 text-center">
