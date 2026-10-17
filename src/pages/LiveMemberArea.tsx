@@ -107,6 +107,7 @@ interface MemberState {
     confirmed_at: string | null;
     payment_window_expires_at: string | null;
     checkout_url: string;
+    preselected_installments?: number | null;
     /** Situação na Expedição: separação, envio e rastreio. */
     fulfillment?: {
       expedition_stage?: string | null;
@@ -2357,6 +2358,7 @@ export default function LiveMemberArea() {
                           }))}
                           form={payForm}
                           installmentConfig={installmentConfig}
+                          preselectedInstallments={order.preselected_installments}
                           stepBadge={null}
                           onPaymentConfirmed={handlePaymentConfirmed}
                           onStepEvent={trackStep}

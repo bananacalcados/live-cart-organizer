@@ -33,7 +33,7 @@ export interface PixData {
 
 export type { InstallmentConfig } from "@/lib/installmentRules";
 import type { InstallmentConfig } from "@/lib/installmentRules";
-import { buildInstallmentOptions, calculateInstallmentAmount as calcInstallment } from "@/lib/installmentRules";
+import { buildInstallmentOptions, resolveInstallmentSelection, calculateInstallmentAmount as calcInstallment } from "@/lib/installmentRules";
 
 
 export interface CustomerFormData {
@@ -87,7 +87,7 @@ export function StepPayment({
   onStepEvent,
   preselectedInstallments,
 }: {
-  /** Parcelas pré-escolhidas pela vendedora no modal da Live. */
+  /** Parcelas fixadas pela vendedora no modal da Live. */
   preselectedInstallments?: number | null;
   orderId: string;
   amount: number;
@@ -656,9 +656,9 @@ function CardPaymentForm({
   const builtOptions = buildInstallmentOptions(amount, installmentConfig, isDebit ? null : mpOptions);
   const installmentOptions = builtOptions.map((o) => ({ value: String(o.installments), label: o.label }));
 
-  const selectedInstallments = isDebit ? 1 : Number(installments);
-  const installmentCountForCalculation = selectedInstallments || 1;
-  const selectedOption = builtOptions.find((o) => o.installments === installmentCountForCalculation) || builtOptions[0];
+  const selection = resolveInstallmentSelection(builtOptions, installments, preselectedInstallments, isDebit);
+  const selectedInstallments = selection.count;
+  const selectedOption = selection.option || builtOptions[0];
   const chargeAmount = isDebit ? amount : selectedOption.chargeAmount;
   const displayTotal = isDebit ? amount : selectedOption.totalAmount;
   const selectedInstallmentAmount = isDebit ? amount : selectedOption.installmentAmount;
@@ -666,15 +666,6 @@ function CardPaymentForm({
   // Tudo pronto pra pagar: cartão completo + parcela escolhida + sem divergência
   // de crédito/débito. Quando vira true (e a pessoa não pediu para editar), o
   // formulário colapsa no resumo com o botão gigante.
-  // Pré-seleção feita pela vendedora: aplica uma vez, se a opção existir no link.
-  const preselectAppliedRef = useRef(false);
-  useEffect(() => {
-    if (isDebit || preselectAppliedRef.current || installments || !preselectedInstallments) return;
-    if (builtOptions.some((o) => o.installments === preselectedInstallments)) {
-      preselectAppliedRef.current = true;
-      setInstallments(String(preselectedInstallments));
-    }
-  }, [isDebit, installments, preselectedInstallments, builtOptions]);
 
   const readyToPay = formComplete && (isDebit || !!selectedInstallments) && !mismatch;
   useEffect(() => {
@@ -698,6 +689,11 @@ function CardPaymentForm({
 
     // Prevent double-click with ref (synchronous check)
     if (processingRef.current) return;
+
+    if (selection.locked && !selectedInstallments) {
+      toast.error("As parcelas definidas para este pedido não estão disponíveis. Entre em contato com a loja.");
+      return;
+    }
 
     if (!isDebit && !selectedInstallments && !missingFields.length) {
       // Antes o botão ficava cinza e travado ("Selecione as parcelas") e a
@@ -735,7 +731,7 @@ function CardPaymentForm({
 
     // Lock immediately
     processingRef.current = true;
-    onStepEvent?.("card_submitted", { method: isDebit ? "debit_card" : "credit_card", amount, installments: isDebit ? 1 : Number(installments) });
+    onStepEvent?.("card_submitted", { method: isDebit ? "debit_card" : "credit_card", amount, installments: selectedInstallments });
     setIsProcessing(true);
     setPaymentError(null);
 
@@ -1046,14 +1042,18 @@ function CardPaymentForm({
       {!isDebit ? (
         <div className="space-y-2">
           <Label className="text-sm">Parcelas</Label>
-          <InstallmentPicker
+          {selection.locked ? (
+            <p className={`rounded-md border border-input p-3 text-sm font-semibold ${selection.option ? "text-foreground" : "text-destructive"}`}>
+              {selection.option?.label || "As parcelas definidas para este pedido não estão disponíveis. Entre em contato com a loja."}
+            </p>
+          ) : <InstallmentPicker
             ref={installmentsRef}
             value={installments}
             options={installmentOptions}
             onChange={(value) => { setInstallments(value); setInstallmentsError(false); }}
             invalid={!installments && (installmentsError || formComplete)}
-          />
-          {!installments && (installmentsError || formComplete) && (
+          />}
+          {!selection.locked && !selectedInstallments && (installmentsError || formComplete) && (
             <p className="text-sm font-semibold text-destructive">
               ⬆ Escolha em quantas vezes quer pagar
             </p>
