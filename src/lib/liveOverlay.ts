@@ -2,13 +2,17 @@ export interface OverlayItem { id: string; text: string; enabled: boolean }
 export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel";
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
-/** Fontes dobradas em 17/10/2026: o texto ficava ilegível no vídeo da live. */
+/**
+ * Fontes quase dobradas em 17/10/2026: o texto ficava ilegível no vídeo da live.
+ * Posições pensadas para a faixa útil do Instagram (180–1500): faixa no topo,
+ * barra/chamada no meio, aviso de compra embaixo — sem um bloco cobrir o outro.
+ */
 export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
-  ticker: { x: 40, y: 200, width: 1000, font_size: 80, align: "center" },
-  raffle_bar: { x: 40, y: 330, width: 1000, font_size: 72, align: "center" },
-  alert: { x: 60, y: 820, width: 960, font_size: 84, align: "left" },
-  cta: { x: 40, y: 1389, width: 1000, font_size: 84, align: "center" },
-  wheel: { x: 140, y: 560, width: 800, font_size: 112, align: "center" },
+  ticker: { x: 20, y: 190, width: 1040, font_size: 76, align: "center" },
+  raffle_bar: { x: 20, y: 620, width: 1040, font_size: 72, align: "center" },
+  alert: { x: 20, y: 1010, width: 1040, font_size: 72, align: "left" },
+  cta: { x: 20, y: 620, width: 1040, font_size: 84, align: "center" },
+  wheel: { x: 140, y: 620, width: 800, font_size: 108, align: "center" },
 };
 export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
