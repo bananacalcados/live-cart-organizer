@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleIncomingOptOut, isOptedOut } from "../_shared/opt-out.ts";
@@ -214,8 +215,21 @@ serve(async (req) => {
         }
       }
 
-      for (const step of steps) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
+        const step = steps[i];
         const actionConfig = step.action_config as Record<string, unknown>;
+
+        if (step.action_type === 'wait_for_reply') {
+          await supabase.from('automation_pending_replies').insert({
+            phone, flow_id: flow.id, step_id: step.id, pending_step_index: i + 1,
+            button_branches: waitReplyBranches(actionConfig || {}, steps[i + 1]?.id),
+            whatsapp_number_id: (actionConfig?.whatsappNumberId as string) || whatsappNumberId,
+            recipient_data: { name: '', firstName: '' },
+            expires_at: waitReplyExpiresAt(actionConfig || {}),
+          });
+          break;
+        }
 
         // Apply delay
         if (step.delay_seconds > 0) {

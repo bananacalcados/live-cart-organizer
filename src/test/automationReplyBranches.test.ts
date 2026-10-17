@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { replyTarget, waitReplyBranches, waitReplyExpiresAt } from '../../supabase/functions/_shared/automation-reply-branches';
+import { replyTarget, waitReplyBranches, waitReplyExpiresAt, continuationIndices } from '../../supabase/functions/_shared/automation-reply-branches';
 
 describe('Aguardar resposta — caminhos independentes', () => {
   it('resposta dentro do prazo segue somente o caminho de resposta', () => {
@@ -19,7 +19,7 @@ describe('Aguardar resposta — caminhos independentes', () => {
     expect(branches.__timeout_message__).toBe('Oi');
   });
   it('saída desconectada não entra no outro ramo', () => {
-    const branches = waitReplyBranches({ buttonBranches: { 'btn-timeout': 'sem-resposta' } });
+    const branches = waitReplyBranches({ buttonBranches: { 'btn-timeout': 'sem-resposta' } }, 'outro-ramo');
     expect(replyTarget(branches, false, 'Oi')).toBeNull();
     expect(branches.__reply_stop__).toBe('true');
   });
@@ -27,5 +27,24 @@ describe('Aguardar resposta — caminhos independentes', () => {
     const now = Date.parse('2026-10-17T12:22:00Z');
     expect(waitReplyExpiresAt({ timeoutHours: 24 }, now)).toBe('2026-10-18T12:22:00.000Z');
     expect(waitReplyExpiresAt({ timeoutHours: 2 }, now)).toBe('2026-10-17T14:22:00.000Z');
+  });
+});
+
+describe('sequências por ramo', () => {
+  const steps = [
+    { id: 'espera', action_config: { buttonBranches: { 'btn-replied': 'sim', 'btn-timeout': 'nao' } } },
+    { id: 'sim', action_config: { nextStepId: 'sim-final' } },
+    { id: 'nao', action_config: { nextStepId: 'nao-final' } },
+    { id: 'sim-final', action_config: {} },
+    { id: 'nao-final', action_config: {} },
+  ];
+  it('resposta percorre somente suas ações, mesmo fora da ordem da lista', () => {
+    expect(continuationIndices(steps, 1)).toEqual([1, 3]);
+  });
+  it('timeout percorre somente suas ações', () => {
+    expect(continuationIndices(steps, 2)).toEqual([2, 4]);
+  });
+  it('fluxos antigos sem ligações preservam a sequência anterior', () => {
+    expect(continuationIndices([{ id: 'a', action_config: {} }, { id: 'b', action_config: {} }], 0)).toBeNull();
   });
 });

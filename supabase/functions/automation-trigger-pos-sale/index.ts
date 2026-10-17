@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   anchoredRunAtMs,
@@ -224,7 +225,8 @@ Deno.serve(async (req) => {
       let guard: PurchaseGuard | null = null;
       let scheduled = 0;
 
-      for (let i = 0; i < steps.length; i++) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
         const step = steps[i];
         const sCfg = (step.action_config || {}) as any;
 
@@ -243,6 +245,26 @@ Deno.serve(async (req) => {
         }
 
         runAtMs += Number(step.delay_seconds || 0) * 1000;
+
+        if (step.action_type === 'wait_for_reply') {
+          const branches = waitReplyBranches(sCfg, steps[i + 1]?.id);
+          if (runAtMs - Date.now() <= 5000) {
+            await supabase.from('automation_pending_replies').insert({
+              phone, flow_id: flow.id, step_id: step.id, pending_step_index: i + 1,
+              button_branches: branches,
+              whatsapp_number_id: sCfg.whatsappNumberId || null,
+              recipient_data: { name: customerName, firstName },
+              expires_at: waitReplyExpiresAt(sCfg),
+            });
+          } else {
+            await supabase.from('automation_pos_followups').insert({
+              sale_id: sale.id, flow_id: flow.id, step_id: step.id, step_index: i + 1,
+              customer_phone: phone, customer_cpf: cpf, scheduled_at: new Date(runAtMs).toISOString(),
+              payload: { vars, action_type: step.action_type, action_config: sCfg, wait_branches: branches, ...(guard ? { __guard__: guard } : {}) },
+            });
+          }
+          break;
+        }
 
         if (runAtMs - Date.now() <= 5000) {
           await executeStep(supabase, step, phone, replaceVars, flow.id);

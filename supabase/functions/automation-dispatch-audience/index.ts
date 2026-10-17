@@ -1,4 +1,4 @@
-import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
@@ -584,13 +584,14 @@ serve(async (req) => {
           .replace(/\{\{cidade\}\}/g, recipient.city || '');
       }
 
-      for (let i = 0; i < steps.length; i++) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
         const sendNumberId = (config.whatsappNumberId as string) || defaultNumberId;
 
         // Skip steps that are reachable only via branches (must wait for client click)
-        if (i > 0 && branchTargetIds.has(step.id)) {
+        if (i > 0 && !continuationIndices(steps, 0) && branchTargetIds.has(step.id)) {
           console.log(`[dispatch] Stopping at step ${i} (${step.id}) — branch target only`);
           break;
         }

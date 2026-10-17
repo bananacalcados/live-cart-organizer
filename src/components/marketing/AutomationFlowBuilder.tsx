@@ -338,7 +338,7 @@ function ActionNode({ data }: { data: any }) {
       )}
       {isWait && (
         <div className="mt-1">
-          <p className="text-xs text-foreground">⏳ Aguarda resposta</p>
+          <p className="text-xs text-foreground">Prazo: {data.timeoutHours || 24}h</p>
           {data.timeoutAction && data.timeoutAction !== "cancel" && (
             <p className="text-[10px] text-orange-500 flex items-center gap-0.5"><GitBranch className="h-2.5 w-2.5" />Bifurcação: {data.timeoutAction === "send_template" ? "Template" : data.timeoutAction === "send_text" ? "Mensagem" : data.timeoutAction === "add_tag" ? "Tag" : "Cancelar"}</p>
           )}
@@ -357,7 +357,7 @@ function ActionNode({ data }: { data: any }) {
       {isWait ? (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           {[{ id: 'btn-replied', label: 'Respondeu dentro do prazo' }, { id: 'btn-timeout', label: 'Não respondeu no prazo' }].map(outcome => (
-            <div key={outcome.id} className="relative pr-4 text-xs text-foreground">
+            <div key={outcome.id} className="relative pr-4 text-xs text-foreground min-h-4">
               {outcome.label}
               <Handle type="source" position={Position.Right} id={outcome.id} className="!bg-primary !w-3 !h-3 !border-2 !border-background" style={{ top: '50%' }} />
             </div>

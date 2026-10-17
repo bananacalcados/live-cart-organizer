@@ -1,4 +1,4 @@
-import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -98,12 +98,13 @@ serve(async (req) => {
       }
     }
 
-    for (let i = 0; i < steps.length; i++) {
+    const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
       const step = steps[i];
       const config = step.action_config || {};
 
       // Skip steps that are reachable only via branches (must wait for client click)
-      if (i > 0 && branchTargetIds.has(step.id)) {
+      if (i > 0 && !continuationIndices(steps, 0) && branchTargetIds.has(step.id)) {
         results.push({ step: i + 1, type: step.action_type, status: 'skipped', detail: 'Aguardando clique em botão (branch)' });
         break;
       }

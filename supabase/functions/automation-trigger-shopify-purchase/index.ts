@@ -1,4 +1,4 @@
-import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -47,7 +47,9 @@ Deno.serve(async (req) => {
       const steps = (flow.steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
       console.log("Processing flow:", flow.id, "steps:", steps.length);
 
-      for (const step of steps) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
+        const step = steps[i];
         console.log("Step config:", JSON.stringify(step));
         // Substitui variáveis
         const replaceVars = (text: string) => text
