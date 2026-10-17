@@ -204,6 +204,9 @@ export function LiveRedirectManager() {
                         <Copy className="h-3 w-3" />
                       )}
                     </button>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      <TrackedLinkStats slug={`ao-vivo:${link.slug}`} />
+                    </p>
                   </div>
 
                   <div className="text-center px-3">
