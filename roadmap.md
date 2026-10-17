@@ -52,3 +52,5 @@
 - [x] Zerar falhas da Whats Carol; testes isolados desfeitos e painel autenticado conferido; cron 200.
 
 - [x] Automação: duas saídas em Aguardar resposta; 8 testes passaram e escolha/reabertura conferidas em sessão autorizada com gravações interceptadas, sem envios reais.
+- [x] Otimizar recuperação de comentários na conta da live; 3 testes passaram e comentário real apareceu sem recarga (20 s após comentário).
+- [ ] Restabelecer chegada imediata dos comentários da Meta: entregas do webhook interrompidas; recuperação do servidor permanece ativa.

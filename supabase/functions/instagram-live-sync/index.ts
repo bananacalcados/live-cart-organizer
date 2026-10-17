@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 import { requireUser } from "../_shared/require-user.ts";
+import { LIVE_SYNC_SECOND_PASS_MS, selectLiveAccounts } from "../_shared/live-sync-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +11,8 @@ const corsHeaders = {
 };
 
 const GRAPH_HOSTS = [
-  "https://graph.facebook.com/v25.0",
   "https://graph.instagram.com/v25.0",
+  "https://graph.facebook.com/v25.0",
 ];
 
 interface IgAccountRow {
@@ -118,7 +119,7 @@ async function graphJson(url: string): Promise<{ ok: boolean; status: number; da
 }
 
 async function fetchAllComments(firstPage: LiveMediaItem["comments"]): Promise<GraphComment[]> {
-  const out: GraphComment[] = Array.isArray(firstPage?.data) ? [...firstPage!.data!] : [];
+  const out: GraphComment[] = [...(firstPage?.data || [])];
   let next = firstPage?.paging?.next || null;
   let pages = 0;
   while (next && pages < 10) {
@@ -171,7 +172,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // Só o worker (x-cron-secret / service role) ou usuário logado do app.
-  if (!(await isAuthorizedCron(req))) {
+  const authorizedCron = await isAuthorizedCron(req);
+  if (!authorizedCron) {
     const auth = await requireUser(req);
     if (!auth.ok) return json({ error: "unauthorized" }, 401);
   }
@@ -187,12 +189,12 @@ Deno.serve(async (req) => {
 
     const eventQuery = supabase
       .from("events")
-      .select("id, name, live_active_until")
+      .select("id, name, live_active_until, instagram_live_url")
       .order("live_active_until", { ascending: false })
       .limit(1);
 
     const { data: event, error: eventError } = eventId
-      ? await supabase.from("events").select("id, name, live_active_until").eq("id", eventId).maybeSingle()
+      ? await supabase.from("events").select("id, name, live_active_until, instagram_live_url").eq("id", eventId).maybeSingle()
       : await eventQuery.gt("live_active_until", new Date().toISOString()).maybeSingle();
 
     if (eventError) return json({ error: "event_lookup_failed", details: eventError.message }, 500);
@@ -209,13 +211,14 @@ Deno.serve(async (req) => {
 
     if (accountsError) return json({ error: "instagram_accounts_lookup_failed", details: accountsError.message }, 500);
 
-    const rows = (accounts || []) as IgAccountRow[];
+    const rows = selectLiveAccounts((accounts || []) as IgAccountRow[], event.instagram_live_url);
     if (rows.length === 0) return json({ ok: false, reason: "no_instagram_accounts_configured", comments_found: 0, live_comments_inserted: 0 });
 
     const liveRows: any[] = [];
     const linkRows: any[] = [];
     const scanned: any[] = [];
     const errors: string[] = [];
+    const liveMedia: { id: string; token: string }[] = [];
 
     for (const account of rows) {
       const token = account.access_token || globalIgToken();
@@ -227,6 +230,7 @@ Deno.serve(async (req) => {
       });
 
       for (const media of result.media) {
+        liveMedia.push({ id: media.id, token });
         const comments = await fetchAllComments(media.comments);
         for (const c of comments) {
           if (!c?.id) continue;
@@ -273,7 +277,40 @@ Deno.serve(async (req) => {
     if (uniqueLinks.length > 0) {
       await supabase
         .from("instagram_user_links")
-        .upsert(uniqueLinks, { onConflict: "username", ignoreDuplicates: false });
+        .upsert(uniqueLinks, { onConflict: "username", ignoreDuplicates: true });
+    }
+
+    // Reuse the existing minute worker: one bounded second pass on the media
+    // already discovered, no new cron and no polling from each open browser.
+    const runtime = (globalThis as any).EdgeRuntime;
+    if (authorizedCron && liveMedia.length && runtime?.waitUntil) {
+      runtime.waitUntil((async () => {
+        await new Promise(resolve => setTimeout(resolve, LIVE_SYNC_SECOND_PASS_MS));
+        const { data: stillActive } = await supabase.from("events")
+          .select("id").eq("id", event.id).gt("live_active_until", new Date().toISOString()).maybeSingle();
+        if (!stillActive) return;
+        for (const media of liveMedia.slice(0, 1)) {
+          const response = await fetch(`https://graph.instagram.com/v25.0/${encodeURIComponent(media.id)}/comments?fields=id,text,timestamp,username,from&limit=100`, {
+            headers: { Authorization: `Bearer ${media.token}` }, signal: AbortSignal.timeout(10_000),
+          });
+          if (!response.ok) { console.warn("live second pass failed", response.status); continue; }
+          const data = await response.json();
+          const batch = (data.data || []).flatMap((c: GraphComment) => {
+            const username = normalizeUsername(c.username || c.from?.username);
+            const text = String(c.text || "").trim();
+            if (!c.id || !username || !text) return [];
+            const createdAt = parseTimestamp(c.timestamp);
+            const cls = classifyComment(text);
+            return [{ event_id: event.id, comment_id: c.id, username, comment_text: text,
+              raw_timestamp: createdAt, created_at: createdAt, source_pc: "meta-live-media-sync",
+              is_order: cls.is_order, ai_classification: cls.type, ai_confidence: cls.confidence }];
+          });
+          if (!batch.length) continue;
+          const { data: inserted, error } = await supabase.from("live_comments")
+            .upsert(batch, { onConflict: "event_id,comment_id", ignoreDuplicates: true }).select("id");
+          console.log("live second pass", { inserted: inserted?.length || 0, error: error?.message || null });
+        }
+      })().catch((error: unknown) => console.error("live second pass error", String(error))));
     }
 
     return json({
