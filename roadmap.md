@@ -37,6 +37,7 @@
 - [x] Mover o controle para o resumo do evento selecionado e verificar as configurações por evento.
 - [x] Posições e larguras arrastáveis, fontes, guias e salvamento independente em config.layout.
 - [x] Verificar persistência no overlay real, quebra de texto, restauração e entregar print da edição.
+- [x] Aumentar o texto de todos os blocos (faixa 76, barra 72, aviso 72, chamada 84, roleta 108) e reposicionar para nenhum bloco cobrir o outro; aplicado nas 3 lives e no modelo padrão, combinações conferidas no navegador.
 
 ## Roleta ao vivo no Overlay
 - [x] Campo "Pagou em até (min)" ao criar roleta
