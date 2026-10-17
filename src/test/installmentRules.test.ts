@@ -18,6 +18,20 @@ describe("buildInstallmentOptions", () => {
     expect(selection.locked).toBe(false);
   });
 
+  it("preserva 10x fixadas para a cascata quando o MP oferece somente até 6x", () => {
+    const mp = [{ installments: 6, installmentAmount: 500 / 6, totalAmount: 500, interestFree: true }];
+    const options = buildInstallmentOptions(500, tenInstallments, mp, 10);
+    const selection = resolveInstallmentSelection(options, "", 10);
+    expect(selection.count).toBe(10);
+    expect(selection.option).toMatchObject({ chargeAmount: 500, totalAmount: 500, installmentAmount: 50, hasInterest: false });
+    expect(buildInstallmentOptions(500, tenInstallments, mp).map(o => o.installments)).toEqual([6]);
+  });
+
+  it("não libera 10x fixadas acima do teto de 6x do pedido", () => {
+    const options = buildInstallmentOptions(500, { ...tenInstallments, max_installments: 6 }, null, 10);
+    expect(resolveInstallmentSelection(options, "1", 10).count).toBe(0);
+  });
+
   it("não substitui 10x fixadas por 1x quando a condição não está disponível", () => {
     expect(resolveInstallmentSelection(buildInstallmentOptions(500, { ...tenInstallments, max_installments: 6 }), "1", 10))
       .toEqual({ locked: true, count: 0, option: null });

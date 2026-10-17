@@ -101,12 +101,15 @@ export function buildInstallmentOptions(
   amount: number,
   config: InstallmentConfig,
   mpOptions?: MpPayerCost[] | null,
+  staffSelection?: number | null,
 ): InstallmentOption[] {
   const out: InstallmentOption[] = [];
   const maxN = Math.max(1, Math.min(12, config.max_installments || 1));
   for (let i = 1; i <= maxN; i++) {
     const mp = mpOptions?.find((o) => o.installments === i) || null;
-    if (mpOptions && mpOptions.length > 0 && !mp) continue; // emissor não oferece
+    // A lista do MP não representa os demais gateways da cascata. Uma escolha
+    // da equipe válida na regra do pedido precisa chegar ao servidor intacta.
+    if (mpOptions && mpOptions.length > 0 && !mp && i !== staffSelection) continue;
 
     let totalAmount: number;
     let chargeAmount: number;

@@ -653,7 +653,7 @@ function CardPaymentForm({
   // Lista de parcelas segue a REGRA DO LINK (teto, sem juros e acréscimo).
   // Acima do "sem juros" do link o acréscimo é nosso, mesmo que a conta do
   // Mercado Pago ofereça sem juros — nesse caso o valor cobrado já vai inflado.
-  const builtOptions = buildInstallmentOptions(amount, installmentConfig, isDebit ? null : mpOptions);
+  const builtOptions = buildInstallmentOptions(amount, installmentConfig, isDebit ? null : mpOptions, isDebit ? null : preselectedInstallments);
   const installmentOptions = builtOptions.map((o) => ({ value: String(o.installments), label: o.label }));
 
   const selection = resolveInstallmentSelection(builtOptions, installments, preselectedInstallments, isDebit);
