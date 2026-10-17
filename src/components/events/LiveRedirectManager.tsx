@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TrackedLinkStats } from "@/components/marketing/TrackedLinkStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, subDays } from "date-fns";
@@ -204,6 +205,9 @@ export function LiveRedirectManager() {
                         <Copy className="h-3 w-3" />
                       )}
                     </button>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      <TrackedLinkStats slug={`ao-vivo:${link.slug}`} />
+                    </p>
                   </div>
 
                   <div className="text-center px-3">

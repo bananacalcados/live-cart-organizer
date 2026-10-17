@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { saveMetaAttribution, buildFbc } from "../_shared/meta-attribution-memory.ts";
+import { resumeAutomationWait } from "../_shared/automation-wait-response.ts";
 
 
 const corsHeaders = {
@@ -48,7 +49,25 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const slug = (url.searchParams.get("slug") || "").trim().toLowerCase();
-    const phone = url.searchParams.get("lead") || url.searchParams.get("phone") || null;
+    let phone = url.searchParams.get("lead") || url.searchParams.get("phone") || null;
+
+    // Link da live com código por cliente (/ao-vivo/<slug>/<CODE>): sabe quem clicou
+    // e segue o ramo "clicou no link" da automação, se houver.
+    const trackCode = (url.searchParams.get("code") || "").trim().toUpperCase();
+    if (slug && /^[A-Z0-9]{6}$/.test(trackCode)) {
+      try {
+        const { data: clicked } = await supabase.rpc("tracked_link_click", { p_slug: `ao-vivo:${slug}`, p_code: trackCode });
+        if (typeof clicked === "string" && clicked) {
+          if (!phone) phone = clicked;
+          const work = resumeAutomationWait(supabase, clicked, null, "clicked").catch((e) => console.error("[tracked click] automação", e));
+          // deno-lint-ignore no-explicit-any
+          const er = (globalThis as any).EdgeRuntime;
+          if (er?.waitUntil) er.waitUntil(work);
+        }
+      } catch (e) {
+        console.error("[tracked click]", e);
+      }
+    }
     const utmSource = url.searchParams.get("utm_source") || null;
     const fbclid = url.searchParams.get("fbclid") || null;
     const fbcParam = url.searchParams.get("fbc") || null;

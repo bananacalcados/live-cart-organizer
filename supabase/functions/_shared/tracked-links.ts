@@ -3,7 +3,7 @@
 // um código por telefone (/vip/<slug>/<CODE>). Quando a cliente clica, o
 // redirecionador sabe quem foi. Mesma pessoa + mesmo link = mesmo código.
 
-const VIP_RE = /(https?:\/\/(?:checkout\.bananacalcados\.com\.br|live-cart-organizer\.lovable\.app)\/vip\/)([a-z0-9][a-z0-9_-]*)(?![a-z0-9_\/-])/gi;
+const VIP_RE = /(https?:\/\/(?:checkout\.bananacalcados\.com\.br|live-cart-organizer\.lovable\.app)\/(?:vip|ao-vivo)\/)([a-z0-9][a-z0-9_-]*)(?![a-z0-9_\/-])/gi;
 
 export interface TrackCtx {
   source?: string | null;
@@ -27,9 +27,11 @@ async function issue(supabase: any, phone: string, slug: string, ctx: TrackCtx):
 
 /** Reescreve os links /vip/<slug> de um texto. Nunca falha: em erro mantém o link original. */
 export async function tagTrackedText(supabase: any, phone: string, text: string, ctx: TrackCtx = {}): Promise<string> {
-  if (!text || !phone || !/\/vip\//i.test(text)) return text;
+  if (!text || !phone || !/\/(vip|ao-vivo)\//i.test(text)) return text;
   const slugs = new Set<string>();
-  for (const m of text.matchAll(VIP_RE)) slugs.add(m[2].toLowerCase());
+  // Link da live fica com chave "ao-vivo:<slug>" para não misturar com o grupo VIP.
+  const keyOf = (base: string, slug: string) => (/\/ao-vivo\/$/i.test(base) ? `ao-vivo:${slug}` : slug).toLowerCase();
+  for (const m of text.matchAll(VIP_RE)) slugs.add(keyOf(m[1], m[2]));
   if (slugs.size === 0) return text;
   const codes = new Map<string, string>();
   for (const s of slugs) {
@@ -37,7 +39,7 @@ export async function tagTrackedText(supabase: any, phone: string, text: string,
     if (c) codes.set(s, c);
   }
   return text.replace(VIP_RE, (full, base, slug) => {
-    const c = codes.get(String(slug).toLowerCase());
+    const c = codes.get(keyOf(base, String(slug)));
     return c ? `${base}${slug}/${c}` : full;
   });
 }
@@ -45,7 +47,7 @@ export async function tagTrackedText(supabase: any, phone: string, text: string,
 /** Reescreve os parâmetros de texto dos componentes de um modelo (corpo, cabeçalho, cards). */
 export async function tagTrackedComponents(supabase: any, phone: string, components: any, ctx: TrackCtx = {}): Promise<any> {
   if (!Array.isArray(components) || !phone) return components;
-  if (!/\/vip\//i.test(JSON.stringify(components))) return components;
+  if (!/\/(vip|ao-vivo)\//i.test(JSON.stringify(components))) return components;
   const walk = async (node: any): Promise<any> => {
     if (Array.isArray(node)) return Promise.all(node.map(walk));
     if (node && typeof node === "object") {
