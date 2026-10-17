@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { tagTrackedComponents } from "../_shared/tracked-links.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -528,7 +529,8 @@ serve(async (req) => {
     };
 
     if (sendComponents && sendComponents.length > 0) {
-      (templateBody.template as Record<string, unknown>).components = sendComponents;
+      (templateBody.template as Record<string, unknown>).components = await tagTrackedComponents(
+        supabase, formattedPhone, sendComponents, { source: 'template', ref: templateName, whatsappNumberId: whatsappNumberId || null });
     }
 
     const response = await fetch(graphUrl, {

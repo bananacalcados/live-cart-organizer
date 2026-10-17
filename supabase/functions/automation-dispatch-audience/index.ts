@@ -2,6 +2,7 @@ import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+import { tagTrackedComponents } from "../_shared/tracked-links.ts";
 
 
 
@@ -699,6 +700,10 @@ serve(async (req) => {
             }
             let formattedPhone = recipient.phone.replace(/\D/g, '');
             if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+            {
+              const tagged = await tagTrackedComponents(supabase, formattedPhone, components, { source: 'automation', ref: flowId, whatsappNumberId: sendNumberId || null });
+              components.splice(0, components.length, ...tagged);
+            }
 
             // Carousel: fetch def to inject per-card quick-reply payloads (card
             // identification) and build the full chat carousel structure.
