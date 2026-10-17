@@ -225,6 +225,13 @@
       "when": 1792241933135,
       "tag": "0031_tracked_link_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792241960719,
+      "tag": "0032_tracked_link_issue_fix_random",
+      "breakpoints": true
     }
   ]
 }
