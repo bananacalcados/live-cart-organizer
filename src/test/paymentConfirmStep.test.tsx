@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { StepPayment, type CustomerFormData, type InstallmentConfig } from "@/components/checkout/PaymentSection";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string): Promise<{ data: Record<string, unknown> | null; error: null }> => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke },
