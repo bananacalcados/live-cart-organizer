@@ -183,10 +183,10 @@ export default function LiveOverlay() {
             {fill(rb.text_template, { count: raffleCount })}
             {rb.goal_enabled && rb.goal_count > 0 && (
               <>
-                <div className="overlay-progress-track mt-3 h-6 w-full overflow-hidden rounded-full">
+                <div className="overlay-progress-track mt-[0.25em] h-[0.28em] w-full overflow-hidden rounded-full">
                   <div className="overlay-progress-fill h-full rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                 </div>
-                {remaining > 0 && <div className="mt-2">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
+                {remaining > 0 && <div className="mt-[0.3em]">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
               </>
             )}
           </div>
