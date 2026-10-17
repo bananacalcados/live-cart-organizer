@@ -21701,6 +21701,54 @@ export type Database = {
           },
         ]
       }
+      tracked_link_codes: {
+        Row: {
+          click_count: number
+          code: string
+          created_at: string
+          first_clicked_at: string | null
+          id: string
+          last_clicked_at: string | null
+          last_sent_at: string
+          phone: string
+          sent_count: number
+          slug: string
+          source: string | null
+          source_ref: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          click_count?: number
+          code: string
+          created_at?: string
+          first_clicked_at?: string | null
+          id?: string
+          last_clicked_at?: string | null
+          last_sent_at?: string
+          phone: string
+          sent_count?: number
+          slug: string
+          source?: string | null
+          source_ref?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          click_count?: number
+          code?: string
+          created_at?: string
+          first_clicked_at?: string | null
+          id?: string
+          last_clicked_at?: string | null
+          last_sent_at?: string
+          phone?: string
+          sent_count?: number
+          slug?: string
+          source?: string | null
+          source_ref?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       trigger_conversions: {
         Row: {
           created_at: string
@@ -26695,6 +26743,28 @@ export type Database = {
         Returns: undefined
       }
       title_case_color: { Args: { p_color: string }; Returns: string }
+      tracked_link_click: {
+        Args: { p_code: string; p_slug: string }
+        Returns: string
+      }
+      tracked_link_issue: {
+        Args: {
+          p_number: string
+          p_phone: string
+          p_ref: string
+          p_slug: string
+          p_source: string
+        }
+        Returns: string
+      }
+      tracked_link_stats: {
+        Args: { p_slug: string }
+        Returns: {
+          clicked: number
+          clicks: number
+          sent: number
+        }[]
+      }
       transfer_products_brand: {
         Args: { p_from: string; p_to: string }
         Returns: number
