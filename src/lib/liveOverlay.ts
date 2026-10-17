@@ -12,7 +12,7 @@ export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
   raffle_bar: { x: 20, y: 620, width: 1040, font_size: 72, align: "center" },
   alert: { x: 20, y: 1010, width: 1040, font_size: 72, align: "left" },
   cta: { x: 20, y: 620, width: 1040, font_size: 84, align: "center" },
-  wheel: { x: 140, y: 620, width: 800, font_size: 108, align: "center" },
+  wheel: { x: 20, y: 620, width: 1040, font_size: 108, align: "center" },
 };
 export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
