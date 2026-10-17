@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TrackedLinkStats } from "@/components/marketing/TrackedLinkStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, subDays } from "date-fns";
