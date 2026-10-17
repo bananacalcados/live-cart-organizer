@@ -26,4 +26,4 @@
 - Presenter alerts accept only team_message; order realtime updates data without interrupting the live panel.
 
 - Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.
-- Checkout installments expand inline; member responses pass staff selections to the shared form, which locks valid selections on every render to preserve agreed terms.
+- Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.

@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { StepPayment, type CustomerFormData, type InstallmentConfig } from "@/components/checkout/PaymentSection";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string): Promise<{ data: Record<string, unknown> | null; error: null }> => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke },
@@ -48,9 +48,31 @@ function fillCard() {
 beforeEach(() => {
   cleanup();
   invoke.mockClear();
+  invoke.mockImplementation(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null }));
 });
 
 describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)", () => {
+  it("envia 10x fixadas mesmo após a consulta do MP oferecer apenas 6x", async () => {
+    invoke.mockImplementation(async (name: string) => ({
+      data: name === "mercadopago-installments"
+        ? { options: [{ installments: 6, installmentAmount: 500 / 6, totalAmount: 500, interestFree: true }] }
+        : name === "pagarme-create-charge" ? { success: true, gateway: "pagarme" } : null,
+      error: null,
+    }));
+    render(<StepPayment orderId="teste-mp-6x" amount={500} products={[]} form={form}
+      installmentConfig={{ ...config, max_installments: 10, interest_free_installments: 10 }}
+      preselectedInstallments={10} onPaymentConfirmed={vi.fn()} />);
+    fireEvent.click(screen.getByText("Cartão de crédito"));
+    fillCard();
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("mercadopago-installments", expect.anything()));
+    fireEvent.click(await screen.findByText(/editar dados do cartão/i));
+    expect(screen.queryByRole("button", { name: "Parcelas" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /CLIQUE AQUI PARA CONCLUIR PAGAMENTO/i }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("pagarme-create-charge", expect.objectContaining({
+      body: expect.objectContaining({ installments: 10, totalAmountCents: 50000, baseAmountCents: 50000 }),
+    })));
+  });
+
   it("envia exatamente 10 parcelas fixadas pela equipe após editar os dados do cartão", async () => {
     render(<StepPayment orderId="teste-fixo" amount={500} products={[]} form={form}
       installmentConfig={{ ...config, max_installments: 10, interest_free_installments: 10 }}
