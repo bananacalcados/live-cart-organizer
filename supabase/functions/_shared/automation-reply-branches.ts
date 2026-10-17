@@ -15,6 +15,8 @@ export function waitReplyBranches(config: Config, fallbackNextId?: string): Reco
     __timeout_tag__: config.timeoutTag || '',
     ...(replied ? { __replied__: replied } : { __reply_stop__: 'true' }),
     ...(timeout ? { __timeout__: timeout } : {}),
+    ...(branches['btn-clicked'] ? { __clicked__: branches['btn-clicked'] } : {}),
+    ...(branches['btn-reacted'] ? { __reacted__: branches['btn-reacted'] } : {}),
   };
 }
 
@@ -45,4 +47,13 @@ export function continuationIndices(steps: Array<{ id: string; action_config?: C
     index = steps.findIndex(step => step.id === nextId);
   }
   return indices;
+}
+
+export type WaitOutcome = 'replied' | 'clicked' | 'reacted';
+
+/** Destino de um engajamento. Clique/reação sem caminho próprio NÃO encerram a espera. */
+export function engagementTarget(branches: Record<string, string>, outcome: WaitOutcome): { consume: boolean; target: string | null } {
+  if (outcome === 'replied') return { consume: true, target: replyTarget(branches, false, '') };
+  const t = branches[outcome === 'clicked' ? '__clicked__' : '__reacted__'];
+  return t ? { consume: true, target: t } : { consume: false, target: null };
 }

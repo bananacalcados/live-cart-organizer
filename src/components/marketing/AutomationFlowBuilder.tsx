@@ -356,7 +356,7 @@ function ActionNode({ data }: { data: any }) {
       {/* Button branches: show each quick reply as a labeled output handle on the RIGHT side aligned with its row */}
       {isWait ? (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
-          {[{ id: 'btn-replied', label: 'Respondeu dentro do prazo' }, { id: 'btn-timeout', label: 'Não respondeu no prazo' }].map(outcome => (
+          {[{ id: 'btn-replied', label: 'Respondeu dentro do prazo' }, { id: 'btn-clicked', label: 'Clicou no link' }, { id: 'btn-reacted', label: 'Reagiu à mensagem' }, { id: 'btn-timeout', label: 'Não respondeu no prazo' }].map(outcome => (
             <div key={outcome.id} className="relative pr-4 text-xs text-foreground min-h-4">
               {outcome.label}
               <Handle type="source" position={Position.Right} id={outcome.id} className="!bg-primary !w-3 !h-3 !border-2 !border-background" style={{ top: '50%' }} />
@@ -1491,7 +1491,7 @@ function StepEditorDialog({
                 </div>
 
                 <div className="space-y-3">
-                  {[{ key: 'btn-replied', label: 'Se responder dentro do prazo' }, { key: 'btn-timeout', label: 'Se não responder no prazo' }].map(outcome => (
+                  {[{ key: 'btn-replied', label: 'Se responder dentro do prazo' }, { key: 'btn-clicked', label: 'Se clicar no link (link /vip com código) — opcional' }, { key: 'btn-reacted', label: 'Se reagir à mensagem (só instância oficial) — opcional' }, { key: 'btn-timeout', label: 'Se não fizer nada no prazo' }].map(outcome => (
                     <div key={outcome.key} className="space-y-1">
                       <Label className="text-xs">{outcome.label}</Label>
                       <Select value={config.buttonBranches?.[outcome.key] || (outcome.key === 'btn-replied' ? config.nextStepId : '') || 'none'} onValueChange={value => {
@@ -2966,7 +2966,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
           target: `step-${targetStepId}`,
           animated: true,
           markerEnd: { type: MarkerType.ArrowClosed },
-          label: handleId === 'btn-replied' ? 'Respondeu no prazo' : handleId === 'btn-timeout' ? 'Não respondeu no prazo' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+          label: handleId === 'btn-replied' ? 'Respondeu no prazo' : handleId === 'btn-clicked' ? 'Clicou no link' : handleId === 'btn-reacted' ? 'Reagiu' : handleId === 'btn-timeout' ? 'Não respondeu no prazo' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
           style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
         });
       }

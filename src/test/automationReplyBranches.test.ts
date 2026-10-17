@@ -48,3 +48,11 @@ describe('sequências por ramo', () => {
     expect(continuationIndices([{ id: 'a', action_config: {} }, { id: 'b', action_config: {} }], 0)).toBeNull();
   });
 });
+
+import { engagementTarget } from "../../supabase/functions/_shared/automation-reply-branches";
+describe("engajamento na espera", () => {
+  const b = waitReplyBranches({ buttonBranches: { "btn-replied": "r", "btn-clicked": "c", "btn-timeout": "t" } });
+  it("clique segue o ramo clicou", () => expect(engagementTarget(b, "clicked")).toEqual({ consume: true, target: "c" }));
+  it("reação sem ramo não encerra a espera", () => expect(engagementTarget(b, "reacted")).toEqual({ consume: false, target: null }));
+  it("resposta segue o ramo respondeu", () => expect(engagementTarget(b, "replied").target).toBe("r"));
+});
