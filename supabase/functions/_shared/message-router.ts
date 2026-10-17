@@ -8,6 +8,7 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resumeAutomationWait } from "./automation-wait-response.ts";
 import { handleIncomingOptOut } from "./opt-out.ts";
 
 
@@ -115,6 +116,15 @@ export async function routeMessage(
   }
 
 
+
+  try {
+    if (await resumeAutomationWait(supabase, phone, whatsappNumberId)) {
+      return { agent: 'none', reason: 'wait_reply_continued' };
+    }
+  } catch (error) {
+    console.error('[router] wait reply continuation failed:', error);
+    return { agent: 'none', reason: 'wait_reply_error' };
+  }
 
   // 0b. Check if the WhatsApp instance has AI globally paused (e.g. Ravena)
   if (whatsappNumberId) {

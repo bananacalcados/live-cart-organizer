@@ -3,7 +3,8 @@ type Config = Record<string, any>;
 /** Store both outcomes by stable step ID, not mutable list position. */
 export function waitReplyBranches(config: Config, fallbackNextId?: string): Record<string, string> {
   const branches = config.buttonBranches || {};
-  const replied = branches['btn-replied'] || config.nextStepId || fallbackNextId;
+  const explicit = Object.prototype.hasOwnProperty.call(config, 'nextStepId') || Object.keys(branches).some(key => key === 'btn-replied' || key === 'btn-timeout');
+  const replied = branches['btn-replied'] || config.nextStepId || (explicit ? undefined : fallbackNextId);
   const timeout = branches['btn-timeout'];
   return {
     ...(config.branches || {}),
@@ -29,4 +30,19 @@ export function replyTarget(branches: Record<string, string>, isButton: boolean,
     return entry?.[1] || null;
   }
   return null;
+}
+
+/** Follow saved edges when present; never wander into a different outcome. */
+export function continuationIndices(steps: Array<{ id: string; action_config?: Config }>, start: number): number[] | null {
+  const wired = steps.some(step => Object.prototype.hasOwnProperty.call(step.action_config || {}, 'nextStepId') || Object.keys(step.action_config?.buttonBranches || {}).some(key => key === 'btn-replied' || key === 'btn-timeout'));
+  if (!wired) return null;
+  const indices: number[] = [];
+  let index = start;
+  while (index >= 0 && index < steps.length && !indices.includes(index)) {
+    indices.push(index);
+    const nextId = steps[index].action_config?.nextStepId;
+    if (!nextId) break;
+    index = steps.findIndex(step => step.id === nextId);
+  }
+  return indices;
 }

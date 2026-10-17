@@ -2967,7 +2967,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
           animated: true,
           markerEnd: { type: MarkerType.ArrowClosed },
           label: handleId === 'btn-replied' ? 'Respondeu no prazo' : handleId === 'btn-timeout' ? 'Não respondeu no prazo' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
-          style: { stroke: handleId === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
+          style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
         });
       }
 
@@ -3010,7 +3010,6 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   // Only rebuild nodes from DB when steps array changes (length or IDs)
-  const stepsKey = steps.map(s => s.id).join(",");
   useEffect(() => {
     const { nodes: n, edges: e } = buildNodesAndEdges();
     setNodes(n);
@@ -3094,7 +3093,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
       const sourceStepId = conn.source.replace("step-", "");
       const sourceStep = steps.find((s) => s.id === sourceStepId);
       if (sourceStep) {
-        const cfg = (sourceStep.action_config || {}) as any;
+        const cfg = { ...((sourceStep.action_config || {}) as any) };
         const buttonBranches = { ...(cfg.buttonBranches || {}), [conn.sourceHandle]: targetStepId };
         if (sourceStep.action_type === 'wait_for_reply' && conn.sourceHandle === 'btn-replied') cfg.nextStepId = targetStepId;
         await supabase
@@ -3142,10 +3141,11 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
       else if (e.source) { delete wiring.next[e.source.replace("step-", "")]; touched = true; }
     }
     if (touched) {
-      await persistWiring(steps, wiring);
+      const { data: fresh } = await supabase.from("automation_steps").select("*").eq("flow_id", flow.id).order("step_order");
+      await persistWiring((fresh || []) as AutomationStep[], wiring);
       fetchSteps();
     }
-  }, [steps, persistWiring]);
+  }, [steps, persistWiring, flow.id]);
 
   const handleNodeClick = useCallback((_: any, node: Node) => {
     if (node.type === "action") {

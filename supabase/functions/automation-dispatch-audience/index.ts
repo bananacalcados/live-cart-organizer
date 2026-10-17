@@ -598,7 +598,7 @@ serve(async (req) => {
         if (step.action_type === 'delay') continue;
         if (step.action_type === 'wait_for_reply') {
           const timeoutHours = (config.timeoutHours as number) || 24;
-          const expiresAt = new Date(Date.now() + timeoutHours * 60 * 60 * 1000).toISOString();
+          const expiresAt = waitReplyExpiresAt(config);
           await supabase.from('automation_pending_replies').insert({
             phone: recipient.phone,
             flow_id: flowId,
