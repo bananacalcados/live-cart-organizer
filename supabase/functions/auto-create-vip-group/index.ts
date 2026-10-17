@@ -140,44 +140,57 @@ serve(async (req) => {
     const updated = [...targetIds, newGroup.id];
     await supabase.from("group_campaigns").update({ target_groups: updated, total_groups: updated.length }).eq("id", c.id);
 
-    // ── Configurações (falhas só registram) ──
+    // ── Configurações: ENFILEIRADAS na fila de ações de grupo (ritmo anti-ban) ──
+    // A criação do grupo em si continua direta; nome/descrição/foto/permissões/
+    // admins/pin são executados pelo group-admin-worker, uma ação por vez.
     const errors: string[] = [];
-    const step = async (label: string, p: Promise<{ ok: boolean; error: any }>) => {
-      const r = await p;
-      if (!r.ok) errors.push(`${label}: ${r.error}`);
-      await delay(1000);
+    const batch = `auto-create-${newGroup.id.slice(0, 8)}`;
+    const queueRows: Record<string, unknown>[] = [];
+    let seq = 0;
+    const enqueue = (action_type: string, payload: Record<string, unknown>) => {
+      queueRows.push({
+        whatsapp_number_id: inst.id,
+        group_db_id: newGroup.id,
+        group_jid: newJid,
+        group_name_snapshot: newName,
+        campaign_id: c.id,
+        action_type,
+        payload,
+        batch,
+        requested_by: "system",
+        seq: ++seq,
+        status: "queued",
+      });
     };
-    const wid = inst.id;
+    if (c.group_description) enqueue("set_description", { description: c.group_description });
+    if (c.group_photo_url) enqueue("set_photo", { photo_url: c.group_photo_url });
+    enqueue("set_only_admins_send", { enabled: !!c.group_only_admins_send });
+    enqueue("set_only_admins_add", { enabled: !!c.group_only_admins_add });
+    for (const ph of adminPhones) enqueue("promote_admin", { phone: ph });
+    if (c.group_pin_message_text) enqueue("pin_message", { text: c.group_pin_message_text, duration: c.group_pin_duration || "7_days" });
+    if (queueRows.length > 0) {
+      const { error: qErr } = await supabase.from("group_admin_actions").insert(queueRows);
+      if (qErr) {
+        console.error("[auto-create] falha ao enfileirar configurações", qErr);
+        errors.push("fila de configuração: não gravada");
+      } else {
+        console.log(`[auto-create] ${queueRows.length} configurações enfileiradas para "${newName}" (lote ${batch})`);
+      }
+    }
+
+    // Link de convite (leitura, continua direta)
     if (provider === "uazapi") {
-      if (c.group_description) await step("descrição", callFn("uazapi-groups", { action: "updateDescription", groupJid: newJid, description: c.group_description, whatsapp_number_id: wid }));
-      if (c.group_photo_url) await step("foto", callFn("uazapi-groups", { action: "updateImage", groupJid: newJid, image: c.group_photo_url, whatsapp_number_id: wid }));
-      await step("só admins enviam", callFn("uazapi-groups", { action: "updateAnnounce", groupJid: newJid, announce: !!c.group_only_admins_send, whatsapp_number_id: wid }));
-      await step("só admins adicionam", callFn("uazapi-groups", { action: "updateMemberAddMode", groupJid: newJid, adminsOnly: !!c.group_only_admins_add, whatsapp_number_id: wid }));
-      await step("promover admins", callFn("uazapi-groups", { action: "updateParticipants", groupJid: newJid, participantAction: "promote", participants: adminPhones, whatsapp_number_id: wid }));
-      if (c.group_pin_message_text) await step("fixar mensagem", callFn("uazapi-groups", { action: "pinMessage", groupJid: newJid, message: c.group_pin_message_text, pinDuration: c.group_pin_duration || "7_days", whatsapp_number_id: wid }));
-      const inv = await callFn("uazapi-groups", { action: "inviteLink", groupJid: newJid, whatsapp_number_id: wid });
+      const inv = await callFn("uazapi-groups", { action: "inviteLink", groupJid: newJid, whatsapp_number_id: inst.id });
       const d: any = inv.data?.data || {};
       inviteLink = d?.InviteLink || d?.inviteLink || d?.invite_link || d?.link || d?.group?.invite_link || null;
       if (!inviteLink) errors.push("link de convite: não retornado");
-    } else {
-      if (c.group_description) await step("descrição", callFn("zapi-group-settings", { action: "update-description", groupId: newJid, value: c.group_description, whatsapp_number_id: wid }));
-      if (c.group_photo_url) await step("foto", callFn("zapi-group-settings", { action: "update-photo", groupId: newJid, value: c.group_photo_url, whatsapp_number_id: wid }));
-      await step("só admins enviam", callFn("zapi-group-settings", { action: "set-messages-admins-only", groupId: newJid, value: String(!!c.group_only_admins_send), whatsapp_number_id: wid }));
-      await step("só admins adicionam", callFn("zapi-group-settings", { action: "set-add-admins-only", groupId: newJid, value: String(!!c.group_only_admins_add), whatsapp_number_id: wid }));
-      for (const ph of adminPhones) await step(`promover ${ph}`, callFn("zapi-group-settings", { action: "promote-admin", groupId: newJid, phone: ph, whatsapp_number_id: wid }));
-      if (c.group_pin_message_text) {
-        const sent = await callFn("zapi-send-group-message", { groupId: newJid, type: "text", message: c.group_pin_message_text, whatsapp_number_id: wid });
-        const messageId = sent.data?.messageId || sent.data?.data?.messageId || sent.data?.zaapId || null;
-        if (messageId) await step("fixar mensagem", callFn("zapi-group-settings", { action: "pin-message", groupId: newJid, messageId, pinDuration: c.group_pin_duration || "7_days", whatsapp_number_id: wid }));
-        else errors.push("fixar mensagem: envio sem ID");
-      }
     }
     if (inviteLink) await supabase.from("whatsapp_groups").update({ invite_link: inviteLink }).eq("id", newGroup.id);
 
-    if (errors.length) console.warn(`[auto-create] grupo "${newName}" criado com falhas de configuração:`, errors);
-    else console.log(`[auto-create] grupo "${newName}" configurado com sucesso`);
+    if (errors.length) console.warn(`[auto-create] grupo "${newName}" criado com ressalvas:`, errors);
+    else console.log(`[auto-create] grupo "${newName}" criado; configurações na fila`);
 
-    return json({ success: true, group: { id: newGroup.id, group_id: newJid, name: newName, invite_link: inviteLink }, config_errors: errors });
+    return json({ success: true, group: { id: newGroup.id, group_id: newJid, name: newName, invite_link: inviteLink }, queued_config_actions: queueRows.length, config_errors: errors });
   } catch (error) {
     console.error("[auto-create] erro:", error);
     return json({ error: "Internal server error", details: (error as Error).message }, 500);
