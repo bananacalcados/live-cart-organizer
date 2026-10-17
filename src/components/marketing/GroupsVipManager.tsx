@@ -359,6 +359,11 @@ export function GroupsVipManager() {
           <TabsTrigger value="attendance_links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links de atendimento</TabsTrigger>
         </TabsList>
 
+        {/* FILA DE AÇÕES DE GRUPO TAB */}
+        <TabsContent value="queue" className="space-y-4">
+          <GroupActionsQueuePanel />
+        </TabsContent>
+
         {/* BASE DE ÓRFÃOS TAB */}
         <TabsContent value="orphans" className="space-y-4">
           <OrphanBaseManager />
