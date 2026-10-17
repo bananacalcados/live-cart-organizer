@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import { AppLoadFailure } from "@/components/AppLoadFailure";
+import { recoverModuleLoad } from "@/lib/moduleRecovery";
 
 // Auth hotfix: some browsers can keep Supabase Auth's Navigator Web Lock
 // orphaned, which makes signInWithPassword/getSession hang indefinitely.
@@ -69,8 +71,16 @@ if ((isPreviewHost || isInIframe) && "caches" in window) {
   caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
-const root = createRoot(document.getElementById("root")!);
+window.addEventListener("vite:preloadError", (event) => {
+  const error = (event as Event & { payload?: unknown }).payload;
+  if (recoverModuleLoad(error)) event.preventDefault();
+});
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Application root is missing");
+const root = createRoot(rootElement);
 
 import("./App.tsx").then(({ default: App }) => {
   root.render(<App />);
+}).catch((error: unknown) => {
+  if (!recoverModuleLoad(error)) root.render(<AppLoadFailure />);
 });
