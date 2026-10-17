@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { uazapiInstance } from "../_shared/uazapi-credentials.ts";
+import { resumeAutomationWait } from "../_shared/automation-wait-response.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,8 +54,18 @@ serve(async (req) => {
     // Link rastreado por cliente (/vip/<slug>/<CODE>): registra quem clicou.
     const trackCode = (url.searchParams.get('code') || '').trim().toUpperCase();
     if (/^[A-Z0-9]{6}$/.test(trackCode)) {
-      supabase.rpc('tracked_link_click', { p_slug: slug, p_code: trackCode })
-        .then(({ error }: any) => { if (error) console.error('[tracked click]', error.message); });
+      const work = supabase.rpc('tracked_link_click', { p_slug: slug, p_code: trackCode })
+        .then(async ({ data, error }: any) => {
+          if (error) { console.error('[tracked click]', error.message); return; }
+          const clickedPhone = typeof data === 'string' ? data : null;
+          if (clickedPhone) {
+            try { await resumeAutomationWait(supabase, clickedPhone, null, 'clicked'); }
+            catch (e) { console.error('[tracked click] automação', e); }
+          }
+        });
+      // deno-lint-ignore no-explicit-any
+      const er = (globalThis as any).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(work);
     }
 
     // Fire-and-forget: increment click count (non-blocking)

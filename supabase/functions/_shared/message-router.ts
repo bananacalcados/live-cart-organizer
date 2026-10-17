@@ -118,7 +118,14 @@ export async function routeMessage(
 
 
   try {
-    if (await resumeAutomationWait(supabase, phone, whatsappNumberId)) {
+    // Reação (Meta manda como "[reação: 😍]"): só segue o ramo "reagiu" se ele existir;
+    // reação nunca conta como resposta. Reação removida (emoji vazio) é ignorada.
+    const reaction = /^\[reação: (.*)\]$/.exec(String(input.messageText || '').trim());
+    if (reaction) {
+      if (reaction[1] && await resumeAutomationWait(supabase, phone, whatsappNumberId, 'reacted')) {
+        return { agent: 'none', reason: 'wait_reaction_continued' };
+      }
+    } else if (await resumeAutomationWait(supabase, phone, whatsappNumberId)) {
       return { agent: 'none', reason: 'wait_reply_continued' };
     }
   } catch (error) {
