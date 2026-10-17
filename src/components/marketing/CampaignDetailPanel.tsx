@@ -349,6 +349,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchOtherCampaignGroups]);
 
+  // Ao mudar filtro, mantém selecionados só os rascunhos que continuam visíveis.
+  useEffect(() => {
+    setSelectedDraftIds(prev => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter(id => {
+        const m = messages.find(x => x.id === id);
+        if (!m || m.status !== 'draft') return false;
+        if (msgStatusFilter !== 'all' && msgStatusFilter !== 'draft') return false;
+        if (msgBatchFilter !== 'all' && m.draft_batch !== msgBatchFilter) return false;
+        if (msgDayFilter && (!m.scheduled_at || format(new Date(m.scheduled_at), 'yyyy-MM-dd') !== msgDayFilter)) return false;
+        return true;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [msgStatusFilter, msgBatchFilter, msgDayFilter, messages]);
+
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
     const interval = setInterval(() => {
