@@ -121,6 +121,7 @@ const App = () => (
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/vip/:slug/:code" element={<VipGroupRedirectPage />} />
               <Route path="/ao-vivo/:slug" element={<LiveRedirectPage />} />
+              <Route path="/ao-vivo/:slug/:code" element={<LiveRedirectPage />} />
               <Route path="/g/:code" element={<VipGoRedirect />} />
               <Route path="/overlay/:token" element={<LiveOverlay />} />
               <Route path="/zap/:slug" element={<LiveWhatsAppRedirectPage />} />

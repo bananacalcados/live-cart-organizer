@@ -12,7 +12,7 @@ import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
  * - Se nenhuma live estiver ativa, mostra tela "em breve".
  */
 export default function LiveRedirectPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, code } = useParams<{ slug: string; code?: string }>();
   const [params] = useSearchParams();
   const [status, setStatus] = useState<"loading" | "redirecting" | "offline" | "error">("loading");
   const [targetUrl, setTargetUrl] = useState<string | null>(null);
@@ -34,6 +34,7 @@ export default function LiveRedirectPage() {
     const attr = attributionPayload();
 
     const qs = new URLSearchParams({ slug });
+    if (code) qs.set("code", code);
     const lead = params.get("lead") || params.get("phone");
     const utm = attr.utm_source || params.get("utm_source");
     if (lead) qs.set("lead", lead);
@@ -95,7 +96,7 @@ export default function LiveRedirectPage() {
         setStatus("error");
         setErr(String(e?.message || e));
       });
-  }, [slug]);
+  }, [slug, code]);
 
   return (
     <div
