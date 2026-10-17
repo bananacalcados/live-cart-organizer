@@ -44,9 +44,11 @@ serve(async (req) => {
       if (!res.ok) {
         const errData = await res.text();
         console.error('Z-API groups error:', errData);
+        // Retorna 200 com success:false em vez de 4xx: a tela trata como aviso
+        // (instância offline/assinatura vencida) e nunca quebra a página.
         return new Response(
-          JSON.stringify({ error: 'Failed to fetch groups', details: errData }),
-          { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: 'Failed to fetch groups', details: errData }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
