@@ -4,7 +4,7 @@
 
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
 - The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
-- Incident payment audits are admin-only, read-only, paginated in fifty rows and limited to three concurrent provider reads; they never send notifications or create charges.
+- Payment audits are admin-only/read-only: 50-row pages, at most three concurrent provider reads, no notifications or charges.
 
 - Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
 
