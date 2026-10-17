@@ -362,17 +362,70 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     }
   };
 
-  // Executa a ação confirmada usando exatamente os grupos pré-visualizados.
+  // Monta as linhas da fila (uma por grupo físico) para a ação confirmada.
+  const buildQueueItems = (
+    groups: GroupRow[],
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
+    batch: string,
+    extra?: { phone?: string },
+  ): EnqueueGroupActionInput[] => {
+    const items: EnqueueGroupActionInput[] = [];
+    let seq = 0;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i];
+      if (!g.effectiveInstanceId) continue;
+      const base = {
+        whatsapp_number_id: g.effectiveInstanceId,
+        group_db_id: g.id,
+        group_jid: g.group_id,
+        group_name_snapshot: g.name,
+        campaign_id: campaignId,
+        batch,
+        requested_by: 'user',
+      };
+      switch (action) {
+        case 'name':
+          items.push({ ...base, action_type: 'rename', payload: { name: `${bulkName} #${i + 1}` }, seq: ++seq });
+          break;
+        case 'photo':
+          items.push({ ...base, action_type: 'set_photo', payload: { photo_url: bulkPhotoUrl }, seq: ++seq });
+          break;
+        case 'description':
+          items.push({ ...base, action_type: 'set_description', payload: { description: bulkDescription }, seq: ++seq });
+          break;
+        case 'permissions':
+          items.push({ ...base, action_type: 'set_only_admins_send', payload: { enabled: onlyAdminsSend }, seq: ++seq });
+          items.push({ ...base, action_type: 'set_only_admins_add', payload: { enabled: onlyAdminsAdd }, seq: ++seq });
+          break;
+        case 'pin':
+          items.push({ ...base, action_type: 'pin_message', payload: { text: pinMessageText, duration: pinDuration }, seq: ++seq });
+          break;
+        case 'promote':
+          items.push({ ...base, action_type: 'promote_admin', payload: { phone: extra?.phone }, seq: ++seq });
+          break;
+      }
+    }
+    return items;
+  };
+
+  // Executa a ação confirmada: ENFILEIRA na fila de ações de grupo (worker no
+  // servidor executa com ritmo anti-ban), em vez de rodar em laço no navegador.
   const executeConfirmed = async () => {
     if (!pendingAction) return;
-    const { action, label, delayMs, groups } = pendingAction;
+    const { action, groups } = pendingAction;
     setPendingAction(null);
     setIsApplying(action);
     try {
-      const r = await runOnAllGroups(action, delayMs, undefined, groups);
-      if (r) reportResult(label, r);
+      const batch = newBatchCode(`campanha-${action}`);
+      const items = buildQueueItems(groups, action, batch);
+      if (items.length === 0) {
+        toast.error('Nenhum grupo com instância ativa para enfileirar');
+        return;
+      }
+      const n = await enqueueGroupAdminActions(items);
+      toast.success(`${n} ações adicionadas à fila; previsão de conclusão ~${estimateBatchMinutes(n)} min. Acompanhe na aba "Ações de grupo".`);
     } catch (e) {
-      toast.error(`Erro ao aplicar: ${(e as Error).message}`);
+      toast.error(`Erro ao enfileirar: ${(e as Error).message}`);
     } finally {
       setIsApplying(null);
     }
@@ -383,8 +436,15 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     const cleanPhone = promotePhone.replace(/\D/g, '');
     setIsApplying('promote');
     try {
-      const r = await runOnAllGroups('promote', 1000, { phone: cleanPhone });
-      if (!r) return;
+      const groups = await fetchGroupsWithProvider();
+      if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return; }
+      const batch = newBatchCode('campanha-promote');
+      const items = buildQueueItems(groups, 'promote', batch, { phone: cleanPhone });
+      if (items.length === 0) {
+        toast.error('Nenhum grupo com instância ativa para enfileirar');
+        return;
+      }
+      const n = await enqueueGroupAdminActions(items);
 
       if (!adminPhones.includes(cleanPhone)) {
         const newAdmins = [...adminPhones, cleanPhone];
@@ -392,7 +452,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         await supabase.from('group_campaigns').update({ group_admin_phones: newAdmins } as any).eq('id', campaignId);
       }
 
-      reportResult('Admin promovido', r);
+      toast.success(`${n} ações de promoção na fila; previsão ~${estimateBatchMinutes(n)} min.`);
       setPromotePhone('');
     } catch (e) {
       toast.error(`Erro ao promover admin: ${(e as Error).message}`);
