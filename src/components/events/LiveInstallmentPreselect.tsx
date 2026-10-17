@@ -9,7 +9,7 @@ interface Props {
   onSaved?: (value: number | null) => void;
 }
 
-/** Parcelas que o link de pagamento já abre selecionadas (orders.preselected_installments). */
+/** Parcelas fixadas para o pagamento (orders.preselected_installments). */
 export function LiveInstallmentPreselect({ orderId, value, onSaved }: Props) {
   const [current, setCurrent] = useState<number>(Number(value) || 0);
   const [saving, setSaving] = useState(false);
@@ -28,7 +28,7 @@ export function LiveInstallmentPreselect({ orderId, value, onSaved }: Props) {
       return;
     }
     onSaved?.(next > 0 ? next : null);
-    toast.success(next > 0 ? `Link vai abrir com ${next}x selecionado` : "Pré-seleção removida");
+    toast.success(next > 0 ? `Pagamento fixado em ${next}x` : "Cliente pode escolher as parcelas");
   };
 
   return (

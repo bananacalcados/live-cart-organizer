@@ -1079,6 +1079,7 @@ Deno.serve(async (req) => {
                       order.confirmed_items_signature !== itemsSignature(order))),
                 payment_window_expires_at: order.payment_window_expires_at,
                 checkout_url: `/checkout/order/${order.id}`,
+                preselected_installments: order.preselected_installments ?? null,
                 // Situação na Expedição (separação/envio/rastreio) — alimenta o
                 // painel "ACOMPANHAMENTO DO PEDIDO" da área de membros.
                 fulfillment: fulfillment

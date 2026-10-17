@@ -75,6 +75,20 @@ export interface InstallmentOption {
   label: string;
 }
 
+/** Escolha da equipe substitui a escolha local, sem trocar silenciosamente de parcela. */
+export function resolveInstallmentSelection(
+  options: InstallmentOption[],
+  customerSelection: string,
+  staffSelection?: number | null,
+  isDebit = false,
+): { locked: boolean; count: number; option: InstallmentOption | null } {
+  if (isDebit) return { locked: false, count: 1, option: null };
+  const locked = Number.isInteger(staffSelection) && Number(staffSelection) > 0;
+  const requested = locked ? Number(staffSelection) : Number(customerSelection);
+  const option = options.find((item) => item.installments === requested) ?? null;
+  return { locked, count: option ? requested : 0, option };
+}
+
 /**
  * Monta a lista de parcelas respeitando a regra do link.
  * - Dentro do "sem juros" do link/evento: a promessa configurada é definitiva.
