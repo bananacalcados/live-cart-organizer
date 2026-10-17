@@ -544,7 +544,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-xs">
                 <p>
-                  Esta ação será aplicada em <strong>{pendingAction?.groups.length || 0} grupo(s) físico(s)</strong> desta campanha.
+                  Serão enfileiradas ações para <strong>{pendingAction?.groups.length || 0} grupo(s) físico(s)</strong> desta campanha.
+                  O servidor executa uma por vez, com pausas anti-ban — previsão de conclusão ~{estimateBatchMinutes(pendingAction?.groups.length || 0)} min.
                   Registros duplicados/legados foram automaticamente unificados.
                 </p>
                 <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1">
