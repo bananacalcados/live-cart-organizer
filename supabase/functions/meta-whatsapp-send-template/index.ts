@@ -382,7 +382,8 @@ serve(async (req) => {
         };
 
         if (item.template_params && Array.isArray(item.template_params) && item.template_params.length > 0) {
-          (templateBody.template as Record<string, unknown>).components = item.template_params;
+          (templateBody.template as Record<string, unknown>).components = await tagTrackedComponents(
+            supabase, formattedPhone, item.template_params, { source: 'template_bulk', ref: item.template_name, whatsappNumberId: whatsappNumberId || null });
         }
 
         try {

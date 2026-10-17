@@ -50,6 +50,13 @@ serve(async (req) => {
       return new Response('Link não encontrado', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
+    // Link rastreado por cliente (/vip/<slug>/<CODE>): registra quem clicou.
+    const trackCode = (url.searchParams.get('code') || '').trim().toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(trackCode)) {
+      supabase.rpc('tracked_link_click', { p_slug: slug, p_code: trackCode })
+        .then(({ error }: any) => { if (error) console.error('[tracked click]', error.message); });
+    }
+
     // Fire-and-forget: increment click count (non-blocking)
     supabase.from('group_redirect_links')
       .update({ click_count: (link.click_count || 0) + 1 })
