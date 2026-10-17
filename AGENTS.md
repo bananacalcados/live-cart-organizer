@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers and retries must not bypass anti-ban limits. Only successful provider actions mirror group settings.
+
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
 - The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
 - Incident payment audits are admin-only, read-only, paginated in fifty rows and limited to three concurrent provider reads; they never send notifications or create charges.

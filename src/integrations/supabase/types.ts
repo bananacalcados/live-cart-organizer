@@ -8492,6 +8492,7 @@ export type Database = {
       group_admin_actions: {
         Row: {
           action_type: string
+          attempt_history: string[]
           attempts: number
           batch: string | null
           campaign_id: string | null
@@ -8502,6 +8503,7 @@ export type Database = {
           group_jid: string
           group_name_snapshot: string | null
           id: string
+          last_attempt_at: string | null
           locked_until: string | null
           not_before: string | null
           notes: string | null
@@ -8516,6 +8518,7 @@ export type Database = {
         }
         Insert: {
           action_type: string
+          attempt_history?: string[]
           attempts?: number
           batch?: string | null
           campaign_id?: string | null
@@ -8526,6 +8529,7 @@ export type Database = {
           group_jid: string
           group_name_snapshot?: string | null
           id?: string
+          last_attempt_at?: string | null
           locked_until?: string | null
           not_before?: string | null
           notes?: string | null
@@ -8540,6 +8544,7 @@ export type Database = {
         }
         Update: {
           action_type?: string
+          attempt_history?: string[]
           attempts?: number
           batch?: string | null
           campaign_id?: string | null
@@ -8550,6 +8555,7 @@ export type Database = {
           group_jid?: string
           group_name_snapshot?: string | null
           id?: string
+          last_attempt_at?: string | null
           locked_until?: string | null
           not_before?: string | null
           notes?: string | null
@@ -8598,6 +8604,7 @@ export type Database = {
           max_per_day: number
           max_per_hour: number
           min_gap_seconds: number
+          next_allowed_at: string | null
           paused: boolean
           paused_reason: string | null
           whatsapp_number_id: string
@@ -8615,6 +8622,7 @@ export type Database = {
           max_per_day?: number
           max_per_hour?: number
           min_gap_seconds?: number
+          next_allowed_at?: string | null
           paused?: boolean
           paused_reason?: string | null
           whatsapp_number_id: string
@@ -8632,6 +8640,7 @@ export type Database = {
           max_per_day?: number
           max_per_hour?: number
           min_gap_seconds?: number
+          next_allowed_at?: string | null
           paused?: boolean
           paused_reason?: string | null
           whatsapp_number_id?: string
@@ -24930,6 +24939,7 @@ export type Database = {
         Args: { p_number_id: string }
         Returns: {
           action_type: string
+          attempt_history: string[]
           attempts: number
           batch: string | null
           campaign_id: string | null
@@ -24940,6 +24950,7 @@ export type Database = {
           group_jid: string
           group_name_snapshot: string | null
           id: string
+          last_attempt_at: string | null
           locked_until: string | null
           not_before: string | null
           notes: string | null
@@ -25156,6 +25167,16 @@ export type Database = {
           p_source?: string
         }
         Returns: string
+      }
+      finish_group_admin_action: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_instance_failure?: boolean
+          p_outcome: string
+          p_result?: Json
+        }
+        Returns: undefined
       }
       forfeit_physical_prize: {
         Args: { p_order_id: string; p_reason?: string }
@@ -25810,6 +25831,21 @@ export type Database = {
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]
+      }
+      group_admin_attempt_counts: {
+        Args: { p_now?: string; p_number_id: string }
+        Returns: {
+          day_count: number
+          hour_count: number
+        }[]
+      }
+      group_admin_queue_counts: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          day_count: number
+          hour_count: number
+          whatsapp_number_id: string
+        }[]
       }
       guard_automation_dispatch: {
         Args: {

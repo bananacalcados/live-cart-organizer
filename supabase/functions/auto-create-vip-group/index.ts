@@ -129,8 +129,6 @@ serve(async (req) => {
       group_id: newJid, name: newName, is_vip: true, is_active: true,
       instance_id: instanceKey, participant_count: adminPhones.length + 1, max_participants: 1024,
       invite_link: inviteLink,
-      only_admins_send: !!c.group_only_admins_send, only_admins_add: !!c.group_only_admins_add,
-      description: c.group_description || null, photo_url: c.group_photo_url || null,
     }).select("id").single();
     if (insErr || !newGroup) {
       console.error("[auto-create] grupo criado no WhatsApp mas não salvo", insErr);
