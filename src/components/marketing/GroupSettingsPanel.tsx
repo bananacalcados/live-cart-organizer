@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { enqueueGroupAdminActions, type GroupAdminActionType } from "@/lib/marketing/groupAdminQueue";
 
 interface GroupSettingsPanelProps {
   group: {
