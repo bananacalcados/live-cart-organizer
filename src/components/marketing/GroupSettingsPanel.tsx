@@ -131,14 +131,12 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
     setOnlyAdminsSend(val);
     const ok = await enqueueAction('set_only_admins_send', { enabled: val });
     if (!ok) { setOnlyAdminsSend(!val); return; }
-    await supabase.from('whatsapp_groups').update({ only_admins_send: val }).eq('id', group.id);
   };
 
   const handleToggleAdminsAdd = async (val: boolean) => {
     setOnlyAdminsAdd(val);
     const ok = await enqueueAction('set_only_admins_add', { enabled: val });
     if (!ok) { setOnlyAdminsAdd(!val); return; }
-    await supabase.from('whatsapp_groups').update({ only_admins_add: val }).eq('id', group.id);
   };
 
   const handleSaveLocal = async () => {
