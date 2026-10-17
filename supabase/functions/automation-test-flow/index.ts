@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -115,31 +116,16 @@ serve(async (req) => {
 
       // wait_for_reply — create pending reply so webhook can activate the next step
       if (step.action_type === 'wait_for_reply') {
-        const timeoutSeconds = config.timeoutSeconds || 86400;
-        const timeoutAction = config.timeoutAction || 'stop';
-        const timeoutTargetStepId = config.timeoutTargetStepId || null;
-
-        const branches: Record<string, string> = {};
-        if (timeoutTargetStepId) {
-          branches['__timeout__'] = timeoutTargetStepId;
-        }
-
-        // Find the next step to continue to when client replies
-        const nextStepIndex = i + 1;
-
         await supabase.from('automation_pending_replies').insert({
-          phone: formattedPhone,
-          flow_id: flowId,
-          pending_step_index: nextStepIndex,
-          step_id: step.id,
-          button_branches: Object.keys(branches).length > 0 ? branches : null,
+          phone: formattedPhone, flow_id: flowId, step_id: step.id,
+          pending_step_index: i + 1,
+          button_branches: waitReplyBranches(config, steps[i + 1]?.id),
           whatsapp_number_id: config.whatsappNumberId || null,
           recipient_data: { name: testName || 'Teste', firstName },
-          expires_at: new Date(Date.now() + timeoutSeconds * 1000).toISOString(),
+          expires_at: waitReplyExpiresAt(config),
         });
-
-        results.push({ step: i + 1, type: 'wait_for_reply', status: 'created', detail: `Aguardando resposta (timeout: ${Math.round(timeoutSeconds/3600)}h)` });
-        break; // Stop execution here, wait for client reply
+        results.push({ step: i + 1, type: 'wait_for_reply', status: 'created', detail: 'Aguardando resposta' });
+        break;
       }
 
       // AI response — call with phone so it reads conversation history

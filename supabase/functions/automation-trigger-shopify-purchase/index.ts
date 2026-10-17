@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -128,7 +129,8 @@ Deno.serve(async (req) => {
             phone: formattedPhone,
             flow_id: flow.id,
             step_id: step.id,
-            button_branches: config.branches || {},
+            button_branches: waitReplyBranches(config, steps[steps.indexOf(step) + 1]?.id),
+            expires_at: waitReplyExpiresAt(config),
             whatsapp_number_id: config.whatsappNumberId || null,
             recipient_data: { name: name || "", firstName, shopify_order_id: shopifyOrderId },
           });

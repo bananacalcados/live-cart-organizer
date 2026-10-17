@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
@@ -603,7 +604,7 @@ serve(async (req) => {
             flow_id: flowId,
             pending_step_index: i,
             step_id: step.id,
-            button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
+            button_branches: waitReplyBranches(config, steps[i + 1]?.id),
             whatsapp_number_id: sendNumberId || null,
             recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
             expires_at: expiresAt,

@@ -100,7 +100,7 @@ const ACTION_TYPES = [
   { value: "send_template", label: "Template Meta", icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", description: "Template oficial aprovado" },
   { value: "send_text", label: "Mensagem Livre", icon: MessageSquare, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", description: "Texto, emoji, foto, áudio" },
   { value: "ai_crosssell", label: "Cross-sell IA", icon: Sparkles, color: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-100 dark:bg-yellow-900/30", description: "IA sugere produto + link Yampi direto" },
-  { value: "wait_for_reply", label: "Aguardar Resposta", icon: Reply, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30", description: "Espera o lead responder (com bifurcação)" },
+  { value: "wait_for_reply", label: "Aguardar Resposta", icon: Reply, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30", description: "Respondeu / Não respondeu no prazo" },
   { value: "ai_response", label: "Resposta IA", icon: Brain, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900/30", description: "IA responde com prompt customizado" },
   { value: "add_tag", label: "Adicionar Tag", icon: Tag, color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30", description: "Adiciona tag ao lead" },
   { value: "delay", label: "Aguardar Tempo", icon: Timer, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", description: "Espera tempo configurável" },
@@ -354,7 +354,16 @@ function ActionNode({ data }: { data: any }) {
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
       
       {/* Button branches: show each quick reply as a labeled output handle on the RIGHT side aligned with its row */}
-      {hasButtonBranches ? (
+      {isWait ? (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          {[{ id: 'btn-replied', label: 'Respondeu dentro do prazo' }, { id: 'btn-timeout', label: 'Não respondeu no prazo' }].map(outcome => (
+            <div key={outcome.id} className="relative pr-4 text-xs text-foreground">
+              {outcome.label}
+              <Handle type="source" position={Position.Right} id={outcome.id} className="!bg-primary !w-3 !h-3 !border-2 !border-background" style={{ top: '50%' }} />
+            </div>
+          ))}
+        </div>
+      ) : hasButtonBranches ? (
         <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1"><GitBranch className="h-2.5 w-2.5" />Caminhos por botão:</p>
           {branchButtons.map((btnText, i) => (
@@ -1467,11 +1476,11 @@ function StepEditorDialog({
                 <div className="p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
                   <p className="text-xs text-orange-700 dark:text-orange-300">
                     <Reply className="h-3.5 w-3.5 inline mr-1" />
-                    O fluxo pausa aqui e só continua quando o lead responder. Se não responder no tempo definido, a ação de timeout será executada.
+                    Respondeu dentro do prazo / Não respondeu no prazo
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Timeout (horas)</Label>
+                  <Label className="text-xs">Prazo para responder (horas)</Label>
                   <Input
                     type="number"
                     value={config.timeoutHours || 24}
@@ -1481,11 +1490,32 @@ function StepEditorDialog({
                   />
                 </div>
 
-                {/* Bifurcation: what to do on no reply */}
-                <div className="space-y-2 p-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
+                <div className="space-y-3">
+                  {[{ key: 'btn-replied', label: 'Se responder dentro do prazo' }, { key: 'btn-timeout', label: 'Se não responder no prazo' }].map(outcome => (
+                    <div key={outcome.key} className="space-y-1">
+                      <Label className="text-xs">{outcome.label}</Label>
+                      <Select value={config.buttonBranches?.[outcome.key] || (outcome.key === 'btn-replied' ? config.nextStepId : '') || 'none'} onValueChange={value => {
+                        const branches = { ...(config.buttonBranches || {}) };
+                        if (value === 'none') delete branches[outcome.key]; else branches[outcome.key] = value;
+                        setConfig({ ...config, buttonBranches: branches, ...(outcome.key === 'btn-replied' ? { nextStepId: value === 'none' ? null : value } : {}) });
+                      }}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem caminho conectado</SelectItem>
+                          {allSteps.filter(item => item.id !== step?.id).map((item, index) => (
+                            <SelectItem key={item.id} value={item.id}>{index + 1}. {ACTION_TYPES.find(action => action.value === item.action_type)?.label || item.action_type}{item.action_config?.message ? ` — ${item.action_config.message.slice(0, 35)}` : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Legacy fallback when no timeout branch is connected */}
+                {!config.buttonBranches?.["btn-timeout"] && <div className="space-y-2 p-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
                   <Label className="text-xs font-semibold flex items-center gap-1.5">
                     <GitBranch className="h-3.5 w-3.5 text-orange-500" />
-                    Se não responder (bifurcação)
+                    Sem caminho: ação ao vencer o prazo
                   </Label>
                   <Select value={config.timeoutAction || "cancel"} onValueChange={v => setConfig({ ...config, timeoutAction: v })}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
@@ -1541,7 +1571,7 @@ function StepEditorDialog({
                       />
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             )}
 
@@ -2911,6 +2941,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
           tags: cfg.tags,
           promptPreview: cfg.prompt?.slice(0, 40) || cfg.crosssellPrompt?.slice(0, 40),
           timeoutAction: cfg.timeoutAction,
+          timeoutHours: cfg.timeoutHours,
           productPool: cfg.productPool,
           carouselCards: cfg.carouselCards,
           hasDeadline: cfg.hasDeadline,
@@ -2935,7 +2966,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
           target: `step-${targetStepId}`,
           animated: true,
           markerEnd: { type: MarkerType.ArrowClosed },
-          label: handleId === 'btn-timeout' ? '⏳ Sem resposta' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+          label: handleId === 'btn-replied' ? 'Respondeu no prazo' : handleId === 'btn-timeout' ? 'Não respondeu no prazo' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
           style: { stroke: handleId === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
         });
       }
@@ -2958,9 +2989,13 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     }
     for (const [sourceId, targetId] of Object.entries(wiring.next)) {
       if (!byId.has(sourceId) || !byId.has(targetId)) continue;
+      const sourceStep = steps.find(item => item.id === sourceId);
+      const waitSource = sourceStep?.action_type === 'wait_for_reply';
+      if (waitSource && sourceStep?.action_config?.buttonBranches?.['btn-replied']) continue;
       edges.push({
         id: `e-seq-${sourceId}`,
         source: `step-${sourceId}`,
+        ...(waitSource ? { sourceHandle: 'btn-replied', label: 'Respondeu no prazo' } : {}),
         target: `step-${targetId}`,
         animated: true,
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -2980,7 +3015,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     const { nodes: n, edges: e } = buildNodesAndEdges();
     setNodes(n);
     setEdges(e);
-  }, [stepsKey, triggerType, triggerConfig]);
+  }, [steps, triggerType, triggerConfig, buildNodesAndEdges]);
 
   // Save positions when nodes are dragged
   const handleNodesChange = useCallback((changes: any) => {
@@ -3033,7 +3068,9 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
     const visit = (id: string | null | undefined) => {
       if (!id || !byId.has(id) || seen.includes(id)) return;
       seen.push(id);
-      const cfg = (byId.get(id)!.action_config || {}) as any;
+      const currentStep = byId.get(id);
+      if (!currentStep) return;
+      const cfg = (currentStep.action_config || {}) as any;
       Object.values(cfg.buttonBranches || {}).forEach((t) => { if (typeof t === "string") visit(t); });
       visit(wiring.next[id]);
     };
@@ -3059,6 +3096,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
       if (sourceStep) {
         const cfg = (sourceStep.action_config || {}) as any;
         const buttonBranches = { ...(cfg.buttonBranches || {}), [conn.sourceHandle]: targetStepId };
+        if (sourceStep.action_type === 'wait_for_reply' && conn.sourceHandle === 'btn-replied') cfg.nextStepId = targetStepId;
         await supabase
           .from("automation_steps")
           .update({ action_config: { ...cfg, buttonBranches } })
@@ -3094,6 +3132,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
         const cfg = { ...((step.action_config || {}) as any) };
         const branches = { ...(cfg.buttonBranches || {}) };
         delete branches[e.sourceHandle];
+        if (step.action_type === 'wait_for_reply' && e.sourceHandle === 'btn-replied') { cfg.nextStepId = null; delete wiring.next[sourceStepId]; }
         cfg.buttonBranches = branches;
         await supabase.from("automation_steps").update({ action_config: cfg }).eq("id", sourceStepId);
         touched = true;
@@ -3149,7 +3188,7 @@ function flowWiring(list: AutomationStep[], triggerConfig: any): FlowWiring {
       firstStepId = created.id;
     } else if (last) {
       const lastCfg = (last.action_config || {}) as any;
-      const lastHasButtons = !!((lastCfg.quickReplyButtons?.length > 0) || (lastCfg.interactiveButtons?.length > 0));
+      const lastHasButtons = last.action_type === 'wait_for_reply' || !!((lastCfg.quickReplyButtons?.length > 0) || (lastCfg.interactiveButtons?.length > 0));
       if (!lastHasButtons && !next[last.id]) next[last.id] = created.id;
     }
 

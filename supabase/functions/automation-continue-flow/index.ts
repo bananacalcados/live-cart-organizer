@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAutomationJob, type AutomationJobPayload } from "../_shared/automation-send.ts";
@@ -183,7 +184,7 @@ serve(async (req) => {
           flow_id: flowId,
           pending_step_index: i + 1, // points to the step AFTER wait_for_reply
           step_id: step.id,
-          button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
+          button_branches: waitReplyBranches(config, steps[i + 1]?.id),
           whatsapp_number_id: whatsappNumberId,
           recipient_data: recipientData || {},
           expires_at: expiresAt,
