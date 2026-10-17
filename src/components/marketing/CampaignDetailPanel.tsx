@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { TrackedLinkStats } from "./TrackedLinkStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
@@ -2188,6 +2189,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {link.click_count} cliques · {link.redirect_count} redirecionamentos
+                        <TrackedLinkStats slug={link.slug} />
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

@@ -10,6 +10,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
+import { tagTrackedComponents } from "../_shared/tracked-links.ts";
 import { resolveMetaMediaId } from "../_shared/meta-media-cache.ts";
 import { sendTextFallback } from "../_shared/meta-fallback.ts";
 
@@ -452,7 +453,9 @@ serve(async (req) => {
 
       const testRcp: any = { phone: formatted, recipient_name: 'Teste', first_name: 'Teste' };
       if (usesCashback(testConfig)) await attachCashback(supabase, [testRcp]);
-      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId, mediaIds);
+      const components = await tagTrackedComponents(supabase, formatted,
+        buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId, mediaIds),
+        { source: 'dispatch_test', ref: dispatchId, whatsappNumberId: dispatch.whatsapp_number_id || null });
 
       const body: any = {
         messaging_product: 'whatsapp',
@@ -560,7 +563,9 @@ serve(async (req) => {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
-        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds);
+        const components = await tagTrackedComponents(supabase, formatted,
+          buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds),
+          { source: 'dispatch', ref: dispatchId, whatsappNumberId: dispatch.whatsapp_number_id || null });
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
         const carouselPayload = buildCarouselPayloadForChat(templateComponents, components, variablesConfig);
         const body: any = {

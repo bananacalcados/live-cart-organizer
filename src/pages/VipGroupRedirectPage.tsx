@@ -4,7 +4,7 @@ import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
 
 
 export default function VipGroupRedirectPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, code } = useParams<{ slug: string; code?: string }>();
   const [status, setStatus] = useState<'loading' | 'redirecting' | 'inapp' | 'nogroup' | 'error'>('loading');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string>('');
@@ -25,6 +25,7 @@ export default function VipGroupRedirectPage() {
     const isInApp = isInstagram || isFacebook;
 
     const rq = new URLSearchParams({ slug, mode: 'api' });
+    if (code) rq.set('code', code);
     if (attr.fbclid) rq.set('fbclid', attr.fbclid);
     if (attr.fbc) rq.set('fbc', attr.fbc);
     if (attr.fbp) rq.set('fbp', attr.fbp);
@@ -81,7 +82,7 @@ export default function VipGroupRedirectPage() {
         setErrorDetail(msg);
         setStatus('error');
       });
-  }, [slug]);
+  }, [slug, code]);
 
   const copyLink = () => {
     if (inviteUrl && navigator.clipboard) {
