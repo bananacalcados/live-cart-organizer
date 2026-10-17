@@ -211,6 +211,13 @@
       "when": 1792196979219,
       "tag": "0029_lov_database_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792198726703,
+      "tag": "0030_group_admin_queue_atomic_throttle",
+      "breakpoints": true
     }
   ]
 }
