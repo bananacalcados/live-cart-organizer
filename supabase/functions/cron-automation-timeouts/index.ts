@@ -58,7 +58,7 @@ serve(async (req) => {
       .from('automation_pending_replies')
       .select('*')
       .eq('is_active', true)
-      .lt('expires_at', new Date().toISOString())
+      .lte('expires_at', new Date().toISOString())
       .limit(100);
 
     if (!expired || expired.length === 0) {
@@ -73,12 +73,15 @@ serve(async (req) => {
     for (const pending of expired) {
       try {
         // Mark as consumed
-        await supabase.from('automation_pending_replies')
+        const { data: claimed, error: claimError } = await supabase.from('automation_pending_replies')
           .update({ is_active: false })
-          .eq('id', pending.id);
+          .eq('id', pending.id).eq('is_active', true)
+          .lte('expires_at', new Date().toISOString()).select('id').maybeSingle();
+        if (claimError) throw claimError;
+        if (!claimed) continue;
 
         const branches = (pending.button_branches || {}) as Record<string, string>;
-        const timeoutAction = branches.__timeout_action__ || 'cancel';
+        const timeoutAction = branches.__timeout__ ? 'continue' : (branches.__timeout_action__ || 'cancel');
         const timeoutMessage = branches.__timeout_message__ || '';
         const timeoutTemplate = branches.__timeout_template__ || '';
         const timeoutTag = branches.__timeout_tag__ || '';

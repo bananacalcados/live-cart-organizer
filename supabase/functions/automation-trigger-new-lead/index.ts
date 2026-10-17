@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -176,7 +177,8 @@ serve(async (req) => {
 
       console.log(`Executing flow "${flow.name}" for phone ${formattedPhone}`);
 
-      for (let i = 0; i < steps.length; i++) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
 
@@ -192,7 +194,8 @@ serve(async (req) => {
             flow_id: flow.id,
             pending_step_index: i,
             step_id: step.id,
-            button_branches: branches,
+            button_branches: waitReplyBranches(config, steps[i + 1]?.id),
+            expires_at: waitReplyExpiresAt(config),
             whatsapp_number_id: (config.whatsappNumberId as string) || null,
             recipient_data: { name: name || '', firstName: name ? name.split(' ')[0] : '' },
           });

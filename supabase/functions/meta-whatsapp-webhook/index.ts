@@ -606,7 +606,7 @@ serve(async (req) => {
                   // Defensive: confirm suffix actually matches (LIKE pattern is anchored at end)
                   let pendingReply = pendingReplies?.find(pr => {
                     const prSuffix = pr.phone.replace(/\D/g, '').slice(-8);
-                    return prSuffix === phoneSuffix;
+                    return prSuffix === phoneSuffix && pr.whatsapp_number_id === whatsappNumberDbId && pr.button_branches?.__wait_reply__ !== 'true';
                   }) || null;
 
                   // Clique tardio: o botão do template continua no WhatsApp da cliente
@@ -625,6 +625,7 @@ serve(async (req) => {
                       .limit(5);
                     pendingReply = (latePending || []).find(pr =>
                       pr.phone.replace(/\D/g, '').slice(-8) === phoneSuffix &&
+                      pr.whatsapp_number_id === whatsappNumberDbId && pr.button_branches?.__wait_reply__ !== 'true' &&
                       Object.keys((pr.button_branches || {}) as Record<string, string>)
                         .some(k => !k.startsWith('__') && k.toLowerCase() === buttonText)
                     ) || null;
@@ -635,7 +636,11 @@ serve(async (req) => {
                     automationFlowHandled = true;
                     console.log(`Found pending reply for ${phone}, type=${msg.type}, text: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
                     // Mark as consumed
-                    await supabase.from('automation_pending_replies').update({ is_active: false, answered_at: new Date().toISOString() }).eq('id', pendingReply.id);
+                    const { data: consumed } = await supabase.from('automation_pending_replies')
+                      .update({ is_active: false, answered_at: new Date().toISOString() })
+                      .eq('id', pendingReply.id).eq('is_active', pendingReply.is_active)
+                      .is('answered_at', null).select('id').maybeSingle();
+                    if (!consumed) throw new Error('Resposta já consumida');
 
                     // Determine which branch to follow
                     const branches = (pendingReply.button_branches || {}) as Record<string, string>;

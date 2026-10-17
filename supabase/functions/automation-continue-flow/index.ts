@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendAutomationJob, type AutomationJobPayload } from "../_shared/automation-send.ts";
@@ -144,13 +145,15 @@ serve(async (req) => {
       });
     }
 
-    for (let i = startFromStep; i < steps.length; i++) {
+    const explicitRoute = continuationIndices(steps, Number(startFromStep));
+    const route = explicitRoute || Array.from({ length: Math.max(0, steps.length - Number(startFromStep)) }, (_, offset) => Number(startFromStep) + offset);
+    for (const i of route) {
       const step = steps[i];
       const config = step.action_config as Record<string, unknown> || {};
 
       // Stop if we reached a step that is a branch target of ANOTHER step (not the current entry point).
       // It must only be reached via its branch, never via sequential flow.
-      if (i !== startFromStep && branchTargetIds.has(step.id)) {
+      if (!explicitRoute && i !== startFromStep && branchTargetIds.has(step.id)) {
         console.log(`[continue-flow] Stopping at step ${i} (${step.id}) — it's a branch target of another step`);
         break;
       }
@@ -177,13 +180,13 @@ serve(async (req) => {
       // If we hit another wait_for_reply, create a new pending reply and stop
       if (step.action_type === 'wait_for_reply') {
         const timeoutHours = (config.timeoutHours as number) || 24;
-        const expiresAt = new Date(Date.now() + timeoutHours * 60 * 60 * 1000).toISOString();
+        const expiresAt = waitReplyExpiresAt(config);
         await supabase.from('automation_pending_replies').insert({
           phone,
           flow_id: flowId,
           pending_step_index: i + 1, // points to the step AFTER wait_for_reply
           step_id: step.id,
-          button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
+          button_branches: waitReplyBranches(config, steps[i + 1]?.id),
           whatsapp_number_id: whatsappNumberId,
           recipient_data: recipientData || {},
           expires_at: expiresAt,

@@ -50,3 +50,5 @@
 - [x] Corrigir erros permanentes, instâncias inativas e espelho no sucesso.
 - [x] Corrigir parâmetros/contagens do painel e reenfileiramento.
 - [x] Zerar falhas da Whats Carol; testes isolados desfeitos e painel autenticado conferido; cron 200.
+
+- [x] Automação: duas saídas em Aguardar resposta; 8 testes passaram e escolha/reabertura conferidas em sessão autorizada com gravações interceptadas, sem envios reais.

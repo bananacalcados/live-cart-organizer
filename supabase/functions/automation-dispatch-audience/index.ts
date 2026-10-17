@@ -1,3 +1,4 @@
+import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
@@ -583,13 +584,14 @@ serve(async (req) => {
           .replace(/\{\{cidade\}\}/g, recipient.city || '');
       }
 
-      for (let i = 0; i < steps.length; i++) {
+      const route = continuationIndices(steps, 0) || steps.map((_: unknown, index: number) => index);
+      for (const i of route) {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
         const sendNumberId = (config.whatsappNumberId as string) || defaultNumberId;
 
         // Skip steps that are reachable only via branches (must wait for client click)
-        if (i > 0 && branchTargetIds.has(step.id)) {
+        if (i > 0 && !continuationIndices(steps, 0) && branchTargetIds.has(step.id)) {
           console.log(`[dispatch] Stopping at step ${i} (${step.id}) — branch target only`);
           break;
         }
@@ -597,13 +599,13 @@ serve(async (req) => {
         if (step.action_type === 'delay') continue;
         if (step.action_type === 'wait_for_reply') {
           const timeoutHours = (config.timeoutHours as number) || 24;
-          const expiresAt = new Date(Date.now() + timeoutHours * 60 * 60 * 1000).toISOString();
+          const expiresAt = waitReplyExpiresAt(config);
           await supabase.from('automation_pending_replies').insert({
             phone: recipient.phone,
             flow_id: flowId,
             pending_step_index: i,
             step_id: step.id,
-            button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
+            button_branches: waitReplyBranches(config, steps[i + 1]?.id),
             whatsapp_number_id: sendNumberId || null,
             recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
             expires_at: expiresAt,

@@ -1,3 +1,4 @@
+import { waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 // automation-pos-followups-cron
 // Processa os passos agendados das automações disparadas por venda
 // (automation_pos_followups) — ex.: "21 dias após a compra, enviar o template
@@ -88,6 +89,18 @@ Deno.serve(async (req) => {
 
       const jobs: Record<string, unknown>[] = [];
       const numberId = cfg.whatsappNumberId || cfg.whatsapp_number_id || null;
+
+      if (payload.action_type === 'wait_for_reply') {
+        const { error: waitError } = await supabase.from('automation_pending_replies').insert({
+          phone, flow_id: row.flow_id, step_id: row.step_id, pending_step_index: row.step_index,
+          button_branches: payload.wait_branches || {}, whatsapp_number_id: numberId,
+          recipient_data: { name: vars.__full_name__ || '', firstName: vars.__first_name__ || '' },
+          expires_at: waitReplyExpiresAt(cfg),
+        });
+        if (waitError) throw waitError;
+        await supabase.from('automation_pos_followups').update({ sent_at: new Date().toISOString() }).eq('id', row.id).is('sent_at', null);
+        continue;
+      }
 
       if (payload.action_type === "send_template" && (cfg.templateName || cfg.template_name)) {
         const components: unknown[] = [];
