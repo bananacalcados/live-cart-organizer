@@ -204,6 +204,13 @@
       "when": 1792194714597,
       "tag": "0028_group_scheduled_drafts_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792196979219,
+      "tag": "0029_lov_database_migration",
+      "breakpoints": true
     }
   ]
 }
