@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { InstallmentPicker } from "@/components/checkout/InstallmentPicker";
 
 export interface OrderProduct {
   title: string;
@@ -486,7 +487,7 @@ function CardPaymentForm({
   const cardNumberRef = useRef<HTMLInputElement>(null);
   const expiryRef = useRef<HTMLInputElement>(null);
   const cvvRef = useRef<HTMLInputElement>(null);
-  const installmentsRef = useRef<HTMLSelectElement>(null);
+  const installmentsRef = useRef<HTMLButtonElement>(null);
   // Cliente tocou em PAGAR sem escolher parcelas: destaca o campo em vermelho.
   const [installmentsError, setInstallmentsError] = useState(false);
 
@@ -707,7 +708,6 @@ function CardPaymentForm({
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.focus();
-        try { (el as any).showPicker?.(); } catch { /* navegador sem showPicker */ }
       }
       return;
     }
@@ -1046,21 +1046,13 @@ function CardPaymentForm({
       {!isDebit ? (
         <div className="space-y-2">
           <Label className="text-sm">Parcelas</Label>
-          {/* Seletor NATIVO: o menu flutuante travava toques na página em alguns Android
-              (o botão Pagar parava de responder depois de escolher as parcelas). */}
-          <select
+          <InstallmentPicker
             ref={installmentsRef}
             value={installments}
-            onChange={(e) => { setInstallments(e.target.value); setInstallmentsError(false); }}
-            className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              !installments && (installmentsError || formComplete) ? "border-2 border-destructive" : "border-input"
-            }`}
-          >
-            <option value="" disabled>SELECIONE AS PARCELAS</option>
-            {installmentOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            options={installmentOptions}
+            onChange={(value) => { setInstallments(value); setInstallmentsError(false); }}
+            invalid={!installments && (installmentsError || formComplete)}
+          />
           {!installments && (installmentsError || formComplete) && (
             <p className="text-sm font-semibold text-destructive">
               ⬆ Escolha em quantas vezes quer pagar
@@ -1100,7 +1092,7 @@ function CardPaymentForm({
         <Button
           onClick={handleSubmit}
           disabled={isProcessing || !!mismatch}
-          className={`w-full h-14 text-lg font-semibold ${readyToPay ? "bg-emerald-600 text-white hover:bg-emerald-500" : formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
+          className={`w-full h-auto min-h-14 whitespace-normal px-3 py-3 text-base sm:text-lg text-center font-semibold ${readyToPay ? "bg-emerald-600 text-white hover:bg-emerald-500" : formComplete ? "" : "bg-muted text-muted-foreground hover:bg-muted"}`}
           size="lg"
         >
           <Lock className="h-5 w-5 mr-2" />
