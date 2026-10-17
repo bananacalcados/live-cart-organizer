@@ -33,7 +33,7 @@
 - [x] Ampliar Reduzir valor e conferir a tela sem alterar pedidos (filtro Mercado Pago e abertura do diálogo verificados).
 
 ## Correção de pagamento em 10x
-- [ ] Identificar e corrigir o bloqueio das parcelas fixas sem mudar condições combinadas nem efetuar cobrança.
+- [x] Corrigir filtro do MP que removia 10x fixadas; 12 testes e clique no navegador com retorno simulado de 6x mantiveram 10x e valor combinado, sem cobrança real.
 
 ## Ajustes do Overlay da Live
 - [x] Preservar parcelas escolhidas pela equipe na área de membros e impedir nova seleção; 9 testes passaram, tela com dados interceptados manteve 10x após editar o cartão; sem cobrança real.
