@@ -16,10 +16,13 @@
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e (nfe-emitir) lê unit_price e o imposto deve incidir só sobre o valor real; bloqueada após NF-e emitida.
 - Painéis da Live leem comentários só de `live_comments` (sem polling; tempo real por INSERT): `meta-messenger-webhook` grava todo comentário do IG ali (evento com live ativa, ou eventos do dia como reserva) e `instagram-live-sync` roda no servidor pelo worker de 1 min `expire_live_payment_windows` (só com `live_active_until > now()`), porque o navegador não pode ser a fonte da sincronização.
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (token do evento, polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders, porque é página pública e não pode tocar em orders/comentários/clientes.
-- Overlay scales uniformly to the viewport; EventInnerDashboard mounts controls by event, preventing OBS sizing and settings leakage.
-- Overlay layout editing shares measured canvas bounds with the public renderer and serializes layout-only writes merged into saved config, because repositioning must go live without publishing unapplied form edits or changing alert queues.
+- Overlay scales to viewport; per-event controls isolate OBS settings.
+- Overlay editing shares renderer bounds and merges serialized layout-only writes, keeping unapplied settings and alert queues unchanged.
 - Leads that are already customers (customers_unified.total_orders > 0, matched by last 8 phone digits) are kept in lp_leads but marked dispatch_excluded_reason='ja_cliente' by a BEFORE INSERT trigger, because history must be preserved while dispatches only target real prospects.
 - Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in total orders, total value and the conversion denominator, but never as paid/received, because the business wants real conversion.
 - Card gateway split (Admin > Pagamentos, table gateway_split_config) only picks the FIRST gateway of the card cascade, deterministically by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins the queue only when it is the drawn start gateway, and any config read failure falls back to the fixed order, because retries must never land on a different gateway.
 
 - Wait-reply outcomes use stable step IDs and conditional row consumption, because replies and timeouts must choose only one branch while preserving legacy routing.
+- Presenter alerts accept only team_message; order realtime updates data without interrupting the live panel.
+
+- Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.

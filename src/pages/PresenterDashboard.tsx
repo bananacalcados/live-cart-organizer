@@ -21,6 +21,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
+import { isPresenterMessage } from "@/lib/presenterAlerts";
 
 const PRESENTER_ORDER_COLUMNS =
   "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
@@ -68,8 +69,6 @@ export default function PresenterDashboard() {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [metrics, setMetrics] = useState({ totalPaid: 0, totalRevenue: 0, avgTicket: 0, pendingCount: 0 });
   const [teamMessage, setTeamMessage] = useState<PresenterAlert | null>(null);
-  const [confirmPopup, setConfirmPopup] = useState<{ handle: string; orderId: string } | null>(null);
-  const notifiedConfirmRef = useRef<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
@@ -129,11 +128,15 @@ export default function PresenterDashboard() {
     if (!eventId) return;
     const { data } = await supabase
       .from("livete_presenter_alerts")
-      .select("*")
+      .select("id, alert_type, message, product_title, customer_name, phone, is_read, created_at")
       .eq("event_id", eventId)
+      .eq("alert_type", "team_message")
       .order("created_at", { ascending: false })
       .limit(50);
-    if (data) setAlerts(data as PresenterAlert[]);
+    if (data) setAlerts(prev => {
+      const next = data as PresenterAlert[];
+      return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+    });
   }, [eventId]);
 
   // Load orders and metrics
@@ -332,9 +335,10 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
         const newAlert = payload.new as PresenterAlert;
-        setAlerts(prev => [newAlert, ...prev]);
+        if (!isPresenterMessage(newAlert)) return;
+        setAlerts(prev => [newAlert, ...prev].slice(0, 50));
         playNotificationSound();
-        if (newAlert.alert_type === "team_message") setTeamMessage(newAlert);
+        setTeamMessage(newAlert);
       })
       .subscribe();
 
@@ -353,29 +357,11 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
         void applyOrderChange(payload);
-        void maybeNotifyAwaitingConfirmation(payload.new as any);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [eventId, applyOrderChange]);
-
-  const maybeNotifyAwaitingConfirmation = useCallback(async (row: any) => {
-    if (!row?.id || row.stage !== "awaiting_confirmation") return;
-    if (notifiedConfirmRef.current.has(row.id)) return;
-    notifiedConfirmRef.current.add(row.id);
-    let handle = "cliente";
-    if (row.customer_id) {
-      const { data } = await supabase
-        .from("customers")
-        .select("instagram_handle")
-        .eq("id", row.customer_id)
-        .maybeSingle();
-      if (data?.instagram_handle) handle = data.instagram_handle.replace(/^@/, "");
-    }
-    setConfirmPopup({ handle, orderId: row.id });
-    playNotificationSound();
-  }, [playNotificationSound]);
 
   const markAsRead = async (alertId: string) => {
     await supabase.from("livete_presenter_alerts").update({ is_read: true }).eq("id", alertId);
@@ -614,7 +600,7 @@ export default function PresenterDashboard() {
                   {alerts.length === 0 && (
                     <Card className="bg-muted-foreground/10 border-muted-foreground/20">
                       <CardContent className="p-6 text-center text-muted-foreground">
-                        Nenhum alerta ainda. Os alertas da IA aparecerão aqui em tempo real 🔔
+                        Nenhum recado da equipe.
                       </CardContent>
                     </Card>
                   )}
@@ -795,22 +781,6 @@ export default function PresenterDashboard() {
             }}
           >
             Entendi
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* Pedido criado aguardando confirmação da cliente */}
-      <Dialog open={!!confirmPopup} onOpenChange={(open) => !open && setConfirmPopup(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl">🛒 Pedido criado!</DialogTitle>
-          </DialogHeader>
-          <p className="text-lg leading-relaxed">
-            Pedido da cliente <strong>@{confirmPopup?.handle}</strong> criado. Solicite a ela que entre no link da live
-            para <strong>confirmar o pedido</strong> e concorrer à bolsa, caso confirme em 5 minutos com todos os dados.
-          </p>
-          <Button className="w-full h-12 text-base font-bold" onClick={() => setConfirmPopup(null)}>
-            Avisei!
           </Button>
         </DialogContent>
       </Dialog>
