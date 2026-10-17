@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { enqueueGroupAdminActions, estimateBatchMinutes, newBatchCode, type EnqueueGroupActionInput } from "@/lib/marketing/groupAdminQueue";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -219,129 +220,10 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   };
 
 
-  const invokeFn = async (fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
-    const { data, error } = await supabase.functions.invoke(fn, { body });
-    if (error) return { ok: false, error: error.message };
-    if (data && (data as any).success === true) return { ok: true };
-    const err = (data as any)?.error;
-    return { ok: false, error: err ? (typeof err === 'string' ? err : JSON.stringify(err)) : 'Falha desconhecida' };
-  };
-
-  // Aplica uma ação lógica a UM grupo, roteando pelo provider real da instância.
-  const applyActionToGroup = async (
-    g: GroupRow,
-    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
-    idx: number,
-    extra?: { phone?: string },
-  ): Promise<{ ok: boolean; error?: string }> => {
-    const wid = g.effectiveInstanceId || undefined;
-    if (!wid) return { ok: false, error: 'Sem número de WhatsApp ativo. Atribua um número à campanha ou selecione um número ativo no topo.' };
-
-    if (g.provider === 'uazapi') {
-      switch (action) {
-        case 'name':
-          return invokeFn('uazapi-groups', { action: 'updateName', groupJid: g.group_id, name: `${bulkName} #${idx + 1}`, whatsapp_number_id: wid });
-        case 'photo':
-          return invokeFn('uazapi-groups', { action: 'updateImage', groupJid: g.group_id, image: bulkPhotoUrl, whatsapp_number_id: wid });
-        case 'description':
-          return invokeFn('uazapi-groups', { action: 'updateDescription', groupJid: g.group_id, description: bulkDescription, whatsapp_number_id: wid });
-        case 'permissions': {
-          const r1 = await invokeFn('uazapi-groups', { action: 'updateAnnounce', groupJid: g.group_id, announce: onlyAdminsSend, whatsapp_number_id: wid });
-          const r2 = await invokeFn('uazapi-groups', { action: 'updateMemberAddMode', groupJid: g.group_id, adminsOnly: onlyAdminsAdd, whatsapp_number_id: wid });
-          return r1.ok && r2.ok ? { ok: true } : { ok: false, error: r1.error || r2.error };
-        }
-        case 'pin':
-          return invokeFn('uazapi-groups', { action: 'pinMessage', groupJid: g.group_id, message: pinMessageText, pinDuration, whatsapp_number_id: wid });
-        case 'promote':
-          return invokeFn('uazapi-groups', { action: 'updateParticipants', groupJid: g.group_id, participantAction: 'promote', participants: [extra?.phone], whatsapp_number_id: wid });
-      }
-    }
-
-    if (g.provider === 'wasender') {
-      switch (action) {
-        case 'permissions':
-          return invokeFn('wasender-groups', { action: 'settings', groupJid: g.group_id, settings: { announce: onlyAdminsSend, restrict: onlyAdminsAdd }, whatsapp_number_id: wid });
-        case 'promote':
-          return invokeFn('wasender-groups', { action: 'updateParticipants', groupJid: g.group_id, participantAction: 'promote', participants: [extra?.phone], whatsapp_number_id: wid });
-        case 'pin':
-          return invokeFn('wasender-groups', { action: 'sendMessage', groupJid: g.group_id, message: pinMessageText, whatsapp_number_id: wid });
-        default:
-          return { ok: false, error: `Ação "${action}" não suportada pelo provedor WaSender` };
-      }
-    }
-
-    // Padrão: Z-API
-    switch (action) {
-      case 'name':
-        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-name', value: `${bulkName} #${idx + 1}`, whatsapp_number_id: wid });
-      case 'photo':
-        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-photo', value: bulkPhotoUrl, whatsapp_number_id: wid });
-      case 'description':
-        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-description', value: bulkDescription, whatsapp_number_id: wid });
-      case 'permissions': {
-        const r1 = await invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'set-messages-admins-only', value: String(onlyAdminsSend), whatsapp_number_id: wid });
-        const r2 = await invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'set-add-admins-only', value: String(onlyAdminsAdd), whatsapp_number_id: wid });
-        return r1.ok && r2.ok ? { ok: true } : { ok: false, error: r1.error || r2.error };
-      }
-      case 'promote':
-        return invokeFn('zapi-group-settings', { action: 'promote-admin', groupId: g.group_id, phone: extra?.phone, whatsapp_number_id: wid });
-      case 'pin': {
-        const send = await supabase.functions.invoke('zapi-send-group-message', {
-          body: { groupId: g.group_id, message: pinMessageText, type: 'text', whatsapp_number_id: wid },
-        });
-        if (send.error) return { ok: false, error: send.error.message };
-        const sd: any = send.data;
-        const messageId = sd?.messageId || sd?.data?.messageId || sd?.data?.zapiMessageId || sd?.data?.zaapId || sd?.data?.id || null;
-        if (!messageId) return { ok: false, error: 'Mensagem enviada sem ID para fixar' };
-        await new Promise(r => setTimeout(r, 2000));
-        return invokeFn('zapi-group-settings', { action: 'pin-message', groupId: g.group_id, messageId, pinDuration, whatsapp_number_id: wid });
-      }
-    }
-    return { ok: false, error: 'Ação não suportada' };
-  };
-
-  const runOnAllGroups = async (
-    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
-    delayMs: number,
-    extra?: { phone?: string },
-    preGroups?: GroupRow[],
-  ): Promise<{ success: number; total: number; errors: string[] } | null> => {
-    const groups = preGroups ?? await fetchGroupsWithProvider();
-    if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
-    let success = 0;
-    let repointed = 0;
-    const errors: string[] = [];
-    for (let i = 0; i < groups.length; i++) {
-      const g = groups[i];
-      const res = await applyActionToGroup(g, action, i, extra);
-      if (res.ok) {
-        success++;
-        // Auto-cura: se o grupo apontava para uma instância morta/diferente, grava a que FUNCIONOU.
-        // Nunca adivinha — só persiste a instância que acabou de aplicar com sucesso.
-        if (g.effectiveInstanceId && g.effectiveInstanceId !== g.storedInstanceId) {
-          const { error: upErr } = await supabase
-            .from('whatsapp_groups')
-            .update({ instance_id: g.effectiveInstanceId })
-            .eq('id', g.id);
-          if (!upErr) repointed++;
-        }
-      } else {
-        errors.push(`${g.name}: ${res.error || 'falha'}`);
-      }
-      await new Promise(r => setTimeout(r, delayMs));
-    }
-    if (repointed > 0) console.info(`[CampaignBulkSettings] ${repointed} grupo(s) repontados para a instância ativa.`);
-    return { success, total: groups.length, errors };
-  };
-
-  const reportResult = (label: string, r: { success: number; total: number; errors: string[] }) => {
-    if (r.errors.length === 0) {
-      toast.success(`${label}: ${r.success}/${r.total} grupos`);
-    } else {
-      console.error('[CampaignBulkSettings] falhas:', r.errors);
-      toast.error(`${label}: ${r.success}/${r.total}. Falhas: ${r.errors.slice(0, 2).join(' | ')}${r.errors.length > 2 ? '…' : ''}`);
-    }
-  };
+  // As ações em massa não rodam mais no navegador: são ENFILEIRADAS em
+  // group_admin_actions e o worker do servidor executa com ritmo anti-ban.
+  // A pré-visualização (grupos físicos deduplicados + avisos de campanhas
+  // cruzadas) continua igual antes de confirmar.
 
   // Monta a pré-visualização (grupos físicos deduplicados + avisos de campanhas cruzadas) e abre confirmação.
   const prepareAction = async (
