@@ -517,8 +517,9 @@
   background: hsl(var(--overlay-surface) / 0.6);
   color: hsl(var(--overlay-text));
   text-shadow: var(--overlay-text-shadow);
-  border-radius: 24px;
-  padding: 20px 32px;
+  /* em para que a caixa acompanhe o tamanho da fonte escolhida por bloco */
+  border-radius: 0.45em;
+  padding: 0.35em 0.6em;
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;

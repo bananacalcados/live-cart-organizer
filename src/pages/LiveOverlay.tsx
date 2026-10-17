@@ -183,10 +183,10 @@ export default function LiveOverlay() {
             {fill(rb.text_template, { count: raffleCount })}
             {rb.goal_enabled && rb.goal_count > 0 && (
               <>
-                <div className="overlay-progress-track mt-3 h-6 w-full overflow-hidden rounded-full">
+                <div className="overlay-progress-track mt-[0.25em] h-[0.28em] w-full overflow-hidden rounded-full">
                   <div className="overlay-progress-fill h-full rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                 </div>
-                {remaining > 0 && <div className="mt-2">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
+                {remaining > 0 && <div className="mt-[0.3em]">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
               </>
             )}
           </div>
@@ -204,8 +204,8 @@ export default function LiveOverlay() {
       {spin && (
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
           <div key={spin.key} className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: "0.6em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
-            <div className={spin.done ? "overlay-wheel-winner mt-3" : "mt-3"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
+            <div style={{ fontSize: "0.5em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
+            <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
           </div>
         </OverlayBlock>
       )}
