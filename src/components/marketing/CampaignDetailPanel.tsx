@@ -888,7 +888,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       media_url: block?.mediaItems?.[0]?.url || block?.mediaUrl || data.mediaUrl || null,
       poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
       poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
-      scheduled_at: scheduledAt.toISOString(),
+      scheduled_at: data.scheduledAt ? scheduledAt.toISOString() : null,
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
       disable_link_preview: !!block?.disableLinkPreview,
