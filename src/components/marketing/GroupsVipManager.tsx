@@ -31,6 +31,7 @@ import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
 import { VipLinksManager } from "./VipLinksManager";
 import { OrphanBaseManager } from "./OrphanBaseManager";
+import { GroupActionsQueuePanel } from "./GroupActionsQueuePanel";
 import { authHeaders } from "@/lib/authHeaders";
 
 interface WhatsAppGroup {
@@ -351,6 +352,7 @@ export function GroupsVipManager() {
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
+          <TabsTrigger value="queue" className="gap-1"><ListChecks className="h-3.5 w-3.5" />Ações de grupo</TabsTrigger>
           <TabsTrigger value="links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links</TabsTrigger>
           <TabsTrigger value="orphans" className="gap-1"><UserX className="h-3.5 w-3.5" />Base de Órfãos</TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
