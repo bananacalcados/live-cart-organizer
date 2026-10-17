@@ -958,22 +958,21 @@ function CardPaymentForm({
           <p className="text-center text-xs font-extrabold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
             ✅ Cartão preenchido — falta só apertar o botão
           </p>
+          {/* Botão de pagamento em formato padrão: retangular e baixo, sem o
+              resumo dentro — o valor fica fora, logo abaixo. */}
           <Button
             onClick={handleSubmit}
-            className="w-full h-auto min-h-20 sm:min-h-24 whitespace-normal px-3 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse border-b-4 border-emerald-800"
+            className="w-full h-14 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse text-sm sm:text-base"
             size="lg"
           >
-            <span className="flex w-full min-w-0 flex-col items-center leading-tight py-2 gap-1">
-              <span className="flex items-center justify-center gap-2 text-base sm:text-xl font-black text-center break-words">
-                <Lock className="h-5 w-5 shrink-0" /> <span>CLIQUE AQUI PARA CONCLUIR PAGAMENTO</span>
-              </span>
-              <span className="text-sm font-bold opacity-90">
-                {isDebit || selectedInstallments === 1
-                  ? `à vista • R$ ${selectedInstallmentAmount.toFixed(2)}`
-                  : `${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)} • Total R$ ${displayTotal.toFixed(2)}`}
-              </span>
-            </span>
+            <Lock className="h-4 w-4 mr-2 shrink-0" />
+            <span className="font-bold truncate">CLIQUE AQUI PARA CONCLUIR PAGAMENTO</span>
           </Button>
+          <p className="text-center text-sm font-bold text-emerald-800 dark:text-emerald-300">
+            {isDebit || selectedInstallments === 1
+              ? `à vista • Total R$ ${displayTotal.toFixed(2)}`
+              : `${selectedInstallments}x de R$ ${selectedInstallmentAmount.toFixed(2)} • Total R$ ${displayTotal.toFixed(2)}`}
+          </p>
           <p className="text-center text-xs text-muted-foreground">
             💳 {cardName.trim().toUpperCase()} •••• {cardNumber.replace(/\D/g, "").slice(-4)} ·{" "}
             {isDebit || selectedInstallments === 1 ? "à vista" : `${selectedInstallments}x`}
