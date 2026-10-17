@@ -46,7 +46,7 @@
 - [x] Prêmios de desconto/frete na Ficha da Live e no chat do PDV
 
 ## Correções da fila administrativa de grupos
-- [ ] Corrigir claim, intervalo persistido, ordem e contagem de tentativas.
-- [ ] Corrigir erros permanentes, instâncias inativas e espelho no sucesso.
-- [ ] Corrigir parâmetros/contagens do painel e reenfileiramento.
-- [ ] Zerar falhas da Whats Carol; testar sem grupos reais e conferir cron 200.
+- [x] Corrigir claim, intervalo persistido, ordem e contagem de tentativas.
+- [x] Corrigir erros permanentes, instâncias inativas e espelho no sucesso.
+- [x] Corrigir parâmetros/contagens do painel e reenfileiramento.
+- [x] Zerar falhas da Whats Carol; testes isolados desfeitos e painel autenticado conferido; cron 200.

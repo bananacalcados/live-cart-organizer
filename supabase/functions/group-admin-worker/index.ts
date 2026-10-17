@@ -219,7 +219,7 @@ serve(async (req) => {
             await finish(action, "failed", { error: classification.message, result: r.result, instanceFailure: false });
             stats.failed++;
           } else if (canRetry(action.attempts)) {
-            await finish(action, "retry", { error: errText, deferMinutes: 10 });
+            await finish(action, "retry", { error: errText });
             console.warn(`[group-admin-worker] ${action.action_type} falhou (tentativa ${action.attempts}), nova tentativa em 10min: ${errText}`);
           } else {
             await finish(action, "failed", { error: errText.slice(0, 300) });

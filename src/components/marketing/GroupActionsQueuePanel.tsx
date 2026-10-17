@@ -166,8 +166,8 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
     const th = throttles.find(t => t.whatsapp_number_id === a.whatsapp_number_id);
     const avg = th ? (th.min_gap_seconds + th.max_gap_seconds) / 2 : AVG_GAP_SECONDS;
     if (th?.paused) return "Fila pausada";
-    const wait = Math.max(0, Date.parse(th?.next_allowed_at || "") - Date.now(), Date.parse(a.not_before || "") - Date.now());
-    const mins = Math.max(1, Math.ceil(((ahead + 1) * avg + (Number.isFinite(wait) ? wait / 1000 : 0)) / 60));
+    const wait = Math.max(0, th?.next_allowed_at ? Date.parse(th.next_allowed_at) - Date.now() : 0, a.not_before ? Date.parse(a.not_before) - Date.now() : 0);
+    const mins = Math.max(1, Math.ceil(((ahead + 1) * avg + wait / 1000) / 60));
     return `~${mins} min`;
   };
 
