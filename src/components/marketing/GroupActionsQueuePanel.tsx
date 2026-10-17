@@ -50,6 +50,7 @@ interface ThrottleRow {
   paused_reason: string | null;
   consecutive_failures: number;
   last_action_at: string | null;
+  next_allowed_at: string | null;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -122,32 +123,18 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
       if (error) throw error;
       setActions((data || []) as unknown as QueueAction[]);
 
-      const { data: th } = await supabase.from("group_admin_throttle" as any).select("*");
+      const { data: th } = await supabase.from("group_admin_throttle" as any).select("whatsapp_number_id,min_gap_seconds,max_gap_seconds,long_pause_every,long_pause_min_seconds,long_pause_max_seconds,max_per_hour,max_per_day,window_start,window_end,paused,paused_reason,consecutive_failures,last_action_at,next_allowed_at").limit(200);
       setThrottles((th || []) as unknown as ThrottleRow[]);
 
-      const { data: nums } = await supabase.from("whatsapp_numbers_safe").select("id, label");
+      const { data: nums } = await supabase.from("whatsapp_numbers_safe").select("id, label").limit(200);
       setInstances((nums || []) as { id: string; label: string }[]);
 
-      // Contagens da última hora e do dia por instância (para o painel de ritmo)
-      const sinceHour = new Date(Date.now() - 3600_000).toISOString();
-      const { data: hourRows } = await supabase
-        .from("group_admin_actions" as any)
-        .select("whatsapp_number_id")
-        .in("status", ["done", "failed"])
-        .gte("finished_at", sinceHour);
+      const { data: counts, error: countError } = await supabase.rpc("group_admin_queue_counts", { p_limit: 200, p_offset: 0 });
+      if (countError) throw countError;
       const hc: Record<string, number> = {};
-      (hourRows || []).forEach((r: any) => { hc[r.whatsapp_number_id] = (hc[r.whatsapp_number_id] || 0) + 1; });
-      setHourCounts(hc);
-
-      const spNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-      const dayStart = new Date(spNow); dayStart.setHours(0, 0, 0, 0);
-      const { data: dayRows } = await supabase
-        .from("group_admin_actions" as any)
-        .select("whatsapp_number_id")
-        .in("status", ["done", "failed"])
-        .gte("finished_at", dayStart.toISOString());
       const dc: Record<string, number> = {};
-      (dayRows || []).forEach((r: any) => { dc[r.whatsapp_number_id] = (dc[r.whatsapp_number_id] || 0) + 1; });
+      (counts || []).forEach(r => { hc[r.whatsapp_number_id] = r.hour_count; dc[r.whatsapp_number_id] = r.day_count; });
+      setHourCounts(hc);
       setDayCounts(dc);
     } catch (e) {
       toast.error("Erro ao carregar fila de ações");
@@ -174,11 +161,13 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
     if (a.status !== "queued") return "—";
     const ahead = actions.filter(x =>
       x.whatsapp_number_id === a.whatsapp_number_id && x.status === "queued" &&
-      (x.created_at < a.created_at || (x.created_at === a.created_at && (x.seq || 0) < (a.seq || 0)))
+      (x.created_at < a.created_at || (x.created_at === a.created_at && (x.seq ?? Infinity) < (a.seq ?? Infinity)))
     ).length;
     const th = throttles.find(t => t.whatsapp_number_id === a.whatsapp_number_id);
     const avg = th ? (th.min_gap_seconds + th.max_gap_seconds) / 2 : AVG_GAP_SECONDS;
-    const mins = Math.max(1, Math.ceil(((ahead + 1) * avg) / 60));
+    if (th?.paused) return "Fila pausada";
+    const wait = Math.max(0, Date.parse(th?.next_allowed_at || "") - Date.now(), Date.parse(a.not_before || "") - Date.now());
+    const mins = Math.max(1, Math.ceil(((ahead + 1) * avg + (Number.isFinite(wait) ? wait / 1000 : 0)) / 60));
     return `~${mins} min`;
   };
 
@@ -191,7 +180,7 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
 
   const requeueAction = async (a: QueueAction) => {
     const { error } = await supabase.from("group_admin_actions" as any)
-      .update({ status: "queued", not_before: null, error_message: null, finished_at: null, locked_until: null, updated_at: new Date().toISOString() } as any)
+      .update({ status: "queued", attempts: 0, not_before: null, error_message: null, finished_at: null, locked_until: null, updated_at: new Date().toISOString() } as any)
       .eq("id", a.id).eq("status", "failed");
     if (error) { toast.error("Erro ao reenfileirar"); return; }
     toast.success("Ação de volta na fila");
@@ -219,9 +208,10 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
   const saveThrottle = async () => {
     if (!editingThrottle) return;
     setIsSavingThrottle(true);
-    const { whatsapp_number_id, ...rest } = editingThrottle;
+    const { whatsapp_number_id, min_gap_seconds, max_gap_seconds, long_pause_every, long_pause_min_seconds, long_pause_max_seconds, max_per_hour, max_per_day, window_start, window_end } = editingThrottle;
     const { error } = await supabase.from("group_admin_throttle" as any)
-      .upsert({ whatsapp_number_id, ...rest } as any);
+      .update({ min_gap_seconds, max_gap_seconds, long_pause_every, long_pause_min_seconds, long_pause_max_seconds, max_per_hour, max_per_day, window_start, window_end })
+      .eq("whatsapp_number_id", whatsapp_number_id);
     setIsSavingThrottle(false);
     if (error) { toast.error("Erro ao salvar ritmo"); return; }
     toast.success("Ritmo salvo!");
@@ -260,12 +250,12 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
                         {th?.paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
                         {th?.paused ? "Retomar" : "Pausar fila"}
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar ritmo"
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar ritmo" disabled={!th}
                         onClick={() => setEditingThrottle(th || {
                           whatsapp_number_id: id, min_gap_seconds: 45, max_gap_seconds: 120,
                           long_pause_every: 5, long_pause_min_seconds: 180, long_pause_max_seconds: 360,
                           max_per_hour: 20, max_per_day: 60, window_start: "08:00", window_end: "22:00",
-                          paused: false, paused_reason: null, consecutive_failures: 0, last_action_at: null,
+                          paused: false, paused_reason: null, consecutive_failures: 0, last_action_at: null, next_allowed_at: null,
                         })}>
                         <Settings2 className="h-3.5 w-3.5" />
                       </Button>
@@ -298,6 +288,7 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
             <SelectItem value="done">Feitas</SelectItem>
             <SelectItem value="failed">Falharam</SelectItem>
             <SelectItem value="cancelled">Canceladas</SelectItem>
+            <SelectItem value="skipped">Puladas</SelectItem>
           </SelectContent>
         </Select>
         <Select value={instanceFilter} onValueChange={setInstanceFilter}>
@@ -358,7 +349,7 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
                         {a.attempts > 1 && <span>Tentativa {a.attempts}</span>}
                         {a.batch && <span>Lote: {a.batch}</span>}
                       </div>
-                      {a.error_message && a.status === "failed" && (
+                      {a.error_message && (a.status === "failed" || a.status === "skipped") && (
                         <p className="text-[11px] text-destructive">{a.error_message}</p>
                       )}
                     </div>

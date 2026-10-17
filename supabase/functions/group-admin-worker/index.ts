@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
+import { classifyActionError, canRetry, supportsGroupAction } from "./policy.ts";
 
 /**
  * group-admin-worker — executa UMA ação administrativa de grupo por instância
@@ -40,7 +41,10 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return json({ error: "Configuração indisponível" }, 500);
+  const supabase = createClient(url, key);
   const started = Date.now();
   const stats = { done: 0, failed: 0, deferred: 0, skipped: 0 };
 
@@ -63,6 +67,7 @@ serve(async (req) => {
   };
 
   const executeAction = async (a: Action, provider: string): Promise<{ ok: boolean; status: number; error: string | null; result: any }> => {
+    if (!supportsGroupAction(provider, a.action_type)) return { ok: false, status: 400, error: `Ação "${a.action_type}" não suportada pelo provedor ${provider}`, result: { code: "UNSUPPORTED_ACTION" } };
     const p = a.payload || {};
     const jid = a.group_jid;
     const wid = a.whatsapp_number_id;
@@ -123,35 +128,12 @@ serve(async (req) => {
     return { ok: r.ok, status: r.status, error: r.error, result: r.data };
   };
 
-  const finish = async (a: Action, outcome: "done" | "failed" | "retry" | "defer", info: { error?: string | null; result?: any; deferMinutes?: number }) => {
-    const patch: Record<string, any> = { updated_at: new Date().toISOString(), locked_until: null };
-    if (outcome === "done") {
-      patch.status = "done"; patch.finished_at = new Date().toISOString(); patch.result = info.result ?? null; patch.error_message = null;
-    } else if (outcome === "failed") {
-      patch.status = "failed"; patch.finished_at = new Date().toISOString(); patch.error_message = info.error || "falha";
-    } else {
-      // retry / defer: volta para queued sem concluir
-      patch.status = "queued";
-      patch.not_before = new Date(Date.now() + (info.deferMinutes || 10) * 60_000).toISOString();
-      if (outcome === "defer") patch.attempts = Math.max(0, a.attempts - 1); // adiamento não conta tentativa
-      if (info.error) patch.error_message = info.error;
-    }
-    await supabase.from("group_admin_actions").update(patch).eq("id", a.id);
-
-    // Controle de falhas consecutivas por instância
-    if (outcome === "done") {
-      await supabase.from("group_admin_throttle").update({ consecutive_failures: 0 }).eq("whatsapp_number_id", a.whatsapp_number_id);
-    } else if (outcome === "failed" || outcome === "retry") {
-      const { data: t } = await supabase.from("group_admin_throttle").select("consecutive_failures").eq("whatsapp_number_id", a.whatsapp_number_id).maybeSingle();
-      const fails = (t?.consecutive_failures || 0) + 1;
-      const upd: Record<string, any> = { consecutive_failures: fails };
-      if (fails >= 3) {
-        upd.paused = true;
-        upd.paused_reason = `3 falhas seguidas: ${String(info.error || "erro desconhecido").slice(0, 180)}`;
-        console.warn(`[group-admin-worker] instância ${a.whatsapp_number_id} PAUSADA após 3 falhas seguidas`);
-      }
-      await supabase.from("group_admin_throttle").upsert({ whatsapp_number_id: a.whatsapp_number_id, ...upd });
-    }
+  const finish = async (a: Action, outcome: "done" | "failed" | "retry", info: { error?: string | null; result?: any; instanceFailure?: boolean }) => {
+    const { error } = await supabase.rpc("finish_group_admin_action", {
+      p_id: a.id, p_outcome: outcome, p_error: info.error ?? null,
+      p_result: info.result ?? null, p_instance_failure: info.instanceFailure ?? true,
+    });
+    if (error) throw error;
   };
 
   const mirrorToGroupRow = async (a: Action) => {
@@ -197,7 +179,11 @@ serve(async (req) => {
       for (const numberId of numberIds) {
         if (Date.now() - started >= LOOP_BUDGET_MS) break;
         const inst = numMap.get(numberId);
-        if (!inst || inst.is_active === false) { stats.skipped++; continue; }
+        if (!inst || inst.is_active === false) {
+          const { error } = await supabase.from("group_admin_actions").update({ status: "skipped", error_message: "Instância inativa", finished_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("whatsapp_number_id", numberId).eq("status", "queued");
+          if (error) throw error;
+          stats.skipped++; continue;
+        }
 
         // Instância offline: adia as ações dela em 10 min (sem contar tentativa)
         if (inst.is_online === false) {
@@ -210,26 +196,13 @@ serve(async (req) => {
           continue;
         }
 
-        const { data: claimed } = await supabase.rpc("claim_next_group_admin_action", { p_number_id: numberId });
+        const { data: claimed, error: claimError } = await supabase.rpc("claim_next_group_admin_action", { p_number_id: numberId });
+        if (claimError) throw claimError;
         const action = (Array.isArray(claimed) ? claimed[0] : claimed) as Action | null;
         if (!action) continue; // throttle segurou (gap, janela, tetos) ou fila vazia
         claimedAny = true;
 
-        // pin_message é envio de mensagem: não disputar com disparo agendado em andamento
-        if (action.action_type === "pin_message") {
-          const { count } = await supabase
-            .from("group_campaign_block_dispatches")
-            .select("id", { count: "exact", head: true })
-            .eq("whatsapp_number_id", numberId)
-            .in("status", ["pending", "sending"]);
-          if ((count || 0) > 0) {
-            console.log(`[group-admin-worker] pin_message adiado: disparo agendado em andamento na instância ${numberId}`);
-            await finish(action, "defer", { deferMinutes: 5, error: "disparo de mensagem agendada em andamento" });
-            stats.deferred++;
-            continue;
-          }
-        }
-
+        // Pin deferral happens atomically inside claim, before attempts and throttle.
         const provider = inst.provider || "zapi";
         console.log(`[group-admin-worker] executando ${action.action_type} no grupo ${action.group_jid} (${provider}, tentativa ${action.attempts})`);
         const r = await executeAction(action, provider);
@@ -241,11 +214,11 @@ serve(async (req) => {
           console.log(`[group-admin-worker] ${action.action_type} OK no grupo ${action.group_jid}`);
         } else {
           const errText = String(r.error || "");
-          const forbidden = r.status === 403 || /GROUP_FORBIDDEN|forbidden|not.?admin|403/i.test(errText);
-          if (forbidden) {
-            await finish(action, "failed", { error: "Número não é admin do grupo" });
+          const classification = classifyActionError(r.status, r.result, errText);
+          if (classification.permanent) {
+            await finish(action, "failed", { error: classification.message, result: r.result, instanceFailure: false });
             stats.failed++;
-          } else if (action.attempts < 2) {
+          } else if (canRetry(action.attempts)) {
             await finish(action, "retry", { error: errText, deferMinutes: 10 });
             console.warn(`[group-admin-worker] ${action.action_type} falhou (tentativa ${action.attempts}), nova tentativa em 10min: ${errText}`);
           } else {
