@@ -8489,6 +8489,157 @@ export type Database = {
         }
         Relationships: []
       }
+      group_admin_actions: {
+        Row: {
+          action_type: string
+          attempts: number
+          batch: string | null
+          campaign_id: string | null
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          group_db_id: string | null
+          group_jid: string
+          group_name_snapshot: string | null
+          id: string
+          locked_until: string | null
+          not_before: string | null
+          notes: string | null
+          payload: Json
+          requested_by: string
+          result: Json | null
+          seq: number | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          action_type: string
+          attempts?: number
+          batch?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          group_db_id?: string | null
+          group_jid: string
+          group_name_snapshot?: string | null
+          id?: string
+          locked_until?: string | null
+          not_before?: string | null
+          notes?: string | null
+          payload?: Json
+          requested_by?: string
+          result?: Json | null
+          seq?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          action_type?: string
+          attempts?: number
+          batch?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          group_db_id?: string | null
+          group_jid?: string
+          group_name_snapshot?: string | null
+          id?: string
+          locked_until?: string | null
+          not_before?: string | null
+          notes?: string | null
+          payload?: Json
+          requested_by?: string
+          result?: Json | null
+          seq?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_admin_actions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_admin_actions_group_db_id_fkey"
+            columns: ["group_db_id"]
+            isOneToOne: false
+            referencedRelation: "vip_group_membership_stats"
+            referencedColumns: ["group_id"]
+          },
+          {
+            foreignKeyName: "group_admin_actions_group_db_id_fkey"
+            columns: ["group_db_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_admin_throttle: {
+        Row: {
+          actions_since_long_pause: number
+          consecutive_failures: number
+          last_action_at: string | null
+          long_pause_every: number
+          long_pause_max_seconds: number
+          long_pause_min_seconds: number
+          max_gap_seconds: number
+          max_per_day: number
+          max_per_hour: number
+          min_gap_seconds: number
+          paused: boolean
+          paused_reason: string | null
+          whatsapp_number_id: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          actions_since_long_pause?: number
+          consecutive_failures?: number
+          last_action_at?: string | null
+          long_pause_every?: number
+          long_pause_max_seconds?: number
+          long_pause_min_seconds?: number
+          max_gap_seconds?: number
+          max_per_day?: number
+          max_per_hour?: number
+          min_gap_seconds?: number
+          paused?: boolean
+          paused_reason?: string | null
+          whatsapp_number_id: string
+          window_end?: string
+          window_start?: string
+        }
+        Update: {
+          actions_since_long_pause?: number
+          consecutive_failures?: number
+          last_action_at?: string | null
+          long_pause_every?: number
+          long_pause_max_seconds?: number
+          long_pause_min_seconds?: number
+          max_gap_seconds?: number
+          max_per_day?: number
+          max_per_hour?: number
+          min_gap_seconds?: number
+          paused?: boolean
+          paused_reason?: string | null
+          whatsapp_number_id?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       group_campaign_block_dispatches: {
         Row: {
           attempts: number
@@ -24773,6 +24924,39 @@ export type Database = {
           to: "ig_live_cart_notifications"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      claim_next_group_admin_action: {
+        Args: { p_number_id: string }
+        Returns: {
+          action_type: string
+          attempts: number
+          batch: string | null
+          campaign_id: string | null
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          group_db_id: string | null
+          group_jid: string
+          group_name_snapshot: string | null
+          id: string
+          locked_until: string | null
+          not_before: string | null
+          notes: string | null
+          payload: Json
+          requested_by: string
+          result: Json | null
+          seq: number | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "group_admin_actions"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       classify_group_member: { Args: { _phone: string }; Returns: string }
