@@ -52,11 +52,11 @@ describe("Etapa final de pagamento (botão CLIQUE AQUI PARA CONCLUIR PAGAMENTO)"
 
     // Antes de completar: botão pede as parcelas, sem o resumo.
     expect(screen.queryByText(/falta só apertar o botão/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Selecione as parcelas/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Parcelas" })).toBeInTheDocument();
 
     fillCard();
-    const select = document.querySelector("select")!;
-    fireEvent.change(select, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Parcelas" }));
+    fireEvent.click(screen.getByRole("button", { name: /^3x de/ }));
 
     // Resumo aparece com a frase final e o valor das parcelas.
     expect(await screen.findByText(/falta só apertar o botão/i)).toBeInTheDocument();
