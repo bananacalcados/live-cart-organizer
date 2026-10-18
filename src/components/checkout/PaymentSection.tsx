@@ -962,11 +962,11 @@ function CardPaymentForm({
               resumo dentro — o valor fica fora, logo abaixo. */}
           <Button
             onClick={handleSubmit}
-            className="w-full h-14 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse text-sm sm:text-base"
+            className="w-full min-h-14 h-auto whitespace-normal px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 shadow-xl shadow-emerald-600/40 animate-pulse text-[11px] min-[380px]:text-xs min-[460px]:text-sm sm:text-base"
             size="lg"
           >
             <Lock className="h-4 w-4 mr-2 shrink-0" />
-            <span className="font-bold text-center leading-snug">CLIQUE AQUI PARA CONCLUIR PAGAMENTO</span>
+            <span className="font-bold text-center leading-tight">CLIQUE AQUI PARA CONCLUIR PAGAMENTO</span>
           </Button>
           <p className="text-center text-sm font-bold text-emerald-800 dark:text-emerald-300">
             {isDebit || selectedInstallments === 1
