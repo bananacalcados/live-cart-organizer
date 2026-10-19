@@ -131,6 +131,7 @@ serve(async (req) => {
 
     for (const refund of processingRefunds || []) {
       refundsChecked++;
+      const isVerificar = refund.status === "verificar";
       try {
         const account = await getMpAccountByPaymentId(supabase, refund.payment_id);
         if (!account) continue;
@@ -139,27 +140,55 @@ serve(async (req) => {
         });
         if (!r.ok) continue;
         const refundsList: any[] = await r.json();
-        const match = (refundsList || []).find((item) => String(item?.id) === String(refund.refund_id));
-        if (!match) continue;
+
+        // "verificar": sem refund_id gravado — casa por mesmo valor criado
+        // DEPOIS do registro. Se após 15 min não existir, marca falhou.
+        const match = isVerificar
+          ? (refundsList || []).find((item) =>
+              Math.abs(Number(item?.amount || 0) - Number(refund.amount)) < 0.01
+              && item?.date_created && new Date(item.date_created) >= new Date(refund.created_at))
+          : (refundsList || []).find((item) => String(item?.id) === String(refund.refund_id));
+
+        if (!match) {
+          if (isVerificar && Date.now() - new Date(refund.created_at).getTime() > 15 * 60 * 1000) {
+            await supabase.from("gateway_refunds").update({
+              status: "falhou",
+              error_message: "O Mercado Pago não processou este estorno (conferido após 15 min). Pode solicitar novamente.",
+              updated_at: new Date().toISOString(),
+            }).eq("id", refund.id).eq("status", "verificar");
+          }
+          continue;
+        }
 
         const mpStatus = String(match.status || "");
         if (mpStatus === "approved") {
           await supabase.from("gateway_refunds").update({
             status: "concluido",
+            refund_id: match.id != null ? String(match.id) : refund.refund_id,
             e2e_id: match.e2e_id || refund.e2e_id || null,
             mp_response: match,
             completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }).eq("id", refund.id).eq("status", "processando");
+          }).eq("id", refund.id).in("status", ["processando", "verificar"]);
           await runRefundPostActions(supabase, refund, null);
           refundsDone++;
-        } else if (!["in_process", "pending"].includes(mpStatus)) {
+        } else if (["in_process", "pending"].includes(mpStatus)) {
+          if (isVerificar) {
+            await supabase.from("gateway_refunds").update({
+              status: "processando",
+              refund_id: match.id != null ? String(match.id) : refund.refund_id,
+              e2e_id: match.e2e_id || refund.e2e_id || null,
+              mp_response: match,
+              updated_at: new Date().toISOString(),
+            }).eq("id", refund.id).eq("status", "verificar");
+          }
+        } else {
           await supabase.from("gateway_refunds").update({
             status: "falhou",
             error_message: `Estorno recusado pelo Mercado Pago (status: ${mpStatus || "desconhecido"}).`,
             mp_response: match,
             updated_at: new Date().toISOString(),
-          }).eq("id", refund.id).eq("status", "processando");
+          }).eq("id", refund.id).in("status", ["processando", "verificar"]);
         }
       } catch (err: any) {
         errors.push({ refund: refund.id, err: err.message });
