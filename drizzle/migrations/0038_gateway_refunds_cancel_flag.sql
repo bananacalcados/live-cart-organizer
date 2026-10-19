@@ -1,0 +1,2 @@
+ALTER TABLE public.gateway_refunds ADD COLUMN cancel_order BOOLEAN NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.gateway_refunds.cancel_order IS 'Se true, ao concluir estorno integral de pedido da live nao enviado, move o pedido para cancelled (confirmado pelo usuario na tela).';
