@@ -167,6 +167,19 @@ export function RefundApprovalsPanel() {
               </div>
               <button onClick={() => void saveFooter()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Salvar</button>
             </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Mensagem padrão ao enviar o comprovante — variáveis: {"{nome} {valor} {data_compra} {codigo} {aviso_prazo}"}</label>
+              <textarea
+                value={msgTpl}
+                onChange={(e) => setMsgTpl(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              />
+              <div className="flex justify-end">
+                <button onClick={() => void saveMsgTpl()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Salvar mensagem</button>
+              </div>
+            </div>
           </div>
         )}
 
