@@ -114,8 +114,61 @@ serve(async (req) => {
     }
   }
 
+  // ── Estornos em processamento (Fase 1): consulta GET /v1/payments/{id}/refunds ──
+  // Reaproveita este worker de 2 min — sem cron novo. Teto de 20 por execução.
+  let refundsChecked = 0;
+  let refundsDone = 0;
+  try {
+    const { data: processingRefunds } = await supabase
+      .from("gateway_refunds")
+      .select("*")
+      .eq("gateway", "mercadopago")
+      .eq("status", "processando")
+      .order("created_at", { ascending: true })
+      .limit(20);
+
+    for (const refund of processingRefunds || []) {
+      refundsChecked++;
+      try {
+        const account = await getMpAccountByPaymentId(supabase, refund.payment_id);
+        if (!account) continue;
+        const r = await fetch(`https://api.mercadopago.com/v1/payments/${refund.payment_id}/refunds`, {
+          headers: { Authorization: `Bearer ${account.access_token}` },
+        });
+        if (!r.ok) continue;
+        const refundsList: any[] = await r.json();
+        const match = (refundsList || []).find((item) => String(item?.id) === String(refund.refund_id));
+        if (!match) continue;
+
+        const mpStatus = String(match.status || "");
+        if (mpStatus === "approved") {
+          await supabase.from("gateway_refunds").update({
+            status: "concluido",
+            e2e_id: match.e2e_id || refund.e2e_id || null,
+            mp_response: match,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", refund.id).eq("status", "processando");
+          await runRefundPostActions(supabase, refund, null);
+          refundsDone++;
+        } else if (!["in_process", "pending"].includes(mpStatus)) {
+          await supabase.from("gateway_refunds").update({
+            status: "falhou",
+            error_message: `Estorno recusado pelo Mercado Pago (status: ${mpStatus || "desconhecido"}).`,
+            mp_response: match,
+            updated_at: new Date().toISOString(),
+          }).eq("id", refund.id).eq("status", "processando");
+        }
+      } catch (err: any) {
+        errors.push({ refund: refund.id, err: err.message });
+      }
+    }
+  } catch (err: any) {
+    errors.push({ refunds_sync: err.message });
+  }
+
   return new Response(
-    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, errors: errors.slice(0, 5) }),
+    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, errors: errors.slice(0, 5) }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
