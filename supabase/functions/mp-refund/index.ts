@@ -377,8 +377,18 @@ serve(async (req) => {
     ]);
     const recent = recentRes.data || [];
     // Aviso: Pix concluído (pelo acompanhamento) com comprovante pronto e ainda não enviado.
-    const readyToSend = recent.filter((r: any) => r.status === "concluido" && !r.card_brand && r.receipt_path && !r.receipt_sent_at)
-      .map((r: any) => ({ id: r.id, amount: r.amount, customer_name: r.mp_response?.payer?.first_name || null, source: r.source, source_id: r.source_id }));
+    const readyRows = recent.filter((r: any) => r.status === "concluido" && !r.card_brand && r.receipt_path && !r.receipt_sent_at)
+      .slice(0, 20);
+    const saleIds = readyRows.filter((r: any) => r.source === "pos_sale").map((r: any) => r.source_id);
+    const orderIds = readyRows.filter((r: any) => r.source === "order").map((r: any) => r.source_id);
+    const names = new Map<string, string>();
+    const [salesN, ordersN] = await Promise.all([
+      saleIds.length ? supabase.from("pos_sales").select("id, customer_name").in("id", saleIds) : Promise.resolve({ data: [] }),
+      orderIds.length ? supabase.from("orders").select("id, customer:customers(full_name)").in("id", orderIds) : Promise.resolve({ data: [] }),
+    ]);
+    for (const x of (salesN as any).data || []) if (x.customer_name) names.set(x.id, x.customer_name);
+    for (const x of (ordersN as any).data || []) if (x.customer?.full_name) names.set(x.id, x.customer.full_name);
+    const readyToSend = readyRows.map((r: any) => ({ id: r.id, amount: r.amount, customer_name: names.get(r.source_id) || null }));
     return json({ ok: true, pending: pendingRes.data || [], recent, readyToSend, isAdmin: !!isAdmin });
   }
 
