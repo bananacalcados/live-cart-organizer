@@ -68,3 +68,4 @@
 - [ ] Bloco 3 — frase de pedido no modelo padrão da faixa
 
 - [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.
+- [ ] Corrigir carrinhos montados em Novos Contatos para Aguardando Pagamento, sem alterar pedidos ou publicar.
