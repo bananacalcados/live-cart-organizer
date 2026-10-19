@@ -274,6 +274,13 @@
       "when": 1792448314727,
       "tag": "0038_gateway_refunds_cancel_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792449306879,
+      "tag": "0039_refund_security_hardening",
+      "breakpoints": true
     }
   ]
 }
