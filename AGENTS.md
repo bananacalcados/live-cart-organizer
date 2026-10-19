@@ -2,9 +2,7 @@
 
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers and retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
-- Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
-- The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
-- Payment audits: admin/read-only, 50 rows, ≤3 provider reads; no charges/notifications.
+- Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments. Incident reversal only from a privileged DB session with an invalidated sandbox attempt and no successful attempt remaining. Payment audits: admin/read-only, 50 rows, ≤3 provider reads.
 
 - Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
 
@@ -18,7 +16,7 @@
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (token do evento, polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders, porque é página pública e não pode tocar em orders/comentários/clientes.
 - Overlay scales to viewport; per-event controls isolate OBS. Raffle eligibility only in RPC event_raffle_pool (bar, list, draw match).
 - Overlay editing shares renderer bounds and merges layout-only writes, keeping unapplied settings and alert queues.
-- Leads that are already customers (customers_unified.total_orders > 0, matched by last 8 phone digits) are kept in lp_leads but marked dispatch_excluded_reason='ja_cliente' by a BEFORE INSERT trigger, because history must be preserved while dispatches only target real prospects.
+- Leads already customers (customers_unified.total_orders > 0, last 8 phone digits) stay in lp_leads marked dispatch_excluded_reason='ja_cliente' via BEFORE INSERT trigger: history preserved, dispatches target only real prospects.
 - Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in total orders, total value and the conversion denominator, but never as paid/received, because the business wants real conversion.
 - Card gateway split (Admin > Pagamentos, table gateway_split_config) only picks the FIRST gateway of the card cascade, deterministically by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins the queue only when it is the drawn start gateway, and any config read failure falls back to the fixed order, because retries must never land on a different gateway.
 
