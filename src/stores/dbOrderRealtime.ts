@@ -31,7 +31,7 @@ export const fetchDbOrderById = async (orderId: string): Promise<DbOrder | null>
 export interface OrderSyncVersion {
   id: string;
   updated_at: string;
-  customer: { whatsapp?: string | null } | null;
+  customer?: { whatsapp?: string | null } | null;
 }
 
 export const changedOrderIds = (orders: DbOrder[], versions: OrderSyncVersion[]) => {
