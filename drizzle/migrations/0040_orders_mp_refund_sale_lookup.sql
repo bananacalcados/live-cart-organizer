@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS orders_mp_refund_sale_lookup ON public.orders (pos_sale_id) INCLUDE (id, mercadopago_payment_id, mp_account_id) WHERE mercadopago_payment_id IS NOT NULL;
