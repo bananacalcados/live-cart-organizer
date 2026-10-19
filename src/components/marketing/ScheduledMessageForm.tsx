@@ -23,6 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { VipLinkBlockControls, VipDayLock, VIP_LINK_PLACEHOLDER, type VipLinkMode, type VipLinkProduct } from "./VipLinkControls";
+import { appendDraftMedia, removeDraftMedia } from "@/lib/marketing/draftMediaCaption";
 
 export interface MediaItem {
   url: string;
@@ -253,7 +254,7 @@ function BlockEditor({
           const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
           newItems.push({ url: urlData.publicUrl, caption: '' });
         }
-        onChange({ ...block, mediaItems: [...block.mediaItems, ...newItems] });
+        onChange(appendDraftMedia(block, newItems));
         if (newItems.length) toast.success(`${newItems.length} arquivo(s) enviado(s)!`);
       } catch { toast.error("Erro no upload"); }
       finally { setIsUploading(false); if (e.target) e.target.value = ''; }
@@ -262,7 +263,7 @@ function BlockEditor({
 
   const addUrl = () => {
     if (!urlInput.trim()) return;
-    onChange({ ...block, mediaItems: [...block.mediaItems, { url: urlInput.trim(), caption: '' }] });
+    onChange(appendDraftMedia(block, [{ url: urlInput.trim(), caption: '' }]));
     setUrlInput('');
   };
 
@@ -273,7 +274,7 @@ function BlockEditor({
   };
 
   const removeItem = (idx: number) => {
-    onChange({ ...block, mediaItems: block.mediaItems.filter((_, i) => i !== idx) });
+    onChange(removeDraftMedia(block, idx));
   };
 
   // Audio recording
@@ -418,6 +419,17 @@ function BlockEditor({
             </div>
 
             {/* Items list */}
+            {block.mediaItems.length === 0 && (
+              <div className="space-y-1">
+                <Label htmlFor={`draft-caption-${block.id}`}>Legenda (vai junto com a foto)</Label>
+                <Textarea id={`draft-caption-${block.id}`} ref={textareaRef}
+                  placeholder="Legenda (vai junto com a foto)" value={block.content}
+                  onChange={e => onChange({ ...block, content: e.target.value })}
+                  rows={4} className="text-xs" />
+                <WhatsAppFormattingToolbar value={block.content}
+                  onChange={content => onChange({ ...block, content })} textareaRef={textareaRef} />
+              </div>
+            )}
             {block.mediaItems.length > 0 && (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {block.mediaItems.map((item, i) => (
@@ -436,7 +448,7 @@ function BlockEditor({
                         onChange={e => updateCaption(i, e.target.value)} rows={2} className="text-xs" />
                       <WhatsAppFormattingToolbar value={item.caption} onChange={val => updateCaption(i, val)} />
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeItem(i)}>
+                    <Button variant="ghost" size="icon" aria-label={`Remover arquivo ${i + 1}`} className="h-6 w-6 shrink-0" onClick={() => removeItem(i)}>
                       <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </div>
@@ -454,11 +466,14 @@ function BlockEditor({
               <VipLinkBlockControls
                 mode={block.vipLinkMode || 'none'}
                 product={block.vipLinkProduct || null}
-                text={block.mediaItems[block.mediaItems.length - 1]?.caption || ''}
+                text={block.mediaItems.length ? block.mediaItems[block.mediaItems.length - 1].caption : block.content}
                 onChange={(m, p) => onChange({ ...block, vipLinkMode: m, vipLinkProduct: p })}
                 onInsertPlaceholder={() => {
                   const last = block.mediaItems.length - 1;
-                  if (last < 0) { toast.error('Adicione a foto/vídeo primeiro'); return; }
+                  if (last < 0) {
+                    onChange({ ...block, content: block.content.includes(VIP_LINK_PLACEHOLDER) ? block.content : `${block.content}${block.content ? '\n' : ''}${VIP_LINK_PLACEHOLDER}` });
+                    return;
+                  }
                   const items = block.mediaItems.map((it, i) => i === last && !it.caption.includes(VIP_LINK_PLACEHOLDER)
                     ? { ...it, caption: `${it.caption}${it.caption ? '\n' : ''}${VIP_LINK_PLACEHOLDER}` } : it);
                   onChange({ ...block, mediaItems: items });
@@ -962,7 +977,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
     if (shopifySendMode === 'photo_only') {
       if (targetBlock.type === 'image') {
-        updateBlock(targetBlock.id, { ...targetBlock, mediaBrief: n.title, vipLinkProduct: targetBlock.vipLinkProduct || linkProduct, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
+        updateBlock(targetBlock.id, appendDraftMedia({ ...targetBlock, mediaBrief: n.title, vipLinkProduct: targetBlock.vipLinkProduct || linkProduct }, [{ url: imageUrl, caption: '' }]));
       } else if (targetBlock.type === 'text') {
         // Add a new image block
         const nb = createBlock('image');

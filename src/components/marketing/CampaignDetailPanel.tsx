@@ -885,7 +885,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const block = data.blocks?.[0];
     const msgData = {
       message_type: block?.type || data.messageType,
-      message_content: block?.content || data.messageContent,
+      message_content: ['image', 'video', 'document'].includes(block?.type || data.messageType)
+        ? (block?.mediaItems?.length ? block.mediaItems[0].caption : block?.content ?? data.messageContent) || null
+        : block?.content || data.messageContent,
       media_url: block?.mediaItems?.[0]?.url || block?.mediaUrl || data.mediaUrl || null,
       poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
       poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
