@@ -215,7 +215,7 @@ serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, errors: errors.slice(0, 5) }),
+    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, errors: errors.slice(0, 5) }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
