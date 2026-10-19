@@ -43,15 +43,23 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
   if (source === "order") {
     const { data } = await supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, mp_account_id, total, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
+      .select("id, mercadopago_payment_id, mp_account_id, products, discount_type, discount_value, free_shipping, shipping_cost, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
       .eq("id", id)
       .maybeSingle();
     if (!data) return null;
+    // Valor final = produtos - desconto + frete (mesma fórmula do front)
+    const productsTotal = (Array.isArray(data.products) ? data.products : []).reduce(
+      (sum: number, p: any) => sum + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
+    const discount = data.discount_type && data.discount_value
+      ? (data.discount_type === "percentage" ? productsTotal * (Number(data.discount_value) / 100) : Number(data.discount_value))
+      : 0;
+    const shipping = data.free_shipping ? 0 : Number(data.shipping_cost || 0);
+    const total = Math.max(0, productsTotal - discount + shipping);
     return {
       id: data.id,
       paymentId: data.mercadopago_payment_id,
       mpAccountId: data.mp_account_id,
-      total: Number(data.total || 0),
+      total,
       label: "Pedido da Live",
       channel: "live",
       customerName: data.customer?.full_name || null,
@@ -145,9 +153,11 @@ async function checkPayment(
   if (refUuid && refUuid !== src.id.toLowerCase()) {
     const [otherSale, otherOrder] = await Promise.all([
       supabase.from("pos_sales").select("id").eq("id", refUuid).maybeSingle(),
-      supabase.from("orders").select("id").eq("id", refUuid).maybeSingle(),
+      supabase.from("orders").select("id, pos_sale_id").eq("id", refUuid).maybeSingle(),
     ]);
-    if (otherSale.data || otherOrder.data) {
+    // Pedido da live convertido em venda do PDV é a MESMA compra — libera.
+    const samePurchase = otherOrder.data && otherOrder.data.pos_sale_id === src.id;
+    if ((otherSale.data || otherOrder.data) && !samePurchase) {
       return { ok: false, error: "A referência do pagamento no Mercado Pago pertence a outra venda/pedido. Estorno bloqueado por segurança.", payment, account };
     }
   }
