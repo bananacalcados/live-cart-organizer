@@ -27,3 +27,4 @@
 
 - Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
+- Raffle eligibility lives only in RPC event_raffle_pool (overlay bar, Participantes tab and draw), so the count shown live always matches who is drawn.
