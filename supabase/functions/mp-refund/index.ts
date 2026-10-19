@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
+import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 
 const MAX_REFUND_AGE_DAYS = 180;
 
@@ -164,48 +165,6 @@ async function checkPayment(
   return { ok: true, payment, account, remaining, refundedSoFar };
 }
 
-async function appendHistory(supabase: any, row: any, userEmail: string | null) {
-  const when = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  const line = `[ESTORNO MP ${when}] ${brl(Number(row.amount))} (${row.refund_type}) — motivo: ${row.reason}${row.reason_text ? ` (${row.reason_text})` : ""} — por ${userEmail || row.requested_by || "sistema"}`;
-  const table = row.source === "order" ? "orders" : "pos_sales";
-  try {
-    const { data } = await supabase.from(table).select("notes").eq("id", row.source_id).maybeSingle();
-    const current = (data?.notes || "") as string;
-    await supabase.from(table).update({ notes: current ? `${current}\n${line}` : line }).eq("id", row.source_id);
-  } catch (e: any) {
-    console.warn("[mp-refund] history append failed:", e?.message);
-  }
-}
-
-async function linkExchange(supabase: any, row: any) {
-  try {
-    await supabase
-      .from("trocas_devolucoes")
-      .update({ estorno_forma: "mercadopago", gateway_refund_id: row.id })
-      .eq("pedido_original_id", row.source_id)
-      .is("gateway_refund_id", null);
-  } catch (e: any) {
-    console.warn("[mp-refund] link exchange failed:", e?.message);
-  }
-}
-
-async function maybeCancelOrder(supabase: any, row: any) {
-  if (row.source !== "order" || !row.cancel_order || row.refund_type !== "integral") return;
-  try {
-    const { data } = await supabase.from("orders").select("stage").eq("id", row.source_id).maybeSingle();
-    if (data && !["shipped", "delivered", "cancelled"].includes(String(data.stage || ""))) {
-      await supabase.from("orders").update({ stage: "cancelled", updated_at: new Date().toISOString() }).eq("id", row.source_id);
-    }
-  } catch (e: any) {
-    console.warn("[mp-refund] cancel order failed:", e?.message);
-  }
-}
-
-async function postRefundActions(supabase: any, row: any, userEmail: string | null) {
-  await appendHistory(supabase, row, userEmail);
-  await linkExchange(supabase, row);
-  await maybeCancelOrder(supabase, row);
-}
 
 async function executeMpRefund(supabase: any, row: any, account: any, payment: any, userEmail: string | null) {
   const isPix = payment.payment_method_id === "pix" || payment.payment_type_id === "bank_transfer";
