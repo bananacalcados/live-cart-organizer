@@ -1,10 +1,10 @@
 # Project architecture rules
 
-- Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers and retries must not bypass anti-ban limits. Only successful provider actions mirror group settings.
+- Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers and retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
 - The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
-- Payment audits: admin-only/read-only, 50 rows, max 3 provider reads; no charges/notifications.
+- Payment audits: admin/read-only, 50 rows, ≤3 provider reads; no charges/notifications.
 
 - Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
 
@@ -25,11 +25,11 @@
 - Wait-reply outcomes use stable step IDs and conditional row consumption, because replies and timeouts must choose only one branch while preserving legacy routing.
 - Presenter alerts accept only team_message; order realtime never interrupts the live panel.
 
-- Lazy imports share one reload/tab and visible stale-module fallbacks.
+- Lazy imports: one reload/tab, visible stale-module fallback.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
 
 - Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; hosted change feeds may be absent.
 
-- VIP photo insert normalizes internal names for external writers; captions never use media_brief.
+- VIP inserts normalize names; captions never use media_brief. Shared media helpers preserve draft captions on append/remove.
