@@ -28,7 +28,7 @@
 
 - Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
 
-- Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; hosted change feeds may be absent.
+- Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 
 - VIP inserts normalize names; captions never use media_brief. Shared media helpers preserve draft captions on append/remove.
 - MP refunds (phase 1): edge mp-refund (JWT + has_module_access 'estornos'; switches refunds_enabled/refund_approval_threshold in app_settings; idempotency key per row; Pix in_process=processando); audit in gateway_refunds (writes service-role only); status sync rides mercadopago-poll-pending; post-actions in _shared/refund-post-actions.ts; external_reference of an order converted to this pos_sale = same purchase; other gateways/Point later.
