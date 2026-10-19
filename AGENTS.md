@@ -17,7 +17,7 @@
 - Overlay scales to viewport; per-event controls isolate OBS. Raffle eligibility only in RPC event_raffle_pool (bar, list, draw match).
 - Overlay editing shares renderer bounds and merges layout-only writes, keeping unapplied settings and alert queues.
 - Leads already customers (customers_unified.total_orders > 0, last 8 phone digits) stay in lp_leads marked dispatch_excluded_reason='ja_cliente' via BEFORE INSERT trigger: history preserved, dispatches target only real prospects.
-- Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in total orders, total value and the conversion denominator, but never as paid/received, because the business wants real conversion.
+- Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in totals and the conversion denominator, never as paid/received — the business wants real conversion.
 - Card gateway split (Admin > Pagamentos, gateway_split_config) picks only the FIRST gateway of the card cascade, deterministic by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins only as drawn start gateway, config read failure falls back to the fixed order — retries must never land on a different gateway.
 
 - Wait-reply outcomes use stable step IDs and conditional row consumption, because replies and timeouts must choose only one branch while preserving legacy routing.
