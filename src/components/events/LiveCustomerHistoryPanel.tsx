@@ -10,6 +10,8 @@ import { invalidateExchangeRegistry, useExchangeRegistry } from "@/hooks/useExch
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { isSalePaid } from "@/lib/salePaymentState";
 import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
+import { RefundDialog } from "@/components/refunds/RefundDialog";
+import { useCanRefund } from "@/hooks/useCanRefund";
 import type { DbOrder } from "@/types/database";
 
 interface Props {
@@ -52,6 +54,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   const [liveConfigs, setLiveConfigs] = useState<Record<string, any>>({});
   const { byPhone: cbByPhone, byCpf: cbByCpf, byHandle: cbByHandle, refresh: refreshChargebacks } = useChargebackRegistry();
   const { byPhone: exByPhone, byCpf: exByCpf, byHandle: exByHandle, bySale: exBySale, refresh: refreshExchanges } = useExchangeRegistry();
+  const canRefund = useCanRefund();
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +225,20 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
     renderUnpaidActions={(item) => item.orderName === "Pedido da Live" && item.id in liveConfigs
       ? <LiveInstallmentPreselect orderId={item.id} value={liveConfigs[item.id]} onSaved={(v) => setLiveConfigs((prev) => ({ ...prev, [item.id]: v }))} />
       : null}
-    renderOrderActions={(item) => item.kind === "pos_sale" ? <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} /> : null}
+    renderOrderActions={(item) => {
+      if (item.kind === "pos_sale") {
+        return <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} hasMpPayment={item.hasMpPayment} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} />;
+      }
+      // Pedido da Live pago via Mercado Pago: estorno direto no pedido (ex.: cancelar antes do envio)
+      if (canRefund && item.orderName === "Pedido da Live" && item.hasMpPayment && item.paymentState === "paid") {
+        const orderLabel = `Pedido da Live${item.createdAt ? ` · ${new Date(item.createdAt).toLocaleDateString("pt-BR")}` : ""}`;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <RefundDialog source="order" sourceId={item.id} label={orderLabel} customerName={data?.name} onDone={refreshRisks} />
+          </div>
+        );
+      }
+      return null;
+    }}
   />;
 }
