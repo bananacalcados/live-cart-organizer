@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Undo2, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { RefundReceiptButton } from "./RefundReceiptButton";
 import { refundApi, REFUND_REASONS, type RefundPreview, type RefundSource } from "@/lib/refunds";
 import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, validateRefundAmount } from "@/lib/refundRules";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +41,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [doneRefund, setDoneRefund] = useState<{ id: string; status?: string } | null>(null);
 
   const parsedAmount = useMemo(() => Number(String(amount).replace(",", ".")), [amount]);
   const remaining = preview?.remaining ?? 0;
@@ -119,6 +121,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
         cancel_order: canSuggestCancel ? cancelOrder : false,
       });
       setResultMessage(res.message || (res.pending_approval ? "Estorno aguardando aprovação de um administrador." : "Estorno enviado."));
+      setDoneRefund(res.refund_id ? { id: res.refund_id, status: res.status } : null);
       setStep("done");
       onDone?.();
     } catch (e: any) {
@@ -161,7 +164,8 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 <ShieldAlert className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                 <span>{error}</span>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {doneRefund?.status === "concluido" && <RefundReceiptButton refundId={doneRefund.id} />}
                 <button onClick={() => setOpen(false)} className="rounded-md border border-pos-white/20 px-4 py-2 text-sm text-pos-white hover:bg-pos-white/10">Fechar</button>
               </div>
             </div>
