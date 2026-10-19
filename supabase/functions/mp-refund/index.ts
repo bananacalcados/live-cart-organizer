@@ -214,7 +214,7 @@ async function executeMpRefund(supabase: any, row: any, account: any, payment: a
     updated_at: new Date().toISOString(),
   }).eq("id", row.id);
 
-  if (done) await postRefundActions(supabase, row, userEmail);
+  if (done) await runRefundPostActions(supabase, row, userEmail);
 
   return {
     ok: true,
