@@ -17,6 +17,8 @@ export interface POSCustomerOrder {
   kind?: "pos_sale" | "expedition";
   /** "paid" = pagamento confirmado, "unpaid" = sem pagamento (checkout/pedido em aberto) */
   paymentState?: "paid" | "unpaid" | "unknown";
+  /** Tem pagamento do Mercado Pago vinculado (habilita o botão Estorno). */
+  hasMpPayment?: boolean;
   shipped?: boolean;
   items?: { name: string; variant?: string; size?: string; quantity?: number }[];
 }

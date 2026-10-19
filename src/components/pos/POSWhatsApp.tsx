@@ -879,7 +879,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
         // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
         supabase
           .from("pos_sales")
-          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id, paid_at, shipped_at")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id, paid_at, shipped_at, mercadopago_payment_id")
           .eq("phone_suffix8", suffix)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -1001,6 +1001,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           channelLabel: typeLabel,
           modality,
           kind: "pos_sale" as const,
+          hasMpPayment: !!s.mercadopago_payment_id,
           paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
           shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
