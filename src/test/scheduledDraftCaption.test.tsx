@@ -19,7 +19,7 @@ function setup(type = 'image', text = caption, status = 'draft') {
   const save = vi.fn().mockResolvedValue(undefined);
   const result = render(<ScheduledMessageForm open onOpenChange={vi.fn()} onSubmit={vi.fn()}
     onUpdate={save} editingMessage={{ id: 'test', message_type: type, message_content: text,
-      media_url: null, scheduled_at: '2099-01-01T12:00:00Z', send_speed: 'slow', vip_link_mode: 'general', status }} />);
+      media_url: null, poll_options: null, scheduled_at: '2099-01-01T12:00:00Z', send_speed: 'slow', vip_link_mode: 'general', status }} />);
   return { ...result, save };
 }
 beforeEach(() => { vi.clearAllMocks(); upload.mockResolvedValue({ error: null }); });

@@ -71,6 +71,6 @@
 - [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
 
 ## Correção pequena — fotos nos Grupos VIP
-- [ ] Preservar legenda dos rascunhos sem mídia: exibição, primeiro arquivo, remoção, link e salvamento; testar sem envios/publicação.
+- [x] Preservar legenda sem mídia: exibição, primeiro arquivo (upload/URL/Shopify), remoção, link e salvamento; 14 testes passaram; upload real, salvar/reabrir e remover/salvar sem arquivo conferidos na campanha Teste. Rascunho de teste removido; sem aprovação/envios/publicação.
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
