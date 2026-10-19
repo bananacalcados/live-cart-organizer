@@ -6,7 +6,7 @@ import { OrderStage, isOrderComplete } from '@/types/order';
 import { isOrderMarkedPaid, isPaidOrderStage } from '@/lib/orderPaymentStages';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
-import { fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
+import { changedOrderIds, fetchChangedEventOrders, fetchEventOrderVersions, fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
 
 // Helper to convert products array to Json type
 const productsToJson = (products: DbOrderProduct[]): Json => {
@@ -728,6 +728,34 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
   },
 
   subscribeToEventOrders: (eventId) => {
+    let disposed = false;
+    let syncing = false;
+    const reconcile = async () => {
+      if (disposed || syncing || document.hidden) return;
+      syncing = true;
+      try {
+        const versions = await fetchEventOrderVersions(eventId);
+        if (disposed) return;
+        const current = get().orders.filter((order) => order.event_id === eventId);
+        const fresh = await fetchChangedEventOrders(eventId, changedOrderIds(current, versions));
+        if (disposed) return;
+        for (const order of fresh) {
+          const existing = get().orders.find((item) => item.id === order.id);
+          get().upsertOrderRealtime({ ...existing, ...order });
+        }
+        const serverIds = new Set(versions.map((order) => order.id));
+        for (const order of current) {
+          if (!serverIds.has(order.id) && !lockedOrderIds.has(order.id)) get().removeOrderRealtime(order.id);
+        }
+      } catch (error) {
+        console.error('Error reconciling event orders:', error);
+      } finally {
+        syncing = false;
+      }
+    };
+    const interval = setInterval(reconcile, 60000);
+    const onVisible = () => { if (!document.hidden) void reconcile(); };
+    document.addEventListener('visibilitychange', onVisible);
     const channel = supabase
       .channel(`event-orders-${eventId}`)
       .on(
@@ -756,6 +784,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       .subscribe();
 
     return () => {
+      disposed = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
       supabase.removeChannel(channel);
     };
   },

@@ -12,7 +12,7 @@
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync is stored in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only) and read before the META_ADS_ACCESS_TOKEN secret, because edge functions cannot rewrite secrets.
 - DRE (PDV > Dashboard Geral) é calculada só pela RPC dre_period sobre as views v_sale_* (sem grant ao front); custo do item fica gravado em pos_sale_items.cost_price_at_sale via trigger, porque o custo do cadastro muda com o tempo.
 - AppMax uses AppStore OAuth2 via appmax-install; store credentials stay service-role-only in appmax_installations, never fixed secrets.
-- Link de Atendimento VIP é um motor separado (vip_links, vip_link_daily_destination, vip_link_clicks, vip_link_conversations, edge function vip-go, rota /g/:code, trigger trg_vip_link_match_incoming); nunca reaproveita tabelas/funções da Live (/zap) nem do /vip, porque esses fluxos já funcionam e têm regras próprias de casamento.
+- VIP attendance uses vip_links/daily_destination/clicks/conversations, vip-go and /g/:code; never reuse /zap or /vip engines: matching rules differ.
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e (nfe-emitir) lê unit_price e o imposto deve incidir só sobre o valor real; bloqueada após NF-e emitida.
 - Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows runs server sync only for active lives, with one 30s second pass on the discovered media/account, avoiding browser polling and extra crons.
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (token do evento, polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders, porque é página pública e não pode tocar em orders/comentários/clientes.
@@ -29,3 +29,5 @@
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
 
 - Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
+
+- Event orders reconcile paginated ID/version/phone metadata every 60s while visible, fetching changed carts in batches and preserving editing locks; hosted change feeds may be absent.
