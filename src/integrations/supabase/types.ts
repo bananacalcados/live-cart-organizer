@@ -8468,6 +8468,10 @@ export type Database = {
           receipt_code: string | null
           receipt_generated_at: string | null
           receipt_path: string | null
+          receipt_sent_at: string | null
+          receipt_sent_by: string | null
+          receipt_sent_channel: string | null
+          receipt_sent_to: string | null
           refund_id: string | null
           refund_type: string
           requested_by: string | null
@@ -8499,6 +8503,10 @@ export type Database = {
           receipt_code?: string | null
           receipt_generated_at?: string | null
           receipt_path?: string | null
+          receipt_sent_at?: string | null
+          receipt_sent_by?: string | null
+          receipt_sent_channel?: string | null
+          receipt_sent_to?: string | null
           refund_id?: string | null
           refund_type: string
           requested_by?: string | null
@@ -8530,6 +8538,10 @@ export type Database = {
           receipt_code?: string | null
           receipt_generated_at?: string | null
           receipt_path?: string | null
+          receipt_sent_at?: string | null
+          receipt_sent_by?: string | null
+          receipt_sent_channel?: string | null
+          receipt_sent_to?: string | null
           refund_id?: string | null
           refund_type?: string
           requested_by?: string | null
@@ -19974,6 +19986,7 @@ export type Database = {
           enabled: boolean
           id: boolean
           receipt_footer_contact: string
+          receipt_message_template: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -19982,6 +19995,7 @@ export type Database = {
           enabled?: boolean
           id?: boolean
           receipt_footer_contact?: string
+          receipt_message_template?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -19990,6 +20004,7 @@ export type Database = {
           enabled?: boolean
           id?: boolean
           receipt_footer_contact?: string
+          receipt_message_template?: string | null
           updated_at?: string
           updated_by?: string | null
         }
