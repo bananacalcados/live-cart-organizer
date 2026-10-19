@@ -60,3 +60,9 @@
 - [x] Automação: duas saídas em Aguardar resposta; 8 testes passaram e escolha/reabertura conferidas em sessão autorizada com gravações interceptadas, sem envios reais.
 - [x] Otimizar recuperação de comentários na conta da live; 3 testes passaram e comentário real apareceu sem recarga (20 s após comentário).
 - [ ] Restabelecer chegada imediata dos comentários da Meta: entregas do webhook interrompidas; recuperação do servidor permanece ativa.
+
+## Overlay — relógio, liberação de par e sorteio com prazos (live 19/10, não publicar)
+- [x] Bloco 0 — auditoria
+- [x] Bloco 1 — relógios de pagamento + aviso "Liberou o par" (testado com dados de mentira e teste desfeito no evento Teste)
+- [ ] Bloco 2 — prazos de cadastro/pagamento no sorteio + aba Participantes (aguarda ok do usuário)
+- [ ] Bloco 3 — frase de pedido no modelo padrão da faixa

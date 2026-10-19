@@ -196,6 +196,31 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
         </Card>
 
         <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Relógios de pagamento</CardTitle>
+            <Switch checked={cfg.payment_timers.enabled} onCheckedChange={(v) => update("payment_timers", { enabled: v })} />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label>Texto ({"{handle}"}, {"{timer}"}, {"{product}"}, {"{size}"})</Label>
+            <Input value={cfg.payment_timers.template} onChange={(e) => update("payment_timers", { template: e.target.value })} />
+            <p className="text-xs text-muted-foreground">Aparece quando começa o prazo de pagamento do pedido. Até 4 ao mesmo tempo; some ao pagar, ao vencer ou depois de 20 min.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Liberação de par</CardTitle>
+            <Switch checked={cfg.expired_alert.enabled} onCheckedChange={(v) => update("expired_alert", { enabled: v })} />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label>Texto ({"{handle}"}, {"{product}"}, {"{size}"})</Label>
+            <Input value={cfg.expired_alert.template} onChange={(e) => update("expired_alert", { template: e.target.value })} />
+            <div className="flex items-center gap-2"><Label>Duração (segundos)</Label>
+              <Input type="number" className="w-24" min={2} value={cfg.expired_alert.duration_seconds} onChange={(e) => update("expired_alert", { duration_seconds: Number(e.target.value) || 8 })} /></div>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader><CardTitle className="text-base">Avisos automáticos</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {(["paid_alert", "assembled_alert"] as const).map((k) => (

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, fill, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, fill, formatTimer, visibleTimers, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
-interface Alert { key: number; text: string; duration: number }
+interface Alert { key: number; text: string; duration: number; tone?: "expired" }
 
 /**
  * Overlay da Live para o OBS (1080x1920, fundo transparente).
@@ -29,6 +29,8 @@ export default function LiveOverlay() {
   const ctaTimer = useRef<number | null>(null);
   const cfgRef = useRef<OverlayConfig | null>(null);
   const cfgKey = useRef("");
+  const [timers, setTimers] = useState<PaymentTimer[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const resize = () => setViewport((current) => {
@@ -102,6 +104,18 @@ export default function LiveOverlay() {
         lastId.current = Math.max(lastId.current, e.id);
         if (!cfg) continue;
         if (Date.now() - new Date(e.created_at).getTime() > 120_000) continue;
+        const p = e.payload || {};
+        if (e.kind === "paid" && p.order_id) setTimers((list) => list.filter((t) => t.orderId !== p.order_id));
+        if (e.kind === "expired" && p.order_id) setTimers((list) => list.filter((t) => t.orderId !== p.order_id));
+        if ((e.kind === "timer" || e.kind === "assembled") && p.expires_at && p.order_id && cfg.payment_timers.enabled) {
+          const t: PaymentTimer = { orderId: p.order_id, handle: p.handle || "cliente", product: p.product || "", size: p.size || "", expiresAt: new Date(p.expires_at).getTime(), addedAt: new Date(e.created_at).getTime() };
+          setTimers((list) => [...list.filter((x) => x.orderId !== t.orderId), t]);
+          continue;
+        }
+        if (e.kind === "expired") {
+          if (cfg.expired_alert.enabled) queue.current.push({ key: e.id, text: fill(cfg.expired_alert.template, { handle: p.handle || "", product: p.product || "par", size: p.size || "número" }), duration: cfg.expired_alert.duration_seconds, tone: "expired" });
+          continue;
+        }
         if (e.kind === "paid" && cfg.paid_alert.enabled && e.payload?.handle) {
           queue.current.push({ key: e.id, text: fill(cfg.paid_alert.template, e.payload), duration: cfg.paid_alert.duration_seconds });
         } else if (e.kind === "assembled" && cfg.assembled_alert.enabled && e.payload?.handle) {
@@ -118,6 +132,17 @@ export default function LiveOverlay() {
     const t = window.setInterval(pull, 2000);
     return () => { stop = true; window.clearInterval(t); };
   }, [token]);
+
+  // Relógio local (1 s) só enquanto há relógios na tela — não consulta o servidor
+  useEffect(() => {
+    if (!timers.length) return;
+    const t = window.setInterval(() => {
+      const n = Date.now();
+      setNow(n);
+      setTimers((list) => { const keep = list.filter((x) => x.expiresAt > n && n - x.addedAt < 20 * 60_000); return keep.length === list.length ? list : keep; });
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [timers.length]);
 
   // Fila de avisos: um por vez
   useEffect(() => {
@@ -195,8 +220,21 @@ export default function LiveOverlay() {
 
       {alert && (
         <OverlayBlock position={config.layout.alert} blockKey="alert">
-          <div key={alert.key} className={`${panel} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ lineHeight: 1.2 }}>
+          <div key={alert.key} className={`${panel} ${alert.tone === "expired" ? "overlay-alert-expired" : ""} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ lineHeight: 1.2 }}>
             {alert.text}
+          </div>
+        </OverlayBlock>
+      )}
+
+      {config.payment_timers.enabled && visibleTimers(timers, now).length > 0 && (
+        <OverlayBlock position={config.layout.timers} blockKey="timers">
+          <div className="flex flex-col gap-[0.3em]">
+            {visibleTimers(timers, now).map((t) => (
+              <div key={t.orderId} data-overlay-timer={t.orderId} className={`${panel} font-bold animate-in fade-in duration-500`} style={{ lineHeight: 1.2 }}>
+                {fill(config.payment_timers.template, { handle: t.handle, product: t.product, size: t.size, timer: formatTimer(t.expiresAt - now) })
+                  .split(formatTimer(t.expiresAt - now)).flatMap((part, i, arr) => i < arr.length - 1 ? [part, <span key={i} className="overlay-timer">{formatTimer(t.expiresAt - now)}</span>] : [part])}
+              </div>
+            ))}
           </div>
         </OverlayBlock>
       )}

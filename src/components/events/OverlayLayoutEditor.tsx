@@ -6,7 +6,7 @@ import { MoveDiagonal2 } from "lucide-react";
 import { fill, normalizeOverlayPosition, OverlayBlockKey, OverlayConfig, OverlayLayout } from "@/lib/liveOverlay";
 import { OverlayBlock } from "./OverlayBlock";
 
-const names: Record<OverlayBlockKey, string> = { ticker: "Faixa", raffle_bar: "Sorteio", alert: "Aviso", cta: "Chamada", wheel: "Roleta" };
+const names: Record<OverlayBlockKey, string> = { ticker: "Faixa", raffle_bar: "Sorteio", alert: "Aviso", cta: "Chamada", wheel: "Roleta", timers: "Relógios" };
 const keys = Object.keys(names) as OverlayBlockKey[];
 
 export function OverlayLayoutEditor({ config, onChange, onSave }: { config: OverlayConfig; onChange: (layout: OverlayLayout) => void; onSave: (layout: OverlayLayout) => void }) {
@@ -43,6 +43,7 @@ export function OverlayLayoutEditor({ config, onChange, onSave }: { config: Over
     alert: fill(config.paid_alert.template, { handle: "cliente", product: "Tenis Feminino New Balance 530" }),
     cta: config.cta.items.find((i) => i.enabled)?.text || "Comente VIP e receba o link no direct",
     wheel: `${fill(config.wheel.title_template, { handle: "cliente" })} · 🎉 Bolsa`,
+    timers: fill(config.payment_timers.template, { handle: "cliente", timer: "19:42", product: "Tenis 530", size: "36" }),
   };
   return <div className="space-y-3">
     <div data-testid="overlay-editor" className="relative overflow-hidden bg-muted-foreground/40" style={{ width: 324, height: 576 }}>

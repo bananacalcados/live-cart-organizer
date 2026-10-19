@@ -1,5 +1,5 @@
 export interface OverlayItem { id: string; text: string; enabled: boolean }
-export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel";
+export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel" | "timers";
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
 /**
@@ -13,6 +13,7 @@ export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
   alert: { x: 20, y: 1010, width: 1040, font_size: 72, align: "left" },
   cta: { x: 20, y: 620, width: 1040, font_size: 84, align: "center" },
   wheel: { x: 20, y: 620, width: 1040, font_size: 108, align: "center" },
+  timers: { x: 20, y: 1250, width: 1040, font_size: 44, align: "left" },
 };
 export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
@@ -26,6 +27,10 @@ export interface OverlayConfig {
   assembled_alert: { enabled: boolean; template: string; duration_seconds: number };
   cta: { enabled: boolean; interval_minutes: number; items: OverlayItem[] };
   wheel: { enabled: boolean; title_template: string; result_seconds: number };
+  /** Relógios de pagamento: lista fixa, até 4 pedidos, fora da fila de avisos. */
+  payment_timers: { enabled: boolean; template: string };
+  /** Aviso de par liberado quando o prazo de pagamento vence. */
+  expired_alert: { enabled: boolean; template: string; duration_seconds: number };
 }
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
@@ -46,6 +51,8 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   },
   cta: { enabled: true, interval_minutes: 10, items: [] },
   wheel: { enabled: true, title_template: "🎰 Roleta de @{handle}", result_seconds: 8 },
+  payment_timers: { enabled: true, template: "✅ @{handle}, seu carrinho está pronto! ⏳ {timer} para pagar e concorrer à bolsa 🎁" },
+  expired_alert: { enabled: true, template: "🔁 Liberou o {size} do {product}! Quem quer?", duration_seconds: 8 },
 };
 
 /** Junta o config salvo com os padrões, para nunca faltar campo. */
@@ -60,8 +67,22 @@ export function withOverlayDefaults(raw: any): OverlayConfig {
     assembled_alert: { ...d.assembled_alert, ...(c.assembled_alert || {}) },
     cta: { ...d.cta, ...(c.cta || {}), items: c.cta?.items || [] },
     wheel: { ...d.wheel, ...(c.wheel || {}) },
+    payment_timers: { ...d.payment_timers, ...(c.payment_timers || {}) },
+    expired_alert: { ...d.expired_alert, ...(c.expired_alert || {}) },
   };
 }
 
 export const fill = (tpl: string, vars: Record<string, string | number>) =>
   tpl.replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined ? String(vars[k]) : ""));
+
+/** Tempo restante em mm:ss (nunca negativo). */
+export const formatTimer = (ms: number) => {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+};
+
+export interface PaymentTimer { orderId: string; handle: string; product: string; size: string; expiresAt: number; addedAt: number }
+/** Relógios visíveis: some ao vencer ou após 20 min; até 4, o que vence primeiro no topo. */
+export function visibleTimers(list: PaymentTimer[], now: number): PaymentTimer[] {
+  return list.filter((t) => t.expiresAt > now && now - t.addedAt < 20 * 60_000).sort((a, b) => a.expiresAt - b.expiresAt).slice(0, 4);
+}
