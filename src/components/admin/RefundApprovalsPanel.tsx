@@ -4,6 +4,8 @@ import { Loader2, Undo2, Check, X } from "lucide-react";
 import { refundApi, REFUND_REASONS, REFUND_STATUS_LABELS, type RefundConfig, type RefundRow } from "@/lib/refunds";
 import { useToast } from "@/hooks/use-toast";
 import { RefundReceiptButton } from "@/components/refunds/RefundReceiptButton";
+import { SendRefundReceiptButton } from "@/components/refunds/SendRefundReceiptButton";
+import { DEFAULT_RECEIPT_MESSAGE } from "@/lib/refundReceiptMessage";
 
 const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const reasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
@@ -21,6 +23,8 @@ export function RefundApprovalsPanel() {
   const [recent, setRecent] = useState<RefundRow[]>([]);
   const [threshold, setThreshold] = useState("");
   const [footer, setFooter] = useState("");
+  const [msgTpl, setMsgTpl] = useState("");
+  const [ready, setReady] = useState<{ id: string; amount: number; customer_name: string | null }[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -30,6 +34,8 @@ export function RefundApprovalsPanel() {
       setIsAdmin(cfg.isAdmin);
       setThreshold(cfg.config.approval_threshold == null ? "" : String(cfg.config.approval_threshold).replace(".", ","));
       setFooter(cfg.config.receipt_footer_contact || "");
+      setMsgTpl(cfg.config.receipt_message_template || DEFAULT_RECEIPT_MESSAGE);
+      setReady(list.readyToSend || []);
       setPending(list.pending);
       setRecent(list.recent);
     } catch (e: any) {
@@ -76,6 +82,16 @@ export function RefundApprovalsPanel() {
     }
   };
 
+  const saveMsgTpl = async () => {
+    try {
+      const res = await refundApi.setConfig({ receipt_message_template: msgTpl.trim() });
+      setConfig(res.config);
+      toast({ title: "Mensagem padrão salva" });
+    } catch (e: any) {
+      toast({ title: "Não consegui salvar", description: e?.message, variant: "destructive" });
+    }
+  };
+
   const act = async (id: string, action: "approve" | "reject") => {
     setBusyId(id);
     try {
@@ -113,6 +129,12 @@ export function RefundApprovalsPanel() {
         <CardTitle className="flex items-center gap-2 text-base"><Undo2 className="h-4 w-4" /> Estornos Mercado Pago</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
+        {ready.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/10 p-3 text-sm">
+            <span>Estorno Pix concluído — comprovante pronto para enviar à cliente <b>{r.customer_name || ""}</b> ({brl(r.amount)})</span>
+            <SendRefundReceiptButton refundId={r.id} onSent={() => void load()} />
+          </div>
+        ))}
         {isAdmin && (
           <div className="space-y-3 rounded-lg border border-border p-3">
             <label className="flex items-center justify-between gap-3 text-sm">
@@ -188,6 +210,7 @@ export function RefundApprovalsPanel() {
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
                   {r.status === "concluido" && <RefundReceiptButton refundId={r.id} />}
+                  {r.status === "concluido" && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={() => void load()} />}
                   {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
                 </div>
               </div>

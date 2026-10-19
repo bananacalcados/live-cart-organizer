@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, Undo2, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { RefundReceiptButton } from "./RefundReceiptButton";
+import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 import { refundApi, REFUND_REASONS, type RefundPreview, type RefundSource } from "@/lib/refunds";
 import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, validateRefundAmount } from "@/lib/refundRules";
 import { useToast } from "@/hooks/use-toast";
@@ -166,6 +167,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
               </div>
               <div className="flex justify-end gap-2">
                 {doneRefund?.status === "concluido" && <RefundReceiptButton refundId={doneRefund.id} />}
+                {doneRefund?.status === "concluido" && <SendRefundReceiptButton refundId={doneRefund.id} />}
                 <button onClick={() => setOpen(false)} className="rounded-md border border-pos-white/20 px-4 py-2 text-sm text-pos-white hover:bg-pos-white/10">Fechar</button>
               </div>
             </div>

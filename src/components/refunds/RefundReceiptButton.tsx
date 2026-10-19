@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FileDown, Loader2 } from "lucide-react";
 import { getCompletedRefunds, openRefundReceipt, type CompletedRefund } from "@/lib/refunds";
 import { useToast } from "@/hooks/use-toast";
+import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 
 /** Botão "Baixar comprovante" para um estorno concluído (PDF gerado no servidor). */
 export function RefundReceiptButton({ refundId, label = "Baixar comprovante" }: { refundId: string; label?: string }) {
@@ -37,11 +38,13 @@ export function SourceRefundReceipts({ sourceId }: { sourceId: string }) {
   return (
     <>
       {rows.map((r) => (
-        <RefundReceiptButton
-          key={r.id}
-          refundId={r.id}
-          label={`Comprovante estorno ${Number(r.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
-        />
+        <span key={r.id} className="inline-flex flex-wrap items-center gap-1">
+          <RefundReceiptButton
+            refundId={r.id}
+            label={`Comprovante estorno ${Number(r.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+          />
+          {r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} />}
+        </span>
       ))}
     </>
   );
