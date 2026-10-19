@@ -4,7 +4,7 @@
 
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
 - The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
-- Payment audits are admin-only/read-only: 50-row pages, at most three concurrent provider reads, no notifications or charges.
+- Payment audits are admin-only/read-only: 50-row pages, max three concurrent provider reads, no notifications or charges.
 
 - Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
 
@@ -28,4 +28,4 @@
 - Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
 
-- Chat PIX uses the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
+- Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
