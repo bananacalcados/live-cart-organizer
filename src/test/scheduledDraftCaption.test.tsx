@@ -27,17 +27,17 @@ afterEach(cleanup);
 describe('editor de legendas VIP', () => {
   it.each(['image', 'video', 'document'])('salva %s sem arquivo como rascunho', async type => {
     const { save } = setup(type);
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Salvar$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][1].blocks[0]).toMatchObject({ content: caption, mediaItems: [] });
   });
   it('upload múltiplo salva a legenda somente no primeiro arquivo', async () => {
-    const { container, save } = setup();
-    const input = container.querySelector('input[type=file]');
+    const { save } = setup();
+    const input = document.querySelector('input[type=file]');
     if (!input) throw new Error('Upload ausente');
     fireEvent.change(input, { target: { files: [new File(['a'], 'a.jpg', { type: 'image/jpeg' }), new File(['b'], 'b.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getAllByPlaceholderText('Legenda...')).toHaveLength(2));
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Salvar$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][1].blocks[0].mediaItems.map((i: { caption: string }) => i.caption)).toEqual([caption, '']);
   });
@@ -62,13 +62,13 @@ describe('editor de legendas VIP', () => {
     fetchProducts.mockResolvedValue([{ node: { id: 'prod', title: 'Sandália', handle: 'sandalia',
       priceRange: { minVariantPrice: { amount: '119.99' } }, images: { edges: [{ node: { url: 'https://example.test/photo.jpg' } }] } } }]);
     setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Shopify', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Shopify$/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Usar Foto' }));
     expect(screen.getByPlaceholderText('Legenda...')).toHaveValue(caption);
   });
   it('mensagem pendente continua exigindo arquivo', () => {
     const { save } = setup('image', caption, 'pending');
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Salvar$/ }));
     expect(save).not.toHaveBeenCalled();
   });
 });
