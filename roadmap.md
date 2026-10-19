@@ -69,3 +69,7 @@
 
 - [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.
 - [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
+
+## Correção pequena — fotos nos Grupos VIP
+- [ ] Usar título exato do produto nos novos blocos e limpar somente nomes antigos de fotos em rascunhos.
+- [ ] Conferir todos os caminhos de envio: nome interno nunca vira legenda/texto; informar quantidade corrigida e arquivo de envio.
