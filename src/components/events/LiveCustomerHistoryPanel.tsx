@@ -77,7 +77,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             ? supabase.from("expedition_orders").select("id,shopify_order_name,expedition_status,freight_tracking_code,total_price,shopify_created_at,customer_cpf,shipping_address").or(`customer_phone.ilike.%${suffix}%`).order("shopify_created_at", { ascending: false }).limit(10)
             : Promise.resolve({ data: [] as any[] }),
           suffix
-            ? supabase.from("pos_sales").select("id,sale_type,status,total,tracking_code,tiny_order_number,nfce_number,invoice_number,customer_cpf,created_at,store_id,paid_at,shipped_at").eq("phone_suffix8", suffix).order("created_at", { ascending: false }).limit(20)
+            ? supabase.from("pos_sales").select("id,sale_type,status,total,tracking_code,tiny_order_number,nfce_number,invoice_number,customer_cpf,created_at,store_id,paid_at,shipped_at,mercadopago_payment_id").eq("phone_suffix8", suffix).order("created_at", { ascending: false }).limit(20)
             : Promise.resolve({ data: [] as any[] }),
         ]);
 
@@ -127,6 +127,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             createdAt: item.created_at,
             channelLabel: "Live",
             modality: "Online",
+            hasMpPayment: !!(item as any).mercadopago_payment_id,
             paymentState: item.is_paid || item.paid_externally ? "paid" : "unpaid",
             items: (item.products || []).map((product) => ({ name: product.title || "Produto", variant: product.variant || undefined, quantity: product.quantity })),
           }));
@@ -142,6 +143,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           channelLabel: sale.sale_type,
           modality: sale.sale_type === "pos" ? "Presencial" : "Online",
           kind: "pos_sale",
+          hasMpPayment: !!sale.mercadopago_payment_id,
           paymentState: isSalePaid(sale) ? "paid" : "unpaid",
           shipped: !!(sale as any).shipped_at || ["shipped", "delivered"].includes(String(sale.status || "")),
           items: saleItems.get(sale.id) || [],
