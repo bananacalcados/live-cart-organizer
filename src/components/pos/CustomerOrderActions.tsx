@@ -12,6 +12,7 @@ import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
 import type { ExchangeRecord } from "@/hooks/useExchangeRegistry";
 import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { useCanRefund } from "@/hooks/useCanRefund";
+import { SourceRefundReceipts } from "@/components/refunds/RefundReceiptButton";
 
 interface Props {
   /** pos_sales.id da venda. */
@@ -72,6 +73,7 @@ export function CustomerOrderActions({
       {canRefund && hasMpPayment && (
         <RefundDialog source="pos_sale" sourceId={saleId} label={saleLabel} customerName={customer.name} onDone={onChanged} />
       )}
+      {canRefund && <SourceRefundReceipts sourceId={saleId} />}
       {canRefund && mpPaymentError && <p className="text-xs text-destructive">{mpPaymentError}</p>}
 
 

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Undo2, Check, X } from "lucide-react";
 import { refundApi, REFUND_REASONS, REFUND_STATUS_LABELS, type RefundConfig, type RefundRow } from "@/lib/refunds";
 import { useToast } from "@/hooks/use-toast";
+import { RefundReceiptButton } from "@/components/refunds/RefundReceiptButton";
 
 const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const reasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
@@ -19,6 +20,7 @@ export function RefundApprovalsPanel() {
   const [pending, setPending] = useState<RefundRow[]>([]);
   const [recent, setRecent] = useState<RefundRow[]>([]);
   const [threshold, setThreshold] = useState("");
+  const [footer, setFooter] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -27,6 +29,7 @@ export function RefundApprovalsPanel() {
       setConfig(cfg.config);
       setIsAdmin(cfg.isAdmin);
       setThreshold(cfg.config.approval_threshold == null ? "" : String(cfg.config.approval_threshold).replace(".", ","));
+      setFooter(cfg.config.receipt_footer_contact || "");
       setPending(list.pending);
       setRecent(list.recent);
     } catch (e: any) {
@@ -58,6 +61,16 @@ export function RefundApprovalsPanel() {
       const res = await refundApi.setConfig({ approval_threshold: value });
       setConfig(res.config);
       toast({ title: "Teto de aprovação salvo" });
+    } catch (e: any) {
+      toast({ title: "Não consegui salvar", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  const saveFooter = async () => {
+    try {
+      const res = await refundApi.setConfig({ receipt_footer_contact: footer.trim() });
+      setConfig(res.config);
+      toast({ title: "Contato do comprovante salvo" });
     } catch (e: any) {
       toast({ title: "Não consegui salvar", description: e?.message, variant: "destructive" });
     }
@@ -119,6 +132,19 @@ export function RefundApprovalsPanel() {
               </div>
               <button onClick={() => void saveThreshold()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Salvar</button>
             </div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground">Contato no rodapé do comprovante de estorno (ex.: WhatsApp, e-mail, endereço)</label>
+                <input
+                  value={footer}
+                  onChange={(e) => setFooter(e.target.value)}
+                  maxLength={300}
+                  placeholder="Ex.: WhatsApp (33) 9 0000-0000 · contato@bananacalcados.com.br"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <button onClick={() => void saveFooter()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Salvar</button>
+            </div>
           </div>
         )}
 
@@ -159,7 +185,11 @@ export function RefundApprovalsPanel() {
             {recent.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
                 {rowInfo(r)}
-                <span className="text-xs font-semibold text-muted-foreground shrink-0">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
+                  {r.status === "concluido" && <RefundReceiptButton refundId={r.id} />}
+                  {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
+                </div>
               </div>
             ))}
           </div>

@@ -13,6 +13,7 @@ import { getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { loadMpSalePayments } from "../_shared/mp-sale-payment.ts";
+import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 
 const MAX_REFUND_AGE_DAYS = 180;
 
@@ -111,11 +112,12 @@ async function isPointSale(supabase: any, source: string, sourceId: string, paym
   return false;
 }
 
-async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_threshold: number | null }> {
+async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_threshold: number | null; receipt_footer_contact: string }> {
   const { data } = await supabase.rpc("refund_config");
   return {
     enabled: !!data?.enabled,
     approval_threshold: data?.approval_threshold == null ? null : Number(data.approval_threshold),
+    receipt_footer_contact: String(data?.receipt_footer_contact || ""),
   };
 }
 
@@ -308,9 +310,34 @@ serve(async (req) => {
     if (body.approval_threshold === null || typeof body.approval_threshold === "number") {
       updates.approval_threshold = body.approval_threshold;
     }
+    if (typeof body.receipt_footer_contact === "string") {
+      updates.receipt_footer_contact = body.receipt_footer_contact.slice(0, 300);
+    }
     const { error: upErr } = await supabase.from("refund_settings").upsert({ id: true, ...updates }, { onConflict: "id" });
     if (upErr) return json({ error: `Falha ao salvar configuração: ${upErr.message}` }, 500);
     return json({ ok: true, config: await getConfig(supabase) });
+  }
+
+  // ── Comprovante interno (Fase 3): só estorno concluído ──
+  if (action === "receipt") {
+    const refundId = String(body?.id || "");
+    if (!refundId) return json({ error: "Estorno não informado." }, 400);
+    const r = await ensureRefundReceipt(supabase, refundId);
+    if (!r.ok || !r.path) return json({ error: r.error || "Não consegui gerar o comprovante." }, 400);
+    const url = await signedReceiptUrl(supabase, r.path);
+    if (!url) return json({ error: "Não consegui gerar o link do comprovante." }, 500);
+    return json({ ok: true, url, code: r.code, path: r.path });
+  }
+
+  // ── Estornos concluídos de vendas/pedidos (uma consulta, até 100 ids) ──
+  if (action === "completed_for_sources") {
+    const ids = (Array.isArray(body?.ids) ? body.ids : []).map(String).filter((s: string) => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 100);
+    if (ids.length === 0) return json({ ok: true, refunds: [] });
+    const { data } = await supabase.from("gateway_refunds")
+      .select("id, source, source_id, amount, completed_at, receipt_code")
+      .in("source_id", ids).eq("status", "concluido")
+      .order("completed_at", { ascending: false }).limit(200);
+    return json({ ok: true, refunds: data || [] });
   }
 
   // ── Lista de estornos (pendentes + recentes) ──

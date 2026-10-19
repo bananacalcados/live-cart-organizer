@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { listAllMpAccountsForPolling, getMpAccountByPaymentId } from "../_shared/mp-account.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
+import { ensureRefundReceipt } from "../_shared/refund-receipt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,8 +199,23 @@ serve(async (req) => {
     errors.push({ refunds_sync: err.message });
   }
 
+  // ── Comprovantes pendentes (Fase 3): estornos concluídos sem PDF, poucos por rodada ──
+  let receiptsMade = 0;
+  try {
+    const { data: noReceipt } = await supabase
+      .from("gateway_refunds").select("id")
+      .eq("status", "concluido").is("receipt_path", null)
+      .order("completed_at", { ascending: true }).limit(3);
+    for (const r of noReceipt || []) {
+      const res = await ensureRefundReceipt(supabase, r.id);
+      if (res.ok) receiptsMade++; else errors.push({ receipt: r.id, err: res.error });
+    }
+  } catch (err: any) {
+    errors.push({ receipts: err.message });
+  }
+
   return new Response(
-    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, errors: errors.slice(0, 5) }),
+    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, errors: errors.slice(0, 5) }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });

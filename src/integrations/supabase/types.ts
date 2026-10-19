@@ -8465,6 +8465,9 @@ export type Database = {
           payment_id: string
           reason: string
           reason_text: string | null
+          receipt_code: string | null
+          receipt_generated_at: string | null
+          receipt_path: string | null
           refund_id: string | null
           refund_type: string
           requested_by: string | null
@@ -8493,6 +8496,9 @@ export type Database = {
           payment_id: string
           reason: string
           reason_text?: string | null
+          receipt_code?: string | null
+          receipt_generated_at?: string | null
+          receipt_path?: string | null
           refund_id?: string | null
           refund_type: string
           requested_by?: string | null
@@ -8521,6 +8527,9 @@ export type Database = {
           payment_id?: string
           reason?: string
           reason_text?: string | null
+          receipt_code?: string | null
+          receipt_generated_at?: string | null
+          receipt_path?: string | null
           refund_id?: string | null
           refund_type?: string
           requested_by?: string | null
@@ -19964,6 +19973,7 @@ export type Database = {
           approval_threshold: number | null
           enabled: boolean
           id: boolean
+          receipt_footer_contact: string
           updated_at: string
           updated_by: string | null
         }
@@ -19971,6 +19981,7 @@ export type Database = {
           approval_threshold?: number | null
           enabled?: boolean
           id?: boolean
+          receipt_footer_contact?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -19978,6 +19989,7 @@ export type Database = {
           approval_threshold?: number | null
           enabled?: boolean
           id?: boolean
+          receipt_footer_contact?: string
           updated_at?: string
           updated_by?: string | null
         }
