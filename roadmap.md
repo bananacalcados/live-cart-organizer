@@ -67,4 +67,4 @@
 - [ ] Bloco 2 — prazos de cadastro/pagamento no sorteio + aba Participantes (aguarda ok do usuário)
 - [ ] Bloco 3 — frase de pedido no modelo padrão da faixa
 
-- [ ] PIX: substituir botão nativo por instrução + mesmo código isolado; testar sem cobranças.
+- [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.

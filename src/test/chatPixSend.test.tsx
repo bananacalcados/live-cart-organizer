@@ -24,7 +24,7 @@ describe("envio do Pix pelo diálogo", () => {
     render(<ChatPixButton orderId="teste-isolado" variant="button" onSent={onSent} channel={{
       provider: "uazapi", sendText, sendCopyButton, persist, sendImage: vi.fn(),
     }} />);
-    fireEvent.click(screen.getByRole("button", { name: "PIX", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^PIX$/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Enviar PIX na conversa" }));
     await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
     expect(sendText).toHaveBeenCalledTimes(2);
