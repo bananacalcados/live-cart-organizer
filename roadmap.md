@@ -71,7 +71,8 @@
 - [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
 
 ## Estorno — pagamento de pedido convertido em venda
-- [ ] Regra compartilhada de leitura, botões Live/PDV e preview sem estorno real; publicar após teste e segurança.
+- [x] Regra compartilhada de leitura Live/PDV/função, ambiguidade bloqueada; 16 testes e leitura autenticada real localizaram pagamento/conta do pedido sem alterar vendas; índice conferido com EXPLAIN; função implantada.
+- [ ] Conferir botão e preview autorizado: sessão disponível não tem estornos (403); sessão admin depende de autorização indisponível neste contexto. Nenhum estorno executado.
 
 ## Correção pequena — fotos nos Grupos VIP
 - [x] Preservar legenda sem mídia: exibição, primeiro arquivo (upload/URL/Shopify), remoção, link e salvamento; 14 testes passaram; upload real, salvar/reabrir e remover/salvar sem arquivo conferidos na campanha Teste. Rascunho de teste removido; sem aprovação/envios/publicação.
