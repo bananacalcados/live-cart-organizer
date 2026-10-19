@@ -68,3 +68,4 @@
 - [ ] Bloco 3 — frase de pedido no modelo padrão da faixa
 
 - [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.
+- [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
