@@ -26,7 +26,7 @@
 - Lazy imports: one reload/tab, visible stale-module fallback.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
 
-- Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
+- Chat PIX sends the same standalone code, not native copy buttons: recipient clipboard support can't be verified.
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 
