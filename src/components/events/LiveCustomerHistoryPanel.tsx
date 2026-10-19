@@ -13,6 +13,7 @@ import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPre
 import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import type { DbOrder } from "@/types/database";
+import { loadMpSalePayments } from "@/lib/mpSalePayment";
 
 interface Props {
   order: DbOrder;
@@ -104,10 +105,11 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
 
         const saleIds = posSales.map((item) => item.id);
         const storeIds = Array.from(new Set(posSales.map((item) => item.store_id).filter(Boolean))) as string[];
-        const [storesRes, itemsRes, cashbackRes] = await Promise.all([
+        const [storesRes, itemsRes, cashbackRes, mpPayments] = await Promise.all([
           storeIds.length ? supabase.from("pos_stores").select("id,name").in("id", storeIds) : Promise.resolve({ data: [] as any[] }),
           saleIds.length ? supabase.from("pos_sale_items").select("sale_id,product_name,variant_name,size,quantity").in("sale_id", saleIds) : Promise.resolve({ data: [] as any[] }),
           phone ? supabase.rpc("lookup_cashback_by_phones" as any, { p_phones: [phone] }) : Promise.resolve({ data: [] as any[] }),
+          loadMpSalePayments(supabase, posSales),
         ]);
         const stores = new Map((storesRes.data || []).map((item: any) => [item.id, item.name]));
         const saleItems = new Map<string, POSCustomerOrder["items"]>();
@@ -146,7 +148,8 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           channelLabel: sale.sale_type,
           modality: sale.sale_type === "pos" ? "Presencial" : "Online",
           kind: "pos_sale",
-          hasMpPayment: !!sale.mercadopago_payment_id,
+          hasMpPayment: !!mpPayments.get(sale.id)?.paymentId,
+          mpPaymentError: mpPayments.get(sale.id)?.error ?? undefined,
           paymentState: isSalePaid(sale) ? "paid" : "unpaid",
           shipped: !!(sale as any).shipped_at || ["shipped", "delivered"].includes(String(sale.status || "")),
           items: saleItems.get(sale.id) || [],
@@ -227,7 +230,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
       : null}
     renderOrderActions={(item) => {
       if (item.kind === "pos_sale") {
-        return <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} hasMpPayment={item.hasMpPayment} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} />;
+        return <CustomerOrderActions saleId={item.id} saleLabel={item.orderName || "Venda"} saleTotal={item.totalPrice} hasMpPayment={item.hasMpPayment} mpPaymentError={item.mpPaymentError} customer={{ name: data?.name, phone, cpf: data?.cpf, email: data?.email, unifiedId }} chargebacks={chargebacks.filter((record) => record.pos_sale_id === item.id)} exchanges={exBySale(item.id)} onChanged={refreshRisks} />;
       }
       // Pedido da Live pago via Mercado Pago: estorno direto no pedido (ex.: cancelar antes do envio)
       if (canRefund && item.orderName === "Pedido da Live" && item.hasMpPayment && item.paymentState === "paid") {

@@ -20,6 +20,7 @@ interface Props {
   saleTotal?: number | null;
   /** Venda tem pagamento do Mercado Pago vinculado (habilita o botão Estorno). */
   hasMpPayment?: boolean;
+  mpPaymentError?: string;
   sellerId?: string | null;
   sellerName?: string | null;
   customer: {
@@ -44,6 +45,7 @@ export function CustomerOrderActions({
   saleLabel,
   saleTotal,
   hasMpPayment,
+  mpPaymentError,
   sellerId,
   sellerName,
   customer,
@@ -70,6 +72,7 @@ export function CustomerOrderActions({
       {canRefund && hasMpPayment && (
         <RefundDialog source="pos_sale" sourceId={saleId} label={saleLabel} customerName={customer.name} onDone={onChanged} />
       )}
+      {canRefund && mpPaymentError && <p className="text-xs text-destructive">{mpPaymentError}</p>}
 
 
 
