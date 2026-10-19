@@ -215,6 +215,8 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
           <CardContent className="space-y-2">
             <Label>Texto ({"{handle}"}, {"{product}"}, {"{size}"})</Label>
             <Input value={cfg.expired_alert.template} onChange={(e) => update("expired_alert", { template: e.target.value })} />
+            <Label>Texto quando não há outro par ({"{handle}"})</Label>
+            <Input value={cfg.expired_alert.template_no_stock} onChange={(e) => update("expired_alert", { template_no_stock: e.target.value })} />
             <div className="flex items-center gap-2"><Label>Duração (segundos)</Label>
               <Input type="number" className="w-24" min={2} value={cfg.expired_alert.duration_seconds} onChange={(e) => update("expired_alert", { duration_seconds: Number(e.target.value) || 8 })} /></div>
           </CardContent>

@@ -113,7 +113,7 @@ export default function LiveOverlay() {
           continue;
         }
         if (e.kind === "expired") {
-          if (cfg.expired_alert.enabled) queue.current.push({ key: e.id, text: fill(cfg.expired_alert.template, { handle: p.handle || "", product: p.product || "par", size: p.size || "número" }), duration: cfg.expired_alert.duration_seconds, tone: "expired" });
+          if (cfg.expired_alert.enabled) queue.current.push({ key: e.id, text: fill(expiredAlertTemplate(cfg.expired_alert, p), { handle: p.handle || "", product: p.product || "par", size: p.size || "número" }), duration: cfg.expired_alert.duration_seconds, tone: "expired" });
           continue;
         }
         if (e.kind === "paid" && cfg.paid_alert.enabled && e.payload?.handle) {
