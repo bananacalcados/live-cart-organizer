@@ -82,6 +82,7 @@ import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
 import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
 import { isSalePaid } from "@/lib/salePaymentState";
+import { loadMpSalePayments } from "@/lib/mpSalePayment";
 
 interface Props {
   storeId: string;
@@ -129,6 +130,10 @@ interface CrmCustomerData {
     modality?: "Presencial" | "Online";
     /** pos_sale = venda registrada no PDV (permite troca/devolução e chargeback). */
     kind?: "pos_sale" | "expedition";
+    hasMpPayment?: boolean;
+    mpPaymentError?: string;
+    paymentState?: "paid" | "unpaid" | "unknown";
+    shipped?: boolean;
     items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
 }
@@ -957,7 +962,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       // Nomes das lojas + itens das vendas do PDV
       const saleIds = posSales.map((s) => s.id);
       const storeIds = Array.from(new Set(posSales.map((s) => s.store_id).filter(Boolean)));
-      const [storesRes, itemsRes] = await Promise.all([
+      const [storesRes, itemsRes, mpPayments] = await Promise.all([
         storeIds.length
           ? supabase.from("pos_stores").select("id, name").in("id", storeIds)
           : Promise.resolve({ data: [] as any[] }),
@@ -967,6 +972,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
               .select("sale_id, product_name, variant_name, size, quantity")
               .in("sale_id", saleIds)
           : Promise.resolve({ data: [] as any[] }),
+        loadMpSalePayments(supabase, posSales),
       ]);
       const storeNameById = new Map<string, string>(
         (storesRes.data || []).map((st: any) => [st.id, st.name]),
@@ -1001,7 +1007,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           channelLabel: typeLabel,
           modality,
           kind: "pos_sale" as const,
-          hasMpPayment: !!s.mercadopago_payment_id,
+          hasMpPayment: !!mpPayments.get(s.id)?.paymentId,
+          mpPaymentError: mpPayments.get(s.id)?.error ?? undefined,
           paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
           shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
@@ -2816,7 +2823,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
-                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} mpPaymentError={o.mpPaymentError} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
               />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}

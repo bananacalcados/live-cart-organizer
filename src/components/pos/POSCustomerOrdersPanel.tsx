@@ -19,6 +19,7 @@ export interface POSCustomerOrder {
   paymentState?: "paid" | "unpaid" | "unknown";
   /** Tem pagamento do Mercado Pago vinculado (habilita o botão Estorno). */
   hasMpPayment?: boolean;
+  mpPaymentError?: string;
   shipped?: boolean;
   items?: { name: string; variant?: string; size?: string; quantity?: number }[];
 }

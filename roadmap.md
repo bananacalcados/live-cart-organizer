@@ -70,6 +70,10 @@
 - [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.
 - [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
 
+## Estorno — pagamento de pedido convertido em venda
+- [x] Regra compartilhada de leitura Live/PDV/função, ambiguidade bloqueada; 16 testes e leitura autenticada real localizaram pagamento/conta do pedido sem alterar vendas; índice conferido com EXPLAIN; função implantada.
+- [ ] Conferir botão e preview autorizado: sessão disponível não tem estornos (403); sessão admin depende de autorização indisponível neste contexto. Nenhum estorno executado.
+
 ## Correção pequena — fotos nos Grupos VIP
 - [x] Preservar legenda sem mídia: exibição, primeiro arquivo (upload/URL/Shopify), remoção, link e salvamento; 14 testes passaram; upload real, salvar/reabrir e remover/salvar sem arquivo conferidos na campanha Teste. Rascunho de teste removido; sem aprovação/envios/publicação.
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.

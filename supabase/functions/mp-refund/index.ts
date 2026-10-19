@@ -12,6 +12,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
+import { loadMpSalePayments } from "../_shared/mp-sale-payment.ts";
 
 const MAX_REFUND_AGE_DAYS = 180;
 
@@ -30,6 +31,8 @@ function brl(n: number) {
 
 interface SourceRow {
   id: string;
+  paymentOrderId?: string | null;
+  paymentError?: string | null;
   paymentId: string | null;
   mpAccountId: string | null;
   total: number;
@@ -78,10 +81,14 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
+  const payments = await loadMpSalePayments(supabase, [data]);
+  const resolved = payments.get(data.id);
   return {
     id: data.id,
-    paymentId: data.mercadopago_payment_id,
-    mpAccountId: data.mp_account_id,
+    paymentId: resolved?.paymentId ?? null,
+    mpAccountId: resolved?.accountId ?? null,
+    paymentOrderId: resolved?.orderId,
+    paymentError: resolved?.error,
     total: Number(data.total || 0),
     label: data.payment_method ? `Venda PDV (${data.payment_method})` : "Venda PDV",
     channel: "pdv",
@@ -132,10 +139,11 @@ async function checkPayment(
   src: SourceRow,
   requestedAmount: number | null,
 ): Promise<MpCheck> {
+  if (src.paymentError) return { ok: false, error: src.paymentError };
   if (!src.paymentId) return { ok: false, error: "Esta venda/pedido não tem pagamento do Mercado Pago vinculado." };
 
-  const account = src.channel === "live"
-    ? await getMpAccountForOrder(supabase, src.id)
+  const account = src.channel === "live" || src.paymentOrderId
+    ? await getMpAccountForOrder(supabase, src.paymentOrderId || src.id)
     : await getMpAccountForSale(supabase, src.id);
   if (!account) return { ok: false, error: "Conta do Mercado Pago não encontrada para esta venda." };
 
