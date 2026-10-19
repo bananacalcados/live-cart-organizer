@@ -74,3 +74,12 @@
 - [x] Preservar legenda sem mídia: exibição, primeiro arquivo (upload/URL/Shopify), remoção, link e salvamento; 14 testes passaram; upload real, salvar/reabrir e remover/salvar sem arquivo conferidos na campanha Teste. Rascunho de teste removido; sem aprovação/envios/publicação.
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
+
+## Estorno Mercado Pago pelo sistema — Fase 1 (concluído, não publicado)
+- [x] Migração: tabela gateway_refunds (campo gateway p/ futuros), RLS (leitura admin/permissão estornos, escrita só service role), coluna trocas_devolucoes.gateway_refund_id
+- [x] Edge function mp-refund: JWT + permissão estornos/admin, interruptor geral (padrão desligado), validação no MP (approved/partially_refunded, 180 dias, valor), idempotency key única, Pix com X-Render-In-Process-Refunds + in_process, teto de aprovação (vazio = não-admin sempre aguarda), lista aprovar/recusar
+- [x] Botão ESTORNO no modal WhatsApp do PDV (pos_sales com mercadopago_payment_id) e no modal da Live (orders com mercadopago_payment_id); Point = "não suportado"
+- [x] Confirmação: cliente, nº, canal, forma (Pix/cartão+bandeira+final), valor original/já estornado/a estornar, motivo obrigatório, digitar valor + senha
+- [x] Worker: estender mercadopago-poll-pending (2 min) p/ sincronizar estornos processando via GET /v1/payments/{id}/refunds
+- [x] Histórico: linha em notes do pedido/venda (append, sem sobrescrever); pedido da live integral não enviado → perguntar se move p/ cancelled; sem mexer em estoque/NF-e
+- [x] Fora da fase: PDF, WhatsApp, outros gateways

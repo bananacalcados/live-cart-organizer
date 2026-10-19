@@ -879,7 +879,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
         // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
         supabase
           .from("pos_sales")
-          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id, paid_at, shipped_at")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id, paid_at, shipped_at, mercadopago_payment_id")
           .eq("phone_suffix8", suffix)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -1001,6 +1001,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           channelLabel: typeLabel,
           modality,
           kind: "pos_sale" as const,
+          hasMpPayment: !!s.mercadopago_payment_id,
           paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
           shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
@@ -2815,7 +2816,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
-                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
               />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}

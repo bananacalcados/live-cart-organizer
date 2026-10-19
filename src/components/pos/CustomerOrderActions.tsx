@@ -10,12 +10,16 @@ import { ShippingTypeButtons } from "./ShippingTypeButtons";
 import { OrderTrackingLinkActions } from "./OrderTrackingLinkActions";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
 import type { ExchangeRecord } from "@/hooks/useExchangeRegistry";
+import { RefundDialog } from "@/components/refunds/RefundDialog";
+import { useCanRefund } from "@/hooks/useCanRefund";
 
 interface Props {
   /** pos_sales.id da venda. */
   saleId: string;
   saleLabel: string;
   saleTotal?: number | null;
+  /** Venda tem pagamento do Mercado Pago vinculado (habilita o botão Estorno). */
+  hasMpPayment?: boolean;
   sellerId?: string | null;
   sellerName?: string | null;
   customer: {
@@ -39,6 +43,7 @@ export function CustomerOrderActions({
   saleId,
   saleLabel,
   saleTotal,
+  hasMpPayment,
   sellerId,
   sellerName,
   customer,
@@ -49,6 +54,7 @@ export function CustomerOrderActions({
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [presentialOpen, setPresentialOpen] = useState(false);
   const [shippingOpen, setShippingOpen] = useState(false);
+  const canRefund = useCanRefund();
 
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
@@ -60,6 +66,11 @@ export function CustomerOrderActions({
       <ShippingTypeButtons saleId={saleId} />
 
       <OrderTrackingLinkActions saleId={saleId} customerName={customer.name} customerPhone={customer.phone} />
+
+      {canRefund && hasMpPayment && (
+        <RefundDialog source="pos_sale" sourceId={saleId} label={saleLabel} customerName={customer.name} onDone={onChanged} />
+      )}
+
 
 
       <button

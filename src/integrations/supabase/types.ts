@@ -8444,6 +8444,93 @@ export type Database = {
           },
         ]
       }
+      gateway_refunds: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          cancel_order: boolean
+          card_brand: string | null
+          card_last4: string | null
+          completed_at: string | null
+          created_at: string
+          e2e_id: string | null
+          error_message: string | null
+          gateway: string
+          id: string
+          idempotency_key: string
+          installments: number | null
+          mp_account_id: string | null
+          mp_response: Json | null
+          payment_id: string
+          reason: string
+          reason_text: string | null
+          refund_id: string | null
+          refund_type: string
+          requested_by: string | null
+          source: string
+          source_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_order?: boolean
+          card_brand?: string | null
+          card_last4?: string | null
+          completed_at?: string | null
+          created_at?: string
+          e2e_id?: string | null
+          error_message?: string | null
+          gateway?: string
+          id?: string
+          idempotency_key: string
+          installments?: number | null
+          mp_account_id?: string | null
+          mp_response?: Json | null
+          payment_id: string
+          reason: string
+          reason_text?: string | null
+          refund_id?: string | null
+          refund_type: string
+          requested_by?: string | null
+          source: string
+          source_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          cancel_order?: boolean
+          card_brand?: string | null
+          card_last4?: string | null
+          completed_at?: string | null
+          created_at?: string
+          e2e_id?: string | null
+          error_message?: string | null
+          gateway?: string
+          id?: string
+          idempotency_key?: string
+          installments?: number | null
+          mp_account_id?: string | null
+          mp_response?: Json | null
+          payment_id?: string
+          reason?: string
+          reason_text?: string | null
+          refund_id?: string | null
+          refund_type?: string
+          requested_by?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gateway_split_config: {
         Row: {
           enabled: boolean
@@ -21878,6 +21965,7 @@ export type Database = {
           estorno_forma: string | null
           fase2_erro: string | null
           faturamento_vendedora_troca: number
+          gateway_refund_id: string | null
           id: string
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -21913,6 +22001,7 @@ export type Database = {
           estorno_forma?: string | null
           fase2_erro?: string | null
           faturamento_vendedora_troca?: number
+          gateway_refund_id?: string | null
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -21948,6 +22037,7 @@ export type Database = {
           estorno_forma?: string | null
           fase2_erro?: string | null
           faturamento_vendedora_troca?: number
+          gateway_refund_id?: string | null
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -26434,6 +26524,7 @@ export type Database = {
       }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
       refresh_vip_orphans: { Args: never; Returns: Json }
+      refund_config: { Args: never; Returns: Json }
       register_template_category_change: {
         Args: {
           p_language: string
