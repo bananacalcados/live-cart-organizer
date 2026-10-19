@@ -12,7 +12,7 @@
 - AppMax: AppStore OAuth2 via appmax-install; appmax_installations credentials service-role-only, never fixed secrets.
 - VIP attendance uses vip_links/daily_destination/clicks/conversations, vip-go and /g/:code; never reuse /zap or /vip engines: matching rules differ.
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e (nfe-emitir) lê unit_price e o imposto deve incidir só sobre o valor real; bloqueada após NF-e emitida.
-- Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows runs server sync only for active lives, with one 30s second pass on the discovered media/account, avoiding browser polling and extra crons.
+- Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows syncs server-side only for active lives (one 30s second pass), avoiding browser polling and extra crons.
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (token do evento, polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders, porque é página pública e não pode tocar em orders/comentários/clientes.
 - Overlay scales to viewport; per-event controls isolate OBS. Raffle eligibility only in RPC event_raffle_pool (bar, list, draw match).
 - Overlay editing shares renderer bounds and merges layout-only writes, keeping unapplied settings and alert queues.
