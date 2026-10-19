@@ -962,11 +962,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
     if (shopifySendMode === 'photo_only') {
       if (targetBlock.type === 'image') {
-        updateBlock(targetBlock.id, { ...targetBlock, vipLinkProduct: targetBlock.vipLinkProduct || linkProduct, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
+        updateBlock(targetBlock.id, { ...targetBlock, mediaBrief: n.title, vipLinkProduct: targetBlock.vipLinkProduct || linkProduct, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
       } else if (targetBlock.type === 'text') {
         // Add a new image block
         const nb = createBlock('image');
         nb.mediaItems = [{ url: imageUrl, caption: '' }];
+        nb.mediaBrief = n.title;
         nb.vipLinkProduct = linkProduct;
         setBlocks(prev => [...prev, nb]);
       }

@@ -253,6 +253,13 @@
       "when": 1792427785282,
       "tag": "0035_raffle_deadlines_registered_at",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792444187451,
+      "tag": "0036_vip_photo_internal_names",
+      "breakpoints": true
     }
   ]
 }
