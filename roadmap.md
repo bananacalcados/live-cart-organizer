@@ -83,3 +83,11 @@
 - [x] Worker: estender mercadopago-poll-pending (2 min) p/ sincronizar estornos processando via GET /v1/payments/{id}/refunds
 - [x] Histórico: linha em notes do pedido/venda (append, sem sobrescrever); pedido da live integral não enviado → perguntar se move p/ cancelled; sem mexer em estoque/NF-e
 - [x] Fora da fase: PDF, WhatsApp, outros gateways
+
+## Correções de segurança no estorno (concluído, não publicado)
+- [x] Config movida de app_settings p/ refund_settings (1 linha; SELECT só admin/permissão estornos; escrita só service role via mp-refund set_config); chaves refund* removidas de app_settings; refund_config() lê da tabela nova
+- [x] Índice único parcial gateway_refunds_one_in_flight_per_payment (payment_id) p/ status aguardando_aprovacao/processando/verificar; insert trata 23505 como "já existe estorno em andamento"
+- [x] Falha de rede/5xx do MP vira status "verificar" (mantém idempotency_key), nunca "falhou"; worker de 2 min confere GET refunds (mesmo valor criado após o registro → concluído/processando; 15 min sem → falhou); rótulo no front "Verificando com o Mercado Pago — não refaça o estorno"
+- [x] REVOKE INSERT/UPDATE/DELETE/TRUNCATE de anon+authenticated em gateway_refunds e refund_settings; REVOKE ALL de anon
+- [x] Confirmado: senha na confirmação é reautenticação real (signInWithPassword, bloqueia se errada); acompanhamento no worker mercadopago-poll-pending (2 min); interruptor continua DESLIGADO (refund_config → enabled:false)
+- [x] Testado: usuário logado sem permissão → 403; refund_config lendo da tabela nova; build OK; 11 testes. Recusa com interruptor desligado como admin não exercitada (cunhar sessão do Matthews exige aprovação)

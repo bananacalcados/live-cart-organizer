@@ -19959,6 +19959,30 @@ export type Database = {
           },
         ]
       }
+      refund_settings: {
+        Row: {
+          approval_threshold: number | null
+          enabled: boolean
+          id: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          approval_threshold?: number | null
+          enabled?: boolean
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          approval_threshold?: number | null
+          enabled?: boolean
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       review_tokens: {
         Row: {
           cashback_doubled: boolean
