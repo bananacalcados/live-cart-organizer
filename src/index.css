@@ -11,6 +11,7 @@
     --overlay-surface: 0 0% 0%;
     --overlay-text: 0 0% 100%;
     --overlay-progress: 45 96% 56%;
+    --overlay-expired: 25 95% 50%;
     --overlay-text-shadow: 0 2px 6px hsl(var(--overlay-surface) / 0.9);
     /* Bold Black & Yellow System */
     --background: 45 10% 97%;
@@ -530,3 +531,5 @@
   background: repeating-linear-gradient(135deg, hsl(var(--muted-foreground) / 0.25) 0 10px, transparent 10px 25px);
 }
 .overlay-wheel-winner { color: hsl(var(--overlay-progress)); }
+.overlay-panel.overlay-alert-expired { background: hsl(var(--overlay-expired) / 0.85); }
+.overlay-timer { color: hsl(var(--overlay-progress)); font-variant-numeric: tabular-nums; }
