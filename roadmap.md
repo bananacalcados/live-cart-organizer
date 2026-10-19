@@ -71,5 +71,5 @@
 - [x] Corrigir atualização dos carrinhos nas linhas: conferência paginada por minuto, somente detalhes alterados; 5 testes e recuperação de carrinho real em tela desatualizada verificados, sem alterações no banco ou publicação.
 
 ## Correção pequena — fotos nos Grupos VIP
-- [ ] Usar título exato do produto nos novos blocos e limpar somente nomes antigos de fotos em rascunhos.
-- [ ] Conferir todos os caminhos de envio: nome interno nunca vira legenda/texto; informar quantidade corrigida e arquivo de envio.
+- [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
+- [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
