@@ -53,12 +53,28 @@ export interface RefundRow {
   created_at: string;
   receipt_code?: string | null;
   receipt_path?: string | null;
+  receipt_sent_at?: string | null;
+  receipt_sent_to?: string | null;
+  receipt_sent_channel?: string | null;
+}
+
+export interface ReceiptSendPreview {
+  ok: boolean;
+  blocked: string | null;
+  phone_masked: string;
+  instance: { id: string; provider: string; label: string } | null;
+  message: string;
+  file_name: string;
+  customer_name: string | null;
+  already_sent_at: string | null;
+  already_sent_to: string | null;
 }
 
 export interface RefundConfig {
   enabled: boolean;
   approval_threshold: number | null;
   receipt_footer_contact?: string;
+  receipt_message_template?: string;
 }
 
 async function call<T = any>(body: Record<string, unknown>): Promise<T> {
@@ -82,14 +98,18 @@ export const refundApi = {
     reason_text?: string | null;
     cancel_order?: boolean;
   }) => call<{ ok: boolean; pending_approval?: boolean; refund_id?: string; status?: string; message?: string }>({ action: "execute", ...payload }),
-  list: () => call<{ ok: boolean; pending: RefundRow[]; recent: RefundRow[]; isAdmin: boolean }>({ action: "list" }),
+  list: () => call<{ ok: boolean; pending: RefundRow[]; recent: RefundRow[]; readyToSend?: { id: string; amount: number; customer_name: string | null }[]; isAdmin: boolean }>({ action: "list" }),
+  receiptSendPreview: (id: string, whatsappNumberId?: string | null) =>
+    call<ReceiptSendPreview>({ action: "receipt_send_preview", id, whatsapp_number_id: whatsappNumberId || undefined }),
+  sendReceipt: (p: { id: string; message: string; confirm_resend?: boolean; whatsapp_number_id?: string | null }) =>
+    call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
   approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
   reject: (id: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id }),
   getConfig: () => call<{ ok: boolean; config: RefundConfig; isAdmin: boolean }>({ action: "get_config" }),
   receipt: (id: string) => call<{ ok: boolean; url: string; code: string; path: string }>({ action: "receipt", id }),
   completedForSources: (ids: string[]) =>
     call<{ ok: boolean; refunds: CompletedRefund[] }>({ action: "completed_for_sources", ids }),
-  setConfig: (cfg: { enabled?: boolean; approval_threshold?: number | null; receipt_footer_contact?: string }) =>
+  setConfig: (cfg: { enabled?: boolean; approval_threshold?: number | null; receipt_footer_contact?: string; receipt_message_template?: string }) =>
     call<{ ok: boolean; config: RefundConfig }>({ action: "set_config", ...cfg }),
 };
 
@@ -116,6 +136,8 @@ export interface CompletedRefund {
   amount: number;
   completed_at: string | null;
   receipt_code: string | null;
+  receipt_path?: string | null;
+  receipt_sent_at?: string | null;
 }
 
 /** Abre o comprovante (gerado no servidor, link de 10 min). */
