@@ -154,7 +154,6 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
     setPixIncludeQrPref(v);
   };
 
-  const supportsCopyButton = channel?.provider === "uazapi";
 
   return (
     <>
@@ -229,16 +228,11 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
                     <p className="text-sm font-medium">Enviar também o QR code</p>
                     <p className="text-xs text-muted-foreground">
                       Imagem para pagar pela galeria do banco. Sem isso vai só{" "}
-                      {supportsCopyButton ? "o botão Copiar + a chave" : "a instrução + a chave"}.
+                      a instrução + a chave.
                     </p>
                   </div>
                   <Switch checked={includeQr} onCheckedChange={toggleQr} disabled={!qrBase64} />
                 </div>
-                {!supportsCopyButton && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    Esta instância não suporta botão "Copiar" nativo — a chave vai em mensagem isolada.
-                  </p>
-                )}
                 <Button
                   className="w-full bg-[#00a884] hover:bg-[#008c6f] text-white gap-1.5"
                   onClick={handleSend}

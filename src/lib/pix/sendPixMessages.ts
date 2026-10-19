@@ -5,8 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * Sequência enviada:
  *  1. (opcional) Imagem do QR code com legenda explicando como pagar pela galeria.
- *  2. Mensagem com valor + botão nativo "Copiar código PIX" (só uazapi). Nos demais
- *     provedores vai um texto de instrução no lugar do botão.
+ *  2. Mensagem com valor e instrução de cópia manual (sem botão nativo).
  *  3. O código copia e cola SOZINHO em uma mensagem, sem nada em volta — os bancos
  *     rejeitam o código quando vem misturado com texto/emoji.
  *
@@ -74,11 +73,11 @@ export async function uploadPixQrPng(base64: string, key: string): Promise<strin
 export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResult> {
   const { channel, amount, includeQr, qrBase64, qrKey } = opts;
   const code = opts.code.trim();
+  if (!code) throw new Error("Código PIX vazio — nada foi enviado.");
   const desc = opts.description?.trim() ? `\n📝 ${opts.description.trim()}` : "";
   const valor = fmtBRL(amount);
 
   let sentQr = false;
-  let usedCopyButton = false;
 
   // 1) QR code (opcional)
   if (includeQr && qrBase64) {
@@ -94,41 +93,18 @@ export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResu
     }
   }
 
-  // 2) Valor + botão Copiar (uazapi) ou instrução em texto
-  const canButton = channel.provider === "uazapi" && !!channel.sendCopyButton;
-  if (canButton) {
-    const text =
-      `💰 *PIX de ${valor}*${desc}\n\n` +
-      `Toque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em ` +
-      `*Pix → Pix Copia e Cola* e cole o código. 👇`;
-    try {
-      const mid = await channel.sendCopyButton!(text, "Copiar código PIX", code);
-      await channel.persist({
-        message: `${text}\n\n[Botão: Copiar código PIX]\n[PIX_CODE:${code}]`,
-        message_id: mid,
-      });
-      usedCopyButton = true;
-    } catch (e) {
-      console.warn("[sendPix] botão copiar falhou, caindo para texto:", e);
-    }
-  }
-  if (!usedCopyButton) {
-    const intro =
-      `💰 *PIX de ${valor}*${desc}\n\n` +
-      `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
-      `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
-    const mid = await channel.sendText(intro);
-    await channel.persist({ message: intro, message_id: mid });
-  }
+  // O aceite do provedor não garante suporte ao clipboard da destinatária.
+  const intro =
+    `💰 *PIX de ${valor}*${desc}\n\n` +
+    `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
+    `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
+  const mid = await channel.sendText(intro);
+  await channel.persist({ message: intro, message_id: mid });
 
-  // 3) Sem botão nativo, envia o código isolado para facilitar a cópia manual.
-  // Quando há botão Copiar, o código já está no próprio botão e não deve ser duplicado no chat.
-  if (!usedCopyButton) {
-    const codeMid = await channel.sendText(code);
-    await channel.persist({ message: code, message_id: codeMid });
-  }
-
-  return { sentQr, usedCopyButton };
+  // Mesmo código existente, sem gerar cobrança ou misturar texto no código.
+  const codeMid = await channel.sendText(code);
+  await channel.persist({ message: code, message_id: codeMid });
+  return { sentQr, usedCopyButton: false };
 }
 
 const QR_PREF_KEY = "pix_send_include_qr";

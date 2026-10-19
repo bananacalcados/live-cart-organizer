@@ -5,7 +5,7 @@
 - [x] Instagram: token expirado → renovação diária + status no admin (falta usuário colar tokens novos)
 - [~] Botão EXCLUIR CONTATO no chat do PDV — código pronto; falta publicar a função `contact-erase` (deploy tool não enxergou a pasta nova)
 - [ ] NF-e Lourdes: função `fiscal-recover-by-identifier` pronta; BrasilNFe ObterNotasFiscais retorna 524 — retentar; depois botão de recuperação no painel fiscal + corrigir nfce-retry-pending (não apagar doc antes de reemitir)
-- [x] PIX no chat: não duplicar código quando houver botão Copiar, adicionar atalho na lateral da Live e reproduzir o botão no histórico
+- [x] PIX no chat: adicionar atalho na lateral da Live e reproduzir o botão no histórico
 - [x] Painéis laterais nos chats da Live e do PDV + notas persistentes por cliente
 - [x] PDV: fila compacta fixa acima das notas; ocultar notas nas ferramentas; botão voltar; produtos completos no checkout
 - [x] PDV: ficha completa em painel lateral e largura original do chat preservada com ferramentas abertas
@@ -66,3 +66,5 @@
 - [x] Bloco 1 — relógios de pagamento + aviso "Liberou o par" (testado com dados de mentira e teste desfeito no evento Teste)
 - [ ] Bloco 2 — prazos de cadastro/pagamento no sorteio + aba Participantes (aguarda ok do usuário)
 - [ ] Bloco 3 — frase de pedido no modelo padrão da faixa
+
+- [x] PIX: substituir botão nativo por instrução + mesmo código isolado; 8 testes com envio simulado, sem cobranças. Não publicado; cópia no WhatsApp real não verificada.

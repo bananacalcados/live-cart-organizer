@@ -4,14 +4,14 @@
 
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments.
 - The payment-source guard permits incident reversal only from a privileged database session with an invalidated sandbox attempt and no successful attempt remaining; application users cannot use this exception.
-- Payment audits are admin-only/read-only: 50-row pages, at most three concurrent provider reads, no notifications or charges.
+- Payment audits: admin-only/read-only, 50-row pages, max three concurrent provider reads, no notifications or charges.
 
 - Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
 
 - Every public payment surface must resolve `payment_splits` before rendering a charge; never fall back to the full order total when split status cannot be loaded, because that can double-charge a customer.
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync is stored in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only) and read before the META_ADS_ACCESS_TOKEN secret, because edge functions cannot rewrite secrets.
 - DRE (PDV > Dashboard Geral) é calculada só pela RPC dre_period sobre as views v_sale_* (sem grant ao front); custo do item fica gravado em pos_sale_items.cost_price_at_sale via trigger, porque o custo do cadastro muda com o tempo.
-- AppMax usa o fluxo OAuth2 da AppStore (edge function appmax-install: validação, autorização e callback); credenciais da loja ficam em appmax_installations (só service_role), porque são geradas na instalação e não podem ser segredos fixos.
+- AppMax uses AppStore OAuth2 via appmax-install; store credentials stay service-role-only in appmax_installations, never fixed secrets.
 - Link de Atendimento VIP é um motor separado (vip_links, vip_link_daily_destination, vip_link_clicks, vip_link_conversations, edge function vip-go, rota /g/:code, trigger trg_vip_link_match_incoming); nunca reaproveita tabelas/funções da Live (/zap) nem do /vip, porque esses fluxos já funcionam e têm regras próprias de casamento.
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e (nfe-emitir) lê unit_price e o imposto deve incidir só sobre o valor real; bloqueada após NF-e emitida.
 - Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows runs server sync only for active lives, with one 30s second pass on the discovered media/account, avoiding browser polling and extra crons.
@@ -27,3 +27,5 @@
 
 - Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
+
+- Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
