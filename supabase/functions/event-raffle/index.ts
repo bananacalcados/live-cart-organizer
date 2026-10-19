@@ -121,12 +121,11 @@ Deno.serve(async (req) => {
       if (!raffle.id) return json({ ok: false, error: "save_first" }, 400);
       const rows = await poolRows(raffle);
       const eligible = rows.filter((r: any) => r.eligible);
-      const mask = (p: string) => String(p || "").replace(/\d(?=\d{4})/g, "•");
       return json({
         ok: true,
         count: eligible.length,
-        participants: eligible.slice(0, 300).map((r: any) => ({ ...r, phone: mask(r.phone) })),
-        all: rows.slice(0, 500).map((r: any) => ({ ...r, phone: mask(r.phone) })),
+        participants: eligible.slice(0, 300),
+        all: rows.slice(0, 500),
       });
     }
 

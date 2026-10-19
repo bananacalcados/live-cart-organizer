@@ -28,6 +28,8 @@ interface Raffle {
   audience: string;
   min_purchase_value: number;
   exclude_previous_winners: boolean;
+  max_registration_minutes: number | null;
+  max_payment_minutes: number | null;
   status: string;
   drawn_at: string | null;
 }
@@ -70,7 +72,22 @@ interface Draft {
   audience: string;
   min_purchase_value: number;
   exclude_previous_winners: boolean;
+  max_registration_minutes: number | null;
+  max_payment_minutes: number | null;
 }
+
+interface PoolRow {
+  phone: string;
+  display_name: string | null;
+  product: string | null;
+  registration_minutes: number | null;
+  payment_minutes: number | null;
+  eligible: boolean;
+  reason: string | null;
+}
+
+const fmtMin = (m: number | null) => (m === null || m === undefined ? "—" : `${String(m).replace(".", ",")} min`);
+const optionalMinutes = (v: string) => (v.trim() === "" ? null : Math.max(1, Math.round(Number(v)) || 1));
 
 const emptyDraft = (): Draft => ({
   name: "Sorteio da Live",
@@ -82,6 +99,8 @@ const emptyDraft = (): Draft => ({
   audience: "confirmed_orders",
   min_purchase_value: 0,
   exclude_previous_winners: true,
+  max_registration_minutes: null,
+  max_payment_minutes: null,
 });
 
 async function callRaffle(payload: Record<string, unknown>) {
@@ -141,6 +160,9 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [drawing, setDrawing] = useState<string | null>(null);
+  const [pools, setPools] = useState<Record<string, PoolRow[]>>({});
+  const [openPool, setOpenPool] = useState<string | null>(null);
+  const [onlyEligible, setOnlyEligible] = useState(false);
   const [rolls, setRolls] = useState<Record<string, { names: string[]; winner: string }>>({});
 
   const load = useCallback(async () => {
@@ -169,7 +191,10 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
   const refreshCount = useCallback(async (raffle: Raffle) => {
     try {
       const res = await callRaffle({ action: "preview", raffle_id: raffle.id });
-      if (res?.ok) setCounts((c) => ({ ...c, [raffle.id]: res.count }));
+      if (res?.ok) {
+        setCounts((c) => ({ ...c, [raffle.id]: res.count }));
+        setPools((p) => ({ ...p, [raffle.id]: res.all || [] }));
+      }
     } catch { /* silencioso */ }
   }, []);
 
@@ -338,6 +363,23 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
               )}
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Prazo de cadastro (min)</Label>
+                <Input type="number" min={1} placeholder="Sem prazo"
+                  value={draft.max_registration_minutes ?? ""}
+                  onChange={(e) => setDraft({ ...draft, max_registration_minutes: optionalMinutes(e.target.value) })} />
+                <p className="text-xs text-muted-foreground">Do pedido até o carrinho montado.</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Prazo de pagamento (min)</Label>
+                <Input type="number" min={1} placeholder="Sem prazo"
+                  value={draft.max_payment_minutes ?? ""}
+                  onChange={(e) => setDraft({ ...draft, max_payment_minutes: optionalMinutes(e.target.value) })} />
+                <p className="text-xs text-muted-foreground">Do pedido até o pagamento.</p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Excluir quem já ganhou neste evento</p>
@@ -379,10 +421,12 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
                 <Badge variant="outline">
                   {AUDIENCES.find((a) => a.value === r.audience)?.label || r.audience}
                 </Badge>
+                {r.max_registration_minutes && <Badge variant="outline">cadastro ≤ {r.max_registration_minutes} min</Badge>}
+                {r.max_payment_minutes && <Badge variant="outline">pagamento ≤ {r.max_payment_minutes} min</Badge>}
                 {r.status === "drawn" && <Badge className="bg-emerald-600">Sorteado</Badge>}
                 <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5" />
-                  {r.status === "draft" ? `${counts[r.id] ?? "..."} participantes` : `${(winners[r.id] || []).length} ganhador(es)`}
+                  {r.status === "draft" ? `${counts[r.id] ?? "..."} elegíveis` : `${(winners[r.id] || []).length} ganhador(es)`}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -405,9 +449,42 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
                 </div>
               )}
 
+              {r.status === "draft" && openPool === r.id && (
+                <div className="rounded-lg border">
+                  <div className="flex items-center justify-between gap-2 p-2 border-b">
+                    <p className="text-sm font-medium">{counts[r.id] ?? 0} elegíveis de {(pools[r.id] || []).length}</p>
+                    <label className="flex items-center gap-2 text-xs">
+                      <Switch checked={onlyEligible} onCheckedChange={setOnlyEligible} /> Só elegíveis
+                    </label>
+                  </div>
+                  <div className="max-h-80 overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead className="text-muted-foreground"><tr className="text-left">
+                        <th className="p-2">Cliente</th><th className="p-2">Produto</th><th className="p-2">Cadastro em</th>
+                        <th className="p-2">Pagamento em</th><th className="p-2">Elegível</th>
+                      </tr></thead>
+                      <tbody>
+                        {(pools[r.id] || []).filter((p) => !onlyEligible || p.eligible).map((p, i) => (
+                          <tr key={`${p.phone}-${i}`} className="border-t">
+                            <td className="p-2"><p className="font-medium">{p.display_name || "Cliente"}</p><p className="text-muted-foreground">{maskPhone(p.phone)}</p></td>
+                            <td className="p-2">{p.product || "—"}</td>
+                            <td className="p-2">{fmtMin(p.registration_minutes)}</td>
+                            <td className="p-2">{fmtMin(p.payment_minutes)}</td>
+                            <td className="p-2">{p.eligible ? <Badge className="bg-emerald-600">sim</Badge> : <span className="text-destructive">não · {p.reason}</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end">
                 {r.status === "draft" ? (
                   <>
+                    <Button variant="outline" size="sm" onClick={() => { if (openPool !== r.id) refreshCount(r); setOpenPool(openPool === r.id ? null : r.id); }}>
+                      <Users className="h-4 w-4 mr-1" /> Participantes
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => removeRaffle(r.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
