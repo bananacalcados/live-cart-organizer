@@ -20,7 +20,7 @@
 - Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in totals and the conversion denominator, never as paid/received — the business wants real conversion.
 - Card gateway split (Admin > Pagamentos, gateway_split_config) picks only the FIRST gateway of the card cascade, deterministic by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins only as drawn start gateway, config read failure falls back to the fixed order — retries must never land on a different gateway.
 
-- Wait-reply outcomes use stable step IDs and conditional row consumption, because replies and timeouts must choose only one branch while preserving legacy routing.
+- Wait-reply outcomes use stable step IDs and conditional row consumption: replies and timeouts choose only one branch while preserving legacy routing.
 - Presenter alerts accept only team_message; order realtime never interrupts the live panel.
 
 - Lazy imports: one reload/tab, visible stale-module fallback.
