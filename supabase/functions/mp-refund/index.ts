@@ -201,13 +201,21 @@ async function executeMpRefund(supabase: any, row: any, account: any, payment: a
       body: JSON.stringify(body),
     });
   } catch (e: any) {
-    await supabase.from("gateway_refunds").update({ status: "falhou", error_message: `Falha de rede ao chamar o Mercado Pago: ${e?.message}`, updated_at: new Date().toISOString() }).eq("id", row.id);
-    return { ok: false, error: "Falha de comunicação com o Mercado Pago. Nenhum estorno foi criado — tente novamente." };
+    // Falha de rede/timeout: o MP PODE ter processado e só a resposta se perdeu.
+    // Marca "verificar" (mantém a idempotency_key) — o worker confere antes de
+    // permitir qualquer nova tentativa. NUNCA marcar "falhou" aqui.
+    await supabase.from("gateway_refunds").update({ status: "verificar", error_message: `Falha de rede ao chamar o Mercado Pago: ${e?.message}`, updated_at: new Date().toISOString() }).eq("id", row.id);
+    return { ok: false, verificar: true, error: "Falha de comunicação com o Mercado Pago. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
   }
 
   const respBody = await resp.json().catch(() => ({}));
 
   if (!resp.ok) {
+    // 5xx do MP: mesma incerteza da falha de rede — pode ter processado.
+    if (resp.status >= 500) {
+      await supabase.from("gateway_refunds").update({ status: "verificar", error_message: `Mercado Pago instável (HTTP ${resp.status}) — verificando se o estorno foi processado.`, mp_response: respBody, updated_at: new Date().toISOString() }).eq("id", row.id);
+      return { ok: false, verificar: true, error: "O Mercado Pago está instável. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
+    }
     const rawMsg = String(respBody?.message || respBody?.error || `HTTP ${resp.status}`);
     const insufficient = /insufficient|saldo|balance/i.test(rawMsg) || respBody?.causes?.some?.((c: any) => /insufficient|balance/i.test(String(c?.code || c?.description || "")));
     const friendly = insufficient
@@ -282,14 +290,15 @@ serve(async (req) => {
 
   if (action === "set_config") {
     if (!isAdmin) return json({ error: "Só administradores podem alterar as configurações de estorno." }, 403);
-    const updates: Array<{ key: string; value: any }> = [];
-    if (typeof body.enabled === "boolean") updates.push({ key: "refunds_enabled", value: body.enabled });
+    // Escrita SÓ aqui (service role + admin). A tabela refund_settings não tem
+    // grant de escrita para usuários logados — ninguém altera pelo navegador.
+    const updates: Record<string, any> = { updated_at: new Date().toISOString(), updated_by: userId };
+    if (typeof body.enabled === "boolean") updates.enabled = body.enabled;
     if (body.approval_threshold === null || typeof body.approval_threshold === "number") {
-      updates.push({ key: "refund_approval_threshold", value: body.approval_threshold });
+      updates.approval_threshold = body.approval_threshold;
     }
-    for (const u of updates) {
-      await supabase.from("app_settings").upsert({ key: u.key, value: u.value, updated_at: new Date().toISOString() }, { onConflict: "key" });
-    }
+    const { error: upErr } = await supabase.from("refund_settings").upsert({ id: true, ...updates }, { onConflict: "id" });
+    if (upErr) return json({ error: `Falha ao salvar configuração: ${upErr.message}` }, 500);
     return json({ ok: true, config: await getConfig(supabase) });
   }
 
