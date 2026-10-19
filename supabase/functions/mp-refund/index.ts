@@ -138,10 +138,18 @@ async function checkPayment(
     return { ok: false, error: `O pagamento está com status "${payment.status}" no Mercado Pago — só é possível estornar pagamentos aprovados.`, payment, account };
   }
 
-  // Coerência: se o external_reference tem um UUID e não é o desta venda/pedido, bloqueia.
+  // Coerência: se o external_reference tem um UUID e ele pertence a OUTRA
+  // venda/pedido do sistema, bloqueia. (Links de pagamento usam referências
+  // próprias — UUID desconhecido não bloqueia.)
   const refUuid = extractUuid(payment.external_reference);
   if (refUuid && refUuid !== src.id.toLowerCase()) {
-    return { ok: false, error: "A referência do pagamento no Mercado Pago não corresponde a esta venda/pedido. Estorno bloqueado por segurança.", payment, account };
+    const [otherSale, otherOrder] = await Promise.all([
+      supabase.from("pos_sales").select("id").eq("id", refUuid).maybeSingle(),
+      supabase.from("orders").select("id").eq("id", refUuid).maybeSingle(),
+    ]);
+    if (otherSale.data || otherOrder.data) {
+      return { ok: false, error: "A referência do pagamento no Mercado Pago pertence a outra venda/pedido. Estorno bloqueado por segurança.", payment, account };
+    }
   }
 
   const approvedAt = payment.date_approved ? new Date(payment.date_approved) : null;
