@@ -97,103 +97,16 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const action = String(body?.action || "");
 
-    /** Monta o pool de participantes conforme a configuração do sorteio. */
+    /** Pool pela regra única do banco (mesma da barra do overlay e da aba Participantes). */
+    async function poolRows(raffle: any): Promise<any[]> {
+      const { data, error } = await supabase.rpc("event_raffle_pool", { p_raffle_id: raffle.id });
+      if (error) throw new Error(error.message);
+      return data || [];
+    }
     async function buildPool(raffle: any): Promise<PoolEntry[]> {
-      const eventId = raffle.event_id as string;
-      const minValue = Number(raffle.min_purchase_value || 0);
-
-      const { data: orders } = await supabase
-        .from("orders")
-        .select("id, stage, is_paid, paid_externally, products, customer_id, customer:customers(instagram_handle, whatsapp)")
-        .eq("event_id", eventId)
-        .neq("stage", "cancelled")
-        .limit(5000);
-
-      const orderTotal = (o: any) => {
-        const items = Array.isArray(o.products) ? o.products : [];
-        return items.reduce(
-          (s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1),
-          0,
-        );
-      };
-
-      const byPhone = new Map<string, PoolEntry>();
-      const orderPhones = new Set<string>();
-
-      for (const o of orders || []) {
-        const cust = (o as any).customer;
-        const phone = normalizePhone(cust?.whatsapp || "");
-        if (!phone) continue;
-        const key = suffix8(phone);
-        orderPhones.add(key);
-
-        const paid = Boolean(o.is_paid || o.paid_externally);
-        const confirmed = isConfirmedStage(String(o.stage || ""));
-
-        if (raffle.audience === "confirmed_orders" && !confirmed) continue;
-        if (raffle.audience === "payers" && !paid) continue;
-        if (raffle.audience === "live_leads") continue;
-
-        const value = orderTotal(o);
-        const prev = byPhone.get(key);
-        if (prev) {
-          prev.entry_value += value;
-        } else {
-          byPhone.set(key, {
-            phone,
-            display_name: cust?.instagram_handle || null,
-            order_id: o.id,
-            entry_value: value,
-          });
-        }
-      }
-
-      if (raffle.audience === "live_leads") {
-        const { data: leads } = await supabase
-          .from("event_leads")
-          .select("name, phone, phone_suffix, instagram, disqualified")
-          .eq("event_id", eventId)
-          .limit(5000);
-        for (const l of leads || []) {
-          if (l.disqualified) continue;
-          const phone = normalizePhone(l.phone || "");
-          if (!phone) continue;
-          const key = suffix8(phone);
-          if (orderPhones.has(key)) continue; // já montou pedido no evento
-          if (byPhone.has(key)) continue;
-          byPhone.set(key, {
-            phone,
-            display_name: l.instagram || l.name || null,
-            order_id: null,
-            entry_value: 0,
-          });
-        }
-      } else if (minValue > 0) {
-        for (const [k, v] of [...byPhone.entries()]) {
-          if (v.entry_value < minValue) byPhone.delete(k);
-        }
-      }
-
-      if (raffle.exclude_previous_winners) {
-        const { data: prevRaffles } = await supabase
-          .from("event_raffles")
-          .select("id")
-          .eq("event_id", eventId)
-          .neq("id", raffle.id);
-        const ids = (prevRaffles || []).map((r: any) => r.id);
-        if (ids.length) {
-          const { data: winners } = await supabase
-            .from("event_raffle_winners")
-            .select("phone, voided_at")
-            .in("raffle_id", ids);
-          for (const w of winners || []) {
-            if (w.voided_at) continue;
-            byPhone.delete(suffix8(w.phone));
-          }
-        }
-      }
-
-      return [...byPhone.values()];
+      return (await poolRows(raffle)).filter((r: any) => r.eligible).map((r: any) => ({
+        phone: r.phone, display_name: r.display_name, order_id: r.order_id, entry_value: Number(r.entry_value || 0),
+      }));
     }
 
     async function getRaffle(id: string) {
@@ -205,8 +118,15 @@ Deno.serve(async (req) => {
     if (action === "preview") {
       const raffle = body?.raffle_id ? await getRaffle(body.raffle_id) : body?.raffle;
       if (!raffle) return json({ ok: false, error: "raffle_not_found" }, 404);
-      const pool = await buildPool(raffle);
-      return json({ ok: true, count: pool.length, participants: pool.slice(0, 300) });
+      if (!raffle.id) return json({ ok: false, error: "save_first" }, 400);
+      const rows = await poolRows(raffle);
+      const eligible = rows.filter((r: any) => r.eligible);
+      return json({
+        ok: true,
+        count: eligible.length,
+        participants: eligible.slice(0, 300),
+        all: rows.slice(0, 500),
+      });
     }
 
     // ---------- DRAW ----------

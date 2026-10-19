@@ -30,7 +30,7 @@ export interface OverlayConfig {
   /** Relógios de pagamento: lista fixa, até 4 pedidos, fora da fila de avisos. */
   payment_timers: { enabled: boolean; template: string };
   /** Aviso de par liberado quando o prazo de pagamento vence. */
-  expired_alert: { enabled: boolean; template: string; duration_seconds: number };
+  expired_alert: { enabled: boolean; template: string; template_no_stock: string; duration_seconds: number };
 }
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
@@ -52,7 +52,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   cta: { enabled: true, interval_minutes: 10, items: [] },
   wheel: { enabled: true, title_template: "🎰 Roleta de @{handle}", result_seconds: 8 },
   payment_timers: { enabled: true, template: "✅ @{handle}, seu carrinho está pronto! ⏳ {timer} para pagar e concorrer à bolsa 🎁" },
-  expired_alert: { enabled: true, template: "🔁 Liberou o {size} do {product}! Quem quer?", duration_seconds: 8 },
+  expired_alert: { enabled: true, template: "🔁 Liberou o {size} do {product}! Quem quer?", template_no_stock: "⌛ @{handle}, o prazo da bolsa acabou!", duration_seconds: 8 },
 };
 
 /** Junta o config salvo com os padrões, para nunca faltar campo. */
@@ -85,4 +85,9 @@ export interface PaymentTimer { orderId: string; handle: string; product: string
 /** Relógios visíveis: some ao vencer ou após 20 min; até 4, o que vence primeiro no topo. */
 export function visibleTimers(list: PaymentTimer[], now: number): PaymentTimer[] {
   return list.filter((t) => t.expiresAt > now && now - t.addedAt < 20 * 60_000).sort((a, b) => a.expiresAt - b.expiresAt).slice(0, 4);
+}
+
+/** Aviso de vencimento: sem estoque além do carrinho, usa o texto "prazo acabou". */
+export function expiredAlertTemplate(cfg: OverlayConfig["expired_alert"], payload: { has_stock?: boolean }): string {
+  return payload?.has_stock === false ? (cfg.template_no_stock || DEFAULT_OVERLAY_CONFIG.expired_alert.template_no_stock) : cfg.template;
 }

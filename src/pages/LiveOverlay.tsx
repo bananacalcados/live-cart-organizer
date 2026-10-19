@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, fill, formatTimer, visibleTimers, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, visibleTimers, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
@@ -113,7 +113,7 @@ export default function LiveOverlay() {
           continue;
         }
         if (e.kind === "expired") {
-          if (cfg.expired_alert.enabled) queue.current.push({ key: e.id, text: fill(cfg.expired_alert.template, { handle: p.handle || "", product: p.product || "par", size: p.size || "número" }), duration: cfg.expired_alert.duration_seconds, tone: "expired" });
+          if (cfg.expired_alert.enabled) queue.current.push({ key: e.id, text: fill(expiredAlertTemplate(cfg.expired_alert, p), { handle: p.handle || "", product: p.product || "par", size: p.size || "número" }), duration: cfg.expired_alert.duration_seconds, tone: "expired" });
           continue;
         }
         if (e.kind === "paid" && cfg.paid_alert.enabled && e.payload?.handle) {
