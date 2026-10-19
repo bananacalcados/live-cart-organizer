@@ -381,14 +381,19 @@ serve(async (req) => {
     }
 
     // Trava contra duplicidade: já existe estorno em andamento para este pagamento?
+    // (O índice único parcial gateway_refunds_one_in_flight_per_payment garante
+    // a mesma regra no banco — duas abas ao mesmo tempo não passam as duas.)
     const { data: inFlight } = await supabase
       .from("gateway_refunds")
       .select("id, status")
       .eq("payment_id", src.paymentId || "")
-      .in("status", ["aguardando_aprovacao", "processando"])
+      .in("status", ["aguardando_aprovacao", "processando", "verificar"])
       .limit(1);
     if (inFlight && inFlight.length > 0) {
-      return json({ error: "Já existe um estorno aguardando aprovação ou em processamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
+      const checking = inFlight[0].status === "verificar";
+      return json({ error: checking
+        ? "Existe um estorno em verificação com o Mercado Pago para este pagamento. NÃO refaça o estorno — aguarde a conferência automática."
+        : "Já existe um estorno aguardando aprovação ou em processamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
     }
 
     const check = await checkPayment(supabase, src, amount);
@@ -422,8 +427,10 @@ serve(async (req) => {
 
     const { data: inserted, error: insErr } = await supabase.from("gateway_refunds").insert(row).select("id").single();
     if (insErr) {
-      if (String(insErr.message).includes("duplicate")) {
-        return json({ error: "Este estorno já foi registrado (proteção contra duplicidade)." }, 409);
+      // Violação do índice único parcial (corrida entre duas solicitações
+      // simultâneas): só um estorno em andamento por pagamento.
+      if (insErr.code === "23505" || String(insErr.message).includes("gateway_refunds_one_in_flight_per_payment")) {
+        return json({ error: "Já existe um estorno em andamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
       }
       return json({ error: `Falha ao registrar o estorno: ${insErr.message}` }, 500);
     }
