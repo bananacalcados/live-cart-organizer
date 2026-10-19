@@ -6351,6 +6351,8 @@ export type Database = {
           exclude_previous_winners: boolean
           expiry_days: number
           id: string
+          max_payment_minutes: number | null
+          max_registration_minutes: number | null
           min_purchase_value: number
           name: string
           prize_label: string
@@ -6369,6 +6371,8 @@ export type Database = {
           exclude_previous_winners?: boolean
           expiry_days?: number
           id?: string
+          max_payment_minutes?: number | null
+          max_registration_minutes?: number | null
           min_purchase_value?: number
           name: string
           prize_label: string
@@ -6387,6 +6391,8 @@ export type Database = {
           exclude_previous_winners?: boolean
           expiry_days?: number
           id?: string
+          max_payment_minutes?: number | null
+          max_registration_minutes?: number | null
           min_purchase_value?: number
           name?: string
           prize_label?: string
@@ -6641,6 +6647,7 @@ export type Database = {
           name: string
           operation_mode: string
           overlay_token: string | null
+          payment_window_on_assembly: boolean
           setup_completed: boolean
           start_date: string | null
           store_ids: string[] | null
@@ -6696,6 +6703,7 @@ export type Database = {
           name: string
           operation_mode?: string
           overlay_token?: string | null
+          payment_window_on_assembly?: boolean
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -6751,6 +6759,7 @@ export type Database = {
           name?: string
           operation_mode?: string
           overlay_token?: string | null
+          payment_window_on_assembly?: boolean
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -13768,6 +13777,7 @@ export type Database = {
           pos_sale_id: string | null
           preselected_installments: number | null
           products: Json
+          registered_at: string | null
           release_to_expedition: boolean
           shipping_cost: number | null
           shipping_info: Json | null
@@ -13839,6 +13849,7 @@ export type Database = {
           pos_sale_id?: string | null
           preselected_installments?: number | null
           products?: Json
+          registered_at?: string | null
           release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
@@ -13910,6 +13921,7 @@ export type Database = {
           pos_sale_id?: string | null
           preselected_installments?: number | null
           products?: Json
+          registered_at?: string | null
           release_to_expedition?: boolean
           shipping_cost?: number | null
           shipping_info?: Json | null
@@ -25175,6 +25187,20 @@ export type Database = {
         Returns: Json
       }
       event_phone_key: { Args: { p_phone: string }; Returns: string }
+      event_raffle_pool: {
+        Args: { p_raffle_id: string }
+        Returns: {
+          display_name: string
+          eligible: boolean
+          entry_value: number
+          order_id: string
+          payment_minutes: number
+          phone: string
+          product: string
+          reason: string
+          registration_minutes: number
+        }[]
+      }
       events_buyer_origin_matrix_range: {
         Args: { p_channel?: string; p_from: string; p_to: string }
         Returns: Json
@@ -26373,6 +26399,7 @@ export type Database = {
           unit_cost_brl: number
         }[]
       }
+      raffle_norm_phone: { Args: { p: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
         Returns: undefined
