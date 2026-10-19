@@ -23,7 +23,7 @@
 - Card gateway split (Admin > Pagamentos, table gateway_split_config) only picks the FIRST gateway of the card cascade, deterministically by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins the queue only when it is the drawn start gateway, and any config read failure falls back to the fixed order, because retries must never land on a different gateway.
 
 - Wait-reply outcomes use stable step IDs and conditional row consumption, because replies and timeouts must choose only one branch while preserving legacy routing.
-- Presenter alerts accept only team_message; order realtime updates data without interrupting the live panel.
+- Presenter alerts accept only team_message; order realtime never interrupts the live panel.
 
 - Startup/lazy imports share one reload per tab and visible fallbacks to recover stale modules.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
