@@ -44,7 +44,7 @@ export interface RefundRow {
   refund_type: "integral" | "parcial";
   reason: string;
   reason_text: string | null;
-  status: "aguardando_aprovacao" | "recusado" | "processando" | "concluido" | "falhou";
+  status: "aguardando_aprovacao" | "recusado" | "processando" | "verificar" | "concluido" | "falhou";
   error_message: string | null;
   card_brand: string | null;
   card_last4: string | null;
@@ -98,6 +98,7 @@ export const REFUND_STATUS_LABELS: Record<string, string> = {
   aguardando_aprovacao: "Aguardando aprovação",
   recusado: "Recusado",
   processando: "Em processamento",
+  verificar: "Verificando com o Mercado Pago — não refaça o estorno",
   concluido: "Concluído",
   falhou: "Falhou",
 };
