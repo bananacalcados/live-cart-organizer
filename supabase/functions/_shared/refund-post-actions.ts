@@ -2,6 +2,7 @@
 // Compartilhado entre mp-refund (execução imediata) e mercadopago-poll-pending
 // (estornos que ficaram "processando", ex.: Pix in_process).
 // NÃO mexe em estoque nem em nota fiscal nesta fase.
+import { ensureRefundReceipt } from "./refund-receipt.ts";
 
 function brl(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -49,4 +50,11 @@ export async function runRefundPostActions(supabase: any, row: any, userEmail: s
   await appendRefundHistory(supabase, row, userEmail);
   await linkRefundToExchange(supabase, row);
   await maybeCancelRefundedOrder(supabase, row);
+  // Comprovante interno (Fase 3) — falha aqui nunca desfaz o estorno.
+  try {
+    const r = await ensureRefundReceipt(supabase, row.id);
+    if (!r.ok) console.warn("[refund-post] receipt:", r.error);
+  } catch (e: any) {
+    console.warn("[refund-post] receipt failed:", e?.message);
+  }
 }
