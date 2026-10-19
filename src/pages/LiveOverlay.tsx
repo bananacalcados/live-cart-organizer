@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, fill, formatTimer, visibleTimers, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, visibleTimers, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }

@@ -36,3 +36,11 @@ describe("payment timers", () => {
     expect(visibleTimers(list, now).map((t) => t.orderId)).toEqual(["b", "f", "d", "e"]);
   });
 });
+import { DEFAULT_OVERLAY_CONFIG, expiredAlertTemplate } from "@/lib/liveOverlay";
+describe("expired alert", () => {
+  it("uses the 'liberou' text when there is another pair and the 'prazo acabou' text when not", () => {
+    const c = DEFAULT_OVERLAY_CONFIG.expired_alert;
+    expect(expiredAlertTemplate(c, {})).toBe("🔁 Liberou o {size} do {product}! Quem quer?");
+    expect(expiredAlertTemplate(c, { has_stock: false })).toBe("⌛ @{handle}, o prazo da bolsa acabou!");
+  });
+});
