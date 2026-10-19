@@ -130,6 +130,10 @@ interface CrmCustomerData {
     modality?: "Presencial" | "Online";
     /** pos_sale = venda registrada no PDV (permite troca/devolução e chargeback). */
     kind?: "pos_sale" | "expedition";
+    hasMpPayment?: boolean;
+    mpPaymentError?: string;
+    paymentState?: "paid" | "unpaid" | "unknown";
+    shipped?: boolean;
     items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
 }
@@ -2819,7 +2823,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
-                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} mpPaymentError={o.mpPaymentError} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: selectedPhone ? crmData?.email : undefined, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} mpPaymentError={o.mpPaymentError} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} /> : null}
               />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
