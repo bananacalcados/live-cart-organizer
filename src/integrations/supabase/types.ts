@@ -26964,6 +26964,10 @@ export type Database = {
         }[]
       }
       vip_link_stats: { Args: { p_from: string; p_to: string }; Returns: Json }
+      vip_photo_internal_name: {
+        Args: { p_brief: string; p_product_title?: string }
+        Returns: string
+      }
       vip_set_daily_destination: {
         Args: { p_day: string; p_force?: boolean; p_number_id: string }
         Returns: Json
