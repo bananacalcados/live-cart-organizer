@@ -114,8 +114,10 @@ serve(async (req) => {
     }
   }
 
-  // ── Estornos em processamento (Fase 1): consulta GET /v1/payments/{id}/refunds ──
+  // ── Estornos em processamento/verificação (Fase 1): GET /v1/payments/{id}/refunds ──
   // Reaproveita este worker de 2 min — sem cron novo. Teto de 20 por execução.
+  // "verificar" = a resposta do MP se perdeu (rede/5xx); aqui conferimos se o
+  // estorno foi processado de verdade antes de liberar nova tentativa.
   let refundsChecked = 0;
   let refundsDone = 0;
   try {
@@ -123,7 +125,7 @@ serve(async (req) => {
       .from("gateway_refunds")
       .select("*")
       .eq("gateway", "mercadopago")
-      .eq("status", "processando")
+      .in("status", ["processando", "verificar"])
       .order("created_at", { ascending: true })
       .limit(20);
 

@@ -1,8 +1,11 @@
 // Estorno Mercado Pago pelo sistema — Fase 1.
 // Segurança: exige JWT de usuário logado + permissão "estornos" (user_module_permissions)
-// ou papel admin. Interruptor geral em app_settings (refunds_enabled, padrão desligado).
-// Teto de aprovação em app_settings (refund_approval_threshold; vazio = não-admin sempre
-// aguarda aprovação). Estorno aguardando aprovação NUNCA chama o Mercado Pago.
+// ou papel admin. Interruptor geral e teto de aprovação na tabela refund_settings
+// (escrita SÓ via service role aqui, ação set_config, só admin; padrão desligado,
+// teto vazio = não-admin sempre aguarda aprovação). Estorno aguardando aprovação
+// NUNCA chama o Mercado Pago. Falha de rede/5xx do MP vira status "verificar"
+// (nunca "falhou") — o worker confere se o estorno foi processado antes de
+// permitir nova tentativa (índice único parcial por payment_id).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
