@@ -24,7 +24,7 @@
 - Presenter alerts accept only team_message; order realtime never interrupts the live panel.
 
 - Lazy imports: one reload/tab, visible stale-module fallback.
-- Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers, because the server cascade must honor the agreed terms.
+- Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
 
 - Chat PIX sends the same standalone code, not native copy buttons: delivery cannot verify recipient clipboard support.
 
