@@ -33,6 +33,7 @@ interface SendMessageRequest {
   interactiveData?: InteractiveData;
   interactive_data?: InteractiveData;
   quotedMessageId?: string;
+  fileName?: string;
 }
 
 async function getCredentials(supabase: ReturnType<typeof createClient>, whatsappNumberId?: string) {
@@ -339,6 +340,7 @@ serve(async (req) => {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'document', phoneNumberId, accessToken);
       const documentPayload: Record<string, unknown> = { id: mediaId };
       if (resolvedCaption) documentPayload.caption = resolvedCaption;
+      if (typeof (requestBody as any)?.fileName === 'string' && (requestBody as any).fileName) documentPayload.filename = String((requestBody as any).fileName).slice(0, 120);
 
       body = {
         messaging_product: 'whatsapp',
