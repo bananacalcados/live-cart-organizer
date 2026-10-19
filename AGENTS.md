@@ -4,7 +4,7 @@
 
 - Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments. Incident reversal only from a privileged DB session with an invalidated sandbox attempt and no successful attempt remaining. Payment audits: admin/read-only, 50 rows, ≤3 provider reads.
 
-- Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway to avoid misattributing settlements.
+- Expedition gateway badges and server-side filters use pos_sales.payment_gateway, never the cascade selection or a payment-method guess; unified shipments display every constituent gateway.
 
 - Every public payment surface must resolve `payment_splits` before rendering a charge; never fall back to the full order total when split status cannot be loaded, because that can double-charge a customer.
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync is stored in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only) and read before the META_ADS_ACCESS_TOKEN secret, because edge functions cannot rewrite secrets.
