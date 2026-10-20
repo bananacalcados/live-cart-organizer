@@ -7,6 +7,8 @@ export interface RefundPreview {
   ok: boolean;
   error?: string;
   gateway?: string;
+  fullOnly?: boolean;
+  fullOnlyNotice?: string;
   point?: boolean;
   source?: {
     id: string;
