@@ -548,6 +548,7 @@ serve(async (req) => {
       if (check.ok) { res.eligible = true; res.remaining = check.remaining; continue; }
       const err = check.error || "";
       if (!p && /consultar o pagamento/.test(err)) { res.retry = true; res.reason = RETRY; }
+      else if (p && p.status === "refunded") { res.reason = "Já totalmente estornado"; res.remaining = 0; }
       else if (p && !["approved", "partially_refunded"].includes(p.status)) res.reason = `Pagamento não aprovado no gateway (status ${p.status})`;
       else if (/mais de \d+ dias/.test(err)) res.reason = `Mais de ${MAX_REFUND_AGE_DAYS} dias da aprovação`;
       else if (/totalmente estornado/.test(err)) { res.reason = "Já totalmente estornado"; res.remaining = 0; }
