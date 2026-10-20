@@ -581,6 +581,7 @@ serve(async (req) => {
     return json({
       ok: check.ok,
       error: check.error,
+      gateway: "Mercado Pago",
       source: {
         id: src.id, label: src.label, channel: src.channel, total: src.total,
         customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped,

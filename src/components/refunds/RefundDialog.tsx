@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { RefundReceiptButton } from "./RefundReceiptButton";
 import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 import { refundApi, REFUND_REASONS, type RefundPreview, type RefundSource } from "@/lib/refunds";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, validateRefundAmount } from "@/lib/refundRules";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +29,7 @@ type Step = "loading" | "error" | "form" | "confirm" | "done";
  */
 export function RefundDialog({ source, sourceId, label, customerName, onDone }: Props) {
   const { toast } = useToast();
+  const { isAdmin } = useIsAdmin();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("loading");
   const [preview, setPreview] = useState<RefundPreview | null>(null);
@@ -95,23 +97,27 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
   };
 
   const submit = async () => {
-    const typed = Number(String(typedAmount).replace(",", "."));
-    if (!confirmationAmountMatches(typed, parsedAmount)) {
-      setError("O valor digitado não confere com o valor do estorno.");
-      return;
-    }
-    if (!password) {
-      setError("Digite sua senha do sistema para confirmar.");
-      return;
+    if (isAdmin) {
+      const typed = Number(String(typedAmount).replace(",", "."));
+      if (!confirmationAmountMatches(typed, parsedAmount)) {
+        setError("O valor digitado não confere com o valor do estorno.");
+        return;
+      }
+      if (!password) {
+        setError("Digite sua senha do sistema para confirmar.");
+        return;
+      }
     }
     setSubmitting(true);
     setError(null);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const email = userData?.user?.email;
-      if (!email) throw new Error("Sessão inválida. Entre de novo no sistema.");
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      if (authError) throw new Error("Senha incorreta. O estorno não foi feito.");
+      if (isAdmin) {
+        const { data: userData } = await supabase.auth.getUser();
+        const email = userData?.user?.email;
+        if (!email) throw new Error("Sessão inválida. Entre de novo no sistema.");
+        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        if (authError) throw new Error("Senha incorreta. O estorno não foi feito.");
+      }
 
       const res = await refundApi.execute({
         source,
@@ -121,7 +127,11 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
         reason_text: reason === "outro" ? reasonText.trim() : null,
         cancel_order: canSuggestCancel ? cancelOrder : false,
       });
-      setResultMessage(res.message || (res.pending_approval ? "Estorno aguardando aprovação de um administrador." : "Estorno enviado."));
+      setResultMessage(
+        res.pending_approval
+          ? "Solicitação enviada. Um administrador vai revisar e aprovar na aba ESTORNOS. Nenhum valor foi movido ainda."
+          : res.message || "Estorno enviado."
+      );
       setDoneRefund(res.refund_id ? { id: res.refund_id, status: res.status } : null);
       setStep("done");
       onDone?.();
@@ -149,7 +159,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
         <DialogContent className="bg-pos-black border-amber-500/40 max-w-lg" onClick={stop}>
           <DialogHeader>
             <DialogTitle className="text-pos-white text-xl flex items-center gap-2">
-              <Undo2 className="h-5 w-5 text-amber-400" /> Estorno Mercado Pago
+              <Undo2 className="h-5 w-5 text-amber-400" /> Estorno{preview?.gateway ? ` · ${preview.gateway}` : ""}
             </DialogTitle>
           </DialogHeader>
 
@@ -263,27 +273,34 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 <p className="text-xs text-pos-white/60">Motivo: {REFUND_REASONS.find((r) => r.value === reason)?.label}{reason === "outro" ? ` — ${reasonText}` : ""}</p>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-pos-white/60">Digite o valor do estorno para confirmar ({brl(parsedAmount)})</label>
-                <input
-                  value={typedAmount}
-                  onChange={(e) => setTypedAmount(e.target.value)}
-                  inputMode="decimal"
-                  className="w-full rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"
-                  placeholder="0,00"
-                />
-              </div>
+              {isAdmin && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-xs text-pos-white/60">Digite o valor do estorno para confirmar ({brl(parsedAmount)})</label>
+                    <input
+                      value={typedAmount}
+                      onChange={(e) => setTypedAmount(e.target.value)}
+                      inputMode="decimal"
+                      className="w-full rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"
+                      placeholder="0,00"
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-pos-white/60">Sua senha do sistema</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"
-                  placeholder="••••••••"
-                />
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-pos-white/60">Sua senha do sistema</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </>
+              )}
+              {!isAdmin && (
+                <p className="text-xs text-pos-white/60">Sua solicitação vai para um administrador aprovar na aba ESTORNOS. Nenhum valor é movido agora.</p>
+              )}
 
               {error && <p className="text-destructive text-xs">{error}</p>}
 
@@ -294,7 +311,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                   disabled={submitting}
                   className="rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-black hover:bg-amber-400 disabled:opacity-50 inline-flex items-center gap-2"
                 >
-                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />} Confirmar estorno
+                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />} {isAdmin ? "Confirmar estorno" : "Enviar solicitação de estorno"}
                 </button>
               </div>
             </div>

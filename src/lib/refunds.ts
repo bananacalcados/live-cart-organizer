@@ -6,6 +6,7 @@ export type RefundSource = "order" | "pos_sale";
 export interface RefundPreview {
   ok: boolean;
   error?: string;
+  gateway?: string;
   point?: boolean;
   source?: {
     id: string;
