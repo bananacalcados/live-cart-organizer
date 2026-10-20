@@ -594,7 +594,11 @@ serve(async (req) => {
     if (row.status !== "aguardando_aprovacao") return json({ error: "Este estorno não está aguardando aprovação." }, 400);
 
     if (action === "reject") {
-      await supabase.from("gateway_refunds").update({ status: "recusado", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
+      const rejectedReason = String(body?.rejected_reason || "").trim();
+      if (rejectedReason.length < 3 || rejectedReason.length > 300) {
+        return json({ error: "Informe o motivo da recusa (de 3 a 300 caracteres)." }, 400);
+      }
+      await supabase.from("gateway_refunds").update({ status: "recusado", rejected_reason: rejectedReason, approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
       return json({ ok: true, message: "Estorno recusado." });
     }
 

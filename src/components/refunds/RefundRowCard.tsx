@@ -29,7 +29,7 @@ export function RefundRowCard({ r, actions, onChanged }: { r: RefundListRow; act
           {r.status === "concluido" && r.completed_at ? ` · concluído em ${dt(r.completed_at)}` : ""}
         </p>
         {r.status === "recusado" && (
-          <p className="text-xs text-destructive">Recusado por {r.approved_by_name || "—"}{r.rejected_reason ? `: ${r.rejected_reason}` : ""}</p>
+          <p className="text-xs text-destructive">Recusado por {r.approved_by_name || "—"}{r.rejected_reason ? ` — ${r.rejected_reason}` : ""}</p>
         )}
         {r.status === "falhou" && r.error_message && <p className="text-xs text-destructive">{r.error_message}</p>}
       </div>
