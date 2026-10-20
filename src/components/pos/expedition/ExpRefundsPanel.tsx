@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { refundApi, type RefundListParams, type RefundListRow } from "@/lib/refunds";
 import { RefundRowCard } from "@/components/refunds/RefundRowCard";
@@ -42,6 +43,7 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const [channel, setChannel] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const searchEdited = useRef(false);
   useEffect(() => { const t = setTimeout(() => setSearch(searchInput.trim()), 400); return () => clearTimeout(t); }, [searchInput]);
 
   const historyParams = useCallback((p: number): RefundListParams => ({
@@ -86,7 +88,6 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
     <div className="space-y-6">
       <div className="flex justify-end"><RefundRequestDialog onDone={reload} /></div>
       {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-      {!isAdmin && !loading && <p className="text-xs text-muted-foreground">Você vê só os estornos que você solicitou.</p>}
 
       <section>
         <h3 className="mb-2 text-lg font-black uppercase text-pos-text">Aguardando aprovação ({pending.length})</h3>
@@ -148,7 +149,21 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
           </Select>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Nome, telefone ou CPF" className="h-10 w-64 pl-9" />
+            <Input
+              type="search" autoComplete="off" autoCorrect="off" spellCheck={false}
+              name="refund-history-search" id="refund-history-search"
+              aria-label="Buscar estornos por nome, telefone ou CPF"
+              value={searchInput}
+              onKeyDown={(e) => { searchEdited.current = e.key.length === 1 || ["Backspace", "Delete"].includes(e.key); }}
+              onPaste={() => { searchEdited.current = true; }}
+              onCompositionStart={() => { searchEdited.current = true; }}
+              onChange={(e) => {
+                if (!searchEdited.current) { e.target.value = searchInput; return; }
+                setSearchInput(e.target.value);
+              }}
+              placeholder="Nome, telefone ou CPF" className="h-10 w-64 pl-9 pr-10 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {searchInput && <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1 h-8 w-8" aria-label="Limpar busca de estornos" onClick={() => { searchEdited.current = false; setSearchInput(""); setSearch(""); }}><X className="h-4 w-4" /></Button>}
           </div>
         </div>
         {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : history.length === 0 ? (
@@ -157,9 +172,9 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
           <div className="space-y-2">
             {history.map((r) => <RefundRowCard key={r.id} r={r} onChanged={reload} />)}
             {hasMore && (
-              <button onClick={() => void loadMore()} disabled={loadingMore} className="w-full rounded-md border border-border py-2 text-sm font-bold hover:bg-muted">
+              <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore} className="w-full font-bold">
                 {loadingMore ? "Carregando..." : "Carregar mais"}
-              </button>
+              </Button>
             )}
           </div>
         )}

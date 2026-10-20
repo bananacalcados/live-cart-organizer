@@ -198,6 +198,8 @@ export interface RefundListParams {
 }
 
 export interface RefundListRow extends RefundRow {
+  paid_at?: string | null;
+  mp_account_name?: string | null;
   approved_by?: string | null;
   approved_at?: string | null;
   completed_at?: string | null;
