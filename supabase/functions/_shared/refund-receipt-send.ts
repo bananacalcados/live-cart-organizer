@@ -18,11 +18,11 @@ export function maskPhone(p: string | null) {
 export function renderReceiptMessage(tpl: string, vars: { nome: string; valor: number; dataCompra: string | null; codigo: string; isPix: boolean }) {
   const date = vars.dataCompra ? new Date(vars.dataCompra).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "-";
   return (tpl || DEFAULT_RECEIPT_MESSAGE)
-    .replaceAll("{nome}", vars.nome || "")
-    .replaceAll("{valor}", brl(vars.valor))
-    .replaceAll("{data_compra}", date)
-    .replaceAll("{codigo}", vars.codigo || "")
-    .replaceAll("{aviso_prazo}", vars.isPix ? AVISO_PIX : AVISO_CARTAO)
+    .split("{nome}").join(vars.nome || "")
+    .split("{valor}").join(brl(vars.valor))
+    .split("{data_compra}").join(date)
+    .split("{codigo}").join(vars.codigo || "")
+    .split("{aviso_prazo}").join(vars.isPix ? AVISO_PIX : AVISO_CARTAO)
     .trim();
 }
 
@@ -116,9 +116,9 @@ export async function executeReceiptSend(supabase: any, plan: ReceiptSendPlan, t
     ? { phone: plan.phone, type: "document", mediaUrl: url, caption: text, fileName: plan.fileName, whatsapp_number_id: inst.id }
     : { phone: plan.phone, mediaUrl: url, mediaType: "document", caption: text, fileName: plan.fileName, filename: plan.fileName, whatsapp_number_id: inst.id };
 
-  const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${fn}`, {
+  const resp = await fetch(`${(globalThis as any).Deno.env.get("SUPABASE_URL")}/functions/v1/${fn}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${(globalThis as any).Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const data = await resp.json().catch(() => ({}));
