@@ -9,7 +9,11 @@
 // estornado — então o sistema só permite INTEGRAL na Appmax (conferência segura).
 
 const API = "https://api.appmax.com.br";
-export const APPMAX_PAID = ["aprovado", "approved", "paid", "pago", "integrado", "autorizado", "authorized"];
+export const APPMAX_PAID = ["aprovado", "approved", "paid", "pago", "integrado"];
+// "autorizado" = análise em andamento, pagamento ainda NÃO capturado
+// (mesma regra do appmax-webhook). Nunca é tratado como pago para estorno.
+export const APPMAX_AUTHORIZED = ["autorizado", "authorized"];
+export const APPMAX_AUTHORIZED_BLOCK = "Pedido Appmax ainda em análise/autorizado — aguarde a aprovação do pagamento para estornar";
 export const APPMAX_REFUNDED = ["estornado", "refunded", "reembolsado"];
 export const APPMAX_PARTIAL = ["estornado_parcialmente", "partially_refunded", "estorno_parcial", "parcialmente_estornado"];
 export const APPMAX_LEGACY_BLOCK = "Conta Appmax antiga — estorno pelo sistema indisponível";
