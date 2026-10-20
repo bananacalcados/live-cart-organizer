@@ -38,7 +38,11 @@ import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations
 import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
 import { expeditionPriorityRank, isValadaresOrder, isSedexOrder, isStorePickupOrder } from "@/lib/expeditionPriority";
 import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGateway";
-import { CreditCard, BadgePercent } from "lucide-react";
+import { CreditCard, BadgePercent, Undo2 } from "lucide-react";
+import { lazyNamed } from "@/lib/lazyTab";
+import { useCanRefund } from "@/hooks/useCanRefund";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
 
 
@@ -78,6 +82,32 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
+  const [showRefunds, setShowRefunds] = useState(false);
+  const canRefund = useCanRefund();
+  const { isAdmin: refundAdmin, ready: adminReady } = useIsAdmin(canRefund);
+  const [refundPending, setRefundPending] = useState(0);
+  const [refundTick, setRefundTick] = useState(0);
+  // Contador de estornos aguardando aprovação: carrega ao abrir e atualiza por realtime (sem polling).
+  useEffect(() => {
+    if (!canRefund || !adminReady) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const loadCount = async () => {
+      const { data: u } = await supabase.auth.getUser();
+      let q: any = supabase.from("gateway_refunds").select("id", { count: "exact", head: true }).eq("status", "aguardando_aprovacao");
+      if (!refundAdmin && u?.user?.id) q = q.eq("requested_by", u.user.id);
+      const { count } = await q;
+      if (alive) setRefundPending((prev) => (prev === (count || 0) ? prev : count || 0));
+    };
+    void loadCount();
+    const ch = supabase.channel("exp-gateway-refunds")
+      .on("postgres_changes", { event: "*", schema: "public", table: "gateway_refunds" }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { void loadCount(); setRefundTick((t) => t + 1); }, 1500);
+      })
+      .subscribe();
+    return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
+  }, [canRefund, adminReady, refundAdmin]);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -810,7 +840,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             return (
               <button
                 key={s.id}
-                onClick={() => setStage(s.id)}
+                onClick={() => { setStage(s.id); setShowRefunds(false); }}
                 className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
                   active
                     ? `${stageStyles[s.id].chip} text-white border-transparent shadow-lg scale-[1.02]`
@@ -841,7 +871,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           })}
 
           <button
-            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); }}
+            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); setShowRefunds(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showPurchases
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -856,7 +886,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             </div>
           </button>
           <button
-            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); }}
+            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); setShowRefunds(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showSimu
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -870,9 +900,31 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               </span>
             </div>
           </button>
+          {canRefund && (
+            <button
+              onClick={() => { setShowRefunds((v) => !v); setShowPurchases(false); setShowSimu(false); }}
+              className={`relative rounded-xl px-3 py-4 text-left transition-all border-2 ${
+                showRefunds
+                  ? "bg-violet-600 text-white border-transparent shadow-lg scale-[1.02]"
+                  : "bg-pos-elevated border-violet-500/40 hover:scale-[1.01]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Undo2 className={`h-6 w-6 ${showRefunds ? "text-white" : "text-violet-500"}`} />
+                <span className={`text-lg font-black uppercase leading-tight ${showRefunds ? "text-white" : "text-pos-text"}`}>
+                  Estornos
+                </span>
+              </div>
+              {refundPending > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-6 h-6 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-black flex items-center justify-center">
+                  {refundPending}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
-        <div className="mt-4 flex items-center gap-3 flex-wrap">
+        {!showRefunds && <div className="mt-4 flex items-center gap-3 flex-wrap">
           <label htmlFor="expedition-gateway" className="text-sm font-black text-pos-text uppercase">Gateway de pagamento</label>
           <Select value={filterGateway} onValueChange={setFilterGateway}>
             <SelectTrigger id="expedition-gateway" className="h-12 w-full sm:w-80 text-base font-bold border-2">
@@ -885,9 +937,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
 
-        {showFilters && (
+        {showFilters && !showRefunds && (
           <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div>
@@ -1038,7 +1090,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         )}
       </div>
 
-      {!showPurchases && !showSimu && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && !showSimu && !showRefunds && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
@@ -1128,8 +1180,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
+      {showRefunds && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ExpRefundsPanel refreshKey={refundTick} />
+        </div>
+      )}
+
       {/* List */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu ? "hidden" : ""}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu || showRefunds ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList
