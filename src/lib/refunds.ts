@@ -98,13 +98,14 @@ export const refundApi = {
     reason_text?: string | null;
     cancel_order?: boolean;
   }) => call<{ ok: boolean; pending_approval?: boolean; refund_id?: string; status?: string; message?: string }>({ action: "execute", ...payload }),
-  list: () => call<{ ok: boolean; pending: RefundRow[]; recent: RefundRow[]; readyToSend?: { id: string; amount: number; customer_name: string | null }[]; isAdmin: boolean }>({ action: "list" }),
+  list: () => call<{ ok: boolean; readyToSend?: { id: string; amount: number; customer_name: string | null }[]; isAdmin: boolean }>({ action: "list" }),
+  listScope: (p: RefundListParams) => call<{ ok: boolean; rows: RefundListRow[]; hasMore: boolean; isAdmin: boolean }>({ action: "list", ...p }),
   receiptSendPreview: (id: string, whatsappNumberId?: string | null) =>
     call<ReceiptSendPreview>({ action: "receipt_send_preview", id, whatsapp_number_id: whatsappNumberId || undefined }),
   sendReceipt: (p: { id: string; message: string; confirm_resend?: boolean; whatsapp_number_id?: string | null }) =>
     call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
   approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
-  reject: (id: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id }),
+  reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, reason }),
   getConfig: () => call<{ ok: boolean; config: RefundConfig; isAdmin: boolean }>({ action: "get_config" }),
   receipt: (id: string) => call<{ ok: boolean; url: string; code: string; path: string }>({ action: "receipt", id }),
   completedForSources: (ids: string[]) =>
@@ -178,4 +179,59 @@ export function getCompletedRefunds(sourceId: string): Promise<CompletedRefund[]
   completedCache.set(sourceId, p);
   setTimeout(() => completedCache.delete(sourceId), 60_000);
   return p;
+}
+
+export interface RefundListParams {
+  scope: "pending" | "active" | "history";
+  status?: "concluido" | "recusado" | "falhou";
+  channel?: "live" | "pdv";
+  from?: string;
+  to?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface RefundListRow extends RefundRow {
+  approved_by?: string | null;
+  approved_at?: string | null;
+  completed_at?: string | null;
+  rejected_reason?: string | null;
+  customer_name: string | null;
+  phone_masked: string;
+  source_label: string;
+  requested_by_name: string | null;
+  approved_by_name: string | null;
+}
+
+export interface RefundBadge {
+  id: string;
+  display_id: string;
+  source: RefundSource;
+  source_id: string;
+  status: RefundRow["status"];
+  amount: number;
+  refund_type: "integral" | "parcial";
+  completed_at: string | null;
+  created_at: string;
+  has_receipt: boolean;
+  receipt_sent_at: string | null;
+}
+
+/** Selos de estorno de uma lista de vendas/pedidos — UMA chamada (inclui pedido↔venda vinculados). */
+export async function fetchRefundBadges(ids: string[]): Promise<RefundBadge[]> {
+  const uniq = Array.from(new Set(ids.filter((s) => /^[0-9a-f-]{36}$/i.test(s)))).slice(0, 200);
+  if (uniq.length === 0) return [];
+  const { data, error } = await supabase.rpc("refund_badges_for_sources" as any, { order_ids: uniq, sale_ids: uniq } as any);
+  if (error) return [];
+  return (data as any) || [];
+}
+
+/** Reautenticação real com a senha do próprio usuário (mesma do RefundDialog). */
+export async function reauthWithPassword(password: string) {
+  const { data } = await supabase.auth.getUser();
+  const email = data?.user?.email;
+  if (!email) throw new Error("Sessão inválida. Entre de novo no sistema.");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error("Senha incorreta.");
 }
