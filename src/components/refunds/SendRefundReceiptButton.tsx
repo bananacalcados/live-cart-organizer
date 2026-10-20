@@ -4,6 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { refundApi, type ReceiptSendPreview } from "@/lib/refunds";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+
+const LAST_KEY = "refund-receipt-last-instance";
+type Inst = { id: string; label: string; phone_display: string | null; provider: string | null };
+const instLabel = (i: Inst) => `${i.label}${i.phone_display ? ` (${i.phone_display})` : ""}${i.provider ? ` · ${i.provider}` : ""}`;
 
 /**
  * Fase 4 — "Enviar comprovante à cliente": abre prévia (destino, instância, texto
@@ -19,6 +24,9 @@ export function SendRefundReceiptButton({
   const [preview, setPreview] = useState<ReceiptSendPreview | null>(null);
   const [text, setText] = useState("");
   const [confirmResend, setConfirmResend] = useState(false);
+  const [instances, setInstances] = useState<Inst[]>([]);
+  const [selected, setSelected] = useState<string>("");
+  const [switching, setSwitching] = useState(false);
   const [localSentAt, setLocalSentAt] = useState<string | null>(sentAt || null);
 
   const already = preview?.already_sent_at || localSentAt;
@@ -28,20 +36,45 @@ export function SendRefundReceiptButton({
     e.stopPropagation();
     setOpen(true); setLoading(true); setPreview(null); setConfirmResend(false);
     try {
-      const p = await refundApi.receiptSendPreview(refundId, whatsappNumberId);
-      setPreview(p); setText(p.message);
+      const [p, list] = await Promise.all([
+        refundApi.receiptSendPreview(refundId, whatsappNumberId),
+        supabase.from("whatsapp_numbers_safe" as any).select("id, label, phone_display, provider").eq("is_active", true).order("label"),
+      ]);
+      const insts = ((list as any).data || []) as Inst[];
+      setInstances(insts);
+      let last: string | null = null;
+      try { last = localStorage.getItem(LAST_KEY); } catch { /* */ }
+      const suggested = p.instance?.id || "";
+      if (!whatsappNumberId && last && last !== suggested && insts.some((i) => i.id === last)) {
+        const p2 = await refundApi.receiptSendPreview(refundId, last);
+        setPreview(p2); setText(p2.message); setSelected(p2.instance?.id || last);
+      } else {
+        setPreview(p); setText(p.message); setSelected(suggested);
+      }
     } catch (err: any) {
       toast({ title: "Não consegui montar a prévia", description: err?.message, variant: "destructive" });
       setOpen(false);
     } finally { setLoading(false); }
   };
 
+  const changeInstance = async (id: string) => {
+    setSelected(id);
+    try { localStorage.setItem(LAST_KEY, id); } catch { /* */ }
+    setSwitching(true);
+    try {
+      const p = await refundApi.receiptSendPreview(refundId, id);
+      setPreview((prev) => ({ ...p, message: prev?.message ?? p.message }));
+    } catch (err: any) {
+      toast({ title: "Não consegui conferir essa instância", description: err?.message, variant: "destructive" });
+    } finally { setSwitching(false); }
+  };
+
   const send = async () => {
-    if (!preview || preview.blocked) return;
+    if (!preview || preview.blocked || !selected || switching) return;
     if (already && !confirmResend) return;
     setSending(true);
     try {
-      const r = await refundApi.sendReceipt({ id: refundId, message: text, confirm_resend: !!already, whatsapp_number_id: preview.instance?.id });
+      const r = await refundApi.sendReceipt({ id: refundId, message: text, confirm_resend: !!already, whatsapp_number_id: selected });
       setLocalSentAt(r.sent_at);
       toast({ title: "Comprovante enviado à cliente" });
       setOpen(false);
@@ -70,7 +103,20 @@ export function SendRefundReceiptButton({
               <div className="rounded-md border border-border p-3 space-y-1">
                 <p><span className="text-muted-foreground">Cliente:</span> <b>{preview.customer_name || "—"}</b></p>
                 <p><span className="text-muted-foreground">Destino:</span> <b>{preview.phone_masked || "sem WhatsApp"}</b></p>
-                <p><span className="text-muted-foreground">Vai sair por:</span> <b>{preview.instance?.label || "—"}</b></p>
+                <label className="block">
+                  <span className="text-muted-foreground">Vai sair por:</span>
+                  <select
+                    value={selected}
+                    onChange={(e) => void changeInstance(e.target.value)}
+                    disabled={switching || sending}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="" disabled>Escolha a instância…</option>
+                    {instances.map((i) => <option key={i.id} value={i.id}>{instLabel(i)}</option>)}
+                  </select>
+                  {switching && <span className="text-xs text-muted-foreground">Conferindo instância…</span>}
+                  {!selected && !switching && <span className="text-xs text-destructive">Escolha por qual WhatsApp enviar.</span>}
+                </label>
                 <p className="flex items-center gap-1"><FileText className="h-4 w-4 text-muted-foreground" /> {preview.file_name}</p>
               </div>
               {preview.blocked && (
@@ -87,7 +133,7 @@ export function SendRefundReceiptButton({
                 <button onClick={() => setOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Cancelar</button>
                 <button
                   onClick={() => void send()}
-                  disabled={sending || !!preview.blocked || !text.trim() || (!!already && !confirmResend)}
+                  disabled={sending || switching || !selected || !!preview.blocked || !text.trim() || (!!already && !confirmResend)}
                   className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar
