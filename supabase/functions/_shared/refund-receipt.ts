@@ -95,10 +95,12 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   const { data: account } = await supabase.from("mercadopago_accounts")
     .select("name, cnpj, access_token").eq("id", row.mp_account_id).maybeSingle();
   const isPix = !row.card_brand;
+  const isAppmax = row.gateway === "appmax";
+  const gwName = isAppmax ? "Appmax" : "Mercado Pago";
 
   // Pix sem E2E: busca de novo no MP antes de gerar; nunca inventa.
   let e2e: string | null = row.e2e_id || null;
-  if (isPix && !e2e && row.refund_id && account?.access_token) {
+  if (!isAppmax && isPix && !e2e && row.refund_id && account?.access_token) {
     try {
       const r = await fetch(`https://api.mercadopago.com/v1/payments/${row.payment_id}/refunds/${row.refund_id}`, {
         headers: { Authorization: `Bearer ${account.access_token}` },
@@ -189,8 +191,12 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   field("Motivo", row.reason === "outro" && row.reason_text ? `Outro — ${row.reason_text}` : reason);
 
   section(isPix ? "Pagamento — Pix" : "Pagamento — Cartão");
+  if (isAppmax) {
+    field("Gateway", "Appmax");
+    field("ID do pedido Appmax", String(row.payment_id || "-"));
+  }
   if (isPix) {
-    field("Código da devolução Pix (E2E)", e2e || "E2E não informado pelo Mercado Pago");
+    field("Código da devolução Pix (E2E)", e2e || (isAppmax ? "E2E não informado pelo gateway" : "E2E não informado pelo Mercado Pago"));
     field("ID do reembolso", row.refund_id || "-");
   } else {
     field("Bandeira", String(row.card_brand || "-").toUpperCase());
@@ -208,7 +214,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   y -= 4;
   const contact = String(cfg?.receipt_footer_contact || "").trim();
   if (contact) para(contact);
-  para("Documento interno gerado pelo sistema a partir dos dados da transação no Mercado Pago.");
+  para(`Documento interno gerado pelo sistema a partir dos dados da transação no ${gwName}.`);
   para(`Código de verificação: ${code}`);
 
   const bytes = await pdf.save();
