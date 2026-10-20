@@ -32,4 +32,4 @@
 
 - VIP inserts normalize names; captions never use media_brief. Shared media helpers preserve draft captions on append/remove.
 - MP refunds: JWT + estornos permission; admin-only refund_settings; gateway_refunds service-only writes, payment-id lock and idempotency; uncertain outcomes stay verificar. Poll-pending syncs; refund-post-actions handles history. Shared mp-sale-payment resolves sale or linked-order credentials in one batch; ambiguity fails closed. Converted order references are the same purchase; other gateways/Point later.
-- Refund badges on customer order cards come only from RPC refund_badges_for_sources (one batched call, order↔linked-sale aware, minimal fields for any signed-in user); refund lists/approvals live in Expedição > ESTORNOS via mp-refund list scopes filtered server-side by requester for non-admins.
+- Refund badges: only RPC refund_badges_for_sources (batched, order↔sale aware); refund lists in Expedição > ESTORNOS via mp-refund list scopes, server-filtered by requester for non-admins.
