@@ -212,9 +212,15 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   para(`Código de verificação: ${code}`);
 
   const bytes = await pdf.save();
-  const path = `${row.id}/comprovante-${code}.pdf`;
+  const path = (regenerate && row.receipt_path) ? row.receipt_path : `${row.id}/comprovante-${code}.pdf`;
   const up = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: "application/pdf", upsert: true });
   if (up.error) return { ok: false, error: `Falha ao salvar o comprovante: ${up.error.message}` };
+
+  if (regenerate && row.receipt_path) {
+    await supabase.from("gateway_refunds").update({ receipt_generated_at: new Date().toISOString() }).eq("id", row.id);
+    return { ok: true, path, code };
+  }
+
 
   const { data: saved } = await supabase.from("gateway_refunds").update({
     receipt_code: code, receipt_path: path, receipt_generated_at: new Date().toISOString(),
