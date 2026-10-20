@@ -34,7 +34,7 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
   if (source === "order") {
     const { data } = await supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, mp_account_id, products, discount_type, discount_value, free_shipping, shipping_cost, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
+      .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, products, discount_type, discount_value, free_shipping, shipping_cost, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
       .eq("id", id)
       .maybeSingle();
     if (!data) return null;
@@ -50,6 +50,7 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
       id: data.id,
       paymentId: data.mercadopago_payment_id,
       mpAccountId: data.mp_account_id,
+      appmaxOrderId: data.appmax_order_id ? String(data.appmax_order_id) : null,
       total,
       label: "Pedido da Live",
       channel: "live",
@@ -62,18 +63,20 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
   }
   const { data } = await supabase
     .from("pos_sales")
-    .select("id, mercadopago_payment_id, mp_account_id, total, status, payment_method, created_at, paid_at, shipped_at, customer_name")
+    .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, total, status, payment_method, created_at, paid_at, shipped_at, customer_name")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
   const payments = await loadMpSalePayments(supabase, [data]);
   const resolved = payments.get(data.id);
+  const ax = (await loadAppmaxIds(supabase, [data])).get(data.id);
   return {
     id: data.id,
     paymentId: resolved?.paymentId ?? null,
     mpAccountId: resolved?.accountId ?? null,
     paymentOrderId: resolved?.orderId,
-    paymentError: resolved?.error,
+    paymentError: resolved?.error || (!resolved?.paymentId && ax?.ambiguous ? APPMAX_AMBIGUOUS : undefined),
+    appmaxOrderId: ax?.id ?? null,
     total: Number(data.total || 0),
     label: data.payment_method ? `Venda PDV (${data.payment_method})` : "Venda PDV",
     channel: "pdv",
@@ -83,6 +86,37 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
     shipped: !!data.shipped_at || ["shipped", "delivered"].includes(String(data.status || "")),
     createdAt: data.created_at,
   };
+}
+
+const APPMAX_AMBIGUOUS = "Venda tem mais de um pedido Appmax — estorno pelo sistema indisponível";
+
+/** appmax_order_id da venda ou do pedido da live convertido nela (mesma compra), em lote. */
+async function loadAppmaxIds(supabase: any, sales: { id: string; appmax_order_id?: any }[]): Promise<Map<string, { id: string | null; ambiguous: boolean }>> {
+  const ids = new Map<string, Set<string>>();
+  for (const s of sales) { const set = new Set<string>(); if (s.appmax_order_id) set.add(String(s.appmax_order_id)); ids.set(s.id, set); }
+  if (sales.length) {
+    const { data } = await supabase.from("orders").select("pos_sale_id, appmax_order_id")
+      .in("pos_sale_id", sales.map((s) => s.id)).not("appmax_order_id", "is", null).limit(500);
+    for (const o of data || []) ids.get(o.pos_sale_id)?.add(String(o.appmax_order_id));
+  }
+  const out = new Map<string, { id: string | null; ambiguous: boolean }>();
+  for (const [k, set] of ids) out.set(k, { id: set.size === 1 ? [...set][0] : null, ambiguous: set.size > 1 });
+  return out;
+}
+
+type GwCheck = { gateway: "mercadopago" | "appmax"; payId: string | null; check: any };
+
+/** Gateway REAL: MP aprovado manda; Appmax só sem MP válido/aprovado e com pedido pago lá. */
+async function checkAny(supabase: any, src: SourceRow, amount: number | null): Promise<GwCheck> {
+  if (src.paymentId && !src.paymentError) {
+    const c = await checkPayment(supabase, src, amount);
+    const mpNotApproved = c.payment && !["approved", "partially_refunded", "refunded"].includes(c.payment.status);
+    if (!(mpNotApproved && src.appmaxOrderId)) return { gateway: "mercadopago", payId: src.paymentId, check: c };
+  }
+  if (src.appmaxOrderId && !src.paymentError) {
+    return { gateway: "appmax", payId: src.appmaxOrderId, check: await appmaxCheckPayment(supabase, src.appmaxOrderId, src.total, amount) };
+  }
+  return { gateway: "mercadopago", payId: src.paymentId, check: await checkPayment(supabase, src, amount) };
 }
 
 async function isPointSale(supabase: any, source: string, sourceId: string, paymentId: string | null): Promise<boolean> {
