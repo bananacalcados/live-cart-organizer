@@ -139,6 +139,7 @@ export async function appmaxCheckPayment(supabase: any, orderId: string, localTo
   const p = look.payment;
   if (APPMAX_REFUNDED.includes(p.status)) return { ok: false, error: "Este pagamento já foi totalmente estornado.", payment: p, remaining: 0 };
   if (APPMAX_PARTIAL.includes(p.status)) return { ok: false, error: "Pedido Appmax já parcialmente estornado — estorno pelo sistema indisponível", payment: p };
+  if (APPMAX_AUTHORIZED.includes(p.status)) return { ok: false, error: APPMAX_AUTHORIZED_BLOCK, payment: p };
   if (!APPMAX_PAID.includes(p.status)) return { ok: false, error: `Pedido Appmax não consta como pago (status ${p.status || "desconhecido"})`, payment: p };
   const remaining = Math.round((p.amount ?? localTotal) * 100) / 100;
   if (!(remaining > 0)) return { ok: false, error: "Valor do pedido Appmax indisponível — estorno pelo sistema indisponível", payment: p };
