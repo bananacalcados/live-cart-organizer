@@ -119,6 +119,29 @@ async function checkAny(supabase: any, src: SourceRow, amount: number | null): P
   return { gateway: "mercadopago", payId: src.paymentId, check: await checkPayment(supabase, src, amount) };
 }
 
+async function executeAppmax(supabase: any, row: any, userEmail: string | null) {
+  const now = () => new Date().toISOString();
+  const r = await appmaxExecuteRefund(supabase, String(row.payment_id), Number(row.amount));
+  if (r.kind === "verificar") {
+    await supabase.from("gateway_refunds").update({ status: "verificar", error_message: r.error, mp_response: r.raw ?? null, updated_at: now() }).eq("id", row.id);
+    return { ok: false, verificar: true, error: "Falha de comunicação com a Appmax. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
+  }
+  if (r.kind === "failed") {
+    await supabase.from("gateway_refunds").update({ status: "falhou", error_message: r.error, mp_response: r.raw ?? null, updated_at: now() }).eq("id", row.id);
+    return { ok: false, error: r.error };
+  }
+  const done = r.kind === "done";
+  await supabase.from("gateway_refunds").update({
+    status: done ? "concluido" : "processando", refund_id: r.refundId, mp_response: r.raw ?? null,
+    error_message: null, completed_at: done ? now() : null, updated_at: now(),
+  }).eq("id", row.id);
+  if (done) await runRefundPostActions(supabase, row, userEmail);
+  return {
+    ok: true, status: done ? "concluido" : "processando",
+    message: done ? "Estorno concluído na Appmax." : "Estorno solicitado na Appmax. O sistema acompanha e marca como concluído quando a Appmax confirmar.",
+  };
+}
+
 async function isPointSale(supabase: any, source: string, sourceId: string, paymentId: string | null): Promise<boolean> {
   if (source !== "pos_sale") return false;
   const bySale = await supabase.from("point_payment_intents").select("id").eq("sale_id", sourceId).limit(1);
@@ -455,14 +478,33 @@ serve(async (req) => {
       return json({ ok: false, point: true, error: "Estorno de maquininha ainda não suportado." });
     }
 
-    const check = await checkPayment(supabase, src, null);
+    const gw = await checkAny(supabase, src, null);
+    const check = gw.check;
     const { data: existing } = await supabase
       .from("gateway_refunds")
       .select("id, amount, status, refund_type, created_at")
-      .eq("payment_id", src.paymentId || "")
+      .eq("payment_id", gw.payId || "")
       .order("created_at", { ascending: false })
       .limit(20);
 
+    if (gw.gateway === "appmax") {
+      const ap = check.payment;
+      return json({
+        ok: check.ok, error: check.error, gateway: "Appmax", fullOnly: true, fullOnlyNotice: APPMAX_PARTIAL_ONLY_FULL,
+        source: {
+          id: src.id, label: src.label, channel: src.channel, total: src.total,
+          customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped,
+          stageOrStatus: src.stageOrStatus, createdAt: src.createdAt,
+        },
+        payment: ap ? {
+          id: ap.orderId, status: ap.status, method: ap.method === "pix" ? "pix" : ap.cardBrand || ap.method, type: ap.method === "pix" ? "bank_transfer" : "credit_card",
+          amount: ap.amount ?? src.total, dateApproved: ap.dateApproved, cardLast4: ap.cardLast4, installments: ap.installments, accountName: "Appmax",
+        } : null,
+        remaining: check.remaining ?? null,
+        refundedSoFar: check.refundedSoFar ?? null,
+        existingRefunds: existing || [],
+      });
+    }
     const p = check.payment;
     return json({
       ok: check.ok,
@@ -515,21 +557,41 @@ serve(async (req) => {
     // Trava contra duplicidade: já existe estorno em andamento para este pagamento?
     // (O índice único parcial gateway_refunds_one_in_flight_per_payment garante
     // a mesma regra no banco — duas abas ao mesmo tempo não passam as duas.)
+    const gw = await checkAny(supabase, src, amount);
     const { data: inFlight } = await supabase
       .from("gateway_refunds")
       .select("id, status")
-      .eq("payment_id", src.paymentId || "")
+      .eq("payment_id", gw.payId || "")
       .in("status", ["aguardando_aprovacao", "processando", "verificar"])
       .limit(1);
     if (inFlight && inFlight.length > 0) {
       const checking = inFlight[0].status === "verificar";
       return json({ error: checking
-        ? "Existe um estorno em verificação com o Mercado Pago para este pagamento. NÃO refaça o estorno — aguarde a conferência automática."
+        ? "Existe um estorno em verificação com o gateway para este pagamento. NÃO refaça o estorno — aguarde a conferência automática."
         : "Já existe um estorno aguardando aprovação ou em processamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
     }
 
-    const check = await checkPayment(supabase, src, amount);
+    const check = gw.check;
     if (!check.ok) return json({ error: check.error }, 400);
+    const needsApprovalAx = !isAdmin && (cfg.approval_threshold == null || amount > cfg.approval_threshold);
+    if (gw.gateway === "appmax") {
+      const ap = check.payment;
+      const axRow = {
+        gateway: "appmax", source, source_id: id, mp_account_id: null, payment_id: String(gw.payId),
+        amount, refund_type: "integral", reason, reason_text: reasonText,
+        status: needsApprovalAx ? "aguardando_aprovacao" : "processando", idempotency_key: crypto.randomUUID(),
+        card_brand: ap.method === "pix" ? null : (ap.cardBrand || "cartao"), card_last4: ap.cardLast4, installments: ap.installments,
+        requested_by: userId, cancel_order: cancelOrder,
+      };
+      const { data: ins, error: e2 } = await supabase.from("gateway_refunds").insert(axRow).select("id").single();
+      if (e2) {
+        if (e2.code === "23505" || String(e2.message).includes("gateway_refunds_one_in_flight_per_payment")) return json({ error: "Já existe um estorno em andamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
+        return json({ error: `Falha ao registrar o estorno: ${e2.message}` }, 500);
+      }
+      if (needsApprovalAx) return json({ ok: true, pending_approval: true, refund_id: ins.id, message: "Estorno registrado e aguardando aprovação de um administrador. Nenhum valor foi movido ainda." });
+      const r = await executeAppmax(supabase, { ...axRow, id: ins.id }, userEmail);
+      return json({ ...r, refund_id: ins.id });
+    }
 
     const p = check.payment!;
     const remaining = check.remaining!;
@@ -599,6 +661,16 @@ serve(async (req) => {
 
     const src = await loadSource(supabase, row.source, row.source_id);
     if (!src) return json({ error: "Venda/pedido não encontrado." }, 404);
+    if (row.gateway === "appmax") {
+      const c = await appmaxCheckPayment(supabase, String(row.payment_id), src.total, Number(row.amount));
+      if (!c.ok) {
+        if (c.retry) return json({ error: "Não foi possível consultar a Appmax agora. Tente aprovar de novo em instantes." }, 503);
+        await supabase.from("gateway_refunds").update({ status: "falhou", error_message: c.error, updated_at: new Date().toISOString() }).eq("id", refundId);
+        return json({ error: c.error }, 400);
+      }
+      await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
+      return json(await executeAppmax(supabase, row, userEmail));
+    }
     const check = await checkPayment(supabase, src, Number(row.amount));
     if (!check.ok) {
       await supabase.from("gateway_refunds").update({ status: "falhou", error_message: check.error, updated_at: new Date().toISOString() }).eq("id", refundId);
