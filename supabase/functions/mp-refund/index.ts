@@ -350,6 +350,7 @@ serve(async (req) => {
     for (const r of [...(splitsS.data || []).map((x: any) => x.sale_id), ...(splitsO.data || []).map((x: any) => x.order_id)]) splitCount.set(r, (splitCount.get(r) || 0) + 1);
     const pointSales = new Set((pointR.data || []).map((x: any) => x.sale_id));
     const salePay = await loadMpSalePayments(supabase, [...sales.values()]);
+    const saleAx = await loadAppmaxIds(supabase, [...sales.values()]);
 
     const orderTotal = (d: any) => {
       const pt = (Array.isArray(d.products) ? d.products : []).reduce((s: number, p: any) => s + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
@@ -371,20 +372,22 @@ serve(async (req) => {
       if ((splitCount.get(it.id) || 0) > 1) { res.reason = MULTI; continue; }
       if (it.source === "pos_sale" && pointSales.has(it.id)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
       let paymentId: string | null; let accountId: string | null; let paymentOrderId: string | null = null;
+      let axId: string | null = it.source === "order" ? (row.appmax_order_id ? String(row.appmax_order_id) : null) : (saleAx.get(it.id)?.id ?? null);
       if (it.source === "pos_sale") {
         const p: any = salePay.get(it.id);
         if (p?.error) { res.reason = p.error === MP_SALE_AMBIGUOUS ? MULTI : "Não foi possível consultar o gateway agora"; res.retry = p.error !== MP_SALE_AMBIGUOUS; continue; }
         paymentId = p?.paymentId ?? null; accountId = p?.accountId ?? null; paymentOrderId = p?.orderId ?? null;
       } else { paymentId = row.mercadopago_payment_id; accountId = row.mp_account_id; }
-      if (!paymentId) {
+      if (!paymentId && it.source === "pos_sale" && saleAx.get(it.id)?.ambiguous) { res.gateway = "Appmax"; res.reason = MULTI; continue; }
+      if (!paymentId && !axId) {
         const g = otherGateway(row);
         res.gateway = g;
         res.reason = g ? `${g} — em breve` : "Pago fora do sistema / sem transação de gateway";
         continue;
       }
-      res.gateway = "Mercado Pago";
+      res.gateway = paymentId ? "Mercado Pago" : "Appmax";
       candidates.push({ res, src: {
-        id: row.id, paymentId: String(paymentId), mpAccountId: accountId, paymentOrderId,
+        id: row.id, paymentId: paymentId ? String(paymentId) : null, mpAccountId: accountId, paymentOrderId, appmaxOrderId: axId,
         total: it.source === "order" ? orderTotal(row) : Number(row.total || 0),
         label: "", channel: it.source === "order" ? "live" : "pdv", customerName: null,
         isPaid: true, stageOrStatus: null, shipped: false, createdAt: row.created_at,
@@ -392,7 +395,7 @@ serve(async (req) => {
     }
 
     // Estornos em andamento por payment_id (cobre pedido↔venda da mesma compra) e Point por payment_id.
-    const payIds = [...new Set(candidates.map((c) => c.src.paymentId!))];
+    const payIds = [...new Set(candidates.flatMap((c) => [c.src.paymentId, c.src.appmaxOrderId]).filter(Boolean) as string[])];
     const [activeR, pointPayR]: any[] = payIds.length ? await Promise.all([
       supabase.from("gateway_refunds").select("payment_id, status").in("payment_id", payIds).in("status", ["aguardando_aprovacao", "processando", "verificar"]).limit(200),
       supabase.from("point_payment_intents").select("mp_payment_id").in("mp_payment_id", payIds).limit(200),
@@ -404,14 +407,25 @@ serve(async (req) => {
 
     let checked = 0;
     for (const { res, src } of candidates) {
-      if (pointPays.has(src.paymentId!)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
-      const act = activeBy.get(src.paymentId!);
+      if (src.paymentId && pointPays.has(src.paymentId)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
+      const act = (src.paymentId && activeBy.get(src.paymentId)) || (src.appmaxOrderId && activeBy.get(src.appmaxOrderId));
       if (act) { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
       if (checked >= 10) { res.retry = true; res.reason = RETRY; continue; }
       checked++;
-      let check: MpCheck;
-      try { check = await checkPayment(supabase, src, null); }
+      let gw: GwCheck;
+      try { gw = await checkAny(supabase, src, null); }
       catch { res.retry = true; res.reason = RETRY; continue; }
+      if (gw.gateway === "appmax") {
+        const c = gw.check; const ap = c.payment;
+        res.gateway = "Appmax";
+        if (ap) { res.method = ap.method || undefined; res.cardLast4 = ap.cardLast4; res.installments = ap.installments; res.dateApproved = ap.dateApproved; }
+        if (c.ok) { res.eligible = true; res.remaining = c.remaining; (res as any).fullOnly = true; continue; }
+        if (c.retry) { res.retry = true; res.reason = RETRY; continue; }
+        if (/totalmente estornado/.test(c.error || "")) { res.reason = "Já totalmente estornado"; res.remaining = 0; continue; }
+        res.reason = String(c.error || "").replace(/\.$/, "");
+        continue;
+      }
+      const check: MpCheck = gw.check;
       const p = check.payment;
       if (p) {
         res.method = p.payment_method_id === "pix" || p.payment_type_id === "bank_transfer" ? "pix" : p.payment_type_id === "debit_card" ? "debito" : "cartao";
