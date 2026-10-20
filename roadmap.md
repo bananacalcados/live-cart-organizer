@@ -80,9 +80,9 @@
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
 ## Estornos — Fase E1
-- [ ] Integrar adaptadores MP/Appmax, descoberta segura da conta e elegibilidade real.
-- [ ] Acompanhar Appmax pelo webhook/worker, adaptar comprovante e telas existentes.
-- [ ] Desativar estorno solto Rinne, testar três casos reais sem estornar, publicar.
+- [x] Integrar adaptadores MP/Appmax, descoberta segura da conta e elegibilidade real.
+- [x] Acompanhar Appmax pelo webhook/worker, adaptar comprovante e telas existentes.
+- [x] Desativar estorno solto Rinne, testar três casos reais sem estornar, publicar.
 
 ## Estorno Mercado Pago pelo sistema — Fase 1 (concluído, não publicado)
 - [x] Migração: tabela gateway_refunds (campo gateway p/ futuros), RLS (leitura admin/permissão estornos, escrita só service role), coluna trocas_devolucoes.gateway_refund_id
