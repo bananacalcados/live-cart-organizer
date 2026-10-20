@@ -161,6 +161,7 @@ export async function appmaxExecuteRefund(supabase: any, orderId: string, amount
   if (pre.kind === "retry") return { kind: "verificar", error: `Não consegui consultar a Appmax antes do estorno (${pre.error}).` };
   if (pre.kind !== "ok") return { kind: "failed", error: pre.kind === "legacy" ? APPMAX_LEGACY_BLOCK : "Pedido Appmax não encontrado na conta conectada." };
   if (APPMAX_REFUNDED.includes(pre.payment.status)) return { kind: "done", raw: pre.payment.raw, refundId: null };
+  if (APPMAX_AUTHORIZED.includes(pre.payment.status)) return { kind: "failed", error: APPMAX_AUTHORIZED_BLOCK, raw: pre.payment.raw };
   if (!APPMAX_PAID.includes(pre.payment.status)) return { kind: "failed", error: `Pedido Appmax não consta como pago (status ${pre.payment.status}).`, raw: pre.payment.raw };
 
   let token: string | null;
@@ -195,6 +196,7 @@ export async function appmaxCheckRefund(supabase: any, orderId: string, amount: 
   if (look.kind === "retry") return "retry";
   if (look.kind !== "ok") return "pending";
   if (APPMAX_REFUNDED.includes(look.payment.status)) return "done";
-  if (APPMAX_PAID.includes(look.payment.status)) return "not_refunded";
+  // Autorizado ainda não foi capturado: o estorno não aconteceu (libera nova tentativa).
+  if (APPMAX_PAID.includes(look.payment.status) || APPMAX_AUTHORIZED.includes(look.payment.status)) return "not_refunded";
   return "pending";
 }
