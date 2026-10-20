@@ -10,7 +10,7 @@ import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, Calend
 import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
-import { searchUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
+import { searchPosAndUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
 import { useCustomerChargebacks } from "@/hooks/useCustomerChargebacks";
 import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
 import { MarkChargebackDialog } from "@/components/expedition/MarkChargebackDialog";
@@ -140,55 +140,8 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     setSearching(true);
     setSelected(null);
     try {
-      const digits = q.replace(/\D/g, "");
-      const isPhone = digits.length >= 8;
-      const isCpf = digits.length === 11;
-
-      let queryBuilder = supabase
-        .from("pos_customers")
-        .select("id, name, whatsapp, cpf, email, city, state, previous_whatsapp_numbers")
-        .limit(25);
-
-      if (isCpf) {
-        queryBuilder = queryBuilder.ilike("cpf", `%${digits}%`);
-      } else if (isPhone) {
-        const variations = buildPhoneVariations(q);
-        const last8 = digits.slice(-8);
-        // search by whatsapp containing last 8 digits (covers 9th-digit variations)
-        queryBuilder = queryBuilder.or(
-          variations.map(v => `whatsapp.ilike.%${v}%`).join(",") + `,whatsapp.ilike.%${last8}%`
-        );
-      } else {
-        queryBuilder = queryBuilder.or(`name.ilike.%${q}%,email.ilike.%${q}%`);
-      }
-
-      // Busca em paralelo: pos_customers (transacional) + customers_unified (base completa)
-      const [{ data: posData, error }, unifiedData] = await Promise.all([
-        queryBuilder,
-        searchUnifiedCustomers(q, 25),
-      ]);
-      if (error) throw error;
-
-      const merged: CustomerRow[] = [...((posData as CustomerRow[]) || [])];
-      const seen = new Set(
-        merged.map(c => (c.cpf?.replace(/\D/g, "") || c.whatsapp?.replace(/\D/g, "").slice(-8) || c.id)),
-      );
-      for (const u of unifiedData) {
-        const key = u.cpf?.replace(/\D/g, "") || u.whatsapp?.replace(/\D/g, "").slice(-8) || u.id;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        merged.push({
-          id: u.id,
-          name: u.name,
-          whatsapp: u.whatsapp,
-          cpf: u.cpf,
-          email: u.email,
-          city: u.city,
-          state: u.state,
-          previous_whatsapp_numbers: null,
-          _fromUnified: true,
-        } as CustomerRow);
-      }
+      // Busca compartilhada: pos_customers (transacional) + customers_unified (base completa)
+      const merged = (await searchPosAndUnifiedCustomers(q)) as unknown as CustomerRow[];
 
       setResults(merged);
       if (merged.length === 0) toast.info("Nenhum cliente encontrado");
