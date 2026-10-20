@@ -15,6 +15,7 @@ import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { loadMpSalePayments, MP_SALE_AMBIGUOUS } from "../_shared/mp-sale-payment.ts";
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
+import { applyRefundListFilters } from "../_shared/refund-list.ts";
 
 
 const REASONS = ["cancelamento_antes_envio", "devolucao", "troca_com_diferenca", "outro"] as const;
@@ -265,15 +266,9 @@ serve(async (req) => {
   }
 
   // ── Lista de estornos (Expedição > ESTORNOS + aviso do Admin) ──
-  // scope: pending | active | history. Não-admin vê SÓ as próprias solicitações (filtro no servidor).
+  // scope: pending | active | history. Todos com permissão leem todos; decisões só admin.
   if (action === "list") {
     const scope = ["pending", "active", "history"].includes(body?.scope) ? body.scope : null;
-    const STATUS_BY_SCOPE: Record<string, string[]> = {
-      pending: ["aguardando_aprovacao"],
-      active: ["processando", "verificar"],
-      history: ["concluido", "recusado", "falhou"],
-    };
-    const mine = (q: any) => (isAdmin ? q : q.eq("requested_by", userId));
     const maskPhone = (p: string | null | undefined) => {
       const d = String(p || "").replace(/\D/g, "");
       return d.length >= 8 ? `${d.slice(0, 4)}*****${d.slice(-4)}` : (d ? "****" : "");
@@ -282,14 +277,17 @@ serve(async (req) => {
       const saleIds = [...new Set(rows.filter((r) => r.source === "pos_sale").map((r) => r.source_id))];
       const orderIds = [...new Set(rows.filter((r) => r.source === "order").map((r) => r.source_id))];
       const userIds = [...new Set(rows.flatMap((r) => [r.requested_by, r.approved_by]).filter(Boolean))];
-      const [salesR, ordersR, profR] = await Promise.all([
-        saleIds.length ? supabase.from("pos_sales").select("id, customer_name, customer_phone, customer_cpf").in("id", saleIds) : Promise.resolve({ data: [] }),
-        orderIds.length ? supabase.from("orders").select("id, customer:customers(full_name, whatsapp, instagram_handle)").in("id", orderIds) : Promise.resolve({ data: [] }),
+      const accountIds = [...new Set(rows.map((r) => r.mp_account_id).filter(Boolean))];
+      const [salesR, ordersR, profR, accountsR] = await Promise.all([
+        saleIds.length ? supabase.from("pos_sales").select("id, customer_name, customer_phone, customer_cpf, paid_at, created_at").in("id", saleIds) : Promise.resolve({ data: [] }),
+        orderIds.length ? supabase.from("orders").select("id, paid_at, created_at, customer:customers(full_name, whatsapp, instagram_handle)").in("id", orderIds) : Promise.resolve({ data: [] }),
         userIds.length ? supabase.from("profiles").select("user_id, display_name").in("user_id", userIds) : Promise.resolve({ data: [] }),
+        accountIds.length ? supabase.from("mercadopago_accounts").select("id, name").in("id", accountIds) : Promise.resolve({ data: [] }),
       ]);
-      const src = new Map<string, { name: string | null; phone: string | null; cpf: string | null }>();
-      for (const s of (salesR as any).data || []) src.set(s.id, { name: s.customer_name, phone: s.customer_phone, cpf: s.customer_cpf });
-      for (const o of (ordersR as any).data || []) src.set(o.id, { name: o.customer?.full_name || (o.customer?.instagram_handle ? `@${o.customer.instagram_handle}` : null), phone: o.customer?.whatsapp || null, cpf: null });
+      const src = new Map<string, { name: string | null; phone: string | null; cpf: string | null; paidAt: string | null }>();
+      for (const s of (salesR as any).data || []) src.set(s.id, { name: s.customer_name, phone: s.customer_phone, cpf: s.customer_cpf, paidAt: s.paid_at || s.created_at });
+      for (const o of (ordersR as any).data || []) src.set(o.id, { name: o.customer?.full_name || (o.customer?.instagram_handle ? `@${o.customer.instagram_handle}` : null), phone: o.customer?.whatsapp || null, cpf: null, paidAt: o.paid_at || o.created_at });
+      const accounts = new Map<string, string>((accountsR.data || []).map((a: any) => [a.id, a.name]));
       const names = new Map<string, string>();
       for (const p of (profR as any).data || []) if (p.display_name) names.set(p.user_id, p.display_name);
       return rows.map((r) => {
@@ -297,6 +295,8 @@ serve(async (req) => {
         return {
           ...r,
           customer_name: s?.name || null,
+          paid_at: s?.paidAt || null,
+          mp_account_name: r.gateway === "mercadopago" ? accounts.get(r.mp_account_id) || null : null,
           phone_masked: maskPhone(s?.phone),
           source_label: `${r.source === "order" ? "Pedido" : "Venda"} #${String(r.source_id).slice(0, 8).toUpperCase()}`,
           requested_by_name: names.get(r.requested_by) || null,
@@ -309,15 +309,8 @@ serve(async (req) => {
     if (scope) {
       const limit = Math.min(100, Math.max(1, Number(body?.limit) || 50));
       const page = Math.max(0, Number(body?.page) || 0);
-      let statuses = STATUS_BY_SCOPE[scope];
-      if (scope === "history" && typeof body?.status === "string" && statuses.includes(body.status)) statuses = [body.status];
-      const cols = "id, gateway, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to";
-      let q: any = mine(supabase.from("gateway_refunds").select(cols).in("status", statuses));
-      if (body?.channel === "live") q = q.eq("source", "order");
-      if (body?.channel === "pdv") q = q.eq("source", "pos_sale");
-      if (typeof body?.from === "string" && !isNaN(Date.parse(body.from))) q = q.gte("created_at", body.from);
-      if (typeof body?.to === "string" && !isNaN(Date.parse(body.to))) q = q.lte("created_at", body.to);
-      q = q.order("created_at", { ascending: false });
+      const cols = "id, gateway, mp_account_id, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to";
+      const q: any = applyRefundListFilters(supabase.from("gateway_refunds").select(cols), { ...body, scope });
       const search = String(body?.search || "").trim().toLowerCase().slice(0, 60);
       let rows: any[]; let hasMore: boolean;
       if (search) {
@@ -337,9 +330,9 @@ serve(async (req) => {
     }
 
     // Admin > Pagamentos: só o aviso de Pix concluído pronto para enviar.
-    const { data: readySrc } = await mine(supabase.from("gateway_refunds")
+    const { data: readySrc } = await supabase.from("gateway_refunds")
       .select("id, source, source_id, amount, requested_by, approved_by")
-      .eq("status", "concluido").is("card_brand", null).not("receipt_path", "is", null).is("receipt_sent_at", null))
+      .eq("status", "concluido").is("card_brand", null).not("receipt_path", "is", null).is("receipt_sent_at", null)
       .order("created_at", { ascending: false }).limit(20);
     const readyRows = await enrich(readySrc || []);
     const readyToSend = readyRows.map((r: any) => ({ id: r.id, amount: r.amount, customer_name: r.customer_name }));
