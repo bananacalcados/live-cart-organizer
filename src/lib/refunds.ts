@@ -105,7 +105,7 @@ export const refundApi = {
   sendReceipt: (p: { id: string; message: string; confirm_resend?: boolean; whatsapp_number_id?: string | null }) =>
     call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
   approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
-  reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, reason }),
+  reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, rejected_reason: reason }),
   getConfig: () => call<{ ok: boolean; config: RefundConfig; isAdmin: boolean }>({ action: "get_config" }),
   receipt: (id: string) => call<{ ok: boolean; url: string; code: string; path: string }>({ action: "receipt", id }),
   completedForSources: (ids: string[]) =>
