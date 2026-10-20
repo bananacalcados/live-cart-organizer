@@ -14,6 +14,7 @@ import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { loadMpSalePayments } from "../_shared/mp-sale-payment.ts";
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
+import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 
 const MAX_REFUND_AGE_DAYS = 180;
 
@@ -112,12 +113,13 @@ async function isPointSale(supabase: any, source: string, sourceId: string, paym
   return false;
 }
 
-async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_threshold: number | null; receipt_footer_contact: string }> {
+async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_threshold: number | null; receipt_footer_contact: string; receipt_message_template: string }> {
   const { data } = await supabase.rpc("refund_config");
   return {
     enabled: !!data?.enabled,
     approval_threshold: data?.approval_threshold == null ? null : Number(data.approval_threshold),
     receipt_footer_contact: String(data?.receipt_footer_contact || ""),
+    receipt_message_template: String(data?.receipt_message_template || ""),
   };
 }
 
@@ -313,6 +315,9 @@ serve(async (req) => {
     if (typeof body.receipt_footer_contact === "string") {
       updates.receipt_footer_contact = body.receipt_footer_contact.slice(0, 300);
     }
+    if (typeof body.receipt_message_template === "string") {
+      updates.receipt_message_template = body.receipt_message_template.slice(0, 1000) || null;
+    }
     const { error: upErr } = await supabase.from("refund_settings").upsert({ id: true, ...updates }, { onConflict: "id" });
     if (upErr) return json({ error: `Falha ao salvar configuração: ${upErr.message}` }, 500);
     return json({ ok: true, config: await getConfig(supabase) });
@@ -329,12 +334,36 @@ serve(async (req) => {
     return json({ ok: true, url, code: r.code, path: r.path });
   }
 
+  // ── Fase 4: prévia e envio do comprovante pelo WhatsApp (sempre manual) ──
+  if (action === "receipt_send_preview" || action === "send_receipt") {
+    const refundId = String(body?.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(refundId)) return json({ error: "Estorno não informado." }, 400);
+    const numberId = typeof body?.whatsapp_number_id === "string" && /^[0-9a-f-]{36}$/i.test(body.whatsapp_number_id) ? body.whatsapp_number_id : null;
+    const plan = await planReceiptSend(supabase, refundId, numberId);
+    if (!plan.ok) return json({ error: plan.error }, 400);
+    const info = {
+      ok: true, blocked: plan.blocked || null, phone_masked: plan.phoneMasked, instance: plan.instance,
+      message: plan.message, file_name: plan.fileName, customer_name: plan.customerName,
+      already_sent_at: plan.refund?.receipt_sent_at || null, already_sent_to: plan.refund?.receipt_sent_to || null,
+    };
+    if (action === "receipt_send_preview") return json(info);
+    if (plan.blocked) return json({ error: plan.blocked }, 400);
+    if (plan.refund?.receipt_sent_at && body?.confirm_resend !== true) {
+      return json({ error: "Este comprovante já foi enviado. Confirme o reenvio." }, 409);
+    }
+    const text = String(body?.message ?? plan.message ?? "").trim().slice(0, 1000);
+    if (!text) return json({ error: "Escreva a mensagem." }, 400);
+    const r = await executeReceiptSend(supabase, plan, text, userId, userEmail);
+    if (!r.ok) return json({ error: r.error }, 502);
+    return json({ ok: true, sent_at: r.sent_at });
+  }
+
   // ── Estornos concluídos de vendas/pedidos (uma consulta, até 100 ids) ──
   if (action === "completed_for_sources") {
     const ids = (Array.isArray(body?.ids) ? body.ids : []).map(String).filter((s: string) => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 100);
     if (ids.length === 0) return json({ ok: true, refunds: [] });
     const { data } = await supabase.from("gateway_refunds")
-      .select("id, source, source_id, amount, completed_at, receipt_code")
+      .select("id, source, source_id, amount, completed_at, receipt_code, receipt_path, receipt_sent_at")
       .in("source_id", ids).eq("status", "concluido")
       .order("completed_at", { ascending: false }).limit(200);
     return json({ ok: true, refunds: data || [] });
@@ -346,7 +375,21 @@ serve(async (req) => {
       supabase.from("gateway_refunds").select("*").eq("status", "aguardando_aprovacao").order("created_at", { ascending: false }).limit(50),
       supabase.from("gateway_refunds").select("*").neq("status", "aguardando_aprovacao").order("created_at", { ascending: false }).limit(50),
     ]);
-    return json({ ok: true, pending: pendingRes.data || [], recent: recentRes.data || [], isAdmin: !!isAdmin });
+    const recent = recentRes.data || [];
+    // Aviso: Pix concluído (pelo acompanhamento) com comprovante pronto e ainda não enviado.
+    const readyRows = recent.filter((r: any) => r.status === "concluido" && !r.card_brand && r.receipt_path && !r.receipt_sent_at)
+      .slice(0, 20);
+    const saleIds = readyRows.filter((r: any) => r.source === "pos_sale").map((r: any) => r.source_id);
+    const orderIds = readyRows.filter((r: any) => r.source === "order").map((r: any) => r.source_id);
+    const names = new Map<string, string>();
+    const [salesN, ordersN] = await Promise.all([
+      saleIds.length ? supabase.from("pos_sales").select("id, customer_name").in("id", saleIds) : Promise.resolve({ data: [] }),
+      orderIds.length ? supabase.from("orders").select("id, customer:customers(full_name)").in("id", orderIds) : Promise.resolve({ data: [] }),
+    ]);
+    for (const x of (salesN as any).data || []) if (x.customer_name) names.set(x.id, x.customer_name);
+    for (const x of (ordersN as any).data || []) if (x.customer?.full_name) names.set(x.id, x.customer.full_name);
+    const readyToSend = readyRows.map((r: any) => ({ id: r.id, amount: r.amount, customer_name: names.get(r.source_id) || null }));
+    return json({ ok: true, pending: pendingRes.data || [], recent, readyToSend, isAdmin: !!isAdmin });
   }
 
   // ── Preview: dados do pagamento para a tela de confirmação ──
