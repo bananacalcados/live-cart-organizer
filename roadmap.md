@@ -79,6 +79,11 @@
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
+## Estornos — Fase E1
+- [ ] Integrar adaptadores MP/Appmax, descoberta segura da conta e elegibilidade real.
+- [ ] Acompanhar Appmax pelo webhook/worker, adaptar comprovante e telas existentes.
+- [ ] Desativar estorno solto Rinne, testar três casos reais sem estornar, publicar.
+
 ## Estorno Mercado Pago pelo sistema — Fase 1 (concluído, não publicado)
 - [x] Migração: tabela gateway_refunds (campo gateway p/ futuros), RLS (leitura admin/permissão estornos, escrita só service role), coluna trocas_devolucoes.gateway_refund_id
 - [x] Edge function mp-refund: JWT + permissão estornos/admin, interruptor geral (padrão desligado), validação no MP (approved/partially_refunded, 180 dias, valor), idempotency key única, Pix com X-Render-In-Process-Refunds + in_process, teto de aprovação (vazio = não-admin sempre aguarda), lista aprovar/recusar
