@@ -192,16 +192,18 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 <p><span className="text-pos-white/60">Valor original:</span> <b>{brl(preview.payment.amount)}</b></p>
                 <p><span className="text-pos-white/60">Já estornado:</span> <b>{brl(preview.refundedSoFar ?? 0)}</b></p>
                 <p><span className="text-pos-white/60">Disponível para estorno:</span> <b className="text-amber-300">{brl(remaining)}</b></p>
-                {preview.payment.dateApproved && !isWithinRefundWindow(preview.payment.dateApproved) && (
+                {preview.gateway !== "Appmax" && preview.payment.dateApproved && !isWithinRefundWindow(preview.payment.dateApproved) && (
                   <p className="text-destructive text-xs">Pagamento aprovado há mais de 180 dias — o Mercado Pago não permite mais estorno.</p>
                 )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-pos-white/60">Valor a estornar (integral ou parcial)</label>
+                <label className="text-xs text-pos-white/60">{preview.fullOnly ? "Valor a estornar (integral)" : "Valor a estornar (integral ou parcial)"}</label>
+                {preview.fullOnly && <p className="text-xs text-amber-300">{preview.fullOnlyNotice || "Este gateway só permite estorno integral pelo sistema."}</p>}
                 <div className="flex gap-2">
                   <input
                     value={amount}
+                    disabled={!!preview.fullOnly}
                     onChange={(e) => setAmount(e.target.value)}
                     inputMode="decimal"
                     className="flex-1 rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"

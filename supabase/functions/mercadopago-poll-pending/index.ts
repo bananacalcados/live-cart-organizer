@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { listAllMpAccountsForPolling, getMpAccountByPaymentId } from "../_shared/mp-account.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
+import { closeAppmaxRefund } from "../_shared/refund-gateways/appmax-close.ts";
 import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
 
 const corsHeaders = {
@@ -197,6 +198,20 @@ serve(async (req) => {
     }
   } catch (err: any) {
     errors.push({ refunds_sync: err.message });
+  }
+
+  // ── Estornos Appmax em processando/verificar: confere pelo status do pedido ──
+  try {
+    const { data: axRefunds } = await supabase.from("gateway_refunds").select("*")
+      .eq("gateway", "appmax").in("status", ["processando", "verificar"])
+      .order("created_at", { ascending: true }).limit(10);
+    for (const refund of axRefunds || []) {
+      refundsChecked++;
+      try { if ((await closeAppmaxRefund(supabase, refund)) === "done") refundsDone++; }
+      catch (err: any) { errors.push({ refund: refund.id, err: err.message }); }
+    }
+  } catch (err: any) {
+    errors.push({ appmax_refunds_sync: err.message });
   }
 
   // ── Comprovantes pendentes (Fase 3): estornos concluídos sem PDF, poucos por rodada ──

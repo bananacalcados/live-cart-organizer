@@ -9,14 +9,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
-import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
+import { checkPayment, executeMpRefund, MAX_REFUND_AGE_DAYS, type MpCheck, type SourceRow } from "../_shared/refund-gateways/mercadopago.ts";
+import { appmaxCheckPayment, appmaxExecuteRefund, APPMAX_PARTIAL_ONLY_FULL } from "../_shared/refund-gateways/appmax.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { loadMpSalePayments, MP_SALE_AMBIGUOUS } from "../_shared/mp-sale-payment.ts";
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 
-const MAX_REFUND_AGE_DAYS = 180;
 
 const REASONS = ["cancelamento_antes_envio", "devolucao", "troca_com_diferenca", "outro"] as const;
 
@@ -31,27 +30,11 @@ function brl(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-interface SourceRow {
-  id: string;
-  paymentOrderId?: string | null;
-  paymentError?: string | null;
-  paymentId: string | null;
-  mpAccountId: string | null;
-  total: number;
-  label: string;
-  channel: "live" | "pdv";
-  customerName: string | null;
-  isPaid: boolean;
-  stageOrStatus: string | null;
-  shipped: boolean;
-  createdAt: string | null;
-}
-
 async function loadSource(supabase: any, source: string, id: string): Promise<SourceRow | null> {
   if (source === "order") {
     const { data } = await supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, mp_account_id, products, discount_type, discount_value, free_shipping, shipping_cost, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
+      .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, products, discount_type, discount_value, free_shipping, shipping_cost, stage, is_paid, paid_externally, created_at, customer:customers(full_name)")
       .eq("id", id)
       .maybeSingle();
     if (!data) return null;
@@ -67,6 +50,7 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
       id: data.id,
       paymentId: data.mercadopago_payment_id,
       mpAccountId: data.mp_account_id,
+      appmaxOrderId: data.appmax_order_id ? String(data.appmax_order_id) : null,
       total,
       label: "Pedido da Live",
       channel: "live",
@@ -79,18 +63,20 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
   }
   const { data } = await supabase
     .from("pos_sales")
-    .select("id, mercadopago_payment_id, mp_account_id, total, status, payment_method, created_at, paid_at, shipped_at, customer_name")
+    .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, total, status, payment_method, created_at, paid_at, shipped_at, customer_name")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
   const payments = await loadMpSalePayments(supabase, [data]);
   const resolved = payments.get(data.id);
+  const ax = (await loadAppmaxIds(supabase, [data])).get(data.id);
   return {
     id: data.id,
     paymentId: resolved?.paymentId ?? null,
     mpAccountId: resolved?.accountId ?? null,
     paymentOrderId: resolved?.orderId,
-    paymentError: resolved?.error,
+    paymentError: resolved?.error || (!resolved?.paymentId && ax?.ambiguous ? APPMAX_AMBIGUOUS : undefined),
+    appmaxOrderId: ax?.id ?? null,
     total: Number(data.total || 0),
     label: data.payment_method ? `Venda PDV (${data.payment_method})` : "Venda PDV",
     channel: "pdv",
@@ -99,6 +85,60 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
     stageOrStatus: data.status || null,
     shipped: !!data.shipped_at || ["shipped", "delivered"].includes(String(data.status || "")),
     createdAt: data.created_at,
+  };
+}
+
+const APPMAX_AMBIGUOUS = "Venda tem mais de um pedido Appmax — estorno pelo sistema indisponível";
+
+/** appmax_order_id da venda ou do pedido da live convertido nela (mesma compra), em lote. */
+async function loadAppmaxIds(supabase: any, sales: { id: string; appmax_order_id?: any }[]): Promise<Map<string, { id: string | null; ambiguous: boolean }>> {
+  const ids = new Map<string, Set<string>>();
+  for (const s of sales) { const set = new Set<string>(); if (s.appmax_order_id) set.add(String(s.appmax_order_id)); ids.set(s.id, set); }
+  if (sales.length) {
+    const { data } = await supabase.from("orders").select("pos_sale_id, appmax_order_id")
+      .in("pos_sale_id", sales.map((s) => s.id)).not("appmax_order_id", "is", null).limit(500);
+    for (const o of data || []) ids.get(o.pos_sale_id)?.add(String(o.appmax_order_id));
+  }
+  const out = new Map<string, { id: string | null; ambiguous: boolean }>();
+  for (const [k, set] of ids) out.set(k, { id: set.size === 1 ? [...set][0] : null, ambiguous: set.size > 1 });
+  return out;
+}
+
+type GwCheck = { gateway: "mercadopago" | "appmax"; payId: string | null; check: any };
+
+/** Gateway REAL: MP aprovado manda; Appmax só sem MP válido/aprovado e com pedido pago lá. */
+async function checkAny(supabase: any, src: SourceRow, amount: number | null): Promise<GwCheck> {
+  if (src.paymentId && !src.paymentError) {
+    const c = await checkPayment(supabase, src, amount);
+    const mpNotApproved = c.payment && !["approved", "partially_refunded", "refunded"].includes(c.payment.status);
+    if (!(mpNotApproved && src.appmaxOrderId)) return { gateway: "mercadopago", payId: src.paymentId, check: c };
+  }
+  if (src.appmaxOrderId && !src.paymentError) {
+    return { gateway: "appmax", payId: src.appmaxOrderId, check: await appmaxCheckPayment(supabase, src.appmaxOrderId, src.total, amount) };
+  }
+  return { gateway: "mercadopago", payId: src.paymentId, check: await checkPayment(supabase, src, amount) };
+}
+
+async function executeAppmax(supabase: any, row: any, userEmail: string | null) {
+  const now = () => new Date().toISOString();
+  const r = await appmaxExecuteRefund(supabase, String(row.payment_id), Number(row.amount));
+  if (r.kind === "verificar") {
+    await supabase.from("gateway_refunds").update({ status: "verificar", error_message: r.error, mp_response: r.raw ?? null, updated_at: now() }).eq("id", row.id);
+    return { ok: false, verificar: true, error: "Falha de comunicação com a Appmax. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
+  }
+  if (r.kind === "failed") {
+    await supabase.from("gateway_refunds").update({ status: "falhou", error_message: r.error, mp_response: r.raw ?? null, updated_at: now() }).eq("id", row.id);
+    return { ok: false, error: r.error };
+  }
+  const done = r.kind === "done";
+  await supabase.from("gateway_refunds").update({
+    status: done ? "concluido" : "processando", refund_id: r.refundId, mp_response: r.raw ?? null,
+    error_message: null, completed_at: done ? now() : null, updated_at: now(),
+  }).eq("id", row.id);
+  if (done) await runRefundPostActions(supabase, row, userEmail);
+  return {
+    ok: true, status: done ? "concluido" : "processando",
+    message: done ? "Estorno concluído na Appmax." : "Estorno solicitado na Appmax. O sistema acompanha e marca como concluído quando a Appmax confirmar.",
   };
 }
 
@@ -120,151 +160,6 @@ async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_th
     approval_threshold: data?.approval_threshold == null ? null : Number(data.approval_threshold),
     receipt_footer_contact: String(data?.receipt_footer_contact || ""),
     receipt_message_template: String(data?.receipt_message_template || ""),
-  };
-}
-
-function extractUuid(text: string | null | undefined): string | null {
-  if (!text) return null;
-  const m = String(text).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  return m ? m[0].toLowerCase() : null;
-}
-
-interface MpCheck {
-  ok: boolean;
-  error?: string;
-  payment?: any;
-  account?: any;
-  remaining?: number;
-  refundedSoFar?: number;
-}
-
-async function checkPayment(
-  supabase: any,
-  src: SourceRow,
-  requestedAmount: number | null,
-): Promise<MpCheck> {
-  if (src.paymentError) return { ok: false, error: src.paymentError };
-  if (!src.paymentId) return { ok: false, error: "Esta venda/pedido não tem pagamento do Mercado Pago vinculado." };
-
-  const account = src.channel === "live" || src.paymentOrderId
-    ? await getMpAccountForOrder(supabase, src.paymentOrderId || src.id)
-    : await getMpAccountForSale(supabase, src.id);
-  if (!account) return { ok: false, error: "Conta do Mercado Pago não encontrada para esta venda." };
-
-  const resp = await mpGetPayment(account.access_token, src.paymentId);
-  if (!resp.ok) {
-    return { ok: false, error: `Não consegui consultar o pagamento no Mercado Pago (HTTP ${resp.status}).` };
-  }
-  const payment = await resp.json();
-
-  if (!["approved", "partially_refunded"].includes(payment.status)) {
-    return { ok: false, error: `O pagamento está com status "${payment.status}" no Mercado Pago — só é possível estornar pagamentos aprovados.`, payment, account };
-  }
-
-  // Coerência: se o external_reference tem um UUID e ele pertence a OUTRA
-  // venda/pedido do sistema, bloqueia. (Links de pagamento usam referências
-  // próprias — UUID desconhecido não bloqueia.)
-  const refUuid = extractUuid(payment.external_reference);
-  if (refUuid && refUuid !== src.id.toLowerCase()) {
-    const [otherSale, otherOrder] = await Promise.all([
-      supabase.from("pos_sales").select("id").eq("id", refUuid).maybeSingle(),
-      supabase.from("orders").select("id, pos_sale_id").eq("id", refUuid).maybeSingle(),
-    ]);
-    // Pedido da live convertido em venda do PDV é a MESMA compra — libera.
-    const samePurchase = otherOrder.data && otherOrder.data.pos_sale_id === src.id;
-    if ((otherSale.data || otherOrder.data) && !samePurchase) {
-      return { ok: false, error: "A referência do pagamento no Mercado Pago pertence a outra venda/pedido. Estorno bloqueado por segurança.", payment, account };
-    }
-  }
-
-  const approvedAt = payment.date_approved ? new Date(payment.date_approved) : null;
-  if (approvedAt && (Date.now() - approvedAt.getTime()) > MAX_REFUND_AGE_DAYS * 24 * 60 * 60 * 1000) {
-    return { ok: false, error: `Pagamento aprovado há mais de ${MAX_REFUND_AGE_DAYS} dias — o Mercado Pago não permite mais estorno.`, payment, account };
-  }
-
-  const txAmount = Number(payment.transaction_amount || 0);
-  const refundedSoFar = Number(payment.transaction_details?.total_refunded_amount || 0);
-  const remaining = Math.max(0, Math.round((txAmount - refundedSoFar) * 100) / 100);
-
-  if (remaining <= 0) {
-    return { ok: false, error: "Este pagamento já foi totalmente estornado.", payment, account, remaining, refundedSoFar };
-  }
-  if (requestedAmount != null) {
-    if (!(requestedAmount > 0)) return { ok: false, error: "Informe um valor de estorno maior que zero.", payment, account, remaining, refundedSoFar };
-    if (requestedAmount > remaining + 0.009) {
-      return { ok: false, error: `Valor solicitado (${brl(requestedAmount)}) maior que o valor ainda não estornado (${brl(remaining)}).`, payment, account, remaining, refundedSoFar };
-    }
-  }
-  return { ok: true, payment, account, remaining, refundedSoFar };
-}
-
-
-async function executeMpRefund(supabase: any, row: any, account: any, payment: any, userEmail: string | null) {
-  const isPix = payment.payment_method_id === "pix" || payment.payment_type_id === "bank_transfer";
-  const headers = buildMpHeaders({ accessToken: account.access_token, idempotencyKey: row.idempotency_key });
-  if (isPix) headers["X-Render-In-Process-Refunds"] = "true";
-
-  const isFull = Math.abs(Number(row.amount) - Number(payment.transaction_amount)) < 0.01
-    || Math.abs(Number(row.amount) - (Number(payment.transaction_amount) - Number(payment.transaction_details?.total_refunded_amount || 0))) < 0.01;
-  const body = isFull ? {} : { amount: Number(row.amount) };
-
-  let resp: Response;
-  try {
-    resp = await fetch(`https://api.mercadopago.com/v1/payments/${row.payment_id}/refunds`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-  } catch (e: any) {
-    // Falha de rede/timeout: o MP PODE ter processado e só a resposta se perdeu.
-    // Marca "verificar" (mantém a idempotency_key) — o worker confere antes de
-    // permitir qualquer nova tentativa. NUNCA marcar "falhou" aqui.
-    await supabase.from("gateway_refunds").update({ status: "verificar", error_message: `Falha de rede ao chamar o Mercado Pago: ${e?.message}`, updated_at: new Date().toISOString() }).eq("id", row.id);
-    return { ok: false, verificar: true, error: "Falha de comunicação com o Mercado Pago. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
-  }
-
-  const respBody = await resp.json().catch(() => ({}));
-
-  if (!resp.ok) {
-    // 5xx do MP: mesma incerteza da falha de rede — pode ter processado.
-    if (resp.status >= 500) {
-      await supabase.from("gateway_refunds").update({ status: "verificar", error_message: `Mercado Pago instável (HTTP ${resp.status}) — verificando se o estorno foi processado.`, mp_response: respBody, updated_at: new Date().toISOString() }).eq("id", row.id);
-      return { ok: false, verificar: true, error: "O Mercado Pago está instável. O estorno ficou em verificação — NÃO refaça o estorno; o sistema confere sozinho se ele foi processado." };
-    }
-    const rawMsg = String(respBody?.message || respBody?.error || `HTTP ${resp.status}`);
-    const insufficient = /insufficient|saldo|balance/i.test(rawMsg) || respBody?.causes?.some?.((c: any) => /insufficient|balance/i.test(String(c?.code || c?.description || "")));
-    const friendly = insufficient
-      ? `Saldo insuficiente na conta ${account.account_name} do Mercado Pago para este estorno.`
-      : `Mercado Pago recusou o estorno: ${rawMsg}`;
-    await supabase.from("gateway_refunds").update({ status: "falhou", error_message: friendly, mp_response: respBody, updated_at: new Date().toISOString() }).eq("id", row.id);
-    return { ok: false, error: friendly };
-  }
-
-  const mpStatus = String(respBody?.status || "");
-  const done = mpStatus === "approved";
-  const processing = !done && ["in_process", "pending"].includes(mpStatus);
-  const newStatus = done ? "concluido" : processing ? "processando" : "falhou";
-
-  await supabase.from("gateway_refunds").update({
-    status: newStatus,
-    refund_id: respBody?.id != null ? String(respBody.id) : null,
-    e2e_id: respBody?.e2e_id || null,
-    mp_response: respBody,
-    error_message: newStatus === "falhou" ? `Status inesperado do Mercado Pago: ${mpStatus || "desconhecido"}` : null,
-    completed_at: done ? new Date().toISOString() : null,
-    updated_at: new Date().toISOString(),
-  }).eq("id", row.id);
-
-  if (done) await runRefundPostActions(supabase, row, userEmail);
-
-  return {
-    ok: true,
-    status: newStatus,
-    message: done
-      ? "Estorno concluído no Mercado Pago."
-      : processing
-        ? "Estorno em processamento no Mercado Pago (Pix pode levar alguns minutos). O sistema acompanha e atualiza sozinho."
-        : "O Mercado Pago retornou um status inesperado — verifique a lista de estornos.",
   };
 }
 
@@ -478,6 +373,7 @@ serve(async (req) => {
     for (const r of [...(splitsS.data || []).map((x: any) => x.sale_id), ...(splitsO.data || []).map((x: any) => x.order_id)]) splitCount.set(r, (splitCount.get(r) || 0) + 1);
     const pointSales = new Set((pointR.data || []).map((x: any) => x.sale_id));
     const salePay = await loadMpSalePayments(supabase, [...sales.values()]);
+    const saleAx = await loadAppmaxIds(supabase, [...sales.values()]);
 
     const orderTotal = (d: any) => {
       const pt = (Array.isArray(d.products) ? d.products : []).reduce((s: number, p: any) => s + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
@@ -499,20 +395,22 @@ serve(async (req) => {
       if ((splitCount.get(it.id) || 0) > 1) { res.reason = MULTI; continue; }
       if (it.source === "pos_sale" && pointSales.has(it.id)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
       let paymentId: string | null; let accountId: string | null; let paymentOrderId: string | null = null;
+      let axId: string | null = it.source === "order" ? (row.appmax_order_id ? String(row.appmax_order_id) : null) : (saleAx.get(it.id)?.id ?? null);
       if (it.source === "pos_sale") {
         const p: any = salePay.get(it.id);
         if (p?.error) { res.reason = p.error === MP_SALE_AMBIGUOUS ? MULTI : "Não foi possível consultar o gateway agora"; res.retry = p.error !== MP_SALE_AMBIGUOUS; continue; }
         paymentId = p?.paymentId ?? null; accountId = p?.accountId ?? null; paymentOrderId = p?.orderId ?? null;
       } else { paymentId = row.mercadopago_payment_id; accountId = row.mp_account_id; }
-      if (!paymentId) {
+      if (!paymentId && it.source === "pos_sale" && saleAx.get(it.id)?.ambiguous) { res.gateway = "Appmax"; res.reason = MULTI; continue; }
+      if (!paymentId && !axId) {
         const g = otherGateway(row);
         res.gateway = g;
         res.reason = g ? `${g} — em breve` : "Pago fora do sistema / sem transação de gateway";
         continue;
       }
-      res.gateway = "Mercado Pago";
+      res.gateway = paymentId ? "Mercado Pago" : "Appmax";
       candidates.push({ res, src: {
-        id: row.id, paymentId: String(paymentId), mpAccountId: accountId, paymentOrderId,
+        id: row.id, paymentId: paymentId ? String(paymentId) : null, mpAccountId: accountId, paymentOrderId, appmaxOrderId: axId,
         total: it.source === "order" ? orderTotal(row) : Number(row.total || 0),
         label: "", channel: it.source === "order" ? "live" : "pdv", customerName: null,
         isPaid: true, stageOrStatus: null, shipped: false, createdAt: row.created_at,
@@ -520,7 +418,7 @@ serve(async (req) => {
     }
 
     // Estornos em andamento por payment_id (cobre pedido↔venda da mesma compra) e Point por payment_id.
-    const payIds = [...new Set(candidates.map((c) => c.src.paymentId!))];
+    const payIds = [...new Set(candidates.flatMap((c) => [c.src.paymentId, c.src.appmaxOrderId]).filter(Boolean) as string[])];
     const [activeR, pointPayR]: any[] = payIds.length ? await Promise.all([
       supabase.from("gateway_refunds").select("payment_id, status").in("payment_id", payIds).in("status", ["aguardando_aprovacao", "processando", "verificar"]).limit(200),
       supabase.from("point_payment_intents").select("mp_payment_id").in("mp_payment_id", payIds).limit(200),
@@ -532,14 +430,25 @@ serve(async (req) => {
 
     let checked = 0;
     for (const { res, src } of candidates) {
-      if (pointPays.has(src.paymentId!)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
-      const act = activeBy.get(src.paymentId!);
+      if (src.paymentId && pointPays.has(src.paymentId)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
+      const act = (src.paymentId && activeBy.get(src.paymentId)) || (src.appmaxOrderId && activeBy.get(src.appmaxOrderId));
       if (act) { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
       if (checked >= 10) { res.retry = true; res.reason = RETRY; continue; }
       checked++;
-      let check: MpCheck;
-      try { check = await checkPayment(supabase, src, null); }
+      let gw: GwCheck;
+      try { gw = await checkAny(supabase, src, null); }
       catch { res.retry = true; res.reason = RETRY; continue; }
+      if (gw.gateway === "appmax") {
+        const c = gw.check; const ap = c.payment;
+        res.gateway = "Appmax";
+        if (ap) { res.method = ap.method || undefined; res.cardLast4 = ap.cardLast4; res.installments = ap.installments; res.dateApproved = ap.dateApproved; }
+        if (c.ok) { res.eligible = true; res.remaining = c.remaining; (res as any).fullOnly = true; continue; }
+        if (c.retry) { res.retry = true; res.reason = RETRY; continue; }
+        if (/totalmente estornado/.test(c.error || "")) { res.reason = "Já totalmente estornado"; res.remaining = 0; continue; }
+        res.reason = String(c.error || "").replace(/\.$/, "");
+        continue;
+      }
+      const check: MpCheck = gw.check;
       const p = check.payment;
       if (p) {
         res.method = p.payment_method_id === "pix" || p.payment_type_id === "bank_transfer" ? "pix" : p.payment_type_id === "debit_card" ? "debito" : "cartao";
@@ -569,14 +478,33 @@ serve(async (req) => {
       return json({ ok: false, point: true, error: "Estorno de maquininha ainda não suportado." });
     }
 
-    const check = await checkPayment(supabase, src, null);
+    const gw = await checkAny(supabase, src, null);
+    const check = gw.check;
     const { data: existing } = await supabase
       .from("gateway_refunds")
       .select("id, amount, status, refund_type, created_at")
-      .eq("payment_id", src.paymentId || "")
+      .eq("payment_id", gw.payId || "")
       .order("created_at", { ascending: false })
       .limit(20);
 
+    if (gw.gateway === "appmax") {
+      const ap = check.payment;
+      return json({
+        ok: check.ok, error: check.error, gateway: "Appmax", fullOnly: true, fullOnlyNotice: APPMAX_PARTIAL_ONLY_FULL,
+        source: {
+          id: src.id, label: src.label, channel: src.channel, total: src.total,
+          customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped,
+          stageOrStatus: src.stageOrStatus, createdAt: src.createdAt,
+        },
+        payment: ap ? {
+          id: ap.orderId, status: ap.status, method: ap.method === "pix" ? "pix" : ap.cardBrand || ap.method, type: ap.method === "pix" ? "bank_transfer" : "credit_card",
+          amount: ap.amount ?? src.total, dateApproved: ap.dateApproved, cardLast4: ap.cardLast4, installments: ap.installments, accountName: "Appmax",
+        } : null,
+        remaining: check.remaining ?? null,
+        refundedSoFar: check.refundedSoFar ?? null,
+        existingRefunds: existing || [],
+      });
+    }
     const p = check.payment;
     return json({
       ok: check.ok,
@@ -629,21 +557,41 @@ serve(async (req) => {
     // Trava contra duplicidade: já existe estorno em andamento para este pagamento?
     // (O índice único parcial gateway_refunds_one_in_flight_per_payment garante
     // a mesma regra no banco — duas abas ao mesmo tempo não passam as duas.)
+    const gw = await checkAny(supabase, src, amount);
     const { data: inFlight } = await supabase
       .from("gateway_refunds")
       .select("id, status")
-      .eq("payment_id", src.paymentId || "")
+      .eq("payment_id", gw.payId || "")
       .in("status", ["aguardando_aprovacao", "processando", "verificar"])
       .limit(1);
     if (inFlight && inFlight.length > 0) {
       const checking = inFlight[0].status === "verificar";
       return json({ error: checking
-        ? "Existe um estorno em verificação com o Mercado Pago para este pagamento. NÃO refaça o estorno — aguarde a conferência automática."
+        ? "Existe um estorno em verificação com o gateway para este pagamento. NÃO refaça o estorno — aguarde a conferência automática."
         : "Já existe um estorno aguardando aprovação ou em processamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
     }
 
-    const check = await checkPayment(supabase, src, amount);
+    const check = gw.check;
     if (!check.ok) return json({ error: check.error }, 400);
+    const needsApprovalAx = !isAdmin && (cfg.approval_threshold == null || amount > cfg.approval_threshold);
+    if (gw.gateway === "appmax") {
+      const ap = check.payment;
+      const axRow = {
+        gateway: "appmax", source, source_id: id, mp_account_id: null, payment_id: String(gw.payId),
+        amount, refund_type: "integral", reason, reason_text: reasonText,
+        status: needsApprovalAx ? "aguardando_aprovacao" : "processando", idempotency_key: crypto.randomUUID(),
+        card_brand: ap.method === "pix" ? null : (ap.cardBrand || "cartao"), card_last4: ap.cardLast4, installments: ap.installments,
+        requested_by: userId, cancel_order: cancelOrder,
+      };
+      const { data: ins, error: e2 } = await supabase.from("gateway_refunds").insert(axRow).select("id").single();
+      if (e2) {
+        if (e2.code === "23505" || String(e2.message).includes("gateway_refunds_one_in_flight_per_payment")) return json({ error: "Já existe um estorno em andamento para este pagamento. Aguarde a conclusão antes de pedir outro." }, 409);
+        return json({ error: `Falha ao registrar o estorno: ${e2.message}` }, 500);
+      }
+      if (needsApprovalAx) return json({ ok: true, pending_approval: true, refund_id: ins.id, message: "Estorno registrado e aguardando aprovação de um administrador. Nenhum valor foi movido ainda." });
+      const r = await executeAppmax(supabase, { ...axRow, id: ins.id }, userEmail);
+      return json({ ...r, refund_id: ins.id });
+    }
 
     const p = check.payment!;
     const remaining = check.remaining!;
@@ -713,6 +661,16 @@ serve(async (req) => {
 
     const src = await loadSource(supabase, row.source, row.source_id);
     if (!src) return json({ error: "Venda/pedido não encontrado." }, 404);
+    if (row.gateway === "appmax") {
+      const c = await appmaxCheckPayment(supabase, String(row.payment_id), src.total, Number(row.amount));
+      if (!c.ok) {
+        if (c.retry) return json({ error: "Não foi possível consultar a Appmax agora. Tente aprovar de novo em instantes." }, 503);
+        await supabase.from("gateway_refunds").update({ status: "falhou", error_message: c.error, updated_at: new Date().toISOString() }).eq("id", refundId);
+        return json({ error: c.error }, 400);
+      }
+      await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
+      return json(await executeAppmax(supabase, row, userEmail));
+    }
     const check = await checkPayment(supabase, src, Number(row.amount));
     if (!check.ok) {
       await supabase.from("gateway_refunds").update({ status: "falhou", error_message: check.error, updated_at: new Date().toISOString() }).eq("id", refundId);

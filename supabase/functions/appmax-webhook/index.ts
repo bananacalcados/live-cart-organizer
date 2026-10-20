@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { closeAppmaxRefundsForOrder } from "../_shared/refund-gateways/appmax-close.ts";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
@@ -269,6 +270,13 @@ serve(async (req) => {
     const gatewayTotalSafe = Number.isFinite(gatewayTotal) && gatewayTotal > 0 ? gatewayTotal : null;
 
     console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}, Total: ${gatewayTotalSafe}`);
+
+    // Estorno pelo sistema (Fase E1): fecha gateway_refunds pendentes deste pedido,
+    // re-consultando a API da Appmax. Não altera o que segue com pedido/venda.
+    if (appmaxOrderId && (["order_refund", "order_partial_refund"].includes(event) || status === "estornado")) {
+      try { await closeAppmaxRefundsForOrder(supabase, String(appmaxOrderId), payload); }
+      catch (e: any) { console.warn("[appmax] refund close failed:", e?.message); }
+    }
 
     // Ignorar eventos que não devem acionar pagamento
     if (IGNORED_EVENTS.includes(event)) {
