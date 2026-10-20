@@ -14,7 +14,7 @@ Deno.serve(async () => {
   for (const [k, id, total] of [["b", "130294358", 0], ["c", "126124420", 0], ["d", "129888321", 0]] as any) {
     const raw = await appmaxGetPayment(sb, id, null);
     const c = await appmaxCheckPayment(sb, id, total || (raw as any).payment?.amount || 0, null);
-    out[k] = { kind: raw.kind, status: (raw as any).payment?.status, amount: (raw as any).payment?.amount, method: (raw as any).payment?.method, keys: Object.keys((raw as any).payment?.raw || {}).slice(0, 40), check: { ok: c.ok, error: c.error, remaining: c.remaining } };
+    out[k] = { kind: raw.kind, status: (raw as any).payment?.status, amount: (raw as any).payment?.amount, method: (raw as any).payment?.method, rawo: (raw as any).payment?.raw, check: { ok: c.ok, error: c.error, remaining: c.remaining } };
   }
   return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json" } });
 });
