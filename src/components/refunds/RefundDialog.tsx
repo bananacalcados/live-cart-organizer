@@ -150,7 +150,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
         className="inline-flex items-center gap-1 rounded-md border border-amber-400/50 bg-amber-500/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700 hover:bg-amber-500/20 transition-colors dark:text-amber-300"
-        title="Estornar o pagamento desta venda pelo Mercado Pago"
+        title="Solicitar estorno do pagamento desta venda"
       >
         <Undo2 className="h-3 w-3" /> Estorno
       </button>
@@ -165,7 +165,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
 
           {step === "loading" && (
             <div className="flex items-center justify-center py-10 text-pos-white/70 gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" /> Consultando o pagamento no Mercado Pago…
+              <Loader2 className="h-5 w-5 animate-spin" /> Consultando o pagamento…
             </div>
           )}
 
