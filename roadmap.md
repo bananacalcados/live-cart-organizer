@@ -79,6 +79,11 @@
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
+## Correios contrato próprio — fases 0 e 1
+- [ ] Configuração privada, conexão CWS e card no Admin.
+- [ ] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência.
+- [ ] Testes de regras, acesso e telas; conexão real depende das credenciais do contrato.
+
 ## Estornos — Fase E1
 - [x] Corrigir autofill, leitura/contador para todos com permissão, gateway/conta e data original; conferir quatro concluídos e publicar.
 - [x] Integrar adaptadores MP/Appmax, descoberta segura da conta e elegibilidade real.
