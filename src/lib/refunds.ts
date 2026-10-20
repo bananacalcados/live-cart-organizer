@@ -106,6 +106,8 @@ export const refundApi = {
     call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
   approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
   reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, rejected_reason: reason }),
+  eligibility: (items: { source: RefundSource; id: string }[]) =>
+    call<{ ok: boolean; results: RefundEligibility[] }>({ action: "eligibility", items }),
   getConfig: () => call<{ ok: boolean; config: RefundConfig; isAdmin: boolean }>({ action: "get_config" }),
   receipt: (id: string) => call<{ ok: boolean; url: string; code: string; path: string }>({ action: "receipt", id }),
   completedForSources: (ids: string[]) =>
@@ -234,4 +236,18 @@ export async function reauthWithPassword(password: string) {
   if (!email) throw new Error("Sessão inválida. Entre de novo no sistema.");
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw new Error("Senha incorreta.");
+}
+
+export interface RefundEligibility {
+  source: RefundSource;
+  id: string;
+  eligible: boolean;
+  reason?: string;
+  retry?: boolean;
+  gateway?: string | null;
+  remaining?: number;
+  method?: "pix" | "cartao" | "debito";
+  cardLast4?: string | null;
+  installments?: number | null;
+  dateApproved?: string | null;
 }

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { refundApi, type RefundListParams, type RefundListRow } from "@/lib/refunds";
 import { RefundRowCard } from "@/components/refunds/RefundRowCard";
 import { RefundDecisionButtons } from "@/components/refunds/RefundDecisionButtons";
+import { RefundRequestDialog } from "@/components/refunds/RefundRequestDialog";
 
 const PAGE = 50;
 
@@ -83,6 +84,7 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end"><RefundRequestDialog onDone={reload} /></div>
       {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {!isAdmin && !loading && <p className="text-xs text-muted-foreground">Você vê só os estornos que você solicitou.</p>}
 
