@@ -302,6 +302,13 @@
       "when": 1792454269183,
       "tag": "0042_refund_receipt_send",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792495727278,
+      "tag": "0043_refund_badges_and_rejected_reason",
+      "breakpoints": true
     }
   ]
 }
