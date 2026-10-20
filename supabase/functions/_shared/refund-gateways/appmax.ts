@@ -75,7 +75,10 @@ function normalize(orderId: string, payload: any, localTotal: number | null): Ap
   return {
     orderId: String(o.id),
     status: String(o.status || "").toLowerCase(),
-    amount: toReais(o.total ?? o.total_amount ?? o.amount ?? pay.amount, localTotal),
+    // API v1: total_paid em CENTAVOS (conferido: 35999 = R$ 359,99).
+    amount: o.total_paid != null && isFinite(Number(o.total_paid)) && Number(o.total_paid) > 0
+      ? Math.round(Number(o.total_paid)) / 100
+      : toReais(o.total ?? o.total_amount ?? o.amount ?? pay.amount, localTotal),
     method,
     cardBrand: method === "cartao" ? (String(card.brand || pay.brand || o.card_brand || "").toLowerCase() || "cartao") : null,
     cardLast4: card.last_four_digits || card.last4 || pay.last4 || null,
