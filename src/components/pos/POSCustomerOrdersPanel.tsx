@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { fetchRefundBadges, type RefundBadge } from "@/lib/refunds";
+import { RefundSourceBadges } from "@/components/refunds/RefundSourceBadges";
+import { useCanRefund } from "@/hooks/useCanRefund";
 import { AlertTriangle, Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +85,17 @@ export function POSCustomerOrdersPanel({
   const paidOrders = (data?.orders || []).filter((order) => order.paymentState === "paid");
   const unpaidOrders = (data?.orders || []).filter((order) => order.paymentState === "unpaid");
   const unpaidCount = unpaidOrders.length;
+  const canRefund = useCanRefund();
+  // Selos de estorno: UMA chamada em lote para os ids exibidos (pedido↔venda vinculados inclusos).
+  const idsKey = useMemo(() => (data?.orders || []).map((o) => o.id).sort().join(","), [data?.orders]);
+  const [refundBadges, setRefundBadges] = useState<RefundBadge[]>([]);
+  useEffect(() => {
+    let alive = true;
+    if (!idsKey) { setRefundBadges((p) => (p.length ? [] : p)); return; }
+    void fetchRefundBadges(idsKey.split(",")).then((rows) => { if (alive) setRefundBadges(rows); });
+    return () => { alive = false; };
+  }, [idsKey]);
+  const badgesFor = (id: string) => refundBadges.filter((b) => b.display_id === id);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
@@ -183,7 +197,7 @@ export function POSCustomerOrdersPanel({
           {paidOrders.length ? (
             <div className="space-y-2">
               {paidOrders.map((order) => (
-                <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} />
+                <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} refundBadges={badgesFor(order.id)} canRefund={canRefund} />
               ))}
             </div>
           ) : (
@@ -198,7 +212,7 @@ export function POSCustomerOrdersPanel({
               </div>
               <div className="space-y-2 opacity-90">
                 {unpaidOrders.map((order) => (
-                  <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} renderUnpaidActions={renderUnpaidActions} />
+                  <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} renderUnpaidActions={renderUnpaidActions} refundBadges={badgesFor(order.id)} canRefund={canRefund} />
                 ))}
               </div>
             </div>
@@ -214,7 +228,11 @@ function OrderCard({
   statusLabels,
   renderOrderActions,
   renderUnpaidActions,
+  refundBadges = [],
+  canRefund = false,
 }: {
+  refundBadges?: RefundBadge[];
+  canRefund?: boolean;
   order: POSCustomerOrder;
   statusLabels: Record<string, string>;
   renderOrderActions: (order: POSCustomerOrder) => ReactNode;
@@ -255,6 +273,7 @@ function OrderCard({
               ))}
             </ul>
           ) : null}
+          <RefundSourceBadges badges={refundBadges} canRefund={canRefund} />
           {order.trackingCode ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3 w-3" />{order.trackingCode}</p> : null}
           {order.paymentState === "unpaid" ? (
             <p className="text-[11px] font-semibold text-destructive">

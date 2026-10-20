@@ -8474,6 +8474,7 @@ export type Database = {
           receipt_sent_to: string | null
           refund_id: string | null
           refund_type: string
+          rejected_reason: string | null
           requested_by: string | null
           source: string
           source_id: string
@@ -8509,6 +8510,7 @@ export type Database = {
           receipt_sent_to?: string | null
           refund_id?: string | null
           refund_type: string
+          rejected_reason?: string | null
           requested_by?: string | null
           source: string
           source_id: string
@@ -8544,6 +8546,7 @@ export type Database = {
           receipt_sent_to?: string | null
           refund_id?: string | null
           refund_type?: string
+          rejected_reason?: string | null
           requested_by?: string | null
           source?: string
           source_id?: string
@@ -26575,6 +26578,22 @@ export type Database = {
       }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
       refresh_vip_orphans: { Args: never; Returns: Json }
+      refund_badges_for_sources: {
+        Args: { order_ids: string[]; sale_ids: string[] }
+        Returns: {
+          amount: number
+          completed_at: string
+          created_at: string
+          display_id: string
+          has_receipt: boolean
+          id: string
+          receipt_sent_at: string
+          refund_type: string
+          source: string
+          source_id: string
+          status: string
+        }[]
+      }
       refund_config: { Args: never; Returns: Json }
       register_template_category_change: {
         Args: {

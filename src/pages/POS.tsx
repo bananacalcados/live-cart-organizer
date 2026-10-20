@@ -70,7 +70,7 @@ export default function POS() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [selectedStore, setSelectedStore] = useState<string>("");
-  const [section, setSection] = useState<POSSection>("dashboard");
+  const [section, setSection] = useState<POSSection>(() => (new URLSearchParams(window.location.search).get("section") === "expedition" ? "expedition" : "dashboard"));
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingStockChecks, setPendingStockChecks] = useState(0);

@@ -11,7 +11,6 @@ import { getOrderFinalValue } from "@/lib/orderTotal";
 import { isSalePaid } from "@/lib/salePaymentState";
 import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
 import { RefundDialog } from "@/components/refunds/RefundDialog";
-import { SourceRefundReceipts } from "@/components/refunds/RefundReceiptButton";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import type { DbOrder } from "@/types/database";
 import { loadMpSalePayments } from "@/lib/mpSalePayment";
@@ -239,7 +238,6 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         return (
           <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <RefundDialog source="order" sourceId={item.id} label={orderLabel} customerName={data?.name} onDone={refreshRisks} />
-            <SourceRefundReceipts sourceId={item.id} />
           </div>
         );
       }
