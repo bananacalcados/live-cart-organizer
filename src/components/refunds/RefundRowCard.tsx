@@ -6,6 +6,8 @@ import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 export const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const refundReasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
 const dt = (d?: string | null) => (d ? new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "");
+const paymentDate = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const GATEWAY_LABELS: Record<string, string> = { mercadopago: "Mercado Pago", appmax: "Appmax", pagarme: "Pagar.me", rinne: "Rinne", austpay: "Rinne" };
 
 /** Linha de um estorno (Expedição > ESTORNOS). Comprovante só aparece para concluído. */
 export function RefundRowCard({ r, actions, onChanged }: { r: RefundListRow; actions?: ReactNode; onChanged?: () => void }) {
@@ -19,12 +21,13 @@ export function RefundRowCard({ r, actions, onChanged }: { r: RefundListRow; act
           {r.customer_name || "Cliente"} <span className="font-normal text-muted-foreground">{r.phone_masked}</span>
         </p>
         <p className="text-sm">
-          <b>{brl(r.amount)}</b> <span className="text-muted-foreground">({r.refund_type})</span> · {r.source === "order" ? "Live" : "PDV"} · {r.source_label} · {forma}
+          <b>{brl(r.amount)}</b> <span className="text-muted-foreground">({r.refund_type})</span> · {r.source === "order" ? "Live" : "PDV"} · {r.source_label} · {forma} · {GATEWAY_LABELS[r.gateway] || r.gateway}{r.gateway === "mercadopago" && r.mp_account_name ? ` · ${r.mp_account_name}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
           {refundReasonLabel(r.reason)}{r.reason_text ? ` — ${r.reason_text}` : ""}
         </p>
         <p className="text-[11px] text-muted-foreground">
+          {r.paid_at ? `Pago em ${paymentDate(r.paid_at)} · ` : ""}
           Solicitado por {r.requested_by_name || "—"} em {dt(r.created_at)}
           {r.status === "concluido" && r.completed_at ? ` · concluído em ${dt(r.completed_at)}` : ""}
         </p>

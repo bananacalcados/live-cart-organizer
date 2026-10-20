@@ -41,7 +41,6 @@ import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGat
 import { CreditCard, BadgePercent, Undo2 } from "lucide-react";
 import { lazyNamed } from "@/lib/lazyTab";
 import { useCanRefund } from "@/hooks/useCanRefund";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
 
@@ -84,19 +83,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [showSimu, setShowSimu] = useState(false);
   const [showRefunds, setShowRefunds] = useState(() => new URLSearchParams(window.location.search).get("tab") === "estornos");
   const canRefund = useCanRefund();
-  const { isAdmin: refundAdmin, ready: adminReady } = useIsAdmin(canRefund);
   const [refundPending, setRefundPending] = useState(0);
   const [refundTick, setRefundTick] = useState(0);
   // Contador de estornos aguardando aprovação: carrega ao abrir e atualiza por realtime (sem polling).
   useEffect(() => {
-    if (!canRefund || !adminReady) return;
+    if (!canRefund) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const loadCount = async () => {
-      const { data: u } = await supabase.auth.getUser();
-      let q: any = supabase.from("gateway_refunds").select("id", { count: "exact", head: true }).eq("status", "aguardando_aprovacao");
-      if (!refundAdmin && u?.user?.id) q = q.eq("requested_by", u.user.id);
-      const { count } = await q;
+      const { count } = await supabase.from("gateway_refunds").select("id", { count: "exact", head: true }).eq("status", "aguardando_aprovacao");
       if (alive) setRefundPending((prev) => (prev === (count || 0) ? prev : count || 0));
     };
     void loadCount();
@@ -107,7 +102,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       })
       .subscribe();
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
-  }, [canRefund, adminReady, refundAdmin]);
+  }, [canRefund]);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
