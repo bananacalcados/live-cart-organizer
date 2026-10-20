@@ -12,7 +12,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
-import { loadMpSalePayments } from "../_shared/mp-sale-payment.ts";
+import { loadMpSalePayments, MP_SALE_AMBIGUOUS } from "../_shared/mp-sale-payment.ts";
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 
@@ -452,6 +452,111 @@ serve(async (req) => {
   }
 
   // ── Preview: dados do pagamento para a tela de confirmação ──
+  // ── Elegibilidade em lote (Fase C: Novo estorno) ──
+  // Entrada: items [{source:"order"|"pos_sale", id}] (máx. 60). Tudo decidido com
+  // consultas em lote; MP consultado só p/ candidatos reais, no máximo 10 por chamada.
+  if (action === "eligibility") {
+    const raw = Array.isArray(body?.items) ? body.items : [];
+    const items = raw
+      .filter((i: any) => ["order", "pos_sale"].includes(String(i?.source)) && typeof i?.id === "string" && /^[0-9a-f-]{36}$/i.test(i.id))
+      .slice(0, 60) as { source: "order" | "pos_sale"; id: string }[];
+    if (!items.length) return json({ ok: true, results: [] });
+    const saleIds = items.filter((i) => i.source === "pos_sale").map((i) => i.id);
+    const orderIds = items.filter((i) => i.source === "order").map((i) => i.id);
+    const GW_COLS = "id, mercadopago_payment_id, mp_account_id, appmax_order_id, pagarme_order_id, austpay_transaction_id, vindi_transaction_id";
+    const none = Promise.resolve({ data: [] as any[] });
+    const [salesR, ordersR, splitsS, splitsO, pointR]: any[] = await Promise.all([
+      saleIds.length ? supabase.from("pos_sales").select(`${GW_COLS}, total, created_at`).in("id", saleIds) : none,
+      orderIds.length ? supabase.from("orders").select(`${GW_COLS}, products, discount_type, discount_value, free_shipping, shipping_cost, created_at`).in("id", orderIds) : none,
+      saleIds.length ? supabase.from("payment_splits").select("sale_id").in("sale_id", saleIds).limit(500) : none,
+      orderIds.length ? supabase.from("payment_splits").select("order_id").in("order_id", orderIds).limit(500) : none,
+      saleIds.length ? supabase.from("point_payment_intents").select("sale_id").in("sale_id", saleIds).limit(500) : none,
+    ]);
+    const sales = new Map<string, any>((salesR.data || []).map((s: any) => [s.id, s]));
+    const orders = new Map<string, any>((ordersR.data || []).map((o: any) => [o.id, o]));
+    const splitCount = new Map<string, number>();
+    for (const r of [...(splitsS.data || []).map((x: any) => x.sale_id), ...(splitsO.data || []).map((x: any) => x.order_id)]) splitCount.set(r, (splitCount.get(r) || 0) + 1);
+    const pointSales = new Set((pointR.data || []).map((x: any) => x.sale_id));
+    const salePay = await loadMpSalePayments(supabase, [...sales.values()]);
+
+    const orderTotal = (d: any) => {
+      const pt = (Array.isArray(d.products) ? d.products : []).reduce((s: number, p: any) => s + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
+      const disc = d.discount_type && d.discount_value ? (d.discount_type === "percentage" ? pt * (Number(d.discount_value) / 100) : Number(d.discount_value)) : 0;
+      return Math.max(0, pt - disc + (d.free_shipping ? 0 : Number(d.shipping_cost || 0)));
+    };
+    // Decide pelo código de transação existente, nunca pelo rótulo payment_gateway.
+    const otherGateway = (r: any) => r.appmax_order_id ? "Appmax" : r.pagarme_order_id ? "Pagar.me" : r.austpay_transaction_id ? "Rinne" : r.vindi_transaction_id ? "Vindi" : null;
+
+    type Res = { source: string; id: string; eligible: boolean; reason?: string; retry?: boolean; gateway?: string | null; remaining?: number; method?: string; cardLast4?: string | null; installments?: number | null; dateApproved?: string | null };
+    const results: Res[] = [];
+    const candidates: { res: Res; src: SourceRow }[] = [];
+    const MULTI = "Venda tem mais de um pagamento — estorno pelo sistema indisponível";
+    for (const it of items) {
+      const res: Res = { source: it.source, id: it.id, eligible: false, gateway: null };
+      results.push(res);
+      const row = it.source === "pos_sale" ? sales.get(it.id) : orders.get(it.id);
+      if (!row) { res.reason = "Venda/pedido não encontrado"; continue; }
+      if ((splitCount.get(it.id) || 0) > 1) { res.reason = MULTI; continue; }
+      if (it.source === "pos_sale" && pointSales.has(it.id)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
+      let paymentId: string | null; let accountId: string | null; let paymentOrderId: string | null = null;
+      if (it.source === "pos_sale") {
+        const p: any = salePay.get(it.id);
+        if (p?.error) { res.reason = p.error === MP_SALE_AMBIGUOUS ? MULTI : "Não foi possível consultar o gateway agora"; res.retry = p.error !== MP_SALE_AMBIGUOUS; continue; }
+        paymentId = p?.paymentId ?? null; accountId = p?.accountId ?? null; paymentOrderId = p?.orderId ?? null;
+      } else { paymentId = row.mercadopago_payment_id; accountId = row.mp_account_id; }
+      if (!paymentId) {
+        const g = otherGateway(row);
+        res.gateway = g;
+        res.reason = g ? `${g} — em breve` : "Pago fora do sistema / sem transação de gateway";
+        continue;
+      }
+      res.gateway = "Mercado Pago";
+      candidates.push({ res, src: {
+        id: row.id, paymentId: String(paymentId), mpAccountId: accountId, paymentOrderId,
+        total: it.source === "order" ? orderTotal(row) : Number(row.total || 0),
+        label: "", channel: it.source === "order" ? "live" : "pdv", customerName: null,
+        isPaid: true, stageOrStatus: null, shipped: false, createdAt: row.created_at,
+      } });
+    }
+
+    // Estornos em andamento por payment_id (cobre pedido↔venda da mesma compra) e Point por payment_id.
+    const payIds = [...new Set(candidates.map((c) => c.src.paymentId!))];
+    const [activeR, pointPayR]: any[] = payIds.length ? await Promise.all([
+      supabase.from("gateway_refunds").select("payment_id, status").in("payment_id", payIds).in("status", ["aguardando_aprovacao", "processando", "verificar"]).limit(200),
+      supabase.from("point_payment_intents").select("mp_payment_id").in("mp_payment_id", payIds).limit(200),
+    ]) : [{ data: [] }, { data: [] }];
+    const activeBy = new Map<string, string>((activeR.data || []).map((r: any) => [String(r.payment_id), r.status]));
+    const pointPays = new Set((pointPayR.data || []).map((r: any) => String(r.mp_payment_id)));
+    const ACTIVE_LABEL: Record<string, string> = { aguardando_aprovacao: "aguardando aprovação", processando: "processando", verificar: "verificação" };
+    const RETRY = "Não foi possível consultar o gateway agora";
+
+    let checked = 0;
+    for (const { res, src } of candidates) {
+      if (pointPays.has(src.paymentId!)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
+      const act = activeBy.get(src.paymentId!);
+      if (act) { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
+      if (checked >= 10) { res.retry = true; res.reason = RETRY; continue; }
+      checked++;
+      let check: MpCheck;
+      try { check = await checkPayment(supabase, src, null); }
+      catch { res.retry = true; res.reason = RETRY; continue; }
+      const p = check.payment;
+      if (p) {
+        res.method = p.payment_method_id === "pix" || p.payment_type_id === "bank_transfer" ? "pix" : p.payment_type_id === "debit_card" ? "debito" : "cartao";
+        res.cardLast4 = p.card?.last_four_digits || null; res.installments = p.installments || null; res.dateApproved = p.date_approved || null;
+      }
+      if (check.ok) { res.eligible = true; res.remaining = check.remaining; continue; }
+      const err = check.error || "";
+      if (!p && /consultar o pagamento/.test(err)) { res.retry = true; res.reason = RETRY; }
+      else if (p && p.status === "refunded") { res.reason = "Já totalmente estornado"; res.remaining = 0; }
+      else if (p && !["approved", "partially_refunded"].includes(p.status)) res.reason = `Pagamento não aprovado no gateway (status ${p.status})`;
+      else if (/mais de \d+ dias/.test(err)) res.reason = `Mais de ${MAX_REFUND_AGE_DAYS} dias da aprovação`;
+      else if (/totalmente estornado/.test(err)) { res.reason = "Já totalmente estornado"; res.remaining = 0; }
+      else res.reason = err.replace(/\.$/, "");
+    }
+    return json({ ok: true, results });
+  }
+
   if (action === "preview") {
     const source = String(body?.source || "");
     const id = String(body?.id || "");

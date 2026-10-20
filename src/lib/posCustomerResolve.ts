@@ -10,6 +10,7 @@
  * materializado em `pos_customers` por CPF/telefone (sem duplicar).
  */
 import { supabase } from '@/integrations/supabase/client';
+import { buildPhoneVariations } from '@/lib/phoneUtils';
 
 export interface UnifiedSearchResult {
   id: string; // id do customers_unified
@@ -160,4 +161,66 @@ export async function materializePosCustomer(record: {
     return null;
   }
   return data;
+}
+
+export interface PosCustomerSearchRow {
+  id: string;
+  name: string | null;
+  whatsapp: string | null;
+  cpf: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  previous_whatsapp_numbers: string[] | null;
+  _fromUnified?: true;
+}
+
+/**
+ * Busca do Perfil 360: pos_customers (nome/email, CPF ou WhatsApp com variações
+ * do 9º dígito) + customers_unified, deduplicado por CPF/últimos 8 dígitos.
+ * Compartilhada com o "Novo estorno". Lança erro da consulta em pos_customers.
+ */
+export async function searchPosAndUnifiedCustomers(term: string): Promise<PosCustomerSearchRow[]> {
+  const q = (term || '').trim();
+  if (q.length < 3) return [];
+  const digits = digitsOnly(q);
+  const isPhone = digits.length >= 8;
+  const isCpf = digits.length === 11;
+
+  let queryBuilder = supabase
+    .from('pos_customers')
+    .select('id, name, whatsapp, cpf, email, city, state, previous_whatsapp_numbers')
+    .limit(25);
+  if (isCpf) {
+    queryBuilder = queryBuilder.ilike('cpf', `%${digits}%`);
+  } else if (isPhone) {
+    const variations = buildPhoneVariations(q);
+    const last8 = digits.slice(-8);
+    queryBuilder = queryBuilder.or(
+      variations.map((v) => `whatsapp.ilike.%${v}%`).join(',') + `,whatsapp.ilike.%${last8}%`,
+    );
+  } else {
+    queryBuilder = queryBuilder.or(`name.ilike.%${q}%,email.ilike.%${q}%`);
+  }
+
+  const [{ data: posData, error }, unifiedData] = await Promise.all([
+    queryBuilder,
+    searchUnifiedCustomers(q, 25),
+  ]);
+  if (error) throw error;
+
+  const merged: PosCustomerSearchRow[] = [...((posData as PosCustomerSearchRow[]) || [])];
+  const seen = new Set(
+    merged.map((c) => c.cpf?.replace(/\D/g, '') || c.whatsapp?.replace(/\D/g, '').slice(-8) || c.id),
+  );
+  for (const u of unifiedData) {
+    const key = u.cpf?.replace(/\D/g, '') || u.whatsapp?.replace(/\D/g, '').slice(-8) || u.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({
+      id: u.id, name: u.name, whatsapp: u.whatsapp, cpf: u.cpf, email: u.email,
+      city: u.city, state: u.state, previous_whatsapp_numbers: null, _fromUnified: true,
+    });
+  }
+  return merged;
 }
