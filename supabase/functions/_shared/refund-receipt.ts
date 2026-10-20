@@ -82,11 +82,15 @@ async function loadPurchase(supabase: any, row: any) {
 }
 
 /** Gera (uma vez) e devolve o caminho do comprovante. Só para status "concluido". */
-export async function ensureRefundReceipt(supabase: any, refundId: string): Promise<{ ok: boolean; path?: string; code?: string; error?: string }> {
+// Layout atual (sem "Emitido por"). Comprovantes gerados antes disso são regerados
+// no mesmo caminho e com o mesmo código pelo worker.
+export const RECEIPT_LAYOUT_SINCE = "2026-10-20T01:00:00Z";
+
+export async function ensureRefundReceipt(supabase: any, refundId: string, regenerate = false): Promise<{ ok: boolean; path?: string; code?: string; error?: string }> {
   const { data: row } = await supabase.from("gateway_refunds").select("*").eq("id", refundId).maybeSingle();
   if (!row) return { ok: false, error: "Estorno não encontrado." };
   if (row.status !== "concluido") return { ok: false, error: "Comprovante só pode ser gerado para estorno concluído." };
-  if (row.receipt_path && row.receipt_code) return { ok: true, path: row.receipt_path, code: row.receipt_code };
+  if (row.receipt_path && row.receipt_code && !regenerate) return { ok: true, path: row.receipt_path, code: row.receipt_code };
 
   const { data: account } = await supabase.from("mercadopago_accounts")
     .select("name, cnpj, access_token").eq("id", row.mp_account_id).maybeSingle();
@@ -165,10 +169,6 @@ export async function ensureRefundReceipt(supabase: any, refundId: string): Prom
     for (const l of wrap(text, font, size, W)) { y -= size + 4; page.drawText(l, { x: M, y, size, font, color }); }
   };
 
-  section("Emitido por");
-  field("Conta Mercado Pago", account?.name || "Mercado Pago");
-  const cnpj = fmtCnpj(account?.cnpj);
-  if (cnpj) field("CNPJ", cnpj);
 
   section("Cliente");
   field("Nome", purchase.customerName || "-");
@@ -212,9 +212,15 @@ export async function ensureRefundReceipt(supabase: any, refundId: string): Prom
   para(`Código de verificação: ${code}`);
 
   const bytes = await pdf.save();
-  const path = `${row.id}/comprovante-${code}.pdf`;
+  const path = (regenerate && row.receipt_path) ? row.receipt_path : `${row.id}/comprovante-${code}.pdf`;
   const up = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: "application/pdf", upsert: true });
   if (up.error) return { ok: false, error: `Falha ao salvar o comprovante: ${up.error.message}` };
+
+  if (regenerate && row.receipt_path) {
+    await supabase.from("gateway_refunds").update({ receipt_generated_at: new Date().toISOString() }).eq("id", row.id);
+    return { ok: true, path, code };
+  }
+
 
   const { data: saved } = await supabase.from("gateway_refunds").update({
     receipt_code: code, receipt_path: path, receipt_generated_at: new Date().toISOString(),

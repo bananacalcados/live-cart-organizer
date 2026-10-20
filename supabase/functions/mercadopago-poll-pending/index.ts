@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { listAllMpAccountsForPolling, getMpAccountByPaymentId } from "../_shared/mp-account.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
-import { ensureRefundReceipt } from "../_shared/refund-receipt.ts";
+import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,6 +208,16 @@ serve(async (req) => {
       .order("completed_at", { ascending: true }).limit(3);
     for (const r of noReceipt || []) {
       const res = await ensureRefundReceipt(supabase, r.id);
+      if (res.ok) receiptsMade++; else errors.push({ receipt: r.id, err: res.error });
+    }
+    // Comprovantes no layout antigo: regera no mesmo caminho, mesmo código.
+    const { data: old } = await supabase
+      .from("gateway_refunds").select("id")
+      .eq("status", "concluido").not("receipt_path", "is", null)
+      .lt("receipt_generated_at", RECEIPT_LAYOUT_SINCE)
+      .order("completed_at", { ascending: true }).limit(3);
+    for (const r of old || []) {
+      const res = await ensureRefundReceipt(supabase, r.id, true);
       if (res.ok) receiptsMade++; else errors.push({ receipt: r.id, err: res.error });
     }
   } catch (err: any) {
