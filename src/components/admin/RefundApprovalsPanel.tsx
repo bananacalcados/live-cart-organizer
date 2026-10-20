@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Undo2, Check, X } from "lucide-react";
-import { refundApi, REFUND_REASONS, REFUND_STATUS_LABELS, type RefundConfig, type RefundRow } from "@/lib/refunds";
+import { Loader2, Undo2, ExternalLink } from "lucide-react";
+import { refundApi, type RefundConfig } from "@/lib/refunds";
 import { useToast } from "@/hooks/use-toast";
-import { RefundReceiptButton } from "@/components/refunds/RefundReceiptButton";
 import { SendRefundReceiptButton } from "@/components/refunds/SendRefundReceiptButton";
 import { DEFAULT_RECEIPT_MESSAGE } from "@/lib/refundReceiptMessage";
 
 const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const reasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
 
 /**
  * Admin > Pagamentos: interruptor geral de estornos, teto de aprovação e
@@ -19,13 +17,10 @@ export function RefundApprovalsPanel() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<RefundConfig | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [pending, setPending] = useState<RefundRow[]>([]);
-  const [recent, setRecent] = useState<RefundRow[]>([]);
   const [threshold, setThreshold] = useState("");
   const [footer, setFooter] = useState("");
   const [msgTpl, setMsgTpl] = useState("");
   const [ready, setReady] = useState<{ id: string; amount: number; customer_name: string | null }[]>([]);
-  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -36,8 +31,6 @@ export function RefundApprovalsPanel() {
       setFooter(cfg.config.receipt_footer_contact || "");
       setMsgTpl(cfg.config.receipt_message_template || DEFAULT_RECEIPT_MESSAGE);
       setReady(list.readyToSend || []);
-      setPending(list.pending);
-      setRecent(list.recent);
     } catch (e: any) {
       toast({ title: "Erro ao carregar estornos", description: e?.message, variant: "destructive" });
     } finally {
@@ -92,36 +85,9 @@ export function RefundApprovalsPanel() {
     }
   };
 
-  const act = async (id: string, action: "approve" | "reject") => {
-    setBusyId(id);
-    try {
-      const res = action === "approve" ? await refundApi.approve(id) : await refundApi.reject(id);
-      toast({ title: res.message || (action === "approve" ? "Estorno aprovado" : "Estorno recusado") });
-      await load();
-    } catch (e: any) {
-      toast({ title: "Falha na operação", description: e?.message, variant: "destructive" });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   if (loading) {
     return <Card><CardContent className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></CardContent></Card>;
   }
-
-  const rowInfo = (r: RefundRow) => (
-    <div className="min-w-0">
-      <p className="text-sm font-medium text-foreground">
-        {brl(r.amount)} <span className="text-muted-foreground">({r.refund_type})</span> · {r.source === "order" ? "Live" : "PDV"}
-      </p>
-      <p className="text-xs text-muted-foreground truncate">
-        {reasonLabel(r.reason)}{r.reason_text ? ` — ${r.reason_text}` : ""} · pagamento {r.payment_id}
-        {r.card_last4 ? ` · cartão •••• ${r.card_last4}${r.installments && r.installments > 1 ? ` ${r.installments}x` : ""}` : ""}
-      </p>
-      <p className="text-[11px] text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</p>
-      {r.error_message && <p className="text-[11px] text-destructive">{r.error_message}</p>}
-    </div>
-  );
 
   return (
     <Card>
@@ -183,53 +149,9 @@ export function RefundApprovalsPanel() {
           </div>
         )}
 
-        <div>
-          <p className="text-sm font-semibold text-foreground mb-2">Aguardando aprovação ({pending.length})</p>
-          {pending.length === 0 && <p className="text-xs text-muted-foreground">Nenhum estorno aguardando aprovação.</p>}
-          <div className="space-y-2">
-            {pending.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                {rowInfo(r)}
-                {isAdmin && (
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => void act(r.id, "approve")}
-                      disabled={busyId === r.id}
-                      className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
-                    >
-                      {busyId === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Aprovar
-                    </button>
-                    <button
-                      onClick={() => void act(r.id, "reject")}
-                      disabled={busyId === r.id}
-                      className="inline-flex items-center gap-1 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-                    >
-                      <X className="h-3 w-3" /> Recusar
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-semibold text-foreground mb-2">Últimos estornos</p>
-          {recent.length === 0 && <p className="text-xs text-muted-foreground">Nenhum estorno registrado ainda.</p>}
-          <div className="space-y-2">
-            {recent.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                {rowInfo(r)}
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
-                  {r.status === "concluido" && <RefundReceiptButton refundId={r.id} />}
-                  {r.status === "concluido" && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={() => void load()} />}
-                  {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <a href="/pos?section=expedition&tab=estornos" className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/20">
+          Ver estornos na Expedição <ExternalLink className="h-4 w-4" />
+        </a>
       </CardContent>
     </Card>
   );

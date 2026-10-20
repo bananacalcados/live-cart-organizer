@@ -82,7 +82,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
-  const [showRefunds, setShowRefunds] = useState(false);
+  const [showRefunds, setShowRefunds] = useState(() => new URLSearchParams(window.location.search).get("tab") === "estornos");
   const canRefund = useCanRefund();
   const { isAdmin: refundAdmin, ready: adminReady } = useIsAdmin(canRefund);
   const [refundPending, setRefundPending] = useState(0);
