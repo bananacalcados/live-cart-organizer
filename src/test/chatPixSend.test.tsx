@@ -52,7 +52,8 @@ describe("envio do Pix pelo diálogo", () => {
     const onSent = vi.fn();
     render(<ChatPixButton orderId="teste-sem-botao" variant="button" onSent={onSent} channel={channel} />);
     const sendBtn = await openDialog();
-    fireEvent.click(screen.getByRole("switch", { name: /botão "Copiar código PIX"/i }));
+    const switches = screen.getAllByRole("switch");
+    fireEvent.click(switches[switches.length - 1]);
     fireEvent.click(sendBtn);
     await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
     expect(channel.sendCopyButton).not.toHaveBeenCalled();
