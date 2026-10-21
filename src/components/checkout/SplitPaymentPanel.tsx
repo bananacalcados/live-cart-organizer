@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckCircle2, Copy, CreditCard, Loader2, Plus, QrCode, Split, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
+import { maskCardNumber, maskCardExpiry } from "@/lib/formatMasks";
 import {
   MAX_SPLIT_PARTS, SPLIT_METHOD_LABEL, rebalanceLastPart, validateSplit,
   type SplitMethod, type SplitPartInput,
@@ -315,23 +316,49 @@ function SplitCardPart({ part, form, maxInstallments, onApproved }: { part: Part
   const [exp, setExp] = useState("");
   const [cvv, setCvv] = useState("");
   const [busy, setBusy] = useState(false);
+  const payingRef = useRef(false);
+  const numberRef = useRef<HTMLInputElement>(null);
+  const holderRef = useRef<HTMLInputElement>(null);
+  const expiryRef = useRef<HTMLInputElement>(null);
+  const cvvRef = useRef<HTMLInputElement>(null);
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
   const isDebit = part.method === "debit";
   const maxInst = Math.max(1, maxInstallments, part.installments || 1);
   const [inst, setInst] = useState(isDebit ? 1 : Math.min(part.installments || 1, maxInst));
   const perInst = Number(part.charge_amount) / inst;
 
-  useEffect(() => { initMercadoPago(); }, []);
+  useEffect(() => { initMercadoPago().catch(() => {}); }, []);
 
   const pay = async () => {
-    const [mm, yy] = exp.split("/").map((s) => s.trim());
-    if (number.replace(/\D/g, "").length < 13 || !mm || !yy || cvv.length < 3 || !holder.trim()) {
-      toast.error("Preencha os dados do cartão"); return;
+    if (payingRef.current) return;
+    // Autofill pode preencher o input sem avisar o React: conferir o que está visível.
+    const cardNumber = (numberRef.current?.value ?? number).replace(/\D/g, "");
+    const cardHolder = (holderRef.current?.value ?? holder).trim();
+    const expiry = maskCardExpiry(expiryRef.current?.value ?? exp);
+    const cardCvv = (cvvRef.current?.value ?? cvv).replace(/\D/g, "");
+    const [mm, yy] = expiry.split("/");
+    const invalid = [
+      cardNumber.length < 13 && "número do cartão",
+      !cardHolder && "nome impresso no cartão",
+      (!mm || !yy || yy.length !== 2 || Number(mm) < 1 || Number(mm) > 12) && "validade",
+      cardCvv.length < 3 && "CVV",
+    ].filter(Boolean) as string[];
+    setNumber(maskCardNumber(cardNumber)); setHolder(cardHolder); setExp(expiry); setCvv(cardCvv);
+    setInvalidFields(invalid);
+    if (invalid.length) {
+      const refs = [numberRef, holderRef, expiryRef, cvvRef];
+      const names = ["número do cartão", "nome impresso no cartão", "validade", "CVV"];
+      const field = refs[names.indexOf(invalid[0])]?.current;
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      field?.focus({ preventScroll: true });
+      return;
     }
+    payingRef.current = true;
     setBusy(true);
     try {
       const tok = await tokenizeCardMP({
-        number: number.replace(/\D/g, ""), holderName: holder.trim(), expMonth: mm.padStart(2, "0"),
-        expYear: yy.length === 2 ? `20${yy}` : yy, cvv, cpf: form.cpf.replace(/\D/g, ""),
+        number: cardNumber, holderName: cardHolder, expMonth: mm.padStart(2, "0"),
+        expYear: `20${yy}`, cvv: cardCvv, cpf: form.cpf.replace(/\D/g, ""),
       }, isDebit ? "debit" : "credit");
       if (!tok) throw new Error(isDebit ? "Este cartão não aceita débito" : "Não foi possível validar o cartão");
       const d = await call({
@@ -342,7 +369,7 @@ function SplitCardPart({ part, form, maxInstallments, onApproved }: { part: Part
       toast.success(`Parte ${part.seq} paga!`);
       onApproved();
     } catch (e: any) { toast.error(e.message); }
-    setBusy(false);
+    finally { setBusy(false); payingRef.current = false; }
   };
 
   return (
@@ -350,11 +377,12 @@ function SplitCardPart({ part, form, maxInstallments, onApproved }: { part: Part
       <p className="text-sm font-semibold flex items-center gap-2">
         <CreditCard className="h-4 w-4" /> Parte {part.seq}: {isDebit ? "Débito" : "Crédito"} {BRL(part.charge_amount)}
       </p>
-      <Input placeholder="Número do cartão" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} />
-      <Input placeholder="Nome impresso no cartão" autoComplete="cc-name" value={holder} onChange={(e) => setHolder(e.target.value.toUpperCase())} />
+      {invalidFields.length > 0 && <p role="alert" className="text-sm font-semibold text-destructive">O pagamento ainda não foi enviado. Confira: {invalidFields.join(", ")}. Validade: MM/AA.</p>}
+      <Input ref={numberRef} aria-label="Número do cartão" aria-invalid={invalidFields.includes("número do cartão")} placeholder="Número do cartão" autoComplete="cc-number" name="split-cc-number" inputMode="numeric" maxLength={23} value={number} onChange={(e) => setNumber(maskCardNumber(e.target.value))} />
+      <Input ref={holderRef} aria-label="Nome impresso no cartão" aria-invalid={invalidFields.includes("nome impresso no cartão")} placeholder="Nome impresso no cartão" autoComplete="cc-name" name="split-cc-name" className="uppercase" value={holder} onChange={(e) => setHolder(e.target.value)} />
       <div className="flex gap-2">
-        <Input placeholder="MM/AA" value={exp} onChange={(e) => setExp(e.target.value)} />
-        <Input placeholder="CVV" inputMode="numeric" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, ""))} />
+        <Input ref={expiryRef} aria-label="Validade" aria-invalid={invalidFields.includes("validade")} placeholder="MM/AA" autoComplete="cc-exp" name="split-cc-exp" inputMode="numeric" maxLength={5} value={exp} onChange={(e) => setExp(maskCardExpiry(e.target.value))} />
+        <Input ref={cvvRef} aria-label="CVV" aria-invalid={invalidFields.includes("CVV")} placeholder="CVV" autoComplete="cc-csc" name="split-cc-csc" type="password" inputMode="numeric" maxLength={4} value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, ""))} />
       </div>
       {!isDebit && (
         <div className="space-y-1">
