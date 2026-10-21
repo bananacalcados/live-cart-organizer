@@ -79,6 +79,9 @@
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
+## Mercado Pago — verificação urgente antes da live
+- [ ] Verificar falhas nas cobranças das maquininhas Point e saúde das cobranças online/Pix, sem criar cobranças reais.
+
 ## Correios contrato próprio — fases 0 e 1
 - [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
 - [x] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência; seis opções Frenet reais, recotação 1000g e bloqueio de cotação antiga conferidos, sem trocar transportadora de cliente.
