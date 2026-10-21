@@ -81,7 +81,7 @@
 
 ## Mercado Pago — verificação urgente antes da live
 - [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
-- [ ] Conferir somente API online do checkout transparente e área de membros: respostas atuais de produção, parcelamento, pagamentos e falhas recentes, sem testar maquininhas nem criar cobrança real.
+- [x] Conferir somente API online: produção resolvida, parcelamento real respondeu HTTP 200 às 15:08 UTC e auditoria MP confirmou três pagamentos reais aprovados, incluindo pedido de live; checkout/membros compartilham as rotas Pix/cartão. Últimas tentativas de 20/10 tiveram sucesso; duas falhas anteriores por validade inválida. Nenhuma cobrança nova criada: geração e aprovação nova não foram testadas.
 
 ## Correios contrato próprio — fases 0 e 1
 - [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
