@@ -2,7 +2,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
 import { loadCorreiosSettings, quoteCorreios } from '../_shared/correios.ts';
-import { buildPackage, validatePackage, parseBrl, standardCarrier, localDelivery, type FreightOption, type FreightPackage } from '../_shared/freight-domain.ts';
+import { buildPackage, parseBrl, standardCarrier, localDelivery, type FreightOption, type FreightPackage } from '../_shared/freight-domain.ts';
 const bodySchema = z.object({ sale_id: z.string().uuid(), action: z.enum(['quote','select']).default('quote'), quote_id: z.string().uuid().optional(), option_index: z.number().int().min(0).max(199).optional(), package: z.object({ peso_g: z.number().int().positive().max(1000000), c: z.number().positive().max(100), l: z.number().positive().max(100), a: z.number().positive().max(100) }).strict().optional() }).strict();
 const unique = (v: (string | null)[]) => [...new Set(v.filter((s): s is string => !!s))];
 const checked = (r: any, name: string) => { if (r.error) throw new Error(`Não foi possível carregar ${name}`); return r.data || []; };
@@ -84,15 +84,14 @@ Deno.serve(async (req) => {
     const locals = [...new Map(localResults.flatMap((r) => checked(r,'catálogo local')).map((v: any) => [v.id,v])).values()] as any[];
     const categoryIds = unique([...masters,...locals].map((v) => v.category_id));
     const categories = categoryIds.length ? checked(await db.from('product_categories').select('id,default_weight_kg,default_height_cm,default_width_cm,default_length_cm').in('id',categoryIds).limit(200),'categorias') : [];
-    const automatic = buildPackage(items.map((item: any) => {
+    const pkg = buildPackage(items.map((item: any) => {
       const variant = exactMatch(variants,item);
       const master = variant ? masters.find((m) => m.id === variant.master_id) : exactMatch(masters,item,'unused','sku_root');
       const store = sales.find((s) => s.id === item.sale_id)?.store_id;
       const local = exactMatch(locals.filter((v) => v.store_id === store), item, 'barcode');
       const category = categories.find((c: any) => c.id === (master?.category_id || local?.category_id));
       return { quantity: Number(item.expedition_conference_qty), variantWeight: variant?.weight_kg_override, masterWeight: master?.weight_kg, categoryWeight: category?.default_weight_kg, length: master?.length_cm, width: master?.width_cm, height: master?.height_cm, categoryLength: category?.default_length_cm, categoryWidth: category?.default_width_cm, categoryHeight: category?.default_height_cm };
-    }));
-    const pkg = b.package ? validatePackage({ ...automatic, ...b.package, origem: 'padrao' }) : automatic;
+    }), b.package);
     const errors: Record<string,string> = {};
     const sources = await Promise.allSettled([
       settings.enabled ? quoteCorreios(db,settings,pkg,destination) : Promise.resolve({ options: [] as FreightOption[], error: undefined }),
@@ -108,8 +107,8 @@ Deno.serve(async (req) => {
     options.sort((a,b) => a.price-b.price);
     if (options.length > 200) options.length = 200;
     const context = { group_id: sale.expedition_group_id || '', address: sale.shipping_address, items: items.map((i: any) => ({ id:i.id, quantity:i.expedition_conference_qty, sku:i.sku, barcode:i.barcode })) };
-    const result = await db.from('sale_freight_quotes').insert({ sale_id:sale.id, sale_ids:ids, package:pkg, options, errors, quoted_by:userId, context }).select('id,quoted_at').single();
-    if (result.error) throw new Error('Não foi possível salvar a cotação');
+    const result = await db.rpc('record_sale_freight_quote', { p_sale_id:sale.id, p_sale_ids:ids, p_package:pkg, p_options:options, p_errors:errors, p_user_id:userId, p_context:context });
+    if (result.error) throw new Error(result.error.message || 'Não foi possível salvar a cotação');
     return reply({ id:result.data.id, quoted_at:result.data.quoted_at, package:pkg, options, errors });
   } catch (e) {
     const err = e as Error & { status?:number };

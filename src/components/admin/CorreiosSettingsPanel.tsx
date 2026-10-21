@@ -25,6 +25,7 @@ export function CorreiosSettingsPanel() {
     setBusy('save');setError('');
     try {
       const {codigo_acesso:_,...fields}=config;
+      delete (fields as Partial<Config> & {updated_at?:string}).updated_at;
       const r=await freightCall<{config:Config}>('correios-admin',{action:'set_config',config:{...fields,codigo_acesso:code}});
       setConfig(r.config);setCode('');setDirty(false);toast.success('Configuração Correios salva');
     } catch(e){setError(e instanceof Error?e.message:'Não foi possível salvar');}finally{setBusy(null);}

@@ -16,7 +16,7 @@ export function validatePackage(p: FreightPackage): FreightPackage {
 }
 export interface PackageItem { quantity: number; variantWeight?: unknown; masterWeight?: unknown; categoryWeight?: unknown; length?: unknown; width?: unknown; height?: unknown; categoryLength?: unknown; categoryWidth?: unknown; categoryHeight?: unknown }
 const positive = (v: unknown) => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0;
-export function buildPackage(items: PackageItem[]): FreightPackage {
+export function buildPackage(items: PackageItem[], override?: Pick<FreightPackage,'peso_g'|'c'|'l'|'a'>): FreightPackage {
   let weight = 0, c = 15, l = 10, a = 0, count = 0, defaulted = false;
   for (const item of items) {
     const qty = item.quantity;
@@ -31,7 +31,7 @@ export function buildPackage(items: PackageItem[]): FreightPackage {
     count += qty;
   }
   if (!count) throw new Error('Sem itens destinados à Conferência para cotar');
-  return validatePackage({ peso_g: Math.ceil(weight * 1000), c: Math.ceil(c), l: Math.ceil(l), a: Math.max(1, Math.ceil(a)), itens: count, origem: defaulted ? 'padrao' : 'produtos' });
+  return validatePackage({ peso_g: Math.ceil(weight * 1000), c: Math.ceil(c), l: Math.ceil(l), a: Math.max(1, Math.ceil(a)), itens: count, origem: defaulted || override ? 'padrao' : 'produtos', ...override });
 }
 export function standardCarrier(carrier: string, service: string): Pick<FreightOption, 'shipping_carrier' | 'shipping_type'> {
   const name = `${carrier} ${service}`.toLowerCase();
