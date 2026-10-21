@@ -83,7 +83,7 @@
 - [x] Reproduzir e corrigir armazenamento bloqueado antes da cobrança: 6 testes e tentativa única simulada no navegador passaram; link direto /minha-area abriu correto e pagamentos MP de hoje localizados; não publicado.
 - [ ] Identificar a cliente e o pedido do cartão — falta identificação inequívoca; não presumir causa do relato.
 - [x] Auditar desvio da bio: fotos de produtos das 5 páginas de catálogo ativas apontam para bananabrasil.com.br; botões, endereços oficiais, conexões seguras e DNS conferidos.
-- [ ] Corrigir fotos de produtos da bio e inserção de link de produto nos Grupos VIP; bloquear destinos externos e testar identificadores inválidos, preservando rastreamento.
+- [x] Corrigir fotos de produtos da bio e links Shopify dos Grupos VIP: destino oficial centralizado, identificadores inválidos bloqueados, rastreamento preservado; 30 testes passaram, cinco catálogos e clique em produto real conferidos. Publicação solicitada; conclusão ainda não verificada.
 - [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
 - [x] Conferir somente API online: produção resolvida, parcelamento real respondeu HTTP 200 às 15:08 UTC e auditoria MP confirmou três pagamentos reais aprovados, incluindo pedido de live; checkout/membros compartilham as rotas Pix/cartão. Últimas tentativas de 20/10 tiveram sucesso; duas falhas anteriores por validade inválida. Nenhuma cobrança nova criada: geração e aprovação nova não foram testadas.
 
