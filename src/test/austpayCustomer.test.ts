@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { resolveAustpayCustomer } from "../../supabase/functions/_shared/austpay";
-
-// This shared function runs in Deno; the browser test compiler only needs
-// the environment declaration (these tests never read any credentials).
-declare global {
-  const Deno: { env: { get(name: string): string | undefined } };
-}
+// Load the server module at test runtime, not through the browser TS graph.
+const serverModule = "../../supabase/functions/_shared/austpay.ts";
+const { resolveAustpayCustomer } = await import(/* @vite-ignore */ serverModule);
 
 function database(rows: Record<string, any>) {
   const calls: { table: string; columns: string; field?: string; id?: string }[] = [];
