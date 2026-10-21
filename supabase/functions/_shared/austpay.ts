@@ -145,6 +145,55 @@ export function austpayGetTransaction(cfg: AustpayConfig, transactionId: string)
   return austpayFetch(cfg, `/v1/transactions/${transactionId}`);
 }
 
+export interface AustpayCustomerInfo {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+/**
+ * Busca nome/telefone/e-mail do cliente do pedido (orders → pos_sales) para
+ * enriquecer o registro de falha. Nunca lança: sem dados, devolve nulls.
+ */
+export async function resolveAustpayCustomer(
+  supabase: any,
+  orderId: string,
+): Promise<AustpayCustomerInfo> {
+  const empty: AustpayCustomerInfo = { name: null, phone: null, email: null };
+  if (!orderId) return empty;
+  try {
+    const { data: order } = await supabase
+      .from("orders")
+      .select("customer:customers(name, whatsapp, email)")
+      .eq("id", orderId)
+      .maybeSingle();
+    const c = order?.customer as Record<string, unknown> | null;
+    if (c) {
+      return {
+        name: (c.name as string) || null,
+        phone: (c.whatsapp as string) || null,
+        email: (c.email as string) || null,
+      };
+    }
+    const { data: sale } = await supabase
+      .from("pos_sales")
+      .select("customer_name, customer_phone, payment_details")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (sale) {
+      const pd = (sale.payment_details || {}) as Record<string, unknown>;
+      return {
+        name: (sale.customer_name as string) || (pd.customer_name as string) || null,
+        phone: (sale.customer_phone as string) || (pd.customer_phone as string) || null,
+        email: (pd.customer_email as string) || null,
+      };
+    }
+  } catch (e) {
+    console.warn("[austpay] falha ao buscar cliente do pedido (ignorado):", e);
+  }
+  return empty;
+}
+
 /**
  * Igual ao getAustpayConfig, mas o modo (teste/produção) pode ser ligado pelo
  * sistema em app_settings.austpay_env — esse valor vence o segredo AUSTPAY_ENV.
