@@ -16,6 +16,7 @@ import {
   getAustpayConfig, resolveAustpayConfig,
   isAustpayApproved,
   isAustpayEnabled,
+  resolveAustpayCustomer,
   toCents,
 } from "../_shared/austpay.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
@@ -59,6 +60,8 @@ serve(async (req) => {
 
   let orderId = "";
   let amount = 0;
+  let holderName: string | null = null;
+  let holderEmail: string | null = null;
 
   try {
     const body = await req.json();
@@ -68,6 +71,8 @@ serve(async (req) => {
     const mode = String(body?.mode || "credit").toLowerCase();
     const card = body?.card || {};
     const holder = body?.holder || {};
+    holderName = holder?.name ? String(holder.name) : null;
+    holderEmail = holder?.email ? String(holder.email) : null;
 
     if (!orderId) throw new Error("orderId is required");
     if (!(amount > 0)) throw new Error("amount must be greater than zero");
