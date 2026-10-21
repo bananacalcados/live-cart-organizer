@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 
@@ -14,6 +14,7 @@ const { invoke, tokenize } = vi.hoisted(() => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invoke: (_name: string, args: { body: Record<string, unknown> }) => invoke(args) } } }));
 vi.mock("@/lib/mercadopago", () => ({ initMercadoPago: async () => true, tokenizeCardMP: tokenize }));
+beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 async function open() {
