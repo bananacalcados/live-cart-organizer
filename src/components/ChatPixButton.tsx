@@ -244,6 +244,18 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
                   </div>
                   <Switch checked={includeQr} onCheckedChange={toggleQr} disabled={!qrBase64} />
                 </div>
+                {canCopyButton && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Enviar com botão "Copiar código PIX"</p>
+                      <p className="text-xs text-muted-foreground">
+                        A cliente copia com 1 toque. Se ela relatar que o botão veio vazio,
+                        desligue aqui e reenvie — vai o código sozinho pra copiar manual.
+                      </p>
+                    </div>
+                    <Switch checked={withCopyButton} onCheckedChange={toggleCopyButton} />
+                  </div>
+                )}
                 <Button
                   className="w-full bg-[#00a884] hover:bg-[#008c6f] text-white gap-1.5"
                   onClick={handleSend}
