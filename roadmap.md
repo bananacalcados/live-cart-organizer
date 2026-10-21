@@ -80,9 +80,10 @@
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
 ## Correios contrato próprio — fases 0 e 1
-- [ ] Configuração privada, conexão CWS e card no Admin.
-- [ ] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência.
-- [ ] Testes de regras, acesso e telas; conexão real depende das credenciais do contrato.
+- [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
+- [x] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência; seis opções Frenet reais, recotação 1000g e bloqueio de cotação antiga conferidos, sem trocar transportadora de cliente.
+- [x] 18 testes de regras/gateway passaram e telas autenticadas conferidas; funções implantadas, site não publicado.
+- [ ] Testar conexão e preços CWS reais — faltam usuário, código de acesso e cartão na configuração; escolha de frete em venda real não executada para preservar o envio da cliente.
 
 ## Estornos — Fase E1
 - [x] Corrigir autofill, leitura/contador para todos com permissão, gateway/conta e data original; conferir quatro concluídos e publicar.
