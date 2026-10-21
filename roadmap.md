@@ -16,7 +16,7 @@
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
 ## Auditoria do cartão da cliente — 21/10
-- [ ] Corrigir validade sem barra no pagamento dividido e conferir 2x de R$ 130,00 sem cobrança real.
+- [x] Reproduzido bloqueio com validade 1230; máscara e leitura de autofill corrigidas, erro específico e trava de clique duplicado; 13 testes passaram e link da cliente enviou uma única tentativa interceptada em 2x. Pix R$ 190 pago e saldo R$ 259,99 preservados; sem cobrança real e sem publicação.
 
 ## Pagamento dividido (plano aprovado 23/09)
 - [x] Etapa 1 — Base: partes de pagamento, registro seguro de parte aprovada, contas (desconto só no Pix), chave desligada
