@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveAustpayCustomer } from "../../supabase/functions/_shared/austpay";
 
+// This shared function runs in Deno; the browser test compiler only needs
+// the environment declaration (these tests never read any credentials).
+declare global {
+  const Deno: { env: { get(name: string): string | undefined } };
+}
+
 function database(rows: Record<string, any>) {
   const calls: { table: string; columns: string; field?: string; id?: string }[] = [];
   return {
