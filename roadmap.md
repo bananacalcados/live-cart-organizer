@@ -81,7 +81,7 @@
 
 ## Mercado Pago — verificação urgente antes da live
 - [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
-- [ ] Validar geração nova e envio à maquininha — depende de identificar a conta/vínculo dos terminais e teste autorizado de cobrança; consultas de leitura não comprovam criação nova.
+- [ ] Conferir somente API online do checkout transparente e área de membros: respostas atuais de produção, parcelamento, pagamentos e falhas recentes, sem testar maquininhas nem criar cobrança real.
 
 ## Correios contrato próprio — fases 0 e 1
 - [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
