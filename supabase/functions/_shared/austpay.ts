@@ -164,30 +164,40 @@ export async function resolveAustpayCustomer(
   try {
     const { data: order } = await supabase
       .from("orders")
-      .select("customer:customers(name, whatsapp, email)")
+      .select("pos_sale_id, customer:customers(full_name, whatsapp)")
       .eq("id", orderId)
       .maybeSingle();
+    // Customers stores full_name (not name) and has no email column.
+    // The checkout registration is the exact order's payer identity.
     const c = order?.customer as Record<string, unknown> | null;
-    if (c) {
-      return {
-        name: (c.name as string) || null,
-        phone: (c.whatsapp as string) || null,
-        email: (c.email as string) || null,
+    let identity = { ...empty };
+    if (order) {
+      const { data: registration } = await supabase
+        .from("customer_registrations")
+        .select("full_name, whatsapp, email")
+        .eq("order_id", orderId)
+        .maybeSingle();
+      identity = {
+        name: registration?.full_name || (c?.full_name as string) || null,
+        phone: registration?.whatsapp || (c?.whatsapp as string) || null,
+        email: registration?.email || null,
       };
+      if (!order.pos_sale_id) return identity;
     }
     const { data: sale } = await supabase
       .from("pos_sales")
       .select("customer_name, customer_phone, payment_details")
-      .eq("id", orderId)
+      .eq("id", order?.pos_sale_id || orderId)
       .maybeSingle();
     if (sale) {
       const pd = (sale.payment_details || {}) as Record<string, unknown>;
       return {
-        name: (sale.customer_name as string) || (pd.customer_name as string) || null,
-        phone: (sale.customer_phone as string) || (pd.customer_phone as string) || null,
-        email: (pd.customer_email as string) || null,
+        name: identity.name || (sale.customer_name as string) || (pd.customer_name as string) || null,
+        phone: identity.phone || (sale.customer_phone as string) || (pd.customer_phone as string) || null,
+        email: identity.email || (pd.customer_email as string) || null,
       };
     }
+    return identity;
   } catch (e) {
     console.warn("[austpay] falha ao buscar cliente do pedido (ignorado):", e);
   }

@@ -15,6 +15,9 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## AustPay — nomes nas recusas
+- [x] Corrigir leitura pelo cadastro exato e venda vinculada; 5 testes passaram, funções implantadas e três recusas da Maria Brígida recuperadas e conferidas no painel autenticado, sem cobrança.
+
 ## Auditoria do cartão da cliente — 21/10
 - [x] Reproduzido bloqueio com validade 1230; máscara e leitura de autofill corrigidas, erro específico e trava de clique duplicado; 13 testes passaram e link da cliente enviou uma única tentativa interceptada em 2x. Pix R$ 190 pago e saldo R$ 259,99 preservados; sem cobrança real e sem publicação.
 
