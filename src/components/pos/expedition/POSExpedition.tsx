@@ -41,6 +41,7 @@ import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGat
 import { CreditCard, BadgePercent, Undo2 } from "lucide-react";
 import { lazyNamed } from "@/lib/lazyTab";
 import { useCanRefund } from "@/hooks/useCanRefund";
+import { freightDate } from "@/lib/saleFreight";
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
 
@@ -104,6 +105,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
   }, [canRefund]);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
+  const [freightDates, setFreightDates] = useState<Record<string,string>>({});
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -278,6 +280,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway);
       setOrders(rows);
+      const visibleIds = rows.slice(0, 100).map((row) => row.id);
+      if (visibleIds.length) {
+        const { data: dates, error: datesError } = await supabase.rpc("latest_sale_freight_dates" as any, { p_sale_ids: visibleIds });
+        if (!datesError) {
+          const next: Record<string,string> = {};
+          for (const date of (dates || []) as { sale_id:string; quoted_at:string }[]) next[date.sale_id] = date.quoted_at;
+          setFreightDates((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+        }
+      } else setFreightDates({});
       // Reduções de valor ativas dos pedidos visíveis (1 consulta, IN único).
       const ids = rows.map((r) => r.id).slice(0, 500);
       if (ids.length) {
@@ -1268,6 +1279,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
+                          {freightDates[o.id] && <div className="flex flex-wrap items-center gap-2 mb-2"><span className="text-sm text-muted-foreground">Última cotação: {freightDate(freightDates[o.id])}</span>{stage === "conferencia" && !isStorePickupOrder(o) && !/motot[aá]xi/i.test(o.shipping_carrier || "") && <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setConferenceOrder(o); }}><RefreshCw className="h-3.5 w-3.5 mr-1" />Recotar fretes</Button>}</div>}
                           <div className="mb-3 flex flex-wrap gap-2" aria-label="Gateway do pagamento">
                             {[...new Set((o.group_order_ids?.length ? list.filter((sale) => o.group_order_ids?.includes(sale.id)) : [o]).map((sale) => sale.payment_gateway))].map((gateway) => (
                               <Badge key={gateway || "unknown"} variant="outline" className={`max-w-full min-h-12 px-4 py-2 border-2 rounded-md text-lg font-black uppercase whitespace-normal break-words ${gateway ? "bg-exp-prep/15 border-exp-prep text-exp-prep" : "bg-pos-elevated border-pos-border text-pos-muted-text"}`}>
