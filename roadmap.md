@@ -79,10 +79,15 @@
 - [x] Novas fotos usam título cadastrado; normalização no insert cobre escritores externos; 20 nomes corrigidos em rascunhos incluindo irmãos agrupados, zero restantes. Teste de inserção na campanha Teste desfeito; legenda e horário preservados.
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
+## Mercado Pago — verificação urgente antes da live
+- [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
+- [ ] Validar geração nova e envio à maquininha — depende de identificar a conta/vínculo dos terminais e teste autorizado de cobrança; consultas de leitura não comprovam criação nova.
+
 ## Correios contrato próprio — fases 0 e 1
-- [ ] Configuração privada, conexão CWS e card no Admin.
-- [ ] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência.
-- [ ] Testes de regras, acesso e telas; conexão real depende das credenciais do contrato.
+- [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
+- [x] Cotação Correios + Frenet no PDV, pacote editável e escolha persistida na Conferência; seis opções Frenet reais, recotação 1000g e bloqueio de cotação antiga conferidos, sem trocar transportadora de cliente.
+- [x] 18 testes de regras/gateway passaram e telas autenticadas conferidas; funções implantadas, site não publicado.
+- [ ] Testar conexão e preços CWS reais — faltam usuário, código de acesso e cartão na configuração; escolha de frete em venda real não executada para preservar o envio da cliente.
 
 ## Estornos — Fase E1
 - [x] Corrigir autofill, leitura/contador para todos com permissão, gateway/conta e data original; conferir quatro concluídos e publicar.

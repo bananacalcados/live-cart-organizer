@@ -13,6 +13,7 @@ import { openFiscalDocument } from "@/lib/openFiscalDocument";
 
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
+import { ExpFreightQuotePanel } from "./ExpFreightQuotePanel";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTemplateEditor";
 import { saveExpeditionShippingCost } from "./shippingCost";
@@ -642,6 +643,13 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
               <Truck className="h-5 w-5 text-exp-pick" /> 3. Envio e rastreio
             </p>
             <ExpShippingFields value={shipping} onChange={setShipping} />
+            {!order.is_store_pickup && !isMototaxi(carrier) && !isPickup(carrier) && !/mototaxi|retirada|pickup/i.test(order.shipping_type || "") && (
+              <ExpFreightQuotePanel saleId={order.id} open={open} onQuoted={onRefresh} onSelected={(option) => {
+                setShipping((current) => ({ ...current, carrier: option.shipping_carrier, cost: String(option.price), courier: "", courierProviderId: "" }));
+                setDeliveryDays(option.delivery_days != null ? String(option.delivery_days) : "");
+                onRefresh?.();
+              }} />
+            )}
             {!isMototaxi(carrier) && !isPickup(carrier) && (
               <div className="grid md:grid-cols-2 gap-3">
                 <div>

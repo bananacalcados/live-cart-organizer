@@ -28,6 +28,8 @@ import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
 import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
 import { RefundApprovalsPanel } from "@/components/admin/RefundApprovalsPanel";
 import { GatewaySplitStatsPanel } from "@/components/admin/GatewaySplitStatsPanel";
+import { CorreiosSettingsPanel } from "@/components/admin/CorreiosSettingsPanel";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
@@ -56,6 +58,7 @@ interface UserData {
 }
 
 export default function Admin() {
+  const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
@@ -222,7 +225,7 @@ export default function Admin() {
 
       <main className="flex-1 container py-6 space-y-6">
         <Tabs defaultValue="users">
-          <TabsList>
+          <TabsList className="h-auto flex flex-wrap justify-start gap-1">
             <TabsTrigger value="users" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Usuários</TabsTrigger>
             <TabsTrigger value="zapi" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Z-API</TabsTrigger>
             <TabsTrigger value="meta" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Meta</TabsTrigger>
@@ -235,7 +238,9 @@ export default function Admin() {
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Pagamentos</TabsTrigger>
             <TabsTrigger value="fiscal" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Fiscal</TabsTrigger>
             <TabsTrigger value="acessos" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Acessos</TabsTrigger>
+            {isAdmin && <TabsTrigger value="correios" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Correios (contrato)</TabsTrigger>}
           </TabsList>
+          {isAdmin && <TabsContent value="correios" className="mt-4"><CorreiosSettingsPanel /></TabsContent>}
 
           <TabsContent value="acessos" className="mt-4">
             <AccessLogPanel />

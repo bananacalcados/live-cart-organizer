@@ -34,3 +34,4 @@
 - Refunds (mp-refund + _shared/refund-gateways): JWT + estornos permission server-side, service-only writes, one in-flight per payment; details in supabase/functions/AGENTS.md.
 
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
+- Correios uses service-only credentials/cache, JWT/admin configuration and independent CWS/Frenet quotes on server-resolved Conference groups; stored-option selection is atomic and leaves customer charges and legacy expedition unchanged.

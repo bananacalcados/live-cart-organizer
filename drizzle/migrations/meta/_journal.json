@@ -309,6 +309,27 @@
       "when": 1792495727278,
       "tag": "0043_refund_badges_and_rejected_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792593964311,
+      "tag": "0044_correios_contract_and_sale_freight",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792594144124,
+      "tag": "0045_latest_sale_freight_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792594283848,
+      "tag": "0046_freight_quote_atomic_context",
+      "breakpoints": true
     }
   ]
 }
