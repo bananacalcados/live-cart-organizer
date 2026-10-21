@@ -12,6 +12,7 @@ import {
   austpayTransactionsPath,
   getAustpayConfig, resolveAustpayConfig,
   isAustpayEnabled,
+  resolveAustpayCustomer,
   toCents,
 } from "../_shared/austpay.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
@@ -59,12 +60,16 @@ serve(async (req) => {
 
   let orderId = "";
   let amount = 0;
+  let payerName: string | null = null;
+  let payerEmail: string | null = null;
 
   try {
     const body = await req.json();
     orderId = String(body?.orderId || "");
     amount = Number(body?.amount || 0);
     const payer = body?.payer || {};
+    payerName = [payer?.firstName, payer?.lastName].filter(Boolean).join(" ").trim() || null;
+    payerEmail = payer?.email ? String(payer.email) : null;
 
     if (!orderId) throw new Error("orderId is required");
     if (!(amount > 0)) throw new Error("amount must be greater than zero");
@@ -170,6 +175,7 @@ serve(async (req) => {
     const message = (error as Error)?.message || String(error);
     console.error("[austpay-pix] erro:", message);
 
+    const cust = await resolveAustpayCustomer(supabase, orderId);
     await logCheckoutFailure(supabase, {
       sale_id: orderId || "austpay-sem-pedido",
       payment_method: "pix",
@@ -177,6 +183,9 @@ serve(async (req) => {
       status: "failed",
       error_message: `Falha ao gerar PIX AustPay: ${message}`,
       amount: amount || null,
+      customer_name: cust.name || payerName,
+      customer_phone: cust.phone,
+      customer_email: cust.email || payerEmail,
       metadata: { source: "austpay-create-pix" },
     });
 
