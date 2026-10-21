@@ -80,7 +80,8 @@
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
 ## Mercado Pago — verificação urgente antes da live
-- [ ] Investigar relatos de tela presa antes da cobrança e destino do link da bio; não criar cobranças nem publicar.
+- [x] Reproduzir e corrigir armazenamento bloqueado antes da cobrança: 6 testes e tentativa única simulada no navegador passaram; link direto /minha-area abriu correto e pagamentos MP de hoje localizados; não publicado.
+- [ ] Identificar a cliente do cartão e o link exato da bio que abre cereal — nome/pedido e endereço clicado não foram informados; não presumir causa do relato.
 - [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
 - [x] Conferir somente API online: produção resolvida, parcelamento real respondeu HTTP 200 às 15:08 UTC e auditoria MP confirmou três pagamentos reais aprovados, incluindo pedido de live; checkout/membros compartilham as rotas Pix/cartão. Últimas tentativas de 20/10 tiveram sucesso; duas falhas anteriores por validade inválida. Nenhuma cobrança nova criada: geração e aprovação nova não foram testadas.
 
