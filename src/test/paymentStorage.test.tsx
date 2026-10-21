@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StepPayment } from "@/components/checkout/PaymentSection";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async () => ({ data: { success: true, gateway: "mercadopago" }, error: null })) }));
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   functions: { invoke },
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }) }),
