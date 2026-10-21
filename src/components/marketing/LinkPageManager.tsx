@@ -427,7 +427,7 @@ export function LinkPageManager() {
     setPickerSelected(new Set(catalog.map((c) => c.shopify_product_id)));
     if (shopifyProducts.length === 0) {
       setLoadingProducts(true);
-      try { setShopifyProducts(await fetchProducts(250)); } catch { toast.error("Erro Shopify"); }
+      try { setShopifyProducts(await fetchProducts(250, undefined, { newestFirst: true })); } catch { toast.error("Erro Shopify"); }
       setLoadingProducts(false);
     }
   };
@@ -459,6 +459,23 @@ export function LinkPageManager() {
     await ensureCatalogItem();
     toast.success("Catálogo atualizado");
   };
+
+  // Busca no servidor da Shopify: acha produtos fora dos 250 carregados (ex.: modelos novos)
+  useEffect(() => {
+    const term = shopifySearch.trim();
+    if (!catalogPickerOpen || term.length < 2) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const found = await fetchProducts(100, term, { newestFirst: true });
+      if (cancelled || found.length === 0) return;
+      setShopifyProducts((prev) => {
+        const ids = new Set(prev.map((p) => p.node.id));
+        const extra = found.filter((p) => !ids.has(p.node.id));
+        return extra.length ? [...extra, ...prev] : prev;
+      });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [shopifySearch, catalogPickerOpen]);
 
   const filteredProducts = shopifyProducts.filter((p) => !shopifySearch || p.node.title.toLowerCase().includes(shopifySearch.toLowerCase()));
 
