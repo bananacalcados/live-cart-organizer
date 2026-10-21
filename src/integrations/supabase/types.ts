@@ -26712,6 +26712,18 @@ export type Database = {
       }
       recalculate_lead_temperature: { Args: never; Returns: Json }
       recompute_needs_review: { Args: never; Returns: number }
+      record_sale_freight_quote: {
+        Args: {
+          p_context: Json
+          p_errors: Json
+          p_options: Json
+          p_package: Json
+          p_sale_id: string
+          p_sale_ids: string[]
+          p_user_id: string
+        }
+        Returns: Json
+      }
       redeem_internal_cashback: {
         Args: {
           _channel?: string
@@ -27180,6 +27192,10 @@ export type Database = {
           p_source_url?: string
         }
         Returns: string
+      }
+      validate_freight_context: {
+        Args: { p_context: Json; p_sale_id: string; p_sale_ids: string[] }
+        Returns: undefined
       }
       vip_group_member_phone_suffixes: { Args: never; Returns: string[] }
       vip_groups_interaction_ranking: {
