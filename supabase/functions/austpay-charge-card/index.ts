@@ -16,6 +16,7 @@ import {
   getAustpayConfig, resolveAustpayConfig,
   isAustpayApproved,
   isAustpayEnabled,
+  resolveAustpayCustomer,
   toCents,
 } from "../_shared/austpay.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
@@ -59,6 +60,8 @@ serve(async (req) => {
 
   let orderId = "";
   let amount = 0;
+  let holderName: string | null = null;
+  let holderEmail: string | null = null;
 
   try {
     const body = await req.json();
@@ -68,6 +71,8 @@ serve(async (req) => {
     const mode = String(body?.mode || "credit").toLowerCase();
     const card = body?.card || {};
     const holder = body?.holder || {};
+    holderName = holder?.name ? String(holder.name) : null;
+    holderEmail = holder?.email ? String(holder.email) : null;
 
     if (!orderId) throw new Error("orderId is required");
     if (!(amount > 0)) throw new Error("amount must be greater than zero");
@@ -189,6 +194,7 @@ serve(async (req) => {
     console.log(`[austpay-card] tx=${txId} status=${status} pedido=${orderId}`);
 
     if (!approved) {
+      const cust = await resolveAustpayCustomer(supabase, orderId);
       await logCheckoutFailure(supabase, {
         sale_id: orderId,
         payment_method: mode === "debit" ? "debit_card" : "credit_card",
@@ -196,6 +202,9 @@ serve(async (req) => {
         status: "failed",
         error_message: `AustPay recusou: ${status}${reasonText ? ` — ${reasonText}` : ""}`,
         amount,
+        customer_name: cust.name || holderName,
+        customer_phone: cust.phone,
+        customer_email: cust.email || holderEmail,
         transaction_id: txId || null,
         metadata: { source: "austpay-charge-card", status, status_reason: tx?.status_reason || null, acquirer_response_code: acqCode || null },
       });
@@ -216,6 +225,7 @@ serve(async (req) => {
     const message = (error as Error)?.message || String(error);
     console.error("[austpay-card] erro:", message);
 
+    const cust = await resolveAustpayCustomer(supabase, orderId);
     await logCheckoutFailure(supabase, {
       sale_id: orderId || "austpay-sem-pedido",
       payment_method: "credit_card",
@@ -223,6 +233,9 @@ serve(async (req) => {
       status: "error",
       error_message: message,
       amount: amount || null,
+      customer_name: cust.name || holderName,
+      customer_phone: cust.phone,
+      customer_email: cust.email || holderEmail,
       metadata: { source: "austpay-charge-card" },
     });
 
