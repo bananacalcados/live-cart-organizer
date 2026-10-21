@@ -38,6 +38,7 @@ import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { fetchInstanceInfo, instanceKeys, syncInstanceGroups } from "@/lib/marketing/instanceGroups";
+import { findMirrorUpdates, type MirrorUpdate } from "@/lib/marketing/mirrorGroupMedia";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
 const isTransientNetworkError = (e: unknown): boolean => {
@@ -181,6 +182,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [isApproving, setIsApproving] = useState(false);
   const [approvePreview, setApprovePreview] = useState<{ ids: string[] } | null>(null);
+  const [mirrorPrompt, setMirrorPrompt] = useState<{ updates: MirrorUpdate[]; campaignNames: Record<string, string> } | null>(null);
   const [pastScheduleAck, setPastScheduleAck] = useState(false);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
@@ -823,8 +825,42 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const { error } = await supabase.from('group_campaign_scheduled_messages').delete().eq('id', existing[i].id);
       if (error) throw error;
     }
+    // Espelhamento: se a edição mexeu em mídia, oferece aplicar a mesma mídia
+    // em mensagens idênticas (mesmo texto) de outras campanhas ainda não enviadas.
+    const mediaRows = rows.filter(r => r.media_url && ['image', 'video', 'document', 'audio'].includes(r.message_type));
+    if (mediaRows.length > 0) {
+      try {
+        const { data: candidates } = await supabase
+          .from('group_campaign_scheduled_messages')
+          .select('id, campaign_id, message_type, message_content, media_url')
+          .neq('campaign_id', campaignId)
+          .in('status', ['draft', 'pending', 'grouped'])
+          .in('message_type', ['image', 'video', 'document', 'audio'])
+          .not('message_content', 'is', null)
+          .limit(500);
+        const updates = findMirrorUpdates(mediaRows, (candidates || []) as any);
+        if (updates.length > 0) {
+          const campaignIds = [...new Set(updates.map(u => u.campaign_id))];
+          const { data: camps } = await supabase.from('group_campaigns').select('id, name').in('id', campaignIds);
+          const campaignNames = Object.fromEntries((camps || []).map((c: any) => [c.id, c.name as string]));
+          setMirrorPrompt({ updates, campaignNames });
+        }
+      } catch { /* espelhamento é conveniência; falha não bloqueia o salvamento */ }
+    }
     toast.success(anchor.status === 'draft' ? "Rascunho atualizado!" : "Mensagem atualizada!");
     await fetchMessages();
+  };
+
+  /** Aplica a mídia nas mensagens idênticas de outras campanhas (confirmado pelo usuário). */
+  const applyMirror = async () => {
+    if (!mirrorPrompt) return;
+    let ok = 0;
+    for (const u of mirrorPrompt.updates) {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').update({ media_url: u.newMediaUrl } as any).eq('id', u.id);
+      if (!error) ok++;
+    }
+    if (ok > 0) toast.success(`Mídia aplicada em ${ok} mensagem(ns) de outra(s) campanha(s).`);
+    setMirrorPrompt(null);
   };
 
   /** Abre o editor com a mensagem INTEIRA (todos os blocos do grupo). */
@@ -2286,6 +2322,29 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       />
 
       {/* CREATE GROUP DIALOG */}
+      {/* Espelhamento de mídia em mensagens idênticas de outras campanhas */}
+      <Dialog open={!!mirrorPrompt} onOpenChange={o => !o && setMirrorPrompt(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="text-sm">Aplicar a mesma mídia nas outras campanhas?</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Encontrei a mesma mensagem (texto idêntico) ainda não enviada em outra(s) campanha(s). Quer aplicar a mesma mídia lá também?
+            </p>
+            {mirrorPrompt && (
+              <div className="space-y-1">
+                {Object.entries(mirrorPrompt.updates.reduce<Record<string, number>>((acc, u) => { acc[u.campaign_id] = (acc[u.campaign_id] || 0) + 1; return acc; }, {})).map(([cid, count]) => (
+                  <p key={cid} className="text-xs">• <strong>{mirrorPrompt.campaignNames[cid] || 'Campanha'}</strong>: {count} mensagem(ns)</p>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMirrorPrompt(null)}>Não, só nesta</Button>
+            <Button onClick={applyMirror}>Aplicar nas outras</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
