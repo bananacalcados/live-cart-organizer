@@ -17,6 +17,8 @@ import {
   sendPixMessages,
   getPixIncludeQrPref,
   setPixIncludeQrPref,
+  getPixCopyButtonPref,
+  setPixCopyButtonPref,
   type PixSendChannel,
 } from "@/lib/pix/sendPixMessages";
 
@@ -47,6 +49,7 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
   const [qrBase64, setQrBase64] = useState<string>("");
   const [amount, setAmount] = useState<number | null>(null);
   const [includeQr, setIncludeQr] = useState<boolean>(() => getPixIncludeQrPref());
+  const [withCopyButton, setWithCopyButton] = useState<boolean>(() => getPixCopyButtonPref());
   const [open, setOpen] = useState(false);
 
   const generate = async () => {
