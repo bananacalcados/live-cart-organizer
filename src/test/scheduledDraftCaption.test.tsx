@@ -71,4 +71,16 @@ describe('editor de legendas VIP', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Salvar$/ }));
     expect(save).not.toHaveBeenCalled();
   });
+  it('produto escolhido da Shopify insere somente o link oficial na mensagem', async () => {
+    fetchProducts.mockResolvedValue([{ node: { id: 'prod', title: 'Sandália', handle: 'sandalia',
+      onlineStoreUrl: 'https://www.bananabrasil.com.br/products/sandalia',
+      priceRange: { minVariantPrice: { amount: '119.99' } }, images: { edges: [] } } }]);
+    const { save } = setup('text', 'Oferta');
+    fireEvent.click(screen.getByRole('button', { name: /^Produto Shopify$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Link do Produto$/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Inserir Link' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Salvar$/ }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][1].blocks[0].content).toBe('Oferta\nhttps://bananacalcados.com.br/produto/sandalia');
+  });
 });
