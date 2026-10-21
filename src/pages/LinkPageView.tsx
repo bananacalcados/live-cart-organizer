@@ -4,13 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution, resolveFbclid, resolveUtm } from "@/lib/metaAttribution";
 import { decorateOutboundUrl, newClickId } from "@/lib/marketing/linkPageUtm";
+import { getOfficialProductUrl } from "@/lib/marketing/officialProductUrl";
 
 import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
   Users, Video, Star, Music2, Youtube, Facebook, Loader2, ChevronRight, Sparkles, KeyRound
 } from "lucide-react";
-
-const SHOPIFY_STORE_DOMAIN = "bananabrasil.com.br";
 
 const ITEM_ICONS: Record<string, any> = {
   link: LinkIcon, whatsapp: Phone, address: MapPin, catalog: ShoppingBag,
@@ -158,7 +157,7 @@ export default function LinkPageView() {
   const buildOutbound = useCallback((item: any, product: any | undefined, clickId: string) => {
     if (!data) return "";
     const baseUrl = product
-      ? `https://${SHOPIFY_STORE_DOMAIN}/products/${product.handle}`
+      ? getOfficialProductUrl(product.handle)
       : item.url || "";
     return decorateOutboundUrl({
       url: baseUrl,
@@ -282,12 +281,14 @@ export default function LinkPageView() {
             return (
               <a
                 key={p.id}
-                href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
+                href={getOfficialProductUrl(p.handle) || undefined}
                 target="_blank" rel="noopener noreferrer"
                 onClick={(e) => {
                   const cid = newClickId();
+                  const destination = buildOutbound(item, p, cid);
+                  if (!destination) { e.preventDefault(); return; }
                   // UTMs da Link Page + id do clique, resolvidos no momento do clique
-                  (e.currentTarget as HTMLAnchorElement).href = buildOutbound(item, p, cid);
+                  e.currentTarget.href = destination;
                   handleClick(item, p, cid);
                 }}
 

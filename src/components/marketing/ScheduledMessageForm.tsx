@@ -24,6 +24,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { VipLinkBlockControls, VipDayLock, VIP_LINK_PLACEHOLDER, type VipLinkMode, type VipLinkProduct } from "./VipLinkControls";
 import { appendDraftMedia, removeDraftMedia } from "@/lib/marketing/draftMediaCaption";
+import { getOfficialProductUrl } from "@/lib/marketing/officialProductUrl";
 
 export interface MediaItem {
   url: string;
@@ -1025,7 +1026,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       }
     } else {
       const handle = product.node.handle;
-      const link = `https://bananabrasil.com.br/products/${handle}`;
+      const link = getOfficialProductUrl(handle);
+      if (!link) { toast.error("Produto sem endereço válido no site oficial"); return; }
       if (targetBlock.type === 'text') {
         updateBlock(targetBlock.id, { ...targetBlock, content: targetBlock.content ? `${targetBlock.content}\n${link}` : link });
       }
