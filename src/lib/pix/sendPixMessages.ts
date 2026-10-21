@@ -5,9 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * Sequência enviada:
  *  1. (opcional) Imagem do QR code com legenda explicando como pagar pela galeria.
- *  2. Mensagem com valor e instrução de cópia manual (sem botão nativo).
- *  3. O código copia e cola SOZINHO em uma mensagem, sem nada em volta — os bancos
- *     rejeitam o código quando vem misturado com texto/emoji.
+ *  2. Com botão (padrão, só uazapi): mensagem com valor + botão nativo "Copiar código PIX".
+ *     Sem botão (opção do operador, ou fallback se o botão falhar): instrução de cópia
+ *     manual + o código copia e cola SOZINHO em uma mensagem, sem nada em volta — os
+ *     bancos rejeitam o código quando vem misturado com texto/emoji.
  *
  * O componente chamador injeta como cada mensagem é enviada/persistida (cada chat
  * tem seu próprio roteamento por provider/instância).
