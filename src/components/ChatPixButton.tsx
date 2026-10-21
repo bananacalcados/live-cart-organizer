@@ -136,6 +136,7 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
         includeQr,
         qrBase64,
         qrKey: orderId || "pix",
+        withCopyButton,
       });
       toast.success(
         res.usedCopyButton
@@ -156,6 +157,13 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
     setIncludeQr(v);
     setPixIncludeQrPref(v);
   };
+
+  const toggleCopyButton = (v: boolean) => {
+    setWithCopyButton(v);
+    setPixCopyButtonPref(v);
+  };
+
+  const canCopyButton = !!channel?.sendCopyButton;
 
 
   return (
