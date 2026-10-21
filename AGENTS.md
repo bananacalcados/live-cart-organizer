@@ -27,6 +27,7 @@
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
 
 - Chat PIX: standalone code, no native copy buttons (clipboard unverifiable).
+- Payment storage is best-effort: browser denial cannot block checkout; server idempotency remains authoritative.
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 

@@ -16,6 +16,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { InstallmentPicker } from "@/components/checkout/InstallmentPicker";
 
+// Armazenamento é conveniência; navegadores internos podem bloquear até sua leitura.
+function readPaymentAttempt(orderId: string): string | null {
+  try { return sessionStorage.getItem(`checkout_payment_${orderId}`); } catch { return null; }
+}
+function savePaymentAttempt(orderId: string, attemptId: string): void {
+  try { sessionStorage.setItem(`checkout_payment_${orderId}`, attemptId); } catch { /* mantém trava em memória */ }
+}
+function clearPaymentAttempt(orderId: string): void {
+  try { sessionStorage.removeItem(`checkout_payment_${orderId}`); } catch { /* nunca impede confirmar ou liberar a tela */ }
+}
+
 export interface OrderProduct {
   title: string;
   variant?: string;
@@ -521,7 +532,7 @@ function CardPaymentForm({
 
   // Restore processing state from sessionStorage on mount
   useEffect(() => {
-    const stored = sessionStorage.getItem(`checkout_payment_${orderId}`);
+    const stored = readPaymentAttempt(orderId);
     if (stored) {
       attemptIdRef.current = stored;
       setIsProcessing(true);
@@ -539,28 +550,28 @@ function CardPaymentForm({
         const { data: statusRaw } = await supabase.rpc("get_order_status", { p_order_id: orderId });
         const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
-          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          clearPaymentAttempt(orderId);
           approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
         // Check if attempt finished (failed)
         const attempt = await cpGetAttemptStatus(attemptId);
         if (attempt && attempt.status === "failed") {
-          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          clearPaymentAttempt(orderId);
           setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
           setIsProcessing(false);
           processingRef.current = false;
           return;
         }
         if (attempt && attempt.status === "success") {
-          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          clearPaymentAttempt(orderId);
           approve({ platform: "gateway", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
           return;
         }
       } catch {}
     }
     // Timeout — release form
-    sessionStorage.removeItem(`checkout_payment_${orderId}`);
+    clearPaymentAttempt(orderId);
     setPaymentError("Tempo esgotado. Verifique se o pagamento foi aprovado ou tente novamente.");
     setIsProcessing(false);
     processingRef.current = false;
@@ -729,6 +740,7 @@ function CardPaymentForm({
     }
 
 
+    try {
     // Lock immediately
     processingRef.current = true;
     onStepEvent?.("card_submitted", { method: isDebit ? "debit_card" : "credit_card", amount, installments: selectedInstallments });
@@ -738,10 +750,9 @@ function CardPaymentForm({
     // Generate attempt ID and persist to sessionStorage
     const attemptId = crypto.randomUUID();
     attemptIdRef.current = attemptId;
-    sessionStorage.setItem(`checkout_payment_${orderId}`, attemptId);
+    savePaymentAttempt(orderId, attemptId);
 
     trackPixelEvent("AddPaymentInfo", { content_category: isDebit ? "debit_card" : "credit_card" });
-    try {
       const totalCents = Math.round(chargeAmount * 100);
       const baseCents = Math.round(amount * 100);
 
@@ -762,7 +773,7 @@ function CardPaymentForm({
 
       // Débito só roda pelo Mercado Pago — sem token não há como cobrar.
       if (isDebit && !mpToken) {
-        sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        clearPaymentAttempt(orderId);
         processingRef.current = false;
         setIsProcessing(false);
         onStepEvent?.("card_validation_timeout", { method: "debit_card", amount });
@@ -823,7 +834,7 @@ function CardPaymentForm({
             const body = await ctx.json();
             if (body?.error === "stock_unavailable") {
               detailedMsg = body.message || "Alguns itens estão sem estoque.";
-              sessionStorage.removeItem(`checkout_payment_${orderId}`);
+              clearPaymentAttempt(orderId);
               processingRef.current = false;
               setIsProcessing(false);
               setPaymentError(detailedMsg);
@@ -841,7 +852,7 @@ function CardPaymentForm({
       }
 
       if (data?.already_paid) {
-        sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        clearPaymentAttempt(orderId);
         toast.success("Pagamento já confirmado!");
         approve({ platform: "cached", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
         return;
@@ -863,7 +874,7 @@ function CardPaymentForm({
       }
 
       if (data?.success) {
-        sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        clearPaymentAttempt(orderId);
         onStepEvent?.("card_approved", { method: isDebit ? "debit_card" : "credit_card", amount, gateway: data.gateway || null });
         toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         approve({ platform: data.gateway || "pagarme", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
@@ -879,7 +890,7 @@ function CardPaymentForm({
             .rpc("get_order_status", { p_order_id: orderId });
           const freshOrder = statusRaw as any;
           if (freshOrder?.is_paid) {
-            sessionStorage.removeItem(`checkout_payment_${orderId}`);
+            clearPaymentAttempt(orderId);
             toast.success("Pagamento aprovado!");
             approve({ platform: "appmax", method: isDebit ? "debit_card" : "credit_card", customerData: buildCustomerData() });
             return;
@@ -887,7 +898,7 @@ function CardPaymentForm({
         } catch (_) { /* ignore poll error */ }
       }
       // All gateways declined — show friendly error and release form
-      sessionStorage.removeItem(`checkout_payment_${orderId}`);
+      clearPaymentAttempt(orderId);
       const errMsg = error instanceof Error ? error.message : "Erro ao processar pagamento.";
       onStepEvent?.("card_failed", { method: isDebit ? "debit_card" : "credit_card", amount, detail: errMsg });
       setPaymentError(errMsg);
