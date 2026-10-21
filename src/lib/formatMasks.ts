@@ -1,6 +1,17 @@
 // Máscaras visuais para facilitar a leitura dos dados do cliente.
 export const digitsOnly = (v?: string | null) => String(v ?? "").replace(/\D/g, "");
 
+/** Número do cartão agrupado para leitura, sem alterar os dígitos enviados. */
+export function maskCardNumber(value: string): string {
+  return digitsOnly(value).slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+/** Validade do cartão: mês/ano (MM/AA), não dia/mês. */
+export function maskCardExpiry(value: string): string {
+  const digits = digitsOnly(value).slice(0, 4);
+  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+}
+
 /** 150.231.397-94 */
 export function maskCpf(value?: string | null): string {
   const d = digitsOnly(value).slice(0, 11);
