@@ -152,3 +152,20 @@ export function setPixIncludeQrPref(v: boolean) {
     /* ignore */
   }
 }
+
+const COPY_BUTTON_PREF_KEY = "pix_send_copy_button";
+/** Padrão: com botão (o operador desliga para reenviar sem botão se der erro). */
+export function getPixCopyButtonPref(): boolean {
+  try {
+    return localStorage.getItem(COPY_BUTTON_PREF_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+export function setPixCopyButtonPref(v: boolean) {
+  try {
+    localStorage.setItem(COPY_BUTTON_PREF_KEY, v ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
