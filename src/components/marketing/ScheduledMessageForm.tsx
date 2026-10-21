@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import {
   CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText,
   Mic, Square, Send, ShoppingBag, Image as ImageIcon, Trash2, Search, Plus, GripVertical,
-  ChevronUp, ChevronDown, Type, BarChart3
+  ChevronUp, ChevronDown, Type, BarChart3, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -174,6 +174,8 @@ function BlockEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceIndexRef = useRef<number>(-1);
   // Audio recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -259,6 +261,33 @@ function BlockEditor({
       } catch { toast.error("Erro no upload"); }
       finally { setIsUploading(false); if (e.target) e.target.value = ''; }
     }
+  };
+
+  /** Substitui o arquivo de um item já enviado, mantendo posição e legenda. */
+  const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const idx = replaceIndexRef.current;
+    if (e.target) e.target.value = '';
+    if (!file || idx < 0 || idx >= block.mediaItems.length) return;
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
+    setIsUploading(true);
+    try {
+      const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+      const normalized = file.type.startsWith('image/') ? await normalizeImageOrientation(file) : file;
+      const ext = normalized.name.split('.').pop();
+      const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from('marketing-attachments').upload(path, normalized, { contentType: normalized.type });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+      const next = [...block.mediaItems];
+      next[idx] = { ...next[idx], url: urlData.publicUrl };
+      // Se o tipo do arquivo mudou (ex.: foto -> vídeo), o bloco acompanha.
+      const newType = normalized.type.startsWith('image/') ? 'image' : normalized.type.startsWith('video/') ? 'video' : 'document';
+      onChange({ ...block, type: newType as MessageBlock['type'], mediaItems: next });
+      toast.success('Arquivo substituído!');
+    } catch { toast.error("Erro no upload"); }
+    finally { setIsUploading(false); }
   };
 
   const addUrl = () => {
@@ -409,6 +438,8 @@ function BlockEditor({
             </div>
             <input ref={fileInputRef} type="file" accept={acceptTypes[block.type]} multiple
               onChange={handleFileUpload} className="hidden" />
+            <input ref={replaceInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+              onChange={handleReplaceFile} className="hidden" />
 
             {/* URL add */}
             <div className="flex gap-2">
@@ -448,9 +479,15 @@ function BlockEditor({
                         onChange={e => updateCaption(i, e.target.value)} rows={2} className="text-xs" />
                       <WhatsAppFormattingToolbar value={item.caption} onChange={val => updateCaption(i, val)} />
                     </div>
-                    <Button variant="ghost" size="icon" aria-label={`Remover arquivo ${i + 1}`} className="h-6 w-6 shrink-0" onClick={() => removeItem(i)}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" aria-label={`Trocar arquivo ${i + 1}`} title="Trocar arquivo (mantém a legenda)" className="h-6 w-6" disabled={isUploading}
+                        onClick={() => { replaceIndexRef.current = i; replaceInputRef.current?.click(); }}>
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" aria-label={`Remover arquivo ${i + 1}`} className="h-6 w-6" onClick={() => removeItem(i)}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
