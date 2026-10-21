@@ -100,18 +100,41 @@ export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResu
     }
   }
 
-  // O aceite do provedor não garante suporte ao clipboard da destinatária.
-  const intro =
-    `💰 *PIX de ${valor}*${desc}\n\n` +
-    `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
-    `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
-  const mid = await channel.sendText(intro);
-  await channel.persist({ message: intro, message_id: mid });
+  // 2) Valor + botão Copiar (uazapi, quando pedido) ou instrução em texto.
+  // O aceite do provedor não garante suporte ao clipboard da destinatária —
+  // por isso existe a opção de reenviar sem botão.
+  let usedCopyButton = false;
+  const canButton =
+    opts.withCopyButton !== false && channel.provider === "uazapi" && !!channel.sendCopyButton;
+  if (canButton) {
+    const text =
+      `💰 *PIX de ${valor}*${desc}\n\n` +
+      `Toque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em ` +
+      `*Pix → Pix Copia e Cola* e cole o código. 👇`;
+    try {
+      const mid = await channel.sendCopyButton!(text, "Copiar código PIX", code);
+      await channel.persist({
+        message: `${text}\n\n[Botão: Copiar código PIX]\n[PIX_CODE:${code}]`,
+        message_id: mid,
+      });
+      usedCopyButton = true;
+    } catch (e) {
+      console.warn("[sendPix] botão copiar falhou, caindo para texto:", e);
+    }
+  }
+  if (!usedCopyButton) {
+    const intro =
+      `💰 *PIX de ${valor}*${desc}\n\n` +
+      `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
+      `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
+    const mid = await channel.sendText(intro);
+    await channel.persist({ message: intro, message_id: mid });
 
-  // Mesmo código existente, sem gerar cobrança ou misturar texto no código.
-  const codeMid = await channel.sendText(code);
-  await channel.persist({ message: code, message_id: codeMid });
-  return { sentQr, usedCopyButton: false };
+    // Mesmo código existente, sem gerar cobrança ou misturar texto no código.
+    const codeMid = await channel.sendText(code);
+    await channel.persist({ message: code, message_id: codeMid });
+  }
+  return { sentQr, usedCopyButton };
 }
 
 const QR_PREF_KEY = "pix_send_include_qr";
