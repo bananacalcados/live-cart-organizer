@@ -29,6 +29,7 @@
 
 - Chat PIX: copy-code button is the default on uazapi (operator toggle per send, remembered); failure or opt-out falls back to the isolated standalone code, never mixed with text.
 - Payment storage is best-effort: browser denial cannot block checkout; server idempotency remains authoritative.
+- AustPay failure identity resolves exact order registration and linked sale IDs, never amount; customers uses full_name and has no email column.
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 

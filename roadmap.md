@@ -15,6 +15,9 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## AustPay — nomes nas recusas
+- [ ] Corrigir leitura da identidade pelo pedido/venda e testar; recuperar nomes vazios das recusas confirmadas sem usar valor.
+
 ## Auditoria do cartão da cliente — 21/10
 - [x] Reproduzido bloqueio com validade 1230; máscara e leitura de autofill corrigidas, erro específico e trava de clique duplicado; 13 testes passaram e link da cliente enviou uma única tentativa interceptada em 2x. Pix R$ 190 pago e saldo R$ 259,99 preservados; sem cobrança real e sem publicação.
 
