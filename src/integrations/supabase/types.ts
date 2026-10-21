@@ -3750,6 +3750,57 @@ export type Database = {
         }
         Relationships: []
       }
+      correios_settings: {
+        Row: {
+          ambiente: string
+          cartao_postagem: string
+          codigo_acesso: string
+          contrato: string | null
+          enabled: boolean
+          id: number
+          remetente: Json
+          servicos: Json
+          token: string | null
+          token_expira_em: string | null
+          token_meta: Json | null
+          updated_at: string
+          updated_by: string | null
+          usuario: string
+        }
+        Insert: {
+          ambiente?: string
+          cartao_postagem?: string
+          codigo_acesso?: string
+          contrato?: string | null
+          enabled?: boolean
+          id?: number
+          remetente?: Json
+          servicos?: Json
+          token?: string | null
+          token_expira_em?: string | null
+          token_meta?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+          usuario?: string
+        }
+        Update: {
+          ambiente?: string
+          cartao_postagem?: string
+          codigo_acesso?: string
+          contrato?: string | null
+          enabled?: boolean
+          id?: number
+          remetente?: Json
+          servicos?: Json
+          token?: string | null
+          token_expira_em?: string | null
+          token_meta?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+          usuario?: string
+        }
+        Relationships: []
+      }
       cost_center_fixed_cost_items: {
         Row: {
           amount: number
@@ -20088,6 +20139,102 @@ export type Database = {
           },
         ]
       }
+      sale_freight_quotes: {
+        Row: {
+          context: Json
+          errors: Json
+          id: string
+          options: Json
+          package: Json
+          quoted_at: string
+          quoted_by: string
+          sale_id: string
+          sale_ids: string[]
+          selected_option: Json | null
+        }
+        Insert: {
+          context?: Json
+          errors?: Json
+          id?: string
+          options?: Json
+          package: Json
+          quoted_at?: string
+          quoted_by: string
+          sale_id: string
+          sale_ids: string[]
+          selected_option?: Json | null
+        }
+        Update: {
+          context?: Json
+          errors?: Json
+          id?: string
+          options?: Json
+          package?: Json
+          quoted_at?: string
+          quoted_by?: string
+          sale_id?: string
+          sale_ids?: string[]
+          selected_option?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+        ]
+      }
       sales_triggers: {
         Row: {
           ad_campaign_id: string | null
@@ -26881,6 +27028,10 @@ export type Database = {
           primeiro_nome: string
           tamanhos: string[]
         }[]
+      }
+      select_sale_freight_option: {
+        Args: { p_option_index: number; p_quote_id: string; p_user_id: string }
+        Returns: Json
       }
       set_active_mp_account: {
         Args: { p_account_id: string }
