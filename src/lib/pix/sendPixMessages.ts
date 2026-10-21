@@ -37,6 +37,12 @@ export interface SendPixOptions {
   qrBase64?: string | null;
   /** Chave usada no nome do arquivo do QR (ex.: id do pedido). */
   qrKey?: string;
+  /**
+   * Envia com o botão nativo "Copiar código PIX" (padrão true, só uazapi).
+   * Se o botão falhar no envio, cai automaticamente para o código isolado.
+   * Passe false para reenviar sem botão quando a cliente relatar erro na cópia.
+   */
+  withCopyButton?: boolean;
 }
 
 export interface SendPixResult {
