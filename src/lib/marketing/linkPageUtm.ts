@@ -15,6 +15,7 @@
  */
 
 import { appendAttributionParams } from "@/lib/metaAttribution";
+import { getOfficialProductUrl } from "./officialProductUrl";
 
 function slugify(v: string | null | undefined, max = 40): string {
   return String(v || "")
@@ -56,12 +57,12 @@ export interface OutboundUtmInput {
  * é a Link Page. Os sinais da Meta (fbclid) continuam sendo repassados.
  */
 export function decorateOutboundUrl(input: OutboundUtmInput): string {
-  const { url } = input;
+  const isProduct = Boolean(input.productHandle || input.productId);
+  // Product destinations never trust a caller/provider-supplied origin.
+  const url = isProduct ? getOfficialProductUrl(input.productHandle) : input.url;
   if (!url || !/^https?:\/\//i.test(url)) return url;
   try {
     const u = new URL(url);
-    const isProduct = Boolean(input.productHandle || input.productId);
-
     const content = isProduct
       ? slugify(input.productHandle || input.productTitle) || String(input.productId || "")
       : slugify(input.itemLabel || input.itemType) || String(input.itemId || "");
