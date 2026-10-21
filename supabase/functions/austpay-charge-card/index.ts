@@ -194,6 +194,7 @@ serve(async (req) => {
     console.log(`[austpay-card] tx=${txId} status=${status} pedido=${orderId}`);
 
     if (!approved) {
+      const cust = await resolveAustpayCustomer(supabase, orderId);
       await logCheckoutFailure(supabase, {
         sale_id: orderId,
         payment_method: mode === "debit" ? "debit_card" : "credit_card",
@@ -201,6 +202,9 @@ serve(async (req) => {
         status: "failed",
         error_message: `AustPay recusou: ${status}${reasonText ? ` — ${reasonText}` : ""}`,
         amount,
+        customer_name: cust.name || holderName,
+        customer_phone: cust.phone,
+        customer_email: cust.email || holderEmail,
         transaction_id: txId || null,
         metadata: { source: "austpay-charge-card", status, status_reason: tx?.status_reason || null, acquirer_response_code: acqCode || null },
       });
@@ -221,6 +225,7 @@ serve(async (req) => {
     const message = (error as Error)?.message || String(error);
     console.error("[austpay-card] erro:", message);
 
+    const cust = await resolveAustpayCustomer(supabase, orderId);
     await logCheckoutFailure(supabase, {
       sale_id: orderId || "austpay-sem-pedido",
       payment_method: "credit_card",
@@ -228,6 +233,9 @@ serve(async (req) => {
       status: "error",
       error_message: message,
       amount: amount || null,
+      customer_name: cust.name || holderName,
+      customer_phone: cust.phone,
+      customer_email: cust.email || holderEmail,
       metadata: { source: "austpay-charge-card" },
     });
 
