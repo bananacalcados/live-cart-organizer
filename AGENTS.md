@@ -2,7 +2,8 @@
 
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
-- Cached successful checkout attempts block duplicate charges but never restore paid state; AustPay webhook approvals require a production API re-query, captured status, exact transaction/reference/amount and reject invalidated attempts, because sandbox records must never become real payments. Incident reversal only from a privileged DB session with an invalidated sandbox attempt and no successful attempt remaining. Payment audits: admin/read-only, 50 rows, ≤3 provider reads.
+- Checkout success cache prevents duplicate charges, never restores paid state. AustPay approvals: production re-query, captured, exact transaction/reference/amount, no invalidated attempt. Reversal: privileged DB, invalidated sandbox attempt, no remaining success. Audits: admin/read-only, 50 rows, ≤3 provider reads.
+- Shopify product links use shared officialProductUrl; attribution rebuilds from validated handles and fails closed, never trusting provider destinations.
 
 - Expedition gateway badges/filters use pos_sales.payment_gateway only; unified shipments show every gateway.
 
