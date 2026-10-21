@@ -26276,6 +26276,13 @@ export type Database = {
       is_phone_generic: { Args: { p_suffix8: string }; Returns: boolean }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
+      latest_sale_freight_dates: {
+        Args: { p_sale_ids: string[] }
+        Returns: {
+          quoted_at: string
+          sale_id: string
+        }[]
+      }
       lead_campaign_counts: {
         Args: never
         Returns: {
