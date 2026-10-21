@@ -27,7 +27,7 @@
 - Lazy imports: one reload/tab, visible stale-module fallback.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
 
-- Chat PIX: standalone code, no native copy buttons (clipboard unverifiable).
+- Chat PIX: copy-code button is the default on uazapi (operator toggle per send, remembered); failure or opt-out falls back to the isolated standalone code, never mixed with text.
 - Payment storage is best-effort: browser denial cannot block checkout; server idempotency remains authoritative.
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.

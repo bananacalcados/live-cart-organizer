@@ -5,9 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * Sequência enviada:
  *  1. (opcional) Imagem do QR code com legenda explicando como pagar pela galeria.
- *  2. Mensagem com valor e instrução de cópia manual (sem botão nativo).
- *  3. O código copia e cola SOZINHO em uma mensagem, sem nada em volta — os bancos
- *     rejeitam o código quando vem misturado com texto/emoji.
+ *  2. Com botão (padrão, só uazapi): mensagem com valor + botão nativo "Copiar código PIX".
+ *     Sem botão (opção do operador, ou fallback se o botão falhar): instrução de cópia
+ *     manual + o código copia e cola SOZINHO em uma mensagem, sem nada em volta — os
+ *     bancos rejeitam o código quando vem misturado com texto/emoji.
  *
  * O componente chamador injeta como cada mensagem é enviada/persistida (cada chat
  * tem seu próprio roteamento por provider/instância).
@@ -36,6 +37,12 @@ export interface SendPixOptions {
   qrBase64?: string | null;
   /** Chave usada no nome do arquivo do QR (ex.: id do pedido). */
   qrKey?: string;
+  /**
+   * Envia com o botão nativo "Copiar código PIX" (padrão true, só uazapi).
+   * Se o botão falhar no envio, cai automaticamente para o código isolado.
+   * Passe false para reenviar sem botão quando a cliente relatar erro na cópia.
+   */
+  withCopyButton?: boolean;
 }
 
 export interface SendPixResult {
@@ -93,18 +100,41 @@ export async function sendPixMessages(opts: SendPixOptions): Promise<SendPixResu
     }
   }
 
-  // O aceite do provedor não garante suporte ao clipboard da destinatária.
-  const intro =
-    `💰 *PIX de ${valor}*${desc}\n\n` +
-    `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
-    `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
-  const mid = await channel.sendText(intro);
-  await channel.persist({ message: intro, message_id: mid });
+  // 2) Valor + botão Copiar (uazapi, quando pedido) ou instrução em texto.
+  // O aceite do provedor não garante suporte ao clipboard da destinatária —
+  // por isso existe a opção de reenviar sem botão.
+  let usedCopyButton = false;
+  const canButton =
+    opts.withCopyButton !== false && channel.provider === "uazapi" && !!channel.sendCopyButton;
+  if (canButton) {
+    const text =
+      `💰 *PIX de ${valor}*${desc}\n\n` +
+      `Toque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em ` +
+      `*Pix → Pix Copia e Cola* e cole o código. 👇`;
+    try {
+      const mid = await channel.sendCopyButton!(text, "Copiar código PIX", code);
+      await channel.persist({
+        message: `${text}\n\n[Botão: Copiar código PIX]\n[PIX_CODE:${code}]`,
+        message_id: mid,
+      });
+      usedCopyButton = true;
+    } catch (e) {
+      console.warn("[sendPix] botão copiar falhou, caindo para texto:", e);
+    }
+  }
+  if (!usedCopyButton) {
+    const intro =
+      `💰 *PIX de ${valor}*${desc}\n\n` +
+      `👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, ` +
+      `escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`;
+    const mid = await channel.sendText(intro);
+    await channel.persist({ message: intro, message_id: mid });
 
-  // Mesmo código existente, sem gerar cobrança ou misturar texto no código.
-  const codeMid = await channel.sendText(code);
-  await channel.persist({ message: code, message_id: codeMid });
-  return { sentQr, usedCopyButton: false };
+    // Mesmo código existente, sem gerar cobrança ou misturar texto no código.
+    const codeMid = await channel.sendText(code);
+    await channel.persist({ message: code, message_id: codeMid });
+  }
+  return { sentQr, usedCopyButton };
 }
 
 const QR_PREF_KEY = "pix_send_include_qr";
@@ -118,6 +148,23 @@ export function getPixIncludeQrPref(): boolean {
 export function setPixIncludeQrPref(v: boolean) {
   try {
     localStorage.setItem(QR_PREF_KEY, v ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+const COPY_BUTTON_PREF_KEY = "pix_send_copy_button";
+/** Padrão: com botão (o operador desliga para reenviar sem botão se der erro). */
+export function getPixCopyButtonPref(): boolean {
+  try {
+    return localStorage.getItem(COPY_BUTTON_PREF_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+export function setPixCopyButtonPref(v: boolean) {
+  try {
+    localStorage.setItem(COPY_BUTTON_PREF_KEY, v ? "1" : "0");
   } catch {
     /* ignore */
   }
