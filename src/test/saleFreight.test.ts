@@ -1,0 +1,18 @@
+import { describe, it, expect } from 'vitest';
+import { buildPackage, parseBrl, tokenNeedsRenewal, validatePackage, standardCarrier, localDelivery } from '../../supabase/functions/_shared/freight-domain';
+describe('Correios CWS e pacote da Conferência',()=>{
+  it('converte preço decimal com vírgula e milhar brasileiro',()=>{expect(parseBrl('19,92')).toBe(19.92);expect(parseBrl('1.019,92')).toBe(1019.92);expect(parseBrl('19.92')).toBe(19.92);expect(parseBrl('')).toBeNaN();});
+  it('renova somente quando faltam menos de 30 minutos',()=>{const now=Date.parse('2026-10-21T15:00:00Z');expect(tokenNeedsRenewal('2026-10-21T15:30:00Z',now)).toBe(false);expect(tokenNeedsRenewal('2026-10-21T15:29:59Z',now)).toBe(true);expect(tokenNeedsRenewal(null,now)).toBe(true);});
+  it('peso da variante prevalece sobre mestre e categoria',()=>{expect(buildPackage([{quantity:2,variantWeight:0.8,masterWeight:1,categoryWeight:1.2,length:30,width:20,height:12}])).toEqual({peso_g:1600,c:30,l:20,a:24,itens:2,origem:'produtos'});});
+  it('mestre prevalece sobre categoria quando variante não tem peso',()=>{expect(buildPackage([{quantity:1,masterWeight:0.9,categoryWeight:1.2}]).peso_g).toBe(900);});
+  it('categoria prevalece sobre fallback de 0,7kg por par',()=>{expect(buildPackage([{quantity:2,categoryWeight:0.5}]).peso_g).toBe(1000);});
+  it('fallback é 700g por par e caixa padrão por quantidade',()=>{expect(buildPackage([{quantity:3}])).toEqual({peso_g:2100,c:30,l:20,a:36,itens:3,origem:'padrao'});});
+  it('comprimento/largura máximos e altura somada por quantidade',()=>{expect(buildPackage([{quantity:2,masterWeight:1,length:35,width:16,height:5},{quantity:1,masterWeight:1,length:20,width:25,height:10}])).toMatchObject({c:35,l:25,a:20,itens:3,peso_g:3000});});
+  it('mínimos de 15x10x1 não são diminuídos por produto pequeno',()=>{expect(buildPackage([{quantity:1,masterWeight:1,length:2,width:3,height:0.5}])).toMatchObject({c:15,l:10,a:1});});
+  it('limite por lado é 100cm',()=>{expect(()=>validatePackage({peso_g:500,c:101,l:20,a:12,itens:1,origem:'padrao'})).toThrow('100 cm');});
+  it('soma máxima é 200cm',()=>{expect(()=>validatePackage({peso_g:500,c:100,l:60,a:41,itens:1,origem:'padrao'})).toThrow('200 cm');expect(validatePackage({peso_g:500,c:100,l:60,a:40,itens:1,origem:'padrao'}).a).toBe(40);});
+  it('não aceita pacote manual abaixo de 15x10x1',()=>{expect(()=>validatePackage({peso_g:500,c:14,l:10,a:1,itens:1,origem:'padrao'})).toThrow('mínimo');});
+  it('não aceita quantidade inválida ou vazia',()=>{expect(()=>buildPackage([])).toThrow('Sem itens');expect(()=>buildPackage([{quantity:0}])).toThrow('Quantidade');});
+  it('padroniza Correios SEDEX/PAC como correios e J&T/Jadlog como transportadora',()=>{expect(standardCarrier('Correios','SEDEX')).toEqual({shipping_carrier:'Correios SEDEX',shipping_type:'correios'});expect(standardCarrier('Correios','PAC')).toEqual({shipping_carrier:'Correios PAC',shipping_type:'correios'});expect(standardCarrier('J&T','Express').shipping_carrier).toBe('J&T Express');expect(standardCarrier('Jadlog','Package').shipping_type).toBe('transportadora');});
+  it('retirada e mototáxi não podem ser cotados',()=>{expect(localDelivery({is_store_pickup:true})).toBe(true);expect(localDelivery({shipping_carrier:'Mototáxi'})).toBe(true);expect(localDelivery({shipping_type:'mototaxi'})).toBe(true);expect(localDelivery({shipping_carrier:'Correios PAC'})).toBe(false);});
+});
