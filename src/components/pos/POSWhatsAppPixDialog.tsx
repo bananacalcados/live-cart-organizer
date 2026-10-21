@@ -14,6 +14,8 @@ import {
   sendPixMessages,
   getPixIncludeQrPref,
   setPixIncludeQrPref,
+  getPixCopyButtonPref,
+  setPixCopyButtonPref,
   type PixSendChannel,
 } from "@/lib/pix/sendPixMessages";
 
@@ -43,6 +45,7 @@ export function POSWhatsAppPixDialog({
   const [sending, setSending] = useState(false);
   const [paid, setPaid] = useState(false);
   const [includeQr, setIncludeQr] = useState<boolean>(() => getPixIncludeQrPref());
+  const [withCopyButton, setWithCopyButton] = useState<boolean>(() => getPixCopyButtonPref());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Poll for payment
@@ -198,6 +201,7 @@ export function POSWhatsAppPixDialog({
         includeQr,
         qrBase64: pixQrBase64,
         qrKey: saleId || "pix",
+        withCopyButton,
       });
       toast.success(
         res.usedCopyButton
@@ -214,6 +218,11 @@ export function POSWhatsAppPixDialog({
   const toggleQr = (v: boolean) => {
     setIncludeQr(v);
     setPixIncludeQrPref(v);
+  };
+
+  const toggleCopyButton = (v: boolean) => {
+    setWithCopyButton(v);
+    setPixCopyButtonPref(v);
   };
 
 
@@ -271,6 +280,17 @@ export function POSWhatsAppPixDialog({
                 </div>
                 <Switch checked={includeQr} onCheckedChange={toggleQr} disabled={!pixQrBase64} />
               </div>
+              {sendVia === "uazapi" && (
+                <div className="flex items-center justify-between gap-3 mt-2 rounded-md border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">Enviar com botão "Copiar código PIX"</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Se a cliente relatar que o botão veio vazio, desligue e reenvie sem botão.
+                    </p>
+                  </div>
+                  <Switch checked={withCopyButton} onCheckedChange={toggleCopyButton} />
+                </div>
+              )}
               <div className="flex gap-2 mt-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={async () => {
                   await navigator.clipboard.writeText(pixCode.trim());
