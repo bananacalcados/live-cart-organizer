@@ -80,7 +80,8 @@
 - [x] Conferidos worker e rotas uazapi/WaSender/Z-API/legado: media_brief nunca é enviado, nem como legenda alternativa. Nenhum envio alterado, sem publicação; tela sem erros.
 
 ## Mercado Pago — verificação urgente antes da live
-- [ ] Verificar falhas nas cobranças das maquininhas Point e saúde das cobranças online/Pix, sem criar cobranças reais.
+- [x] Verificar sem cobranças: API respondeu parcelamento e confirmou três pagamentos reais aprovados; conta online produção resolvida. Point respondeu sem terminais e sem intenções locais; nenhuma falha recente registrada.
+- [ ] Validar geração nova e envio à maquininha — depende de identificar a conta/vínculo dos terminais e teste autorizado de cobrança; consultas de leitura não comprovam criação nova.
 
 ## Correios contrato próprio — fases 0 e 1
 - [x] Configuração privada, conexão CWS e card no Admin; salvar/reabrir e erro sem credenciais conferidos.
