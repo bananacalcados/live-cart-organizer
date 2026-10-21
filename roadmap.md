@@ -15,6 +15,9 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Auditoria do cartão da cliente — 21/10
+- [ ] Corrigir validade sem barra no pagamento dividido e conferir 2x de R$ 130,00 sem cobrança real.
+
 ## Pagamento dividido (plano aprovado 23/09)
 - [x] Etapa 1 — Base: partes de pagamento, registro seguro de parte aprovada, contas (desconto só no Pix), chave desligada
 - [x] Etapa 2 — Checkout da cliente pagando parte por parte (cartão das partes só pelo Mercado Pago por enquanto)
