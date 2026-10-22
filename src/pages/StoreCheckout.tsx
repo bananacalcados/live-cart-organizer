@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import { cpGetSale, cpGetSaleStatus, cpUpdateSale, cpLogAttempt, cpGetAttemptStatus, cpCompleteSale } from "@/lib/checkoutPublic";
-import { loadKnownCustomerByPhone } from "@/lib/posCustomerResolve";
+import { loadKnownCustomerByPhone, fillEmptyCheckoutFields } from "@/lib/posCustomerResolve";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, User, MapPin, Wallet, ChevronRight, Store } from "lucide-react";
 import { toast } from "sonner";
@@ -1181,18 +1181,10 @@ export default function StoreCheckout() {
       if (phoneDigits.length >= 8 && (!paymentDetails.customer_cpf || !paymentDetails.customer_email)) {
         try {
           const known = await loadKnownCustomerByPhone(phoneDigits, null);
-          setCustomerForm(prev => ({
-            ...prev,
-            fullName: prev.fullName || known.name || "",
-            email: prev.email || known.email || "",
-            cpf: prev.cpf || (known.cpf ? formatCPF(known.cpf) : ""),
-            cep: prev.cep || (known.cep ? formatCEP(known.cep) : ""),
-            address: prev.address || known.address || "",
-            addressNumber: prev.addressNumber || known.address_number || "",
-            complement: prev.complement || known.complement || "",
-            neighborhood: prev.neighborhood || known.neighborhood || "",
-            city: prev.city || known.city || "",
-            state: prev.state || known.state || "",
+          setCustomerForm(prev => fillEmptyCheckoutFields(prev, {
+            ...known,
+            cpf: known.cpf ? formatCPF(known.cpf) : "",
+            cep: known.cep ? formatCEP(known.cep) : "",
           }));
         } catch {}
       }
