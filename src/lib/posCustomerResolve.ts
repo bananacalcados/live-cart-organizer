@@ -267,23 +267,19 @@ export async function loadKnownCustomerByPhone(phone: string, posCustomer: any |
  * prioridade — nunca sobrescreve. Usado por links antigos, criados antes
  * do prefill automático na geração do link.
  */
-export function fillEmptyCheckoutFields(
-  prev: Record<string, string>,
+const CHECKOUT_FIELD_MAP: Partial<Record<string, keyof KnownCustomerData>> = {
+  fullName: 'name', email: 'email', cpf: 'cpf', cep: 'cep',
+  address: 'address', addressNumber: 'address_number', complement: 'complement',
+  neighborhood: 'neighborhood', city: 'city', state: 'state',
+};
+
+export function fillEmptyCheckoutFields<T extends object>(
+  prev: T,
   known: KnownCustomerData,
-): Record<string, string> {
-  const out: Record<string, string> = { ...prev };
-  const fill = (key: string, value: string | null | undefined) => {
-    if (!out[key] && value) out[key] = value;
-  };
-  fill('fullName', known.name);
-  fill('email', known.email);
-  fill('cpf', known.cpf);
-  fill('cep', known.cep);
-  fill('address', known.address);
-  fill('addressNumber', known.address_number);
-  fill('complement', known.complement);
-  fill('neighborhood', known.neighborhood);
-  fill('city', known.city);
-  fill('state', known.state);
-  return out;
+): T {
+  const out = { ...prev } as Record<string, string>;
+  for (const [key, src] of Object.entries(CHECKOUT_FIELD_MAP)) {
+    if (src && known[src] && !out[key]) out[key] = known[src] as string;
+  }
+  return out as unknown as T;
 }
