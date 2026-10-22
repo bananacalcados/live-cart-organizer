@@ -260,3 +260,26 @@ export async function loadKnownCustomerByPhone(phone: string, posCustomer: any |
   }
   return mergeKnownCustomer(posCustomer, unified);
 }
+
+/**
+ * Preenche APENAS campos vazios do formulário do checkout com os dados
+ * conhecidos da cliente. Dados do pedido e o que já foi digitado têm
+ * prioridade — nunca sobrescreve. Usado por links antigos, criados antes
+ * do prefill automático na geração do link.
+ */
+const CHECKOUT_FIELD_MAP: Partial<Record<string, keyof KnownCustomerData>> = {
+  fullName: 'name', email: 'email', cpf: 'cpf', cep: 'cep',
+  address: 'address', addressNumber: 'address_number', complement: 'complement',
+  neighborhood: 'neighborhood', city: 'city', state: 'state',
+};
+
+export function fillEmptyCheckoutFields<T extends object>(
+  prev: T,
+  known: KnownCustomerData,
+): T {
+  const out = { ...prev } as Record<string, string>;
+  for (const [key, src] of Object.entries(CHECKOUT_FIELD_MAP)) {
+    if (src && known[src] && !out[key]) out[key] = known[src] as string;
+  }
+  return out as unknown as T;
+}

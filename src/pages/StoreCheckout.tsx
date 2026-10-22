@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import { cpGetSale, cpGetSaleStatus, cpUpdateSale, cpLogAttempt, cpGetAttemptStatus, cpCompleteSale } from "@/lib/checkoutPublic";
+import { loadKnownCustomerByPhone, fillEmptyCheckoutFields } from "@/lib/posCustomerResolve";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, User, MapPin, Wallet, ChevronRight, Store } from "lucide-react";
 import { toast } from "sonner";
@@ -1171,6 +1172,21 @@ export default function StoreCheckout() {
         if (filled.fullName && filled.email && filled.cpf && filled.whatsapp) {
           setCurrentStep(3);
         }
+      }
+
+      // Links criados antes do prefill automático: se o pedido não trouxe os
+      // dados da cliente, busca pelo telefone o que já consta no cadastro.
+      // Só preenche campo vazio — dados manuais e do pedido têm prioridade.
+      const phoneDigits = customerPhone.replace(/\D/g, "");
+      if (phoneDigits.length >= 8 && (!paymentDetails.customer_cpf || !paymentDetails.customer_email)) {
+        try {
+          const known = await loadKnownCustomerByPhone(phoneDigits, null);
+          setCustomerForm(prev => fillEmptyCheckoutFields(prev, {
+            ...known,
+            cpf: known.cpf ? formatCPF(known.cpf) : "",
+            cep: known.cep ? formatCEP(known.cep) : "",
+          }));
+        } catch {}
       }
 
       if (sale.status === "completed") setPaymentStatus("success");
