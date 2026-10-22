@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
-import { materializePosCustomer } from "@/lib/posCustomerResolve";
+import { materializePosCustomer, loadKnownCustomerByPhone, mergeKnownCustomer } from "@/lib/posCustomerResolve";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
 import { buildLinkInstallmentRule } from "@/lib/installmentRules";
@@ -225,6 +225,11 @@ export function POSWhatsAppCheckoutDialog({
       const posCustomer = cleanPhone
         ? await materializePosCustomer({ name: customerName || "Cliente", whatsapp: cleanPhone })
         : null;
+      // Dados já conhecidos da cliente: o link nasce preenchido.
+      const known = cleanPhone ? await loadKnownCustomerByPhone(cleanPhone, posCustomer) : mergeKnownCustomer(null, null);
+      const knownCpf = (known.cpf || "").replace(/\D/g, "");
+      const knownCep = (known.cep || "").replace(/\D/g, "");
+      const finalName = customerName || known.name || null;
 
       const salePayload = {
         store_id: storeId,
@@ -235,14 +240,33 @@ export function POSWhatsAppCheckoutDialog({
         sale_type: "online",
         payment_gateway: "store-checkout",
         customer_id: posCustomer?.id || null,
-        customer_name: customerName || null,
+        customer_name: finalName,
         customer_phone: cleanPhone || null,
+        customer_email: known.email || null,
+        customer_cpf: knownCpf || null,
+        customer_cep: knownCep || null,
+        customer_city: known.city || null,
+        customer_state: known.state || null,
+        ...(knownCep ? { shipping_address: {
+          cep: knownCep, street: known.address, number: known.address_number,
+          complement: known.complement, neighborhood: known.neighborhood,
+          city: known.city, state: known.state,
+        } } : {}),
         payment_details: {
           link_origin: "whatsapp_chat",
           // Instância onde o link foi gerado: a confirmação de pagamento sai por ela.
           whatsapp_number_id: selectedNumberId || null,
-          customer_name: customerName || null,
+          customer_name: finalName,
           customer_phone: phone,
+          customer_email: known.email || null,
+          customer_cpf: knownCpf || null,
+          customer_cep: knownCep || null,
+          customer_address: known.address || null,
+          customer_address_number: known.address_number || null,
+          customer_complement: known.complement || null,
+          customer_neighborhood: known.neighborhood || null,
+          customer_city: known.city || null,
+          customer_state: known.state || null,
           discount_amount: discountAmount,
           discount_type: discountType,
           discount_value: discountValue,
