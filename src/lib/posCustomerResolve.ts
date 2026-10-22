@@ -224,3 +224,39 @@ export async function searchPosAndUnifiedCustomers(term: string): Promise<PosCus
   }
   return merged;
 }
+
+export interface KnownCustomerData {
+  name: string | null; cpf: string | null; email: string | null; cep: string | null;
+  address: string | null; address_number: string | null; complement: string | null;
+  neighborhood: string | null; city: string | null; state: string | null;
+}
+
+/**
+ * Junta os dados já conhecidos da cliente (pos_customers + customers_unified
+ * pelo telefone) para pré-preencher links de checkout. Campo a campo, o
+ * cadastro do PDV tem prioridade; o unificado só entra quando há UM único
+ * cliente com aqueles 8 últimos dígitos (nunca chuta entre pessoas).
+ */
+export function mergeKnownCustomer(pos: any | null, unified: any | null): KnownCustomerData {
+  const pick = (k: string) => (pos?.[k] || unified?.[k] || null) as string | null;
+  return {
+    name: pick('name'), cpf: pick('cpf'), email: pick('email'), cep: pick('cep'),
+    address: pick('address'), address_number: pick('address_number'), complement: pick('complement'),
+    neighborhood: pick('neighborhood'), city: pick('city'), state: pick('state'),
+  };
+}
+
+export async function loadKnownCustomerByPhone(phone: string, posCustomer: any | null): Promise<KnownCustomerData> {
+  const digits = digitsOnly(phone);
+  let unified: any = null;
+  if (digits.length >= 8) {
+    const { data } = await supabase
+      .from('customers_unified')
+      .select('name, cpf, email, cep, address, address_number, complement, neighborhood, city, state')
+      .is('merged_into_id', null)
+      .eq('phone_suffix8', digits.slice(-8))
+      .limit(2);
+    if (data && data.length === 1) unified = data[0];
+  }
+  return mergeKnownCustomer(posCustomer, unified);
+}
