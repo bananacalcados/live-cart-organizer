@@ -15,6 +15,10 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Página do produto — Cadastro online
+- [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
+- [ ] Conferir carrinho real de teste: link retornou “Link não encontrado”; pagamento real não exercitado.
+
 ## AustPay — nomes nas recusas
 - [x] Corrigir leitura pelo cadastro exato e venda vinculada; 5 testes passaram, funções implantadas e três recusas da Maria Brígida recuperadas e conferidas no painel autenticado, sem cobrança.
 

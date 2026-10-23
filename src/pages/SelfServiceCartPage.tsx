@@ -6,7 +6,7 @@ import { Loader2, ShieldCheck, Clock, Copy, CheckCircle2, CreditCard, QrCode } f
 import { toast } from "sonner";
 import { StepPayment, type CustomerFormData } from "@/components/checkout/PaymentSection";
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
-import type { InstallmentConfig } from "@/lib/installmentRules";
+import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
@@ -38,7 +38,7 @@ export default function SelfServiceCartPage() {
   const [pix, setPix] = useState<{ code: string; base64: string | null; amount: number; sent: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({ max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49 });
+  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
 
   useEffect(() => {
     call({ action: "cart", slug, order_id: orderId }).then((r) => {
@@ -67,20 +67,9 @@ export default function SelfServiceCartPage() {
     if (!ev || !order) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
-      const cfg = (data?.value || {}) as any;
-      const base = {
-        max_installments: Number(cfg.max_installments) || 12,
-        interest_free_installments: Number(cfg.interest_free_installments ?? 6),
-        monthly_interest_rate: Number(cfg.monthly_interest_rate) || 2.49,
-      };
-      const maxInst = Number(ev.installment_max || 0);
-      const minVal = Number(ev.installment_min_value || 0);
-      if (maxInst > 0) {
-        if (order.total >= minVal) { base.max_installments = maxInst; base.interest_free_installments = maxInst; }
-        else base.max_installments = Math.max(base.max_installments, maxInst);
-      }
-      if (!cancelled) setInstallmentConfig(base);
+      const { data, error } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
+      const base = !error ? parseInstallmentRule(data?.value) : null;
+      if (!cancelled) setInstallmentConfig(base ? resolveSelfServiceInstallments(base, order.total, ev.installment_max, ev.installment_min_value) : null);
     })();
     return () => { cancelled = true; };
   }, [ev, order?.id, order?.total]);
@@ -111,7 +100,9 @@ export default function SelfServiceCartPage() {
   if (!ev || !order) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   const reserveLeft = order.payment_window_expires_at ? new Date(order.payment_window_expires_at).getTime() - now : null;
-  const maxInst = installmentConfig.interest_free_installments || installmentConfig.max_installments;
+  const options = installmentConfig ? buildInstallmentOptions(order.total, installmentConfig) : [];
+  const freeOption = options.filter((o) => !o.hasInterest).at(-1);
+  const interestOption = options.filter((o) => o.hasInterest).at(-1);
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,7 +129,9 @@ export default function SelfServiceCartPage() {
             ))}
             <div className="rounded-2xl border p-3 text-sm">
               <p className="text-lg font-bold">{brl(order.pix_total)} no Pix</p>
-              <p className="text-muted-foreground">ou {brl(order.total)} no cartão em até {maxInst}x de {brl(order.total / Math.max(1, maxInst))} sem juros</p>
+              <p className="text-muted-foreground">ou {brl(order.total)} no cartão</p>
+              {freeOption && <p className="font-semibold">Até {freeOption.installments}x de {brl(freeOption.installmentAmount)} sem juros</p>}
+              {interestOption && <p className="text-muted-foreground">Ou até {interestOption.installments}x com juros — parcelas e total apresentados antes de pagar.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
             </div>
             {reserveLeft !== null && (
@@ -155,7 +148,7 @@ export default function SelfServiceCartPage() {
                 <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="mr-2 h-5 w-5" />PAGAR NO PIX</>}
                 </Button>
-                <Button variant="outline" className="h-14 text-base font-bold" onClick={() => setMode("card")}>
+                <Button variant="outline" className="h-14 text-base font-bold" onClick={() => setMode("card")} disabled={!installmentConfig}>
                   <CreditCard className="mr-2 h-5 w-5" />PAGAR NO CARTÃO
                 </Button>
               </div>
@@ -169,7 +162,7 @@ export default function SelfServiceCartPage() {
                 <Button variant="ghost" className="w-full" onClick={checkPaid}>Já paguei</Button>
                 <button type="button" className="w-full text-xs text-muted-foreground underline" onClick={() => setMode("card")}>Prefiro pagar no cartão</button>
               </div>
-            ) : (
+            ) : installmentConfig ? (
               <div className="rounded-2xl border-2 p-3">
                 <SplitPaymentPanel orderId={order.id} total={order.total} form={form} maxInstallments={Math.min(installmentConfig.max_installments || 6, 12)} onPaid={() => setPaid(true)}>
                   <StepPayment
@@ -183,7 +176,7 @@ export default function SelfServiceCartPage() {
                   />
                 </SplitPaymentPanel>
               </div>
-            )}
+            ) : <p className="text-sm text-muted-foreground">Não foi possível carregar as condições do cartão. Recarregue a página para tentar novamente.</p>}
           </>
         )}
 

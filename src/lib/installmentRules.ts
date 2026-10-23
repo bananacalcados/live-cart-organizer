@@ -18,6 +18,24 @@ export const DEFAULT_INSTALLMENT_CONFIG: InstallmentConfig = {
   monthly_interest_rate: 2.49,
 };
 
+/** Oferta do autoatendimento: teto do evento sempre vale; valor mínimo libera o sem juros ampliado. */
+export function resolveSelfServiceInstallments(
+  base: InstallmentConfig,
+  amount: number,
+  eventMax?: number | null,
+  eventMinimum?: number | null,
+): InstallmentConfig {
+  const max = Number(eventMax) > 0
+    ? Math.min(12, Math.max(1, Math.round(Number(eventMax))))
+    : base.max_installments;
+  return {
+    ...base,
+    max_installments: max,
+    interest_free_installments: Number(eventMax) > 0 && amount >= Math.max(0, Number(eventMinimum) || 0)
+      ? max : Math.min(max, base.interest_free_installments),
+  };
+}
+
 /** Lê uma regra vinda do banco (jsonb) e devolve null quando não há regra útil. */
 export function parseInstallmentRule(raw: any): InstallmentConfig | null {
   if (!raw || typeof raw !== "object") return null;

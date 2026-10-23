@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { buildInstallmentOptions, resolveInstallmentSelection, type InstallmentConfig } from "@/lib/installmentRules";
+import { buildInstallmentOptions, resolveInstallmentSelection, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
+
+describe("oferta do autoatendimento", () => {
+  const base: InstallmentConfig = { max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49 };
+  it("R$ 159,99 permite 6x sem juros ou 10x com juros, não 12x", () => {
+    const config = resolveSelfServiceInstallments(base, 159.99, 10, 300);
+    const options = buildInstallmentOptions(159.99, config);
+    expect(options.filter(o => !o.hasInterest).map(o => o.installments)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(options.filter(o => o.hasInterest).map(o => o.installments)).toEqual([7, 8, 9, 10]);
+    expect(options.find(o => o.installments === 10)?.totalAmount).toBeGreaterThan(159.99);
+  });
+  it("libera 10x sem juros somente quando alcança o mínimo de R$ 300", () => {
+    expect(resolveSelfServiceInstallments(base, 299.99, 10, 300).interest_free_installments).toBe(6);
+    expect(resolveSelfServiceInstallments(base, 300, 10, 300).interest_free_installments).toBe(10);
+  });
+});
 
 describe("buildInstallmentOptions", () => {
   const tenInstallments: InstallmentConfig = { max_installments: 10, interest_free_installments: 10, monthly_interest_rate: 0 };
