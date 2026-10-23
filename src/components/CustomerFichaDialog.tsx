@@ -1,5 +1,5 @@
 import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,6 +107,20 @@ const EMPTY: Form = {
   city: "",
   state: "",
 };
+
+/** Campos do rascunho do autoatendimento que espelham na ficha (sem o WhatsApp). */
+const DRAFT_KEYS: (keyof Form)[] = [
+  "full_name", "cep", "address", "address_number", "complement",
+  "neighborhood", "city", "state", "cpf", "email",
+];
+
+/** Chave do funil (DDD + 8 últimos dígitos), mesmo formato da página de autoatendimento. */
+function draftPhoneKey(whatsapp?: string | null): string | null {
+  let d = String(whatsapp || "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
+  if (d.length < 10) return null;
+  return d.slice(0, 2) + d.slice(-8);
+}
 
 /**
  * Conteúdo da ficha do cliente SEM o Dialog — usado tanto no modal clássico
@@ -230,6 +244,30 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
         }
 
         if (!base.whatsapp) base.whatsapp = formatBRPhone(order.customer?.whatsapp || "");
+
+        // 4. Rascunho do autoatendimento (cliente digitando na página da live
+        //    neste momento) tem prioridade sobre o que estava salvo.
+        const draftKey = draftPhoneKey(order.customer?.whatsapp);
+        if (order.event_id && draftKey) {
+          const { data: dr } = await supabase
+            .from("live_selfservice_accesses" as any)
+            .select("form_draft")
+            .eq("event_id", order.event_id)
+            .eq("phone_key", draftKey)
+            .not("form_draft", "is", null)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const draft = (dr as any)?.form_draft as Record<string, string> | null;
+          if (draft) {
+            lastDraftRef.current = draft;
+            for (const k of DRAFT_KEYS) {
+              const v = String(draft[k] ?? "");
+              if (v) (base as any)[k] = v;
+            }
+          }
+        }
+
         setForm(base);
       } catch (e) {
         console.error("[CustomerFicha] load error:", e);
@@ -238,6 +276,43 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       }
     })();
   }, [order.id, order.customer_id, order.customer?.whatsapp]);
+
+  // Espelho em tempo real: enquanto a cliente digita no formulário da página
+  // da live (modo autoatendimento), os campos aparecem aqui. Nunca pisa no
+  // que a vendedora editou depois do último rascunho recebido.
+  const lastDraftRef = useRef<Record<string, string> | null>(null);
+  useEffect(() => {
+    const eventId = order.event_id;
+    const key = draftPhoneKey(order.customer?.whatsapp);
+    if (!eventId || !key) return;
+    const channel = supabase
+      .channel(`ficha-draft-${order.id}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.phone_key !== key || !row?.form_draft) return;
+          const draft = row.form_draft as Record<string, string>;
+          setForm((cur) => {
+            const prev = lastDraftRef.current || {};
+            const next = { ...cur };
+            let changed = false;
+            for (const k of DRAFT_KEYS) {
+              const v = String(draft[k] ?? "");
+              if (!v) continue;
+              if (!cur[k] || cur[k] === prev[k]) {
+                if (cur[k] !== v) { (next as any)[k] = v; changed = true; }
+              }
+            }
+            return changed ? next : cur;
+          });
+          lastDraftRef.current = draft;
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [order.id, order.event_id, order.customer?.whatsapp]);
 
 
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
