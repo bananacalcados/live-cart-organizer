@@ -663,6 +663,23 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                       Central da Live (fila + chat + pedidos).
                     </p>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationMode(SELF_SERVICE_MODE)}
+                    className={cn(
+                      "rounded-lg border-2 p-3 text-left transition",
+                      operationMode === SELF_SERVICE_MODE
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-semibold text-sm">WhatsApp + Cadastro online</p>
+                    <p className="text-xs text-muted-foreground">
+                      O botão da live leva a cliente pra uma página onde ela digita o WhatsApp, vê o
+                      pedido reservado (se tiver), se cadastra sozinha e paga. Quem não tem pedido
+                      também se cadastra. O WhatsApp e a Central da Live continuam em paralelo.
+                    </p>
+                  </button>
                 </div>
                 {isSelfServiceMode(operationMode) && (
                   <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
