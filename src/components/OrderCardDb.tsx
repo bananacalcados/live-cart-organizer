@@ -56,6 +56,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Link2Off, RefreshCw, Trash, Radio, Shuffle } from "lucide-react";
 import { useEventStore } from "@/stores/eventStore";
+import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -688,6 +689,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
+        <SelfServiceStageBadge
+          eventId={order.event_id}
+          createdAt={order.created_at}
+          registeredAt={(order as any).registered_at}
+          isPaid={!!order.is_paid || !!order.paid_externally}
+          whatsapp={order.customer?.whatsapp}
+        />
         {/* Status do link de checkout — só exibe enquanto o pedido não está pago */}
         {!order.is_paid && !order.paid_externally && linkStep >= 0 && (
           linkStep === 0 ? (
