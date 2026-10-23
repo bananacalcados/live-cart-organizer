@@ -15,6 +15,10 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Separação Francisca / Daiane
+- [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
+- [x] Conferir no navegador os dois pedidos reais do NB 530: nomes, CPF, e-mail, WhatsApp e endereço separados; nenhum estorno executado.
+
 ## Página do produto — Cadastro online
 - [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
 - [ ] Conferir carrinho real de teste: link retornou “Link não encontrado”; pagamento real não exercitado.
