@@ -1,3 +1,4 @@
+import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +25,7 @@ import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/L
 import { isPresenterMessage } from "@/lib/presenterAlerts";
 
 const PRESENTER_ORDER_COLUMNS =
-  "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
+  "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, registered_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
 
 
 interface PresenterAlert {
@@ -50,6 +51,8 @@ interface OrderSummary {
   customerReplied: boolean;
   lastSentAt: string | null;
   lastCustomerAt: string | null;
+  registered_at: string | null;
+  is_paid: boolean;
 }
 
 const alertTypeConfig: Record<string, { label: string; color: string; icon: typeof Bell }> = {
@@ -167,6 +170,8 @@ export default function PresenterDashboard() {
         customerReplied: !!lastCustomer && !!lastSent && new Date(lastCustomer) > new Date(lastSent),
         lastSentAt: lastSent,
         lastCustomerAt: lastCustomer,
+        registered_at: o.registered_at || null,
+        is_paid: !!o.is_paid || !!o.paid_externally,
       };
     });
 
@@ -255,7 +260,16 @@ export default function PresenterDashboard() {
         .eq("event_id", eventId)
         .limit(5000),
     ]);
+    const { data: ssAccesses } = await (supabase as any)
+      .from("live_selfservice_accesses")
+      .select("entered_phone")
+      .eq("event_id", eventId)
+      .limit(5000);
     const clicked = new Set<string>();
+    for (const a of (ssAccesses || []) as any[]) {
+      const s = suffix8(a.entered_phone);
+      if (s) clicked.add(s);
+    }
     for (const c of (clicks || []) as any[]) {
       for (const p of [c.entered_phone, c.phone, c.real_phone]) {
         const s = suffix8(p);
@@ -691,6 +705,13 @@ export default function PresenterDashboard() {
                             <Badge variant="outline" className="text-[10px]">
                               {stageLabel(order.stage_atendimento || order.stage)}
                             </Badge>
+                            <SelfServiceStageBadge
+                              eventId={eventId}
+                              createdAt={order.created_at}
+                              registeredAt={order.registered_at}
+                              isPaid={order.is_paid}
+                              whatsapp={order.whatsapp}
+                            />
                             <span className="text-xs text-muted-foreground">
                               {order.products.length} item(s)
                             </span>
