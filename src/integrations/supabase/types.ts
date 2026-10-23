@@ -11377,12 +11377,18 @@ export type Database = {
       }
       live_selfservice_accesses: {
         Row: {
+          confirm_code: string | null
+          confirm_message_id: string | null
+          confirmed_number_id: string | null
+          confirmed_phone: string | null
+          confirmed_phone_key: string | null
           created_at: string
           entered_phone: string
           event_id: string
           id: string
           instagram: string | null
           lead_id: string | null
+          metadata: Json
           order_ids: string[]
           paid_at: string | null
           phone_key: string
@@ -11390,14 +11396,21 @@ export type Database = {
           updated_at: string
           user_agent: string | null
           viewed_product_at: string | null
+          whatsapp_confirmed_at: string | null
         }
         Insert: {
+          confirm_code?: string | null
+          confirm_message_id?: string | null
+          confirmed_number_id?: string | null
+          confirmed_phone?: string | null
+          confirmed_phone_key?: string | null
           created_at?: string
           entered_phone: string
           event_id: string
           id?: string
           instagram?: string | null
           lead_id?: string | null
+          metadata?: Json
           order_ids?: string[]
           paid_at?: string | null
           phone_key: string
@@ -11405,14 +11418,21 @@ export type Database = {
           updated_at?: string
           user_agent?: string | null
           viewed_product_at?: string | null
+          whatsapp_confirmed_at?: string | null
         }
         Update: {
+          confirm_code?: string | null
+          confirm_message_id?: string | null
+          confirmed_number_id?: string | null
+          confirmed_phone?: string | null
+          confirmed_phone_key?: string | null
           created_at?: string
           entered_phone?: string
           event_id?: string
           id?: string
           instagram?: string | null
           lead_id?: string | null
+          metadata?: Json
           order_ids?: string[]
           paid_at?: string | null
           phone_key?: string
@@ -11420,6 +11440,7 @@ export type Database = {
           updated_at?: string
           user_agent?: string | null
           viewed_product_at?: string | null
+          whatsapp_confirmed_at?: string | null
         }
         Relationships: [
           {
