@@ -335,6 +335,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const data = await res.json();
       if (!data.erro) {
+        ["address", "neighborhood", "city", "state"].forEach((k) => sellerTouchedRef.current.add(k));
         setForm((p) => ({
           ...p,
           address: data.logradouro || p.address,
@@ -353,6 +354,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    sellerTouchedRef.current.add("cep");
     const value = formatCep(e.target.value);
     setForm((p) => ({ ...p, cep: value }));
     if (value.replace(/\D/g, "").length === 8) lookupCep(value);
