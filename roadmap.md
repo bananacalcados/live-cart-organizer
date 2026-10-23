@@ -15,6 +15,9 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Página do produto — Cadastro online
+- [ ] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; testar sem publicar.
+
 ## AustPay — nomes nas recusas
 - [x] Corrigir leitura pelo cadastro exato e venda vinculada; 5 testes passaram, funções implantadas e três recusas da Maria Brígida recuperadas e conferidas no painel autenticado, sem cobrança.
 
