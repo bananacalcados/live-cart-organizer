@@ -11385,6 +11385,7 @@ export type Database = {
           created_at: string
           entered_phone: string
           event_id: string
+          form_draft: Json | null
           id: string
           instagram: string | null
           lead_id: string | null
@@ -11407,6 +11408,7 @@ export type Database = {
           created_at?: string
           entered_phone: string
           event_id: string
+          form_draft?: Json | null
           id?: string
           instagram?: string | null
           lead_id?: string | null
@@ -11429,6 +11431,7 @@ export type Database = {
           created_at?: string
           entered_phone?: string
           event_id?: string
+          form_draft?: Json | null
           id?: string
           instagram?: string | null
           lead_id?: string | null
