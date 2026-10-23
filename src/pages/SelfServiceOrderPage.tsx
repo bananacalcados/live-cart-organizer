@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,13 @@ export default function SelfServiceOrderPage() {
       address_number: sd.address_number || f.address_number, complement: sd.complement || f.complement, neighborhood: sd.neighborhood || f.neighborhood,
       city: sd.city || f.city, state: sd.state || f.state, cpf: maskCpf(sd.cpf || f.cpf), email: sd.email || f.email,
     }));
+    // Rascunho de uma visita anterior tem prioridade: ela continua de onde parou.
+    const dr = r.draft as Record<string, string> | null;
+    if (dr) setForm((f) => {
+      const next = { ...f };
+      for (const [k, v] of Object.entries(dr)) if (v && k in next) (next as any)[k] = v;
+      return next;
+    });
     if ((r.orders || []).length) {
       setScreen("product");
       call({ action: "viewed", slug, phone: d, access_id: r.access_id });
