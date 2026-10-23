@@ -131,16 +131,42 @@ Deno.serve(async (req) => {
     return ((l as any)?.name as string) || null;
   }
 
-  async function openOrderIdsFor(eventId: string, ids: string[]) {
-    if (!ids.length) return [];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage")
+  async function openOrderRowsFor(eventId: string, ids: string[]) {
+    if (!ids.length) return [] as any[];
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
-    return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length).map((o) => o.id as string);
+    return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
 
-  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[]) {
+  // @ do Instagram já conhecido: o pedido da live nasce com o @ anexado ao
+  // WhatsApp, então dá pra descobrir pelo número sem a cliente digitar.
+  async function instagramHintFor(phoneE164: string) {
+    const { data: c } = await sb.from("customers").select("instagram_handle")
+      .ilike("whatsapp", `%${suffix8(phoneE164)}`).not("instagram_handle", "is", null).limit(1).maybeSingle();
+    const h = String((c as any)?.instagram_handle || "").trim().replace(/^@/, "");
+    return h || null;
+  }
+
+  // Cashback da regra normal da loja (só texto de urgência na mensagem).
+  async function cashbackHint(total: number) {
+    const { data: cfg } = await sb.from("pos_cashback_config").select("is_enabled, percentage, min_sale_value, max_cashback").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!cfg || !(cfg as any).is_enabled || total < Number((cfg as any).min_sale_value || 0)) return null;
+    let v = total * (Number((cfg as any).percentage) || 0) / 100;
+    const max = Number((cfg as any).max_cashback);
+    if (max > 0 && v > max) v = max;
+    v = Math.round(v * 100) / 100;
+    return v > 0 ? v : null;
+  }
+
+  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
-    await waSend(numberId, phone, `Oii ${greet}, seu cadastro está confirmado! ✅ Segue o link do seu carrinho: ${links}\nDaqui há pouco volto pra ver se deu tudo certinho com sua compra, tá? 😉`);
+    const cb = cashback ? `\n💰 Pagando em menos de 20 minutos você ainda ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
+    const variants = [
+      `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
+    ];
+    await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
   }
 
   try {
