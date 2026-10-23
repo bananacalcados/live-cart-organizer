@@ -200,8 +200,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "register") {
-      const known = await knownCustomer();
-      if (known && !(await checkCode())) return json({ ok: false, error: "code_required" });
 
       const d = body.details || {};
       const fullName = String(d.full_name || "").trim().slice(0, 120);
