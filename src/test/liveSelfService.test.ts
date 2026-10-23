@@ -26,6 +26,8 @@ describe("modo WhatsApp + Cadastro online", () => {
     expect(selfServiceStage({ ...base, isPaid: false, viewedAt: "2026-10-23T20:01:00Z" })).toBe("viewed");
     expect(selfServiceStage({ ...base, isPaid: false, registeredAt: "2026-10-23T20:09:00Z" })).toBe("registered_late");
     expect(selfServiceStage({ ...base, isPaid: true, registeredAt: "2026-10-23T20:09:00Z" })).toBe("paid");
+    expect(selfServiceStage({ ...base, isPaid: false, registeredAt: "2026-10-23T20:09:00Z", confirmedWhatsApp: false })).toBe("registered_unconfirmed");
+    expect(selfServiceStage({ ...base, isPaid: false, registeredAt: "2026-10-23T20:09:00Z", confirmedWhatsApp: true })).toBe("registered_late");
     expect(formatMmSs(65_000)).toBe("1:05");
   });
 });
