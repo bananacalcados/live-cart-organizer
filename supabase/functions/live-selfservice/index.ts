@@ -477,6 +477,9 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
       const now = new Date().toISOString();
+      // @ do Instagram: se a cliente não digitou, descobre pelo WhatsApp
+      // (o pedido da live já nasce com o @ anexado ao número).
+      const igReg = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || (await instagramHintFor(phone));
 
       // CRM unificado
       const { error: uErr } = await sb.rpc("find_or_create_unified_customer", {
