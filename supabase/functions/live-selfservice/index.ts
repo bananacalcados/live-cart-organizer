@@ -389,11 +389,13 @@ Deno.serve(async (req) => {
       const orders = await openOrders();
       const known = await knownCustomer();
       const instagram = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || null;
+      // @ descoberto pelo WhatsApp: o pedido da live já nasce com o @ anexado.
+      const igHint = instagram || (await instagramHintFor(phone));
       const { data: acc } = await sb.from("live_selfservice_accesses").insert({
         event_id: ev.id,
         entered_phone: phone,
         phone_key: phoneKey(phone),
-        instagram,
+        instagram: igHint,
         order_ids: orders.map((o: any) => o.id),
         user_agent: (req.headers.get("user-agent") || "").slice(0, 300),
       }).select("id").single();
