@@ -18,7 +18,7 @@
 ## Separação Francisca / Daiane
 - [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
 - [x] Conferir no navegador os dois pedidos reais do NB 530: nomes, CPF, e-mail, WhatsApp e endereço separados; nenhum estorno executado.
-- [ ] Registrar estorno externo de R$ 341,99, preservar destinatária bancária do print e gerar/conferir comprovante interno da Francisca.
+- [x] Registrar estorno externo de R$ 341,99 confirmado no MP; histórico autenticado e PDF ULAJAKU4 conferidos com Francisca como cliente, Daiane como destinatária informada no print e valor realmente pago; 19 testes passaram, sem novo estorno/envio.
 
 ## Página do produto — Cadastro online
 - [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
