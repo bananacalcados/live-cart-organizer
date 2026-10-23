@@ -62,6 +62,12 @@ function orderTotal(o: any) {
   return Math.round((Math.max(0, sub - disc) + ship) * 100) / 100;
 }
 
+// Número oficial do evento: o da "Link da Live → WhatsApp" (etapa Mensagem) vale primeiro.
+async function resolveEventNumber(sb: any, eventId: string, fallbackId: string | null) {
+  const { data: link } = await sb.from("live_whatsapp_links").select("whatsapp_number_id, target_phone").eq("event_id", eventId).order("is_active", { ascending: false }).limit(1).maybeSingle();
+  return { id: (link as any)?.whatsapp_number_id || fallbackId || null, targetPhone: (link as any)?.target_phone || null };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -151,7 +157,7 @@ Deno.serve(async (req) => {
         const a = acc as any;
         if (a.metadata?.auto_reply_sent_at) return json({ ok: true, already: true });
         const { data: e2 } = await sb.from("events").select("self_service_slug, whatsapp_number_id").eq("id", a.event_id).maybeSingle();
-        const numberId = a.confirmed_number_id || (e2 as any)?.whatsapp_number_id;
+        const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, a.event_id, (e2 as any)?.whatsapp_number_id)).id;
         const to = a.confirmed_phone || a.entered_phone;
         if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
         const open = await openOrderIdsFor(a.event_id, a.order_ids || []);
@@ -180,7 +186,7 @@ Deno.serve(async (req) => {
         .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
       if (!acc) return json({ ok: true, sent: false });
       const a = acc as any;
-      const numberId = a.confirmed_number_id || (e3 as any).whatsapp_number_id;
+      const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, (o as any).event_id, (e3 as any).whatsapp_number_id)).id;
       const greet = greetName(a.instagram || (c as any)?.instagram_handle, await regName(a.order_ids || [], a.entered_phone));
       // Cadastro feito na página vale para o pedido novo também.
       const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
@@ -205,9 +211,14 @@ Deno.serve(async (req) => {
     if (!ev || ev.operation_mode !== MODE) return json({ ok: false, error: "not_found" }, 404);
 
     let officialPhone: string | null = null;
-    if (ev.whatsapp_number_id) {
-      const { data: wn } = await sb.from("whatsapp_numbers").select("phone_display").eq("id", ev.whatsapp_number_id).maybeSingle();
-      const d = digits((wn as any)?.phone_display);
+    const evNum = await resolveEventNumber(sb, ev.id, ev.whatsapp_number_id);
+    (ev as any).whatsapp_number_id = evNum.id;
+    if (evNum.id) {
+      const { data: wn } = await sb.from("whatsapp_numbers").select("phone_display").eq("id", evNum.id).maybeSingle();
+      const d = digits((wn as any)?.phone_display) || digits(evNum.targetPhone);
+      officialPhone = d ? (d.startsWith("55") ? d : "55" + d) : null;
+    } else if (evNum.targetPhone) {
+      const d = digits(evNum.targetPhone);
       officialPhone = d ? (d.startsWith("55") ? d : "55" + d) : null;
     }
     const { data: pixRow } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
