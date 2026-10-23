@@ -94,6 +94,8 @@ export default function SelfServiceOrderPage() {
     setBusy(false);
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
+    // @ do Instagram descoberto pelo WhatsApp (o pedido da live já tem o @ anexado).
+    if (!instagram && r.instagram_hint) setInstagram(String(r.instagram_hint));
     const sd = r.details;
     if (sd) setForm((f) => ({
       ...f,
