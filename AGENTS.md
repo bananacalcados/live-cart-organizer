@@ -26,6 +26,7 @@
 
 - Lazy imports: one reload/tab, visible stale-module fallback.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
+- Self-service product and cart pages resolve event installment ceilings through resolveSelfServiceInstallments per order, not combined totals; the event threshold expands only interest-free terms, preventing contradictory offers.
 
 - Chat PIX: copy-code button is the default on uazapi (operator toggle per send, remembered); failure or opt-out falls back to the isolated standalone code, never mixed with text.
 - Payment storage is best-effort: browser denial cannot block checkout; server idempotency remains authoritative.

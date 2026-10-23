@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, Gift, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import type { InstallmentConfig } from "@/lib/installmentRules";
+import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { maskCpf, maskCep, maskPhoneBR, digitsOnly } from "@/lib/formatMasks";
 import { isValidCpf } from "@/lib/cpfUtils";
 import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
@@ -52,7 +52,7 @@ export default function SelfServiceOrderPage() {
   const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState({ full_name: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", cpf: "", email: "" });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
-  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({ max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49 });
+  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
 
   useEffect(() => {
     call({ action: "event", slug }).then((r) => (r?.ok ? setEv(r.event) : setNotFound(true)));
@@ -77,19 +77,8 @@ export default function SelfServiceOrderPage() {
     if (!ev || !primary) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
-      const cfg = (data?.value || {}) as any;
-      const base = {
-        max_installments: Number(cfg.max_installments) || 12,
-        interest_free_installments: Number(cfg.interest_free_installments ?? 6),
-        monthly_interest_rate: Number(cfg.monthly_interest_rate) || 2.49,
-      };
-      const maxInst = Number(ev.installment_max || 0);
-      const minVal = Number(ev.installment_min_value || 0);
-      if (maxInst > 0) {
-        if (primary.total >= minVal) { base.max_installments = maxInst; base.interest_free_installments = maxInst; }
-        else base.max_installments = Math.max(base.max_installments, maxInst);
-      }
+      const { data, error } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
+      const base = !error ? parseInstallmentRule(data?.value) : null;
       if (!cancelled) setInstallmentConfig(base);
     })();
     return () => { cancelled = true; };
@@ -175,6 +164,14 @@ export default function SelfServiceOrderPage() {
   );
 
   const items = useMemo(() => orders.flatMap((o) => o.products), [orders]);
+  // Cada carrinho é pago separadamente: somar pedidos não libera uma oferta indevida.
+  const offers = installmentConfig ? orders.map((o) => {
+    const config = resolveSelfServiceInstallments(installmentConfig, o.total, ev?.installment_max, ev?.installment_min_value);
+    const options = buildInstallmentOptions(o.total, config);
+    return { free: options.filter((p) => !p.hasInterest).at(-1), interest: options.filter((p) => p.hasInterest).at(-1) };
+  }) : [];
+  const freeCount = offers.length ? Math.min(...offers.map((o) => o.free?.installments || 1)) : 0;
+  const interestCount = offers.length ? Math.min(...offers.map((o) => o.interest?.installments || 0)) : 0;
 
   if (notFound) return <div className="flex min-h-screen items-center justify-center p-6 text-center text-muted-foreground">Link não encontrado.</div>;
   if (!ev) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -217,12 +214,26 @@ export default function SelfServiceOrderPage() {
             ))}
             <div className="rounded-2xl border p-3 text-sm">
               <p className="text-lg font-bold">{brl(pixAll)} no Pix</p>
-              <p className="text-muted-foreground">ou {brl(totalAll)} no cartão em até {installmentConfig.max_installments}x</p>
+              <p className="text-muted-foreground">ou {brl(totalAll)} no cartão</p>
+              {freeCount > 0 && <p className="font-semibold">Até {freeCount}x sem juros{orders.length === 1 && offers[0]?.free ? ` de ${brl(offers[0].free.installmentAmount)}` : " por pedido"}</p>}
+              {interestCount > 0 && <p className="text-muted-foreground">Ou até {interestCount}x com juros — parcelas e total apresentados antes de pagar.</p>}
+              {orders.length > 1 && <p className="text-xs text-muted-foreground">As condições são calculadas pelo valor de cada pedido.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
             </div>
             {reserveLeft !== null && !reserveExpired && (
               <div className="flex items-center gap-2 rounded-2xl bg-muted p-3 text-sm">
                 <Clock className="h-4 w-4" /> Reservado pra você por <strong>{formatMmSs(reserveLeft)}</strong>
+              </div>
+            )}
+            {ev.prize_name && (
+              <div className="flex items-start gap-3 rounded-2xl border-2 border-primary p-3">
+                {ev.prize_image_url ? <img src={ev.prize_image_url} alt={ev.prize_name} className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <Gift className="h-10 w-10 shrink-0 text-primary" />}
+                <div className="min-w-0 space-y-1 text-sm">
+                  <p className="font-bold">Sorteio: {ev.prize_name}</p>
+                  <p className="flex items-center gap-2 font-bold tabular-nums text-primary"><Clock className="h-4 w-4" />{formatMmSs(prizeLeft)}</p>
+                  <p>{prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."}</p>
+                  <p className="text-xs text-muted-foreground">Prêmio entregue somente com o pedido pago.</p>
+                </div>
               </div>
             )}
             {reserveExpired ? (
@@ -232,14 +243,6 @@ export default function SelfServiceOrderPage() {
               </div>
             ) : (
               <>
-                {prizeActive && (
-                  <div className="flex items-center gap-3 rounded-2xl border-2 border-primary p-3">
-                    {ev.prize_image_url ? <img src={ev.prize_image_url} alt={ev.prize_name || ""} className="h-14 w-14 rounded-lg object-cover" /> : <Gift className="h-10 w-10 text-primary" />}
-                    <p className="text-sm">
-                      Confirme seus dados em <strong>{formatMmSs(prizeLeft)}</strong> e ganhe <strong>{ev.prize_name}</strong> — entregue junto com o pedido pago
-                    </p>
-                  </div>
-                )}
                 <Button className="h-14 w-full text-base font-bold" onClick={goRegister} disabled={busy}>
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : prizeActive ? "Confirmar meus dados e concorrer" : "Confirmar meus dados"}
                 </Button>
