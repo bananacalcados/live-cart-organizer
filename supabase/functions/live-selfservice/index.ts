@@ -369,7 +369,29 @@ Deno.serve(async (req) => {
         user_agent: (req.headers.get("user-agent") || "").slice(0, 300),
       }).select("id").single();
       const details = known ? await savedDetails() : null;
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, orders: orders.map(mapOrder) });
+      // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
+      // a cliente continua o cadastro de onde parou.
+      const { data: prevDraft } = await sb.from("live_selfservice_accesses")
+        .select("form_draft")
+        .eq("event_id", ev.id).eq("phone_key", phoneKey(phone))
+        .not("form_draft", "is", null)
+        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
+    }
+
+    // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
+    const DRAFT_FIELDS = ["full_name", "cep", "address", "address_number", "complement", "neighborhood", "city", "state", "cpf", "email"] as const;
+    if (action === "draft") {
+      if (!(await allow(`ss-draft:${phone}`, 120, 600))) return json({ ok: true }); // silencioso: rascunho é best-effort
+      const accessId = String(body.access_id || "");
+      if (!accessId) return json({ ok: false, error: "Sessão inválida." }, 400);
+      const src = (body.details || {}) as Record<string, unknown>;
+      const draft: Record<string, string> = {};
+      for (const k of DRAFT_FIELDS) draft[k] = String(src[k] ?? "").slice(0, 200);
+      await sb.from("live_selfservice_accesses")
+        .update({ form_draft: draft, updated_at: new Date().toISOString() })
+        .eq("id", accessId).eq("event_id", ev.id).is("whatsapp_confirmed_at", null);
+      return json({ ok: true });
     }
 
     if (action === "viewed") {
