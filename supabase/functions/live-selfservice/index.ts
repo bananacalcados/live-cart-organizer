@@ -407,7 +407,7 @@ Deno.serve(async (req) => {
         .eq("event_id", ev.id).eq("phone_key", phoneKey(phone))
         .not("form_draft", "is", null)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
     }
 
     // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
