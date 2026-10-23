@@ -131,16 +131,42 @@ Deno.serve(async (req) => {
     return ((l as any)?.name as string) || null;
   }
 
-  async function openOrderIdsFor(eventId: string, ids: string[]) {
-    if (!ids.length) return [];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage")
+  async function openOrderRowsFor(eventId: string, ids: string[]) {
+    if (!ids.length) return [] as any[];
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
-    return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length).map((o) => o.id as string);
+    return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
 
-  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[]) {
+  // @ do Instagram já conhecido: o pedido da live nasce com o @ anexado ao
+  // WhatsApp, então dá pra descobrir pelo número sem a cliente digitar.
+  async function instagramHintFor(phoneE164: string) {
+    const { data: c } = await sb.from("customers").select("instagram_handle")
+      .ilike("whatsapp", `%${suffix8(phoneE164)}`).not("instagram_handle", "is", null).limit(1).maybeSingle();
+    const h = String((c as any)?.instagram_handle || "").trim().replace(/^@/, "");
+    return h || null;
+  }
+
+  // Cashback da regra normal da loja (só texto de urgência na mensagem).
+  async function cashbackHint(total: number) {
+    const { data: cfg } = await sb.from("pos_cashback_config").select("is_enabled, percentage, min_sale_value, max_cashback").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!cfg || !(cfg as any).is_enabled || total < Number((cfg as any).min_sale_value || 0)) return null;
+    let v = total * (Number((cfg as any).percentage) || 0) / 100;
+    const max = Number((cfg as any).max_cashback);
+    if (max > 0 && v > max) v = max;
+    v = Math.round(v * 100) / 100;
+    return v > 0 ? v : null;
+  }
+
+  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
-    await waSend(numberId, phone, `Oii ${greet}, seu cadastro está confirmado! ✅ Segue o link do seu carrinho: ${links}\nDaqui há pouco volto pra ver se deu tudo certinho com sua compra, tá? 😉`);
+    const cb = cashback ? `\n💰 Pagando em menos de 20 minutos você ainda ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
+    const variants = [
+      `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
+    ];
+    await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
   }
 
   try {
@@ -160,10 +186,12 @@ Deno.serve(async (req) => {
         const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, a.event_id, (e2 as any)?.whatsapp_number_id)).id;
         const to = a.confirmed_phone || a.entered_phone;
         if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
-        const open = await openOrderIdsFor(a.event_id, a.order_ids || []);
+        const openRows = await openOrderRowsFor(a.event_id, a.order_ids || []);
+        const open = openRows.map((o) => o.id as string);
         const greet = greetName(a.instagram, await regName(a.order_ids || [], a.entered_phone));
+        const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
         try {
-          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open);
+          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
           else await waSend(numberId, to, `Oii ${greet}, seu cadastro está confirmado! ✅ Quando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`);
         } catch (err) {
           console.error("[live-selfservice] resposta automática falhou", err);
@@ -174,7 +202,7 @@ Deno.serve(async (req) => {
       }
       // send_cart: pedido novo de cliente que já confirmou no WhatsApp (Caso B → link sai sozinho).
       const orderId = String(body.orderId || "");
-      const { data: o } = await sb.from("orders").select("id, event_id, customer_id").eq("id", orderId).maybeSingle();
+      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost").eq("id", orderId).maybeSingle();
       if (!o) return json({ ok: false, sent: false });
       const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
       if ((e3 as any)?.operation_mode !== MODE || !(e3 as any)?.self_service_slug) return json({ ok: true, sent: false });
@@ -196,7 +224,8 @@ Deno.serve(async (req) => {
         if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), order_id: orderId, whatsapp: digits(cp) });
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
-      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId]); }
+      const cbOne = await cashbackHint(orderTotal(o));
+      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
       catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
       return json({ ok: true, sent: true });
     }
@@ -360,11 +389,13 @@ Deno.serve(async (req) => {
       const orders = await openOrders();
       const known = await knownCustomer();
       const instagram = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || null;
+      // @ descoberto pelo WhatsApp: o pedido da live já nasce com o @ anexado.
+      const igHint = instagram || (await instagramHintFor(phone));
       const { data: acc } = await sb.from("live_selfservice_accesses").insert({
         event_id: ev.id,
         entered_phone: phone,
         phone_key: phoneKey(phone),
-        instagram,
+        instagram: igHint,
         order_ids: orders.map((o: any) => o.id),
         user_agent: (req.headers.get("user-agent") || "").slice(0, 300),
       }).select("id").single();
@@ -376,7 +407,7 @@ Deno.serve(async (req) => {
         .eq("event_id", ev.id).eq("phone_key", phoneKey(phone))
         .not("form_draft", "is", null)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
     }
 
     // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
@@ -446,6 +477,9 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
       const now = new Date().toISOString();
+      // @ do Instagram: se a cliente não digitou, descobre pelo WhatsApp
+      // (o pedido da live já nasce com o @ anexado ao número).
+      const igReg = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || (await instagramHintFor(phone));
 
       // CRM unificado
       const { error: uErr } = await sb.rpc("find_or_create_unified_customer", {
@@ -491,9 +525,9 @@ Deno.serve(async (req) => {
           ...(lead && lead.source !== "autoatendimento" && !metaBase.original_source ? { original_source: lead.source } : {}),
         };
         if (lead?.id) {
-          await sb.from("event_leads").update({ name: fullName, source: "autoatendimento", metadata, instagram: body.instagram || undefined }).eq("id", lead.id);
+          await sb.from("event_leads").update({ name: fullName, source: "autoatendimento", metadata, instagram: igReg || undefined }).eq("id", lead.id);
         } else {
-          await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: body.instagram || null });
+          await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: igReg || null });
         }
       }
 
@@ -506,7 +540,7 @@ Deno.serve(async (req) => {
       let accessId: string | null = body.access_id ? String(body.access_id) : null;
       if (!accessId) {
         const { data: na } = await sb.from("live_selfservice_accesses").insert({
-          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: body.instagram || null,
+          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: igReg || null,
           order_ids: target.map((o: any) => o.id), registered_at: now,
         }).select("id").single();
         accessId = na?.id || null;
@@ -521,7 +555,7 @@ Deno.serve(async (req) => {
           .eq("id", accessId).eq("event_id", ev.id);
         if (!error) code = cand;
       }
-      const greet = greetName(body.instagram, fullName);
+      const greet = greetName(igReg, fullName);
       const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. Pode enviar o link do meu carrinho?`;
       const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
       return json({ ok: true, code, text, wa_url: waUrl, has_order: target.length > 0 });
