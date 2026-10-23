@@ -1,5 +1,5 @@
 import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,6 +107,20 @@ const EMPTY: Form = {
   city: "",
   state: "",
 };
+
+/** Campos do rascunho do autoatendimento que espelham na ficha (sem o WhatsApp). */
+const DRAFT_KEYS: (keyof Form)[] = [
+  "full_name", "cep", "address", "address_number", "complement",
+  "neighborhood", "city", "state", "cpf", "email",
+];
+
+/** Chave do funil (DDD + 8 últimos dígitos), mesmo formato da página de autoatendimento. */
+function draftPhoneKey(whatsapp?: string | null): string | null {
+  let d = String(whatsapp || "").replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
+  if (d.length < 10) return null;
+  return d.slice(0, 2) + d.slice(-8);
+}
 
 /**
  * Conteúdo da ficha do cliente SEM o Dialog — usado tanto no modal clássico
