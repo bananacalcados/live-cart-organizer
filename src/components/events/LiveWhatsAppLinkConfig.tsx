@@ -56,6 +56,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showClicks, setShowClicks] = useState(false);
+  const [ssStats, setSsStats] = useState<{ accesses: number; registered: number } | null>(null);
   const [stats, setStats] = useState<{
     confirmed: number; matched: number; withFb: number;
     byPhone: number; byCode: number; byTime: number; divergent: number;
@@ -270,6 +271,9 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
                   </span>
                 )}
               </>
+            )}
+            {ssStats && ssStats.accesses > 0 && (
+              <>{" · "}página de cadastro: {ssStats.accesses} acessos, {ssStats.registered} cadastros</>
             )}
           </p>
         ) : (
