@@ -51,6 +51,8 @@ export default function SelfServiceOrderPage() {
   const [code, setCode] = useState("");
   const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState({ full_name: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", cpf: "", email: "" });
+  const [useAlt, setUseAlt] = useState(false);
+  const [alt, setAlt] = useState({ cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "" });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
 
@@ -101,11 +103,22 @@ export default function SelfServiceOrderPage() {
     }));
     // Rascunho de uma visita anterior tem prioridade: ela continua de onde parou.
     const dr = r.draft as Record<string, string> | null;
-    if (dr) setForm((f) => {
-      const next = { ...f };
-      for (const [k, v] of Object.entries(dr)) if (v && k in next) (next as any)[k] = v;
-      return next;
-    });
+    if (dr) {
+      setForm((f) => {
+        const next = { ...f };
+        for (const [k, v] of Object.entries(dr)) if (v && k in next) (next as any)[k] = v;
+        return next;
+      });
+      setUseAlt(dr.use_alt === "1");
+      setAlt((a) => {
+        const next = { ...a };
+        for (const k of Object.keys(next) as (keyof typeof next)[]) {
+          const v = dr[`alt_${k}`];
+          if (v) next[k] = v;
+        }
+        return next;
+      });
+    }
     if ((r.orders || []).length) {
       setScreen("product");
       call({ action: "viewed", slug, phone: d, access_id: r.access_id });
@@ -122,10 +135,11 @@ export default function SelfServiceOrderPage() {
     if (screen !== "register" || !accessId) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => {
-      call({ action: "draft", slug, phone: digitsOnly(phone), access_id: accessId, details: form });
+      const altFields = Object.fromEntries(Object.entries(alt).map(([k, v]) => [`alt_${k}`, v]));
+      call({ action: "draft", slug, phone: digitsOnly(phone), access_id: accessId, details: { ...form, use_alt: useAlt ? "1" : "", ...altFields } });
     }, 1000);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
-  }, [form, screen, accessId, slug, phone]);
+  }, [form, alt, useAlt, screen, accessId, slug, phone]);
 
   const verify = async () => {
     setBusy(true);
@@ -153,16 +167,28 @@ export default function SelfServiceOrderPage() {
     } catch { /* cliente digita manualmente */ }
   };
 
+  const lookupAltCep = async (v: string) => {
+    const d = digitsOnly(v);
+    if (d.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${d}/json/`);
+      const j = await res.json();
+      if (j?.erro) { toast.error("CEP não encontrado."); return; }
+      setAlt((a) => ({ ...a, address: j.logradouro || a.address, neighborhood: j.bairro || a.neighborhood, city: j.localidade || a.city, state: j.uf || a.state }));
+    } catch { /* cliente digita manualmente */ }
+  };
+
   const cpfOk = isValidCpf(form.cpf);
+  const altOk = !useAlt || (digitsOnly(alt.cep).length === 8 && alt.address.trim() && alt.address_number.trim() && alt.city.trim() && alt.state.trim());
   const canSubmit = isRealFullName(form.full_name) && cpfOk && isUsableEmail(form.email) && digitsOnly(form.cep).length === 8
-    && form.address.trim() && form.address_number.trim() && form.city.trim() && form.state.trim();
+    && form.address.trim() && form.address_number.trim() && form.city.trim() && form.state.trim() && altOk;
 
   const submit = async () => {
     if (!canSubmit) { toast.error("Confira os campos destacados."); return; }
     setBusy(true);
     const r = await call({
       action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null,
-      order_ids: orders.map((o) => o.id), details: form,
+      order_ids: orders.map((o) => o.id), details: form, alt_address: useAlt ? alt : null,
     });
     setBusy(false);
     if (!r?.ok) {
@@ -178,7 +204,7 @@ export default function SelfServiceOrderPage() {
   const footer = (
     <p className="mt-6 text-center text-xs text-muted-foreground">
       <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
-      Único WhatsApp oficial da Banana: final <strong>{ev?.official_last4 || "----"}</strong>. Qualquer outro número é golpe.
+      Único WhatsApp oficial da Banana: <strong>{ev?.official_phone ? maskPhoneBR(ev.official_phone) : "não configurado"}</strong>. Qualquer outro número é golpe.
     </p>
   );
 
@@ -314,6 +340,25 @@ export default function SelfServiceOrderPage() {
               <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input value={form.city} onChange={set("city")} /></div>
               <div className="space-y-1"><Label>UF</Label><Input maxLength={2} value={form.state} onChange={set("state")} /></div>
             </div>
+            <button type="button" className="text-sm font-semibold text-primary underline" onClick={() => setUseAlt((v) => !v)}>
+              {useAlt ? "Usar meu endereço principal" : "Enviar para outro endereço"}
+            </button>
+            {useAlt && (
+              <div className="space-y-3 rounded-xl border border-primary/40 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">Endereço de entrega deste pedido (seu endereço principal continua salvo)</p>
+                <div className="space-y-1"><Label>CEP de entrega</Label><Input inputMode="numeric" value={alt.cep} onChange={(e) => { const v = maskCep(e.target.value); setAlt((a) => ({ ...a, cep: v })); lookupAltCep(v); }} /></div>
+                <div className="space-y-1"><Label>Rua</Label><Input value={alt.address} onChange={(e) => setAlt((a) => ({ ...a, address: e.target.value }))} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1"><Label>Número</Label><Input value={alt.address_number} onChange={(e) => setAlt((a) => ({ ...a, address_number: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Complemento</Label><Input value={alt.complement} onChange={(e) => setAlt((a) => ({ ...a, complement: e.target.value }))} /></div>
+                </div>
+                <div className="space-y-1"><Label>Bairro</Label><Input value={alt.neighborhood} onChange={(e) => setAlt((a) => ({ ...a, neighborhood: e.target.value }))} /></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input value={alt.city} onChange={(e) => setAlt((a) => ({ ...a, city: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>UF</Label><Input maxLength={2} value={alt.state} onChange={(e) => setAlt((a) => ({ ...a, state: e.target.value }))} /></div>
+                </div>
+              </div>
+            )}
             <div className="space-y-1">
               <Label>CPF</Label>
               <Input inputMode="numeric" value={form.cpf} onChange={(e) => setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }))} aria-invalid={digitsOnly(form.cpf).length === 11 && !cpfOk} />
