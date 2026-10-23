@@ -228,6 +228,52 @@ Deno.serve(async (req) => {
 
     if (action === "event") return json({ ok: true, event: eventInfo });
 
+    // ───── Página do link do carrinho (pedido deste modo) ─────
+    if (action === "cart" || action === "pix" || action === "status") {
+      const orderId = String(body.order_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
+      const { data: o } = await sb.from("orders")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
+      if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
+      const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
+      if (action === "status") return json({ ok: true, paid });
+      const { data: reg } = await sb.from("customer_registrations")
+        .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();
+      const r = reg as any;
+      if (action === "cart") {
+        const form = r ? { fullName: r.full_name, email: r.email, cpf: r.cpf, whatsapp: r.whatsapp, cep: r.cep, address: r.address, addressNumber: r.address_number, complement: r.complement || "", neighborhood: r.neighborhood || "", city: r.city, state: r.state } : null;
+        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, form });
+      }
+      // pix
+      if (paid) return json({ ok: true, paid: true });
+      if (!r) return json({ ok: false, error: "Cadastro não encontrado para este pedido." }, 400);
+      if (!(await allow(`ss-pix:${orderId}`, 4, 600))) return json({ ok: false, error: "Você já gerou o Pix várias vezes. Aguarde alguns minutos." }, 429);
+      const nameParts = String(r.full_name || "").trim().split(/\s+/);
+      const pr = await fetch(`${SB_URL}/functions/v1/mercadopago-create-pix`, {
+        method: "POST", headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, payer: { firstName: nameParts[0], lastName: nameParts.slice(1).join(" "), email: r.email, cpf: r.cpf, phone: r.whatsapp } }),
+      });
+      const pd = await pr.json().catch(() => ({}));
+      if (!pr.ok || !(pd as any)?.qrCode) {
+        console.error("[live-selfservice] pix falhou", pr.status, pd);
+        return json({ ok: false, error: (pd as any)?.error || "Não foi possível gerar o Pix agora." }, 502);
+      }
+      const amount = Number((pd as any).amount ?? mapOrder(o).pix_total);
+      // Envia o mesmo Pix no WhatsApp da cliente (melhor esforço: a página já mostra o código).
+      let sentWa = false;
+      try {
+        const { data: acc } = await sb.from("live_selfservice_accesses").select("confirmed_phone, confirmed_number_id")
+          .eq("event_id", ev.id).contains("order_ids", [orderId]).not("whatsapp_confirmed_at", "is", null)
+          .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
+        const { data: c } = await sb.from("customers").select("whatsapp").eq("id", (o as any).customer_id).maybeSingle();
+        const to = (acc as any)?.confirmed_phone || (c as any)?.whatsapp || r.whatsapp;
+        const numberId = (acc as any)?.confirmed_number_id || ev.whatsapp_number_id;
+        if (to && numberId) { await waSendPix(numberId, to, String((pd as any).qrCode).trim(), amount); sentWa = true; }
+      } catch (err) { console.error("[live-selfservice] pix no WhatsApp falhou", err); }
+      return json({ ok: true, qr_code: (pd as any).qrCode, qr_base64: (pd as any).qrCodeBase64 || null, amount, sent_whatsapp: sentWa });
+    }
+
     const phone = normalizeBrPhone(body.phone);
     if (!phone) return json({ ok: false, error: "Digite o WhatsApp completo com DDD." }, 400);
 
@@ -399,8 +445,29 @@ Deno.serve(async (req) => {
           .eq("id", body.access_id).eq("event_id", ev.id);
       }
 
-      const fresh = target.length ? (await openOrders()).filter((o: any) => reqIds.includes(o.id)).map(mapOrder) : [];
-      return json({ ok: true, orders: fresh, form: { fullName, email, cpf, whatsapp: phone, cep, address: addr.address, addressNumber: addr.address_number, complement: addr.complement, neighborhood: addr.neighborhood, city: addr.city, state: addr.state } });
+      // Código único de confirmação (mesmo formato do /zap), gravado no acesso.
+      let accessId: string | null = body.access_id ? String(body.access_id) : null;
+      if (!accessId) {
+        const { data: na } = await sb.from("live_selfservice_accesses").insert({
+          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: body.instagram || null,
+          order_ids: target.map((o: any) => o.id), registered_at: now,
+        }).select("id").single();
+        accessId = na?.id || null;
+      }
+      let code: string | null = null;
+      for (let i = 0; i < 6 && accessId && !code; i++) {
+        const cand = genCode();
+        const { count } = await sb.from("live_whatsapp_clicks").select("id", { count: "exact", head: true }).eq("code", cand);
+        if ((count || 0) > 0) continue;
+        const { error } = await sb.from("live_selfservice_accesses")
+          .update({ confirm_code: cand, whatsapp_confirmed_at: null, updated_at: now, ...(target.length ? { order_ids: target.map((o: any) => o.id) } : {}) })
+          .eq("id", accessId).eq("event_id", ev.id);
+        if (!error) code = cand;
+      }
+      const greet = greetName(body.instagram, fullName);
+      const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. Pode enviar o link do meu carrinho?`;
+      const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
+      return json({ ok: true, code, text, wa_url: waUrl, has_order: target.length > 0 });
     }
 
     if (action === "paid") {
