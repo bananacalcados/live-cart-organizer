@@ -146,6 +146,20 @@ Deno.serve(async (req) => {
       };
     };
 
+    async function savedDetails(): Promise<any> {
+      const { data: reg } = await sb.from("customer_registrations")
+        .select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let d: any = reg;
+      if (!d) {
+        const { data: cu } = await sb.from("customers_unified")
+          .select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+          .eq("phone_suffix8", suffix8(phone)).limit(2);
+        if ((cu || []).length === 1) d = { ...cu![0], full_name: (cu![0] as any).name };
+      }
+      return d || null;
+    }
+
     if (action === "identify") {
       if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
       const orders = await openOrders();
@@ -159,7 +173,8 @@ Deno.serve(async (req) => {
         order_ids: orders.map((o: any) => o.id),
         user_agent: (req.headers.get("user-agent") || "").slice(0, 300),
       }).select("id").single();
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, orders: orders.map(mapOrder) });
+      const details = known ? await savedDetails() : null;
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, orders: orders.map(mapOrder) });
     }
 
     if (action === "viewed") {
@@ -186,16 +201,7 @@ Deno.serve(async (req) => {
     if (action === "verify_code") {
       const ok = await checkCode();
       if (!ok) return json({ ok: false, error: "Código incorreto." });
-      const { data: reg } = await sb.from("customer_registrations")
-        .select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
-      let d: any = reg;
-      if (!d) {
-        const { data: cu } = await sb.from("customers_unified")
-          .select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-          .eq("phone_suffix8", suffix8(phone)).limit(2);
-        if ((cu || []).length === 1) d = { ...cu![0], full_name: (cu![0] as any).name };
-      }
+      const d = await savedDetails();
       return json({ ok: true, details: d || null });
     }
 
