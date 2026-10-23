@@ -106,6 +106,13 @@ export default function SelfServiceOrderPage() {
     setBusy(false);
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
+    const sd = r.details;
+    if (sd) setForm((f) => ({
+      ...f,
+      full_name: sd.full_name || f.full_name, cep: maskCep(sd.cep || f.cep), address: sd.address || f.address,
+      address_number: sd.address_number || f.address_number, complement: sd.complement || f.complement, neighborhood: sd.neighborhood || f.neighborhood,
+      city: sd.city || f.city, state: sd.state || f.state, cpf: maskCpf(sd.cpf || f.cpf), email: sd.email || f.email,
+    }));
     if ((r.orders || []).length) {
       setScreen("product");
       call({ action: "viewed", slug, phone: d, access_id: r.access_id });
@@ -271,6 +278,16 @@ export default function SelfServiceOrderPage() {
 
         {screen === "register" && (
           <div className="space-y-3 rounded-2xl border p-4">
+            {prizeActive && (
+              <div className="flex items-center gap-3 rounded-2xl border-2 border-primary p-3">
+                {ev.prize_image_url ? <img src={ev.prize_image_url} alt={ev.prize_name || ""} className="h-14 w-14 rounded-lg object-cover" /> : <Gift className="h-10 w-10 text-primary" />}
+                <p className="text-sm">
+                  Faltam <strong>{formatMmSs(prizeLeft)}</strong> pra concorrer a <strong>{ev.prize_name}</strong>. Conclua esta etapa pra terminar seu cadastro e garantir sua participação.
+                </p>
+              </div>
+            )}
+            {!prizeActive && <p className="text-sm text-muted-foreground">Conclua esta etapa pra terminar seu cadastro.</p>}
+            {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}
             <div className="space-y-1"><Label>Nome completo</Label><Input autoComplete="name" value={form.full_name} onChange={set("full_name")} /></div>
             <div className="space-y-1"><Label>CEP</Label><Input inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} /></div>
             <div className="space-y-1"><Label>Rua</Label><Input value={form.address} onChange={set("address")} /></div>
