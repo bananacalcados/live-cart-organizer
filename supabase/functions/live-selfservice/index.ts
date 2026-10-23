@@ -7,6 +7,16 @@
 //   (eligible_for_prize) é decidido no banco pelo gatilho do pedido — nunca por esta página.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/access-code.ts";
+import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+
+const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function genCode(): string { const b = new Uint8Array(5); crypto.getRandomValues(b); let o = ""; for (const x of b) o += ALPHABET[x % ALPHABET.length]; return o; }
+const firstName = (n?: string | null) => { const f = String(n || "").trim().split(/\s+/)[0] || ""; return f ? f.charAt(0).toUpperCase() + f.slice(1).toLowerCase() : ""; };
+const greetName = (ig?: string | null, name?: string | null) => { const h = String(ig || "").trim().replace(/^@/, ""); return h ? `@${h}` : (firstName(name) || "você"); };
+const cartUrl = (slug: string, orderId: string) => `${PUBLIC_BASE}/pedido/${slug}/carrinho/${orderId}`;
+const fmtBRL = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+function extractMid(d: any): string | null { const c = d?.messageId ?? d?.data?.messageId ?? d?.data?.messageid ?? d?.data?.id ?? d?.data?.message?.messageid ?? d?.messages?.[0]?.id ?? d?.data?.messages?.[0]?.id ?? null; return c != null ? String(c) : null; }
 
 const MODE = "whatsapp_autoatendimento";
 const cors = {
