@@ -186,10 +186,12 @@ Deno.serve(async (req) => {
         const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, a.event_id, (e2 as any)?.whatsapp_number_id)).id;
         const to = a.confirmed_phone || a.entered_phone;
         if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
-        const open = await openOrderIdsFor(a.event_id, a.order_ids || []);
+        const openRows = await openOrderRowsFor(a.event_id, a.order_ids || []);
+        const open = openRows.map((o) => o.id as string);
         const greet = greetName(a.instagram, await regName(a.order_ids || [], a.entered_phone));
+        const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
         try {
-          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open);
+          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
           else await waSend(numberId, to, `Oii ${greet}, seu cadastro está confirmado! ✅ Quando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`);
         } catch (err) {
           console.error("[live-selfservice] resposta automática falhou", err);
