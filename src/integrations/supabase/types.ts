@@ -6407,6 +6407,7 @@ export type Database = {
           min_purchase_value: number
           name: string
           prize_label: string
+          prize_requires_paid: boolean
           prize_type: string
           prize_value: number
           status: string
@@ -6427,6 +6428,7 @@ export type Database = {
           min_purchase_value?: number
           name: string
           prize_label: string
+          prize_requires_paid?: boolean
           prize_type?: string
           prize_value?: number
           status?: string
@@ -6447,6 +6449,7 @@ export type Database = {
           min_purchase_value?: number
           name?: string
           prize_label?: string
+          prize_requires_paid?: boolean
           prize_type?: string
           prize_value?: number
           status?: string
@@ -6699,6 +6702,11 @@ export type Database = {
           operation_mode: string
           overlay_token: string | null
           payment_window_on_assembly: boolean
+          self_service_prize_image_url: string | null
+          self_service_prize_name: string | null
+          self_service_product_notice: string
+          self_service_registration_minutes: number
+          self_service_slug: string | null
           setup_completed: boolean
           start_date: string | null
           store_ids: string[] | null
@@ -6755,6 +6763,11 @@ export type Database = {
           operation_mode?: string
           overlay_token?: string | null
           payment_window_on_assembly?: boolean
+          self_service_prize_image_url?: string | null
+          self_service_prize_name?: string | null
+          self_service_product_notice?: string
+          self_service_registration_minutes?: number
+          self_service_slug?: string | null
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -6811,6 +6824,11 @@ export type Database = {
           operation_mode?: string
           overlay_token?: string | null
           payment_window_on_assembly?: boolean
+          self_service_prize_image_url?: string | null
+          self_service_prize_name?: string | null
+          self_service_product_notice?: string
+          self_service_registration_minutes?: number
+          self_service_slug?: string | null
           setup_completed?: boolean
           start_date?: string | null
           store_ids?: string[] | null
@@ -11356,6 +11374,62 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      live_selfservice_accesses: {
+        Row: {
+          created_at: string
+          entered_phone: string
+          event_id: string
+          id: string
+          instagram: string | null
+          lead_id: string | null
+          order_ids: string[]
+          paid_at: string | null
+          phone_key: string
+          registered_at: string | null
+          updated_at: string
+          user_agent: string | null
+          viewed_product_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          entered_phone: string
+          event_id: string
+          id?: string
+          instagram?: string | null
+          lead_id?: string | null
+          order_ids?: string[]
+          paid_at?: string | null
+          phone_key: string
+          registered_at?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          viewed_product_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          entered_phone?: string
+          event_id?: string
+          id?: string
+          instagram?: string | null
+          lead_id?: string | null
+          order_ids?: string[]
+          paid_at?: string | null
+          phone_key?: string
+          registered_at?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          viewed_product_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_selfservice_accesses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       live_sessions: {
         Row: {
