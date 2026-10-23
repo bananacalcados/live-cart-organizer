@@ -380,7 +380,7 @@ Deno.serve(async (req) => {
     }
 
     // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
-    const DRAFT_FIELDS = ["full_name", "cep", "address", "address_number", "complement", "neighborhood", "city", "state", "cpf", "email"] as const;
+    const DRAFT_FIELDS = ["full_name", "cep", "address", "address_number", "complement", "neighborhood", "city", "state", "cpf", "email", "use_alt", "alt_cep", "alt_address", "alt_address_number", "alt_complement", "alt_neighborhood", "alt_city", "alt_state"] as const;
     if (action === "draft") {
       if (!(await allow(`ss-draft:${phone}`, 120, 600))) return json({ ok: true }); // silencioso: rascunho é best-effort
       const accessId = String(body.access_id || "");
@@ -458,9 +458,23 @@ Deno.serve(async (req) => {
       const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
       const target = orders.filter((o: any) => reqIds.includes(o.id));
 
+      // Endereço alternativo de entrega: vale só para o pedido; o endereço
+      // principal da ficha (customers_unified) continua intacto.
+      const altSrc = (body.alt_address || null) as Record<string, unknown> | null;
+      const altAddr = altSrc ? {
+        cep: String(altSrc.cep || "").replace(/\D/g, "").slice(0, 8),
+        address: String(altSrc.address || "").trim().slice(0, 160),
+        address_number: String(altSrc.address_number || "").trim().slice(0, 20),
+        complement: String(altSrc.complement || "").trim().slice(0, 120),
+        neighborhood: String(altSrc.neighborhood || "").trim().slice(0, 120),
+        city: String(altSrc.city || "").trim().slice(0, 120),
+        state: String(altSrc.state || "").trim().slice(0, 2).toUpperCase(),
+      } : null;
+      const orderAddr = altAddr && altAddr.cep.length === 8 && altAddr.address && altAddr.address_number && altAddr.city && altAddr.state ? altAddr : addr;
+
       if (target.length) {
         for (const o of target) {
-          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...addr };
+          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr };
           const { data: reg } = await sb.from("customer_registrations").select("id").eq("order_id", o.id).maybeSingle();
           if (reg?.id) await sb.from("customer_registrations").update(payload).eq("id", reg.id);
           else await sb.from("customer_registrations").insert(payload);
