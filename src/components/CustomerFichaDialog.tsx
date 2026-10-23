@@ -278,50 +278,51 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   }, [order.id, order.customer_id, order.customer?.whatsapp]);
 
   // Espelho em tempo real: enquanto a cliente digita no formulário da página
-  // da live (modo autoatendimento), os campos aparecem aqui. Nunca pisa no
-  // que a vendedora editou depois do último rascunho recebido.
+  // da live (modo autoatendimento), os campos aparecem aqui. Atualiza qualquer
+  // campo que a vendedora NÃO editou manualmente — inclusive os que já vieram
+  // preenchidos do cadastro.
   const lastDraftRef = useRef<Record<string, string> | null>(null);
+  const sellerTouchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => { sellerTouchedRef.current = new Set(); }, [order.id]);
   useEffect(() => {
     const eventId = order.event_id;
     const key = draftPhoneKey(order.customer?.whatsapp);
     if (!eventId || !key) return;
+    const applyDraft = (row: any) => {
+      if (row?.phone_key !== key || !row?.form_draft) return;
+      const draft = row.form_draft as Record<string, string>;
+      setForm((cur) => {
+        const next = { ...cur };
+        let changed = false;
+        for (const k of DRAFT_KEYS) {
+          const v = String(draft[k] ?? "");
+          if (!v || sellerTouchedRef.current.has(k)) continue;
+          if (cur[k] !== v) { (next as any)[k] = v; changed = true; }
+        }
+        return changed ? next : cur;
+      });
+      lastDraftRef.current = draft;
+    };
     const channel = supabase
       .channel(`ficha-draft-${order.id}-${Math.random().toString(36).slice(2)}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` },
-        (payload) => {
-          const row = payload.new as any;
-          if (row?.phone_key !== key || !row?.form_draft) return;
-          const draft = row.form_draft as Record<string, string>;
-          setForm((cur) => {
-            const prev = lastDraftRef.current || {};
-            const next = { ...cur };
-            let changed = false;
-            for (const k of DRAFT_KEYS) {
-              const v = String(draft[k] ?? "");
-              if (!v) continue;
-              if (!cur[k] || cur[k] === prev[k]) {
-                if (cur[k] !== v) { (next as any)[k] = v; changed = true; }
-              }
-            }
-            return changed ? next : cur;
-          });
-          lastDraftRef.current = draft;
-        },
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (p) => applyDraft(p.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (p) => applyDraft(p.new))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [order.id, order.event_id, order.customer?.whatsapp]);
 
 
-  const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    sellerTouchedRef.current.add(k);
     setForm((p) => ({ ...p, [k]: e.target.value }));
+  };
 
   // CPF: máscara automática (000.000.000-00) + aviso quando o número é inválido.
   // CPF errado é a causa nº 1 de recusa do gateway ("validation_error | customer | Invalid CPF").
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    sellerTouchedRef.current.add("cpf");
     setForm((p) => ({ ...p, cpf: formatCpf(e.target.value) }));
+  };
 
   const cpfDigits = onlyDigitsCpf(form.cpf);
   const cpfInvalid = cpfDigits.length > 0 && !isValidCpf(cpfDigits);
@@ -334,6 +335,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const data = await res.json();
       if (!data.erro) {
+        ["address", "neighborhood", "city", "state"].forEach((k) => sellerTouchedRef.current.add(k));
         setForm((p) => ({
           ...p,
           address: data.logradouro || p.address,
@@ -352,6 +354,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    sellerTouchedRef.current.add("cep");
     const value = formatCep(e.target.value);
     setForm((p) => ({ ...p, cep: value }));
     if (value.replace(/\D/g, "").length === 8) lookupCep(value);
