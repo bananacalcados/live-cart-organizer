@@ -238,6 +238,10 @@ Deno.serve(async (req) => {
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
+      if (paid) {
+        await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("event_id", ev.id).contains("order_ids", [orderId]).is("paid_at", null);
+      }
       if (action === "status") return json({ ok: true, paid });
       const { data: reg } = await sb.from("customer_registrations")
         .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();

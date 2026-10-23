@@ -35,12 +35,13 @@ export function SelfServiceStageBadge({
     createdAt,
     registeredAt,
     viewedAt: key && st.viewedKeys.has(key) ? "1" : null,
+    confirmedWhatsApp: !!key && st.confirmedKeys.has(key),
     minutes: st.minutes,
   });
   const tone =
     stage === "paid" ? "border-primary/50 text-primary"
     : stage === "registered_in_time" ? "border-primary/40 text-primary"
-    : stage === "registered_late" ? "border-destructive/40 text-destructive"
+    : stage === "registered_late" || stage === "registered_unconfirmed" ? "border-destructive/40 text-destructive"
     : "border-border text-muted-foreground";
   return (
     <Badge variant="outline" className={`text-[10px] ${tone}`}>
