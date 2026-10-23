@@ -1,6 +1,7 @@
 // Página pública de autoatendimento da live (modo "WhatsApp + Cadastro online").
 // Rota /pedido/:slug. A cliente digita o WhatsApp, vê o pedido reservado,
-// se cadastra e paga. Quem não tem pedido vira lead do evento (source 'autoatendimento').
+// se cadastra e confirma no WhatsApp (#CODIGO); o link do carrinho chega pela resposta
+// automática e o pagamento acontece na página do carrinho (/pedido/:slug/carrinho/:orderId). Quem não tem pedido vira lead do evento (source 'autoatendimento').
 // Regras:
 // - Nunca pré-preenche dados de cliente já conhecida sem o código do WhatsApp (código permanente).
 // - registered_at do pedido só é gravado aqui (envio do cadastro); o prêmio
