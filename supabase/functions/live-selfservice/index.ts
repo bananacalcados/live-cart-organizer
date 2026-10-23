@@ -525,9 +525,9 @@ Deno.serve(async (req) => {
           ...(lead && lead.source !== "autoatendimento" && !metaBase.original_source ? { original_source: lead.source } : {}),
         };
         if (lead?.id) {
-          await sb.from("event_leads").update({ name: fullName, source: "autoatendimento", metadata, instagram: body.instagram || undefined }).eq("id", lead.id);
+          await sb.from("event_leads").update({ name: fullName, source: "autoatendimento", metadata, instagram: igReg || undefined }).eq("id", lead.id);
         } else {
-          await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: body.instagram || null });
+          await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: igReg || null });
         }
       }
 
@@ -540,7 +540,7 @@ Deno.serve(async (req) => {
       let accessId: string | null = body.access_id ? String(body.access_id) : null;
       if (!accessId) {
         const { data: na } = await sb.from("live_selfservice_accesses").insert({
-          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: body.instagram || null,
+          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: igReg || null,
           order_ids: target.map((o: any) => o.id), registered_at: now,
         }).select("id").single();
         accessId = na?.id || null;
@@ -555,7 +555,7 @@ Deno.serve(async (req) => {
           .eq("id", accessId).eq("event_id", ev.id);
         if (!error) code = cand;
       }
-      const greet = greetName(body.instagram, fullName);
+      const greet = greetName(igReg, fullName);
       const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. Pode enviar o link do meu carrinho?`;
       const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
       return json({ ok: true, code, text, wa_url: waUrl, has_order: target.length > 0 });
