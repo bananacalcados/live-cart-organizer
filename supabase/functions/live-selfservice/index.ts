@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
       }
       // send_cart: pedido novo de cliente que já confirmou no WhatsApp (Caso B → link sai sozinho).
       const orderId = String(body.orderId || "");
-      const { data: o } = await sb.from("orders").select("id, event_id, customer_id").eq("id", orderId).maybeSingle();
+      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost").eq("id", orderId).maybeSingle();
       if (!o) return json({ ok: false, sent: false });
       const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
       if ((e3 as any)?.operation_mode !== MODE || !(e3 as any)?.self_service_slug) return json({ ok: true, sent: false });
