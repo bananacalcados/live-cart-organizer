@@ -60,6 +60,7 @@ const EventTypebotView = lazy(() => import("./pages/public/EventTypebotView"));
 const EventCaptureBuilder = lazy(() => import("./pages/events/EventCaptureBuilder"));
 const LiveMemberArea = lazy(() => import("./pages/LiveMemberArea"));
 const SelfServiceOrderPage = lazy(() => import("./pages/SelfServiceOrderPage"));
+const SelfServiceCartPage = lazy(() => import("./pages/SelfServiceCartPage"));
 const AustpayTestPage = lazy(() => import("./pages/AustpayTestPage"));
 
 const Companies = lazy(() => import("./pages/admin/Companies"));
@@ -138,6 +139,7 @@ const App = () => (
               <Route path="/minha-area" element={<LiveMemberArea />} />
               <Route path="/minha-area/:slug" element={<LiveMemberArea />} />
               <Route path="/pedido/:eventSlug" element={<SelfServiceOrderPage />} />
+              <Route path="/pedido/:eventSlug/carrinho/:orderId" element={<SelfServiceCartPage />} />
               <Route path="/teste-austpay/:token" element={<AustpayTestPage />} />
               <Route path="/events/:eventId/capture" element={<ProtectedRoute requiredModule="events"><EventCaptureBuilder /></ProtectedRoute>} />
 

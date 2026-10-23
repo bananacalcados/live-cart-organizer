@@ -21,13 +21,14 @@ export function registeredInTime(createdAt: string, registeredAt: string | null 
   return new Date(registeredAt).getTime() <= registrationDeadline(createdAt, minutes);
 }
 
-export type SelfServiceStage = "awaiting_id" | "viewed" | "registered_in_time" | "registered_late" | "paid";
+export type SelfServiceStage = "awaiting_id" | "viewed" | "registered_unconfirmed" | "registered_in_time" | "registered_late" | "paid";
 
 export const SELF_SERVICE_STAGE_LABEL: Record<SelfServiceStage, string> = {
   awaiting_id: "Aguardando identificação",
   viewed: "Viu o produto",
-  registered_in_time: "Cadastro concluído (no prazo)",
-  registered_late: "Cadastro concluído (fora do prazo)",
+  registered_unconfirmed: "Cadastro feito — não confirmou no WhatsApp",
+  registered_in_time: "Confirmou no WhatsApp (no prazo)",
+  registered_late: "Confirmou no WhatsApp (fora do prazo)",
   paid: "Pago",
 };
 
@@ -37,10 +38,13 @@ export function selfServiceStage(args: {
   createdAt: string;
   registeredAt?: string | null;
   viewedAt?: string | null;
+  /** undefined = sem informação (mantém o estágio de cadastro); false = não confirmou. */
+  confirmedWhatsApp?: boolean;
   minutes: number;
 }): SelfServiceStage {
   if (args.isPaid) return "paid";
   if (args.registeredAt) {
+    if (args.confirmedWhatsApp === false) return "registered_unconfirmed";
     return registeredInTime(args.createdAt, args.registeredAt, args.minutes) ? "registered_in_time" : "registered_late";
   }
   if (args.viewedAt) return "viewed";

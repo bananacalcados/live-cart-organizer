@@ -545,6 +545,16 @@ serve(async (req) => {
       console.log(`[livete-start] Modo WhatsApp: template automático suprimido para order ${orderId} (waInitialAuto=${waInitialAuto})`);
       // Opt-in: mensagem inicial NÃO-API (uazapi) com rodízio de variações.
       const dispatchWaInitial = async () => {
+        // Autoatendimento: cliente que já confirmou o cadastro no WhatsApp recebe o
+        // link do carrinho na mesma conversa, sem depender da mensagem inicial.
+        if (operationMode === 'whatsapp_autoatendimento') {
+          const sc = await fetch(`${supabaseUrl}/functions/v1/live-selfservice`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'send_cart', orderId }),
+          }).then((r) => r.json()).catch(() => null);
+          if (sc?.sent) return;
+        }
         if (!waInitialAuto || !waPhone) return;
         const r = await fetch(`${supabaseUrl}/functions/v1/event-order-wa-initial-send`, {
           method: 'POST',

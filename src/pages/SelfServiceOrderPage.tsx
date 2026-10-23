@@ -6,13 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, Gift, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { StepPayment, type CustomerFormData } from "@/components/checkout/PaymentSection";
-import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import type { InstallmentConfig } from "@/lib/installmentRules";
 import { maskCpf, maskCep, maskPhoneBR, digitsOnly } from "@/lib/formatMasks";
 import { isValidCpf } from "@/lib/cpfUtils";
 import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 import { formatMmSs, registrationDeadline } from "@/lib/liveModes";
+import { openWhatsAppDeepLink } from "@/lib/waDeepLink";
 
 type Ev = {
   id: string; name: string; prize_name: string | null; prize_image_url: string | null;
@@ -24,7 +23,7 @@ type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; created_at: string; payment_window_expires_at: string | null; registered_at: string | null;
 };
-type Screen = "identify" | "product" | "no_order" | "code" | "register" | "pay" | "lead_done" | "paid";
+type Screen = "identify" | "product" | "no_order" | "code" | "register" | "confirm_wa";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -51,10 +50,8 @@ export default function SelfServiceOrderPage() {
   const [known, setKnown] = useState(false);
   const [code, setCode] = useState("");
   const [now, setNow] = useState(Date.now());
-  const [payMethod, setPayMethod] = useState<"pix" | "card">("pix");
   const [form, setForm] = useState({ full_name: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", cpf: "", email: "" });
-  const [payForm, setPayForm] = useState<CustomerFormData | null>(null);
-  const [payIndex, setPayIndex] = useState(0);
+  const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({ max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49 });
 
   useEffect(() => {
@@ -157,22 +154,17 @@ export default function SelfServiceOrderPage() {
     setBusy(true);
     const r = await call({
       action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null,
-      order_ids: orders.map((o) => o.id), payment_method: orders.length ? payMethod : null, details: form,
+      order_ids: orders.map((o) => o.id), details: form,
     });
     setBusy(false);
     if (!r?.ok) {
       toast.error(r?.error || "Não foi possível salvar."); return;
     }
-    if (orders.length) {
-      if (r.orders?.length) setOrders(r.orders);
-      setPayForm(r.form); setPayIndex(0); setScreen("pay");
-    } else setScreen("lead_done");
-  };
-
-  const onPaid = () => {
-    call({ action: "paid", slug, phone: digitsOnly(phone), access_id: accessId });
-    if (payIndex + 1 < orders.length) { setPayIndex(payIndex + 1); toast.success("Pago! Agora o próximo pedido."); }
-    else setScreen("paid");
+    // Fim do cadastro = confirmação no WhatsApp (mesmo deep link do /zap).
+    if (!r.wa_url) { toast.error("WhatsApp oficial não configurado neste evento."); return; }
+    setConfirmUrl(r.wa_url);
+    setScreen("confirm_wa");
+    openWhatsAppDeepLink(r.wa_url);
   };
 
   const footer = (
@@ -249,7 +241,7 @@ export default function SelfServiceOrderPage() {
                   </div>
                 )}
                 <Button className="h-14 w-full text-base font-bold" onClick={goRegister} disabled={busy}>
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : prizeActive ? "Confirmar meus dados e concorrer" : "Confirmar dados e pagar"}
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : prizeActive ? "Confirmar meus dados e concorrer" : "Confirmar meus dados"}
                 </Button>
               </>
             )}
@@ -306,56 +298,24 @@ export default function SelfServiceOrderPage() {
               {digitsOnly(form.cpf).length === 11 && !cpfOk && <p className="text-xs text-destructive">CPF inválido</p>}
             </div>
             <div className="space-y-1"><Label>E-mail</Label><Input type="email" autoComplete="email" value={form.email} onChange={set("email")} /></div>
-            {orders.length > 0 && (
-              <div className="space-y-1">
-                <Label>Forma de pagamento</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["pix", "card"] as const).map((m) => (
-                    <Button key={m} type="button" variant={payMethod === m ? "default" : "outline"} onClick={() => setPayMethod(m)}>
-                      {m === "pix" ? "Pix" : "Cartão"}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy || !canSubmit}>
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : orders.length ? (known ? "Confirmar endereço e pagar" : "Confirmar e pagar") : "Concluir cadastro"}
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
             </Button>
           </div>
         )}
 
-        {screen === "pay" && payForm && orders[payIndex] && (
-          <div className="rounded-2xl border-2 p-3">
-            {orders.length > 1 && <p className="mb-2 text-sm font-semibold">Pedido {payIndex + 1} de {orders.length}</p>}
-            <p className="mb-2 text-xs text-muted-foreground">Você escolheu {payMethod === "pix" ? "Pix" : "cartão"} — confirme abaixo.</p>
-            <SplitPaymentPanel orderId={orders[payIndex].id} total={orders[payIndex].total} form={payForm} maxInstallments={Math.min(installmentConfig.max_installments || 6, 12)} onPaid={onPaid}>
-              <StepPayment
-                key={orders[payIndex].id}
-                orderId={orders[payIndex].id}
-                amount={orders[payIndex].total}
-                products={orders[payIndex].products.map((p) => ({ ...p, image: p.image || undefined }))}
-                form={payForm}
-                installmentConfig={installmentConfig}
-                stepBadge={null}
-                onPaymentConfirmed={onPaid}
-              />
-            </SplitPaymentPanel>
-          </div>
-        )}
-
-        {screen === "lead_done" && (
+        {screen === "confirm_wa" && (
           <div className="space-y-4 rounded-2xl border p-4 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-primary" />
-            <p className="font-semibold">Cadastro feito ✅ — peça seu produto na live ou fale no WhatsApp</p>
-            {waLink && <Button asChild className="w-full"><a href={waLink} target="_blank" rel="noreferrer"><MessageCircle className="mr-2 h-4 w-4" />Falar no WhatsApp</a></Button>}
-          </div>
-        )}
-
-        {screen === "paid" && (
-          <div className="space-y-3 rounded-2xl border p-4 text-center">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-primary" />
-            <p className="text-lg font-bold">Pagamento confirmado! 🎉</p>
-            <p className="text-sm text-muted-foreground">Você vai receber a confirmação no WhatsApp.</p>
+            <p className="font-semibold">Falta só um passo: envie a mensagem que abriu no WhatsApp</p>
+            <p className="text-sm text-muted-foreground">
+              {orders.length ? "Assim que ela chegar, a gente te responde com o link do seu carrinho." : "Assim que ela chegar, seu cadastro fica confirmado."}
+            </p>
+            {confirmUrl && (
+              <Button asChild className="h-14 w-full text-base font-bold">
+                <a href={confirmUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-2 h-5 w-5" />Abrir o WhatsApp</a>
+              </Button>
+            )}
           </div>
         )}
 

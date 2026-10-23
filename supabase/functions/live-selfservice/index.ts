@@ -1,12 +1,23 @@
 // Página pública de autoatendimento da live (modo "WhatsApp + Cadastro online").
 // Rota /pedido/:slug. A cliente digita o WhatsApp, vê o pedido reservado,
-// se cadastra e paga. Quem não tem pedido vira lead do evento (source 'autoatendimento').
+// se cadastra e confirma no WhatsApp (#CODIGO); o link do carrinho chega pela resposta
+// automática e o pagamento acontece na página do carrinho (/pedido/:slug/carrinho/:orderId). Quem não tem pedido vira lead do evento (source 'autoatendimento').
 // Regras:
 // - Nunca pré-preenche dados de cliente já conhecida sem o código do WhatsApp (código permanente).
 // - registered_at do pedido só é gravado aqui (envio do cadastro); o prêmio
 //   (eligible_for_prize) é decidido no banco pelo gatilho do pedido — nunca por esta página.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/access-code.ts";
+import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+
+const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function genCode(): string { const b = new Uint8Array(5); crypto.getRandomValues(b); let o = ""; for (const x of b) o += ALPHABET[x % ALPHABET.length]; return o; }
+const firstName = (n?: string | null) => { const f = String(n || "").trim().split(/\s+/)[0] || ""; return f ? f.charAt(0).toUpperCase() + f.slice(1).toLowerCase() : ""; };
+const greetName = (ig?: string | null, name?: string | null) => { const h = String(ig || "").trim().replace(/^@/, ""); return h ? `@${h}` : (firstName(name) || "você"); };
+const cartUrl = (slug: string, orderId: string) => `${PUBLIC_BASE}/pedido/${slug}/carrinho/${orderId}`;
+const fmtBRL = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+function extractMid(d: any): string | null { const c = d?.messageId ?? d?.data?.messageId ?? d?.data?.messageid ?? d?.data?.id ?? d?.data?.message?.messageid ?? d?.messages?.[0]?.id ?? d?.data?.messages?.[0]?.id ?? null; return c != null ? String(c) : null; }
 
 const MODE = "whatsapp_autoatendimento";
 const cors = {
@@ -62,9 +73,127 @@ Deno.serve(async (req) => {
     return data !== false;
   }
 
+  const SB_URL = Deno.env.get("SUPABASE_URL")!;
+  const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  /** Envia pela instância indicada, ciente do provider, e grava no histórico do chat. */
+  async function waSend(numberId: string, phone: string, text: string, copyCode?: string): Promise<string | null> {
+    const { data: num } = await sb.from("whatsapp_numbers").select("id, provider, is_active").eq("id", numberId).maybeSingle();
+    if (!num || !(num as any).is_active) throw new Error("Instância oficial inativa");
+    const provider = String((num as any).provider || "");
+    const to = digits(phone).startsWith("55") ? digits(phone) : "55" + digits(phone);
+    const headers = { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json", "x-force-instance": "true" };
+    let fn: string; let payload: Record<string, unknown>; let stored = text;
+    if (copyCode && provider === "uazapi") {
+      fn = "uazapi-send-buttons";
+      payload = { phone: to, message: text, buttons: [{ id: "copy_pix", title: "Copiar código PIX", copyCode }], whatsapp_number_id: numberId };
+      stored = `${text}\n\n[Botão: Copiar código PIX]\n[PIX_CODE:${copyCode}]`;
+    } else if (provider === "meta") {
+      fn = "meta-whatsapp-send"; payload = { phone: to, message: text, type: "text", whatsapp_number_id: numberId };
+    } else {
+      fn = provider === "wasender" ? "wasender-send-message" : provider === "uazapi" ? "uazapi-send-message" : "zapi-send-message";
+      payload = { phone: to, message: text, whatsapp_number_id: numberId, linkPreview: false };
+    }
+    const r = await fetch(`${SB_URL}/functions/v1/${fn}`, { method: "POST", headers, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || (d as any)?.error || (d as any)?.success === false) throw new Error(`[${r.status}] ${JSON.stringify(d).slice(0, 300)}`);
+    const mid = extractMid(d);
+    await sb.from("whatsapp_messages").insert({ phone: to, message: stored.slice(0, 4000), direction: "outgoing", status: "sent", media_type: "text", whatsapp_number_id: numberId, message_id: mid });
+    return mid;
+  }
+
+  /** Pix no WhatsApp: botão "Copiar código PIX" (uazapi) ou instrução + código sozinho. */
+  async function waSendPix(numberId: string, phone: string, code: string, amount: number) {
+    const valor = fmtBRL(amount);
+    const { data: num } = await sb.from("whatsapp_numbers").select("provider").eq("id", numberId).maybeSingle();
+    if ((num as any)?.provider === "uazapi") {
+      try {
+        await waSend(numberId, phone, `💰 *PIX de ${valor}*\n\nToque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em *Pix → Pix Copia e Cola* e cole o código. 👇`, code);
+        return;
+      } catch (e) { console.warn("[live-selfservice] botão copiar falhou, caindo para texto", e); }
+    }
+    await waSend(numberId, phone, `💰 *PIX de ${valor}*\n\n👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.`);
+    await waSend(numberId, phone, code);
+  }
+
+  async function regName(orderIds: string[], fallbackPhone: string) {
+    if (orderIds.length) {
+      const { data } = await sb.from("customer_registrations").select("full_name").in("order_id", orderIds).limit(1).maybeSingle();
+      if ((data as any)?.full_name) return (data as any).full_name as string;
+    }
+    const { data: l } = await sb.from("event_leads").select("name").eq("phone_suffix", suffix8(fallbackPhone)).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return ((l as any)?.name as string) || null;
+  }
+
+  async function openOrderIdsFor(eventId: string, ids: string[]) {
+    if (!ids.length) return [];
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage")
+      .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
+    return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length).map((o) => o.id as string);
+  }
+
+  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[]) {
+    const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
+    await waSend(numberId, phone, `Oii ${greet}, seu cadastro está confirmado! ✅ Segue o link do seu carrinho: ${links}\nDaqui há pouco volto pra ver se deu tudo certinho com sua compra, tá? 😉`);
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
+
+    // ───── Ações internas (gatilho do banco / livete-start-order) ─────
+    if (action === "confirmed" || action === "send_cart") {
+      if (!(await isAuthorizedCron(req))) return json({ error: "Unauthorized" }, 401);
+      if (action === "confirmed") {
+        const { data: acc } = await sb.from("live_selfservice_accesses")
+          .select("id, event_id, entered_phone, instagram, order_ids, confirmed_phone, confirmed_number_id, metadata").eq("id", String(body.access_id || "")).maybeSingle();
+        if (!acc) return json({ ok: false, error: "not_found" }, 404);
+        const a = acc as any;
+        if (a.metadata?.auto_reply_sent_at) return json({ ok: true, already: true });
+        const { data: e2 } = await sb.from("events").select("self_service_slug, whatsapp_number_id").eq("id", a.event_id).maybeSingle();
+        const numberId = a.confirmed_number_id || (e2 as any)?.whatsapp_number_id;
+        const to = a.confirmed_phone || a.entered_phone;
+        if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
+        const open = await openOrderIdsFor(a.event_id, a.order_ids || []);
+        const greet = greetName(a.instagram, await regName(a.order_ids || [], a.entered_phone));
+        try {
+          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open);
+          else await waSend(numberId, to, `Oii ${greet}, seu cadastro está confirmado! ✅ Quando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`);
+        } catch (err) {
+          console.error("[live-selfservice] resposta automática falhou", err);
+          return json({ ok: false, error: String(err) }, 502);
+        }
+        await sb.from("live_selfservice_accesses").update({ metadata: { ...(a.metadata || {}), auto_reply_sent_at: new Date().toISOString(), auto_reply_case: open.length ? "A" : "B" } }).eq("id", a.id);
+        return json({ ok: true, case: open.length ? "A" : "B" });
+      }
+      // send_cart: pedido novo de cliente que já confirmou no WhatsApp (Caso B → link sai sozinho).
+      const orderId = String(body.orderId || "");
+      const { data: o } = await sb.from("orders").select("id, event_id, customer_id").eq("id", orderId).maybeSingle();
+      if (!o) return json({ ok: false, sent: false });
+      const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
+      if ((e3 as any)?.operation_mode !== MODE || !(e3 as any)?.self_service_slug) return json({ ok: true, sent: false });
+      const { data: c } = await sb.from("customers").select("whatsapp, instagram_handle").eq("id", (o as any).customer_id).maybeSingle();
+      const cp = normalizeBrPhone((c as any)?.whatsapp || "");
+      if (!cp) return json({ ok: true, sent: false });
+      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id")
+        .eq("event_id", (o as any).event_id).eq("confirmed_phone_key", phoneKey(cp)).not("whatsapp_confirmed_at", "is", null)
+        .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
+      if (!acc) return json({ ok: true, sent: false });
+      const a = acc as any;
+      const numberId = a.confirmed_number_id || (e3 as any).whatsapp_number_id;
+      const greet = greetName(a.instagram || (c as any)?.instagram_handle, await regName(a.order_ids || [], a.entered_phone));
+      // Cadastro feito na página vale para o pedido novo também.
+      const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+        .ilike("whatsapp", `%${suffix8(cp)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (prev) {
+        const { data: has } = await sb.from("customer_registrations").select("id").eq("order_id", orderId).maybeSingle();
+        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), order_id: orderId, whatsapp: digits(cp) });
+      }
+      await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
+      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId]); }
+      catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
+      return json({ ok: true, sent: true });
+    }
     const slug = String(body.slug || "").trim().toLowerCase().slice(0, 80);
     if (!slug) return json({ ok: false, error: "Link inválido" }, 400);
 
@@ -99,6 +228,61 @@ Deno.serve(async (req) => {
     };
 
     if (action === "event") return json({ ok: true, event: eventInfo });
+
+    // ───── Página do link do carrinho (pedido deste modo) ─────
+    if (action === "cart" || action === "pix" || action === "status") {
+      const orderId = String(body.order_id || "");
+      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
+      const { data: o } = await sb.from("orders")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
+      if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
+      const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
+      if (paid) {
+        await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("event_id", ev.id).contains("order_ids", [orderId]).is("paid_at", null);
+      }
+      if (action === "status") return json({ ok: true, paid });
+      const { data: reg } = await sb.from("customer_registrations")
+        .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();
+      const r = reg as any;
+      if (action === "cart") {
+        const form = r ? { fullName: r.full_name, email: r.email, cpf: r.cpf, whatsapp: r.whatsapp, cep: r.cep, address: r.address, addressNumber: r.address_number, complement: r.complement || "", neighborhood: r.neighborhood || "", city: r.city, state: r.state } : null;
+        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, form });
+      }
+      // pix
+      if (paid) return json({ ok: true, paid: true });
+      if (!r) return json({ ok: false, error: "Cadastro não encontrado para este pedido." }, 400);
+      // Pagamento dividido em aberto: nunca cobrar o total cheio no Pix avulso.
+      const { data: splits } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      if (((splits || []) as any[]).some((x) => !["refunded", "canceled", "cancelled"].includes(String(x.status)))) {
+        return json({ ok: false, split: true, error: "Este pedido tem pagamento dividido — use a opção de pagamento abaixo." });
+      }
+      if (!(await allow(`ss-pix:${orderId}`, 4, 600))) return json({ ok: false, error: "Você já gerou o Pix várias vezes. Aguarde alguns minutos." }, 429);
+      const nameParts = String(r.full_name || "").trim().split(/\s+/);
+      const pr = await fetch(`${SB_URL}/functions/v1/mercadopago-create-pix`, {
+        method: "POST", headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, payer: { firstName: nameParts[0], lastName: nameParts.slice(1).join(" "), email: r.email, cpf: r.cpf, phone: r.whatsapp } }),
+      });
+      const pd = await pr.json().catch(() => ({}));
+      if (!pr.ok || !(pd as any)?.qrCode) {
+        console.error("[live-selfservice] pix falhou", pr.status, pd);
+        return json({ ok: false, error: (pd as any)?.error || "Não foi possível gerar o Pix agora." }, 502);
+      }
+      const amount = Number((pd as any).amount ?? mapOrder(o).pix_total);
+      // Envia o mesmo Pix no WhatsApp da cliente (melhor esforço: a página já mostra o código).
+      let sentWa = false;
+      try {
+        const { data: acc } = await sb.from("live_selfservice_accesses").select("confirmed_phone, confirmed_number_id")
+          .eq("event_id", ev.id).contains("order_ids", [orderId]).not("whatsapp_confirmed_at", "is", null)
+          .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
+        const { data: c } = await sb.from("customers").select("whatsapp").eq("id", (o as any).customer_id).maybeSingle();
+        const to = (acc as any)?.confirmed_phone || (c as any)?.whatsapp || r.whatsapp;
+        const numberId = (acc as any)?.confirmed_number_id || ev.whatsapp_number_id;
+        if (to && numberId) { await waSendPix(numberId, to, String((pd as any).qrCode).trim(), amount); sentWa = true; }
+      } catch (err) { console.error("[live-selfservice] pix no WhatsApp falhou", err); }
+      return json({ ok: true, qr_code: (pd as any).qrCode, qr_base64: (pd as any).qrCodeBase64 || null, amount, sent_whatsapp: sentWa });
+    }
 
     const phone = normalizeBrPhone(body.phone);
     if (!phone) return json({ ok: false, error: "Digite o WhatsApp completo com DDD." }, 400);
@@ -271,8 +455,29 @@ Deno.serve(async (req) => {
           .eq("id", body.access_id).eq("event_id", ev.id);
       }
 
-      const fresh = target.length ? (await openOrders()).filter((o: any) => reqIds.includes(o.id)).map(mapOrder) : [];
-      return json({ ok: true, orders: fresh, form: { fullName, email, cpf, whatsapp: phone, cep, address: addr.address, addressNumber: addr.address_number, complement: addr.complement, neighborhood: addr.neighborhood, city: addr.city, state: addr.state } });
+      // Código único de confirmação (mesmo formato do /zap), gravado no acesso.
+      let accessId: string | null = body.access_id ? String(body.access_id) : null;
+      if (!accessId) {
+        const { data: na } = await sb.from("live_selfservice_accesses").insert({
+          event_id: ev.id, entered_phone: phone, phone_key: phoneKey(phone), instagram: body.instagram || null,
+          order_ids: target.map((o: any) => o.id), registered_at: now,
+        }).select("id").single();
+        accessId = na?.id || null;
+      }
+      let code: string | null = null;
+      for (let i = 0; i < 6 && accessId && !code; i++) {
+        const cand = genCode();
+        const { count } = await sb.from("live_whatsapp_clicks").select("id", { count: "exact", head: true }).eq("code", cand);
+        if ((count || 0) > 0) continue;
+        const { error } = await sb.from("live_selfservice_accesses")
+          .update({ confirm_code: cand, whatsapp_confirmed_at: null, updated_at: now, ...(target.length ? { order_ids: target.map((o: any) => o.id) } : {}) })
+          .eq("id", accessId).eq("event_id", ev.id);
+        if (!error) code = cand;
+      }
+      const greet = greetName(body.instagram, fullName);
+      const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. Pode enviar o link do meu carrinho?`;
+      const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
+      return json({ ok: true, code, text, wa_url: waUrl, has_order: target.length > 0 });
     }
 
     if (action === "paid") {
