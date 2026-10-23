@@ -351,3 +351,6 @@ verify_jwt = false
 
 [functions.vip-go]
 verify_jwt = false
+
+[functions.live-selfservice]
+verify_jwt = false

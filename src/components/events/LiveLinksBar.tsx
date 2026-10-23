@@ -25,13 +25,14 @@ export function LiveLinksBar({ eventId }: Props) {
   const [zapSlug, setZapSlug] = useState<string | null>(null);
   const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [selfSlug, setSelfSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: ev }, { data: zap }, { data: red }] = await Promise.all([
       supabase
         .from("events")
-        .select("operation_mode, instagram_live_url")
+        .select("operation_mode, instagram_live_url, self_service_slug")
         .eq("id", eventId)
         .maybeSingle() as any,
       (supabase as any)
@@ -50,6 +51,7 @@ export function LiveLinksBar({ eventId }: Props) {
         .maybeSingle(),
     ]);
     setMode((ev as any)?.operation_mode ?? null);
+    setSelfSlug((ev as any)?.self_service_slug ?? null);
     setIgUrl((ev as any)?.instagram_live_url ?? "");
     setSavedIgUrl((ev as any)?.instagram_live_url ?? "");
     setZapSlug(zap?.slug ?? null);
@@ -100,13 +102,20 @@ export function LiveLinksBar({ eventId }: Props) {
 
   if (loading) return null;
 
+  const isSelf = mode === "whatsapp_autoatendimento";
   const isWhatsApp = mode === "whatsapp";
-  const primaryUrl = isWhatsApp
+  const primaryUrl = isSelf
+    ? selfSlug
+      ? `${PUBLIC_HOST}/pedido/${selfSlug}`
+      : null
+    : isWhatsApp
     ? zapSlug
       ? `${PUBLIC_HOST}/zap/${zapSlug}`
       : null
     : `${PUBLIC_HOST}/minha-area`;
-  const primaryLabel = isWhatsApp
+  const primaryLabel = isSelf
+    ? "Link da Live → Cadastro online"
+    : isWhatsApp
     ? "Link da Live → WhatsApp"
     : "Link da Área de Membros";
 

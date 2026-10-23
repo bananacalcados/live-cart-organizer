@@ -56,6 +56,7 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showClicks, setShowClicks] = useState(false);
+  const [ssStats, setSsStats] = useState<{ accesses: number; registered: number } | null>(null);
   const [stats, setStats] = useState<{
     confirmed: number; matched: number; withFb: number;
     byPhone: number; byCode: number; byTime: number; divergent: number;
@@ -110,6 +111,12 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
             byTime: by("time") + by("context"),
             divergent: arr.filter((c) => c.divergent).length,
           });
+          // Página de autoatendimento soma no funil (mesma live).
+          const [{ count: ssAcc }, { count: ssReg }] = await Promise.all([
+            (supabase as any).from("live_selfservice_accesses").select("id", { count: "exact", head: true }).eq("event_id", eventId),
+            (supabase as any).from("live_selfservice_accesses").select("id", { count: "exact", head: true }).eq("event_id", eventId).not("registered_at", "is", null),
+          ]);
+          if (!cancelled) setSsStats({ accesses: ssAcc || 0, registered: ssReg || 0 });
         }
       } else {
         setSlug(slugify(eventName) || `live-${eventId.slice(0, 6)}`);
@@ -264,6 +271,9 @@ export function LiveWhatsAppLinkConfig({ eventId, eventName, defaultWhatsappNumb
                   </span>
                 )}
               </>
+            )}
+            {ssStats && ssStats.accesses > 0 && (
+              <>{" · "}página de cadastro: {ssStats.accesses} acessos, {ssStats.registered} cadastros</>
             )}
           </p>
         ) : (
