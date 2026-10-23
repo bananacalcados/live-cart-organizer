@@ -249,6 +249,11 @@ Deno.serve(async (req) => {
       // pix
       if (paid) return json({ ok: true, paid: true });
       if (!r) return json({ ok: false, error: "Cadastro não encontrado para este pedido." }, 400);
+      // Pagamento dividido em aberto: nunca cobrar o total cheio no Pix avulso.
+      const { data: splits } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      if (((splits || []) as any[]).some((x) => !["refunded", "canceled", "cancelled"].includes(String(x.status)))) {
+        return json({ ok: false, split: true, error: "Este pedido tem pagamento dividido — use a opção de pagamento abaixo." });
+      }
       if (!(await allow(`ss-pix:${orderId}`, 4, 600))) return json({ ok: false, error: "Você já gerou o Pix várias vezes. Aguarde alguns minutos." }, 429);
       const nameParts = String(r.full_name || "").trim().split(/\s+/);
       const pr = await fetch(`${SB_URL}/functions/v1/mercadopago-create-pix`, {
