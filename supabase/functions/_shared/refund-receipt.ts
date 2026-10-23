@@ -174,7 +174,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   };
 
 
-  section(external ? "Cliente do pedido — cadastro da loja" : "Cliente");
+  section("Cliente");
   field("Nome", purchase.customerName || "-");
   const cpf = maskCpf(purchase.cpf);
   if (cpf) field("CPF", cpf);
@@ -188,7 +188,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   section("Estorno");
   field("Valor estornado", brl(Number(row.amount)));
   field("Tipo", row.refund_type === "integral" ? "Integral" : "Parcial");
-  field("Concluído em", external ? `${external.displayedDate} (fuso não informado)` : fmtDate(row.completed_at || row.updated_at, true));
+  field("Concluído em", external ? external.displayedDate : fmtDate(row.completed_at || row.updated_at, true));
   const reason = REASON_LABELS[row.reason] || row.reason;
   field("Motivo", row.reason === "outro" && row.reason_text ? `Outro — ${row.reason_text}` : reason);
 
@@ -200,11 +200,6 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   if (isPix) {
     field("Código da devolução Pix (E2E)", e2e || (isAppmax ? "E2E não informado pelo gateway" : "E2E não informado pelo Mercado Pago"));
     field("ID do reembolso", row.refund_id || "-");
-    if (external) {
-      field("Destinatária no comprovante", external.recipientName);
-      field("CPF no comprovante", external.recipientCpfMasked);
-      para("Referência e destinatária transcritas do comprovante enviado pela loja. O nome da cliente acima não comprova a titularidade da conta bancária.", 9);
-    }
   } else {
     field("Bandeira", String(row.card_brand || "-").toUpperCase());
     if (row.card_last4) field("Final do cartão", `**** ${row.card_last4}`);
@@ -221,9 +216,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   y -= 4;
   const contact = String(cfg?.receipt_footer_contact || "").trim();
   if (contact) para(contact);
-  para(external
-    ? "Documento interno da loja: estorno confirmado no Mercado Pago; demais dados transcritos do comprovante enviado. Não substitui o comprovante bancário."
-    : `Documento interno gerado pelo sistema a partir dos dados da transação no ${gwName}.`);
+  para(`Documento interno gerado pelo sistema a partir dos dados da transação no ${gwName}.`);
   para(`Código de verificação: ${code}`);
 
   const bytes = await pdf.save();
