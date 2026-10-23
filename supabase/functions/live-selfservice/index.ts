@@ -484,7 +484,7 @@ Deno.serve(async (req) => {
       }
 
       if (body.access_id) {
-        await sb.from("live_selfservice_accesses").update({ registered_at: now, updated_at: now })
+        await sb.from("live_selfservice_accesses").update({ registered_at: now, form_draft: null, updated_at: now })
           .eq("id", body.access_id).eq("event_id", ev.id);
       }
 
