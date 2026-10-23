@@ -30,6 +30,7 @@ interface Raffle {
   exclude_previous_winners: boolean;
   max_registration_minutes: number | null;
   max_payment_minutes: number | null;
+  prize_requires_paid?: boolean;
   status: string;
   drawn_at: string | null;
 }
@@ -74,6 +75,7 @@ interface Draft {
   exclude_previous_winners: boolean;
   max_registration_minutes: number | null;
   max_payment_minutes: number | null;
+  prize_requires_paid: boolean;
 }
 
 interface PoolRow {
@@ -101,6 +103,7 @@ const emptyDraft = (): Draft => ({
   exclude_previous_winners: true,
   max_registration_minutes: null,
   max_payment_minutes: null,
+  prize_requires_paid: true,
 });
 
 async function callRaffle(payload: Record<string, unknown>) {
@@ -391,6 +394,17 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
               />
             </div>
 
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Prêmio só é entregue com pedido pago</p>
+                <p className="text-xs text-muted-foreground">Quem não pagou não concorre.</p>
+              </div>
+              <Switch
+                checked={draft.prize_requires_paid}
+                onCheckedChange={(v) => setDraft({ ...draft, prize_requires_paid: v })}
+              />
+            </div>
+
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={() => setDraft(null)}>Cancelar</Button>
               <Button onClick={saveDraft} disabled={saving}>
@@ -423,6 +437,7 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
                 </Badge>
                 {r.max_registration_minutes && <Badge variant="outline">cadastro ≤ {r.max_registration_minutes} min</Badge>}
                 {r.max_payment_minutes && <Badge variant="outline">pagamento ≤ {r.max_payment_minutes} min</Badge>}
+                {r.prize_requires_paid && <Badge variant="outline">só com pedido pago</Badge>}
                 {r.status === "drawn" && <Badge className="bg-emerald-600">Sorteado</Badge>}
                 <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5" />

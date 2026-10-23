@@ -1,3 +1,4 @@
+import { isWhatsAppLikeMode } from "@/lib/liveModes";
 import { useState, useEffect, useMemo } from "react";
 import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { useNavigate, Link } from "react-router-dom";
@@ -68,7 +69,7 @@ const Index = () => {
   const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders, lockOrderEditing, unlockOrderEditing } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
-  const isWhatsAppMode = (currentEvent as any)?.operation_mode === "whatsapp";
+  const isWhatsAppMode = isWhatsAppLikeMode((currentEvent as any)?.operation_mode);
   // A Central da Live fica DESATIVADA por padrão (não monta, não faz polling).
   // Pode ser reativada manualmente pelo botão e a escolha fica salva no aparelho.
   const [attendanceEnabled, setAttendanceEnabled] = useState<boolean>(() => {
