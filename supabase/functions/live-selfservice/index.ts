@@ -267,6 +267,24 @@ Deno.serve(async (req) => {
       pix_discount_percent: pixPct,
     };
 
+    const mapOrder = (o: any) => {
+      const tot = orderTotal(o);
+      const noPix = !!o.cashback_id || Number(o.cashback_amount || 0) > 0;
+      return {
+        id: o.id,
+        products: (o.products || []).map((p: any) => ({ title: p.title, variant: p.variant, price: Number(p.price || 0), quantity: Number(p.quantity || 1), image: p.image || null })),
+        total: tot,
+        pix_total: noPix || !pixPct ? tot : Math.round(tot * (1 - pixPct / 100) * 100) / 100,
+        created_at: o.created_at,
+        payment_window_expires_at: o.payment_window_expires_at,
+        registered_at: o.registered_at,
+        free_shipping: !!o.free_shipping,
+        shipping_cost: Number(o.shipping_cost || 0),
+        discount_type: o.discount_type,
+        discount_value: o.discount_value,
+      };
+    };
+
     if (action === "event") return json({ ok: true, event: eventInfo });
 
     // ───── Página do link do carrinho (pedido deste modo) ─────
@@ -351,24 +369,6 @@ Deno.serve(async (req) => {
         .eq("phone_suffix8", suffix8(phone!)).not("cpf", "is", null);
       return (c2 || 0) > 0;
     }
-
-    const mapOrder = (o: any) => {
-      const tot = orderTotal(o);
-      const noPix = !!o.cashback_id || Number(o.cashback_amount || 0) > 0;
-      return {
-        id: o.id,
-        products: (o.products || []).map((p: any) => ({ title: p.title, variant: p.variant, price: Number(p.price || 0), quantity: Number(p.quantity || 1), image: p.image || null })),
-        total: tot,
-        pix_total: noPix || !pixPct ? tot : Math.round(tot * (1 - pixPct / 100) * 100) / 100,
-        created_at: o.created_at,
-        payment_window_expires_at: o.payment_window_expires_at,
-        registered_at: o.registered_at,
-        free_shipping: !!o.free_shipping,
-        shipping_cost: Number(o.shipping_cost || 0),
-        discount_type: o.discount_type,
-        discount_value: o.discount_value,
-      };
-    };
 
     async function savedDetails(): Promise<any> {
       const { data: reg } = await sb.from("customer_registrations")
