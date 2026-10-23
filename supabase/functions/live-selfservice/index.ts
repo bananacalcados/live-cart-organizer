@@ -224,7 +224,8 @@ Deno.serve(async (req) => {
         if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), order_id: orderId, whatsapp: digits(cp) });
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
-      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId]); }
+      const cbOne = await cashbackHint(orderTotal(o));
+      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
       catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
       return json({ ok: true, sent: true });
     }
