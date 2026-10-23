@@ -1,3 +1,4 @@
+import { SELF_SERVICE_MODE, isSelfServiceMode, isWhatsAppLikeMode } from "@/lib/liveModes";
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -106,6 +107,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [channel, setChannel] = useState<string>("site");
   const [operationMode, setOperationMode] = useState<string>("manual");
   const [memberAreaSlug, setMemberAreaSlug] = useState("");
+  // Modo "WhatsApp + Cadastro online"
+  const [ssSlug, setSsSlug] = useState("");
+  const [ssPrizeName, setSsPrizeName] = useState("");
+  const [ssPrizeImage, setSsPrizeImage] = useState("");
+  const [ssRegMin, setSsRegMin] = useState("5");
+  const [ssNotice, setSsNotice] = useState("Linha Luxo importada · 7 dias para troca ou devolução");
 
   // Frete
   const [shippingCost, setShippingCost] = useState("");
@@ -143,6 +150,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
   const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
+  const officialLast4 = (() => {
+    const n: any = numbers.find((x: any) => x.id === whatsappNumberId);
+    const d = String(n?.phone_display || "").replace(/\D/g, "");
+    return d ? d.slice(-4) : null;
+  })();
   const maWhatsappNumberId = maWaId === "none" ? null : maWaId;
 
   useEffect(() => {
@@ -176,6 +188,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setChannel(e.channel || "site");
     setOperationMode(e.operation_mode || "manual");
     setMemberAreaSlug(e.member_area_slug || "");
+    setSsSlug(e.self_service_slug || "");
+    setSsPrizeName(e.self_service_prize_name || "");
+    setSsPrizeImage(e.self_service_prize_image_url || "");
+    setSsRegMin(String(e.self_service_registration_minutes ?? 5));
+    setSsNotice(e.self_service_product_notice ?? "Linha Luxo importada · 7 dias para troca ou devolução");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
@@ -299,6 +316,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.operation_mode = operationMode;
       updates.member_area_slug =
         operationMode === "member_area" ? slugify(memberAreaSlug || name) || null : null;
+      if (isSelfServiceMode(operationMode)) {
+        updates.self_service_slug = slugify(ssSlug || name) || null;
+        updates.self_service_prize_name = ssPrizeName.trim() || null;
+        updates.self_service_prize_image_url = ssPrizeImage.trim() || null;
+        updates.self_service_registration_minutes = Math.max(1, Math.round(Number(ssRegMin)) || 5);
+        updates.self_service_product_notice = ssNotice.trim();
+      }
       const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
       updates.store_ids = isMulti
@@ -592,7 +616,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
               {/* Modo de operação da live */}
               <div className="space-y-2">
                 <Label>Como essa live vai funcionar? *</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                   <button
                     type="button"
                     onClick={() => setOperationMode("manual")}
@@ -640,7 +664,42 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     </p>
                   </button>
                 </div>
-                {operationMode === "whatsapp" && (
+                {isSelfServiceMode(operationMode) && (
+                  <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Endereço da página (link fixo da live)</Label>
+                      <Input value={ssSlug} placeholder={slugify(name) || "nome-da-live"} onChange={(e) => setSsSlug(e.target.value)} />
+                      <p className="text-xs text-muted-foreground break-all">
+                        checkout.bananacalcados.com.br/pedido/{slugify(ssSlug || name) || "..."}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Prêmio do dia (nome)</Label>
+                        <Input value={ssPrizeName} placeholder="Ex.: Bolsa de brinde" onChange={(e) => setSsPrizeName(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Imagem do prêmio (link)</Label>
+                        <Input value={ssPrizeImage} placeholder="https://..." onChange={(e) => setSsPrizeImage(e.target.value)} />
+                      </div>
+                    </div>
+                    {ssPrizeImage && <img src={ssPrizeImage} alt="" className="h-16 w-16 rounded object-cover" />}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Minutos para cadastro (prêmio)</Label>
+                      <Input type="number" min={1} value={ssRegMin} onChange={(e) => setSsRegMin(e.target.value)} className="w-28" />
+                      <p className="text-xs text-muted-foreground">Contados a partir da criação do pedido. Vira o padrão dos sorteios desta live.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Texto de aviso do produto</Label>
+                      <Input value={ssNotice} onChange={(e) => setSsNotice(e.target.value)} />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Número oficial no rodapé: final <strong>{officialLast4 || "— escolha a instância na etapa Mensagem"}</strong>
+                    </p>
+                  </div>
+                )}
+
+                {isWhatsAppLikeMode(operationMode) && (
                   <div className="space-y-1 rounded-lg border bg-muted/30 p-3">
                     <p className="text-xs text-muted-foreground">
                       Nesta live aparece a aba <strong>Central da Live</strong>: fila de conversas
@@ -720,7 +779,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 preencha as variáveis. A mensagem inicial abaixo é usada como saudação no chat.
               </p>
 
-              {operationMode === "whatsapp" && event?.id && (
+              {isWhatsAppLikeMode(operationMode) && event?.id && (
                 <LiveWhatsAppLinkConfig
                   eventId={event.id}
                   eventName={name}
@@ -728,7 +787,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 />
               )}
 
-              {operationMode === "whatsapp" && (
+              {isWhatsAppLikeMode(operationMode) && (
                 <WaInitialMessageEditor value={waInitial} onChange={setWaInitial} />
               )}
 
