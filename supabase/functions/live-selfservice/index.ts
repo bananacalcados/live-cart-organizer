@@ -503,7 +503,7 @@ Deno.serve(async (req) => {
         const { count } = await sb.from("live_whatsapp_clicks").select("id", { count: "exact", head: true }).eq("code", cand);
         if ((count || 0) > 0) continue;
         const { error } = await sb.from("live_selfservice_accesses")
-          .update({ confirm_code: cand, whatsapp_confirmed_at: null, updated_at: now, ...(target.length ? { order_ids: target.map((o: any) => o.id) } : {}) })
+          .update({ confirm_code: cand, whatsapp_confirmed_at: null, form_draft: null, updated_at: now, ...(target.length ? { order_ids: target.map((o: any) => o.id) } : {}) })
           .eq("id", accessId).eq("event_id", ev.id);
         if (!error) code = cand;
       }
