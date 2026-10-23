@@ -112,15 +112,8 @@ export default function SelfServiceOrderPage() {
     } else setScreen("no_order");
   };
 
-  const goRegister = async () => {
-    if (known) {
-      setBusy(true);
-      const r = await call({ action: "send_code", slug, phone: digitsOnly(phone) });
-      setBusy(false);
-      if (!r?.ok) { toast.error(r?.error || "Não consegui enviar o código."); return; }
-      setScreen("code");
-    } else setScreen("register");
-  };
+  // Sem código de confirmação: o WhatsApp real chega no redirecionamento final.
+  const goRegister = () => setScreen("register");
 
   const verify = async () => {
     setBusy(true);
@@ -161,7 +154,6 @@ export default function SelfServiceOrderPage() {
     });
     setBusy(false);
     if (!r?.ok) {
-      if (r?.error === "code_required") { setScreen("code"); toast.error("Confirme o código do WhatsApp."); return; }
       toast.error(r?.error || "Não foi possível salvar."); return;
     }
     if (orders.length) {
