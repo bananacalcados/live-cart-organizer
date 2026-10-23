@@ -272,9 +272,17 @@ Deno.serve(async (req) => {
     }
 
     if (action === "paid") {
+      // Só marca o funil se o pedido estiver pago de verdade no banco.
       if (body.access_id) {
-        await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq("id", body.access_id).eq("event_id", ev.id);
+        const { data: acc } = await sb.from("live_selfservice_accesses").select("order_ids").eq("id", body.access_id).eq("event_id", ev.id).maybeSingle();
+        const ids = (acc as any)?.order_ids || [];
+        if (ids.length) {
+          const { count } = await sb.from("orders").select("id", { count: "exact", head: true }).in("id", ids).eq("is_paid", true);
+          if ((count || 0) > 0) {
+            await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+              .eq("id", body.access_id).is("paid_at", null);
+          }
+        }
       }
       return json({ ok: true });
     }
