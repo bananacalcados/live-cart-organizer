@@ -115,6 +115,18 @@ export default function SelfServiceOrderPage() {
   // Sem código de confirmação: o WhatsApp real chega no redirecionamento final.
   const goRegister = () => setScreen("register");
 
+  // Rascunho em tempo real: 1 s após parar de digitar, os campos vão para o
+  // backend e aparecem na ficha da cliente no chat da live (sem confirmar).
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (screen !== "register" || !accessId) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      call({ action: "draft", slug, phone: digitsOnly(phone), access_id: accessId, details: form });
+    }, 1000);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [form, screen, accessId, slug, phone]);
+
   const verify = async () => {
     setBusy(true);
     const r = await call({ action: "verify_code", slug, phone: digitsOnly(phone), code });
