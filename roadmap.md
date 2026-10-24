@@ -25,7 +25,8 @@
 - [x] Registrar estorno externo de R$ 341,99 confirmado no MP; histórico autenticado e PDF ULAJAKU4 conferidos com Francisca como cliente, Daiane como destinatária informada no print e valor realmente pago; 19 testes passaram, sem novo estorno/envio.
 
 ## Página do produto — Cadastro online
-- [ ] Destacar cashback no carrinho: pedido de prazo fictício não implementado; aguarda aceite de destaque sem falsa expiração. Conferir cobertura de atribuição Meta do novo link.
+- [ ] Destacar cashback no carrinho: pedido de prazo fictício não implementado; aguarda aceite de destaque sem falsa expiração.
+- [x] Conferir cobertura Meta: gatilho ativo de pedido pago envia Purchase, mas páginas novas não capturam sinais de clique/navegador; recebimento e atribuição dessa compra na Meta não verificados, sem alterar rastreamento.
 - [x] Ampliar prêmio/cronômetro nas telas de produto e cadastro; upload real autenticado exibido e arquivo de teste removido, sem trocar foto da live. Telas 390/1280 sem overflow, 12 testes e confirmação transacional/repetida/remetente corrigido passaram; resposta real recuperada entregue a Matthews com @mattaguiar2 e carrinho certo. Sem cobrança/publicação.
 - [x] Capturar telefone completo antes do Continuar; prospect salvo como lead, duas linhas conferidas na live autenticada com captura real, chegada por broadcast, 8 testes e teste transacional de cliente anterior/empate/conflito/idempotência passaram. Dados de teste removidos, sem mensagens/cobranças/publicação.
 - [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
