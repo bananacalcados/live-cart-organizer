@@ -23,17 +23,26 @@ describe("overlay layout", () => {
     expect(DEFAULT_OVERLAY_LAYOUT.wheel.font_size).toBe(108);
   });
 });
-import { formatTimer, visibleTimers } from "@/lib/liveOverlay";
+import { formatTimer, takeNextTimer, timerShowSeconds } from "@/lib/liveOverlay";
 describe("payment timers", () => {
   it("formats remaining time as mm:ss and never goes negative", () => {
     expect(formatTimer(125_000)).toBe("02:05");
     expect(formatTimer(-5)).toBe("00:00");
   });
-  it("shows at most 4, soonest first, dropping expired and older than 20 min", () => {
+  it("shows one at a time in arrival order, skipping expired and older than 20 min", () => {
     const now = 1_000_000_000;
     const mk = (id: string, exp: number, added = now) => ({ orderId: id, handle: id, product: "", size: "", expiresAt: now + exp, addedAt: added });
-    const list = [mk("a", 50_000), mk("b", 10_000), mk("c", -1), mk("d", 30_000), mk("e", 40_000), mk("f", 20_000), mk("old", 5_000, now - 21 * 60_000)];
-    expect(visibleTimers(list, now).map((t) => t.orderId)).toEqual(["b", "f", "d", "e"]);
+    const queue = [mk("c", -1), mk("old", 5_000, now - 21 * 60_000), mk("a", 50_000), mk("b", 10_000)];
+    const first = takeNextTimer(queue, now);
+    expect(first.next?.orderId).toBe("a");
+    expect(first.rest.map((t) => t.orderId)).toEqual(["b"]);
+    expect(takeNextTimer(first.rest, now).next?.orderId).toBe("b");
+    expect(takeNextTimer([], now).next).toBeNull();
+  });
+  it("uses the configured on-screen time, never under 2 s", () => {
+    expect(timerShowSeconds({ enabled: true, template: "", duration_seconds: 4 })).toBe(4);
+    expect(timerShowSeconds({ enabled: true, template: "", duration_seconds: 0 })).toBe(6);
+    expect(timerShowSeconds({ enabled: true, template: "", duration_seconds: 1 })).toBe(2);
   });
 });
 import { DEFAULT_OVERLAY_CONFIG, expiredAlertTemplate } from "@/lib/liveOverlay";

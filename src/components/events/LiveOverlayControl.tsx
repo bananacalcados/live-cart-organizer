@@ -228,7 +228,9 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
           <CardContent className="space-y-2">
             <Label>Texto ({"{handle}"}, {"{timer}"}, {"{product}"}, {"{size}"})</Label>
             <Input value={cfg.payment_timers.template} onChange={(e) => update("payment_timers", { template: e.target.value })} />
-            <p className="text-xs text-muted-foreground">Aparece quando começa o prazo de pagamento do pedido. Até 4 ao mesmo tempo; some ao pagar, ao vencer ou depois de 20 min.</p>
+            <div className="flex items-center gap-2"><Label>Tempo em tela (segundos)</Label>
+              <Input type="number" className="w-24" min={2} value={cfg.payment_timers.duration_seconds} onChange={(e) => update("payment_timers", { duration_seconds: Number(e.target.value) || 6 })} /></div>
+            <p className="text-xs text-muted-foreground">Fila: aparece um cliente por vez, cada um pelo tempo acima. Quem pagou ou venceu sai da fila. O tamanho da letra é ajustado no bloco "Relógios" do editor de posições.</p>
           </CardContent>
         </Card>
 

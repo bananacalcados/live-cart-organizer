@@ -27,8 +27,8 @@ export interface OverlayConfig {
   assembled_alert: { enabled: boolean; template: string; duration_seconds: number };
   cta: { enabled: boolean; interval_minutes: number; items: OverlayItem[] };
   wheel: { enabled: boolean; title_template: string; result_seconds: number };
-  /** Relógios de pagamento: lista fixa, até 4 pedidos, fora da fila de avisos. */
-  payment_timers: { enabled: boolean; template: string };
+  /** Relógios de pagamento: fila, um pedido por vez, cada um por duration_seconds. */
+  payment_timers: { enabled: boolean; template: string; duration_seconds: number };
   /** Aviso de par liberado quando o prazo de pagamento vence. */
   expired_alert: { enabled: boolean; template: string; template_no_stock: string; duration_seconds: number };
 }
@@ -51,7 +51,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   },
   cta: { enabled: true, interval_minutes: 10, items: [] },
   wheel: { enabled: true, title_template: "🎰 Roleta de @{handle}", result_seconds: 8 },
-  payment_timers: { enabled: true, template: "✅ @{handle}, seu carrinho está pronto! ⏳ {timer} para pagar e concorrer à bolsa 🎁" },
+  payment_timers: { enabled: true, template: "✅ @{handle}, seu carrinho está pronto! ⏳ {timer} para pagar e concorrer à bolsa 🎁", duration_seconds: 6 },
   expired_alert: { enabled: true, template: "🔁 Liberou o {size} do {product}! Quem quer?", template_no_stock: "⌛ @{handle}, o prazo da bolsa acabou!", duration_seconds: 8 },
 };
 
@@ -82,10 +82,18 @@ export const formatTimer = (ms: number) => {
 };
 
 export interface PaymentTimer { orderId: string; handle: string; product: string; size: string; expiresAt: number; addedAt: number }
-/** Relógios visíveis: some ao vencer ou após 20 min; até 4, o que vence primeiro no topo. */
-export function visibleTimers(list: PaymentTimer[], now: number): PaymentTimer[] {
-  return list.filter((t) => t.expiresAt > now && now - t.addedAt < 20 * 60_000).sort((a, b) => a.expiresAt - b.expiresAt).slice(0, 4);
+/** Ainda vale mostrar: prazo não venceu e entrou há menos de 20 min. */
+export const timerStillValid = (t: PaymentTimer, now: number) => t.expiresAt > now && now - t.addedAt < 20 * 60_000;
+/**
+ * Fila dos relógios: um por vez, na ordem de chegada. Devolve o próximo válido e
+ * a fila restante (descartando vencidos), para nunca empilhar vários na tela.
+ */
+export function takeNextTimer(queue: PaymentTimer[], now: number): { next: PaymentTimer | null; rest: PaymentTimer[] } {
+  const valid = queue.filter((t) => timerStillValid(t, now));
+  return { next: valid[0] || null, rest: valid.slice(1) };
 }
+/** Tempo em tela de cada relógio (mínimo 2 s). */
+export const timerShowSeconds = (cfg: OverlayConfig["payment_timers"]) => Math.max(2, Number(cfg.duration_seconds) || 6);
 
 /** Aviso de vencimento: sem estoque além do carrinho, usa o texto "prazo acabou". */
 export function expiredAlertTemplate(cfg: OverlayConfig["expired_alert"], payload: { has_stock?: boolean }): string {
