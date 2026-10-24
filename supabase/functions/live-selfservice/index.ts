@@ -139,26 +139,22 @@ Deno.serve(async (req) => {
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
 
-  // Cashback da regra normal da loja (só texto de urgência na mensagem).
   async function cashbackHint(total: number) {
-    const { data: cfg } = await sb.from("pos_cashback_config").select("is_enabled, percentage, min_sale_value, max_cashback").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (!cfg || !(cfg as any).is_enabled || total < Number((cfg as any).min_sale_value || 0)) return null;
-    let v = total * (Number((cfg as any).percentage) || 0) / 100;
-    const max = Number((cfg as any).max_cashback);
-    if (max > 0 && v > max) v = max;
-    v = Math.round(v * 100) / 100;
-    return v > 0 ? v : null;
+    return Math.round(total * 10) / 100;
   }
 
   async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
-    const cb = cashback ? `\n💰 Pagando em menos de 20 minutos você ainda ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
+    const cb = cashback ? `\n💰 Pagando em até 20 minutos do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
       `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
       `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
       `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
     ];
-    await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    const mid = await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    if (!mid) throw new Error("Provedor não confirmou o identificador do envio");
+    const { error } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: orderIds, p_message_id: mid });
+    if (error) throw error;
   }
 
   try {
@@ -271,6 +267,7 @@ Deno.serve(async (req) => {
         created_at: o.created_at,
         payment_window_expires_at: o.payment_window_expires_at,
         registered_at: o.registered_at,
+        cashback_deadline: o.selfservice_cart_sent_at ? new Date(Date.parse(o.selfservice_cart_sent_at) + 20 * 60 * 1000).toISOString() : null,
         free_shipping: !!o.free_shipping,
         shipping_cost: Number(o.shipping_cost || 0),
         discount_type: o.discount_type,
@@ -285,7 +282,7 @@ Deno.serve(async (req) => {
       const orderId = String(body.order_id || "");
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
-        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at")
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
@@ -362,7 +359,7 @@ Deno.serve(async (req) => {
       const { data } = await sb
         .from("orders")
         .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
-        .eq("event_id", ev!.id)
+        .eq("event_id", ev.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
         .eq("is_paid", false)
@@ -380,10 +377,10 @@ Deno.serve(async (req) => {
 
     async function knownCustomer(): Promise<boolean> {
       const { count } = await sb.from("customer_registrations").select("id", { count: "exact", head: true })
-        .ilike("whatsapp", `%${suffix8(phone!)}`).neq("cpf", "");
+        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "");
       if ((count || 0) > 0) return true;
       const { count: c2 } = await sb.from("customers_unified").select("id", { count: "exact", head: true })
-        .eq("phone_suffix8", suffix8(phone!)).not("cpf", "is", null);
+        .eq("phone_suffix8", suffix8(phone)).not("cpf", "is", null);
       return (c2 || 0) > 0;
     }
 
@@ -396,7 +393,7 @@ Deno.serve(async (req) => {
         const { data: cu } = await sb.from("customers_unified")
           .select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
           .eq("phone_suffix8", suffix8(phone)).limit(2);
-        if ((cu || []).length === 1) d = { ...cu![0], full_name: (cu![0] as any).name };
+        if ((cu || []).length === 1) d = { ...cu[0], full_name: (cu[0] as any).name };
       }
       return d || null;
     }
@@ -460,7 +457,7 @@ Deno.serve(async (req) => {
 
     async function checkCode(): Promise<boolean> {
       if (!(await allow(`otpv:${phone}`, 8, 600))) return false;
-      return verifyAccessCode(sb, phone!, String(body.code || ""));
+      return verifyAccessCode(sb, phone, String(body.code || ""));
     }
 
     if (action === "verify_code") {

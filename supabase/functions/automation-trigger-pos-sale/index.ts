@@ -1,3 +1,4 @@
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -41,7 +42,7 @@ Deno.serve(async (req) => {
 
     const { data: sale, error: saleErr } = await supabase
       .from("pos_sales")
-      .select("id, store_id, seller_id, customer_id, total, customer_name, customer_phone, created_at, sale_type")
+      .select("id, store_id, seller_id, customer_id, total, customer_name, customer_phone, created_at, sale_type, source_order_id")
       .eq("id", sale_id)
       .maybeSingle();
     if (saleErr || !sale) return new Response(JSON.stringify({ error: "sale not found" }), { status: 404, headers: corsHeaders });
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
     const sellerName = seller?.name || "nossa equipe";
     const storeName = store?.name || "";
 
+    const selfserviceCb = sale.source_order_id ? await grantSelfserviceCashback(supabase, sale.source_order_id) : { applicable: false };
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     let { data: cb } = await supabase
       .from("internal_cashback")
@@ -81,8 +83,10 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    if (selfserviceCb?.applicable) cb = selfserviceCb;
+
     // 💰 Auto-gerar cashback se não existir e config permitir
-    if (!cb) {
+    if (!cb && !selfserviceCb?.applicable) {
       // Carrega config: específica da loja primeiro, depois global
       let cfg: any = null;
       const { data: storeCfg } = await supabase

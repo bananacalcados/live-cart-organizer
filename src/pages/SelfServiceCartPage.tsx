@@ -7,13 +7,14 @@ import { toast } from "sonner";
 import { StepPayment, type CustomerFormData } from "@/components/checkout/PaymentSection";
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
+import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
 type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null };
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
-  total: number; pix_total: number; payment_window_expires_at: string | null;
+  total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
 };
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -134,6 +135,7 @@ export default function SelfServiceCartPage() {
               {interestOption && <p className="text-muted-foreground">Ou até {interestOption.installments}x com juros — parcelas e total apresentados antes de pagar.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
             </div>
+            <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />
             {reserveLeft !== null && (
               <div className="flex items-center gap-2 rounded-2xl bg-muted p-3 text-sm">
                 <Clock className="h-4 w-4" />

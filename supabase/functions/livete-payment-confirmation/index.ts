@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -53,6 +54,11 @@ serve(async (req) => {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    if (!order.is_paid && order.stage !== 'paid') return new Response(JSON.stringify({ handled: false, reason: 'not_paid' }), { headers: corsHeaders });
+    let selfserviceCb: any;
+    try { selfserviceCb = await grantSelfserviceCashback(supabase, orderId); }
+    catch (error) { return new Response(JSON.stringify({ handled: false, reason: 'cashback_verification_pending' }), { status: 503, headers: corsHeaders }); }
 
     // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
     const { error: claimError } = await supabase
@@ -126,6 +132,9 @@ serve(async (req) => {
     const phoneSuffix8 = fullPhone.slice(-8);
     let cashbackLine = '';
     try {
+      if (selfserviceCb?.applicable) {
+        cashbackLine = `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
+      } else {
       // Já existe cashback ativo recente? Não duplica.
       const { data: existingCb } = await supabase
         .from('internal_cashback')
@@ -177,6 +186,7 @@ serve(async (req) => {
       if (cb) {
         cashbackLine =
           `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
+      }
       }
     } catch (err) {
       console.error('[livete-payment-confirmation] cashback error:', err);
