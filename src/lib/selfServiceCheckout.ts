@@ -10,6 +10,11 @@ export function canPayRegisteredOrder(order: SelfServiceCheckoutOrder): boolean 
   return !!order.registered_at && order.registration_confirmed === true;
 }
 
+/** The combined preview must retain the previous confirmed/expired guards. */
+export function canFillSelfServiceRegistration(hasOrders: boolean, registrationConfirmed: boolean, reserveExpired: boolean): boolean {
+  return !hasOrders || (!registrationConfirmed && !reserveExpired);
+}
+
 export function selfServiceShipping(order: SelfServiceCheckoutOrder): number {
   return order.free_shipping ? 0 : Math.max(0, Number(order.shipping_cost) || 0);
 }

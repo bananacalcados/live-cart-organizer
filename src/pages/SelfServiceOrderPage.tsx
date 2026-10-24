@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Clock, MessageCircle } from "lucide-react";
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner";
@@ -15,7 +15,7 @@ import { registrationErrors, type RegistrationErrorKey } from "@/lib/selfService
 import { formatMmSs, registrationDeadline } from "@/lib/liveModes";
 import { openWhatsAppDeepLink } from "@/lib/waDeepLink";
 import { completeInitialPhone } from "@/lib/selfServiceInitial";
-import { canPayRegisteredOrder, selfServiceShipping } from "@/lib/selfServiceCheckout";
+import { canFillSelfServiceRegistration, canPayRegisteredOrder, selfServiceShipping } from "@/lib/selfServiceCheckout";
 
 type Ev = {
   id: string; name: string; prize_name: string | null; prize_image_url: string | null;
@@ -95,6 +95,8 @@ export default function SelfServiceOrderPage() {
   const registrationConfirmed = orders.length > 0 && orders.every(canPayRegisteredOrder);
   const reserveLeft = primary?.payment_window_expires_at ? new Date(primary.payment_window_expires_at).getTime() - now : null;
   const reserveExpired = reserveLeft !== null && reserveLeft <= 0;
+  const registrationAvailable = canFillSelfServiceRegistration(orders.length > 0, registrationConfirmed, reserveExpired);
+  const showRegistration = registrationAvailable && (screen === "product" || screen === "no_order" || screen === "register");
   const prizeLeft = primary && ev ? registrationDeadline(primary.created_at, ev.registration_minutes) - now : 0;
   const prizeActive = !!ev?.prize_name && !!primary && !primary.registered_at && prizeLeft > 0;
   // Cronômetro visível enquanto houver prazo, mesmo já cadastrada (mantém a urgência).
@@ -162,14 +164,14 @@ export default function SelfServiceOrderPage() {
   // backend e aparecem na ficha da cliente no chat da live (sem confirmar).
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (screen !== "register" || !accessId) return;
+    if (!showRegistration || !accessId) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => {
       const altFields = Object.fromEntries(Object.entries(alt).map(([k, v]) => [`alt_${k}`, v]));
       call({ action: "draft", slug, phone: digitsOnly(phone), access_id: accessId, details: { ...form, use_alt: useAlt ? "1" : "", ...altFields } });
     }, 1000);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
-  }, [form, alt, useAlt, screen, accessId, slug, phone]);
+  }, [form, alt, useAlt, showRegistration, accessId, slug, phone]);
 
   const verify = async () => {
     setBusy(true);
@@ -222,6 +224,7 @@ export default function SelfServiceOrderPage() {
     : null;
 
   const submit = async () => {
+    if (!showRegistration || busy) return;
     setAttemptedSubmit(true);
     const firstError = Object.keys(errors)[0] as RegistrationErrorKey | undefined;
     if (firstError) {
@@ -276,6 +279,7 @@ export default function SelfServiceOrderPage() {
 
         {screen === "identify" && (
           <div className="space-y-4 rounded-2xl border p-4">
+            <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois de preencher os dados e enviar a mensagem de confirmação no WhatsApp.</p>
             <div className="space-y-1">
               <Label>Seu WhatsApp com DDD</Label>
               <Input inputMode="tel" autoComplete="tel" placeholder="(33) 9.9999-9999" value={maskPhoneBR(phone)} onChange={(e) => setPhone(digitsOnly(e.target.value))} className="h-14 text-lg" />
@@ -285,7 +289,7 @@ export default function SelfServiceOrderPage() {
               <Input placeholder="@seuinsta" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
             </div>
             <Button className="h-14 w-full text-base font-bold" onClick={identify} disabled={busy}>
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar"}
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar para preencher meus dados"}
             </Button>
           </div>
         )}
@@ -329,22 +333,13 @@ export default function SelfServiceOrderPage() {
                 <p className="font-semibold">Reserva expirada — fale no WhatsApp</p>
                 {waLink && <Button asChild className="w-full"><a href={waLink} target="_blank" rel="noreferrer"><MessageCircle className="mr-2 h-4 w-4" />Falar no WhatsApp</a></Button>}
               </div>
-            ) : (
-              <>
-                <Button className="h-14 w-full text-base font-bold" onClick={goRegister} disabled={busy}>
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : prizeActive ? "Confirmar meus dados e concorrer" : "Confirmar meus dados"}
-                </Button>
-              </>
-            )}
+            ) : null}
           </div>
         )}
 
         {screen === "no_order" && (
-          <div className="space-y-4 rounded-2xl border p-4 text-center">
-            <p>Ainda não encontrei um pedido seu nesta live. Faça seu cadastro agora: quando você pedir na live, seu link já vem pronto e você já concorre.</p>
-            <Button className="h-14 w-full text-base font-bold" onClick={goRegister} disabled={busy}>
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Fazer meu cadastro"}
-            </Button>
+          <div className="py-4 text-center">
+            <p>Ainda não encontrei um pedido seu nesta live. Preencha seus dados abaixo e confirme no WhatsApp.</p>
           </div>
         )}
 
@@ -359,12 +354,13 @@ export default function SelfServiceOrderPage() {
           </div>
         )}
 
-        {screen === "register" && (
-          <div className="space-y-3">
-            {prizeTimer && (
+        {showRegistration && (
+          <div className="mt-5 space-y-3 border-t pt-5">
+            {screen === "register" && prizeTimer && (
               <SelfServicePrizeBanner name={ev.prize_name || ""} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description="Conclua seu cadastro antes do tempo acabar para concorrer ao sorteio." />
             )}
-            {!prizeActive && <p className="text-sm text-muted-foreground">Conclua esta etapa pra terminar seu cadastro.</p>}
+            <h2 className="text-lg font-bold">Preencha seus dados</h2>
+            <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois de enviar a mensagem de confirmação no WhatsApp.</p>
             {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}
             <div className="space-y-1"><Label>Nome completo</Label><Input {...fieldProps("full_name")} autoComplete="name" value={form.full_name} onChange={set("full_name")} />{fieldError("full_name")}</div>
             <div className="space-y-1"><Label>CEP</Label><Input {...fieldProps("cep")} inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} />{fieldError("cep")}</div>
@@ -403,6 +399,7 @@ export default function SelfServiceOrderPage() {
             </div>
             <div className="space-y-1"><Label>E-mail</Label><Input {...fieldProps("email")} type="email" autoComplete="email" value={form.email} onChange={set("email")} />{fieldError("email")}</div>
             {attemptedSubmit && Object.keys(errors).length > 0 && <p role="alert" className="text-sm font-semibold text-destructive">Corrija os campos destacados acima para confirmar seu cadastro.</p>}
+            <p className="text-sm text-muted-foreground">Ao tocar abaixo, o WhatsApp vai abrir. Envie a mensagem pronta para concluir a confirmação — só abrir o WhatsApp não confirma.</p>
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
             </Button>
@@ -411,8 +408,9 @@ export default function SelfServiceOrderPage() {
 
         {screen === "confirm_wa" && (
           <div className="space-y-4 rounded-2xl border p-4 text-center">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-primary" />
+            <MessageCircle className="mx-auto h-12 w-12 text-primary" />
             <p className="font-semibold">Falta só um passo: envie a mensagem que abriu no WhatsApp</p>
+            <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois que essa mensagem chegar para nós.</p>
             <p className="text-sm text-muted-foreground">
               {orders.length ? "Assim que ela chegar, a gente te responde com o link do seu carrinho." : "Assim que ela chegar, seu cadastro fica confirmado."}
             </p>

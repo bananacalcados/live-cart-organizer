@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { canPayRegisteredOrder, initialCartMode, selfServiceShipping } from "../lib/selfServiceCheckout";
+import { canFillSelfServiceRegistration, canPayRegisteredOrder, initialCartMode, selfServiceShipping } from "../lib/selfServiceCheckout";
 
 describe("carrinho do autoatendimento", () => {
+  it("abre os dados junto ao pedido sem transformar telefone digitado em confirmação", () => {
+    expect(canFillSelfServiceRegistration(true, false, false)).toBe(true);
+    expect(canPayRegisteredOrder({ id: "pedido", registered_at: null, registration_confirmed: false })).toBe(false);
+  });
+  it("permite cadastro sem pedido", () => {
+    expect(canFillSelfServiceRegistration(false, false, false)).toBe(true);
+  });
+  it("não solicita novo cadastro de pedido confirmado", () => {
+    expect(canFillSelfServiceRegistration(true, true, false)).toBe(false);
+  });
+  it("mantém o bloqueio de reserva expirada", () => {
+    expect(canFillSelfServiceRegistration(true, false, true)).toBe(false);
+  });
   it("cadastro confirmado no WhatsApp não exige nova confirmação", () => {
     expect(canPayRegisteredOrder({ id: "pedido", registered_at: "2026-10-24T15:57:02Z", registration_confirmed: true })).toBe(true);
     expect(canPayRegisteredOrder({ id: "pedido", registered_at: "2026-10-24T15:57:02Z", registration_confirmed: false })).toBe(false);
