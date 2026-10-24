@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ export default function SelfServiceCartPage() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
+  const purchaseSeen = useRef(false);
+  const paidValue = useRef<number | null>(null);
 
   useEffect(() => {
     call({ action: "cart", slug, order_id: orderId }).then((r) => {
@@ -61,7 +63,7 @@ export default function SelfServiceCartPage() {
     const t = setInterval(async () => {
       if (document.hidden) return;
       const r = await call({ action: "status", slug, order_id: orderId });
-      if (r?.paid) setPaid(true);
+      if (r?.paid) { paidValue.current = r.amount_paid ?? null; setPaid(true); }
     }, 30_000);
     return () => clearInterval(t);
   }, [mode, paid, slug, orderId]);
@@ -79,9 +81,14 @@ export default function SelfServiceCartPage() {
 
   useEffect(() => {
     const sync = () => {
-      if (!advertisingChoice()?.accepted) return;
+      if (!advertisingChoice()?.accepted) { if (paid) purchaseSeen.current = true; return; }
       if (!paid) call({ action: "meta_signals", slug, order_id: orderId, signals: advertisingSignals() });
-      trackSelfservice(paid ? "Purchase" : "InitiateCheckout", { value: paid && pix ? pix.amount : order?.total, currency: "BRL" }, paid ? `purchase_order_${orderId}` : undefined);
+      if (!paid) trackSelfservice("InitiateCheckout", { value: order?.total, currency: "BRL" });
+      // No replay after a later consent change; Purchase needs the server-confirmed paid amount.
+      if (paid && !purchaseSeen.current) {
+        purchaseSeen.current = true;
+        if (paidValue.current) trackSelfservice("Purchase", { value: paidValue.current, currency: "BRL" }, `purchase_order_${orderId}`);
+      }
     };
     if (order) sync();
     window.addEventListener("selfservice-advertising-change", sync);

@@ -3,7 +3,7 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
-import { advertisingChoice } from "./selfServiceAdvertising";
+import { advertisingChoice } from "./selfServiceAdvertisingChoice";
 import { resolveFbc, resolveFbp } from "./metaAttribution";
 
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
