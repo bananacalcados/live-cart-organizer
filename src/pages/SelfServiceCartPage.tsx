@@ -51,7 +51,7 @@ export default function SelfServiceCartPage() {
   const [paid, setPaid] = useState(false);
   const [notFound, setNotFound] = useState(false);
   // Link da equipe (?pgto=cartao) já abre na tela do cartão, sem passar pela escolha Pix/Cartão.
-  const [mode, setMode] = useState<"choose" | "pix" | "card">(() => initialCartMode(searchParams.get("pgto") ? `?${searchParams.toString()}` : ""));
+  const [mode, setMode] = useState<"choose" | "pix" | "card">(() => initialCartMode(`?${searchParams.toString()}`));
   const [pix, setPix] = useState<{ code: string; base64: string | null; amount: number; sent: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
