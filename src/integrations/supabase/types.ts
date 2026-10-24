@@ -27290,6 +27290,10 @@ export type Database = {
         Args: { p_option_index: number; p_quote_id: string; p_user_id: string }
         Returns: Json
       }
+      selfservice_access_for_order: {
+        Args: { p_order_id: string }
+        Returns: string
+      }
       selfservice_capture_initial: {
         Args: {
           p_access_id?: string
@@ -27336,6 +27340,10 @@ export type Database = {
       selfservice_match_initial_order: {
         Args: { p_event_id: string; p_phone: string }
         Returns: string[]
+      }
+      selfservice_notify_late_order: {
+        Args: { p_order_id: string }
+        Returns: undefined
       }
       selfservice_queue_backstop_refresh: { Args: never; Returns: undefined }
       selfservice_queue_backstop_tick: { Args: never; Returns: undefined }
