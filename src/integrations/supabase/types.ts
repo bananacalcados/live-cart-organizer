@@ -6680,6 +6680,8 @@ export type Database = {
           end_date: string | null
           followup_templates: Json
           free_shipping_threshold: number | null
+          google_profile_url: string | null
+          google_rating_text: string | null
           id: string
           ig_automations: Json
           ig_initial_message_buttons: Json
@@ -6742,6 +6744,8 @@ export type Database = {
           end_date?: string | null
           followup_templates?: Json
           free_shipping_threshold?: number | null
+          google_profile_url?: string | null
+          google_rating_text?: string | null
           id?: string
           ig_automations?: Json
           ig_initial_message_buttons?: Json
@@ -6804,6 +6808,8 @@ export type Database = {
           end_date?: string | null
           followup_templates?: Json
           free_shipping_threshold?: number | null
+          google_profile_url?: string | null
+          google_rating_text?: string | null
           id?: string
           ig_automations?: Json
           ig_initial_message_buttons?: Json
@@ -20614,6 +20620,72 @@ export type Database = {
         }
         Relationships: []
       }
+      selfservice_instance_pacing: {
+        Row: {
+          last_sent_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          last_sent_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          last_sent_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: []
+      }
+      selfservice_message_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_id: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          message_key: string
+          next_attempt_at: string
+          order_id: string | null
+          payload: Json
+          phone: string
+          sent_at: string | null
+          status: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          message_key: string
+          next_attempt_at?: string
+          order_id?: string | null
+          payload?: Json
+          phone: string
+          sent_at?: string | null
+          status?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          message_key?: string
+          next_attempt_at?: string
+          order_id?: string | null
+          payload?: Json
+          phone?: string
+          sent_at?: string | null
+          status?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       service_providers: {
         Row: {
           created_at: string
@@ -27244,6 +27316,10 @@ export type Database = {
           phone: string
         }[]
       }
+      selfservice_instance_gate: {
+        Args: { p_min_ms: number; p_number_id: string }
+        Returns: boolean
+      }
       selfservice_mark_cart_sent: {
         Args: { p_message_id: string; p_order_ids: string[] }
         Returns: undefined
@@ -27252,6 +27328,44 @@ export type Database = {
         Args: { p_event_id: string; p_phone: string }
         Returns: string[]
       }
+      selfservice_queue_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          event_id: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          message_key: string
+          next_attempt_at: string
+          order_id: string | null
+          payload: Json
+          phone: string
+          sent_at: string | null
+          status: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "selfservice_message_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      selfservice_queue_enqueue: {
+        Args: {
+          p_event_id: string
+          p_kind: string
+          p_message_key: string
+          p_order_id: string
+          p_payload: Json
+          p_phone: string
+          p_whatsapp_number_id: string
+        }
+        Returns: boolean
+      }
+      selfservice_queue_requeue: { Args: { p_id: string }; Returns: boolean }
       selfservice_save_advertising_choice: {
         Args: { p_accept: boolean; p_id: string; p_region: string }
         Returns: string
