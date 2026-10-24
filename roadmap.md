@@ -1,10 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Carrinho e cadastro — 24/10
-- [ ] Mostrar frete separado nas páginas públicas do autoatendimento.
-- [ ] Cadastro confirmado oferece pagamento sem nova confirmação.
-- [ ] Pedido posterior ao cadastro confirmado recebe link pela fila existente.
-- [ ] Testar os três caminhos sem publicar o site.
+- [x] Mostrar frete separado nas páginas públicas do autoatendimento.
+- [x] Cadastro confirmado oferece pagamento sem nova confirmação.
+- [x] Pedido posterior ao cadastro confirmado recebe link pela fila existente.
+- [x] Testar os três caminhos sem publicar o site: 10 testes, identificação transacional com rollback e navegador no pedido real. Sem envio real de WhatsApp.
 
 ## Ajustes de fila — 24/10
 - [x] Intervalo aleatório persistido de 3–7 segundos por instância e testes.
