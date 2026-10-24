@@ -534,6 +534,17 @@
 .overlay-panel.overlay-alert-expired { background: hsl(var(--overlay-expired) / 0.85); }
 .overlay-timer { color: hsl(var(--overlay-progress)); font-variant-numeric: tabular-nums; }
 
+/* Confete do sorteio ao vivo (overlay/OBS) */
+.overlay-confetti { position: absolute; inset: -0.6em; pointer-events: none; overflow: visible; }
+.overlay-confetti i {
+  position: absolute; top: -0.3em; width: 0.2em; height: 0.32em; border-radius: 0.04em;
+  opacity: 0; animation: overlay-confetti-fall 2.8s ease-in forwards;
+}
+@keyframes overlay-confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(4.5em) rotate(540deg); opacity: 0; }
+}
+
 .selfservice-prize { box-shadow: var(--shadow-md); }
 .selfservice-prize-clock { animation: selfservice-prize-glow 1.8s ease-in-out infinite; }
 .selfservice-prize-tick { animation: selfservice-prize-tick 1s steps(2, end) infinite; }

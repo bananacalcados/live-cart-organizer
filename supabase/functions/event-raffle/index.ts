@@ -223,6 +223,25 @@ Deno.serve(async (req) => {
         if (winner) winners.push(winner);
       }
 
+      // Avisa o overlay da live (OBS): roleta gira e para na ganhadora, com confete.
+      try {
+        const labels = pool.map((p) => p.display_name).filter(Boolean).slice(0, 40);
+        for (const w of winners) {
+          await supabase.from("live_overlay_events").insert({
+            event_id: raffle.event_id,
+            kind: "raffle_draw",
+            payload: {
+              winner_label: w.display_name || "Cliente",
+              handle: w.display_name || "cliente",
+              prize_label: raffle.prize_label,
+              labels,
+            },
+          });
+        }
+      } catch (e) {
+        console.error("[event-raffle] overlay", e);
+      }
+
       return json({
         ok: true,
         winners,
