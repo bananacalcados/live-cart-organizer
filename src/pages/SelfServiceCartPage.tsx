@@ -8,7 +8,7 @@ import { StepPayment, type CustomerFormData } from "@/components/checkout/Paymen
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
-import { advertisingChoice, advertisingSignals, trackSelfservice } from "@/lib/selfServiceAdvertising";
+import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
 
@@ -82,7 +82,8 @@ export default function SelfServiceCartPage() {
 
   useEffect(() => {
     const sync = () => {
-      if (!advertisingChoice()?.accepted) { if (paid) purchaseSeen.current = true; return; }
+      if (advertisingRefused()) { if (order) call({ action: "meta_signals", slug, order_id: orderId, signals: advertisingSignals() }); }
+      if (!advertisingAllowed()) { if (paid) purchaseSeen.current = true; return; }
       if (!paid) call({ action: "meta_signals", slug, order_id: orderId, signals: advertisingSignals() });
       if (!paid) trackSelfservice("InitiateCheckout", { value: order?.total, currency: "BRL" });
       // No replay after a later consent change; Purchase needs the server-confirmed paid amount.
@@ -91,7 +92,7 @@ export default function SelfServiceCartPage() {
         if (paidValue.current) trackSelfservice("Purchase", { value: paidValue.current, currency: "BRL" }, `purchase_order_${orderId}`);
       }
     };
-    if (order) sync();
+    if (order) ensureAdvertisingRegion().then(sync);
     window.addEventListener("selfservice-advertising-change", sync);
     return () => window.removeEventListener("selfservice-advertising-change", sync);
   }, [slug, orderId, order?.id, paid]);

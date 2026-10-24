@@ -11,7 +11,7 @@
 // All PII is hashed SHA-256 (lowercased, trimmed). fbc/fbp/UA/IP are sent in plain text.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { loadSelfserviceAdvertising } from "../_shared/selfservice-advertising.ts";
+import { loadSelfserviceAdvertising, ordinaryAllowed } from "../_shared/selfservice-advertising.ts";
 import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
@@ -175,6 +175,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     let selfservice = false;
+    let selfserviceOrdinary = false;
     let selfserviceOrder: any = null;
     if (order_id) {
       const { data: linked, error: linkedError } = await supabase.from("orders").select("id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode)").eq("id", order_id).maybeSingle();
@@ -184,7 +185,9 @@ Deno.serve(async (req) => {
       if (selfservice) {
         const { data: registration } = await supabase.from("customer_registrations").select("selfservice_advertising_consent_id,selfservice_advertising_snapshot").eq("order_id", order_id).maybeSingle();
         const consent = await loadSelfserviceAdvertising(supabase, registration?.selfservice_advertising_consent_id);
-        if (!consent || !registration?.selfservice_advertising_snapshot?.advertising) return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_consent_required" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const full = !!consent && !!registration?.selfservice_advertising_snapshot?.advertising;
+        selfserviceOrdinary = !full && !registration?.selfservice_advertising_consent_id && ordinaryAllowed(registration?.selfservice_advertising_snapshot);
+        if (!full && !selfserviceOrdinary) return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_consent_required" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
         if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
           await grantSelfserviceCashback(supabase, order_id);
@@ -377,8 +380,10 @@ Deno.serve(async (req) => {
 
 
 
+    // Sem aceite explícito: só clique no anúncio, IP, navegador e valor — nada de dado pessoal.
+    if (selfserviceOrdinary) { _email = _fullName = _city = _state = _zip = _cpf = _birthDate = _gender = _customerRef = undefined; }
     // ============ Build hashed user_data ============
-    const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
+    const ph = phoneDigits && !selfserviceOrdinary ? await sha256Hex(phoneDigits) : undefined;
     const em = _email ? await hashIfPresent(normalizeEmail(_email)) : undefined;
 
     const { first: firstRaw, last: lastRaw } = splitName(_fullName);
@@ -396,7 +401,7 @@ Deno.serve(async (req) => {
       const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
-    if (selfservice && order_id) externalId = await sha256Hex(`selfservice_order_${order_id}`);
+    if (selfservice && !selfserviceOrdinary && order_id) externalId = await sha256Hex(`selfservice_order_${order_id}`);
     if (!externalId && _customerRef) {
       externalId = await sha256Hex(String(_customerRef).trim().toLowerCase());
     }

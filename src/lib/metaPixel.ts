@@ -3,7 +3,7 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
-import { advertisingChoice } from "./selfServiceAdvertisingChoice";
+import { advertisingAllowed } from "./selfServiceAdvertisingChoice";
 import { resolveFbc, resolveFbp } from "./metaAttribution";
 
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
@@ -11,7 +11,7 @@ const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
 
 /** Inject the fbevents.js SDK and initialise the pixel (idempotent). */
 export function initMetaPixel() {
-  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingAllowed()) return;
   if (!META_PIXEL_ID || (window as any).fbq) return;
 
   const f = window as any;
@@ -73,7 +73,7 @@ export interface TrackOptions {
 
 /** Fire a standard or custom pixel event (browser). */
 export function trackPixelEvent(event: string, data?: Record<string, any>, options?: TrackOptions) {
-  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingAllowed()) return;
   if (!(window as any).fbq) return;
   const testCode = getTestEventCode();
   const eventData = testCode ? { ...data, test_event_code: testCode } : data;
@@ -91,6 +91,6 @@ export function trackPageView() {
 
 window.addEventListener("storage", (event) => {
   if (event.key === "bc_selfservice_advertising_v1" && window.location.pathname.startsWith("/pedido/")) {
-    (window as any).fbq?.("consent", advertisingChoice()?.accepted ? "grant" : "revoke");
+    (window as any).fbq?.("consent", advertisingAllowed() ? "grant" : "revoke");
   }
 });

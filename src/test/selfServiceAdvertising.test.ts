@@ -16,3 +16,10 @@ describe("publicidade do autoatendimento", () => {
   });
   it("não fabrica FBC quando não houve sinal de clique", () => expect(cleanSelfserviceSignals({}, new Request("https://example.com")).fbc).toBeNull());
 });
+import { ordinaryAllowed } from "../../supabase/functions/_shared/selfservice-advertising";
+describe("rastreamento comum sem caixinha", () => {
+  const snap = (region: string) => ({ ordinary: true, region, notice_version: "selfservice-meta-ordinary-v1" });
+  it("Brasil libera clique/IP/navegador sem aceite", () => expect(ordinaryAllowed(snap("BR"))).toBe(true));
+  it("Europa continua bloqueada sem aceite", () => expect(ordinaryAllowed(snap("DE"))).toBe(false));
+  it("recusa bloqueia", () => expect(ordinaryAllowed({ advertising: false, ordinary: false })).toBe(false));
+});
