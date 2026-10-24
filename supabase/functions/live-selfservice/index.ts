@@ -414,7 +414,30 @@ Deno.serve(async (req) => {
         const { data: c } = await sb.from("customers").select("whatsapp").eq("id", (o as any).customer_id).maybeSingle();
         const to = (acc as any)?.confirmed_phone || (c as any)?.whatsapp || r.whatsapp;
         const numberId = (acc as any)?.confirmed_number_id || ev.whatsapp_number_id;
-        if (to && numberId) { await waSendPix(numberId, to, String((pd as any).qrCode).trim(), amount); sentWa = true; }
+        if (to && numberId) {
+          const code = String((pd as any).qrCode).trim();
+          const { data: numP } = await sb.from("whatsapp_numbers").select("provider").eq("id", numberId).maybeSingle();
+          const isUaz = (numP as any)?.provider === "uazapi";
+          let ok = false;
+          if (isUaz) {
+            ok = await queueAuto({
+              key: `pix:${orderId}`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: `💰 *PIX de ${fmtBRL(amount)}*\n\nToque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em *Pix → Pix Copia e Cola* e cole o código. 👇`, copy_code: code },
+            });
+          } else {
+            const q1 = await queueAuto({
+              key: `pix:${orderId}:1`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: `💰 *PIX de ${fmtBRL(amount)}*\n\n👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.` },
+            });
+            const q2 = await queueAuto({
+              key: `pix:${orderId}:2`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: code },
+            });
+            ok = q1 && q2;
+          }
+          if (ok) sentWa = true;
+          else { await waSendPix(numberId, to, code, amount); sentWa = true; } // fallback: envio direto
+        }
       } catch (err) { console.error("[live-selfservice] pix no WhatsApp falhou", err); }
       return json({ ok: true, qr_code: (pd as any).qrCode, qr_base64: (pd as any).qrCodeBase64 || null, amount, sent_whatsapp: sentWa });
     }
