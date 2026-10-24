@@ -58,10 +58,13 @@ serve(async (req) => {
     if (!order.is_paid && order.stage !== 'paid') return new Response(JSON.stringify({ handled: false, reason: 'not_paid' }), { headers: corsHeaders });
     let selfserviceCb: any;
     try { selfserviceCb = await grantSelfserviceCashback(supabase, orderId); }
-    catch (error) { return new Response(JSON.stringify({ handled: false, reason: 'cashback_verification_pending' }), { status: 503, headers: corsHeaders }); }
+    catch (error) {
+      console.error('[livete-payment-confirmation] cashback verification:', String(error));
+      return new Response(JSON.stringify({ handled: false, reason: 'cashback_verification_pending', details: String(error) }), { status: 503, headers: corsHeaders });
+    }
 
     // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
-    const { error: claimError } = await supabase
+    const { error: claimError } = selfserviceCb?.applicable ? { error: null } : await supabase
       .from('livete_payment_confirmation_sent')
       .insert({ order_id: orderId });
 
@@ -74,6 +77,7 @@ serve(async (req) => {
 
     // Release the claim if we bail out before actually sending
     const releaseClaim = async () => {
+      if (selfserviceCb?.applicable) return;
       await supabase.from('livete_payment_confirmation_sent').delete().eq('order_id', orderId);
     };
 
