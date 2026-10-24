@@ -4,6 +4,7 @@
 
 - Checkout success cache prevents duplicate charges, never restores paid state. AustPay approvals: production re-query, captured, exact transaction/reference/amount, no invalidated attempt. Reversal: privileged DB, invalidated sandbox attempt, no remaining success. Audits: admin/read-only, 50 rows, ≤3 provider reads.
 - Shopify product links use shared officialProductUrl; attribution rebuilds from validated handles and fails closed, never trusting provider destinations.
+- Shopify data updates omit media entirely, preflight linked option values by unique exact dictionary matches, create variants through GraphQL IDs, and reconcile existing combinations only with matching SKU/GTIN; this preserves manual media/legacy links and prevents duplicate retries.
 
 - Expedition gateway badges/filters use pos_sales.payment_gateway only; unified shipments show every gateway.
 
