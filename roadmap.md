@@ -1,5 +1,8 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Novos contatos — mensagens não lidas
+- [ ] Priorizar nova mensagem não lida, destacar com tag verde e permitir marcar como lido no card; validar sem publicar.
+
 ## Integridade dos links e vínculos — 24/10
 - [x] Investigar e proteger link de pagamento: autoatendimento usa carrinho do pedido exato. Link antigo da Amine mostrou 530 Dourado/35 no navegador; divergência reportada não reproduzida.
 - [x] Corrigir vínculo seguro por final único sem conflito; vincular três cadastros confirmados, incluindo Amine, e reprocessar pela fila existente sem reenviar o já enviado.
