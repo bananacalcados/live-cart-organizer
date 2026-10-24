@@ -22,7 +22,7 @@ export async function selfserviceAdvertisingRefused(sb: any, id: unknown) {
 export async function resolveSelfserviceAdvertising(sb: any, raw: any) {
   const consent = await loadSelfserviceAdvertising(sb, raw?.consent_id);
   if (consent) return { mode: "full" as const, consentId: consent.id, snapshot: consent };
-  if (await isRefused(sb, raw?.consent_id)) return { mode: "refused" as const, consentId: raw.consent_id, snapshot: { advertising: false, ordinary: false } };
+  if (await selfserviceAdvertisingRefused(sb, raw?.consent_id)) return { mode: "refused" as const, consentId: raw.consent_id, snapshot: { advertising: false, ordinary: false } };
   const region = typeof raw?.ordinary_region === "string" && /^[A-Z]{2}$/.test(raw.ordinary_region) ? raw.ordinary_region : null;
   if (!region || region === "XX" || region === "T1" || CONSENT_REGIONS.has(region)) return null;
   return { mode: "ordinary" as const, consentId: null, snapshot: { advertising: false, ordinary: true, region, notice_version: ORDINARY_NOTICE, at: new Date().toISOString() } };
