@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Staff self-service drafts use the server's last-ten-digit phone key for contacts without an order, and event-scoped order membership for real orders; manual cart sending saves the exact order registration without claiming WhatsApp confirmation, so provisional phones never select another person's cart.
+
 - Self-service registration derives submission validity and inline field errors from one validation helper; invalid submissions focus the first error without sending registration requests, preserving existing acceptance rules.
 
 - Overlay test participants live in the event's existing wheel config; participant-only saves merge that field into current settings, preserving layout and unrelated controls without creating real raffle entries.

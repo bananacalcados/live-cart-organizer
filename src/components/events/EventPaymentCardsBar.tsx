@@ -121,6 +121,7 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
     : "";
   return {
     id: dbOrder.id,
+    eventId: dbOrder.event_id,
     instagramHandle: handle,
     whatsapp: dbOrder.customer?.whatsapp,
     cartLink: dbOrder.cart_link,
