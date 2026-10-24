@@ -114,6 +114,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [ssPrizeImage, setSsPrizeImage] = useState("");
   const [ssRegMin, setSsRegMin] = useState("5");
   const [ssNotice, setSsNotice] = useState("Linha Luxo importada · 7 dias para troca ou devolução");
+  const [ssCapi, setSsCapi] = useState(true);
+  const [ssGoogleRating, setSsGoogleRating] = useState("");
+  const [ssGoogleUrl, setSsGoogleUrl] = useState("");
 
   // Frete
   const [shippingCost, setShippingCost] = useState("");
@@ -194,6 +197,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setSsPrizeImage(e.self_service_prize_image_url || "");
     setSsRegMin(String(e.self_service_registration_minutes ?? 5));
     setSsNotice(e.self_service_product_notice ?? "Linha Luxo importada · 7 dias para troca ou devolução");
+    setSsCapi(e.capi_advanced_matching !== false);
+    setSsGoogleRating(e.google_rating_text || "");
+    setSsGoogleUrl(e.google_profile_url || "");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
@@ -323,6 +329,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         updates.self_service_prize_image_url = ssPrizeImage.trim() || null;
         updates.self_service_registration_minutes = Math.max(1, Math.round(Number(ssRegMin)) || 5);
         updates.self_service_product_notice = ssNotice.trim();
+        updates.capi_advanced_matching = ssCapi;
+        updates.google_rating_text = ssGoogleRating.trim() || null;
+        updates.google_profile_url = ssGoogleUrl.trim() || null;
       }
       const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
@@ -711,6 +720,26 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                       <Label className="text-xs">Texto de aviso do produto</Label>
                       <Input value={ssNotice} onChange={(e) => setSsNotice(e.target.value)} />
                     </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Enviar dados completos do cliente para a Meta (match avançado)</p>
+                        <p className="text-xs text-muted-foreground">Melhora a atribuição das compras aos anúncios. Base legal validada pelo jurídico.</p>
+                      </div>
+                      <Switch checked={ssCapi} onCheckedChange={setSsCapi} />
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Nota no Google (selo de confiança)</Label>
+                        <Input value={ssGoogleRating} placeholder="Ex.: 4,9" onChange={(e) => setSsGoogleRating(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Link do perfil da loja no Google</Label>
+                        <Input value={ssGoogleUrl} placeholder="https://maps.google.com/..." onChange={(e) => setSsGoogleUrl(e.target.value)} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Preenchidos, aparecem como selo clicável na página de pagamento do link da live.
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       Número oficial no rodapé: final <strong>{officialLast4 || "— escolha a instância na etapa Mensagem"}</strong>
                     </p>

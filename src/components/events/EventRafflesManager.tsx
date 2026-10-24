@@ -205,6 +205,33 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
     raffles.filter((r) => r.status === "draft").forEach(refreshCount);
   }, [raffles, refreshCount]);
 
+  // Tempo real durante a live: pedido pago/cadastro confirmado atualiza o
+  // contador e a lista de elegíveis (com debounce para não piscar em rajada).
+  const refreshTimer = useRef<number | null>(null);
+  const draftKey = raffles.filter((r) => r.status === "draft").map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!eventId || !draftKey) return;
+    const bump = () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        draftKey.split(",").forEach((id) => {
+          const r = raffles.find((x) => x.id === id);
+          if (r) refreshCount(r);
+        });
+      }, 1500);
+    };
+    const channel = supabase
+      .channel(`raffle-eligible-${eventId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `event_id=eq.${eventId}` }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "customer_registrations" }, bump)
+      .subscribe();
+    return () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, draftKey]);
+
   const saveDraft = async () => {
     if (!draft) return;
     if (!draft.name.trim() || !draft.prize_label.trim()) {

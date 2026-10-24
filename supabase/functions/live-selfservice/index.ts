@@ -144,23 +144,69 @@ Deno.serve(async (req) => {
     return Math.round(total * 10) / 100;
   }
 
-  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
+  /** Texto do link do carrinho (3 variações, quebras de linha reais). */
+  function cartText(greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
     const cb = cashback ? `\n💰 Pagando em até 20 minutos do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
-      `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
-      `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
-      `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
+      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
     ];
-    const mid = await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    return variants[Math.floor(Math.random() * variants.length)];
+  }
+
+  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
+    const mid = await waSend(numberId, phone, cartText(greet, slug, orderIds, cashback));
     if (!mid) throw new Error("Provedor não confirmou o identificador do envio");
     const { error } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: orderIds, p_message_id: mid });
     if (error) throw error;
   }
 
+  /**
+   * Fila anti-spam (Bloco 2): toda mensagem automática entra na fila persistida
+   * e o worker envia com intervalo de 4 s por instância, retry e idempotência.
+   * Se a fila falhar por qualquer motivo, o chamador cai no envio direto atual.
+   */
+  async function queueAuto(opts: { key: string; eventId: string | null; orderId: string | null; kind: string; phone: string; numberId: string | null; payload: Record<string, unknown> }): Promise<boolean> {
+    try {
+      const { error } = await sb.rpc("selfservice_queue_enqueue", {
+        p_message_key: opts.key,
+        p_event_id: opts.eventId,
+        p_order_id: opts.orderId,
+        p_kind: opts.kind,
+        p_phone: opts.phone,
+        p_whatsapp_number_id: opts.numberId,
+        p_payload: opts.payload,
+      });
+      if (error) { console.error("[live-selfservice] enqueue falhou", error); return false; }
+      // Acorda o worker (melhor esforço; ele também se auto-chama enquanto houver fila).
+      fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => {});
+      return true;
+    } catch (e) {
+      console.error("[live-selfservice] enqueue erro", e);
+      return false;
+    }
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
+
+    // Despertador público do worker (reenvio manual pela Central da Live).
+    // Não expõe dado nenhum — só manda o worker verificar a fila.
+    if (action === "kick") {
+      fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => {});
+      return json({ ok: true });
+    }
 
     // ───── Ações internas (gatilho do banco / livete-start-order) ─────
     if (action === "confirmed" || action === "send_cart") {
@@ -180,12 +226,27 @@ Deno.serve(async (req) => {
         const open = openRows.map((o) => o.id as string);
         const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
-        try {
-          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
-          else await waSend(numberId, to, `Oii ${greet}, seu cadastro está confirmado! ✅ Quando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`);
-        } catch (err) {
-          console.error("[live-selfservice] resposta automática falhou", err);
-          return json({ ok: false, error: String(err) }, 502);
+        const confirmText = `Oii ${greet}, seu cadastro está confirmado! ✅\n\nQuando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`;
+        const queued = await queueAuto({
+          key: `confirm:${a.id}`,
+          eventId: a.event_id,
+          orderId: open[0] || null,
+          kind: open.length ? "cart_link" : "register_confirm",
+          phone: to,
+          numberId,
+          payload: open.length
+            ? { text: cartText(greet, (e2 as any).self_service_slug, open, cb), order_ids: open }
+            : { text: confirmText },
+        });
+        if (!queued) {
+          // Fallback: fila indisponível → envio direto atual (nunca "não enviar").
+          try {
+            if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
+            else await waSend(numberId, to, confirmText);
+          } catch (err) {
+            console.error("[live-selfservice] resposta automática falhou", err);
+            return json({ ok: false, error: String(err) }, 502);
+          }
         }
         await sb.from("live_selfservice_accesses").update({ metadata: { ...(a.metadata || {}), auto_reply_sent_at: new Date().toISOString(), auto_reply_case: open.length ? "A" : "B" } }).eq("id", a.id);
         return json({ ok: true, case: open.length ? "A" : "B" });
@@ -218,8 +279,20 @@ Deno.serve(async (req) => {
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
-      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
-      catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
+      const toPhone = a.confirmed_phone || cp;
+      const queuedCart = await queueAuto({
+        key: `cart:${orderId}`,
+        eventId: (o as any).event_id,
+        orderId,
+        kind: "cart_link",
+        phone: toPhone,
+        numberId,
+        payload: { text: cartText(greet, (e3 as any).self_service_slug, [orderId], cbOne), order_ids: [orderId] },
+      });
+      if (!queuedCart) {
+        try { await sendCartMessage(numberId, toPhone, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
+        catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
+      }
       return json({ ok: true, sent: true });
     }
     const slug = String(body.slug || "").trim().toLowerCase().slice(0, 80);
@@ -227,7 +300,7 @@ Deno.serve(async (req) => {
 
     const { data: ev } = await sb
       .from("events")
-      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice, capi_advanced_matching")
+      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice, capi_advanced_matching, google_rating_text, google_profile_url")
       .eq("self_service_slug", slug)
       .maybeSingle();
     if (!ev || ev.operation_mode !== MODE) return json({ ok: false, error: "not_found" }, 404);
@@ -258,6 +331,8 @@ Deno.serve(async (req) => {
       installment_max: ev.installment_max,
       installment_min_value: ev.installment_min_value,
       pix_discount_percent: pixPct,
+      google_rating: ev.google_rating_text || null,
+      google_url: ev.google_profile_url || null,
     };
 
     const mapOrder = (o: any) => {
@@ -352,7 +427,30 @@ Deno.serve(async (req) => {
         const { data: c } = await sb.from("customers").select("whatsapp").eq("id", (o as any).customer_id).maybeSingle();
         const to = (acc as any)?.confirmed_phone || (c as any)?.whatsapp || r.whatsapp;
         const numberId = (acc as any)?.confirmed_number_id || ev.whatsapp_number_id;
-        if (to && numberId) { await waSendPix(numberId, to, String((pd as any).qrCode).trim(), amount); sentWa = true; }
+        if (to && numberId) {
+          const code = String((pd as any).qrCode).trim();
+          const { data: numP } = await sb.from("whatsapp_numbers").select("provider").eq("id", numberId).maybeSingle();
+          const isUaz = (numP as any)?.provider === "uazapi";
+          let ok = false;
+          if (isUaz) {
+            ok = await queueAuto({
+              key: `pix:${orderId}`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: `💰 *PIX de ${fmtBRL(amount)}*\n\nToque em *Copiar código PIX* aqui embaixo, abra o app do seu banco em *Pix → Pix Copia e Cola* e cole o código. 👇`, copy_code: code },
+            });
+          } else {
+            const q1 = await queueAuto({
+              key: `pix:${orderId}:1`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: `💰 *PIX de ${fmtBRL(amount)}*\n\n👇 O código *copia e cola* vem na *próxima mensagem*. Toque e segure nela, escolha *Copiar* e cole no app do seu banco em *Pix → Pix Copia e Cola*.` },
+            });
+            const q2 = await queueAuto({
+              key: `pix:${orderId}:2`, eventId: ev.id, orderId, kind: "pix_code", phone: to, numberId,
+              payload: { text: code },
+            });
+            ok = q1 && q2;
+          }
+          if (ok) sentWa = true;
+          else { await waSendPix(numberId, to, code, amount); sentWa = true; } // fallback: envio direto
+        }
       } catch (err) { console.error("[live-selfservice] pix no WhatsApp falhou", err); }
       return json({ ok: true, qr_code: (pd as any).qrCode, qr_base64: (pd as any).qrCodeBase64 || null, amount, sent_whatsapp: sentWa });
     }

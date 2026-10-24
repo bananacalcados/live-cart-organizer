@@ -355,6 +355,47 @@ serve(async (req) => {
     const provider = String(wn?.provider || '');
     console.log(`[livete-payment-confirmation] order ${orderId} → instance ${sendNumberId} (${wn?.label || ''}/${provider}) via ${resolvedVia}`);
 
+    // 6d. Modo whatsapp_autoatendimento: a confirmação entra na fila anti-spam
+    //     (intervalo por instância + retry). Se a fila falhar, cai no envio
+    //     direto logo abaixo — nunca em "não enviar".
+    if (event?.operation_mode === 'whatsapp_autoatendimento') {
+      try {
+        const { error: qErr } = await supabase.rpc('selfservice_queue_enqueue', {
+          p_message_key: `payconf:${orderId}`,
+          p_event_id: order.event_id,
+          p_order_id: orderId,
+          p_kind: 'payment_confirmation',
+          p_phone: fullPhone,
+          p_whatsapp_number_id: sendNumberId,
+          p_payload: { text: message },
+        });
+        if (!qErr) {
+          fetch(`${supabaseUrl}/functions/v1/selfservice-message-worker`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: '{}',
+          }).catch(() => {});
+          await supabase.from('orders').update({ stage_atendimento: 'aguardando_confirmacao_pedido' }).eq('id', orderId);
+          await supabase.from('ai_conversation_logs').insert({
+            order_id: orderId,
+            phone: fullPhone,
+            stage: 'aguardando_confirmacao_pedido',
+            message_out: message,
+            ai_decision: 'payment_confirmation_queued',
+            tool_called: 'livete-payment-confirmation',
+            provider: 'system',
+          });
+          console.log(`[livete-payment-confirmation] Queued confirmation to ${fullPhone} for order ${orderId}`);
+          return new Response(JSON.stringify({ handled: true, queued: true }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        console.error('[livete-payment-confirmation] enqueue falhou, caindo no envio direto:', qErr);
+      } catch (qEx) {
+        console.error('[livete-payment-confirmation] enqueue erro, caindo no envio direto:', qEx);
+      }
+    }
+
     // 7. Send with human-like delay
     await sleep(typingDelay(message));
 

@@ -20,8 +20,9 @@ export default function LiveOverlay() {
   const [tickerIdx, setTickerIdx] = useState(0);
   const [alert, setAlert] = useState<Alert | null>(null);
   const [cta, setCta] = useState<string | null>(null);
-  const [spin, setSpin] = useState<{ key: number; handle: string; text: string; done: boolean } | null>(null);
-  const spinQueue = useRef<{ key: number; handle: string; labels: string[]; winner: string }[]>([]);
+  const [spin, setSpin] = useState<{ key: number; handle: string; text: string; done: boolean; raffle?: boolean; prize?: string } | null>(null);
+  const spinQueue = useRef<{ key: number; handle: string; labels: string[]; winner: string; raffle?: boolean; prize?: string }[]>([]);
+  const [raffleWinner, setRaffleWinner] = useState<{ key: number; label: string } | null>(null);
   const spinBusy = useRef(false);
   const lastId = useRef(0);
   const queue = useRef<Alert[]>([]);
@@ -69,12 +70,17 @@ export default function LiveOverlay() {
     let i = 0; let delay = 70; let elapsed = 0;
     const step = () => {
       if (elapsed >= 6000) {
-        setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true });
-        const secs = Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
+        setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true, raffle: s.raffle, prize: s.prize });
+        if (s.raffle) {
+          // Sorteio: ganhadora fica em destaque 10 s e a barra vira "Ganhadora: @x".
+          setRaffleWinner({ key: s.key, label: s.winner });
+          window.setTimeout(() => setRaffleWinner((w) => (w && w.key === s.key ? null : w)), 30_000);
+        }
+        const secs = s.raffle ? 10 : Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
         window.setTimeout(() => { setSpin(null); spinBusy.current = false; runSpin(); }, secs * 1000);
         return;
       }
-      setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false });
+      setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false, raffle: s.raffle, prize: s.prize });
       i += 1; elapsed += delay; delay = Math.min(450, delay * 1.08);
       window.setTimeout(step, delay);
     };
@@ -122,6 +128,10 @@ export default function LiveOverlay() {
           queue.current.push({ key: e.id, text: fill(cfg.assembled_alert.template, e.payload), duration: cfg.assembled_alert.duration_seconds });
         } else if (e.kind === "wheel_spin" && cfg.wheel.enabled && e.payload?.winner_label) {
           spinQueue.current.push({ key: e.id, handle: e.payload.handle || "cliente", labels: (e.payload.labels || []).filter(Boolean), winner: e.payload.winner_label });
+          runSpin();
+        } else if (e.kind === "raffle_draw" && cfg.wheel.enabled && e.payload?.winner_label) {
+          // Sorteio do painel: mesma roleta, com confete e destaque de 10 s.
+          spinQueue.current.push({ key: e.id, handle: e.payload.handle || "cliente", labels: (e.payload.labels || []).filter(Boolean), winner: e.payload.winner_label, raffle: true, prize: e.payload.prize_label || "" });
           runSpin();
         } else if (e.kind === "cta_now" && e.payload?.text) {
           showCta(e.payload.text);
@@ -205,7 +215,9 @@ export default function LiveOverlay() {
       {rb.enabled && (
         <OverlayBlock position={config.layout.raffle_bar} blockKey="raffle_bar">
           <div className={`${panel} w-full font-bold`}>
-            {fill(rb.text_template, { count: raffleCount })}
+            {raffleWinner
+              ? <span className="overlay-wheel-winner">🏆 Ganhadora: {raffleWinner.label}</span>
+              : fill(rb.text_template, { count: raffleCount })}
             {rb.goal_enabled && rb.goal_count > 0 && (
               <>
                 <div className="overlay-progress-track mt-[0.25em] h-[0.28em] w-full overflow-hidden rounded-full">
@@ -241,8 +253,21 @@ export default function LiveOverlay() {
 
       {spin && (
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
-          <div key={spin.key} className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: "0.5em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
+          <div key={spin.key} className={`${panel} relative font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
+            {spin.done && spin.raffle && (
+              <div className="overlay-confetti" aria-hidden>
+                {Array.from({ length: 28 }).map((_, i) => (
+                  <i key={i} style={{
+                    left: `${(i * 37) % 100}%`,
+                    background: ["#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#facc15"][i % 6],
+                    animationDelay: `${(i % 9) * 0.18}s`,
+                  }} />
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: "0.5em" }}>
+              {spin.raffle ? `🎁 Sorteio${spin.prize ? ` · ${spin.prize}` : ""}` : fill(config.wheel.title_template, { handle: spin.handle })}
+            </div>
             <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
           </div>
         </OverlayBlock>

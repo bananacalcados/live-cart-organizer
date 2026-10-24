@@ -10,10 +10,22 @@ import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstal
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
+import { TutorialVideoButton } from "@/components/selfservice/TutorialVideoButton";
+import tutorialPagamento from "@/assets/videos/tutorial-pagamento-carrinho.mp4.asset.json";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
-type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null };
+type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null; google_rating?: string | null; google_url?: string | null };
+
+/** "G" do Google em SVG inline (selo de avaliação clicável). */
+const GoogleG = () => (
+  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden>
+    <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.1h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.02.15 3.5 2.7.24.03c2.2-2 3.5-5 3.5-8.6z" />
+    <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.14.01-3.1 2.4-.04.13C3.9 21.3 7.7 24 12 24z" />
+    <path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.2-1.7.4-2.4l-.01-.16-3.1-2.4-.1.05C1.4 8.7 1 10.3 1 12s.4 3.3 1.1 4.9l3.1-2.5z" />
+    <path fill="#EA4335" d="M12 4.6c2.2 0 3.7 1 4.6 1.8l3.3-3.2C17.9 1.2 15.2 0 12 0 7.7 0 3.9 2.7 2.1 6.6l3.1 2.5c1-2.9 3.7-4.5 6.8-4.5z" />
+  </svg>
+);
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
@@ -131,6 +143,9 @@ export default function SelfServiceCartPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-md space-y-4 p-4">
         <h1 className="text-center text-xl font-bold">{ev.name}</h1>
+        <div className="text-center">
+          <TutorialVideoButton label="Como pagar?" src={tutorialPagamento.url} />
+        </div>
 
         {paid ? (
           <div className="space-y-3 rounded-2xl border p-4 text-center">
@@ -156,6 +171,24 @@ export default function SelfServiceCartPage() {
               {freeOption && <p className="font-semibold">Até {freeOption.installments}x de {brl(freeOption.installmentAmount)} sem juros</p>}
               {interestOption && <p className="text-muted-foreground">Ou até {interestOption.installments}x com juros — parcelas e total apresentados antes de pagar.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
+            </div>
+            {/* Faixa de confiança: compacta, uma linha no celular, sem empurrar os botões. */}
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+              <span className="font-semibold text-foreground">Banana Calçados · 10 anos · 2 lojas físicas em Gov. Valadares-MG</span>
+              {ev.google_rating && ev.google_url && (
+                <a href={ev.google_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 font-semibold text-foreground underline-offset-2 hover:underline">
+                  <GoogleG /> {ev.google_rating} ★ no Google
+                </a>
+              )}
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                Pagamento processado pelo <strong className="text-foreground">Mercado Pago</strong>
+                <span className="ml-1 flex gap-0.5">
+                  {["Visa", "Master", "Elo", "Hiper"].map((b) => (
+                    <span key={b} className="rounded border bg-background px-1 py-px text-[9px] font-bold text-foreground">{b}</span>
+                  ))}
+                </span>
+              </span>
             </div>
             <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />
             {reserveLeft !== null && (
