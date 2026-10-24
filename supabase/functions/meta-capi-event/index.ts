@@ -11,7 +11,7 @@
 // All PII is hashed SHA-256 (lowercased, trimmed). fbc/fbp/UA/IP are sent in plain text.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { loadSelfserviceAdvertising, ordinaryAllowed } from "../_shared/selfservice-advertising.ts";
+import { selfserviceAdvertisingRefused } from "../_shared/selfservice-advertising.ts";
 import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
@@ -178,16 +178,19 @@ Deno.serve(async (req) => {
     let selfserviceOrdinary = false;
     let selfserviceOrder: any = null;
     if (order_id) {
-      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode)").eq("id", order_id).maybeSingle();
+      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
       if (linkedError) throw linkedError;
       selfserviceOrder = linked;
       selfservice = linked?.events?.operation_mode === "whatsapp_autoatendimento";
       if (selfservice) {
-        const { data: registration } = await supabase.from("customer_registrations").select("selfservice_advertising_consent_id,selfservice_advertising_snapshot").eq("order_id", order_id).maybeSingle();
-        const consent = await loadSelfserviceAdvertising(supabase, registration?.selfservice_advertising_consent_id);
-        const full = !!consent && !!registration?.selfservice_advertising_snapshot?.advertising;
-        selfserviceOrdinary = !full && !registration?.selfservice_advertising_consent_id && ordinaryAllowed(registration?.selfservice_advertising_snapshot);
-        if (!full && !selfserviceOrdinary) return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_consent_required" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // Base legal validada pelo controlador: matching avançado (dados hasheados) é o padrão.
+        // O flag capi_advanced_matching do evento desliga o matching; a recusa registrada
+        // pela cliente bloqueia o envio por completo.
+        const { data: registration } = await supabase.from("customer_registrations").select("selfservice_advertising_consent_id").eq("order_id", order_id).maybeSingle();
+        if (await selfserviceAdvertisingRefused(supabase, registration?.selfservice_advertising_consent_id)) {
+          return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_refused" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        selfserviceOrdinary = (linked?.events as any)?.capi_advanced_matching === false;
         if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
         if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
           await grantSelfserviceCashback(supabase, order_id);
