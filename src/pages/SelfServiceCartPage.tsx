@@ -203,7 +203,7 @@ export default function SelfServiceCartPage() {
                 <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="mr-2 h-5 w-5" />PAGAR NO PIX</>}
                 </Button>
-                <Button variant="outline" className="h-14 text-base font-bold" onClick={() => setMode("card")} disabled={!installmentConfig}>
+                <Button className="h-14 text-base font-bold" onClick={() => setMode("card")} disabled={!installmentConfig}>
                   <CreditCard className="mr-2 h-5 w-5" />PAGAR NO CARTÃO
                 </Button>
               </div>
