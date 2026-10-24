@@ -47,14 +47,15 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
     const response = await austpayGetTransaction(cfg, o.austpay_transaction_id);
     if (!response.ok) throw new Error(`Conferência AustPay: ${response.status}`);
     const p = await response.json();
-    const tx = p.data || p;
-    if (tx.status !== "APPROVED" || String(tx.id || tx.transaction_id) !== String(o.austpay_transaction_id) || tx.external_reference !== orderId) throw new Error("AustPay sem captura válida");
+    const tx = p.status ? p : p.data || p;
+    if (tx.status !== "APPROVED" || String(tx.id || tx.transaction_id) !== String(o.austpay_transaction_id) || tx.external_reference !== orderId) throw new Error(`AustPay sem captura válida: status=${tx.status}, id_match=${String(tx.id || tx.transaction_id) === String(o.austpay_transaction_id)}, reference_match=${tx.external_reference === orderId}`);
     amount = Number(tx.amount) / 100; paidAt = tx.paid_at || tx.approved_at || tx.captured_at || null;
     gateway = "austpay"; txId = o.austpay_transaction_id;
   }
   if (!amount && o.appmax_order_id) {
     const result = await appmaxGetPayment(sb, String(o.appmax_order_id), null);
     if (result.kind !== "ok" || !APPMAX_PAID.includes(result.payment.status)) throw new Error("Pagamento Appmax não confirmado");
+    if (!result.payment.dateApproved) console.warn('[selfservice-cashback] Appmax time fields', Object.keys(result.payment.raw).filter((k) => /date|time|paid|approved/.test(k)), result.payment.raw.created_at, result.payment.raw.updated_at);
     amount = result.payment.amount; paidAt = result.payment.dateApproved;
     gateway = "appmax"; txId = result.payment.orderId;
   } else if (!amount && o.pagarme_order_id) {
