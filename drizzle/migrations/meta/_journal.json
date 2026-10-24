@@ -407,6 +407,13 @@
       "when": 1792811667839,
       "tag": "0057_selfservice_message_queue_and_google_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792811954060,
+      "tag": "0058_grant_selfservice_queue_functions",
+      "breakpoints": true
     }
   ]
 }
