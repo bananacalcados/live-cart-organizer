@@ -17,6 +17,7 @@
 
 ## Shopify — Atualizar dados
 - [x] Corrigir criação de cores vinculadas e proteger fotos; seis testes passaram, branco 34–39 criado no Alo, repetição criou zero duplicados, vínculo Shopify e ficha autenticada conferidos. Fotos anteriores continuam ausentes; não restauradas.
+- [x] Corrigir erro independente do Agente de Clientes: rotina com tabelas temporárias marcada STABLE; VOLATILE aplicado preservando filtros/acessos. Mesma consulta autenticada respondeu 200 e um candidato; sem disparos.
 
 ## Separação Francisca / Daiane
 - [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
