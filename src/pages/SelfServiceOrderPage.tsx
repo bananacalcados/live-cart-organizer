@@ -379,7 +379,6 @@ export default function SelfServiceOrderPage() {
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy || !canSubmit}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
             </Button>
-            <SelfServicePrivacy slug={slug} />
           </div>
         )}
 
