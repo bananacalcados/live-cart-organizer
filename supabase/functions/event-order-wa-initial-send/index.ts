@@ -4,6 +4,7 @@
 // pela instância configurada no evento. Registra em whatsapp_messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
+import { selfserviceOrderLink } from "../_shared/selfservice-order-link.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,7 +70,7 @@ Deno.serve(async (req) => {
 
     const { data: ev } = await supabase
       .from("events")
-      .select("id, wa_initial_enabled, wa_initial_number_id, wa_initial_variants")
+      .select("id, operation_mode, self_service_slug, wa_initial_enabled, wa_initial_number_id, wa_initial_variants")
       .eq("id", order.event_id)
       .maybeSingle();
 
@@ -143,11 +144,12 @@ Deno.serve(async (req) => {
     const igName = igHandle.startsWith("@") ? igHandle : `@${igHandle}`;
     const firstName = (igHandle.replace(/^@/, "").split(/[._\s]/)[0] || "").trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
-    const checkoutLink = order.cart_link || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
+    const selfserviceCart = selfserviceOrderLink(ev || {}, orderId);
+    const checkoutLink = selfserviceCart || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
 
-    const memberAreaLink = /\{member_area_link\}|\{\{\s*(link_carrinho|link_area_membros)\s*\}\}/i.test(variant.text)
+    const memberAreaLink = selfserviceCart || (/\{member_area_link\}|\{\{\s*(link_carrinho|link_area_membros)\s*\}\}/i.test(variant.text)
       ? await issueMagicLink(supabase, waPhone, undefined, orderId || null).catch(() => MEMBER_AREA_PUBLIC)
-      : MEMBER_AREA_PUBLIC;
+      : MEMBER_AREA_PUBLIC);
 
     const tokens: Record<string, string> = {
       "{customer_name}": igHandle || displayName || "",
