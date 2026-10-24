@@ -372,6 +372,13 @@
       "when": 1792805063086,
       "tag": "0052_selfservice_initial_verified_sender",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792805681297,
+      "tag": "0053_selfservice_confirmation_generated_phone",
+      "breakpoints": true
     }
   ]
 }
