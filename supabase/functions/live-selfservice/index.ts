@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
 
     const { data: ev } = await sb
       .from("events")
-      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice, capi_advanced_matching")
+      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice, capi_advanced_matching, google_rating_text, google_profile_url")
       .eq("self_service_slug", slug)
       .maybeSingle();
     if (!ev || ev.operation_mode !== MODE) return json({ ok: false, error: "not_found" }, 404);
@@ -320,6 +320,8 @@ Deno.serve(async (req) => {
       installment_max: ev.installment_max,
       installment_min_value: ev.installment_min_value,
       pix_discount_percent: pixPct,
+      google_rating: ev.google_rating_text || null,
+      google_url: ev.google_profile_url || null,
     };
 
     const mapOrder = (o: any) => {
