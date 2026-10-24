@@ -12,6 +12,7 @@ import { isValidCpf } from "@/lib/cpfUtils";
 import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 import { formatMmSs, registrationDeadline } from "@/lib/liveModes";
 import { openWhatsAppDeepLink } from "@/lib/waDeepLink";
+import { completeInitialPhone } from "@/lib/selfServiceInitial";
 
 type Ev = {
   id: string; name: string; prize_name: string | null; prize_image_url: string | null;
@@ -55,6 +56,23 @@ export default function SelfServiceOrderPage() {
   const [alt, setAlt] = useState({ cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "" });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
+  const captured = useRef<{ phone: string; accessId: string } | null>(null);
+  const latestPhone = useRef(phone);
+  latestPhone.current = phone;
+
+  useEffect(() => {
+    if (screen !== "identify") return;
+    const fullPhone = completeInitialPhone(phone);
+    if (!fullPhone || captured.current?.phone === fullPhone) return;
+    const timer = setTimeout(async () => {
+      const result = await call({ action: "capture", slug, phone: fullPhone, instagram });
+      if (result?.ok && result.access_id && completeInitialPhone(latestPhone.current) === fullPhone) {
+        captured.current = { phone: fullPhone, accessId: result.access_id };
+        setAccessId(result.access_id);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [phone, instagram, screen, slug]);
 
   useEffect(() => {
     call({ action: "event", slug }).then((r) => (r?.ok ? setEv(r.event) : setNotFound(true)));
@@ -90,7 +108,7 @@ export default function SelfServiceOrderPage() {
     const d = digitsOnly(phone);
     if (d.length < 10 || d.length > 13) { toast.error("Digite o WhatsApp completo com DDD."); return; }
     setBusy(true);
-    const r = await call({ action: "identify", slug, phone: d, instagram });
+    const r = await call({ action: "identify", slug, phone: d, instagram, access_id: captured.current?.phone === completeInitialPhone(d) ? captured.current.accessId : null });
     setBusy(false);
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
