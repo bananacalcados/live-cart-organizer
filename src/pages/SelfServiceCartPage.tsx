@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, Clock, Copy, CheckCircle2, CreditCard, QrCode } from "lucide-react";
@@ -11,7 +11,7 @@ import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
-import { selfServiceShipping } from "@/lib/selfServiceCheckout";
+import { initialCartMode, selfServiceShipping } from "@/lib/selfServiceCheckout";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
 type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null; google_rating?: string | null; google_url?: string | null };
@@ -43,13 +43,15 @@ async function call(body: Record<string, unknown>) {
 
 export default function SelfServiceCartPage() {
   const { eventSlug = "", orderId = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const slug = eventSlug.toLowerCase();
   const [ev, setEv] = useState<Ev | null>(null);
   const [order, setOrder] = useState<Ord | null>(null);
   const [form, setForm] = useState<CustomerFormData | null>(null);
   const [paid, setPaid] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [mode, setMode] = useState<"choose" | "pix" | "card">("choose");
+  // Link da equipe (?pgto=cartao) já abre na tela do cartão, sem passar pela escolha Pix/Cartão.
+  const [mode, setMode] = useState<"choose" | "pix" | "card">(() => initialCartMode(searchParams.get("pgto") ? `?${searchParams.toString()}` : ""));
   const [pix, setPix] = useState<{ code: string; base64: string | null; amount: number; sent: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -231,7 +233,7 @@ export default function SelfServiceCartPage() {
                   />
                 </SplitPaymentPanel>
               </div>
-            ) : <p className="text-sm text-muted-foreground">Não foi possível carregar as condições do cartão. Recarregue a página para tentar novamente.</p>}
+            ) : <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
           </>
         )}
 
