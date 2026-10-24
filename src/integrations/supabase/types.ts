@@ -27150,6 +27150,35 @@ export type Database = {
         Args: { p_option_index: number; p_quote_id: string; p_user_id: string }
         Returns: Json
       }
+      selfservice_capture_initial: {
+        Args: {
+          p_access_id?: string
+          p_event_id: string
+          p_instagram?: string
+          p_phone: string
+        }
+        Returns: Json
+      }
+      selfservice_initial_contacts: {
+        Args: {
+          p_event_id: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+        }
+        Returns: {
+          confirmed: boolean
+          created_at: string
+          id: string
+          instagram: string
+          order_ids: string[]
+          phone: string
+        }[]
+      }
+      selfservice_match_initial_order: {
+        Args: { p_event_id: string; p_phone: string }
+        Returns: string[]
+      }
       set_active_mp_account: {
         Args: { p_account_id: string }
         Returns: boolean

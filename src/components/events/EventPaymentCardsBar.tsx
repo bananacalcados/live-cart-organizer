@@ -25,6 +25,8 @@ import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActio
 import { ptBR } from "date-fns/locale";
 import { ShoppingCart } from "lucide-react";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
+import { useInitialLiveContacts } from "@/hooks/events/useInitialLiveContacts";
+import { projectInitialPhones } from "@/lib/selfServiceInitial";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
@@ -90,7 +92,7 @@ function isConversationUnread(o: DbOrder): boolean {
 
 /** Pedido incompleto: sem WhatsApp, sem produto ou marcado como incompleto. */
 function isOrderIncomplete(o: DbOrder): boolean {
-  if (o.stage === "incomplete_order") return true;
+  if (o.stage === "incomplete_order" && !o.initialPhoneUnconfirmed) return true;
   if (!(o.customer?.whatsapp || "").replace(/\D/g, "")) return true;
   if (!o.products || o.products.length === 0) return true;
   return false;
@@ -146,7 +148,9 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  * instância em que a conversa aconteceu (mesma da mensagem inicial da live),
  * e não o modal de pedido.
  */
-export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdProp = null, search }: EventPaymentCardsBarProps) {
+export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, eventId: eventIdProp = null, search }: EventPaymentCardsBarProps) {
+  const initial = useInitialLiveContacts(lanes ? (originalOrders[0]?.event_id || eventIdProp) : null, search);
+  const orders = useMemo(() => projectInitialPhones(originalOrders, initial.contacts), [originalOrders, initial.contacts]);
   const [filter, setFilter] = useState<PayFilter>("awaiting");
   // Aviso rápido para a apresentadora (aparece como modal no Painel da Apresentadora)
   const [presenterMsgOpen, setPresenterMsgOpen] = useState(false);
@@ -194,11 +198,21 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
   }, [orders]);
 
   // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
-  const { contacts: linkContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
+  const { contacts: redirectContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
     lanes ? eventId : null,
     orderPhoneKeys,
     search,
   );
+  const linkContacts = useMemo(() => {
+    const contacts = new Map(redirectContacts.map((contact) => [contact.key, contact]));
+    for (const contact of initial.contacts) {
+      const key = contact.phone.replace(/\D/g, "").slice(-8);
+      if (orderPhoneKeys.has(key) || contacts.has(key)) continue;
+      contacts.set(key, { key, phone: contact.phone, name: null, instagramHandle: contact.instagram, talked: contact.confirmed,
+        createdAt: contact.created_at, unread: false, lastIncomingAt: null });
+    }
+    return [...contacts.values()];
+  }, [redirectContacts, initial.contacts, orderPhoneKeys]);
   const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
 
   // Linha PEDIDOS: quem comentou QUERO na live e ainda não tem pedido neste evento.
@@ -594,6 +608,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
     const h: CardEntry[] = [];
     for (const e of laneAwaitingAll) {
       if (isConversationUnread(e.rep)) continue;
+      if (e.rep.initialPhoneUnconfirmed) { a.push(e); continue; }
       const waited = msWaitingReply(e.rep, nowTick);
       if (waited >= ONE_HOUR_MS) h.push(e);
       else if (waited >= TEN_MIN_MS) f.push(e);
@@ -684,6 +699,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                   )}
                 >
                   {/* Selos de novidade: dentro do card, em linha própria, sem cortar no topo */}
+                  {order.initialPhoneUnconfirmed && <span className="text-xs text-muted-foreground">Telefone digitado · não confirmou no WhatsApp</span>}
                   {!paidCard && (unread || igUnread[igKey(order.customer?.instagram_handle)]) && (
                     <div className="flex flex-wrap items-center gap-1 pr-7 -mb-0.5">
                       {unread && (
@@ -969,6 +985,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
                   }}
                 />
               )}
+              {initial.hasMore && <Button variant="outline" size="sm" onClick={initial.loadMore}>Carregar mais contatos</Button>}
             </LiveLaneSection>
 
             <LiveLaneSection
@@ -1003,6 +1020,7 @@ export function EventPaymentCardsBar({ orders, lanes = false, eventId: eventIdPr
               icon={<Clock className="h-3.5 w-3.5 text-yellow-500" />}
             >
               {renderRow(laneAwaiting, false, "Nenhum pedido aguardando pagamento neste evento.")}
+              {initial.hasMore && <Button variant="outline" size="sm" onClick={initial.loadMore}>Carregar mais contatos</Button>}
             </LiveLaneSection>
 
             <LiveLaneSection

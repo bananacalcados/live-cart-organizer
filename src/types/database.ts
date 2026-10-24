@@ -98,6 +98,8 @@ export interface DbOrder {
   merged_by?: string | null;
   // Joined data
   customer?: DbCustomer;
+  /** Display-only phone from the public first step, not yet verified by WhatsApp. */
+  initialPhoneUnconfirmed?: boolean;
 }
 
 export interface PromotionTier {
