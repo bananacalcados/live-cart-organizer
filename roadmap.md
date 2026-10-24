@@ -25,6 +25,7 @@
 - [x] Registrar estorno externo de R$ 341,99 confirmado no MP; histórico autenticado e PDF ULAJAKU4 conferidos com Francisca como cliente, Daiane como destinatária informada no print e valor realmente pago; 19 testes passaram, sem novo estorno/envio.
 
 ## Página do produto — Cadastro online
+- [ ] Ampliar destaque do prêmio e cronômetro com animação, permitir upload da foto nas configurações e corrigir @/nova confirmação para pedidos com WhatsApp compartilhado; não publicar.
 - [x] Capturar telefone completo antes do Continuar; prospect salvo como lead, duas linhas conferidas na live autenticada com captura real, chegada por broadcast, 8 testes e teste transacional de cliente anterior/empate/conflito/idempotência passaram. Dados de teste removidos, sem mensagens/cobranças/publicação.
 - [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
 - [ ] Conferir carrinho real de teste: link retornou “Link não encontrado”; pagamento real não exercitado.
