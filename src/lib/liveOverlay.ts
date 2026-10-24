@@ -26,7 +26,7 @@ export interface OverlayConfig {
   paid_alert: { enabled: boolean; template: string; duration_seconds: number };
   assembled_alert: { enabled: boolean; template: string; duration_seconds: number };
   cta: { enabled: boolean; interval_minutes: number; items: OverlayItem[] };
-  wheel: { enabled: boolean; title_template: string; result_seconds: number };
+  wheel: { enabled: boolean; title_template: string; result_seconds: number; test_handles?: string };
   /** Relógios de pagamento: fila, um pedido por vez, cada um por duration_seconds. */
   payment_timers: { enabled: boolean; template: string; duration_seconds: number };
   /** Aviso de par liberado quando o prazo de pagamento vence. */
