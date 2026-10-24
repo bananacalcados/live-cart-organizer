@@ -345,10 +345,27 @@ Deno.serve(async (req) => {
     const phone = normalizeBrPhone(body.phone);
     if (!phone) return json({ ok: false, error: "Digite o WhatsApp completo com DDD." }, 400);
 
+    if (action === "capture") {
+      if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Aguarde alguns minutos." }, 429);
+      const { data, error } = await sb.rpc("selfservice_capture_initial", {
+        p_event_id: ev.id, p_phone: phone, p_instagram: String(body.instagram || "").slice(0, 60) || null,
+        p_access_id: /^[0-9a-f-]{36}$/i.test(String(body.access_id || "")) ? body.access_id : null,
+      });
+      if (error) return json({ ok: false, error: "Não foi possível guardar o contato agora." }, 400);
+      return json({ ok: true, ...data });
+    }
+
     async function openOrders() {
       const { data: custs } = await sb.from("customers").select("id, whatsapp").ilike("whatsapp", `%${suffix8(phone!)}`);
       const ids = (custs || []).filter((c: any) => normalizeBrPhone(c.whatsapp || "") === phone).map((c: any) => c.id);
-      if (!ids.length) return [];
+      if (!ids.length) {
+        const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
+        if (!matches?.length) return [];
+        const { data: matched } = await sb.from("orders")
+          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+          .eq("event_id", ev.id).in("id", matches);
+        return matched || [];
+      }
       const { data } = await sb
         .from("orders")
         .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
@@ -386,19 +403,20 @@ Deno.serve(async (req) => {
 
     if (action === "identify") {
       if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+      const { data: capture, error: captureError } = await sb.rpc("selfservice_capture_initial", {
+        p_event_id: ev.id, p_phone: phone, p_instagram: String(body.instagram || "").slice(0, 60) || null,
+        p_access_id: /^[0-9a-f-]{36}$/i.test(String(body.access_id || "")) ? body.access_id : null,
+      });
+      if (captureError || !capture?.access_id) return json({ ok: false, error: "Não foi possível identificar agora." }, 400);
       const orders = await openOrders();
       const known = await knownCustomer();
       const instagram = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || null;
       // @ descoberto pelo WhatsApp: o pedido da live já nasce com o @ anexado.
       const igHint = instagram || (await instagramHintFor(phone));
-      const { data: acc } = await sb.from("live_selfservice_accesses").insert({
-        event_id: ev.id,
-        entered_phone: phone,
-        phone_key: phoneKey(phone),
-        instagram: igHint,
-        order_ids: orders.map((o: any) => o.id),
-        user_agent: (req.headers.get("user-agent") || "").slice(0, 300),
-      }).select("id").single();
+      const acc = { id: capture.access_id };
+      if (igHint || orders.length) await sb.from("live_selfservice_accesses").update({
+        instagram: igHint, order_ids: orders.map((o: any) => o.id),
+      }).eq("id", acc.id).is("whatsapp_confirmed_at", null);
       const details = known ? await savedDetails() : null;
       // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
       // a cliente continua o cadastro de onde parou.
@@ -525,9 +543,11 @@ Deno.serve(async (req) => {
           ...(lead && lead.source !== "autoatendimento" && !metaBase.original_source ? { original_source: lead.source } : {}),
         };
         if (lead?.id) {
-          await sb.from("event_leads").update({ name: fullName, source: "autoatendimento", metadata, instagram: igReg || undefined }).eq("id", lead.id);
+          await sb.from("event_leads").update({ name: fullName, source: metaBase.selfservice_initial ? lead.source : "autoatendimento", metadata, instagram: igReg || undefined }).eq("id", lead.id);
         } else {
-          await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: igReg || null });
+          const { data: buyers } = await sb.from("customers_unified").select("id")
+            .eq("phone_suffix8", suffix8(phone)).gt("total_orders", 0).limit(1);
+          if (!buyers?.length) await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: igReg || null });
         }
       }
 
