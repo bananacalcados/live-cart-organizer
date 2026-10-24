@@ -421,6 +421,13 @@
       "when": 1792811966665,
       "tag": "0059_grant_selfservice_queue_functions_sandbox",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792811984453,
+      "tag": "0060_selfservice_queue_claim_recovery",
+      "breakpoints": true
     }
   ]
 }

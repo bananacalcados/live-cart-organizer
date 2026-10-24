@@ -20638,6 +20638,7 @@ export type Database = {
       selfservice_message_queue: {
         Row: {
           attempts: number
+          claimed_at: string | null
           created_at: string
           event_id: string | null
           id: string
@@ -20654,6 +20655,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           event_id?: string | null
           id?: string
@@ -20670,6 +20672,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           event_id?: string | null
           id?: string
@@ -27332,6 +27335,7 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           attempts: number
+          claimed_at: string | null
           created_at: string
           event_id: string | null
           id: string
