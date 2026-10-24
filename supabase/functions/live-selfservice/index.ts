@@ -197,6 +197,17 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
+    // Despertador público do worker (reenvio manual pela Central da Live).
+    // Não expõe dado nenhum — só manda o worker verificar a fila.
+    if (action === "kick") {
+      fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => {});
+      return json({ ok: true });
+    }
+
     // ───── Ações internas (gatilho do banco / livete-start-order) ─────
     if (action === "confirmed" || action === "send_cart") {
       if (!(await isAuthorizedCron(req))) return json({ error: "Unauthorized" }, 401);
