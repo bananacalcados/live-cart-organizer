@@ -215,7 +215,9 @@ export default function LiveOverlay() {
       {rb.enabled && (
         <OverlayBlock position={config.layout.raffle_bar} blockKey="raffle_bar">
           <div className={`${panel} w-full font-bold`}>
-            {fill(rb.text_template, { count: raffleCount })}
+            {raffleWinner
+              ? <span className="overlay-wheel-winner">🏆 Ganhadora: {raffleWinner.label}</span>
+              : fill(rb.text_template, { count: raffleCount })}
             {rb.goal_enabled && rb.goal_count > 0 && (
               <>
                 <div className="overlay-progress-track mt-[0.25em] h-[0.28em] w-full overflow-hidden rounded-full">
@@ -251,8 +253,21 @@ export default function LiveOverlay() {
 
       {spin && (
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
-          <div key={spin.key} className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: "0.5em" }}>{fill(config.wheel.title_template, { handle: spin.handle })}</div>
+          <div key={spin.key} className={`${panel} relative font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
+            {spin.done && spin.raffle && (
+              <div className="overlay-confetti" aria-hidden>
+                {Array.from({ length: 28 }).map((_, i) => (
+                  <i key={i} style={{
+                    left: `${(i * 37) % 100}%`,
+                    background: ["#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#facc15"][i % 6],
+                    animationDelay: `${(i % 9) * 0.18}s`,
+                  }} />
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: "0.5em" }}>
+              {spin.raffle ? `🎁 Sorteio${spin.prize ? ` · ${spin.prize}` : ""}` : fill(config.wheel.title_template, { handle: spin.handle })}
+            </div>
             <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
           </div>
         </OverlayBlock>
