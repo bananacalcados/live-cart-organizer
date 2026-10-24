@@ -133,6 +133,22 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
     else toast.success("Enviado para a live");
   };
 
+  // Roda a animação do sorteio no overlay com nome fictício, sem gravar ganhador.
+  const testRaffle = async () => {
+    const { error } = await sb.from("live_overlay_events").insert({
+      event_id: eventId,
+      kind: "raffle_draw",
+      payload: {
+        winner_label: "@cliente_exemplo",
+        handle: "cliente_exemplo",
+        prize_label: "Prêmio teste",
+        labels: ["@ana_paula", "@bia_souza", "@carla_lima", "@cliente_exemplo"],
+      },
+    });
+    if (error) toast.error("Não foi possível testar");
+    else toast.success("Animação de teste enviada para a live (nenhum ganhador foi gravado)");
+  };
+
   const saveAsDefault = async () => {
     await sb.from("live_overlay_templates").update({ is_default: false }).eq("is_default", true);
     const { error } = await sb.from("live_overlay_templates").insert({ name: "Padrão", is_default: true, config: cfg });
@@ -163,6 +179,9 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
               <Button variant="outline" className="gap-1" onClick={rotate}><RefreshCw className="h-4 w-4" /> Gerar novo link</Button>
               <Button variant={hidden ? "default" : "destructive"} className="gap-1" onClick={toggleHidden}>
                 {hidden ? <><Eye className="h-4 w-4" /> Mostrar</> : <><EyeOff className="h-4 w-4" /> Ocultar tudo</>}
+              </Button>
+              <Button variant="outline" className="gap-1" onClick={testRaffle}>
+                <Dices className="h-4 w-4" /> Testar sorteio
               </Button>
             </div>
           </CardContent>
