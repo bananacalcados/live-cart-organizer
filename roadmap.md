@@ -1,5 +1,12 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Ajustes de fila — 24/10
+- [x] Intervalo aleatório persistido de 3–7 segundos por instância e testes.
+- [x] Recuperação por minuto enquanto há trabalho, liberando reservas após 2 minutos.
+- [x] Conferir status/reenvio pela mesma chave e entregar arquivos alterados, sem publicar.
+
+Verificação da rodada: testes transacionais de pacing/reenvio/recuperação/ativação e remoção do cron passaram; 11 testes do autoatendimento passaram. Fila consultada: pending=0, sending=0, claimed=0, sent=0, failed=0. Cron só existe enquanto há fila. Sem envio real nesta rodada. A chave deduplica a fila, não a aceitação ambígua do provedor.
+
 Regras: NÃO alterar modos manual/member_area/whatsapp nem eventos existentes. NÃO publicar o site.
 
 - [x] BLOCO 0 — Auditoria (respondida em texto antes de codar)
