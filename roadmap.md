@@ -2,7 +2,7 @@
 
 ## Erro ao gerar Pix — 24/10
 - [x] Identificar recusa do Mercado Pago por ponto antes do @ no e-mail; corrigir validação compartilhada sem alterar cadastro, valores ou consultas.
-- [ ] Validar testes e geração real no carrinho afetado; disponibilizar correção do serviço sem publicar o site.
+- [x] Validar 17 testes e geração real de R$ 341,99 no carrinho da Vaneide, QR/código visíveis e Pix enviado no WhatsApp; liberar tentativas falhas somente desse pedido. Correção compartilhada disponível no serviço e Pix opcional do boleto protegido; site não publicado.
 
 ## Confirmações de pagamento — 24/10
 - [x] Diagnosticar Isabel: IDs recusados da cascata bloqueavam consulta da captura AustPay, cujo GET omite referência; quatro confirmações ausentes, nenhum cadastro pago ausente nos últimos sete dias do autoatendimento.
