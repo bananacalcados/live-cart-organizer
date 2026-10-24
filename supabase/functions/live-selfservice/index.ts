@@ -218,6 +218,16 @@ Deno.serve(async (req) => {
         const a = acc as any;
         if (!a.whatsapp_confirmed_at) return json({ ok: false, error: "not_confirmed" }, 409);
         if (a.metadata?.auto_reply_sent_at) return json({ ok: true, already: true });
+        // Revalidate last-four candidates against the real WhatsApp sender even
+        // when the order was assembled after the form had already been submitted.
+        const { data: initialMatches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: a.event_id, p_phone: a.confirmed_phone || a.entered_phone });
+        if (initialMatches?.length === 1 && !(a.order_ids || []).includes(initialMatches[0])) {
+          const { data: linked } = await sb.rpc("live_link_order_verified", { p_event_id: a.event_id, p_phone: a.confirmed_phone || a.entered_phone });
+          if (linked?.ok && linked.order_id === initialMatches[0]) {
+            a.order_ids = [...(a.order_ids || []), linked.order_id];
+            await sb.from("live_selfservice_accesses").update({ order_ids: a.order_ids }).eq("id", a.id);
+          }
+        }
         const { data: e2 } = await sb.from("events").select("self_service_slug, whatsapp_number_id").eq("id", a.event_id).maybeSingle();
         const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, a.event_id, (e2 as any)?.whatsapp_number_id)).id;
         const to = a.confirmed_phone || a.entered_phone;
@@ -295,6 +305,7 @@ Deno.serve(async (req) => {
         }
       }
       if (!o.registered_at) await sb.from("orders").update({ registered_at: a.registered_at }).eq("id", orderId).is("registered_at", null);
+      if (!c?.whatsapp) await sb.from("customers").update({ whatsapp: cp, updated_at: new Date().toISOString() }).eq("id", o.customer_id).or("whatsapp.is.null,whatsapp.eq.");
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
       const toPhone = a.confirmed_phone || cp;
