@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Gift, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
+import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner";
 import { toast } from "sonner";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { maskCpf, maskCep, maskPhoneBR, digitsOnly } from "@/lib/formatMasks";
@@ -113,7 +114,7 @@ export default function SelfServiceOrderPage() {
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
     // @ do Instagram descoberto pelo WhatsApp (o pedido da live já tem o @ anexado).
-    if (!instagram && r.instagram_hint) setInstagram(String(r.instagram_hint));
+    if (r.instagram_hint) setInstagram(String(r.instagram_hint));
     const sd = r.details;
     if (sd) setForm((f) => ({
       ...f,
@@ -291,15 +292,7 @@ export default function SelfServiceOrderPage() {
               </div>
             )}
             {ev.prize_name && (
-              <div className="flex items-start gap-3 rounded-2xl border-2 border-primary p-3">
-                {ev.prize_image_url ? <img src={ev.prize_image_url} alt={ev.prize_name} className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <Gift className="h-10 w-10 shrink-0 text-primary" />}
-                <div className="min-w-0 space-y-1 text-sm">
-                  <p className="font-bold">Sorteio: {ev.prize_name}</p>
-                  <p className="flex items-center gap-2 font-bold tabular-nums text-primary"><Clock className="h-4 w-4" />{formatMmSs(prizeLeft)}</p>
-                  <p>{prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."}</p>
-                  <p className="text-xs text-muted-foreground">Prêmio entregue somente com o pedido pago.</p>
-                </div>
-              </div>
+              <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeActive} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
             )}
             {reserveExpired ? (
               <div className="space-y-3 rounded-2xl border border-destructive/40 p-4 text-center">
@@ -337,14 +330,9 @@ export default function SelfServiceOrderPage() {
         )}
 
         {screen === "register" && (
-          <div className="space-y-3 rounded-2xl border p-4">
+          <div className="space-y-3">
             {prizeActive && (
-              <div className="flex items-center gap-3 rounded-2xl border-2 border-primary p-3">
-                {ev.prize_image_url ? <img src={ev.prize_image_url} alt={ev.prize_name || ""} className="h-14 w-14 rounded-lg object-cover" /> : <Gift className="h-10 w-10 text-primary" />}
-                <p className="text-sm">
-                  Faltam <strong>{formatMmSs(prizeLeft)}</strong> pra concorrer a <strong>{ev.prize_name}</strong>. Conclua esta etapa pra terminar seu cadastro e garantir sua participação.
-                </p>
-              </div>
+              <SelfServicePrizeBanner name={ev.prize_name || ""} image={ev.prize_image_url} left={prizeLeft} active={prizeActive} description="Conclua seu cadastro antes do tempo acabar para concorrer ao sorteio." />
             )}
             {!prizeActive && <p className="text-sm text-muted-foreground">Conclua esta etapa pra terminar seu cadastro.</p>}
             {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}

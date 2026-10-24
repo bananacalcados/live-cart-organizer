@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/access-code.ts";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -30,7 +31,7 @@ const json = (b: unknown, status = 200) =>
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const suffix8 = (p: string) => digits(p).slice(-8);
-const phoneKey = (e164: string) => { const d = digits(e164).slice(2); return d.slice(0, 2) + d.slice(-8); };
+const phoneKey = selfservicePhoneKey;
 
 function isRealFullName(raw?: string | null) {
   const v = String(raw ?? "").trim();
@@ -133,18 +134,9 @@ Deno.serve(async (req) => {
 
   async function openOrderRowsFor(eventId: string, ids: string[]) {
     if (!ids.length) return [] as any[];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost")
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
-  }
-
-  // @ do Instagram já conhecido: o pedido da live nasce com o @ anexado ao
-  // WhatsApp, então dá pra descobrir pelo número sem a cliente digitar.
-  async function instagramHintFor(phoneE164: string) {
-    const { data: c } = await sb.from("customers").select("instagram_handle")
-      .ilike("whatsapp", `%${suffix8(phoneE164)}`).not("instagram_handle", "is", null).limit(1).maybeSingle();
-    const h = String((c as any)?.instagram_handle || "").trim().replace(/^@/, "");
-    return h || null;
   }
 
   // Cashback da regra normal da loja (só texto de urgência na mensagem).
@@ -178,9 +170,10 @@ Deno.serve(async (req) => {
       if (!(await isAuthorizedCron(req))) return json({ error: "Unauthorized" }, 401);
       if (action === "confirmed") {
         const { data: acc } = await sb.from("live_selfservice_accesses")
-          .select("id, event_id, entered_phone, instagram, order_ids, confirmed_phone, confirmed_number_id, metadata").eq("id", String(body.access_id || "")).maybeSingle();
+          .select("id, event_id, entered_phone, instagram, order_ids, confirmed_phone, confirmed_number_id, whatsapp_confirmed_at, metadata").eq("id", String(body.access_id || "")).maybeSingle();
         if (!acc) return json({ ok: false, error: "not_found" }, 404);
         const a = acc as any;
+        if (!a.whatsapp_confirmed_at) return json({ ok: false, error: "not_confirmed" }, 409);
         if (a.metadata?.auto_reply_sent_at) return json({ ok: true, already: true });
         const { data: e2 } = await sb.from("events").select("self_service_slug, whatsapp_number_id").eq("id", a.event_id).maybeSingle();
         const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, a.event_id, (e2 as any)?.whatsapp_number_id)).id;
@@ -188,7 +181,7 @@ Deno.serve(async (req) => {
         if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
         const openRows = await openOrderRowsFor(a.event_id, a.order_ids || []);
         const open = openRows.map((o) => o.id as string);
-        const greet = greetName(a.instagram, await regName(a.order_ids || [], a.entered_phone));
+        const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
         try {
           if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
@@ -215,7 +208,7 @@ Deno.serve(async (req) => {
       if (!acc) return json({ ok: true, sent: false });
       const a = acc as any;
       const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, (o as any).event_id, (e3 as any).whatsapp_number_id)).id;
-      const greet = greetName(a.instagram || (c as any)?.instagram_handle, await regName(a.order_ids || [], a.entered_phone));
+      const greet = greetName((c as any)?.instagram_handle, await regName([orderId], a.entered_phone));
       // Cadastro feito na página vale para o pedido novo também.
       const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
         .ilike("whatsapp", `%${suffix8(cp)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -356,19 +349,19 @@ Deno.serve(async (req) => {
     }
 
     async function openOrders() {
-      const { data: custs } = await sb.from("customers").select("id, whatsapp").ilike("whatsapp", `%${suffix8(phone!)}`);
+      const { data: custs } = await sb.from("customers").select("id, whatsapp").ilike("whatsapp", `%${suffix8(phone)}`).limit(100);
       const ids = (custs || []).filter((c: any) => normalizeBrPhone(c.whatsapp || "") === phone).map((c: any) => c.id);
       if (!ids.length) {
         const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
         if (!matches?.length) return [];
         const { data: matched } = await sb.from("orders")
-          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
           .eq("event_id", ev.id).in("id", matches);
         return matched || [];
       }
       const { data } = await sb
         .from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev!.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
@@ -380,7 +373,7 @@ Deno.serve(async (req) => {
       const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
       if (!matches?.length) return [];
       const { data: matched } = await sb.from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id).in("id", matches);
       return matched || [];
     }
@@ -418,12 +411,11 @@ Deno.serve(async (req) => {
       const orders = await openOrders();
       const known = await knownCustomer();
       const instagram = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || null;
-      // @ descoberto pelo WhatsApp: o pedido da live já nasce com o @ anexado.
-      const igHint = instagram || (await instagramHintFor(phone));
+      const igHint = orderInstagram(orders as any[], instagram);
       const acc = { id: capture.access_id };
-      if (igHint || orders.length) await sb.from("live_selfservice_accesses").update({
+      await sb.from("live_selfservice_accesses").update({
         instagram: igHint, order_ids: orders.map((o: any) => o.id),
-      }).eq("id", acc.id).is("whatsapp_confirmed_at", null).or(`instagram.is.null,order_ids.neq.{${orders.map((o: any) => o.id).join(",")}}`);
+      }).eq("id", acc.id).is("whatsapp_confirmed_at", null);
       const details = known ? await savedDetails() : null;
       // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
       // a cliente continua o cadastro de onde parou.
@@ -502,9 +494,14 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
       const now = new Date().toISOString();
-      // @ do Instagram: se a cliente não digitou, descobre pelo WhatsApp
-      // (o pedido da live já nasce com o @ anexado ao número).
-      const igReg = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || (await instagramHintFor(phone));
+      const orders = await openOrders();
+      const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
+      const target = orders.filter((o: any) => reqIds.includes(o.id));
+      if (reqIds.length && target.length !== reqIds.length) return json({ ok: false, error: "Seu pedido mudou. Volte e identifique novamente." }, 409);
+      const igReg = orderInstagram(target as any[], String(body.instagram || ""));
+      const { data: access } = await sb.from("live_selfservice_accesses").select("id, metadata, entered_phone")
+        .eq("id", String(body.access_id || "")).eq("event_id", ev.id).maybeSingle();
+      if (!access || normalizeBrPhone(access.entered_phone) !== phone) return json({ ok: false, error: "Identifique seu WhatsApp novamente." }, 400);
 
       // CRM unificado
       const { error: uErr } = await sb.rpc("find_or_create_unified_customer", {
@@ -512,10 +509,6 @@ Deno.serve(async (req) => {
       });
       if (uErr) console.error("[live-selfservice] unified", uErr.message);
       await sb.from("customers_unified").update(addr).eq("phone_suffix8", suffix8(phone));
-
-      const orders = await openOrders();
-      const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
-      const target = orders.filter((o: any) => reqIds.includes(o.id));
 
       // Endereço alternativo de entrega: vale só para o pedido; o endereço
       // principal da ficha (customers_unified) continua intacto.
@@ -573,15 +566,19 @@ Deno.serve(async (req) => {
         accessId = na?.id || null;
       }
       let code: string | null = null;
+      const nextMetadata = { ...((access.metadata as Record<string, unknown>) || {}) };
+      delete nextMetadata.auto_reply_sent_at;
+      delete nextMetadata.auto_reply_case;
       for (let i = 0; i < 6 && accessId && !code; i++) {
         const cand = genCode();
         const { count } = await sb.from("live_whatsapp_clicks").select("id", { count: "exact", head: true }).eq("code", cand);
         if ((count || 0) > 0) continue;
         const { error } = await sb.from("live_selfservice_accesses")
-          .update({ confirm_code: cand, whatsapp_confirmed_at: null, form_draft: null, updated_at: now, ...(target.length ? { order_ids: target.map((o: any) => o.id) } : {}) })
+          .update({ confirm_code: cand, whatsapp_confirmed_at: null, confirmed_phone: null, confirmed_phone_key: null, confirmed_number_id: null, confirm_message_id: null, instagram: igReg, metadata: nextMetadata, form_draft: null, updated_at: now, order_ids: target.map((o: any) => o.id) })
           .eq("id", accessId).eq("event_id", ev.id);
         if (!error) code = cand;
       }
+      if (!code) return json({ ok: false, error: "Não foi possível gerar a confirmação. Tente novamente." }, 503);
       const greet = greetName(igReg, fullName);
       const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. ${target.length ? "Pode enviar o link do meu carrinho?" : "Pode confirmar meu cadastro para a live?"}`;
       const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
