@@ -10,8 +10,6 @@ import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstal
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
-import { TutorialVideoButton } from "@/components/selfservice/TutorialVideoButton";
-import tutorialPagamento from "@/assets/videos/tutorial-pagamento-carrinho.mp4.asset.json";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
@@ -143,9 +141,6 @@ export default function SelfServiceCartPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-md space-y-4 p-4">
         <h1 className="text-center text-xl font-bold">{ev.name}</h1>
-        <div className="text-center">
-          <TutorialVideoButton label="Como pagar?" src={tutorialPagamento.url} />
-        </div>
 
         {paid ? (
           <div className="space-y-3 rounded-2xl border p-4 text-center">
