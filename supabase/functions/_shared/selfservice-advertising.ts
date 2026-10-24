@@ -9,7 +9,7 @@ export async function loadSelfserviceAdvertising(sb: any, id: unknown) {
   return data;
 }
 
-async function isRefused(sb: any, id: unknown) {
+export async function selfserviceAdvertisingRefused(sb: any, id: unknown) {
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return false;
   const { data } = await sb.from("selfservice_advertising_consents").select("advertising").eq("id", id).maybeSingle();
   return !!data && data.advertising === false;
@@ -22,7 +22,7 @@ async function isRefused(sb: any, id: unknown) {
 export async function resolveSelfserviceAdvertising(sb: any, raw: any) {
   const consent = await loadSelfserviceAdvertising(sb, raw?.consent_id);
   if (consent) return { mode: "full" as const, consentId: consent.id, snapshot: consent };
-  if (await isRefused(sb, raw?.consent_id)) return { mode: "refused" as const, consentId: raw.consent_id, snapshot: { advertising: false, ordinary: false } };
+  if (await selfserviceAdvertisingRefused(sb, raw?.consent_id)) return { mode: "refused" as const, consentId: raw.consent_id, snapshot: { advertising: false, ordinary: false } };
   const region = typeof raw?.ordinary_region === "string" && /^[A-Z]{2}$/.test(raw.ordinary_region) ? raw.ordinary_region : null;
   if (!region || region === "XX" || region === "T1" || CONSENT_REGIONS.has(region)) return null;
   return { mode: "ordinary" as const, consentId: null, snapshot: { advertising: false, ordinary: true, region, notice_version: ORDINARY_NOTICE, at: new Date().toISOString() } };
