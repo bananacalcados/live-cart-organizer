@@ -215,12 +215,27 @@ Deno.serve(async (req) => {
         const open = openRows.map((o) => o.id as string);
         const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
-        try {
-          if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
-          else await waSend(numberId, to, `Oii ${greet}, seu cadastro está confirmado! ✅ Quando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`);
-        } catch (err) {
-          console.error("[live-selfservice] resposta automática falhou", err);
-          return json({ ok: false, error: String(err) }, 502);
+        const confirmText = `Oii ${greet}, seu cadastro está confirmado! ✅\n\nQuando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`;
+        const queued = await queueAuto({
+          key: `confirm:${a.id}`,
+          eventId: a.event_id,
+          orderId: open[0] || null,
+          kind: open.length ? "cart_link" : "register_confirm",
+          phone: to,
+          numberId,
+          payload: open.length
+            ? { text: cartText(greet, (e2 as any).self_service_slug, open, cb), order_ids: open }
+            : { text: confirmText },
+        });
+        if (!queued) {
+          // Fallback: fila indisponível → envio direto atual (nunca "não enviar").
+          try {
+            if (open.length) await sendCartMessage(numberId, to, greet, (e2 as any).self_service_slug, open, cb);
+            else await waSend(numberId, to, confirmText);
+          } catch (err) {
+            console.error("[live-selfservice] resposta automática falhou", err);
+            return json({ ok: false, error: String(err) }, 502);
+          }
         }
         await sb.from("live_selfservice_accesses").update({ metadata: { ...(a.metadata || {}), auto_reply_sent_at: new Date().toISOString(), auto_reply_case: open.length ? "A" : "B" } }).eq("id", a.id);
         return json({ ok: true, case: open.length ? "A" : "B" });
@@ -253,8 +268,20 @@ Deno.serve(async (req) => {
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
-      try { await sendCartMessage(numberId, a.confirmed_phone || cp, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
-      catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
+      const toPhone = a.confirmed_phone || cp;
+      const queuedCart = await queueAuto({
+        key: `cart:${orderId}`,
+        eventId: (o as any).event_id,
+        orderId,
+        kind: "cart_link",
+        phone: toPhone,
+        numberId,
+        payload: { text: cartText(greet, (e3 as any).self_service_slug, [orderId], cbOne), order_ids: [orderId] },
+      });
+      if (!queuedCart) {
+        try { await sendCartMessage(numberId, toPhone, greet, (e3 as any).self_service_slug, [orderId], cbOne); }
+        catch (err) { console.error("[live-selfservice] send_cart falhou", err); return json({ ok: false, sent: false, error: String(err) }, 502); }
+      }
       return json({ ok: true, sent: true });
     }
     const slug = String(body.slug || "").trim().toLowerCase().slice(0, 80);
