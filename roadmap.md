@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Confirmações de pagamento — 24/10
+- [ ] Diagnosticar Isabel e auditar pedidos pagos sem cadastro/confirmação.
+- [ ] Corrigir causa e recuperação durável sem duplicar mensagens ou crédito.
+- [ ] Recuperar afetadas e conferir resultado real; não publicar o site.
+
 ## Ficha em tempo real e carrinho manual — 24/10
 - [x] Investigar dados da Silvania: chave do telefone divergente e telefone provisório perdido no chat; corrigir espelho por pedido/evento e chave do servidor para contatos sem pedido, preservando edições da equipe.
 - [x] Oferecer copiar/enviar carrinho exato na parte de pagamento da ficha sem depender da confirmação no WhatsApp; envio manual salva cadastro do pedido sem confirmar WhatsApp.
