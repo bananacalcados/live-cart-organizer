@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
 
     const { data: ev } = await sb
       .from("events")
-      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice")
+      .select("id, name, operation_mode, whatsapp_number_id, installment_max, installment_min_value, self_service_prize_name, self_service_prize_image_url, self_service_registration_minutes, self_service_product_notice, capi_advanced_matching")
       .eq("self_service_slug", slug)
       .maybeSingle();
     if (!ev || ev.operation_mode !== MODE) return json({ ok: false, error: "not_found" }, 404);
@@ -604,6 +604,40 @@ Deno.serve(async (req) => {
         if (!error) code = cand;
       }
       if (!code) return json({ ok: false, error: "Não foi possível gerar a confirmação. Tente novamente." }, 503);
+      // Lead na Meta via CAPI (servidor; os dados são hasheados na função de eventos).
+      // Base legal validada pelo controlador; respeita o flag do evento e a recusa da cliente.
+      try {
+        if (adv?.mode !== "refused" && accessId) {
+          const advFlag = (ev as any).capi_advanced_matching !== false;
+          const leadBody: Record<string, unknown> = {
+            event_name: "Lead",
+            event_id: `lead_ss_${accessId}`,
+            from_server: true,
+            action_source: "website",
+          };
+          if (target.length) {
+            // Com pedido: a função de eventos puxa o cadastro do próprio pedido e aplica o flag.
+            leadBody.order_id = target[0].id;
+          } else {
+            if (advFlag) Object.assign(leadBody, { phone, email, full_name: fullName, city: addr.city, state: addr.state, zip: addr.cep });
+            if (allowed) Object.assign(leadBody, {
+              fbc: (signals as any).fbc || undefined,
+              fbp: (signals as any).fbp || undefined,
+              client_ip_address: (signals as any).client_ip || undefined,
+              client_user_agent: (signals as any).client_user_agent || undefined,
+            });
+          }
+          const leadReq = fetch(`${SB_URL}/functions/v1/meta-capi-event`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify(leadBody),
+          }).then((r) => r.json().catch(() => ({}))).then((d) => { if (!(d as any)?.ok) console.warn("[live-selfservice] lead capi recusado", JSON.stringify(d).slice(0, 300)); })
+            .catch((e) => console.warn("[live-selfservice] lead capi falhou", e));
+          const rt = (globalThis as any).EdgeRuntime;
+          if (rt?.waitUntil) rt.waitUntil(leadReq); else await leadReq;
+        }
+      } catch (e) { console.warn("[live-selfservice] lead capi", e); }
+
       const greet = greetName(igReg, fullName);
       const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. ${target.length ? "Pode enviar o link do meu carrinho?" : "Pode confirmar meu cadastro para a live?"}`;
       const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
