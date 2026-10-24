@@ -11,6 +11,7 @@ import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
+import { selfServiceShipping } from "@/lib/selfServiceCheckout";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
 type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null; google_rating?: string | null; google_url?: string | null };
@@ -27,6 +28,7 @@ const GoogleG = () => (
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
+  shipping_cost: number; free_shipping: boolean;
 };
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -161,6 +163,7 @@ export default function SelfServiceCartPage() {
               </div>
             ))}
             <div className="rounded-2xl border p-3 text-sm">
+              <p className="mb-2 flex justify-between"><span>Frete</span><strong>{order.free_shipping ? "Grátis" : brl(selfServiceShipping(order))}</strong></p>
               <p className="text-lg font-bold">{brl(order.pix_total)} no Pix</p>
               <p className="text-muted-foreground">ou {brl(order.total)} no cartão</p>
               {freeOption && <p className="font-semibold">Até {freeOption.installments}x de {brl(freeOption.installmentAmount)} sem juros</p>}
