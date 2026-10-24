@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       const orderId = String(body.orderId || "");
       const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost, registered_at, is_paid, paid_externally, stage, selfservice_cart_sent_at").eq("id", orderId).maybeSingle();
       if (!o) return json({ ok: false, sent: false });
-      if (o.is_paid || o.paid_externally || o.stage === "cancelled" || o.selfservice_cart_sent_at || !Array.isArray(o.products) || !o.products.length) return json({ ok: true, sent: false });
+      if (o.is_paid || o.paid_externally || o.stage === "cancelled" || !Array.isArray(o.products) || !o.products.length) return json({ ok: true, sent: false });
       const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
       if ((e3 as any)?.operation_mode !== MODE || !(e3 as any)?.self_service_slug) return json({ ok: true, sent: false });
       const { data: c } = await sb.from("customers").select("whatsapp, instagram_handle").eq("id", (o as any).customer_id).maybeSingle();
@@ -307,6 +307,7 @@ Deno.serve(async (req) => {
       if (!o.registered_at) await sb.from("orders").update({ registered_at: a.registered_at }).eq("id", orderId).is("registered_at", null);
       if (!c?.whatsapp) await sb.from("customers").update({ whatsapp: cp, updated_at: new Date().toISOString() }).eq("id", o.customer_id).or("whatsapp.is.null,whatsapp.eq.");
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
+      if (o.selfservice_cart_sent_at) return json({ ok: true, sent: false, already: true });
       const cbOne = await cashbackHint(orderTotal(o));
       const toPhone = a.confirmed_phone || cp;
       const queuedCart = await queueAuto({

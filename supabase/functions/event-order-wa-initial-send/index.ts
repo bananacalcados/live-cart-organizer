@@ -4,6 +4,7 @@
 // pela instância configurada no evento. Registra em whatsapp_messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
+import { selfserviceOrderLink } from "../_shared/selfservice-order-link.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,8 +144,7 @@ Deno.serve(async (req) => {
     const igName = igHandle.startsWith("@") ? igHandle : `@${igHandle}`;
     const firstName = (igHandle.replace(/^@/, "").split(/[._\s]/)[0] || "").trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
-    const selfserviceCart = orderId && ev?.operation_mode === "whatsapp_autoatendimento" && ev?.self_service_slug
-      ? `https://checkout.bananacalcados.com.br/pedido/${ev.self_service_slug}/carrinho/${orderId}` : null;
+    const selfserviceCart = selfserviceOrderLink(ev || {}, orderId);
     const checkoutLink = selfserviceCart || (orderId ? `https://checkout.bananacalcados.com.br/checkout/order/${orderId}` : MEMBER_AREA_PUBLIC);
 
     const memberAreaLink = selfserviceCart || (/\{member_area_link\}|\{\{\s*(link_carrinho|link_area_membros)\s*\}\}/i.test(variant.text)
