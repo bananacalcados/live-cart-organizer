@@ -144,18 +144,53 @@ Deno.serve(async (req) => {
     return Math.round(total * 10) / 100;
   }
 
-  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
+  /** Texto do link do carrinho (3 variações, quebras de linha reais). */
+  function cartText(greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
     const cb = cashback ? `\n💰 Pagando em até 20 minutos do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
-      `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
-      `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
-      `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
+      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
     ];
-    const mid = await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    return variants[Math.floor(Math.random() * variants.length)];
+  }
+
+  async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
+    const mid = await waSend(numberId, phone, cartText(greet, slug, orderIds, cashback));
     if (!mid) throw new Error("Provedor não confirmou o identificador do envio");
     const { error } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: orderIds, p_message_id: mid });
     if (error) throw error;
+  }
+
+  /**
+   * Fila anti-spam (Bloco 2): toda mensagem automática entra na fila persistida
+   * e o worker envia com intervalo de 4 s por instância, retry e idempotência.
+   * Se a fila falhar por qualquer motivo, o chamador cai no envio direto atual.
+   */
+  async function queueAuto(opts: { key: string; eventId: string | null; orderId: string | null; kind: string; phone: string; numberId: string | null; payload: Record<string, unknown> }): Promise<boolean> {
+    try {
+      const { error } = await sb.rpc("selfservice_queue_enqueue", {
+        p_message_key: opts.key,
+        p_event_id: opts.eventId,
+        p_order_id: opts.orderId,
+        p_kind: opts.kind,
+        p_phone: opts.phone,
+        p_whatsapp_number_id: opts.numberId,
+        p_payload: opts.payload,
+      });
+      if (error) { console.error("[live-selfservice] enqueue falhou", error); return false; }
+      // Acorda o worker (melhor esforço; ele também se auto-chama enquanto houver fila).
+      fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => {});
+      return true;
+    } catch (e) {
+      console.error("[live-selfservice] enqueue erro", e);
+      return false;
+    }
   }
 
   try {
