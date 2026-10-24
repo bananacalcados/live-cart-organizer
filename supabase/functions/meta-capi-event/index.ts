@@ -11,6 +11,8 @@
 // All PII is hashed SHA-256 (lowercased, trimmed). fbc/fbp/UA/IP are sent in plain text.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { loadSelfserviceAdvertising } from "../_shared/selfservice-advertising.ts";
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 import {
@@ -172,6 +174,26 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    let selfservice = false;
+    let selfserviceOrder: any = null;
+    if (order_id) {
+      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode)").eq("id", order_id).maybeSingle();
+      if (linkedError) throw linkedError;
+      selfserviceOrder = linked;
+      selfservice = linked?.events?.operation_mode === "whatsapp_autoatendimento";
+      if (selfservice) {
+        const { data: registration } = await supabase.from("customer_registrations").select("selfservice_advertising_consent_id,selfservice_advertising_snapshot").eq("order_id", order_id).maybeSingle();
+        const consent = await loadSelfserviceAdvertising(supabase, registration?.selfservice_advertising_consent_id);
+        if (!consent || !registration?.selfservice_advertising_snapshot?.advertising) return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_consent_required" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
+        if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
+          await grantSelfserviceCashback(supabase, order_id);
+          const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
+          selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+        }
+      }
+    }
+
     let _email = email as string | undefined;
     let _fullName = full_name as string | undefined;
     let _city = city as string | undefined;
@@ -185,6 +207,7 @@ Deno.serve(async (req) => {
     let _fbp = fbp as string | undefined;
     let _fbc = fbc as string | undefined;
 
+    if (selfservice) { _email = _fullName = _city = _state = _zip = _phone = _cpf = _fbp = _fbc = undefined; }
     // If order_id is provided, enrich PII from customer_registrations (gold source for checkout)
     if (order_id) {
       try {
@@ -226,7 +249,7 @@ Deno.serve(async (req) => {
           .select("products")
           .eq("id", order_id)
           .maybeSingle();
-        const products = Array.isArray(ord?.products) ? (ord!.products as Array<Record<string, unknown>>) : [];
+        const products = Array.isArray(ord?.products) ? (ord.products as Array<Record<string, unknown>>) : [];
         if (products.length > 0) {
           const items = products.map((p) => {
             const id = String(p.sku ?? p.shopifyId ?? p.id ?? "").trim() || "sem-sku";
@@ -254,7 +277,7 @@ Deno.serve(async (req) => {
     const phoneSuffix = phoneDigits.slice(-8);
 
     // ---- Ponto 2: IP / User-Agent — fallback pelo telefone quando o pedido não tem cadastro próprio ----
-    if (phoneSuffix && (!_clientIpStored || !_clientUaStored)) {
+    if (!selfservice && phoneSuffix && (!_clientIpStored || !_clientUaStored)) {
       try {
         const { data: cri } = await supabase
           .from("customer_registrations")
@@ -276,7 +299,7 @@ Deno.serve(async (req) => {
 
 
     // Fallback enrichment via phone suffix if still missing
-    if (phoneSuffix && (!_email || !_fullName || !_city || !_state)) {
+    if (!selfservice && phoneSuffix && (!_email || !_fullName || !_city || !_state)) {
       try {
         const { data: zc } = await supabase
           .from("crm_customers_v")
@@ -305,7 +328,7 @@ Deno.serve(async (req) => {
     let _birthDate: string | undefined;
     let _gender: string | undefined;
     let _customerRef: string | undefined;
-    const identity = await resolveCrmIdentity(supabase, {
+    const identity = selfservice ? null : await resolveCrmIdentity(supabase, {
       phone: phoneDigits || _phone,
       email: _email,
       cpf: _cpf,
@@ -329,7 +352,7 @@ Deno.serve(async (req) => {
     // para qualquer telefone conhecido da cliente.
     let _attrOrigin: string | null = null;
     let _attrMatchedPhone: string | null = null;
-    if (!_fbc || !_fbp) {
+    if (!selfservice && (!_fbc || !_fbp)) {
       try {
         const candidates = identity?.phones?.length ? identity.phones : (phoneDigits ? [phoneDigits] : []);
         const stored = await getMetaAttributionForPhones(supabase, candidates);
@@ -369,10 +392,11 @@ Deno.serve(async (req) => {
 
     // Optional external_id: CPF (mais forte) ou o código do cliente no CRM
     let externalId: string | undefined;
-    if (_cpf) {
+    if (!selfservice && _cpf) {
       const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
+    if (selfservice && order_id) externalId = await sha256Hex(`selfservice_order_${order_id}`);
     if (!externalId && _customerRef) {
       externalId = await sha256Hex(String(_customerRef).trim().toLowerCase());
     }
@@ -386,9 +410,9 @@ Deno.serve(async (req) => {
     // próprio navegador — em chamadas server-side (trigger/edge) os headers são do
     // servidor e poluiriam o match da Meta.
     const isServerCall = from_server === true;
-    const clientIp = client_ip_address || _clientIpStored ||
+    const clientIp = (selfservice ? undefined : client_ip_address) || _clientIpStored ||
       (isServerCall ? undefined : extractClientIp(req));
-    const clientUa = client_user_agent || _clientUaStored ||
+    const clientUa = (selfservice ? undefined : client_user_agent) || _clientUaStored ||
       (isServerCall ? undefined : (req.headers.get("user-agent") || undefined));
 
     const userData: Record<string, unknown> = {
@@ -413,18 +437,19 @@ Deno.serve(async (req) => {
 
     // event_id: prefer client-provided (browser dedupe). Otherwise build deterministic for Purchase.
     const eventId =
-      eventIdFromClient ||
+      (selfservice && event_name === "Purchase" ? `purchase_order_${order_id}` : eventIdFromClient) ||
       (event_name === "Purchase" && order_id
         ? `purchase_order_${order_id}`
         : `${event_name.toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-    const eventTime = Math.floor(Date.now() / 1000);
+    const eventTime = selfservice && event_name === "Purchase" ? Math.floor(Date.parse(selfserviceOrder.selfservice_cashback_receipt?.paid_at || selfserviceOrder.paid_at) / 1000) : Math.floor(Date.now() / 1000);
+    if (!Number.isFinite(eventTime)) throw new Error("Horário do pagamento indisponível");
     const actionSource = (actionSourceFromClient as string) || "website";
 
     const customData: Record<string, unknown> = {
       currency,
     };
-    if (value !== undefined && value !== null) customData.value = Number(value);
+    if (value !== undefined && value !== null) customData.value = Number(selfservice && selfserviceOrder?.selfservice_cashback_receipt?.amount_paid || value);
     if (_contentIds && _contentIds.length > 0) {
       customData.content_ids = _contentIds;
       customData.content_type = content_type || "product";
@@ -442,10 +467,10 @@ Deno.serve(async (req) => {
       user_data: userData,
       custom_data: customData,
     };
-    const sourceUrl = event_source_url || _sourceUrlStored;
+    const sourceUrl = (selfservice ? undefined : event_source_url) || _sourceUrlStored;
     if (sourceUrl) eventData.event_source_url = sourceUrl;
 
-    const payload: Record<string, unknown> = { data: [eventData] };
+    const payload: Record<string, unknown> = { data: [eventData], partner_agent: "lovable" };
     if (TEST_CODE) (payload as any).test_event_code = TEST_CODE;
 
     // Pre-log: insert pending row for Purchase events tied to an order_id (idempotent)

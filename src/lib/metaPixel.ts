@@ -3,6 +3,7 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
+import { advertisingChoice } from "./selfServiceAdvertisingChoice";
 import { resolveFbc, resolveFbp } from "./metaAttribution";
 
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
@@ -10,11 +11,12 @@ const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
 
 /** Inject the fbevents.js SDK and initialise the pixel (idempotent). */
 export function initMetaPixel() {
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
   if (!META_PIXEL_ID || (window as any).fbq) return;
 
   const f = window as any;
   const n: any = function (...args: any[]) {
-    n.callMethod ? n.callMethod(...args) : n.queue.push(args);
+    n.callMethod ? n.callMethod.apply(n, args) : n.queue.push(args);
   };
   f.fbq = n;
   if (!f._fbq) f._fbq = n;
@@ -28,7 +30,7 @@ export function initMetaPixel() {
   s.src = "https://connect.facebook.net/en_US/fbevents.js";
   document.head.appendChild(s);
 
-  f.fbq("init", META_PIXEL_ID);
+  f.fbq("init", META_PIXEL_ID, {}, { agent: "lovable" });
 }
 
 /** Read ?test_event_code= from the URL (for Meta Events Manager testing). */
@@ -71,6 +73,7 @@ export interface TrackOptions {
 
 /** Fire a standard or custom pixel event (browser). */
 export function trackPixelEvent(event: string, data?: Record<string, any>, options?: TrackOptions) {
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
   if (!(window as any).fbq) return;
   const testCode = getTestEventCode();
   const eventData = testCode ? { ...data, test_event_code: testCode } : data;
@@ -85,3 +88,9 @@ export function trackPixelEvent(event: string, data?: Record<string, any>, optio
 export function trackPageView() {
   trackPixelEvent("PageView");
 }
+
+window.addEventListener("storage", (event) => {
+  if (event.key === "bc_selfservice_advertising_v1" && window.location.pathname.startsWith("/pedido/")) {
+    (window as any).fbq?.("consent", advertisingChoice()?.accepted ? "grant" : "revoke");
+  }
+});

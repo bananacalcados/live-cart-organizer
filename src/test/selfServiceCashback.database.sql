@@ -1,0 +1,31 @@
+BEGIN;
+DO $$
+DECLARE e uuid:=gen_random_uuid(); c uuid:=gen_random_uuid(); o uuid:=gen_random_uuid(); o2 uuid:=gen_random_uuid(); sent timestamptz; r jsonb; consent uuid;
+BEGIN
+ INSERT INTO public.events(id,name,operation_mode,is_active,automation_enabled) VALUES(e,'TESTE cashback transacional','whatsapp_autoatendimento',false,false);
+ INSERT INTO public.customers(id,instagram_handle,whatsapp) VALUES(c,'teste_cashback','5533991238765');
+ INSERT INTO public.orders(id,event_id,customer_id,stage,products,meta_capi_purchase_sent_at) VALUES(o,e,c,'awaiting_payment','[{"title":"Teste","price":379.99,"quantity":1}]',now());
+ PERFORM public.selfservice_mark_cart_sent(ARRAY[o],'test-provider-id');
+ UPDATE public.orders SET selfservice_cart_sent_at=clock_timestamp()-interval '30 minutes' WHERE id=o;
+ SELECT selfservice_cart_sent_at INTO sent FROM public.orders WHERE id=o;
+ PERFORM public.selfservice_mark_cart_sent(ARRAY[o],'retry-provider-id');
+ IF (SELECT selfservice_cart_sent_at FROM public.orders WHERE id=o) IS DISTINCT FROM sent THEN RAISE EXCEPTION 'retry restarted clock'; END IF;
+ UPDATE public.orders SET is_paid=true,paid_at=sent+interval '20 minutes',payment_confirmed_source='gateway_webhook' WHERE id=o;
+ r:=public.selfservice_grant_cashback(o,379.99,sent+interval '20 minutes','test','test-transaction');
+ IF (r->>'cashback_amount')::numeric<>38.00 THEN RAISE EXCEPTION '20 minutes did not grant 10 percent'; END IF;
+ r:=public.selfservice_grant_cashback(o,1000,sent+interval '30 minutes','test','retry');
+ IF (r->>'cashback_amount')::numeric<>38.00 THEN RAISE EXCEPTION 'retry changed credit'; END IF;
+ IF (SELECT count(*) FROM public.internal_cashback WHERE source_order_id=o)<>1 THEN RAISE EXCEPTION 'duplicate credit'; END IF;
+ INSERT INTO public.orders(id,event_id,customer_id,stage,products,meta_capi_purchase_sent_at) VALUES(o2,e,c,'awaiting_payment','[{"title":"Teste","price":379.99,"quantity":1}]',now());
+ PERFORM public.selfservice_mark_cart_sent(ARRAY[o2],'test-provider-id-2');
+ UPDATE public.orders SET selfservice_cart_sent_at=clock_timestamp()-interval '30 minutes' WHERE id=o2;
+ SELECT selfservice_cart_sent_at INTO sent FROM public.orders WHERE id=o2;
+ UPDATE public.orders SET is_paid=true,paid_at=sent+interval '20 minutes 0.001 second',payment_confirmed_source='gateway_webhook' WHERE id=o2;
+ r:=public.selfservice_grant_cashback(o2,379.99,sent+interval '20 minutes 0.001 second','test','test-transaction-2');
+ IF (r->>'cashback_amount')::numeric<>19.00 THEN RAISE EXCEPTION 'after 20 minutes did not grant 5 percent'; END IF;
+ consent:=public.selfservice_save_advertising_choice(null,true,'BR');
+ PERFORM public.selfservice_save_advertising_choice(consent,false,'BR');
+ IF NOT EXISTS(SELECT 1 FROM public.selfservice_advertising_consents WHERE id=consent AND advertising=false AND jsonb_array_length(choices_history)=2) THEN RAISE EXCEPTION 'withdrawal erased acceptance evidence'; END IF;
+ IF has_function_privilege('anon','public.selfservice_grant_cashback(uuid,numeric,timestamptz,text,text)','EXECUTE') THEN RAISE EXCEPTION 'public grant access'; END IF;
+END $$;
+ROLLBACK;

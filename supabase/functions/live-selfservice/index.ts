@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/access-code.ts";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+import { loadSelfserviceAdvertising, cleanSelfserviceSignals } from "../_shared/selfservice-advertising.ts";
 import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
@@ -139,26 +140,22 @@ Deno.serve(async (req) => {
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
 
-  // Cashback da regra normal da loja (só texto de urgência na mensagem).
   async function cashbackHint(total: number) {
-    const { data: cfg } = await sb.from("pos_cashback_config").select("is_enabled, percentage, min_sale_value, max_cashback").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (!cfg || !(cfg as any).is_enabled || total < Number((cfg as any).min_sale_value || 0)) return null;
-    let v = total * (Number((cfg as any).percentage) || 0) / 100;
-    const max = Number((cfg as any).max_cashback);
-    if (max > 0 && v > max) v = max;
-    v = Math.round(v * 100) / 100;
-    return v > 0 ? v : null;
+    return Math.round(total * 10) / 100;
   }
 
   async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
-    const cb = cashback ? `\n💰 Pagando em menos de 20 minutos você ainda ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
+    const cb = cashback ? `\n💰 Pagando em até 20 minutos do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
       `Oii ${greet}, cadastro confirmado 😁 Segue o link do seu carrinho: ${links}${cb}\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
       `Oi ${greet}! Seu cadastro já está confirmado ✅ Aqui está o link do seu carrinho: ${links}${cb}\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
       `Oii ${greet}, tudo certo com seu cadastro 😁 Link do seu carrinho: ${links}${cb}\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
     ];
-    await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    const mid = await waSend(numberId, phone, variants[Math.floor(Math.random() * variants.length)]);
+    if (!mid) throw new Error("Provedor não confirmou o identificador do envio");
+    const { error } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: orderIds, p_message_id: mid });
+    if (error) throw error;
   }
 
   try {
@@ -202,7 +199,7 @@ Deno.serve(async (req) => {
       const { data: c } = await sb.from("customers").select("whatsapp, instagram_handle").eq("id", (o as any).customer_id).maybeSingle();
       const cp = normalizeBrPhone((c as any)?.whatsapp || "");
       if (!cp) return json({ ok: true, sent: false });
-      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id")
+      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id, advertising_consent_id, advertising_snapshot, advertising_signals")
         .eq("event_id", (o as any).event_id).eq("confirmed_phone_key", phoneKey(cp)).not("whatsapp_confirmed_at", "is", null)
         .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
       if (!acc) return json({ ok: true, sent: false });
@@ -211,10 +208,12 @@ Deno.serve(async (req) => {
       const greet = greetName((c as any)?.instagram_handle, await regName([orderId], a.entered_phone));
       // Cadastro feito na página vale para o pedido novo também.
       const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-        .ilike("whatsapp", `%${suffix8(cp)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        .in("order_id", a.order_ids || []).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const nextConsent = await loadSelfserviceAdvertising(sb, a.advertising_consent_id);
+      const nextSignals = nextConsent && a.advertising_snapshot?.advertising ? { ...(a.advertising_signals || {}), selfservice_advertising_consent_id: nextConsent.id, selfservice_advertising_snapshot: a.advertising_snapshot } : {};
       if (prev) {
         const { data: has } = await sb.from("customer_registrations").select("id").eq("order_id", orderId).maybeSingle();
-        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), order_id: orderId, whatsapp: digits(cp) });
+        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), ...nextSignals, order_id: orderId, whatsapp: digits(cp) });
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
@@ -271,6 +270,7 @@ Deno.serve(async (req) => {
         created_at: o.created_at,
         payment_window_expires_at: o.payment_window_expires_at,
         registered_at: o.registered_at,
+        cashback_deadline: o.selfservice_cart_sent_at ? new Date(Date.parse(o.selfservice_cart_sent_at) + 20 * 60 * 1000).toISOString() : null,
         free_shipping: !!o.free_shipping,
         shipping_cost: Number(o.shipping_cost || 0),
         discount_type: o.discount_type,
@@ -279,13 +279,28 @@ Deno.serve(async (req) => {
     };
 
     if (action === "event") return json({ ok: true, event: eventInfo });
+    if (action === "advertising_choice") {
+      if (typeof body.accepted !== "boolean") return json({ ok: false }, 400);
+      const { data, error } = await sb.rpc("selfservice_save_advertising_choice", { p_id: /^[0-9a-f-]{36}$/i.test(String(body.consent_id || "")) ? body.consent_id : null, p_accept: body.accepted, p_region: /^[A-Z]{2}$/.test(String(body.region || "")) ? body.region : null });
+      return error ? json({ ok: false }, 400) : json({ ok: true, consent_id: data });
+    }
+    if (action === "meta_signals") {
+      const consent = await loadSelfserviceAdvertising(sb, body.signals?.consent_id);
+      if (!consent) return json({ ok: true, blocked: true });
+      const { data: order } = await sb.from("orders").select("id,is_paid").eq("id", String(body.order_id || "")).eq("event_id", ev.id).maybeSingle();
+      if (!order || order.is_paid) return json({ ok: true, blocked: true });
+      const signals = cleanSelfserviceSignals(body.signals, req);
+      const { error } = await sb.from("customer_registrations").update({ ...signals, selfservice_advertising_consent_id: consent.id, selfservice_advertising_snapshot: consent }).eq("order_id", order.id);
+      return json({ ok: !error });
+    }
+
 
     // ───── Página do link do carrinho (pedido deste modo) ─────
     if (action === "cart" || action === "pix" || action === "status") {
       const orderId = String(body.order_id || "");
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
-        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
@@ -293,19 +308,20 @@ Deno.serve(async (req) => {
         await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq("event_id", ev.id).contains("order_ids", [orderId]).is("paid_at", null);
       }
-      if (action === "status") return json({ ok: true, paid });
+      if (action === "status") return json({ ok: true, paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null });
       const { data: reg } = await sb.from("customer_registrations")
         .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();
       const r = reg as any;
       if (action === "cart") {
         const form = r ? { fullName: r.full_name, email: r.email, cpf: r.cpf, whatsapp: r.whatsapp, cep: r.cep, address: r.address, addressNumber: r.address_number, complement: r.complement || "", neighborhood: r.neighborhood || "", city: r.city, state: r.state } : null;
-        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, form });
+        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null, form });
       }
       // pix
       if (paid) return json({ ok: true, paid: true });
       if (!r) return json({ ok: false, error: "Cadastro não encontrado para este pedido." }, 400);
       // Pagamento dividido em aberto: nunca cobrar o total cheio no Pix avulso.
-      const { data: splits } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      const { data: splits, error: splitError } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      if (splitError) return json({ ok: false, error: "Não foi possível conferir os pagamentos deste pedido. Tente novamente." }, 503);
       if (((splits || []) as any[]).some((x) => !["refunded", "canceled", "cancelled"].includes(String(x.status)))) {
         return json({ ok: false, split: true, error: "Este pedido tem pagamento dividido — use a opção de pagamento abaixo." });
       }
@@ -362,7 +378,7 @@ Deno.serve(async (req) => {
       const { data } = await sb
         .from("orders")
         .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
-        .eq("event_id", ev!.id)
+        .eq("event_id", ev.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
         .eq("is_paid", false)
@@ -380,10 +396,10 @@ Deno.serve(async (req) => {
 
     async function knownCustomer(): Promise<boolean> {
       const { count } = await sb.from("customer_registrations").select("id", { count: "exact", head: true })
-        .ilike("whatsapp", `%${suffix8(phone!)}`).neq("cpf", "");
+        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "");
       if ((count || 0) > 0) return true;
       const { count: c2 } = await sb.from("customers_unified").select("id", { count: "exact", head: true })
-        .eq("phone_suffix8", suffix8(phone!)).not("cpf", "is", null);
+        .eq("phone_suffix8", suffix8(phone)).not("cpf", "is", null);
       return (c2 || 0) > 0;
     }
 
@@ -396,7 +412,7 @@ Deno.serve(async (req) => {
         const { data: cu } = await sb.from("customers_unified")
           .select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
           .eq("phone_suffix8", suffix8(phone)).limit(2);
-        if ((cu || []).length === 1) d = { ...cu![0], full_name: (cu![0] as any).name };
+        if ((cu || []).length === 1) d = { ...cu[0], full_name: (cu[0] as any).name };
       }
       return d || null;
     }
@@ -460,7 +476,7 @@ Deno.serve(async (req) => {
 
     async function checkCode(): Promise<boolean> {
       if (!(await allow(`otpv:${phone}`, 8, 600))) return false;
-      return verifyAccessCode(sb, phone!, String(body.code || ""));
+      return verifyAccessCode(sb, phone, String(body.code || ""));
     }
 
     if (action === "verify_code") {
@@ -493,6 +509,8 @@ Deno.serve(async (req) => {
       if (!addr.address || !addr.address_number || !addr.city || !addr.state) {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
+      const consent = await loadSelfserviceAdvertising(sb, body.signals?.consent_id);
+      const signals = consent ? cleanSelfserviceSignals(body.signals, req) : {};
       const now = new Date().toISOString();
       const orders = await openOrders();
       const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
@@ -526,7 +544,7 @@ Deno.serve(async (req) => {
 
       if (target.length) {
         for (const o of target) {
-          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr };
+          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr, ...signals, selfservice_advertising_consent_id: consent?.id || null, selfservice_advertising_snapshot: consent || null };
           const { data: reg } = await sb.from("customer_registrations").select("id").eq("order_id", o.id).maybeSingle();
           if (reg?.id) await sb.from("customer_registrations").update(payload).eq("id", reg.id);
           else await sb.from("customer_registrations").insert(payload);
@@ -552,7 +570,7 @@ Deno.serve(async (req) => {
       }
 
       if (body.access_id) {
-        await sb.from("live_selfservice_accesses").update({ registered_at: now, form_draft: null, updated_at: now })
+        await sb.from("live_selfservice_accesses").update({ registered_at: now, form_draft: null, updated_at: now, advertising_consent_id: consent?.id || null, advertising_snapshot: consent || null, advertising_signals: consent ? signals : null })
           .eq("id", body.access_id).eq("event_id", ev.id);
       }
 

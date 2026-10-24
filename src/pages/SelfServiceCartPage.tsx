@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,16 @@ import { toast } from "sonner";
 import { StepPayment, type CustomerFormData } from "@/components/checkout/PaymentSection";
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
+import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
+import { advertisingChoice, advertisingSignals, trackSelfservice } from "@/lib/selfServiceAdvertising";
+import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
 type Ev = { name: string; product_notice: string | null; official_last4: string | null; installment_max: number | null; installment_min_value: number | null };
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
-  total: number; pix_total: number; payment_window_expires_at: string | null;
+  total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
 };
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -39,10 +42,13 @@ export default function SelfServiceCartPage() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
+  const purchaseSeen = useRef(false);
+  const paidValue = useRef<number | null>(null);
 
   useEffect(() => {
     call({ action: "cart", slug, order_id: orderId }).then((r) => {
       if (!r?.ok) { setNotFound(true); return; }
+      paidValue.current = r.amount_paid ?? null;
       setEv(r.event); setOrder(r.order); setForm(r.form); setPaid(!!r.paid);
     });
   }, [slug, orderId]);
@@ -58,7 +64,7 @@ export default function SelfServiceCartPage() {
     const t = setInterval(async () => {
       if (document.hidden) return;
       const r = await call({ action: "status", slug, order_id: orderId });
-      if (r?.paid) setPaid(true);
+      if (r?.paid) { paidValue.current = r.amount_paid ?? null; setPaid(true); }
     }, 30_000);
     return () => clearInterval(t);
   }, [mode, paid, slug, orderId]);
@@ -73,6 +79,22 @@ export default function SelfServiceCartPage() {
     })();
     return () => { cancelled = true; };
   }, [ev, order?.id, order?.total]);
+
+  useEffect(() => {
+    const sync = () => {
+      if (!advertisingChoice()?.accepted) { if (paid) purchaseSeen.current = true; return; }
+      if (!paid) call({ action: "meta_signals", slug, order_id: orderId, signals: advertisingSignals() });
+      if (!paid) trackSelfservice("InitiateCheckout", { value: order?.total, currency: "BRL" });
+      // No replay after a later consent change; Purchase needs the server-confirmed paid amount.
+      if (paid && !purchaseSeen.current) {
+        purchaseSeen.current = true;
+        if (paidValue.current) trackSelfservice("Purchase", { value: paidValue.current, currency: "BRL" }, `purchase_order_${orderId}`);
+      }
+    };
+    if (order) sync();
+    window.addEventListener("selfservice-advertising-change", sync);
+    return () => window.removeEventListener("selfservice-advertising-change", sync);
+  }, [slug, orderId, order?.id, paid]);
 
   const payPix = async () => {
     setBusy(true);
@@ -93,7 +115,7 @@ export default function SelfServiceCartPage() {
 
   const checkPaid = async () => {
     const r = await call({ action: "status", slug, order_id: orderId });
-    if (r?.paid) setPaid(true); else toast.info("Ainda não recebemos — pode levar alguns segundos.");
+    if (r?.paid) { paidValue.current = r.amount_paid ?? null; setPaid(true); } else toast.info("Ainda não recebemos — pode levar alguns segundos.");
   };
 
   if (notFound) return <div className="flex min-h-screen items-center justify-center p-6 text-center text-muted-foreground">Link não encontrado.</div>;
@@ -134,6 +156,7 @@ export default function SelfServiceCartPage() {
               {interestOption && <p className="text-muted-foreground">Ou até {interestOption.installments}x com juros — parcelas e total apresentados antes de pagar.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
             </div>
+            <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />
             {reserveLeft !== null && (
               <div className="flex items-center gap-2 rounded-2xl bg-muted p-3 text-sm">
                 <Clock className="h-4 w-4" />
@@ -180,6 +203,7 @@ export default function SelfServiceCartPage() {
           </>
         )}
 
+        <SelfServicePrivacy slug={slug} />
         <p className="text-center text-xs text-muted-foreground">
           <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
           Único WhatsApp oficial da Banana: final <strong>{ev.official_last4 || "----"}</strong>. Qualquer outro número é golpe.
