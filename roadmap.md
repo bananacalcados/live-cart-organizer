@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Ajustes de fila — 24/10
+- [ ] Intervalo aleatório persistido de 3–7 segundos por instância e testes.
+- [ ] Recuperação por minuto enquanto há trabalho, liberando reservas após 2 minutos.
+- [ ] Conferir status/reenvio pela mesma chave e entregar arquivos alterados, sem publicar.
+
 Regras: NÃO alterar modos manual/member_area/whatsapp nem eventos existentes. NÃO publicar o site.
 
 - [x] BLOCO 0 — Auditoria (respondida em texto antes de codar)
