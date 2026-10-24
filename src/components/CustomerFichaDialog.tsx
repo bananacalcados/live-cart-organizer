@@ -20,6 +20,8 @@ import { getOrderFinalValue } from "@/lib/orderTotal";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { OrderCashbackBox } from "@/components/events/OrderCashbackBox";
 import { CustomerActivePrizesBox } from "@/components/prizes/CustomerActivePrizes";
+import { useEventStore } from "@/stores/eventStore";
+import { liveStaffCartLink, mergeSelfServiceDraft, selfServiceDraftPhoneKey } from "@/lib/selfServiceStaff";
 
 /** Envia pela instância configurada na Live (nunca pela Z-API padrão, que pode estar vencida). */
 async function sendViaLiveInstance(eventId: string | null | undefined, phone: string, message: string) {
@@ -114,14 +116,6 @@ const DRAFT_KEYS: (keyof Form)[] = [
   "neighborhood", "city", "state", "cpf", "email",
 ];
 
-/** Chave do funil (DDD + 8 últimos dígitos), mesmo formato da página de autoatendimento. */
-function draftPhoneKey(whatsapp?: string | null): string | null {
-  let d = String(whatsapp || "").replace(/\D/g, "");
-  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
-  if (d.length < 10) return null;
-  return d.slice(0, 2) + d.slice(-8);
-}
-
 /**
  * Conteúdo da ficha do cliente SEM o Dialog — usado tanto no modal clássico
  * quanto no painel lateral lado a lado com o chat (WhatsAppChatDialog).
@@ -134,7 +128,13 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   const [copying, setCopying] = useState(false);
   const [fetchingCep, setFetchingCep] = useState(false);
   /** Qual link os botões usam: checkout do pedido ou área de membros autenticada. */
-  const [linkMode, setLinkMode] = useState<"checkout" | "member">("member");
+  const [linkMode, setLinkMode] = useState<"checkout" | "member" | "live">("member");
+  const event = useEventStore((s) => s.events.find((e) => e.id === order.event_id));
+  const liveCartLink = liveStaffCartLink(event as (typeof event & { operation_mode?: string; self_service_slug?: string }), order.id);
+  const lastDraftRef = useRef<Record<string, string> | null>(null);
+  const sellerTouchedRef = useRef<Set<string>>(new Set());
+  const loadVersionRef = useRef(0);
+  useEffect(() => { setLinkMode(liveCartLink ? "live" : "member"); }, [order.id, liveCartLink]);
 
   // Conversas da Central da Live sem pedido usam um id virtual ("live-conv-<fone>"),
   // que não é UUID — nesse caso a ficha só pode ser preenchida após criar o pedido.
@@ -145,6 +145,9 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}?step=3`;
 
   useEffect(() => {
+    const version = ++loadVersionRef.current;
+    sellerTouchedRef.current = new Set();
+    lastDraftRef.current = null;
     (async () => {
       setLoading(true);
       try {
@@ -247,20 +250,20 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
 
         // 4. Rascunho do autoatendimento (cliente digitando na página da live
         //    neste momento) tem prioridade sobre o que estava salvo.
-        const draftKey = draftPhoneKey(order.customer?.whatsapp);
-        if (order.event_id && draftKey) {
-          const { data: dr } = await supabase
+        const draftKey = selfServiceDraftPhoneKey(order.customer?.whatsapp || base.whatsapp);
+        if (order.event_id && (isRealOrder || draftKey)) {
+          let query = supabase
             .from("live_selfservice_accesses" as any)
-            .select("form_draft")
-            .eq("event_id", order.event_id)
-            .eq("phone_key", draftKey)
-            .not("form_draft", "is", null)
+            .select("form_draft,entered_phone")
+            .eq("event_id", order.event_id);
+          query = isRealOrder ? query.contains("order_ids", [order.id]) : query.eq("phone_key", draftKey);
+          const { data: dr } = await query
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
           const draft = (dr as any)?.form_draft as Record<string, string> | null;
+          if (!base.whatsapp && (dr as any)?.entered_phone) base.whatsapp = formatBRPhone((dr as any).entered_phone);
           if (draft) {
-            lastDraftRef.current = draft;
             for (const k of DRAFT_KEYS) {
               const v = String(draft[k] ?? "");
               if (v) (base as any)[k] = v;
@@ -268,39 +271,35 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
           }
         }
 
-        setForm(base);
+        if (version !== loadVersionRef.current) return;
+        setForm((current) => {
+          for (const key of sellerTouchedRef.current) {
+            if (key in base) base[key as keyof Form] = current[key as keyof Form];
+          }
+          return lastDraftRef.current ? mergeSelfServiceDraft(base, lastDraftRef.current, DRAFT_KEYS, sellerTouchedRef.current) : base;
+        });
       } catch (e) {
         console.error("[CustomerFicha] load error:", e);
       } finally {
-        setLoading(false);
+        if (version === loadVersionRef.current) setLoading(false);
       }
     })();
-  }, [order.id, order.customer_id, order.customer?.whatsapp]);
+    return () => { loadVersionRef.current++; };
+  }, [order.id, order.event_id, order.customer_id, order.customer?.whatsapp, isRealOrder]);
 
   // Espelho em tempo real: enquanto a cliente digita no formulário da página
   // da live (modo autoatendimento), os campos aparecem aqui. Atualiza qualquer
   // campo que a vendedora NÃO editou manualmente — inclusive os que já vieram
   // preenchidos do cadastro.
-  const lastDraftRef = useRef<Record<string, string> | null>(null);
-  const sellerTouchedRef = useRef<Set<string>>(new Set());
-  useEffect(() => { sellerTouchedRef.current = new Set(); }, [order.id]);
   useEffect(() => {
     const eventId = order.event_id;
-    const key = draftPhoneKey(order.customer?.whatsapp);
-    if (!eventId || !key) return;
+    const key = selfServiceDraftPhoneKey(order.customer?.whatsapp);
+    if (!eventId || (!isRealOrder && !key)) return;
     const applyDraft = (row: any) => {
-      if (row?.phone_key !== key || !row?.form_draft) return;
+      const matches = isRealOrder ? Array.isArray(row?.order_ids) && row.order_ids.includes(order.id) : row?.phone_key === key;
+      if (!matches || !row?.form_draft) return;
       const draft = row.form_draft as Record<string, string>;
-      setForm((cur) => {
-        const next = { ...cur };
-        let changed = false;
-        for (const k of DRAFT_KEYS) {
-          const v = String(draft[k] ?? "");
-          if (!v || sellerTouchedRef.current.has(k)) continue;
-          if (cur[k] !== v) { (next as any)[k] = v; changed = true; }
-        }
-        return changed ? next : cur;
-      });
+      setForm((cur) => mergeSelfServiceDraft(cur, draft, DRAFT_KEYS, sellerTouchedRef.current));
       lastDraftRef.current = draft;
     };
     const channel = supabase
@@ -309,7 +308,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (p) => applyDraft(p.new))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [order.id, order.event_id, order.customer?.whatsapp]);
+  }, [order.id, order.event_id, order.customer?.whatsapp, isRealOrder]);
 
 
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -453,7 +452,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
     }
     if (cpfInvalid) {
       toast.error("CPF inválido — corrija antes de salvar (o cartão é recusado com CPF errado).");
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -505,9 +504,11 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             : `Ficha salva — frete de R$ ${applied.shippingCost.toFixed(2)} aplicado ao pedido`
           : "Ficha do cliente salva com sucesso",
       );
+      return true;
     } catch (e: any) {
       console.error(e);
       toast.error(`Erro ao salvar ficha: ${e?.message || e}`);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -529,7 +530,8 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
   const handleCopyLink = async () => {
     setCopying(true);
     try {
-      const link = linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
+      const link = linkMode === "live" ? liveCartLink : linkMode === "member" ? await buildMemberAreaLink() : paymentLink;
+      if (!link) throw new Error("Carrinho da live indisponível para este pedido.");
       try {
         await navigator.clipboard.writeText(link);
         toast.success(
@@ -556,15 +558,32 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
     setSending(true);
     try {
       // Save first to ensure pre-fill works
-      await handleSave();
+      if (!(await handleSave())) return;
+
+      // Envio manual: não depende de código/automação e não confirma a identidade.
+      if (linkMode === "live") {
+        if (!liveCartLink) throw new Error("Carrinho da live indisponível para este pedido.");
+        const greet = order.customer?.instagram_handle || form.full_name.split(" ")[0] || "";
+        const message = `Olá ${greet}! 🍌\n\nSegue o link do seu carrinho da live:\n\n${liveCartLink}`;
+        const channel = getPixChannel?.();
+        if (channel && !["instagram", "messenger"].includes(channel.provider)) {
+          const messageId = await channel.sendText(message);
+          await channel.persist({ message, message_id: messageId });
+        } else {
+          await sendViaLiveInstance(order.event_id, phone, message);
+        }
+        toast.success("Link do carrinho da live enviado no WhatsApp!");
+        return;
+      }
 
       // 0) Pagamento dividido: a Área de Membros cobra o total, então enviamos o
       //    link do checkout, que cobra só as partes ainda pendentes.
-      const { data: splitRows } = await supabase
+      const { data: splitRows, error: splitError } = await supabase
         .from("payment_splits" as any)
         .select("method, charge_amount, status")
         .eq("order_id", order.id)
         .order("seq");
+      if (splitError) throw new Error("Não foi possível conferir os pagamentos deste pedido. Tente novamente.");
       const activeSplits = ((splitRows as any[]) || []).filter(
         (p) => !["refunded", "canceled"].includes(p.status),
       );
@@ -785,8 +804,9 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       <div className="border-t px-3 py-3 shrink-0 space-y-2">
         {/* Tipo de link usado ao copiar/enviar */}
         <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setLinkMode("member")}
             className={cn(
               "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
@@ -796,9 +816,10 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             )}
           >
             Área de membros
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setLinkMode("checkout")}
             className={cn(
               "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
@@ -808,7 +829,13 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             )}
           >
             Link do checkout
-          </button>
+          </Button>
+          {liveCartLink && (
+            <Button variant="ghost" size="sm" onClick={() => setLinkMode("live")}
+              className={cn("flex-1 rounded px-2 py-1 text-xs font-medium whitespace-normal", linkMode === "live" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+              Carrinho da live
+            </Button>
+          )}
         </div>
 
         {isRealOrder && !order.is_paid && (
@@ -857,7 +884,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
             disabled={sending || loading || !isRealOrder}
           >
             {sending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-            Enviar link Pagamento
+            {linkMode === "live" ? "Enviar carrinho da live" : "Enviar link Pagamento"}
           </Button>
         </div>
       </div>

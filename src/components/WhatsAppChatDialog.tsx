@@ -97,7 +97,7 @@ export function WhatsAppChatDialog({
 
   const fichaOrder = dbOrder || ({
     id: order.id,
-    event_id: "",
+    event_id: order.eventId || "",
     customer_id: "",
     products: order.products || [],
     stage: order.stage || "cart",
@@ -110,6 +110,10 @@ export function WhatsAppChatDialog({
       whatsapp: order.whatsapp || "",
     },
   } as unknown as DbOrder);
+  // A projeção do card ainda não é a identidade gravada do cliente.
+  const fichaWithPhone = fichaOrder.customer?.whatsapp || !order.whatsapp ? fichaOrder : {
+    ...fichaOrder, customer: fichaOrder.customer ? { ...fichaOrder.customer, whatsapp: order.whatsapp } : fichaOrder.customer,
+  };
 
 
   useEffect(() => {
@@ -122,7 +126,7 @@ export function WhatsAppChatDialog({
   const renderPanel = () => {
     const close = () => setActivePanel(null);
     if (activePanel === "historico") return <LiveCustomerHistoryPanel order={fichaOrder} fallbackPhone={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
-    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaOrder} onClose={close} getPixChannel={() => pixChannelRef.current} />;
+    if (activePanel === "ficha") return <CustomerFichaPanel order={fichaWithPhone} onClose={close} getPixChannel={() => pixChannelRef.current} />;
     if (activePanel === "gift") return <OrderGiftPanel orderId={order.id} customerLabel={order.instagramHandle || order.whatsapp || undefined} onClose={close} />;
     if (activePanel === "details") return <OrderDetailsDialog embedded open onOpenChange={(value) => !value && close()} orderId={order.id} fallbackWhatsapp={order.whatsapp} fallbackInstagram={order.instagramHandle} />;
     if (activePanel === "edit") return dbOrder ? <OrderDialogDb embedded open onOpenChange={(value) => !value && close()} editingOrder={dbOrder} eventId={dbOrder.event_id} /> : <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;

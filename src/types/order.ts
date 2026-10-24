@@ -28,6 +28,7 @@ export interface OrderProduct {
 
 export interface Order {
   id: string;
+  eventId?: string;
   instagramHandle: string;
   whatsapp?: string;
   cartLink?: string;

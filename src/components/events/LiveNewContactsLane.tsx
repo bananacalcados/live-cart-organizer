@@ -452,6 +452,7 @@ export function LiveContactCards({
     markSeen(eventId, c.key);
     setChatOrder({
       id: `live-contact-${c.key}`,
+      eventId,
       instagramHandle: c.instagramHandle || c.name || "",
       whatsapp: c.phone,
       products: [],
