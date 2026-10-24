@@ -456,6 +456,13 @@
       "when": 1792858139663,
       "tag": "0064_selfservice_late_order_access_reconfirmation",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792858187031,
+      "tag": "0065_selfservice_late_order_callback_url",
+      "breakpoints": true
     }
   ]
 }
