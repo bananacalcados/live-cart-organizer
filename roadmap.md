@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Integridade dos links e vínculos — 24/10
+- [ ] Investigar e corrigir link de pagamento com produto diferente do pedido.
+- [ ] Corrigir vínculo seguro de cadastro e pedido por final do WhatsApp, incluindo Amine.
+- [ ] Validar casos reais e regressões sem publicar o site.
+
 ## Carrinho e cadastro — 24/10
 - [x] Mostrar frete separado nas páginas públicas do autoatendimento.
 - [x] Cadastro confirmado oferece pagamento sem nova confirmação.
