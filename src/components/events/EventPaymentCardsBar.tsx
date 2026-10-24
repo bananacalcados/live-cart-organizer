@@ -985,6 +985,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   }}
                 />
               )}
+              {initial.hasMore && <Button variant="outline" size="sm" onClick={initial.loadMore}>Carregar mais contatos</Button>}
             </LiveLaneSection>
 
             <LiveLaneSection

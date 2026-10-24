@@ -375,7 +375,14 @@ Deno.serve(async (req) => {
         .eq("is_paid", false)
         .order("created_at", { ascending: true })
         .limit(10);
-      return (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
+      const existingOrders = (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
+      if (existingOrders.length) return existingOrders;
+      const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
+      if (!matches?.length) return [];
+      const { data: matched } = await sb.from("orders")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id")
+        .eq("event_id", ev.id).in("id", matches);
+      return matched || [];
     }
 
     async function knownCustomer(): Promise<boolean> {
@@ -416,7 +423,7 @@ Deno.serve(async (req) => {
       const acc = { id: capture.access_id };
       if (igHint || orders.length) await sb.from("live_selfservice_accesses").update({
         instagram: igHint, order_ids: orders.map((o: any) => o.id),
-      }).eq("id", acc.id).is("whatsapp_confirmed_at", null);
+      }).eq("id", acc.id).is("whatsapp_confirmed_at", null).or(`instagram.is.null,order_ids.neq.{${orders.map((o: any) => o.id).join(",")}}`);
       const details = known ? await savedDetails() : null;
       // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
       // a cliente continua o cadastro de onde parou.
@@ -576,7 +583,7 @@ Deno.serve(async (req) => {
         if (!error) code = cand;
       }
       const greet = greetName(igReg, fullName);
-      const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. Pode enviar o link do meu carrinho?`;
+      const text = `Oii, aqui é a ${greet}, já preenchi meu cadastro #${code || ""}. ${target.length ? "Pode enviar o link do meu carrinho?" : "Pode confirmar meu cadastro para a live?"}`;
       const waUrl = officialPhone ? `https://wa.me/${officialPhone}?text=${encodeURIComponent(text)}` : null;
       return json({ ok: true, code, text, wa_url: waUrl, has_order: target.length > 0 });
     }
