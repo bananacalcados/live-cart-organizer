@@ -48,6 +48,7 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
     if (!response.ok) throw new Error(`Conferência AustPay: ${response.status}`);
     const p = await response.json();
     const tx = p.status ? p : p.data || p;
+    console.warn('[selfservice-cashback] AustPay reference', tx.external_reference, 'time_fields', Object.keys(tx).filter((k) => /date|time|paid|approved|captur/.test(k)));
     if (tx.status !== "APPROVED" || String(tx.id || tx.transaction_id) !== String(o.austpay_transaction_id) || tx.external_reference !== orderId) throw new Error(`AustPay sem captura válida: status=${tx.status}, id_match=${String(tx.id || tx.transaction_id) === String(o.austpay_transaction_id)}, reference_match=${tx.external_reference === orderId}`);
     amount = Number(tx.amount) / 100; paidAt = tx.paid_at || tx.approved_at || tx.captured_at || null;
     gateway = "austpay"; txId = o.austpay_transaction_id;
