@@ -14,7 +14,7 @@ BEGIN
  UPDATE public.customers SET instagram_handle='outro_perfil_ficticio' WHERE id=cust;
  IF public.selfservice_access_for_order(ord) IS NOT NULL THEN RAISE EXCEPTION 'Perfil incorreto associado'; END IF;
  UPDATE public.orders SET products='[{"title":"Teste","price":100}]',phone_last4='7812' WHERE id=ord;
- UPDATE public.customers SET instagram_handle=NULL WHERE id=cust;
+ UPDATE public.customers SET instagram_handle='' WHERE id=cust;
  IF public.selfservice_access_for_order(ord) IS DISTINCT FROM acc THEN RAISE EXCEPTION 'Final único não identificado'; END IF;
  UPDATE public.customers SET whatsapp='5533888887812' WHERE id=cust;
  IF public.selfservice_access_for_order(ord) IS NOT NULL THEN RAISE EXCEPTION 'Telefone completo conflitante associado'; END IF;
