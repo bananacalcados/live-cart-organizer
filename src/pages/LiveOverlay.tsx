@@ -20,8 +20,9 @@ export default function LiveOverlay() {
   const [tickerIdx, setTickerIdx] = useState(0);
   const [alert, setAlert] = useState<Alert | null>(null);
   const [cta, setCta] = useState<string | null>(null);
-  const [spin, setSpin] = useState<{ key: number; handle: string; text: string; done: boolean } | null>(null);
-  const spinQueue = useRef<{ key: number; handle: string; labels: string[]; winner: string }[]>([]);
+  const [spin, setSpin] = useState<{ key: number; handle: string; text: string; done: boolean; raffle?: boolean; prize?: string } | null>(null);
+  const spinQueue = useRef<{ key: number; handle: string; labels: string[]; winner: string; raffle?: boolean; prize?: string }[]>([]);
+  const [raffleWinner, setRaffleWinner] = useState<{ key: number; label: string } | null>(null);
   const spinBusy = useRef(false);
   const lastId = useRef(0);
   const queue = useRef<Alert[]>([]);

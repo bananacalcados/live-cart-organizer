@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Dices, Eye, EyeOff, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
 import { DEFAULT_OVERLAY_CONFIG, DEFAULT_OVERLAY_LAYOUT, OverlayConfig, OverlayItem, OverlayLayout, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayLayoutEditor } from "./OverlayLayoutEditor";
 
