@@ -16,7 +16,7 @@
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
 ## Shopify — Atualizar dados
-- [ ] Corrigir criação de cores vinculadas, proteger fotos e testar repetição no tênis Alo.
+- [x] Corrigir criação de cores vinculadas e proteger fotos; seis testes passaram, branco 34–39 criado no Alo, repetição criou zero duplicados, vínculo Shopify e ficha autenticada conferidos. Fotos anteriores continuam ausentes; não restauradas.
 
 ## Separação Francisca / Daiane
 - [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
