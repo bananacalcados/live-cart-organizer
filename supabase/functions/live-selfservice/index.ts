@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
 
   async function openOrderRowsFor(eventId: string, ids: string[]) {
     if (!ids.length) return [] as any[];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
@@ -233,6 +233,21 @@ Deno.serve(async (req) => {
         const to = a.confirmed_phone || a.entered_phone;
         if (!numberId || !e2) return json({ ok: false, error: "sem instância" }, 400);
         const openRows = await openOrderRowsFor(a.event_id, a.order_ids || []);
+        // Cadastro feito antes do pedido existir: copia a ficha salva para o pedido
+        // vinculado, senão o carrinho abre sem os botões de pagamento.
+        const saved = a.metadata?.registration_details;
+        if (saved && isValidCpf(String(saved.cpf || "")) && isRealFullName(saved.full_name) && saved.address && saved.cep) {
+          const { data: accR } = await sb.from("live_selfservice_accesses").select("registered_at").eq("id", a.id).maybeSingle();
+          const regAt = (accR as any)?.registered_at || a.whatsapp_confirmed_at;
+          for (const o of openRows) {
+            const { data: has } = await sb.from("customer_registrations").select("id").eq("order_id", o.id).maybeSingle();
+            if (!has) {
+              const { error } = await sb.from("customer_registrations").insert({ ...saved, order_id: o.id, whatsapp: digits(to) });
+              if (error) console.error("[live-selfservice] copiar cadastro", error.message);
+            }
+            if (!o.registered_at) await sb.from("orders").update({ registered_at: regAt }).eq("id", o.id).is("registered_at", null);
+          }
+        }
         const open = openRows.map((o) => o.id as string);
         const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
