@@ -428,6 +428,13 @@
       "when": 1792811984453,
       "tag": "0060_selfservice_queue_claim_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792812878674,
+      "tag": "0061_selfservice_random_pacing_bounded_backstop",
+      "breakpoints": true
     }
   ]
 }

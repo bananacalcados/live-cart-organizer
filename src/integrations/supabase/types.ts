@@ -20622,15 +20622,21 @@ export type Database = {
       }
       selfservice_instance_pacing: {
         Row: {
+          delay_ms: number | null
           last_sent_at: string
+          next_send_at: string | null
           whatsapp_number_id: string
         }
         Insert: {
+          delay_ms?: number | null
           last_sent_at?: string
+          next_send_at?: string | null
           whatsapp_number_id: string
         }
         Update: {
+          delay_ms?: number | null
           last_sent_at?: string
+          next_send_at?: string | null
           whatsapp_number_id?: string
         }
         Relationships: []
@@ -27331,6 +27337,8 @@ export type Database = {
         Args: { p_event_id: string; p_phone: string }
         Returns: string[]
       }
+      selfservice_queue_backstop_refresh: { Args: never; Returns: undefined }
+      selfservice_queue_backstop_tick: { Args: never; Returns: undefined }
       selfservice_queue_claim: {
         Args: { p_limit?: number }
         Returns: {
