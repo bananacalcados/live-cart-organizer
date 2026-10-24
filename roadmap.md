@@ -8,6 +8,8 @@ Regras: NÃO alterar modos manual/member_area/whatsapp nem eventos existentes. N
 - [x] BLOCO 3 — Sorteio ao vivo: contador/lista de elegíveis em tempo real no painel, sorteio grava evento `raffle_draw`, overlay gira a roleta com confete, destaque 10s e barra "Ganhadora: @x", botão "Testar sorteio" no controle do overlay
 - [x] BLOCO 4 — Faixa de confiança no link do carrinho (10 anos/2 lojas, selo Google configurável no evento, Mercado Pago + bandeiras)
 - [x] BLOCO 5 — Interruptor "match avançado Meta" na Etapa 1 do assistente (padrão ligado)
-- [ ] BLOCO 6 — Vídeos tutoriais (subagente sub_1tsr7cmg em andamento) + botões "Como funciona?"/"Como pagar?" nas páginas — aguardando os arquivos de vídeo
+- [x] BLOCO 6 — Vídeos tutoriais (41s cada, verticais) + botões "Como funciona?"/"Como pagar?" nas páginas
 
-Verificação: 24 testes passando, build OK, fila testada no banco (idempotência, ordem, intervalo), funções publicadas no backend. Site NÃO publicado.
+Verificação: 24 testes passando, build OK, fila testada no banco (idempotência, ordem, intervalo, recuperação de travada), funções publicadas no backend. Site NÃO publicado.
+
+Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo fictícios (Maria Aparecida Souza, Tênis Ortopédico R$ 189,90), QR Code ilustrativo (não escaneia), painel de parcelas do cartão é desenho (a tela real não carregou com pedido fictício), sem narração (textos + música).
