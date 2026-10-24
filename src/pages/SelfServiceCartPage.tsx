@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { StepPayment, type CustomerFormData } from "@/components/checkout/PaymentSection";
 import { SplitPaymentPanel } from "@/components/checkout/SplitPaymentPanel";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
+import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
+import { advertisingChoice, advertisingSignals, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
 import { formatMmSs } from "@/lib/liveModes";
 
@@ -74,6 +76,17 @@ export default function SelfServiceCartPage() {
     })();
     return () => { cancelled = true; };
   }, [ev, order?.id, order?.total]);
+
+  useEffect(() => {
+    const sync = () => {
+      if (!advertisingChoice()?.accepted) return;
+      if (!paid) call({ action: "meta_signals", slug, order_id: orderId, signals: advertisingSignals() });
+      trackSelfservice(paid ? "Purchase" : "InitiateCheckout", { value: paid && pix ? pix.amount : order?.total, currency: "BRL" }, paid ? `purchase_order_${orderId}` : undefined);
+    };
+    if (order) sync();
+    window.addEventListener("selfservice-advertising-change", sync);
+    return () => window.removeEventListener("selfservice-advertising-change", sync);
+  }, [slug, orderId, order?.id, paid]);
 
   const payPix = async () => {
     setBusy(true);
@@ -182,6 +195,7 @@ export default function SelfServiceCartPage() {
           </>
         )}
 
+        <SelfServicePrivacy slug={slug} />
         <p className="text-center text-xs text-muted-foreground">
           <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
           Único WhatsApp oficial da Banana: final <strong>{ev.official_last4 || "----"}</strong>. Qualquer outro número é golpe.

@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/access-code.ts";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
+import { loadSelfserviceAdvertising, cleanSelfserviceSignals } from "../_shared/selfservice-advertising.ts";
 import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
@@ -276,6 +277,21 @@ Deno.serve(async (req) => {
     };
 
     if (action === "event") return json({ ok: true, event: eventInfo });
+    if (action === "advertising_choice") {
+      if (typeof body.accepted !== "boolean") return json({ ok: false }, 400);
+      const { data, error } = await sb.rpc("selfservice_save_advertising_choice", { p_id: /^[0-9a-f-]{36}$/i.test(String(body.consent_id || "")) ? body.consent_id : null, p_accept: body.accepted, p_region: /^[A-Z]{2}$/.test(String(body.region || "")) ? body.region : null });
+      return error ? json({ ok: false }, 400) : json({ ok: true, consent_id: data });
+    }
+    if (action === "meta_signals") {
+      const consent = await loadSelfserviceAdvertising(sb, body.signals?.consent_id);
+      if (!consent) return json({ ok: true, blocked: true });
+      const { data: order } = await sb.from("orders").select("id,is_paid").eq("id", String(body.order_id || "")).eq("event_id", ev.id).maybeSingle();
+      if (!order || order.is_paid) return json({ ok: true, blocked: true });
+      const signals = cleanSelfserviceSignals(body.signals, req);
+      const { error } = await sb.from("customer_registrations").update({ ...signals, selfservice_advertising_consent_id: consent.id, selfservice_advertising_snapshot: consent }).eq("order_id", order.id);
+      return json({ ok: !error });
+    }
+
 
     // ───── Página do link do carrinho (pedido deste modo) ─────
     if (action === "cart" || action === "pix" || action === "status") {
@@ -490,6 +506,8 @@ Deno.serve(async (req) => {
       if (!addr.address || !addr.address_number || !addr.city || !addr.state) {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
+      const consent = await loadSelfserviceAdvertising(sb, body.signals?.consent_id);
+      const signals = consent ? cleanSelfserviceSignals(body.signals, req) : {};
       const now = new Date().toISOString();
       const orders = await openOrders();
       const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
@@ -523,7 +541,7 @@ Deno.serve(async (req) => {
 
       if (target.length) {
         for (const o of target) {
-          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr };
+          const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr, ...signals, selfservice_advertising_consent_id: consent?.id || null, selfservice_advertising_snapshot: consent || null };
           const { data: reg } = await sb.from("customer_registrations").select("id").eq("order_id", o.id).maybeSingle();
           if (reg?.id) await sb.from("customer_registrations").update(payload).eq("id", reg.id);
           else await sb.from("customer_registrations").insert(payload);
@@ -549,7 +567,7 @@ Deno.serve(async (req) => {
       }
 
       if (body.access_id) {
-        await sb.from("live_selfservice_accesses").update({ registered_at: now, form_draft: null, updated_at: now })
+        await sb.from("live_selfservice_accesses").update({ registered_at: now, form_draft: null, updated_at: now, advertising_consent_id: consent?.id || null, advertising_snapshot: consent || null, advertising_signals: consent ? signals : null })
           .eq("id", body.access_id).eq("event_id", ev.id);
       }
 

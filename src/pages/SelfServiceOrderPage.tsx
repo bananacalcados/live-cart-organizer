@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, Clock, MessageCircle, CheckCircle2 } from "lucide-react";
+import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
+import { advertisingSignals, advertisingChoice, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner";
 import { toast } from "sonner";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
@@ -57,6 +59,7 @@ export default function SelfServiceOrderPage() {
   const [alt, setAlt] = useState({ cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "" });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
+  useEffect(() => { if (advertisingChoice()?.accepted) trackSelfservice("PageView"); }, [slug]);
   const captured = useRef<{ phone: string; accessId: string } | null>(null);
   const latestPhone = useRef(phone);
   latestPhone.current = phone;
@@ -209,7 +212,7 @@ export default function SelfServiceOrderPage() {
     setBusy(true);
     const r = await call({
       action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null,
-      order_ids: orders.map((o) => o.id), details: form, alt_address: useAlt ? alt : null,
+      order_ids: orders.map((o) => o.id), signals: advertisingSignals(), details: form, alt_address: useAlt ? alt : null,
     });
     setBusy(false);
     if (!r?.ok) {
@@ -376,6 +379,7 @@ export default function SelfServiceOrderPage() {
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy || !canSubmit}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
             </Button>
+            <SelfServicePrivacy slug={slug} inline />
           </div>
         )}
 
@@ -395,6 +399,7 @@ export default function SelfServiceOrderPage() {
         )}
 
         {footer}
+        <SelfServicePrivacy slug={slug} />
       </div>
     </div>
   );

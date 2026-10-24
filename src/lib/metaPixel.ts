@@ -3,6 +3,7 @@
  * Shared across Live, Checkout, and Landing pages.
  */
 
+import { advertisingChoice } from "./selfServiceAdvertising";
 import { resolveFbc, resolveFbp } from "./metaAttribution";
 
 const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
@@ -10,6 +11,7 @@ const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
 
 /** Inject the fbevents.js SDK and initialise the pixel (idempotent). */
 export function initMetaPixel() {
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
   if (!META_PIXEL_ID || (window as any).fbq) return;
 
   const f = window as any;
@@ -28,7 +30,7 @@ export function initMetaPixel() {
   s.src = "https://connect.facebook.net/en_US/fbevents.js";
   document.head.appendChild(s);
 
-  f.fbq("init", META_PIXEL_ID);
+  f.fbq("init", META_PIXEL_ID, {}, { agent: "lovable" });
 }
 
 /** Read ?test_event_code= from the URL (for Meta Events Manager testing). */
@@ -71,6 +73,7 @@ export interface TrackOptions {
 
 /** Fire a standard or custom pixel event (browser). */
 export function trackPixelEvent(event: string, data?: Record<string, any>, options?: TrackOptions) {
+  if (window.location.pathname.startsWith("/pedido/") && !advertisingChoice()?.accepted) return;
   if (!(window as any).fbq) return;
   const testCode = getTestEventCode();
   const eventData = testCode ? { ...data, test_event_code: testCode } : data;
