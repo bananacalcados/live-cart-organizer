@@ -379,6 +379,13 @@
       "when": 1792805681297,
       "tag": "0053_selfservice_confirmation_generated_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792807241038,
+      "tag": "0054_selfservice_cashback_receipts",
+      "breakpoints": true
     }
   ]
 }

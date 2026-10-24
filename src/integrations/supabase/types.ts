@@ -9760,6 +9760,7 @@ export type Database = {
           is_used: boolean
           min_purchase: number
           origin_type: string
+          source_order_id: string | null
           updated_at: string
           used_at: string | null
           used_channel: string | null
@@ -9778,6 +9779,7 @@ export type Database = {
           is_used?: boolean
           min_purchase: number
           origin_type?: string
+          source_order_id?: string | null
           updated_at?: string
           used_at?: string | null
           used_channel?: string | null
@@ -9796,6 +9798,7 @@ export type Database = {
           is_used?: boolean
           min_purchase?: number
           origin_type?: string
+          source_order_id?: string | null
           updated_at?: string
           used_at?: string | null
           used_channel?: string | null
@@ -14039,6 +14042,9 @@ export type Database = {
           products: Json
           registered_at: string | null
           release_to_expedition: boolean
+          selfservice_cart_message_id: string | null
+          selfservice_cart_sent_at: string | null
+          selfservice_cashback_receipt: Json | null
           shipping_cost: number | null
           shipping_info: Json | null
           shipping_type: string | null
@@ -14111,6 +14117,9 @@ export type Database = {
           products?: Json
           registered_at?: string | null
           release_to_expedition?: boolean
+          selfservice_cart_message_id?: string | null
+          selfservice_cart_sent_at?: string | null
+          selfservice_cashback_receipt?: Json | null
           shipping_cost?: number | null
           shipping_info?: Json | null
           shipping_type?: string | null
@@ -14183,6 +14192,9 @@ export type Database = {
           products?: Json
           registered_at?: string | null
           release_to_expedition?: boolean
+          selfservice_cart_message_id?: string | null
+          selfservice_cart_sent_at?: string | null
+          selfservice_cashback_receipt?: Json | null
           shipping_cost?: number | null
           shipping_info?: Json | null
           shipping_type?: string | null
@@ -27159,6 +27171,16 @@ export type Database = {
         }
         Returns: Json
       }
+      selfservice_grant_cashback: {
+        Args: {
+          p_amount_paid: number
+          p_gateway: string
+          p_order_id: string
+          p_paid_at: string
+          p_transaction_id: string
+        }
+        Returns: Json
+      }
       selfservice_initial_contacts: {
         Args: {
           p_event_id: string
@@ -27174,6 +27196,10 @@ export type Database = {
           order_ids: string[]
           phone: string
         }[]
+      }
+      selfservice_mark_cart_sent: {
+        Args: { p_message_id: string; p_order_ids: string[] }
+        Returns: undefined
       }
       selfservice_match_initial_order: {
         Args: { p_event_id: string; p_phone: string }
