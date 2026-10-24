@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Self-service registration derives submission validity and inline field errors from one validation helper; invalid submissions focus the first error without sending registration requests, preserving existing acceptance rules.
+
 - Overlay test participants live in the event's existing wheel config; participant-only saves merge that field into current settings, preserving layout and unrelated controls without creating real raffle entries.
 
 - Live newcomer activity reads the indexed conversation summary for loaded contacts and shares one unread derivation for redirect and self-service contacts; reuse the existing event-scoped device read marker and WhatsApp broadcast to avoid per-message queries.
