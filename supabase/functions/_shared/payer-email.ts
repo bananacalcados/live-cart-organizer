@@ -51,8 +51,13 @@ export function normalizePayerEmail(raw?: string | null): string | null {
   // ".com.br" digitado como ".com.brr"/".com.b"
   domain = domain.replace(/\.com\.brr?$/, ".com.br").replace(/\.com\.b$/, ".com.br");
 
+  // O regex isolado aceitava ponto antes do @, no início e pontos duplos.
+  // Não adivinhar a caixa postal: endereço inválido usa o fallback técnico,
+  // sem alterar o cadastro ou buscar o e-mail de outra pessoa.
+  if (local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..")) return null;
+  if (domain.length > 253 || domain.split(".").some((label) => label.length > 63 || label.startsWith("-") || label.endsWith("-"))) return null;
   const candidate = `${local}@${domain}`;
-  return EMAIL_RE.test(candidate) ? candidate : null;
+  return candidate.length <= 254 && EMAIL_RE.test(candidate) ? candidate : null;
 }
 
 /**

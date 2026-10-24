@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Erro ao gerar Pix — 24/10
+- [x] Identificar recusa do Mercado Pago por ponto antes do @ no e-mail; corrigir validação compartilhada sem alterar cadastro, valores ou consultas.
+- [ ] Validar testes e geração real no carrinho afetado; disponibilizar correção do serviço sem publicar o site.
+
 ## Confirmações de pagamento — 24/10
 - [x] Diagnosticar Isabel: IDs recusados da cascata bloqueavam consulta da captura AustPay, cujo GET omite referência; quatro confirmações ausentes, nenhum cadastro pago ausente nos últimos sete dias do autoatendimento.
 - [x] Corrigir prova da transação vinculada, fila como idempotência e recuperação limitada pelo worker de dois minutos existente; falha de cashback não bloqueia confirmação paga.
