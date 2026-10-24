@@ -8,6 +8,8 @@ import { Loader2, ShieldCheck, Clock, MessageCircle, CheckCircle2 } from "lucide
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner";
+import { TutorialVideoButton } from "@/components/selfservice/TutorialVideoButton";
+import tutorialCadastro from "@/assets/videos/tutorial-cadastro-live.mp4.asset.json";
 import { toast } from "sonner";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { maskCpf, maskCep, maskPhoneBR, digitsOnly } from "@/lib/formatMasks";

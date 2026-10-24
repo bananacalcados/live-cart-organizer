@@ -10,6 +10,8 @@ import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstal
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
+import { TutorialVideoButton } from "@/components/selfservice/TutorialVideoButton";
+import tutorialPagamento from "@/assets/videos/tutorial-pagamento-carrinho.mp4.asset.json";
 import { formatMmSs } from "@/lib/liveModes";
 
 /** Link do carrinho do modo "WhatsApp + Cadastro online" (/pedido/:slug/carrinho/:orderId). */
