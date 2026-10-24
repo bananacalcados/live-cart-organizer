@@ -14,6 +14,7 @@ describe("captura inicial na live", () => {
     const result = projectInitialPhones([order], [contact]);
     expect(result[0].customer?.whatsapp).toBe("5533991234567");
     expect(result[0].initialPhoneUnconfirmed).toBe(true);
+    expect(result[0].initialContactAt).toBe("2026-10-24T01:00:00Z");
     expect(order.customer?.whatsapp).toBe("");
     expect(result[0].is_paid).toBe(false);
   });
