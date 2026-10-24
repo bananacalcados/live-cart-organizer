@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Ficha em tempo real e carrinho manual — 24/10
+- [ ] Investigar dados da Silvania e corrigir espelho antes da confirmação, preservando edições da equipe.
+- [ ] Oferecer copiar/enviar carrinho exato na parte de pagamento da ficha sem depender da confirmação no WhatsApp.
+- [ ] Validar dados, link e testes; não publicar o site.
+
 ## Confirmação de cadastro — erros nos campos
 - [x] Mostrar erros por campo e focar primeiro erro ao confirmar; 5 testes passaram e navegador confirmou nome com e-mail bloqueado sem envio, aviso visível e erro removido ao corrigir. Identificação simulada, evento real, sem salvar cadastro nem enviar WhatsApp. Sem publicar.
 
