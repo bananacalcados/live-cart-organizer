@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canPayRegisteredOrder, selfServiceShipping } from "../lib/selfServiceCheckout";
+import { canPayRegisteredOrder, initialCartMode, selfServiceShipping } from "../lib/selfServiceCheckout";
 
 describe("carrinho do autoatendimento", () => {
   it("cadastro confirmado no WhatsApp não exige nova confirmação", () => {
@@ -9,5 +9,11 @@ describe("carrinho do autoatendimento", () => {
   it("exibe o frete do pedido sem cobrar frete marcado como grátis", () => {
     expect(selfServiceShipping({ id: "pedido", shipping_cost: 19.99, free_shipping: false })).toBe(19.99);
     expect(selfServiceShipping({ id: "pedido", shipping_cost: 19.99, free_shipping: true })).toBe(0);
+  });
+  it("link da equipe com ?pgto=cartao abre direto na tela do cartão", () => {
+    expect(initialCartMode("?pgto=cartao")).toBe("card");
+  });
+  it.each(["", "?pgto=pix", "?pgto=cartao2"])("link sem o parâmetro (%s) mantém a tela de escolha", (search) => {
+    expect(initialCartMode(search)).toBe("choose");
   });
 });
