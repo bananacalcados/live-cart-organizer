@@ -70,12 +70,17 @@ export default function LiveOverlay() {
     let i = 0; let delay = 70; let elapsed = 0;
     const step = () => {
       if (elapsed >= 6000) {
-        setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true });
-        const secs = Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
+        setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true, raffle: s.raffle, prize: s.prize });
+        if (s.raffle) {
+          // Sorteio: ganhadora fica em destaque 10 s e a barra vira "Ganhadora: @x".
+          setRaffleWinner({ key: s.key, label: s.winner });
+          window.setTimeout(() => setRaffleWinner((w) => (w && w.key === s.key ? null : w)), 30_000);
+        }
+        const secs = s.raffle ? 10 : Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
         window.setTimeout(() => { setSpin(null); spinBusy.current = false; runSpin(); }, secs * 1000);
         return;
       }
-      setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false });
+      setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false, raffle: s.raffle, prize: s.prize });
       i += 1; elapsed += delay; delay = Math.min(450, delay * 1.08);
       window.setTimeout(step, delay);
     };
@@ -123,6 +128,10 @@ export default function LiveOverlay() {
           queue.current.push({ key: e.id, text: fill(cfg.assembled_alert.template, e.payload), duration: cfg.assembled_alert.duration_seconds });
         } else if (e.kind === "wheel_spin" && cfg.wheel.enabled && e.payload?.winner_label) {
           spinQueue.current.push({ key: e.id, handle: e.payload.handle || "cliente", labels: (e.payload.labels || []).filter(Boolean), winner: e.payload.winner_label });
+          runSpin();
+        } else if (e.kind === "raffle_draw" && cfg.wheel.enabled && e.payload?.winner_label) {
+          // Sorteio do painel: mesma roleta, com confete e destaque de 10 s.
+          spinQueue.current.push({ key: e.id, handle: e.payload.handle || "cliente", labels: (e.payload.labels || []).filter(Boolean), winner: e.payload.winner_label, raffle: true, prize: e.payload.prize_label || "" });
           runSpin();
         } else if (e.kind === "cta_now" && e.payload?.text) {
           showCta(e.payload.text);
