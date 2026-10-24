@@ -23,7 +23,7 @@ describe("Shopify data updates", () => {
     expect(plan.create).toHaveLength(6);
     expect(plan.additions).toEqual([{ optionId: "cor", gid: "meta-branco" }]);
     const options = [{ name: "Cor", optionValues: [{ id: "branco", linkedMetafieldValue: "meta-branco" }] }, product.options[1]];
-    expect(resolveOptionInputs(plan.create[0].input.optionValues, options)).toEqual([{ id: "branco" }, { id: "tam-34" }]);
+    expect(resolveOptionInputs(plan.create[0].input.optionValues, options)).toEqual([{ optionName: "Cor", id: "branco" }, { optionName: "Tamanho", id: "tam-34" }]);
   });
   it("rejects absent or ambiguous patterns, without a similar color fallback", () => {
     expect(() => exactColor([{ id: "off", displayName: "Off White" }], "Branco")).toThrow();

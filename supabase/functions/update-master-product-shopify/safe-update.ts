@@ -88,10 +88,10 @@ export function planVariants(variants: any[], product: any, colorObjects: any[])
 
 export function resolveOptionInputs(values: any[], options: any[]) {
   return values.map((value) => {
-    if (!value.linkedMetafieldValue) return value.id ? { id: value.id } : { optionName: value.optionName, name: value.name };
+    if (!value.linkedMetafieldValue) return value.id ? { optionName: value.optionName, id: value.id } : { optionName: value.optionName, name: value.name };
     const option = options.find((item) => item.name === value.optionName);
     const linked = option?.optionValues.find((item: any) => item.linkedMetafieldValue === value.linkedMetafieldValue);
     if (!linked?.id) throw new Error(`A Shopify não confirmou a cor "${value.name}"; nenhuma variação foi criada.`);
-    return { id: linked.id };
+    return { optionName: value.optionName, id: linked.id };
   });
 }
