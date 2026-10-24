@@ -365,6 +365,13 @@
       "when": 1792804931223,
       "tag": "0051_selfservice_initial_contact_lanes",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792805063086,
+      "tag": "0052_selfservice_initial_verified_sender",
+      "breakpoints": true
     }
   ]
 }
