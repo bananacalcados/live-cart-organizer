@@ -1,9 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Integridade dos links e vínculos — 24/10
-- [ ] Investigar e corrigir link de pagamento com produto diferente do pedido.
-- [ ] Corrigir vínculo seguro de cadastro e pedido por final do WhatsApp, incluindo Amine.
-- [ ] Validar casos reais e regressões sem publicar o site.
+- [x] Investigar e proteger link de pagamento: autoatendimento usa carrinho do pedido exato. Link antigo da Amine mostrou 530 Dourado/35 no navegador; divergência reportada não reproduzida.
+- [x] Corrigir vínculo seguro por final único sem conflito; vincular três cadastros confirmados, incluindo Amine, e reprocessar pela fila existente sem reenviar o já enviado.
+- [x] Validar carrinho real, fila sent, 15 testes e teste transacional de final único/conflito/empate; site não publicado.
 
 ## Carrinho e cadastro — 24/10
 - [x] Mostrar frete separado nas páginas públicas do autoatendimento.
