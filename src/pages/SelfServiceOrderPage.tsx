@@ -93,6 +93,8 @@ export default function SelfServiceOrderPage() {
   const reserveExpired = reserveLeft !== null && reserveLeft <= 0;
   const prizeLeft = primary && ev ? registrationDeadline(primary.created_at, ev.registration_minutes) - now : 0;
   const prizeActive = !!ev?.prize_name && !!primary && !primary.registered_at && prizeLeft > 0;
+  // Cronômetro visível enquanto houver prazo, mesmo já cadastrada (mantém a urgência).
+  const prizeTimer = !!ev?.prize_name && !!primary && prizeLeft > 0;
   const totalAll = orders.reduce((s, o) => s + o.total, 0);
   const pixAll = orders.reduce((s, o) => s + o.pix_total, 0);
   const waLink = ev?.official_phone ? `https://wa.me/${ev.official_phone}` : null;
@@ -295,7 +297,7 @@ export default function SelfServiceOrderPage() {
               </div>
             )}
             {ev.prize_name && (
-              <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeActive} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
+              <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
             )}
             {reserveExpired ? (
               <div className="space-y-3 rounded-2xl border border-destructive/40 p-4 text-center">
@@ -334,8 +336,8 @@ export default function SelfServiceOrderPage() {
 
         {screen === "register" && (
           <div className="space-y-3">
-            {prizeActive && (
-              <SelfServicePrizeBanner name={ev.prize_name || ""} image={ev.prize_image_url} left={prizeLeft} active={prizeActive} description="Conclua seu cadastro antes do tempo acabar para concorrer ao sorteio." />
+            {prizeTimer && (
+              <SelfServicePrizeBanner name={ev.prize_name || ""} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description="Conclua seu cadastro antes do tempo acabar para concorrer ao sorteio." />
             )}
             {!prizeActive && <p className="text-sm text-muted-foreground">Conclua esta etapa pra terminar seu cadastro.</p>}
             {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}

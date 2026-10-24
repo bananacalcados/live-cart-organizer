@@ -37,6 +37,7 @@ export function OverlayLayoutEditor({ config, onChange, onSave }: { config: Over
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     onSave(layoutRef.current);
   };
+  const setFont = (key: OverlayBlockKey, size: number) => { const layout = { ...layoutRef.current, [key]: normalizeOverlayPosition({ ...layoutRef.current[key], font_size: size }) }; layoutRef.current = layout; onChange(layout); onSave(layout); };
   const texts: Record<OverlayBlockKey, string> = {
     ticker: config.ticker.items.find((i) => i.enabled)?.text || "🚚 Frete fixo R$ 19,99",
     raffle_bar: fill(config.raffle_bar.text_template, { count: 25 }),
@@ -60,7 +61,11 @@ export function OverlayLayoutEditor({ config, onChange, onSave }: { config: Over
     </div>
     {keys.map((key) => <div key={key} className="flex items-center justify-between gap-2">
       <Label htmlFor={`font-${key}`}>{names[key]} · fonte</Label>
-      <Input id={`font-${key}`} type="number" min={16} max={160} className="w-20" value={config.layout[key].font_size} onChange={(e) => { const layout = { ...config.layout, [key]: normalizeOverlayPosition({ ...config.layout[key], font_size: Number(e.target.value) }) }; layoutRef.current = layout; onChange(layout); onSave(layout); }} />
+      <div className="flex items-center gap-1">
+        <Button type="button" variant="outline" size="sm" aria-label={`Diminuir ${names[key]}`} onClick={() => setFont(key, config.layout[key].font_size - 4)}>A−</Button>
+        <Input id={`font-${key}`} type="number" min={16} max={160} className="w-20" value={config.layout[key].font_size} onChange={(e) => setFont(key, Number(e.target.value))} />
+        <Button type="button" variant="outline" size="sm" aria-label={`Aumentar ${names[key]}`} onClick={() => setFont(key, config.layout[key].font_size + 4)}>A+</Button>
+      </div>
     </div>)}
   </div>;
 }

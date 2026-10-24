@@ -134,19 +134,19 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   };
 
   // Roda a animação do sorteio no overlay com nome fictício, sem gravar ganhador.
+  const [fakeHandles, setFakeHandles] = useState<string>(() => { try { return localStorage.getItem("overlay-fake-handles") || "@ana_paula\n@bia_souza\n@carla_lima\n@cliente_exemplo"; } catch { return ""; } });
   const testRaffle = async () => {
+    const labels = Array.from(new Set(fakeHandles.split(/[\n,]+/).map((h) => h.trim().replace(/^@?/, "@")).filter((h) => h.length > 1))).slice(0, 50);
+    if (labels.length < 2) return toast.error("Crie pelo menos 2 @ fictícios");
+    try { localStorage.setItem("overlay-fake-handles", fakeHandles); } catch { /* ignore */ }
+    const winner = labels[Math.floor(Math.random() * labels.length)];
     const { error } = await sb.from("live_overlay_events").insert({
       event_id: eventId,
       kind: "raffle_draw",
-      payload: {
-        winner_label: "@cliente_exemplo",
-        handle: "cliente_exemplo",
-        prize_label: "Prêmio teste",
-        labels: ["@ana_paula", "@bia_souza", "@carla_lima", "@cliente_exemplo"],
-      },
+      payload: { winner_label: winner, handle: winner.slice(1), prize_label: "Prêmio teste", labels, test: true },
     });
     if (error) toast.error("Não foi possível testar");
-    else toast.success("Animação de teste enviada para a live (nenhum ganhador foi gravado)");
+    else toast.success(`Teste enviado: ${winner} (nenhum ganhador foi gravado)`);
   };
 
   const saveAsDefault = async () => {
@@ -183,6 +183,11 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
               <Button variant="outline" className="gap-1" onClick={testRaffle}>
                 <Dices className="h-4 w-4" /> Testar sorteio
               </Button>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fake-handles">Participantes fictícios do teste (um @ por linha)</Label>
+              <Textarea id="fake-handles" rows={4} value={fakeHandles} onChange={(e) => setFakeHandles(e.target.value)} placeholder="@maria_teste" />
+              <p className="text-xs text-muted-foreground">Só para ver a roleta no OBS — não entram no sorteio de verdade.</p>
             </div>
           </CardContent>
         </Card>
