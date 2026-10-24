@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
       const orderId = String(body.order_id || "");
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
-        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
@@ -306,19 +306,20 @@ Deno.serve(async (req) => {
         await sb.from("live_selfservice_accesses").update({ paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq("event_id", ev.id).contains("order_ids", [orderId]).is("paid_at", null);
       }
-      if (action === "status") return json({ ok: true, paid });
+      if (action === "status") return json({ ok: true, paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null });
       const { data: reg } = await sb.from("customer_registrations")
         .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();
       const r = reg as any;
       if (action === "cart") {
         const form = r ? { fullName: r.full_name, email: r.email, cpf: r.cpf, whatsapp: r.whatsapp, cep: r.cep, address: r.address, addressNumber: r.address_number, complement: r.complement || "", neighborhood: r.neighborhood || "", city: r.city, state: r.state } : null;
-        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, form });
+        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null, form });
       }
       // pix
       if (paid) return json({ ok: true, paid: true });
       if (!r) return json({ ok: false, error: "Cadastro não encontrado para este pedido." }, 400);
       // Pagamento dividido em aberto: nunca cobrar o total cheio no Pix avulso.
-      const { data: splits } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      const { data: splits, error: splitError } = await sb.from("payment_splits").select("id, status").eq("order_id", orderId);
+      if (splitError) return json({ ok: false, error: "Não foi possível conferir os pagamentos deste pedido. Tente novamente." }, 503);
       if (((splits || []) as any[]).some((x) => !["refunded", "canceled", "cancelled"].includes(String(x.status)))) {
         return json({ ok: false, split: true, error: "Este pedido tem pagamento dividido — use a opção de pagamento abaixo." });
       }

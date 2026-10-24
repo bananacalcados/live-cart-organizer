@@ -201,6 +201,7 @@ Deno.serve(async (req) => {
     let _fbp = fbp as string | undefined;
     let _fbc = fbc as string | undefined;
 
+    if (selfservice) { _email = _fullName = _city = _state = _zip = _phone = _cpf = _fbp = _fbc = undefined; }
     // If order_id is provided, enrich PII from customer_registrations (gold source for checkout)
     if (order_id) {
       try {
@@ -403,9 +404,9 @@ Deno.serve(async (req) => {
     // próprio navegador — em chamadas server-side (trigger/edge) os headers são do
     // servidor e poluiriam o match da Meta.
     const isServerCall = from_server === true;
-    const clientIp = client_ip_address || _clientIpStored ||
+    const clientIp = (selfservice ? undefined : client_ip_address) || _clientIpStored ||
       (isServerCall ? undefined : extractClientIp(req));
-    const clientUa = client_user_agent || _clientUaStored ||
+    const clientUa = (selfservice ? undefined : client_user_agent) || _clientUaStored ||
       (isServerCall ? undefined : (req.headers.get("user-agent") || undefined));
 
     const userData: Record<string, unknown> = {
@@ -460,7 +461,7 @@ Deno.serve(async (req) => {
       user_data: userData,
       custom_data: customData,
     };
-    const sourceUrl = event_source_url || _sourceUrlStored;
+    const sourceUrl = (selfservice ? undefined : event_source_url) || _sourceUrlStored;
     if (sourceUrl) eventData.event_source_url = sourceUrl;
 
     const payload: Record<string, unknown> = { data: [eventData], partner_agent: "lovable" };

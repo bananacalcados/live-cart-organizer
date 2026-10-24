@@ -88,3 +88,9 @@ export function trackPixelEvent(event: string, data?: Record<string, any>, optio
 export function trackPageView() {
   trackPixelEvent("PageView");
 }
+
+window.addEventListener("storage", (event) => {
+  if (event.key === "bc_selfservice_advertising_v1" && window.location.pathname.startsWith("/pedido/")) {
+    (window as any).fbq?.("consent", advertisingChoice()?.accepted ? "grant" : "revoke");
+  }
+});
