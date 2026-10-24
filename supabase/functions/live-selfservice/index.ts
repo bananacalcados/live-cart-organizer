@@ -550,7 +550,7 @@ Deno.serve(async (req) => {
           ...(lead && lead.source !== "autoatendimento" && !metaBase.original_source ? { original_source: lead.source } : {}),
         };
         if (lead?.id) {
-          await sb.from("event_leads").update({ name: fullName, source: metaBase.selfservice_initial ? lead.source : "autoatendimento", metadata, instagram: igReg || undefined }).eq("id", lead.id);
+          await sb.from("event_leads").update({ name: fullName, metadata, instagram: igReg || undefined }).eq("id", lead.id);
         } else {
           const { data: buyers } = await sb.from("customers_unified").select("id")
             .eq("phone_suffix8", suffix8(phone)).gt("total_orders", 0).limit(1);
