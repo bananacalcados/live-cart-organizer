@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Cadastro sem etapa intermediária — 24/10
+- [ ] Unir campos à tela do pedido e de quem não tem pedido, mantendo captura, rascunho e bloqueios existentes.
+- [ ] Informar que a confirmação exige enviar a mensagem no WhatsApp; validar caminhos, erros e testes sem publicar.
+
 ## Erro ao gerar Pix — 24/10
 - [x] Identificar recusa do Mercado Pago por ponto antes do @ no e-mail; corrigir validação compartilhada sem alterar cadastro, valores ou consultas.
 - [x] Validar 17 testes e geração real de R$ 341,99 no carrinho da Vaneide, QR/código visíveis e Pix enviado no WhatsApp; liberar tentativas falhas somente desse pedido. Correção compartilhada disponível no serviço e Pix opcional do boleto protegido; site não publicado.
