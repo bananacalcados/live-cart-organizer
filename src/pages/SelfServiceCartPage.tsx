@@ -48,6 +48,7 @@ export default function SelfServiceCartPage() {
   useEffect(() => {
     call({ action: "cart", slug, order_id: orderId }).then((r) => {
       if (!r?.ok) { setNotFound(true); return; }
+      paidValue.current = r.amount_paid ?? null;
       setEv(r.event); setOrder(r.order); setForm(r.form); setPaid(!!r.paid);
     });
   }, [slug, orderId]);
@@ -114,7 +115,7 @@ export default function SelfServiceCartPage() {
 
   const checkPaid = async () => {
     const r = await call({ action: "status", slug, order_id: orderId });
-    if (r?.paid) setPaid(true); else toast.info("Ainda não recebemos — pode levar alguns segundos.");
+    if (r?.paid) { paidValue.current = r.amount_paid ?? null; setPaid(true); } else toast.info("Ainda não recebemos — pode levar alguns segundos.");
   };
 
   if (notFound) return <div className="flex min-h-screen items-center justify-center p-6 text-center text-muted-foreground">Link não encontrado.</div>;

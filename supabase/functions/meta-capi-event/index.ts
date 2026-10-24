@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { loadSelfserviceAdvertising } from "../_shared/selfservice-advertising.ts";
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { normalizeMetaPhone } from "../_shared/meta-phone.ts";
 import { getMetaAttribution } from "../_shared/meta-attribution-memory.ts";
 import {
@@ -185,6 +186,11 @@ Deno.serve(async (req) => {
         const consent = await loadSelfserviceAdvertising(supabase, registration?.selfservice_advertising_consent_id);
         if (!consent || !registration?.selfservice_advertising_snapshot?.advertising) return new Response(JSON.stringify({ ok: true, skipped: true, reason: "advertising_consent_required" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
+        if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
+          await grantSelfserviceCashback(supabase, order_id);
+          const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
+          selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+        }
       }
     }
 
@@ -431,7 +437,7 @@ Deno.serve(async (req) => {
 
     // event_id: prefer client-provided (browser dedupe). Otherwise build deterministic for Purchase.
     const eventId =
-      eventIdFromClient ||
+      (selfservice && event_name === "Purchase" ? `purchase_order_${order_id}` : eventIdFromClient) ||
       (event_name === "Purchase" && order_id
         ? `purchase_order_${order_id}`
         : `${event_name.toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
