@@ -351,6 +351,13 @@
       "when": 1792774472225,
       "tag": "0049_selfservice_form_draft_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792802473527,
+      "tag": "0050_fix_reactivation_candidates_volatility",
+      "breakpoints": true
     }
   ]
 }
