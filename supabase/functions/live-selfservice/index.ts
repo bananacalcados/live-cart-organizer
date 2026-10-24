@@ -253,30 +253,48 @@ Deno.serve(async (req) => {
       }
       // send_cart: pedido novo de cliente que já confirmou no WhatsApp (Caso B → link sai sozinho).
       const orderId = String(body.orderId || "");
-      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost").eq("id", orderId).maybeSingle();
+      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost, registered_at, is_paid, paid_externally, stage, selfservice_cart_sent_at").eq("id", orderId).maybeSingle();
       if (!o) return json({ ok: false, sent: false });
+      if (o.is_paid || o.paid_externally || o.stage === "cancelled" || o.selfservice_cart_sent_at || !Array.isArray(o.products) || !o.products.length) return json({ ok: true, sent: false });
       const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
       if ((e3 as any)?.operation_mode !== MODE || !(e3 as any)?.self_service_slug) return json({ ok: true, sent: false });
       const { data: c } = await sb.from("customers").select("whatsapp, instagram_handle").eq("id", (o as any).customer_id).maybeSingle();
-      const cp = normalizeBrPhone((c as any)?.whatsapp || "");
-      if (!cp) return json({ ok: true, sent: false });
-      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id, advertising_consent_id, advertising_snapshot, advertising_signals")
-        .eq("event_id", (o as any).event_id).eq("confirmed_phone_key", phoneKey(cp)).not("whatsapp_confirmed_at", "is", null)
-        .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: resolvedAccess, error: accessError } = await sb.rpc("selfservice_access_for_order", { p_order_id: orderId });
+      if (accessError || !resolvedAccess) return json({ ok: true, sent: false });
+      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id, registered_at, metadata, advertising_consent_id, advertising_snapshot, advertising_signals")
+        .eq("id", resolvedAccess).maybeSingle();
       if (!acc) return json({ ok: true, sent: false });
       const a = acc as any;
+      const cp = normalizeBrPhone(a.confirmed_phone || "");
+      if (!cp) return json({ ok: true, sent: false });
       const numberId = a.confirmed_number_id || (await resolveEventNumber(sb, (o as any).event_id, (e3 as any).whatsapp_number_id)).id;
       const greet = greetName((c as any)?.instagram_handle, await regName([orderId], a.entered_phone));
       // Cadastro feito na página vale para o pedido novo também.
-      const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-        .in("order_id", a.order_ids || []).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      let prev = a.metadata?.registration_details || null;
+      if (!prev && a.order_ids?.length) {
+        const { data } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+          .in("order_id", a.order_ids).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        prev = data;
+      }
+      // Older no-order registrations have no order_ids; only a unique exact verified
+      // phone record may supply their saved fields (never a loose suffix match).
+      if (!prev) {
+        const { data } = await sb.from("customers_unified").select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+          .eq("phone_e164", cp).limit(2);
+        if (data?.length === 1) { const { name, ...fields } = data[0]; prev = { ...fields, full_name: name }; }
+      }
+      if (!prev || !isValidCpf(String(prev.cpf || "")) || !isRealFullName(prev.full_name) || !prev.address || !prev.cep) return json({ ok: true, sent: false, reason: "registration_unavailable" });
       const nextConsent = await loadSelfserviceAdvertising(sb, a.advertising_consent_id);
       const nextSignals = nextConsent && a.advertising_snapshot?.advertising ? { ...(a.advertising_signals || {}), selfservice_advertising_consent_id: nextConsent.id, selfservice_advertising_snapshot: a.advertising_snapshot }
         : ordinaryAllowed(a.advertising_snapshot) ? { ...(a.advertising_signals || {}), selfservice_advertising_consent_id: null, selfservice_advertising_snapshot: a.advertising_snapshot } : {};
       if (prev) {
         const { data: has } = await sb.from("customer_registrations").select("id").eq("order_id", orderId).maybeSingle();
-        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), ...nextSignals, order_id: orderId, whatsapp: digits(cp) });
+        if (!has) {
+          const { error } = await sb.from("customer_registrations").insert({ ...(prev as any), ...nextSignals, order_id: orderId, whatsapp: digits(cp) });
+          if (error) throw error;
+        }
       }
+      if (!o.registered_at) await sb.from("orders").update({ registered_at: a.registered_at }).eq("id", orderId).is("registered_at", null);
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
       const toPhone = a.confirmed_phone || cp;
@@ -349,6 +367,7 @@ Deno.serve(async (req) => {
         cashback_deadline: o.selfservice_cart_sent_at ? new Date(Date.parse(o.selfservice_cart_sent_at) + 20 * 60 * 1000).toISOString() : null,
         free_shipping: !!o.free_shipping,
         shipping_cost: Number(o.shipping_cost || 0),
+        registration_confirmed: o.registration_confirmed === true,
         discount_type: o.discount_type,
         discount_value: o.discount_value,
       };
@@ -544,7 +563,10 @@ Deno.serve(async (req) => {
         .eq("event_id", ev.id).eq("phone_key", phoneKey(phone))
         .not("form_draft", "is", null)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, draft: (prevDraft as any)?.form_draft || null, orders: orders.map(mapOrder) });
+      const { data: confirmedAccess } = await sb.from("live_selfservice_accesses").select("order_ids")
+        .eq("event_id", ev.id).eq("confirmed_phone_key", phoneKey(phone)).not("whatsapp_confirmed_at", "is", null).limit(100);
+      const confirmedIds = new Set((confirmedAccess || []).flatMap((a: any) => a.order_ids || []));
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, draft: (prevDraft as any)?.form_draft || null, orders: orders.map((o: any) => mapOrder({ ...o, registration_confirmed: confirmedIds.has(o.id) })) });
     }
 
     // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
@@ -690,6 +712,7 @@ Deno.serve(async (req) => {
       }
       let code: string | null = null;
       const nextMetadata = { ...((access.metadata as Record<string, unknown>) || {}) };
+      nextMetadata.registration_details = { full_name: fullName, cpf, email, ...orderAddr };
       delete nextMetadata.auto_reply_sent_at;
       delete nextMetadata.auto_reply_case;
       for (let i = 0; i < 6 && accessId && !code; i++) {

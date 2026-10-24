@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram, reuse its saved registration without overwriting staff fields, and notify through the existing cart queue; public re-entry skips registration only for confirmed linked orders.
+
 - Self-service queue pacing is sampled and persisted atomically per instance; claims reserve only its FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.
 
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
