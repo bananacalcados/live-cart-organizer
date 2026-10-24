@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
       const { data: c } = await sb.from("customers").select("whatsapp, instagram_handle").eq("id", (o as any).customer_id).maybeSingle();
       const cp = normalizeBrPhone((c as any)?.whatsapp || "");
       if (!cp) return json({ ok: true, sent: false });
-      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id")
+      const { data: acc } = await sb.from("live_selfservice_accesses").select("id, instagram, order_ids, entered_phone, confirmed_phone, confirmed_number_id, advertising_consent_id, advertising_snapshot, advertising_signals")
         .eq("event_id", (o as any).event_id).eq("confirmed_phone_key", phoneKey(cp)).not("whatsapp_confirmed_at", "is", null)
         .order("whatsapp_confirmed_at", { ascending: false }).limit(1).maybeSingle();
       if (!acc) return json({ ok: true, sent: false });
@@ -208,10 +208,12 @@ Deno.serve(async (req) => {
       const greet = greetName((c as any)?.instagram_handle, await regName([orderId], a.entered_phone));
       // Cadastro feito na página vale para o pedido novo também.
       const { data: prev } = await sb.from("customer_registrations").select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-        .ilike("whatsapp", `%${suffix8(cp)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        .in("order_id", a.order_ids || []).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const nextConsent = await loadSelfserviceAdvertising(sb, a.advertising_consent_id);
+      const nextSignals = nextConsent && a.advertising_snapshot?.advertising ? { ...(a.advertising_signals || {}), selfservice_advertising_consent_id: nextConsent.id, selfservice_advertising_snapshot: a.advertising_snapshot } : {};
       if (prev) {
         const { data: has } = await sb.from("customer_registrations").select("id").eq("order_id", orderId).maybeSingle();
-        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), order_id: orderId, whatsapp: digits(cp) });
+        if (!has) await sb.from("customer_registrations").insert({ ...(prev as any), ...nextSignals, order_id: orderId, whatsapp: digits(cp) });
       }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       const cbOne = await cashbackHint(orderTotal(o));
