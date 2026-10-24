@@ -11,8 +11,7 @@ import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner
 import { toast } from "sonner";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 import { maskCpf, maskCep, maskPhoneBR, digitsOnly } from "@/lib/formatMasks";
-import { isValidCpf } from "@/lib/cpfUtils";
-import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
+import { registrationErrors, type RegistrationErrorKey } from "@/lib/selfServiceRegistrationValidation";
 import { formatMmSs, registrationDeadline } from "@/lib/liveModes";
 import { openWhatsAppDeepLink } from "@/lib/waDeepLink";
 import { completeInitialPhone } from "@/lib/selfServiceInitial";
@@ -57,6 +56,8 @@ export default function SelfServiceOrderPage() {
   const [code, setCode] = useState("");
   const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState({ full_name: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", cpf: "", email: "" });
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [touched, setTouched] = useState<Partial<Record<RegistrationErrorKey, boolean>>>({});
   const [useAlt, setUseAlt] = useState(false);
   const [alt, setAlt] = useState({ cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "" });
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
@@ -207,13 +208,28 @@ export default function SelfServiceOrderPage() {
     } catch { /* cliente digita manualmente */ }
   };
 
-  const cpfOk = isValidCpf(form.cpf);
-  const altOk = !useAlt || (digitsOnly(alt.cep).length === 8 && alt.address.trim() && alt.address_number.trim() && alt.city.trim() && alt.state.trim());
-  const canSubmit = isRealFullName(form.full_name) && cpfOk && isUsableEmail(form.email) && digitsOnly(form.cep).length === 8
-    && form.address.trim() && form.address_number.trim() && form.city.trim() && form.state.trim() && altOk;
+  const errors = registrationErrors(form, alt, useAlt);
+  const visibleError = (key: RegistrationErrorKey) => (attemptedSubmit || touched[key]) ? errors[key] : undefined;
+  const fieldProps = (key: RegistrationErrorKey) => ({
+    id: `registration-${key}`,
+    "aria-invalid": !!visibleError(key),
+    "aria-describedby": visibleError(key) ? `registration-${key}-error` : undefined,
+    className: visibleError(key) ? "border-destructive" : undefined,
+    onBlur: () => setTouched((current) => ({ ...current, [key]: true })),
+  });
+  const fieldError = (key: RegistrationErrorKey) => visibleError(key)
+    ? <p id={`registration-${key}-error`} className="text-xs text-destructive">{visibleError(key)}</p>
+    : null;
 
   const submit = async () => {
-    if (!canSubmit) { toast.error("Confira os campos destacados."); return; }
+    setAttemptedSubmit(true);
+    const firstError = Object.keys(errors)[0] as RegistrationErrorKey | undefined;
+    if (firstError) {
+      document.getElementById(`registration-${firstError}`)?.focus();
+      document.getElementById(`registration-${firstError}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      toast.error(errors[firstError]);
+      return;
+    }
     setBusy(true);
     const r = await call({
       action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null,
@@ -350,17 +366,17 @@ export default function SelfServiceOrderPage() {
             )}
             {!prizeActive && <p className="text-sm text-muted-foreground">Conclua esta etapa pra terminar seu cadastro.</p>}
             {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}
-            <div className="space-y-1"><Label>Nome completo</Label><Input autoComplete="name" value={form.full_name} onChange={set("full_name")} /></div>
-            <div className="space-y-1"><Label>CEP</Label><Input inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} /></div>
-            <div className="space-y-1"><Label>Rua</Label><Input value={form.address} onChange={set("address")} /></div>
+            <div className="space-y-1"><Label>Nome completo</Label><Input {...fieldProps("full_name")} autoComplete="name" value={form.full_name} onChange={set("full_name")} />{fieldError("full_name")}</div>
+            <div className="space-y-1"><Label>CEP</Label><Input {...fieldProps("cep")} inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} />{fieldError("cep")}</div>
+            <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("address")} value={form.address} onChange={set("address")} />{fieldError("address")}</div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1"><Label>Número</Label><Input value={form.address_number} onChange={set("address_number")} /></div>
-              <div className="space-y-1"><Label>Complemento</Label><Input value={form.complement} onChange={set("complement")} /></div>
+              <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("address_number")} value={form.address_number} onChange={set("address_number")} />{fieldError("address_number")}</div>
+              <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("complement")} value={form.complement} onChange={set("complement")} />{fieldError("complement")}</div>
             </div>
-            <div className="space-y-1"><Label>Bairro</Label><Input value={form.neighborhood} onChange={set("neighborhood")} /></div>
+            <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("neighborhood")} value={form.neighborhood} onChange={set("neighborhood")} />{fieldError("neighborhood")}</div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input value={form.city} onChange={set("city")} /></div>
-              <div className="space-y-1"><Label>UF</Label><Input maxLength={2} value={form.state} onChange={set("state")} /></div>
+              <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("city")} value={form.city} onChange={set("city")} />{fieldError("city")}</div>
+              <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("state")} maxLength={2} value={form.state} onChange={set("state")} />{fieldError("state")}</div>
             </div>
             <button type="button" className="text-sm font-semibold text-primary underline" onClick={() => setUseAlt((v) => !v)}>
               {useAlt ? "Usar meu endereço principal" : "Enviar para outro endereço"}
@@ -368,26 +384,26 @@ export default function SelfServiceOrderPage() {
             {useAlt && (
               <div className="space-y-3 rounded-xl border border-primary/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Endereço de entrega deste pedido (seu endereço principal continua salvo)</p>
-                <div className="space-y-1"><Label>CEP de entrega</Label><Input inputMode="numeric" value={alt.cep} onChange={(e) => { const v = maskCep(e.target.value); setAlt((a) => ({ ...a, cep: v })); lookupAltCep(v); }} /></div>
-                <div className="space-y-1"><Label>Rua</Label><Input value={alt.address} onChange={(e) => setAlt((a) => ({ ...a, address: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>CEP de entrega</Label><Input {...fieldProps("alt_cep")} inputMode="numeric" value={alt.cep} onChange={(e) => { const v = maskCep(e.target.value); setAlt((a) => ({ ...a, cep: v })); lookupAltCep(v); }} />{fieldError("alt_cep")}</div>
+                <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("alt_address")} value={alt.address} onChange={(e) => setAlt((a) => ({ ...a, address: e.target.value }))} />{fieldError("alt_address")}</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1"><Label>Número</Label><Input value={alt.address_number} onChange={(e) => setAlt((a) => ({ ...a, address_number: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>Complemento</Label><Input value={alt.complement} onChange={(e) => setAlt((a) => ({ ...a, complement: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("alt_address_number")} value={alt.address_number} onChange={(e) => setAlt((a) => ({ ...a, address_number: e.target.value }))} />{fieldError("alt_address_number")}</div>
+                  <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("alt_complement")} value={alt.complement} onChange={(e) => setAlt((a) => ({ ...a, complement: e.target.value }))} />{fieldError("alt_complement")}</div>
                 </div>
-                <div className="space-y-1"><Label>Bairro</Label><Input value={alt.neighborhood} onChange={(e) => setAlt((a) => ({ ...a, neighborhood: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("alt_neighborhood")} value={alt.neighborhood} onChange={(e) => setAlt((a) => ({ ...a, neighborhood: e.target.value }))} />{fieldError("alt_neighborhood")}</div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input value={alt.city} onChange={(e) => setAlt((a) => ({ ...a, city: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>UF</Label><Input maxLength={2} value={alt.state} onChange={(e) => setAlt((a) => ({ ...a, state: e.target.value }))} /></div>
+                  <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("alt_city")} value={alt.city} onChange={(e) => setAlt((a) => ({ ...a, city: e.target.value }))} />{fieldError("alt_city")}</div>
+                  <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("alt_state")} maxLength={2} value={alt.state} onChange={(e) => setAlt((a) => ({ ...a, state: e.target.value }))} />{fieldError("alt_state")}</div>
                 </div>
               </div>
             )}
             <div className="space-y-1">
               <Label>CPF</Label>
-              <Input inputMode="numeric" value={form.cpf} onChange={(e) => setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }))} aria-invalid={digitsOnly(form.cpf).length === 11 && !cpfOk} />
-              {digitsOnly(form.cpf).length === 11 && !cpfOk && <p className="text-xs text-destructive">CPF inválido</p>}
+              <Input {...fieldProps("cpf")} inputMode="numeric" value={form.cpf} onChange={(e) => setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }))} />{fieldError("cpf")}
             </div>
-            <div className="space-y-1"><Label>E-mail</Label><Input type="email" autoComplete="email" value={form.email} onChange={set("email")} /></div>
-            <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy || !canSubmit}>
+            <div className="space-y-1"><Label>E-mail</Label><Input {...fieldProps("email")} type="email" autoComplete="email" value={form.email} onChange={set("email")} />{fieldError("email")}</div>
+            {attemptedSubmit && Object.keys(errors).length > 0 && <p role="alert" className="text-sm font-semibold text-destructive">Corrija os campos destacados acima para confirmar seu cadastro.</p>}
+            <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
             </Button>
           </div>

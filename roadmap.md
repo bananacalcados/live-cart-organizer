@@ -1,5 +1,8 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Confirmação de cadastro — erros nos campos
+- [x] Mostrar erros por campo e focar primeiro erro ao confirmar; 5 testes passaram e navegador confirmou nome com e-mail bloqueado sem envio, aviso visível e erro removido ao corrigir. Identificação simulada, evento real, sem salvar cadastro nem enviar WhatsApp. Sem publicar.
+
 ## Novos contatos — mensagens não lidas
 - [x] Priorizar nova mensagem não lida, destacar com tag verde e permitir marcar como lido no card; 8 testes passaram, leitura conferida na live real e consulta indexada validada. Leitura por aparelho (padrão existente); chegada de nova mensagem validada em teste, não com novo envio real. Sem publicar.
 
