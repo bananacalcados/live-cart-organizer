@@ -9,7 +9,7 @@ export async function loadSelfserviceAdvertising(sb: any, id: unknown) {
   return data;
 }
 
-async function isRefused(sb: any, id: unknown) {
+export async function selfserviceAdvertisingRefused(sb: any, id: unknown) {
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return false;
   const { data } = await sb.from("selfservice_advertising_consents").select("advertising").eq("id", id).maybeSingle();
   return !!data && data.advertising === false;
