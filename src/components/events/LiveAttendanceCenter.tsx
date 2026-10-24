@@ -151,6 +151,8 @@ export function LiveAttendanceCenter({
   };
 
   return (
+    <>
+    <SelfServiceQueueAlerts eventId={eventId} />
     <div className="flex h-[calc(100vh-7rem)] min-h-[600px] gap-3 px-3 pb-3">
       {/* Coluna 1 — fila */}
       <div className="hidden w-[280px] shrink-0 lg:block">
