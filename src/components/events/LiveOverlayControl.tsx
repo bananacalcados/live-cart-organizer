@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Copy, Dices, Eye, EyeOff, Plus, RefreshCw, Send, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Dices, Eye, EyeOff, Plus, RefreshCw, Save, Send, Trash2 } from "lucide-react";
 import { DEFAULT_OVERLAY_CONFIG, DEFAULT_OVERLAY_LAYOUT, OverlayConfig, OverlayItem, OverlayLayout, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayLayoutEditor } from "./OverlayLayoutEditor";
 
@@ -56,6 +56,8 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   const [editPositions, setEditPositions] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const [savingParticipants, setSavingParticipants] = useState(false);
+  const [fakeHandles, setFakeHandles] = useState<string>(() => { try { return localStorage.getItem(`overlay-fake-handles:${eventId}`) ?? localStorage.getItem("overlay-fake-handles") ?? "@ana_paula\n@bia_souza\n@carla_lima\n@cliente_exemplo"; } catch { return ""; } });
 
   const changeLayout = (layout: OverlayLayout) => setCfg((c) => ({ ...c, layout }));
   // Serialize writes; merge only layout into the latest saved config, never draft form values.
@@ -87,6 +89,9 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
     if (st) {
       setCfg(withOverlayDefaults(st.config));
       setHidden(!!st.hidden);
+      let localDraft: string | null = null;
+      try { localDraft = localStorage.getItem(`overlay-fake-handles:${eventId}`); } catch { /* optional draft */ }
+      setFakeHandles(localDraft ?? st.config?.wheel?.test_handles ?? "@ana_paula\n@bia_souza\n@carla_lima\n@cliente_exemplo");
     } else {
       const c = await loadDefaultTemplate();
       await sb.from("live_overlay_settings").insert({ event_id: eventId, config: c });
@@ -135,11 +140,35 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   };
 
   // Roda a animação do sorteio no overlay com nome fictício, sem gravar ganhador.
-  const [fakeHandles, setFakeHandles] = useState<string>(() => { try { return localStorage.getItem("overlay-fake-handles") || "@ana_paula\n@bia_souza\n@carla_lima\n@cliente_exemplo"; } catch { return ""; } });
+  const changeParticipants = (value: string) => {
+    setFakeHandles(value);
+    try { localStorage.setItem(`overlay-fake-handles:${eventId}`, value); } catch { /* optional draft */ }
+  };
+  const saveParticipants = async (): Promise<boolean> => {
+    setSavingParticipants(true);
+    try {
+      await saveQueue.current;
+      const { data, error: readError } = await sb.from("live_overlay_settings").select("config").eq("event_id", eventId).single();
+      if (readError) throw readError;
+      if (data.config?.wheel?.test_handles !== fakeHandles) {
+        const { error } = await sb.from("live_overlay_settings").update({
+          config: { ...data.config, wheel: { ...data.config?.wheel, test_handles: fakeHandles } },
+          updated_at: new Date().toISOString(),
+        }).eq("event_id", eventId);
+        if (error) throw error;
+      }
+      setCfg((current) => ({ ...current, wheel: { ...current.wheel, test_handles: fakeHandles } }));
+      try { localStorage.removeItem(`overlay-fake-handles:${eventId}`); } catch { /* optional draft */ }
+      return true;
+    } catch {
+      toast.error("Não foi possível salvar os participantes. Tente novamente.");
+      return false;
+    } finally { setSavingParticipants(false); }
+  };
   const testRaffle = async () => {
     const labels = Array.from(new Set(fakeHandles.split(/[\n,]+/).map((h) => h.trim().replace(/^@?/, "@")).filter((h) => h.length > 1))).slice(0, 50);
     if (labels.length < 2) return toast.error("Crie pelo menos 2 @ fictícios");
-    try { localStorage.setItem("overlay-fake-handles", fakeHandles); } catch { /* ignore */ }
+    if (!(await saveParticipants())) return;
     const winner = labels[Math.floor(Math.random() * labels.length)];
     const { error } = await sb.from("live_overlay_events").insert({
       event_id: eventId,
@@ -181,13 +210,16 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
               <Button variant={hidden ? "default" : "destructive"} className="gap-1" onClick={toggleHidden}>
                 {hidden ? <><Eye className="h-4 w-4" /> Mostrar</> : <><EyeOff className="h-4 w-4" /> Ocultar tudo</>}
               </Button>
-              <Button variant="outline" className="gap-1" onClick={testRaffle}>
+              <Button variant="outline" className="gap-1" onClick={testRaffle} disabled={savingParticipants}>
                 <Dices className="h-4 w-4" /> Testar sorteio
               </Button>
             </div>
             <div className="space-y-1">
               <Label htmlFor="fake-handles">Participantes fictícios do teste (um @ por linha)</Label>
-              <Textarea id="fake-handles" rows={4} value={fakeHandles} onChange={(e) => setFakeHandles(e.target.value)} placeholder="@maria_teste" />
+              <Textarea id="fake-handles" rows={4} value={fakeHandles} onChange={(e) => changeParticipants(e.target.value)} placeholder="@maria_teste" />
+              <Button variant="outline" size="sm" className="gap-1" disabled={savingParticipants} onClick={async () => { if (await saveParticipants()) toast.success("Participantes salvos nesta live"); }}>
+                <Save className="h-4 w-4" /> {savingParticipants ? "Salvando…" : "Salvar participantes"}
+              </Button>
               <p className="text-xs text-muted-foreground">Só para ver a roleta no OBS — não entram no sorteio de verdade.</p>
             </div>
           </CardContent>

@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayPosition, withOverlayDefaults } from "@/lib/liveOverlay";
 
 describe("overlay layout", () => {
+  it("preserves saved fictional participants independently of real raffle entries", () => {
+    const handles = "@llarissalaura\n@elanenavegante\n@jessicamarianer\n@werlic.gabii";
+    const config = withOverlayDefaults({ wheel: { test_handles: handles, enabled: false } });
+    expect(config.wheel.test_handles).toBe(handles);
+    expect(config.wheel.enabled).toBe(false);
+    expect(config.layout.wheel).toEqual(DEFAULT_OVERLAY_LAYOUT.wheel);
+  });
   it("fills missing blocks and individual fields without changing saved text", () => {
     const config = withOverlayDefaults({ layout: { alert: { x: 400, width: 500 } }, ticker: { items: [{ id: "one", text: "Manual", enabled: true }] } });
     expect(config.layout.ticker).toEqual(DEFAULT_OVERLAY_LAYOUT.ticker);
