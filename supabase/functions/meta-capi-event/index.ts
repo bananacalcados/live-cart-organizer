@@ -381,9 +381,9 @@ Deno.serve(async (req) => {
 
 
     // Sem aceite explícito: só clique no anúncio, IP, navegador e valor — nada de dado pessoal.
-    if (selfserviceOrdinary) { _email = _fullName = _city = _state = _zip = _cpf = undefined; phoneDigits = undefined as any; }
+    if (selfserviceOrdinary) { _email = _fullName = _city = _state = _zip = _cpf = _birthDate = _gender = _customerRef = undefined; }
     // ============ Build hashed user_data ============
-    const ph = phoneDigits ? await sha256Hex(phoneDigits) : undefined;
+    const ph = phoneDigits && !selfserviceOrdinary ? await sha256Hex(phoneDigits) : undefined;
     const em = _email ? await hashIfPresent(normalizeEmail(_email)) : undefined;
 
     const { first: firstRaw, last: lastRaw } = splitName(_fullName);
