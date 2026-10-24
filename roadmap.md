@@ -15,6 +15,10 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Shopify — Atualizar dados
+- [x] Corrigir criação de cores vinculadas e proteger fotos; seis testes passaram, branco 34–39 criado no Alo, repetição criou zero duplicados, vínculo Shopify e ficha autenticada conferidos. Fotos anteriores continuam ausentes; não restauradas.
+- [x] Corrigir erro independente do Agente de Clientes: rotina com tabelas temporárias marcada STABLE; VOLATILE aplicado preservando filtros/acessos. Mesma consulta autenticada respondeu 200 e um candidato; sem disparos.
+
 ## Separação Francisca / Daiane
 - [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
 - [x] Conferir no navegador os dois pedidos reais do NB 530: nomes, CPF, e-mail, WhatsApp e endereço separados; nenhum estorno executado.
