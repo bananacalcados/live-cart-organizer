@@ -16,9 +16,18 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
   if (splitError) throw splitError;
   const active = (parts || []).filter((p: any) => !["cancelled", "canceled", "refunded"].includes(p.status));
   if (active.length) {
-    if (active.some((p: any) => p.status !== "paid" || !p.paid_at)) throw new Error("Partes ainda não confirmadas");
-    amount = active.reduce((sum: number, p: any) => sum + Number(p.charge_amount), 0);
-    paidAt = active.map((p: any) => p.paid_at).sort().at(-1);
+    if (active.length > 10 || active.some((p: any) => p.status !== "approved" || p.gateway !== "mercadopago" || !p.gateway_tx_id)) throw new Error("Partes ainda não confirmadas");
+    const account = await getMpAccountForOrder(sb, orderId);
+    if (!account || account.is_sandbox) throw new Error("Conta de produção indisponível");
+    const payments = await Promise.all(active.map(async (part: any) => {
+      const response = await mpGetPayment(account.access_token, part.gateway_tx_id);
+      if (!response.ok) throw new Error("Não foi possível conferir uma das partes");
+      const payment = await response.json();
+      if (payment.status !== "approved" || payment.currency_id !== "BRL" || String(payment.id) !== String(part.gateway_tx_id) || !payment.date_approved) throw new Error("Parte sem comprovação");
+      return payment;
+    }));
+    amount = payments.reduce((sum: number, payment: any) => sum + Number(payment.transaction_amount), 0);
+    paidAt = payments.map((payment: any) => payment.date_approved).sort().at(-1);
     gateway = "split"; txId = active.map((p: any) => p.gateway_tx_id).join(",");
   } else if (o.mercadopago_payment_id) {
     const account = await getMpAccountForOrder(sb, orderId);
