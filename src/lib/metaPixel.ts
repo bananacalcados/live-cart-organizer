@@ -16,7 +16,7 @@ export function initMetaPixel() {
 
   const f = window as any;
   const n: any = function (...args: any[]) {
-    n.callMethod ? n.callMethod(...args) : n.queue.push(args);
+    n.callMethod ? n.callMethod.apply(n, args) : n.queue.push(args);
   };
   f.fbq = n;
   if (!f._fbq) f._fbq = n;
