@@ -1,9 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Confirmações de pagamento — 24/10
-- [ ] Diagnosticar Isabel e auditar pedidos pagos sem cadastro/confirmação.
-- [ ] Corrigir causa e recuperação durável sem duplicar mensagens ou crédito.
-- [ ] Recuperar afetadas e conferir resultado real; não publicar o site.
+- [x] Diagnosticar Isabel: IDs recusados da cascata bloqueavam consulta da captura AustPay, cujo GET omite referência; quatro confirmações ausentes, nenhum cadastro pago ausente nos últimos sete dias do autoatendimento.
+- [x] Corrigir prova da transação vinculada, fila como idempotência e recuperação limitada pelo worker de dois minutos existente; falha de cashback não bloqueia confirmação paga.
+- [x] Recuperar quatro confirmações e verificar entrega real (Silvania leu, Isabel respondeu SIM), 11 testes e conversa da Isabel no navegador; não publicar o site.
+- [ ] Cashback de @aicrampio e @carmenpina165: Appmax retorna pagamento aprovado e valor mas não data de aprovação; aguarda evidência oficial, sem estimar crédito. Confirmações entregues com cashback em conferência.
 
 ## Ficha em tempo real e carrinho manual — 24/10
 - [x] Investigar dados da Silvania: chave do telefone divergente e telefone provisório perdido no chat; corrigir espelho por pedido/evento e chave do servidor para contatos sem pedido, preservando edições da equipe.
