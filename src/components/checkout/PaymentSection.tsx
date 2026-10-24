@@ -97,9 +97,12 @@ export function StepPayment({
   prizeAppliedCents = 0,
   onStepEvent,
   preselectedInstallments,
+  initialMethod = null,
 }: {
   /** Parcelas fixadas pela vendedora no modal da Live. */
   preselectedInstallments?: number | null;
+  /** Método já selecionado ao abrir (ex.: link da equipe que cai direto no cartão). */
+  initialMethod?: "pix" | "card" | "debit" | null;
   orderId: string;
   amount: number;
   products: OrderProduct[];
@@ -116,8 +119,8 @@ export function StepPayment({
   onStepEvent?: (event: string, data?: Record<string, unknown>) => void;
 }) {
 
-   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(null);
-   const [showAllMethods, setShowAllMethods] = useState(true);
+   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | "debit" | null>(initialMethod);
+    const [showAllMethods, setShowAllMethods] = useState(!initialMethod);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
 
   useEffect(() => {

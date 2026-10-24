@@ -51,7 +51,8 @@ export default function SelfServiceCartPage() {
   const [paid, setPaid] = useState(false);
   const [notFound, setNotFound] = useState(false);
   // Link da equipe (?pgto=cartao) já abre na tela do cartão, sem passar pela escolha Pix/Cartão.
-  const [mode, setMode] = useState<"choose" | "pix" | "card">(() => initialCartMode(`?${searchParams.toString()}`));
+  const [directCard] = useState(() => initialCartMode(`?${searchParams.toString()}`) === "card");
+  const [mode, setMode] = useState<"choose" | "pix" | "card">(directCard ? "card" : "choose");
   const [pix, setPix] = useState<{ code: string; base64: string | null; amount: number; sent: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -225,6 +226,7 @@ export default function SelfServiceCartPage() {
                   <StepPayment
                     orderId={order.id}
                     amount={order.total}
+                    initialMethod={directCard ? "card" : null}
                     products={order.products.map((p) => ({ ...p, image: p.image || undefined })) as any}
                     form={form}
                     installmentConfig={installmentConfig}
