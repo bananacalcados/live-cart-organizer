@@ -100,6 +100,8 @@ export interface DbOrder {
   customer?: DbCustomer;
   /** Display-only phone from the public first step, not yet verified by WhatsApp. */
   initialPhoneUnconfirmed?: boolean;
+  /** When the contact typed the phone in the public link (click time), display-only. */
+  initialContactAt?: string;
 }
 
 export interface PromotionTier {

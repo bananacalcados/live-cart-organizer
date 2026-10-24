@@ -25,6 +25,11 @@ export function projectInitialPhones(orders: DbOrder[], contacts: InitialLiveCon
     if (new Set(matches.map((contact) => contact.phone)).size !== 1) return order;
     const contact = matches[0];
     if (!contact) return order;
-    return { ...order, customer: { ...order.customer, whatsapp: contact.phone }, initialPhoneUnconfirmed: !contact.confirmed };
+    return {
+      ...order,
+      customer: { ...order.customer, whatsapp: contact.phone },
+      initialPhoneUnconfirmed: !contact.confirmed,
+      initialContactAt: contact.created_at,
+    };
   });
 }
