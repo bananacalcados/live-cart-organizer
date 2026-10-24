@@ -13,3 +13,8 @@ export function canPayRegisteredOrder(order: SelfServiceCheckoutOrder): boolean 
 export function selfServiceShipping(order: SelfServiceCheckoutOrder): number {
   return order.free_shipping ? 0 : Math.max(0, Number(order.shipping_cost) || 0);
 }
+
+/** Link enviado pela equipe com ?pgto=cartao abre o carrinho já na tela do cartão. */
+export function initialCartMode(search: string): "choose" | "card" {
+  return new URLSearchParams(search).get("pgto") === "cartao" ? "card" : "choose";
+}
