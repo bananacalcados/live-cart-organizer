@@ -17,7 +17,7 @@ import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { format } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNewContactsLane";
 import { useEventContactLanes } from "@/hooks/useEventContactLanes";
@@ -691,7 +691,13 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   )}
                 >
                   {/* Selos de novidade: dentro do card, em linha própria, sem cortar no topo */}
-                  {order.initialPhoneUnconfirmed && <span className="text-xs text-muted-foreground">Telefone digitado · não confirmou no WhatsApp</span>}
+                  {order.initialPhoneUnconfirmed && (
+                    <span className="text-xs text-muted-foreground">
+                      {order.initialContactAt
+                        ? `Clicou no link há ${formatDistanceToNowStrict(new Date(order.initialContactAt), { locale: ptBR })} · não completou o cadastro`
+                        : "Telefone digitado · não confirmou no WhatsApp"}
+                    </span>
+                  )}
                   {!paidCard && (unread || igUnread[igKey(order.customer?.instagram_handle)]) && (
                     <div className="flex flex-wrap items-center gap-1 pr-7 -mb-0.5">
                       {unread && (
