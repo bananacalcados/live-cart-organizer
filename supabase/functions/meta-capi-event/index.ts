@@ -404,7 +404,15 @@ Deno.serve(async (req) => {
       const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
-    if (selfservice && !selfserviceOrdinary && order_id) externalId = await sha256Hex(`selfservice_order_${order_id}`);
+    if (selfservice && !selfserviceOrdinary && order_id) {
+      // external_id = identificador do cliente no CRM (código BC-XXXXXX ou id); fallback: pedido.
+      let custRef: string | undefined;
+      if (selfserviceOrder?.customer_id) {
+        const { data: cu } = await supabase.from("customers_unified").select("id, customer_code").eq("id", selfserviceOrder.customer_id).maybeSingle();
+        custRef = (cu?.customer_code as string | undefined) || (cu?.id as string | undefined);
+      }
+      externalId = await sha256Hex(String(custRef || `selfservice_order_${order_id}`).trim().toLowerCase());
+    }
     if (!externalId && _customerRef) {
       externalId = await sha256Hex(String(_customerRef).trim().toLowerCase());
     }
