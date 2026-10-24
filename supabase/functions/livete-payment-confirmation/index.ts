@@ -58,10 +58,16 @@ serve(async (req) => {
     if (!order.is_paid && order.stage !== 'paid') return new Response(JSON.stringify({ handled: false, reason: 'not_paid' }), { headers: corsHeaders });
     let selfserviceCb: any;
     try { selfserviceCb = await grantSelfserviceCashback(supabase, orderId); }
-    catch (error) { return new Response(JSON.stringify({ handled: false, reason: 'cashback_verification_pending' }), { status: 503, headers: corsHeaders }); }
+    catch (error) {
+      console.error('[livete-payment-confirmation] cashback verification:', String(error));
+      const { data: ev } = await supabase.from('events').select('operation_mode').eq('id', order.event_id).maybeSingle();
+      if (ev?.operation_mode !== 'whatsapp_autoatendimento') throw error;
+      // Payment is already confirmed; inability to verify credit must not silence it.
+      selfserviceCb = { applicable: true, pending: true };
+    }
 
     // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
-    const { error: claimError } = await supabase
+    const { error: claimError } = selfserviceCb?.applicable ? { error: null } : await supabase
       .from('livete_payment_confirmation_sent')
       .insert({ order_id: orderId });
 
@@ -74,6 +80,7 @@ serve(async (req) => {
 
     // Release the claim if we bail out before actually sending
     const releaseClaim = async () => {
+      if (selfserviceCb?.applicable) return;
       await supabase.from('livete_payment_confirmation_sent').delete().eq('order_id', orderId);
     };
 
@@ -133,7 +140,7 @@ serve(async (req) => {
     let cashbackLine = '';
     try {
       if (selfserviceCb?.applicable) {
-        cashbackLine = `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
+        cashbackLine = selfserviceCb.pending ? '\n\n💰 Seu cashback está em conferência.' : `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
       } else {
       // Já existe cashback ativo recente? Não duplica.
       const { data: existingCb } = await supabase

@@ -7,6 +7,7 @@ import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { closeAppmaxRefund } from "../_shared/refund-gateways/appmax-close.ts";
 import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -238,6 +239,40 @@ serve(async (req) => {
   } catch (err: any) {
     errors.push({ receipts: err.message });
   }
+
+  // Repair notifications that failed before enqueue; bounded, no new cron.
+  // The queue's unique key is the self-service idempotency boundary.
+  try {
+    const { data: events } = await supabase.from('events').select('id')
+      .eq('operation_mode', 'whatsapp_autoatendimento').eq('is_active', true).limit(20);
+    const eventIds = (events || []).map((e) => e.id);
+    if (eventIds.length) {
+      const { data: paidOrders } = await supabase.from('orders').select('id')
+        .in('event_id', eventIds).eq('is_paid', true).neq('stage', 'cancelled')
+        .gte('paid_at', since).order('paid_at', { ascending: false }).limit(100);
+      const ids = (paidOrders || []).map((o) => o.id);
+      if (ids.length) {
+        const { data: credits } = await supabase.from('orders').select('id').in('id', ids)
+          .is('selfservice_cashback_receipt', null).order('paid_at', { ascending: false }).limit(4);
+        for (const credit of credits || []) {
+          try { await grantSelfserviceCashback(supabase, credit.id); }
+          catch (error) { errors.push({ cashback_pending: credit.id, details: String(error) }); }
+        }
+        const { data: queued, error: queueError } = await supabase.from('selfservice_message_queue')
+          .select('order_id').in('order_id', ids).eq('kind', 'payment_confirmation');
+        if (queueError) throw queueError;
+        const done = new Set((queued || []).map((q) => q.order_id));
+        for (const order of (paidOrders || []).filter((o) => !done.has(o.id)).slice(0, 4)) {
+          const response = await fetch(`${supabaseUrl}/functions/v1/livete-payment-confirmation`, {
+            method: 'POST', headers: { Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: order.id }),
+          });
+          const result = await response.text();
+          if (!response.ok) errors.push({ confirmation: order.id, status: response.status, details: result });
+        }
+      }
+    }
+  } catch (err: any) { errors.push({ confirmation_recovery: err.message }); }
 
   return new Response(
     JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, errors: errors.slice(0, 5) }),

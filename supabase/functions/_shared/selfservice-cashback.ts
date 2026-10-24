@@ -2,6 +2,7 @@ import { getMpAccountForOrder } from "./mp-account.ts";
 import { mpGetPayment } from "./mp-http.ts";
 import { appmaxGetPayment, APPMAX_PAID } from "./refund-gateways/appmax.ts";
 import { resolveAustpayConfig, austpayGetTransaction } from "./austpay.ts";
+import { capturedAustpayEvidence } from "./selfservice-payment-evidence.ts";
 
 /** Only exact linked transactions; missing provider evidence blocks credit, never guesses time/amount. */
 export async function grantSelfserviceCashback(sb: any, orderId: string) {
@@ -35,15 +36,31 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
     const response = await mpGetPayment(account.access_token, o.mercadopago_payment_id);
     if (!response.ok) throw new Error(`Conferência MP: ${response.status}`);
     const p = await response.json();
-    if (String(p.id) !== String(o.mercadopago_payment_id) || p.status !== "approved" || p.currency_id !== "BRL") throw new Error("Pagamento MP não aprovado");
-    amount = Number(p.transaction_amount); paidAt = p.date_approved || null;
-    gateway = "mercadopago"; txId = String(p.id);
-  } else if (o.appmax_order_id) {
+    if (String(p.id) !== String(o.mercadopago_payment_id) || p.currency_id !== "BRL") throw new Error("Identidade do pagamento MP inválida");
+    if (p.status === "approved") {
+      amount = Number(p.transaction_amount); paidAt = p.date_approved || null;
+      gateway = "mercadopago"; txId = String(p.id);
+    }
+  }
+  if (!amount && o.austpay_transaction_id) {
+    const cfg = await resolveAustpayConfig(sb);
+    if (!cfg || cfg.env !== "production") throw new Error("AustPay produção indisponível");
+    const response = await austpayGetTransaction(cfg, o.austpay_transaction_id);
+    if (!response.ok) throw new Error(`Conferência AustPay: ${response.status}`);
+    const p = await response.json();
+    const tx = p.status ? p : p.data || p;
+    const { data: invalidated, error: invalidationError } = await sb.from("pos_checkout_attempts").select("id").eq("sale_id", orderId).eq("transaction_id", o.austpay_transaction_id).eq("status", "invalidated").limit(1);
+    if (invalidationError || invalidated?.length) throw new Error("Captura AustPay invalidada ou não verificável");
+    const evidence = capturedAustpayEvidence(tx, o.austpay_transaction_id, o.id, orderId);
+    amount = evidence.amount; paidAt = evidence.paidAt;
+    gateway = "austpay"; txId = o.austpay_transaction_id;
+  }
+  if (!amount && o.appmax_order_id) {
     const result = await appmaxGetPayment(sb, String(o.appmax_order_id), null);
     if (result.kind !== "ok" || !APPMAX_PAID.includes(result.payment.status)) throw new Error("Pagamento Appmax não confirmado");
     amount = result.payment.amount; paidAt = result.payment.dateApproved;
     gateway = "appmax"; txId = result.payment.orderId;
-  } else if (o.pagarme_order_id) {
+  } else if (!amount && o.pagarme_order_id) {
     const key = Deno.env.get("PAGARME_SECRET_KEY");
     if (!key) throw new Error("Credencial Pagar.me indisponível");
     const response = await fetch(`https://api.pagar.me/core/v5/orders/${encodeURIComponent(o.pagarme_order_id)}`, { headers: { Authorization: `Basic ${btoa(key + ":")}` } });
@@ -54,15 +71,6 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
     amount = charges.reduce((s: number, c: any) => s + Number(c.paid_amount || c.amount), 0) / 100;
     paidAt = charges.map((c: any) => c.paid_at).filter(Boolean).sort().at(-1) || null;
     gateway = "pagarme"; txId = String(p.id);
-  } else if (o.austpay_transaction_id) {
-    const cfg = await resolveAustpayConfig(sb);
-    if (!cfg || cfg.env !== "production") throw new Error("AustPay produção indisponível");
-    const response = await austpayGetTransaction(cfg, o.austpay_transaction_id);
-    if (!response.ok) throw new Error(`Conferência AustPay: ${response.status}`);
-    const p = await response.json();
-    if (p.status !== "APPROVED" || String(p.id || p.transaction_id) !== String(o.austpay_transaction_id) || p.external_reference !== orderId) throw new Error("AustPay sem captura válida");
-    amount = Number(p.amount) / 100; paidAt = p.paid_at || p.approved_at || p.captured_at || null;
-    gateway = "austpay"; txId = o.austpay_transaction_id;
   }
   if (!amount || !paidAt || !Number.isFinite(Date.parse(paidAt))) throw new Error("Cashback aguardando valor e horário oficiais do pagamento");
   const { data, error: grantError } = await sb.rpc("selfservice_grant_cashback", { p_order_id: orderId, p_amount_paid: amount, p_paid_at: paidAt, p_gateway: gateway, p_transaction_id: txId });
