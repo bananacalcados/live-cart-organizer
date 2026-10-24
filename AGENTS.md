@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Live newcomer activity reads the indexed conversation summary for loaded contacts and shares one unread derivation for redirect and self-service contacts; reuse the existing event-scoped device read marker and WhatsApp broadcast to avoid per-message queries.
+
 - Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram or unique conflict-free last four digits, reuse saved registration without overwriting staff fields, and notify through the existing cart queue; repairs link already-sent orders without resending. Payment messages in this mode use the source order's cart URL, never cached cart links or a generic member-area fallback.
 
 - Self-service queue pacing is sampled and persisted atomically per instance; claims reserve only its FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.

@@ -4,7 +4,7 @@ import { Order } from "@/types/order";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { cn } from "@/lib/utils";
-import { HelpCircle, MessageCircle, MoreVertical, Phone, Plus, RefreshCw, Undo2, UserPlus } from "lucide-react";
+import { CheckCheck, HelpCircle, MessageCircle, MoreVertical, Phone, Plus, RefreshCw, Undo2, UserPlus } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -18,9 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { ContactLaneMark } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
-import { useEventStore } from "@/stores/eventStore";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { buildPhoneVariations } from "@/lib/phoneUtils";
+import type { InitialLiveContact } from "@/lib/selfServiceInitial";
+import { compareLiveContacts, isLiveContactUnread } from "@/lib/liveContactUnread";
 
 interface ClickRow {
   id: string;
@@ -104,13 +105,14 @@ function readSeen(eventId: string): Record<string, number> {
 }
 function markSeen(eventId: string, key: string) {
   const m = readSeen(eventId);
-  m[key] = Date.now();
+  const seenAt = Date.now();
+  m[key] = seenAt;
   try {
     localStorage.setItem(seenKey(eventId), JSON.stringify(m));
   } catch {
     /* ignore */
   }
-  window.dispatchEvent(new CustomEvent("live-contact-seen", { detail: { eventId } }));
+  window.dispatchEvent(new CustomEvent("live-contact-seen", { detail: { eventId, key, seenAt } }));
 }
 
 const suffix8 = (phone?: string | null) => {
@@ -133,12 +135,21 @@ function formatPhone(phone?: string | null): string {
  * Quem clicou e não falou não vira card (fica só como lead de retomada).
  * Dedup por DDD + 8 dígitos; mais recente primeiro.
  */
-export function useLiveNewContacts(eventId: string | null | undefined, excludeKeys: Set<string>, search?: string) {
-  const [rows, setRows] = useState<ClickRow[]>([]);
+const EMPTY_INITIAL_CONTACTS: InitialLiveContact[] = [];
+
+export function useLiveNewContacts(eventId: string | null | undefined, excludeKeys: Set<string>, search?: string, initialContacts: InitialLiveContact[] = EMPTY_INITIAL_CONTACTS) {
+  const [clickRows, setRows] = useState<ClickRow[]>([]);
+  const rows = useMemo(() => [
+    ...clickRows,
+    ...initialContacts.filter((contact) => !excludeKeys.has(suffix8(contact.phone))).map((contact): ClickRow => ({
+      id: contact.id, created_at: contact.created_at, entered_phone: contact.phone,
+      phone: contact.confirmed ? contact.phone : null, real_phone: contact.phone, superseded: false,
+    })),
+  ], [clickRows, initialContacts, excludeKeys]);
+  const initialHandles = useMemo(() => new Map(initialContacts.map((contact) => [suffix8(contact.phone), contact.instagram])), [initialContacts]);
   const [loading, setLoading] = useState(false);
   const [activity, setActivity] = useState<Map<string, { lastIn: string | null; lastOut: string | null }>>(new Map());
   const [seen, setSeen] = useState<Record<string, number>>({});
-  const eventStart = useEventStore((st) => (st.events.find((ev) => ev.id === eventId) as any)?.start_date as string | undefined);
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -180,7 +191,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
   // Atividade de conversa (última mensagem recebida/enviada) dos contatos que já falaram.
   // Chave estável: só muda quando entra/sai um telefone (recarregar a lista não refaz a busca).
   const talkedKey = useMemo(
-    () => [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))].sort().join(","),
+    () => [...new Set(rows.flatMap((r) => buildPhoneVariations(r.real_phone || r.phone || r.entered_phone || "")))].sort().join(","),
     [rows],
   );
   const talkedPhones = useMemo(() => (talkedKey ? talkedKey.split(",") : []), [talkedKey]);
@@ -189,28 +200,39 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       setActivity(new Map());
       return;
     }
-    const since = eventStart || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const map = new Map<string, { lastIn: string | null; lastOut: string | null }>();
-    for (let i = 0; i < talkedPhones.length; i += 200) {
-      const batch = talkedPhones.slice(i, i + 200);
-      const { data } = await supabase
-        .from("whatsapp_messages")
-        .select("phone, direction, created_at")
-        .in("phone", batch)
-        .gte("created_at", since)
-        .not("message", "ilike", "💬 Comentário%")
-        .order("created_at", { ascending: false })
-        .limit(3000);
-      for (const m of (data || []) as { phone: string; direction: string; created_at: string }[]) {
-        const k = suffix8(m.phone);
-        const cur = map.get(k) || { lastIn: null, lastOut: null };
-        if (m.direction === "incoming" && !cur.lastIn) cur.lastIn = m.created_at;
-        if (m.direction === "outgoing" && !cur.lastOut) cur.lastOut = m.created_at;
-        map.set(k, cur);
+    for (let i = 0; i < talkedPhones.length; i += 100) {
+      const batch = talkedPhones.slice(i, i + 100);
+      for (let offset = 0; ; offset += 200) {
+        const { data, error } = await supabase
+          .from("whatsapp_conversations")
+          .select("phone, last_incoming_at, last_outgoing_at")
+          .in("phone", batch)
+          .eq("is_group", false)
+          .order("phone").order("instance_key")
+          .range(offset, offset + 199);
+        if (error) return;
+        for (const m of data || []) {
+          const k = suffix8(m.phone);
+          const cur = map.get(k) || { lastIn: null, lastOut: null };
+          if (m.last_incoming_at && (!cur.lastIn || m.last_incoming_at > cur.lastIn)) cur.lastIn = m.last_incoming_at;
+          if (m.last_outgoing_at && (!cur.lastOut || m.last_outgoing_at > cur.lastOut)) cur.lastOut = m.last_outgoing_at;
+          map.set(k, cur);
+        }
+        if (!data || data.length < 200) break;
       }
     }
-    setActivity(map);
-  }, [eventId, talkedPhones, eventStart]);
+    setActivity((previous) => {
+      const merged = new Map(map);
+      for (const [key, old] of previous) {
+        const current = merged.get(key);
+        if (!current) continue;
+        if (old.lastIn && (!current.lastIn || old.lastIn > current.lastIn)) current.lastIn = old.lastIn;
+        if (old.lastOut && (!current.lastOut || old.lastOut > current.lastOut)) current.lastOut = old.lastOut;
+      }
+      return JSON.stringify([...previous]) === JSON.stringify([...merged]) ? previous : merged;
+    });
+  }, [eventId, talkedPhones]);
 
   useEffect(() => {
     loadActivity();
@@ -220,7 +242,8 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     if (!eventId) return;
     setSeen(readSeen(eventId));
     const onSeen = (e: Event) => {
-      if ((e as CustomEvent).detail?.eventId === eventId) setSeen(readSeen(eventId));
+      const detail = (e as CustomEvent).detail;
+      if (detail?.eventId === eventId) setSeen((previous) => ({ ...previous, [detail.key]: detail.seenAt }));
     };
     window.addEventListener("live-contact-seen", onSeen);
     return () => window.removeEventListener("live-contact-seen", onSeen);
@@ -267,8 +290,13 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       setActivity((prev) => {
         const next = new Map(prev);
         const a = { ...(next.get(k) || { lastIn: null, lastOut: null }) };
-        if (p.direction === "incoming") a.lastIn = p.created_at;
-        else a.lastOut = p.created_at;
+        if (p.direction === "incoming") {
+          if (a.lastIn && a.lastIn >= p.created_at) return prev;
+          a.lastIn = p.created_at;
+        } else {
+          if (a.lastOut && a.lastOut >= p.created_at) return prev;
+          a.lastOut = p.created_at;
+        }
         next.set(k, a);
         return next;
       });
@@ -350,17 +378,15 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
       if (excludeKeys.has(key)) continue;
       const existing = byKey.get(key);
       const act = activity.get(key);
-      const lastIn = act?.lastIn ? +new Date(act.lastIn) : 0;
-      const lastOut = act?.lastOut ? +new Date(act.lastOut) : 0;
-      const unread = lastIn > 0 && lastIn > lastOut && lastIn > (seen[key] || 0);
+      const unread = isLiveContactUnread(act, seen[key]);
       const known = identities.get(key);
       const leadName = r.lead?.name && !/^lead whatsapp$/i.test(r.lead.name) ? r.lead.name : null;
       const contact: NewContact = {
         key,
         phone,
         name: known?.name || leadName,
-        instagramHandle: known?.handle || null,
-        talked: !!r.phone,
+        instagramHandle: initialHandles.get(key) || known?.handle || null,
+        talked: !!r.phone || !!act?.lastIn,
         createdAt: r.created_at,
         unread,
         lastIncomingAt: act?.lastIn || null,
@@ -380,11 +406,8 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         )
       : list;
     // Não lidas primeiro; depois mais recentes.
-    return filtered.sort((a, b) => {
-      if (a.unread !== b.unread) return a.unread ? -1 : 1;
-      return +new Date(b.createdAt) - +new Date(a.createdAt);
-    });
-  }, [rows, excludeKeys, search, activity, seen, identities]);
+    return filtered.sort(compareLiveContacts);
+  }, [rows, excludeKeys, search, activity, seen, identities, initialHandles]);
 
   return { contacts, loading, reload: load };
 }
@@ -456,11 +479,11 @@ export function LiveContactCards({
         className={cn(
           "group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-y-neutral-700 border-r-neutral-700 border-l-4 bg-neutral-900 px-3 py-2 text-left text-white transition-colors hover:bg-neutral-800",
           isDoubts ? "border-l-neutral-400" : "border-l-sky-400",
-          c.unread && "border-l-emerald-500 ring-2 ring-emerald-500 ring-offset-2 ring-offset-background",
+          c.unread && "border-l-stage-paid ring-2 ring-stage-paid ring-offset-2 ring-offset-background",
         )}
       >
         {c.unread && (
-          <span className="absolute -left-1.5 -top-2 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow">
+          <span className="rounded bg-stage-paid px-2 py-0.5 text-[10px] font-bold text-accent-foreground self-start">
             Não lida
           </span>
         )}
@@ -559,6 +582,16 @@ export function LiveContactCards({
         <div className="flex flex-wrap items-center gap-1">
           <LiveCardMessageActions eventId={eventId} phone={c.phone} name={c.name} />
         </div>
+        {c.unread && !isDoubts && (
+          <Button
+            variant="outline" size="sm"
+            className="mt-1 h-7 gap-1 border-stage-paid bg-stage-paid text-accent-foreground hover:bg-stage-paid/90 hover:text-accent-foreground text-[10px]"
+            onClick={(e) => { e.stopPropagation(); markSeen(eventId, c.key); }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <CheckCheck className="h-3 w-3" /> Marcar como lido
+          </Button>
+        )}
       </div>
     );
   });

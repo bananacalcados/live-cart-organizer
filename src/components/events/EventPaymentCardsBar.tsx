@@ -202,17 +202,9 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     lanes ? eventId : null,
     orderPhoneKeys,
     search,
+    initial.contacts,
   );
-  const linkContacts = useMemo(() => {
-    const contacts = new Map(redirectContacts.map((contact) => [contact.key, contact]));
-    for (const contact of initial.contacts) {
-      const key = contact.phone.replace(/\D/g, "").slice(-8);
-      if (orderPhoneKeys.has(key) || contacts.has(key)) continue;
-      contacts.set(key, { key, phone: contact.phone, name: null, instagramHandle: contact.instagram, talked: contact.confirmed,
-        createdAt: contact.created_at, unread: false, lastIncomingAt: null });
-    }
-    return [...contacts.values()];
-  }, [redirectContacts, initial.contacts, orderPhoneKeys]);
+  const linkContacts = redirectContacts;
   const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
 
   // Linha PEDIDOS: quem comentou QUERO na live e ainda não tem pedido neste evento.
