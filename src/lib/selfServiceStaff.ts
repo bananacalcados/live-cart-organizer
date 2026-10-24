@@ -21,5 +21,6 @@ export function mergeSelfServiceDraft<T extends Record<string, string>>(
 export function liveStaffCartLink(event: { operation_mode?: string | null; self_service_slug?: string | null } | undefined, orderId: string): string | null {
   if (event?.operation_mode !== "whatsapp_autoatendimento" || !event.self_service_slug) return null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)) return null;
-  return `https://checkout.bananacalcados.com.br/pedido/${event.self_service_slug}/carrinho/${orderId}`;
+  // ?pgto=cartao: o link da equipe abre direto na tela do cartão de crédito.
+  return `https://checkout.bananacalcados.com.br/pedido/${event.self_service_slug}/carrinho/${orderId}?pgto=cartao`;
 }
