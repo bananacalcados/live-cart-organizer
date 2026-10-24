@@ -1,7 +1,7 @@
 // Worker da fila de mensagens automáticas do modo whatsapp_autoatendimento.
 //
 // Drena public.selfservice_message_queue respeitando:
-// - intervalo mínimo de 4 s entre mensagens da MESMA instância (portão atômico
+// - intervalo sorteado de 3–7 s entre mensagens da MESMA instância (portão atômico
 //   selfservice_instance_gate); instâncias diferentes não esperam entre si;
 // - retry com backoff (30 s, 2 min, 10 min, 30 min) — timeout/erro do provedor
 //   NUNCA descarta a mensagem: ela volta para a fila; só vira 'failed' após a
@@ -10,7 +10,7 @@
 //   porque a linha só sai da fila quando o provedor confirma.
 //
 // É chamado (fire-and-forget) logo após cada enqueue e se auto-chama enquanto
-// houver trabalho pendente — sem cron novo.
+// houver trabalho próximo. O backstop por minuto fica armado só enquanto há fila.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 
@@ -25,7 +25,8 @@ const json = (body: unknown, status = 200) =>
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
 const BACKOFF_S = [30, 120, 600, 1800]; // após a 5ª tentativa → failed
 const MAX_ATTEMPTS = 5;
-const MIN_INTERVAL_MS = 4000;
+const MIN_INTERVAL_MS = 3000; // compatibilidade da RPC; o banco sorteia e persiste 3–7 s
+const MAX_INTERVAL_MS = 7000;
 const BUDGET_MS = 50_000;
 
 function extractMid(d: any): string | null {
@@ -35,8 +36,9 @@ function extractMid(d: any): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  const SB_URL = Deno.env.get("SUPABASE_URL")!;
-  const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+   const SB_URL = Deno.env.get("SUPABASE_URL");
+   const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+   if (!SB_URL || !SB_KEY) return json({ error: "Worker configuration missing" }, 500);
   const auth = req.headers.get("authorization") || "";
   if (auth !== `Bearer ${SB_KEY}` && !(await isAuthorizedCron(req))) return json({ error: "Unauthorized" }, 401);
 
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
       fn = provider === "wasender" ? "wasender-send-message" : provider === "uazapi" ? "uazapi-send-message" : "zapi-send-message";
       payload = { phone: to, message: text, whatsapp_number_id: row.whatsapp_number_id, linkPreview: false };
     }
-    const r = await fetch(`${SB_URL}/functions/v1/${fn}`, { method: "POST", headers, body: JSON.stringify(payload) });
+    const r = await fetch(`${SB_URL}/functions/v1/${fn}`, { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(20_000) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || (d as any)?.error || (d as any)?.success === false) throw new Error(`[${r.status}] ${JSON.stringify(d).slice(0, 300)}`);
     const mid = extractMid(d);
@@ -78,25 +80,26 @@ Deno.serve(async (req) => {
     if (error) { console.error("[ss-worker] claim", error); break; }
     if (!rows?.length) break;
 
-    for (const row of rows as any[]) {
-      // Portão de ritmo: se a instância enviou há menos de 4 s, devolve a
-      // mensagem para a fila (sem contar tentativa) e segue para outra instância.
+    // O claim traz só a primeira mensagem por instância; remetentes independentes
+    // são processados em paralelo, sem esperar um provedor lento de outra instância.
+    await Promise.all((rows as any[]).map(async (row) => {
+      // O intervalo sorteado fica no banco e não muda quando o portão é consultado.
       const { data: gate } = await sb.rpc("selfservice_instance_gate", {
         p_number_id: row.whatsapp_number_id ? String(row.whatsapp_number_id) : "sem-instancia",
         p_min_ms: MIN_INTERVAL_MS,
       });
-      if (!gate) {
+      if (gate !== true) {
         await sb.from("selfservice_message_queue")
-          .update({ status: "pending", next_attempt_at: new Date(Date.now() + MIN_INTERVAL_MS).toISOString() })
-          .eq("id", row.id);
-        continue;
+           .update({ status: "pending", claimed_at: null, next_attempt_at: new Date(Date.now() + 1000).toISOString() })
+           .eq("id", row.id).eq("status", "sending").eq("claimed_at", row.claimed_at);
+        return;
       }
       try {
         const mid = await sendOne(row);
         processed += 1;
         await sb.from("selfservice_message_queue")
           .update({ status: "sent", sent_at: new Date().toISOString(), last_error: null, payload: { ...(row.payload || {}), message_id: mid } })
-          .eq("id", row.id);
+           .eq("id", row.id).eq("status", "sending").eq("claimed_at", row.claimed_at);
         // O cronômetro do cashback (10% em 20 min) começa no envio REAL do link.
         if (row.kind === "cart_link" && mid && Array.isArray(row.payload?.order_ids) && row.payload.order_ids.length) {
           const { error: markErr } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: row.payload.order_ids, p_message_id: mid });
@@ -112,24 +115,24 @@ Deno.serve(async (req) => {
             next_attempt_at: new Date(Date.now() + BACKOFF_S[Math.min(attempts - 1, BACKOFF_S.length - 1)] * 1000).toISOString(),
             last_error: String(e).slice(0, 500),
           })
-          .eq("id", row.id);
+           .eq("id", row.id).eq("status", "sending").eq("claimed_at", row.claimed_at);
       }
-    }
+    }));
 
     // Ainda há algo vencido (ou vencendo logo por causa do ritmo)? Continua.
-    const soon = new Date(Date.now() + MIN_INTERVAL_MS + 1000).toISOString();
+    const soon = new Date(Date.now() + MAX_INTERVAL_MS + 1000).toISOString();
     const { count } = await sb.from("selfservice_message_queue")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending").lte("next_attempt_at", soon);
     if (!count) break;
-    await new Promise((r) => setTimeout(r, MIN_INTERVAL_MS + 500));
+    await new Promise((r) => setTimeout(r, 1000));
   }
 
   // Estourou o tempo com trabalho restante: auto-chama (fire-and-forget).
   const { count: left } = await sb.from("selfservice_message_queue")
     .select("id", { count: "exact", head: true })
     .eq("status", "pending")
-    .lte("next_attempt_at", new Date(Date.now() + 60_000).toISOString());
+    .lte("next_attempt_at", new Date(Date.now() + MAX_INTERVAL_MS).toISOString());
   if (left) {
     fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, {
       method: "POST",

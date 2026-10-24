@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Self-service queue pacing is sampled and persisted atomically per instance; claims reserve only its FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.
+
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
 - Checkout success cache prevents duplicate charges, never restores paid state. AustPay approvals: production re-query, captured, exact transaction/reference/amount, no invalidated attempt. Reversal: privileged DB, invalidated sandbox attempt, no remaining success. Audits: admin/read-only, 50 rows, ≤3 provider reads.
