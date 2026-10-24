@@ -793,7 +793,10 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
               <Input
                 value={form.state}
                 maxLength={2}
-                onChange={(e) => setForm((p) => ({ ...p, state: e.target.value.toUpperCase() }))}
+                onChange={(e) => {
+                  sellerTouchedRef.current.add("state");
+                  setForm((p) => ({ ...p, state: e.target.value.toUpperCase() }));
+                }}
               />
             </div>
           </div>

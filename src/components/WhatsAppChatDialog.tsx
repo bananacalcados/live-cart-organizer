@@ -85,6 +85,7 @@ export function WhatsAppChatDialog({
     const ph = suffix8(order.whatsapp);
     const matches = allOrders.filter((o) => {
       if (o.stage === "cancelled") return false;
+      if (order.eventId && o.event_id !== order.eventId) return false;
       const oig = normHandle(o.customer?.instagram_handle);
       const oph = suffix8(o.customer?.whatsapp);
       return (!!ig && oig === ig) || (ph.length === 8 && oph === ph);
