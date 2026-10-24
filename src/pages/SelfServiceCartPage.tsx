@@ -141,6 +141,9 @@ export default function SelfServiceCartPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-md space-y-4 p-4">
         <h1 className="text-center text-xl font-bold">{ev.name}</h1>
+        <div className="text-center">
+          <TutorialVideoButton label="Como pagar?" src={tutorialPagamento.url} />
+        </div>
 
         {paid ? (
           <div className="space-y-3 rounded-2xl border p-4 text-center">

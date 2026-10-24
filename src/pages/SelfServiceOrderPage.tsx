@@ -251,7 +251,10 @@ export default function SelfServiceOrderPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-md p-4">
         <h1 className="mb-1 text-center text-xl font-bold">{ev.name}</h1>
-        <p className="mb-5 text-center text-sm text-muted-foreground">Banana Calçados · pedido da live</p>
+        <p className="mb-1 text-center text-sm text-muted-foreground">Banana Calçados · pedido da live</p>
+        <div className="mb-4 text-center">
+          <TutorialVideoButton label="Como funciona?" src={tutorialCadastro.url} />
+        </div>
 
         {screen === "identify" && (
           <div className="space-y-4 rounded-2xl border p-4">
