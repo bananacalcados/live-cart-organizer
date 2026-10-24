@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
 
   async function openOrderRowsFor(eventId: string, ids: string[]) {
     if (!ids.length) return [] as any[];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
