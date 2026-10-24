@@ -2,6 +2,7 @@ import { getMpAccountForOrder } from "./mp-account.ts";
 import { mpGetPayment } from "./mp-http.ts";
 import { appmaxGetPayment, APPMAX_PAID } from "./refund-gateways/appmax.ts";
 import { resolveAustpayConfig, austpayGetTransaction } from "./austpay.ts";
+import { capturedAustpayEvidence } from "./selfservice-payment-evidence.ts";
 
 /** Only exact linked transactions; missing provider evidence blocks credit, never guesses time/amount. */
 export async function grantSelfserviceCashback(sb: any, orderId: string) {
@@ -48,15 +49,15 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
     if (!response.ok) throw new Error(`Conferência AustPay: ${response.status}`);
     const p = await response.json();
     const tx = p.status ? p : p.data || p;
-    console.warn('[selfservice-cashback] AustPay reference', tx.external_reference, 'time_fields', Object.keys(tx).filter((k) => /date|time|paid|approved|captur/.test(k)));
-    if (tx.status !== "APPROVED" || String(tx.id || tx.transaction_id) !== String(o.austpay_transaction_id) || tx.external_reference !== orderId) throw new Error(`AustPay sem captura válida: status=${tx.status}, id_match=${String(tx.id || tx.transaction_id) === String(o.austpay_transaction_id)}, reference_match=${tx.external_reference === orderId}`);
-    amount = Number(tx.amount) / 100; paidAt = tx.paid_at || tx.approved_at || tx.captured_at || null;
+    const { data: invalidated, error: invalidationError } = await sb.from("pos_checkout_attempts").select("id").eq("sale_id", orderId).eq("transaction_id", o.austpay_transaction_id).eq("status", "invalidated").limit(1);
+    if (invalidationError || invalidated?.length) throw new Error("Captura AustPay invalidada ou não verificável");
+    const evidence = capturedAustpayEvidence(tx, o.austpay_transaction_id, o.id, orderId);
+    amount = evidence.amount; paidAt = evidence.paidAt;
     gateway = "austpay"; txId = o.austpay_transaction_id;
   }
   if (!amount && o.appmax_order_id) {
     const result = await appmaxGetPayment(sb, String(o.appmax_order_id), null);
     if (result.kind !== "ok" || !APPMAX_PAID.includes(result.payment.status)) throw new Error("Pagamento Appmax não confirmado");
-    if (!result.payment.dateApproved) console.warn('[selfservice-cashback] Appmax time fields', Object.keys(result.payment.raw).filter((k) => /date|time|paid|approved/.test(k)), result.payment.raw.created_at, result.payment.raw.updated_at);
     amount = result.payment.amount; paidAt = result.payment.dateApproved;
     gateway = "appmax"; txId = result.payment.orderId;
   } else if (!amount && o.pagarme_order_id) {
