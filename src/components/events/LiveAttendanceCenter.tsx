@@ -9,6 +9,7 @@ import { PresenterTeamChat } from "./PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { LiveQuickActionsDialog } from "./LiveQuickActionsDialog";
+import { SelfServiceQueueAlerts } from "./SelfServiceQueueAlerts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Plus, Truck, Users, Zap } from "lucide-react";
@@ -340,5 +341,6 @@ export function LiveAttendanceCenter({
       )}
 
     </div>
+    </>
   );
 }
