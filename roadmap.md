@@ -15,6 +15,9 @@
 
 - [x] Clientes RFM: ampliar e traduzir os botões dos segmentos e explicar cada classificação
 
+## Shopify — Atualizar dados
+- [ ] Corrigir criação de cores vinculadas, proteger fotos e testar repetição no tênis Alo.
+
 ## Separação Francisca / Daiane
 - [x] Recuperar dados originais da conversa e separar cadastro principal, ficha do pedido, Marketing e cliente das vendas, preservando telefones e pagamentos.
 - [x] Conferir no navegador os dois pedidos reais do NB 530: nomes, CPF, e-mail, WhatsApp e endereço separados; nenhum estorno executado.
