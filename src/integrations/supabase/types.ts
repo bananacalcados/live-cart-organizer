@@ -6666,6 +6666,7 @@ export type Database = {
         Row: {
           active_product_delay_seconds: number
           automation_enabled: boolean
+          capi_advanced_matching: boolean
           catalog_lead_page_id: string | null
           channel: Database["public"]["Enums"]["event_channel"]
           channel_preference: string
@@ -6727,6 +6728,7 @@ export type Database = {
         Insert: {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
+          capi_advanced_matching?: boolean
           catalog_lead_page_id?: string | null
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
@@ -6788,6 +6790,7 @@ export type Database = {
         Update: {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
+          capi_advanced_matching?: boolean
           catalog_lead_page_id?: string | null
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
