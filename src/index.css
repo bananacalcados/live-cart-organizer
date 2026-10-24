@@ -533,3 +533,15 @@
 .overlay-wheel-winner { color: hsl(var(--overlay-progress)); }
 .overlay-panel.overlay-alert-expired { background: hsl(var(--overlay-expired) / 0.85); }
 .overlay-timer { color: hsl(var(--overlay-progress)); font-variant-numeric: tabular-nums; }
+
+.selfservice-prize { box-shadow: var(--shadow-md); }
+.selfservice-prize-clock { animation: selfservice-prize-glow 1.8s ease-in-out infinite; }
+.selfservice-prize-tick { animation: selfservice-prize-tick 1s steps(2, end) infinite; }
+@keyframes selfservice-prize-glow {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); }
+  50% { box-shadow: 0 0 0 7px hsl(var(--primary) / 0.08); }
+}
+@keyframes selfservice-prize-tick { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) {
+  .selfservice-prize-clock, .selfservice-prize-tick { animation: none; }
+}

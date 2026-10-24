@@ -29,6 +29,7 @@ import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { LiveWhatsAppLinkConfig } from "./LiveWhatsAppLinkConfig";
 import { WaInitialMessageEditor, type WaInitialConfig } from "./WaInitialMessageEditor";
 import { MessagePresetControls } from "./MessagePresetControls";
+import { LivePrizeImageUpload } from "./LivePrizeImageUpload";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
@@ -700,7 +701,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                         <Input value={ssPrizeImage} placeholder="https://..." onChange={(e) => setSsPrizeImage(e.target.value)} />
                       </div>
                     </div>
-                    {ssPrizeImage && <img src={ssPrizeImage} alt="" className="h-16 w-16 rounded object-cover" />}
+                    <LivePrizeImageUpload eventId={event.id} value={ssPrizeImage} onChange={setSsPrizeImage} />
                     <div className="space-y-1">
                       <Label className="text-xs">Minutos para cadastro (prêmio)</Label>
                       <Input type="number" min={1} value={ssRegMin} onChange={(e) => setSsRegMin(e.target.value)} className="w-28" />
