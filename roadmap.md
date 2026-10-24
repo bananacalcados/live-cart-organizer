@@ -25,6 +25,7 @@
 - [x] Registrar estorno externo de R$ 341,99 confirmado no MP; histórico autenticado e PDF ULAJAKU4 conferidos com Francisca como cliente, Daiane como destinatária informada no print e valor realmente pago; 19 testes passaram, sem novo estorno/envio.
 
 ## Página do produto — Cadastro online
+- [ ] Capturar telefone na primeira etapa, salvar prospect como lead e mostrar nas linhas; resolver pedido pelo final de quatro dígitos com segurança e testar fluxo real sem mensagens/cobranças.
 - [x] Mostrar cronômetro do sorteio também antes do formulário e separar parcelas com/sem juros pelo valor da compra; 13 testes passaram e produto/formulário conferidos com identificação simulada e configuração real, sem publicar.
 - [ ] Conferir carrinho real de teste: link retornou “Link não encontrado”; pagamento real não exercitado.
 
