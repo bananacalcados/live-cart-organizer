@@ -7,6 +7,7 @@ import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { closeAppmaxRefund } from "../_shared/refund-gateways/appmax-close.ts";
 import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
+import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -251,6 +252,12 @@ serve(async (req) => {
         .gte('paid_at', since).order('paid_at', { ascending: false }).limit(100);
       const ids = (paidOrders || []).map((o) => o.id);
       if (ids.length) {
+        const { data: credits } = await supabase.from('orders').select('id').in('id', ids)
+          .is('selfservice_cashback_receipt', null).order('paid_at', { ascending: false }).limit(4);
+        for (const credit of credits || []) {
+          try { await grantSelfserviceCashback(supabase, credit.id); }
+          catch (error) { errors.push({ cashback_pending: credit.id, details: String(error) }); }
+        }
         const { data: queued, error: queueError } = await supabase.from('selfservice_message_queue')
           .select('order_id').in('order_id', ids).eq('kind', 'payment_confirmation');
         if (queueError) throw queueError;

@@ -60,7 +60,10 @@ serve(async (req) => {
     try { selfserviceCb = await grantSelfserviceCashback(supabase, orderId); }
     catch (error) {
       console.error('[livete-payment-confirmation] cashback verification:', String(error));
-      return new Response(JSON.stringify({ handled: false, reason: 'cashback_verification_pending', details: String(error) }), { status: 503, headers: corsHeaders });
+      const { data: ev } = await supabase.from('events').select('operation_mode').eq('id', order.event_id).maybeSingle();
+      if (ev?.operation_mode !== 'whatsapp_autoatendimento') throw error;
+      // Payment is already confirmed; inability to verify credit must not silence it.
+      selfserviceCb = { applicable: true, pending: true };
     }
 
     // 1.5 Idempotency claim: only ONE confirmation message per order, ever.
@@ -137,7 +140,7 @@ serve(async (req) => {
     let cashbackLine = '';
     try {
       if (selfserviceCb?.applicable) {
-        cashbackLine = `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
+        cashbackLine = selfserviceCb.pending ? '\n\n💰 Seu cashback está em conferência.' : `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
       } else {
       // Já existe cashback ativo recente? Não duplica.
       const { data: existingCb } = await supabase
