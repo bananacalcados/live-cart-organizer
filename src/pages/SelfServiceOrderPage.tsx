@@ -16,6 +16,7 @@ import { isRealFullName, isUsableEmail } from "@/lib/customerIdentity";
 import { formatMmSs, registrationDeadline } from "@/lib/liveModes";
 import { openWhatsAppDeepLink } from "@/lib/waDeepLink";
 import { completeInitialPhone } from "@/lib/selfServiceInitial";
+import { canPayRegisteredOrder, selfServiceShipping } from "@/lib/selfServiceCheckout";
 
 type Ev = {
   id: string; name: string; prize_name: string | null; prize_image_url: string | null;
@@ -26,6 +27,7 @@ type Ev = {
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; created_at: string; payment_window_expires_at: string | null; registered_at: string | null;
+  registration_confirmed: boolean; shipping_cost: number; free_shipping: boolean;
 };
 type Screen = "identify" | "product" | "no_order" | "code" | "register" | "confirm_wa";
 
@@ -89,6 +91,7 @@ export default function SelfServiceOrderPage() {
   }, []);
 
   const primary = orders[0] || null;
+  const registrationConfirmed = orders.length > 0 && orders.every(canPayRegisteredOrder);
   const reserveLeft = primary?.payment_window_expires_at ? new Date(primary.payment_window_expires_at).getTime() - now : null;
   const reserveExpired = reserveLeft !== null && reserveLeft <= 0;
   const prizeLeft = primary && ev ? registrationDeadline(primary.created_at, ev.registration_minutes) - now : 0;
@@ -284,6 +287,7 @@ export default function SelfServiceOrderPage() {
               </div>
             ))}
             <div className="rounded-2xl border p-3 text-sm">
+              <p className="mb-2 flex justify-between"><span>Frete{orders.length > 1 ? " dos pedidos" : ""}</span><strong>{orders.every((o) => o.free_shipping) ? "Grátis" : brl(orders.reduce((sum, o) => sum + selfServiceShipping(o), 0))}</strong></p>
               <p className="text-lg font-bold">{brl(pixAll)} no Pix</p>
               <p className="text-muted-foreground">ou {brl(totalAll)} no cartão</p>
               {freeCount > 0 && <p className="font-semibold">Até {freeCount}x sem juros{orders.length === 1 && offers[0]?.free ? ` de ${brl(offers[0].free.installmentAmount)}` : " por pedido"}</p>}
@@ -296,10 +300,15 @@ export default function SelfServiceOrderPage() {
                 <Clock className="h-4 w-4" /> Reservado pra você por <strong>{formatMmSs(reserveLeft)}</strong>
               </div>
             )}
-            {ev.prize_name && (
+            {ev.prize_name && !registrationConfirmed && (
               <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
             )}
-            {reserveExpired ? (
+            {registrationConfirmed ? (
+              <div className="grid gap-2">
+                <p className="text-center text-sm font-semibold text-primary">Cadastro confirmado ✅</p>
+                {orders.map((o, i) => <Button key={o.id} asChild className="h-14 w-full text-base font-bold"><a href={`/pedido/${slug}/carrinho/${o.id}`}>Pagar meu pedido{orders.length > 1 ? ` ${i + 1}` : ""}</a></Button>)}
+              </div>
+            ) : reserveExpired ? (
               <div className="space-y-3 rounded-2xl border border-destructive/40 p-4 text-center">
                 <p className="font-semibold">Reserva expirada — fale no WhatsApp</p>
                 {waLink && <Button asChild className="w-full"><a href={waLink} target="_blank" rel="noreferrer"><MessageCircle className="mr-2 h-4 w-4" />Falar no WhatsApp</a></Button>}
