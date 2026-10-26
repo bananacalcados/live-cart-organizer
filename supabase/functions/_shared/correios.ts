@@ -18,6 +18,7 @@ function apiError(status: number, data: any) {
 async function request(url: string, init: RequestInit) {
   try {
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000) });
+    if (response.ok && /application\/(pdf|octet-stream)/i.test(response.headers.get('content-type') || '')) return { pdfBytes: new Uint8Array(await response.arrayBuffer()) };
     const data = await response.json().catch(() => null);
     if (!response.ok) throw new Error(apiError(response.status, data));
     if (data == null) throw new Error('Correios: resposta inválida da API');

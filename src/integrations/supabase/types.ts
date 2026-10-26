@@ -3801,6 +3801,87 @@ export type Database = {
         }
         Relationships: []
       }
+      correios_shipments: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          codigo_objeto: string | null
+          combined_path: string | null
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          group_id: string | null
+          id: string
+          label_generated_at: string | null
+          label_path: string | null
+          nfe_chaves: string[]
+          package: Json | null
+          prepostagem_id: string | null
+          price: number | null
+          request: Json | null
+          response: Json | null
+          sale_id: string
+          sale_ids: string[]
+          servico_codigo: string
+          servico_nome: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          codigo_objeto?: string | null
+          combined_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          group_id?: string | null
+          id?: string
+          label_generated_at?: string | null
+          label_path?: string | null
+          nfe_chaves?: string[]
+          package?: Json | null
+          prepostagem_id?: string | null
+          price?: number | null
+          request?: Json | null
+          response?: Json | null
+          sale_id: string
+          sale_ids?: string[]
+          servico_codigo: string
+          servico_nome?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          codigo_objeto?: string | null
+          combined_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          group_id?: string | null
+          id?: string
+          label_generated_at?: string | null
+          label_path?: string | null
+          nfe_chaves?: string[]
+          package?: Json | null
+          prepostagem_id?: string | null
+          price?: number | null
+          request?: Json | null
+          response?: Json | null
+          sale_id?: string
+          sale_ids?: string[]
+          servico_codigo?: string
+          servico_nome?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cost_center_fixed_cost_items: {
         Row: {
           amount: number
@@ -26519,6 +26600,15 @@ export type Database = {
         Returns: {
           quoted_at: string
           sale_id: string
+        }[]
+      }
+      latest_sale_freight_summaries: {
+        Args: { p_sale_ids: string[] }
+        Returns: {
+          cheapest: Json
+          quoted_at: string
+          sale_id: string
+          selected: Json
         }[]
       }
       lead_campaign_counts: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,18 +7,23 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Truck, RefreshCw } from 'lucide-react';
 import { freightCall, freightDate, type FreightOption, type SaleFreightQuote } from '@/lib/saleFreight';
 import { toast } from 'sonner';
-interface Props { saleId:string; open:boolean; onSelected:(option:FreightOption)=>void; onQuoted?:()=>void }
-export function ExpFreightQuotePanel({saleId,open,onSelected,onQuoted}:Props) {
+interface Props { saleId:string; open:boolean; onSelected:(option:FreightOption)=>void; onQuoted?:()=>void; autoQuote?:boolean }
+const AUTO_QUOTE_MAX_AGE_MS=12*60*60*1000;
+export function ExpFreightQuotePanel({saleId,open,onSelected,onQuoted,autoQuote}:Props) {
   const [quote,setQuote]=useState<SaleFreightQuote|null>(null),[visible,setVisible]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const autoRan=useRef<string|null>(null);
   const [edited,setEdited]=useState(false),[form,setForm]=useState({peso_g:'700',c:'30',l:'20',a:'12'});
   useEffect(()=>{
-    if(!open)return;
+    if(!open){autoRan.current=null;return;}
     let alive=true;
     setQuote(null);setVisible(false);setEdited(false);setError('');
-    supabase.from('sale_freight_quotes').select('id,sale_id,quoted_at,package,options,errors,selected_option').eq('sale_id',saleId).order('quoted_at',{ascending:false}).order('id',{ascending:false}).limit(1).maybeSingle().then(({data,error:loadError})=>{
+    supabase.from('sale_freight_quotes').select('id,sale_id,quoted_at,package,options,errors,selected_option').contains('sale_ids',[saleId]).order('quoted_at',{ascending:false}).order('id',{ascending:false}).limit(1).maybeSingle().then(({data,error:loadError})=>{
       if(!alive)return;
       if(loadError){setError('Não foi possível carregar a última cotação');return;}
       if(data){const q=data as unknown as SaleFreightQuote;setQuote(q);setForm({peso_g:String(q.package.peso_g),c:String(q.package.c),l:String(q.package.l),a:String(q.package.a)});}
+      const stale=!data||Date.now()-Date.parse((data as any).quoted_at)>AUTO_QUOTE_MAX_AGE_MS;
+      // One automatic quote per dialog opening; Recotar remains manual.
+      if(autoQuote&&autoRan.current!==saleId){autoRan.current=saleId;if(stale)void recote();else setVisible(true);}
     });
     return ()=>{alive=false;};
   },[open,saleId]);

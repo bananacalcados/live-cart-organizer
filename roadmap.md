@@ -56,3 +56,8 @@ Regras: NÃO alterar modos manual/member_area/whatsapp nem eventos existentes. N
 Verificação: 24 testes passando, build OK, fila testada no banco (idempotência, ordem, intervalo, recuperação de travada), funções publicadas no backend. Site NÃO publicado.
 
 Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo fictícios (Maria Aparecida Souza, Tênis Ortopédico R$ 189,90), QR Code ilustrativo (não escaneia), painel de parcelas do cartão é desenho (a tela real não carregou com pedido fictício), sem narração (textos + música).
+
+## Correios fase 2 — 26/10
+- [x] Pré-postagem + etiqueta conjunta (correios-shipment, correios_shipments, bucket correios-labels)
+- [x] Cotação automática na Conferência + resumo nos cards
+- [ ] Primeira pré-postagem real (aguardando autorização do Matthews)

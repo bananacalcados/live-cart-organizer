@@ -14,6 +14,8 @@ import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpFreightQuotePanel } from "./ExpFreightQuotePanel";
+import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
+import { correiosTrackingUrl } from "@/lib/correiosTracking";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTemplateEditor";
 import { saveExpeditionShippingCost } from "./shippingCost";
@@ -59,6 +61,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [scanInput, setScanInput] = useState("");
   const [tracking, setTracking] = useState(order.tracking_code || "");
   const [trackingUrl, setTrackingUrl] = useState<string>((order as any).tracking_url || "");
+  const [freightRefresh, setFreightRefresh] = useState(0);
   const [deliveryDays, setDeliveryDays] = useState<string>((order as any).delivery_days || "");
   const [shipping, setShipping] = useState<ShippingFieldsValue>({
     carrier: order.shipping_carrier || order.delivery_method || "",
@@ -644,11 +647,15 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             </p>
             <ExpShippingFields value={shipping} onChange={setShipping} />
             {!order.is_store_pickup && !isMototaxi(carrier) && !isPickup(carrier) && !/mototaxi|retirada|pickup/i.test(order.shipping_type || "") && (
-              <ExpFreightQuotePanel saleId={order.id} open={open} onQuoted={onRefresh} onSelected={(option) => {
+              <>
+              <ExpFreightQuotePanel saleId={order.id} open={open} onQuoted={onRefresh} autoQuote={/^\d{8}$/.test(String(order.shipping_address?.zip_code || order.shipping_address?.zip || order.shipping_address?.cep || "").replace(/\D/g, ""))} onSelected={(option) => {
                 setShipping((current) => ({ ...current, carrier: option.shipping_carrier, cost: String(option.price), courier: "", courierProviderId: "" }));
                 setDeliveryDays(option.delivery_days != null ? String(option.delivery_days) : "");
+                setFreightRefresh((n) => n + 1);
                 onRefresh?.();
               }} />
+              {open && <ExpCorreiosShipmentPanel saleId={order.id} refreshKey={freightRefresh} onTracking={(code) => { setTracking(code); setTrackingUrl(correiosTrackingUrl(code)); onRefresh?.(); }} />}
+              </>
             )}
             {!isMototaxi(carrier) && !isPickup(carrier) && (
               <div className="grid md:grid-cols-2 gap-3">
