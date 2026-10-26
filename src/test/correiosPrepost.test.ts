@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildPrePostagemPayload, code128C, CODE128, parseNfeXml, extractPdfBase64, maskCpf, groupChave, addressProblems } from '../../supabase/functions/_shared/correios-prepost-domain';
+import { buildPrePostagemPayload, code128C, CODE128, parseNfeXml, extractPdfBase64, maskCpf, groupChave, addressProblems, schemaProblems } from '../../supabase/functions/_shared/correios-prepost-domain';
 
 const chave = '31261026586173000127550010000012341000012345';
 const xml = `<nfeProc><NFe><infNFe Id="NFe${chave}"><ide><serie>1</serie><nNF>1234</nNF><dhEmi>2026-10-26T10:00:00-03:00</dhEmi></ide><emit><CNPJ>26586173000127</CNPJ><xNome>Banana Calçados</xNome><enderEmit><xMun>Governador Valadares</xMun><UF>MG</UF></enderEmit><IE>123</IE></emit><dest><CPF>12345678901</CPF><xNome>Maria Souza</xNome><enderDest><xLgr>Rua A</xLgr><nro>10</nro><xBairro>Centro</xBairro><xMun>São Paulo</xMun><UF>SP</UF><CEP>01310100</CEP></enderDest></dest><det nItem="1"><prod><xProd>Tênis Samba</xProd><qCom>2.0000</qCom><vUnCom>170.9950</vUnCom></prod></det><total><ICMSTot><vNF>341.99</vNF></ICMSTot></total></infNFe></NFe><protNFe><infProt><nProt>131260000000001</nProt></infProt></protNFe></nfeProc>`;
 const sender = { nome: 'Banana Calçados Pérola', cnpj: '26.586.173/0001-27', telefone: '33991230581', email: '', cep: '35051-520', logradouro: 'Rua Vale Formoso', numero: '362', bairro: 'Kennedy', cidade: 'Governador Valadares', uf: 'MG' };
-const sale = { id: 'abcdef12-0000-0000-0000-000000000000', customer_name: 'Maria Souza', customer_cpf: '123.456.789-01', customer_phone: '+55 (11) 98765-4321', customer_email: 'maria@x.com', shipping_address: { zip_code: '01310-100', address: 'Rua A', number: '10', neighborhood: 'Centro', city: 'São Paulo', state: 'sp' } };
+const sale = { id: 'abcdef12-0000-0000-0000-000000000000', customer_name: 'Maria Souza', customer_cpf: '123.456.789-09', customer_phone: '+55 (11) 98765-4321', customer_email: 'maria@x.com', shipping_address: { zip_code: '01310-100', address: 'Rua A', number: '10', neighborhood: 'Centro', city: 'São Paulo', state: 'sp' } };
 
 describe('Pré-postagem Correios', () => {
   it('lê chave, número, série, protocolo e itens do XML da NF-e', () => {
@@ -23,7 +23,7 @@ describe('Pré-postagem Correios', () => {
     expect(payload.remetente).toMatchObject({ cpfCnpj: '26586173000127', dddCelular: '33', celular: '991230581' });
     expect(payload.remetente).not.toHaveProperty('email');
     expect(payload.remetente.endereco.cep).toBe('35051520');
-    expect(payload.destinatario).toMatchObject({ cpfCnpj: '12345678901', dddCelular: '11', celular: '987654321', email: 'maria@x.com' });
+    expect(payload.destinatario).toMatchObject({ cpfCnpj: '12345678909', dddCelular: '11', celular: '987654321', email: 'maria@x.com' });
     expect(payload.destinatario.endereco).toMatchObject({ cep: '01310100', uf: 'SP' });
     expect(payload).not.toHaveProperty('listaServicoAdicional');
     expect(payload.itensDeclaracaoConteudo[0]).toEqual({ conteudo: 'Tênis Samba', quantidade: '2', valor: '171.00' });
@@ -58,5 +58,16 @@ describe('Pré-postagem Correios', () => {
   it('mascara CPF e agrupa a chave de 4 em 4', () => {
     expect(maskCpf('12345678901')).toBe('123.***.***-01');
     expect(groupChave(chave).split(' ')).toHaveLength(11);
+  });
+  it('omite CPF inválido e respeita limites do schema', () => {
+    const { payload, problems } = buildPrePostagemPayload({ sender, sale: { ...sale, customer_cpf: '12345678901' }, serviceCode: '03220', pkg: { peso_g: 1400, c: 30, l: 20, a: 24 }, nfes: [parseNfeXml(xml)], reference: 'x'.repeat(40) });
+    expect(payload.destinatario).not.toHaveProperty('cpfCnpj');
+    expect(payload.pedidoExternoOrigem).toHaveLength(25);
+    expect(problems).toEqual([]);
+  });
+  it('acusa dimensão acima de 3 dígitos e item repetido', () => {
+    const { payload } = buildPrePostagemPayload({ sender, sale, serviceCode: '03220', pkg: { peso_g: 1400, c: 1000, l: 20, a: 24 }, nfes: [parseNfeXml(xml)], reference: 'a' });
+    expect(schemaProblems(payload)).toContain('comprimentoInformado deve ter 1 a 3 dígitos');
+    expect(schemaProblems({ ...payload, itensDeclaracaoConteudo: [{ conteudo: 'a', quantidade: '1', valor: '1.00' }] })).toContain('conteudo do item deve ter 2 a 60 caracteres');
   });
 });
