@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       const missingNfe = sales.filter((s) => !nfeMap.get(s.id)?.chave_acesso);
       const summaryBase = { cotacao_simulada: !!quote.simulated_quote, servico: option.service, servico_codigo: option.service_code, price: option.price, package: quote.package, destinatario: { nome: sale.customer_name, endereco: saleAddress(sale) }, sale_ids: ids };
       if (missingNfe.length) {
-        const msg = `NF-e autorizada não encontrada para: ${missingNfe.map((s) => s.customer_name || s.id.slice(0, 8)).join(', ')}`;
+        const msg = `NF-e autorizada não encontrada para: ${missingNfe.map((s) => `${s.customer_name || 'pedido'} (${s.id.slice(0, 8)})`).join(', ')}`;
         if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [msg], summary: { ...summaryBase, nfes: [...nfeMap.values()].map((d) => ({ numero: d.numero, chave: d.chave_acesso })), nfe_faltantes: missingNfe.map((s) => s.id) } });
         throw fail(msg);
       }
