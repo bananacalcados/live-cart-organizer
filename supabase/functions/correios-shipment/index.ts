@@ -146,7 +146,9 @@ Deno.serve(async (req) => {
       if (!settings.enabled) throw fail('Integração Correios desativada no Admin');
       const { payload, problems } = buildPrePostagemPayload({ sender: settings.remetente, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });
       const summary = { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) };
-      if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, payload, summary });
+      const senderCnpj = String(settings.remetente?.cnpj || '').replace(/\D/g, '');
+      const warnings = nfes.filter((n) => n.chave.slice(6, 20) !== senderCnpj).map((n) => `NF-e ${n.numero} foi emitida pelo CNPJ ${n.chave.slice(6, 20)}, diferente do remetente (${senderCnpj})`);
+      if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, warnings, payload, summary });
       if (problems.length) throw fail(problems.join('; '));
       const ins = await db.from('correios_shipments').insert({ sale_id: sale.id, group_id: sale.expedition_group_id, sale_ids: ids, servico_codigo: option.service_code, servico_nome: option.service, status: 'criada', request: payload, nfe_chaves: nfes.map((n) => n.chave), package: quote.package, price: option.price, created_by: userId }).select('*').single();
       if (ins.error) {
