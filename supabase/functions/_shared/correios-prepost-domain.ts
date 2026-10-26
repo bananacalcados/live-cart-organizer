@@ -129,3 +129,10 @@ export function extractPdfBase64(data: any): string | null {
   for (const k of ['dados', 'pdf', 'arquivo', 'rotulo', 'conteudo', 'base64']) { const r = extractPdfBase64(data[k]); if (r) return r; }
   return null;
 }
+
+/** Label sender = Admin address/phone + label name + CNPJ of the NF-e issuer(s); Admin CNPJ only when no issuer is known. */
+export function resolveLabelSender(base: Sender & { nome_etiqueta?: string }, issuerCnpjs: (string | null | undefined)[]): { sender?: Sender; problem?: string } {
+  const set = [...new Set(issuerCnpjs.map(digits).filter((c) => c.length === 14))];
+  if (set.length > 1) return { problem: `Envio unificado com NF-e de emitentes diferentes (${set.join(', ')}). Separe os pedidos` };
+  return { sender: { ...base, nome: clip(base.nome_etiqueta || 'Banana Calçados', 50), cnpj: set[0] || digits(base.cnpj) } };
+}

@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { freightCall } from '@/lib/saleFreight';
 
 export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; sale_ids?: string[] }
-interface Summary { ok: boolean; problems: string[]; warnings?: string[]; summary: { servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
+interface Summary { ok: boolean; problems: string[]; summary: { remetente?: { nome: string; cnpj: string }; servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
 interface Props { saleId: string; refreshKey?: unknown; onTracking?: (code: string) => void }
 const STATUS: Record<string, string> = { criada: 'Pré-postagem criada', rotulo_emitido: 'Etiqueta emitida', postada: 'Postada' };
 
@@ -54,7 +54,7 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
       <p><b>Pacote:</b> {preview.summary.package.peso_g} g · {preview.summary.package.c}×{preview.summary.package.l}×{preview.summary.package.a} cm</p>
       <p><b>Destinatário:</b> {preview.summary.destinatario.nome} — {Object.values(preview.summary.destinatario.endereco).filter(Boolean).join(', ')}</p>
       <p><b>NF-e:</b> {preview.summary.nfes.length ? preview.summary.nfes.map((n) => `Nº ${n.numero}`).join(', ') : 'nenhuma encontrada'}</p>
-      {preview.warnings?.map((w) => <p key={w} className="text-muted-foreground break-words">Atenção: {w}</p>)}
+      {preview.summary.remetente && <p><b>Remetente:</b> {preview.summary.remetente.nome} · CNPJ {preview.summary.remetente.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}</p>}
       {preview.problems.map((p) => <p key={p} role="alert" className="text-destructive break-words">{p}</p>)}
       <div className="flex flex-wrap gap-2"><Button onClick={create} disabled={busy || !preview.ok}>{busy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar e gerar</Button><Button variant="outline" onClick={() => setPreview(null)} disabled={busy}>Voltar</Button></div>
     </div>}

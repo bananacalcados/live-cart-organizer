@@ -3,7 +3,7 @@ import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
 import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch, quoteCorreios } from '../_shared/correios.ts';
 import { localDelivery, buildPackage } from '../_shared/freight-domain.ts';
-import { buildPrePostagemPayload, parseNfeXml, correiosTrackingUrl, extractPdfBase64, saleAddress, type NfeSummary } from '../_shared/correios-prepost-domain.ts';
+import { buildPrePostagemPayload, resolveLabelSender, parseNfeXml, correiosTrackingUrl, extractPdfBase64, saleAddress, type NfeSummary } from '../_shared/correios-prepost-domain.ts';
 import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
 
 const BUCKET = 'correios-labels';
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       return data;
     };
     const loadNfes = async (saleIds: string[]) => {
-      const { data, error } = await db.from('fiscal_documents').select('pos_sale_id,chave_acesso,numero,serie,protocolo,xml_content,created_at').in('pos_sale_id', saleIds).eq('modelo', 55).eq('status', 'authorized').order('created_at', { ascending: false }).limit(200);
+      const { data, error } = await db.from('fiscal_documents').select('pos_sale_id,company_id,chave_acesso,numero,serie,protocolo,xml_content,created_at').in('pos_sale_id', saleIds).eq('modelo', 55).eq('status', 'authorized').order('created_at', { ascending: false }).limit(200);
       if (error) throw new Error('Não foi possível ler as NF-e');
       const bySale = new Map<string, any>();
       for (const d of data || []) if (!bySale.has(d.pos_sale_id)) bySale.set(d.pos_sale_id, d);
@@ -144,11 +144,15 @@ Deno.serve(async (req) => {
       const nfes = ids.map((id) => summarize(nfeMap.get(id)));
       const settings = await loadCorreiosSettings(db);
       if (!settings.enabled) throw fail('Integração Correios desativada no Admin');
-      const { payload, problems } = buildPrePostagemPayload({ sender: settings.remetente, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });
-      const summary = { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) };
-      const senderCnpj = String(settings.remetente?.cnpj || '').replace(/\D/g, '');
-      const warnings = nfes.filter((n) => n.chave.slice(6, 20) !== senderCnpj).map((n) => `NF-e ${n.numero} foi emitida pelo CNPJ ${n.chave.slice(6, 20)}, diferente do remetente (${senderCnpj})`);
-      if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, warnings, payload, summary });
+      const companyIds = [...new Set(ids.map((id) => nfeMap.get(id)?.company_id).filter(Boolean))];
+      const { data: companies, error: compErr } = companyIds.length ? await db.from('companies').select('id,cnpj').in('id', companyIds) : { data: [], error: null };
+      if (compErr) throw new Error('Não foi possível ler a empresa emitente da NF-e');
+      const issuer = ids.map((id) => (companies || []).find((c: any) => c.id === nfeMap.get(id)?.company_id)?.cnpj);
+      const resolved = resolveLabelSender(settings.remetente as any, issuer);
+      if (!resolved.sender) { if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [resolved.problem], summary: { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) } }); throw fail(resolved.problem!); }
+      const { payload, problems } = buildPrePostagemPayload({ sender: resolved.sender, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });
+      const summary = { ...summaryBase, remetente: { nome: payload.remetente.nome, cnpj: payload.remetente.cpfCnpj }, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) };
+      if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, payload, summary });
       if (problems.length) throw fail(problems.join('; '));
       const ins = await db.from('correios_shipments').insert({ sale_id: sale.id, group_id: sale.expedition_group_id, sale_ids: ids, servico_codigo: option.service_code, servico_nome: option.service, status: 'criada', request: payload, nfe_chaves: nfes.map((n) => n.chave), package: quote.package, price: option.price, created_by: userId }).select('*').single();
       if (ins.error) {
