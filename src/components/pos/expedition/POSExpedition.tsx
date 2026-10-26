@@ -41,7 +41,9 @@ import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGat
 import { CreditCard, BadgePercent, Undo2 } from "lucide-react";
 import { lazyNamed } from "@/lib/lazyTab";
 import { useCanRefund } from "@/hooks/useCanRefund";
-import { freightDate } from "@/lib/saleFreight";
+import { freightDate, freightCall } from "@/lib/saleFreight";
+import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
+import { Printer } from "lucide-react";
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
 
@@ -106,6 +108,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   }, [canRefund]);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
   const [freightDates, setFreightDates] = useState<Record<string,string>>({});
+  const [freightSummaries, setFreightSummaries] = useState<Record<string,{ cheapest:any; selected:any }>>({});
+  const [correiosShipments, setCorreiosShipments] = useState<Record<string,{ id:string; codigo_objeto:string|null; status:string }>>({});
+  const [printingBatch, setPrintingBatch] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -274,6 +279,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     load();
   };
 
+  const printCorreiosBatch = async () => {
+    const ids = [...new Set(orders.flatMap((o) => (o.group_order_ids?.length ? o.group_order_ids : [o.id])).map((id) => correiosShipments[id]).filter((sh) => sh?.status === "rotulo_emitido").map((sh) => sh!.id))].slice(0, 50);
+    if (!ids.length) return toast.error("Nenhuma etiqueta Correios emitida nos pedidos desta etapa");
+    setPrintingBatch(true);
+    try {
+      const r = await freightCall<{ url: string; count: number }>("correios-shipment", { action: "batch_labels", shipment_ids: ids });
+      window.open(r.url, "_blank", "noopener");
+      toast.success(`${r.count} etiqueta(s) no PDF`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao montar as etiquetas"); }
+    finally { setPrintingBatch(false); }
+  };
+
   const load = async () => {
     if (!storeId) return;
     setLoading(true);
@@ -282,13 +299,22 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       setOrders(rows);
       const visibleIds = rows.slice(0, 100).map((row) => row.id);
       if (visibleIds.length) {
-        const { data: dates, error: datesError } = await supabase.rpc("latest_sale_freight_dates" as any, { p_sale_ids: visibleIds });
+        const [{ data: dates, error: datesError }, { data: ships, error: shipsError }] = await Promise.all([
+          supabase.rpc("latest_sale_freight_summaries" as any, { p_sale_ids: visibleIds }),
+          supabase.from("correios_shipments").select("id,sale_ids,codigo_objeto,status").overlaps("sale_ids", visibleIds).not("status", "in", "(cancelada,erro)").limit(200),
+        ]);
         if (!datesError) {
-          const next: Record<string,string> = {};
-          for (const date of (dates || []) as { sale_id:string; quoted_at:string }[]) next[date.sale_id] = date.quoted_at;
+          const next: Record<string,string> = {}, sums: Record<string,{ cheapest:any; selected:any }> = {};
+          for (const date of (dates || []) as { sale_id:string; quoted_at:string; cheapest:any; selected:any }[]) { next[date.sale_id] = date.quoted_at; sums[date.sale_id] = { cheapest: date.cheapest, selected: date.selected }; }
           setFreightDates((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+          setFreightSummaries((current) => JSON.stringify(current) === JSON.stringify(sums) ? current : sums);
         }
-      } else setFreightDates({});
+        if (!shipsError) {
+          const map: Record<string,{ id:string; codigo_objeto:string|null; status:string }> = {};
+          for (const sh of (ships || []) as any[]) for (const id of sh.sale_ids) map[id] = { id: sh.id, codigo_objeto: sh.codigo_objeto, status: sh.status };
+          setCorreiosShipments((current) => JSON.stringify(current) === JSON.stringify(map) ? current : map);
+        }
+      } else { setFreightDates({}); setFreightSummaries({}); setCorreiosShipments({}); }
       // Reduções de valor ativas dos pedidos visíveis (1 consulta, IN único).
       const ids = rows.map((r) => r.id).slice(0, 500);
       if (ids.length) {
@@ -1125,6 +1151,18 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                     size="sm"
                     variant="outline"
                     className="font-bold border-exp-prep text-exp-prep"
+                    disabled={printingBatch}
+                    onClick={printCorreiosBatch}
+                  >
+                    {printingBatch ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
+                    IMPRIMIR ETIQUETAS CORREIOS DO DIA
+                  </Button>
+                )}
+                {stage === "preparacao" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold border-exp-prep text-exp-prep"
                     disabled={bulkBusy || bulkSelectedOrders.length < 2}
                     onClick={bulkUnify}
                   >
@@ -1280,6 +1318,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                         )}
                         <div className="min-w-0 flex-1">
                           {freightDates[o.id] && <div className="flex flex-wrap items-center gap-2 mb-2"><span className="text-sm text-muted-foreground">Última cotação: {freightDate(freightDates[o.id])}</span>{stage === "conferencia" && !isStorePickupOrder(o) && !/motot[aá]xi/i.test(o.shipping_carrier || "") && <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setConferenceOrder(o); }}><RefreshCw className="h-3.5 w-3.5 mr-1" />Recotar fretes</Button>}</div>}
+                          {stage === "conferencia" && freightSummaries[o.id]?.cheapest && <p className="text-sm font-semibold text-pos-muted-text mb-2">Mais barato: {freightSummaries[o.id].cheapest.carrier} {freightSummaries[o.id].cheapest.service} {brl(Number(freightSummaries[o.id].cheapest.price))}{freightSummaries[o.id].cheapest.delivery_days != null ? ` · ${freightSummaries[o.id].cheapest.delivery_days} dias` : ""}{freightSummaries[o.id].selected ? ` — Selecionado: ${freightSummaries[o.id].selected.carrier} ${freightSummaries[o.id].selected.service} ${brl(Number(freightSummaries[o.id].selected.price))}` : ""}</p>}
+                          {correiosShipments[o.id]?.codigo_objeto && <Badge className="mb-2 bg-sky-600 text-white text-sm font-black">Correios · {correiosShipments[o.id].codigo_objeto}</Badge>}
                           <div className="mb-3 flex flex-wrap gap-2" aria-label="Gateway do pagamento">
                             {[...new Set((o.group_order_ids?.length ? list.filter((sale) => o.group_order_ids?.includes(sale.id)) : [o]).map((sale) => sale.payment_gateway))].map((gateway) => (
                               <Badge key={gateway || "unknown"} variant="outline" className={`max-w-full min-h-12 px-4 py-2 border-2 rounded-md text-lg font-black uppercase whitespace-normal break-words ${gateway ? "bg-exp-prep/15 border-exp-prep text-exp-prep" : "bg-pos-elevated border-pos-border text-pos-muted-text"}`}>
@@ -1688,6 +1728,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
                     {expanded === o.id && (
                       <div className="border-t-2 border-pos-border bg-pos-elevated p-4 space-y-2">
+                        {stage === "preparacao" && !isStorePickupOrder(o) && <ExpCorreiosShipmentPanel saleId={o.id} onTracking={() => load()} />}
                         {o.items.map((it) => (
                           <div key={it.id} className="flex items-start justify-between gap-3 py-2 border-b border-pos-border/60 last:border-0">
                             <div>
