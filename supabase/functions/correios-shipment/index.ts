@@ -9,7 +9,7 @@ import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
 const BUCKET = 'correios-labels';
 const ACTIVE = '(cancelada,erro)';
 const body = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional() }),
+  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional() }).refine((v) => !v.simulate_service_code || v.dry_run === true, { message: 'Simulação só em dry_run' }),
   z.object({ action: z.literal('label'), shipment_id: z.string().uuid() }),
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       const cf = createCorreiosFetch(auth.settings, auth.token);
       let recibo = shipment.response?.label_recibo as string | undefined;
       if (!recibo) {
-        const r: any = await cf('/v1/prepostagens/rotulo/assincrono/pdf', { method: 'POST', body: JSON.stringify({ idsPrePostagem: [shipment.prepostagem_id], numeroCartaoPostagem: settings.cartao_postagem, tipoRotulo: 'P', formatoRotulo: 'ET', imprimeRemetente: 'S', layoutImpressao: 'PADRAO' }) });
+        const r: any = await cf('/v1/prepostagens/rotulo/assincrono/pdf', { method: 'POST', body: JSON.stringify({ idsPrePostagem: [shipment.prepostagem_id], numeroCartaoPostagem: settings.cartao_postagem, tipoRotulo: 'P', formatoRotulo: 'ET', imprimeRemetente: 'S', layoutImpressao: 'LINEAR_100_150' }) });
         recibo = r?.idRecibo || r?.reciboSolicitacao || r?.id;
         if (!recibo) throw new Error('Correios: não retornou o recibo do rótulo');
         await db.from('correios_shipments').update({ response: { ...(shipment.response || {}), label_recibo: recibo } }).eq('id', shipment.id);
@@ -119,9 +119,10 @@ Deno.serve(async (req) => {
       if (sales.some((s) => localDelivery(s))) throw fail('Retirada na loja/mototáxi não usa etiqueta Correios');
       const { data: existing } = await db.from('correios_shipments').select('*').overlaps('sale_ids', ids).not('status', 'in', ACTIVE).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (existing && !b.dry_run) return reply({ shipment: await withUrls(existing), existing: true });
-      const { data: quote } = await db.from('sale_freight_quotes').select('id,package,selected_option,quoted_at').contains('sale_ids', [sale.id]).order('quoted_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
-      const option = quote?.selected_option as any;
-      if (!quote || option?.source !== 'correios') throw fail('Selecione uma opção dos Correios na cotação');
+      const { data: quote } = await db.from('sale_freight_quotes').select('id,package,options,selected_option,quoted_at').contains('sale_ids', [sale.id]).order('quoted_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+      // simulate_service_code (dry_run only) previews a Correios option from the latest quote without selecting it.
+      const option = (b.simulate_service_code ? ((quote as any)?.options || []).find((o: any) => o?.source === 'correios' && String(o.service_code) === b.simulate_service_code) : quote?.selected_option) as any;
+      if (!quote || option?.source !== 'correios') throw fail(b.simulate_service_code ? 'A última cotação não tem essa opção dos Correios' : 'Selecione uma opção dos Correios na cotação');
       const nfeMap = await loadNfes(ids);
       const missingNfe = sales.filter((s) => !nfeMap.get(s.id)?.chave_acesso);
       const summaryBase = { servico: option.service, servico_codigo: option.service_code, price: option.price, package: quote.package, destinatario: { nome: sale.customer_name, endereco: saleAddress(sale) }, sale_ids: ids };
@@ -135,7 +136,7 @@ Deno.serve(async (req) => {
       if (!settings.enabled) throw fail('Integração Correios desativada no Admin');
       const { payload, problems } = buildPrePostagemPayload({ sender: settings.remetente, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });
       const summary = { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) };
-      if (b.dry_run) return reply({ dry_run: true, ok: !problems.length, problems, payload, summary });
+      if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, payload, summary });
       if (problems.length) throw fail(problems.join('; '));
       const ins = await db.from('correios_shipments').insert({ sale_id: sale.id, group_id: sale.expedition_group_id, sale_ids: ids, servico_codigo: option.service_code, servico_nome: option.service, status: 'criada', request: payload, nfe_chaves: nfes.map((n) => n.chave), package: quote.package, price: option.price, created_by: userId }).select('*').single();
       if (ins.error) {
