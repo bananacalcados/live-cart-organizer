@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPrePostagemPayload, code128C, CODE128, parseNfeXml, extractPdfBase64, maskCpf, groupChave, addressProblems, schemaProblems } from '../../supabase/functions/_shared/correios-prepost-domain';
+import { buildPrePostagemPayload, code128C, CODE128, parseNfeXml, extractPdfBase64, maskCpf, groupChave, addressProblems, schemaProblems, resolveLabelSender } from '../../supabase/functions/_shared/correios-prepost-domain';
 
 const chave = '31261026586173000127550010000012341000012345';
 const xml = `<nfeProc><NFe><infNFe Id="NFe${chave}"><ide><serie>1</serie><nNF>1234</nNF><dhEmi>2026-10-26T10:00:00-03:00</dhEmi></ide><emit><CNPJ>26586173000127</CNPJ><xNome>Banana Calçados</xNome><enderEmit><xMun>Governador Valadares</xMun><UF>MG</UF></enderEmit><IE>123</IE></emit><dest><CPF>12345678901</CPF><xNome>Maria Souza</xNome><enderDest><xLgr>Rua A</xLgr><nro>10</nro><xBairro>Centro</xBairro><xMun>São Paulo</xMun><UF>SP</UF><CEP>01310100</CEP></enderDest></dest><det nItem="1"><prod><xProd>Tênis Samba</xProd><qCom>2.0000</qCom><vUnCom>170.9950</vUnCom></prod></det><total><ICMSTot><vNF>341.99</vNF></ICMSTot></total></infNFe></NFe><protNFe><infProt><nProt>131260000000001</nProt></infProt></protNFe></nfeProc>`;
@@ -69,5 +69,11 @@ describe('Pré-postagem Correios', () => {
     const { payload } = buildPrePostagemPayload({ sender, sale, serviceCode: '03220', pkg: { peso_g: 1400, c: 1000, l: 20, a: 24 }, nfes: [parseNfeXml(xml)], reference: 'a' });
     expect(schemaProblems(payload)).toContain('comprimentoInformado deve ter 1 a 3 dígitos');
     expect(schemaProblems({ ...payload, itensDeclaracaoConteudo: [{ conteudo: 'a', quantidade: '1', valor: '1.00' }] })).toContain('conteudo do item deve ter 2 a 60 caracteres');
+  });
+  it('remetente usa CNPJ do emitente da NF-e e nome da etiqueta', () => {
+    const r = resolveLabelSender(sender, ['16941125000156']);
+    expect(r.sender).toMatchObject({ nome: 'Banana Calçados', cnpj: '16941125000156', cep: '35051-520' });
+    expect(resolveLabelSender(sender, [null]).sender?.cnpj).toBe('26586173000127');
+    expect(resolveLabelSender(sender, ['16941125000156', '26586173000127']).problem).toMatch(/emitentes diferentes/);
   });
 });
