@@ -1,7 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { parseBrl, tokenNeedsRenewal, standardCarrier, type FreightPackage, type FreightOption } from './freight-domain.ts';
 export { parseBrl } from './freight-domain.ts';
-export const DEFAULT_SENDER = { nome: 'Banana Calçados Pérola', cnpj: '26586173000127', telefone: '33991230581', email: '', cep: '35051520', logradouro: 'Rua Vale Formoso', numero: '362', complemento: '', bairro: 'Kennedy', cidade: 'Governador Valadares', uf: 'MG' };
+export const DEFAULT_SENDER = { nome: 'Banana Calçados Pérola', nome_etiqueta: 'Banana Calçados', cnpj: '26586173000127', telefone: '33991230581', email: '', cep: '35051520', logradouro: 'Rua Vale Formoso', numero: '362', complemento: '', bairro: 'Kennedy', cidade: 'Governador Valadares', uf: 'MG' };
 export const DEFAULT_SERVICES = [{ codigo: '03220', nome: 'SEDEX', ativo: true }, { codigo: '03298', nome: 'PAC', ativo: true }];
 export interface CorreiosSettings { id: number; usuario: string; codigo_acesso: string; cartao_postagem: string; contrato: string | null; ambiente: 'producao' | 'homologacao'; enabled: boolean; remetente: typeof DEFAULT_SENDER; servicos: typeof DEFAULT_SERVICES; token: string | null; token_expira_em: string | null; token_meta: Record<string, unknown> | null; updated_at?: string }
 export async function loadCorreiosSettings(db: SupabaseClient): Promise<CorreiosSettings> {
