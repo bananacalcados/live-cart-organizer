@@ -46,6 +46,48 @@ function phoneParts(raw: unknown) {
   return {};
 }
 const validEmail = (e: unknown) => typeof e === 'string' && /^[^\s@.][^\s@]*@[^\s@]+\.[a-z]{2,}$/i.test(e.trim()) && !/\.\.|\.@/.test(e) ? e.trim().slice(0, 255) : undefined;
+function validCpf(c: string) {
+  if (c.length === 14) return true;
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  const dv = (n: number) => { let s = 0; for (let i = 0; i < n; i++) s += Number(c[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === Number(c[9]) && dv(10) === Number(c[10]);
+}
+function itemText(v: unknown) { const t = clip(v, 60); return t.length >= 2 && !/^(.)\1*$/.test(t) ? t : 'Calcados'; }
+/** Checks the built payload against RequestPrePostagemExternaDTO limits (prepostagem v3 api-docs). */
+export function schemaProblems(p: any): string[] {
+  const out: string[] = [];
+  const max = (v: unknown, n: number, label: string) => { if (v != null && String(v).length > n) out.push(`${label} acima de ${n} caracteres`); };
+  const need = (v: unknown, label: string) => { if (v == null || String(v).trim() === '') out.push(`${label} obrigatório`); };
+  for (const [who, x] of [['remetente', p.remetente], ['destinatario', p.destinatario]] as const) {
+    need(x?.nome, `${who}.nome`); if (x?.nome && (x.nome.length < 3 || x.nome.length > 50)) out.push(`${who}.nome deve ter 3 a 50 caracteres`);
+    const e = x?.endereco || {};
+    if (!/^\d{8}$/.test(e.cep || '')) out.push(`${who}.cep deve ter 8 dígitos`);
+    need(e.logradouro, `${who}.logradouro`); max(e.logradouro, 50, `${who}.logradouro`); need(e.numero, `${who}.numero`); max(e.numero, 6, `${who}.numero`);
+    max(e.complemento, 30, `${who}.complemento`); need(e.bairro, `${who}.bairro`); max(e.bairro, 30, `${who}.bairro`); need(e.cidade, `${who}.cidade`); max(e.cidade, 30, `${who}.cidade`);
+    if (!/^[A-Z]{2}$/.test(e.uf || '')) out.push(`${who}.uf deve ter 2 letras`);
+    if (x?.dddCelular != null && !/^\d{2}$/.test(x.dddCelular)) out.push(`${who}.dddCelular deve ter 2 dígitos`);
+    if (x?.celular != null && !/^\d{9}$/.test(x.celular)) out.push(`${who}.celular deve ter 9 dígitos`);
+    if (x?.dddTelefone != null && !/^\d{2}$/.test(x.dddTelefone)) out.push(`${who}.dddTelefone deve ter 2 dígitos`);
+    if (x?.telefone != null && !/^\d{8}$/.test(x.telefone)) out.push(`${who}.telefone deve ter 8 dígitos`);
+    if (x?.cpfCnpj != null && !/^(\d{11}|\d{14})$/.test(x.cpfCnpj)) out.push(`${who}.cpfCnpj deve ter 11 ou 14 dígitos`);
+    max(x?.email, 255, `${who}.email`);
+  }
+  if (!/^\d{5}$/.test(p.codigoServico || '')) out.push('codigoServico inválido');
+  if (!/^[1-9]\d{0,5}$/.test(p.pesoInformado || '')) out.push('pesoInformado deve ter 1 a 6 dígitos e ser maior que zero');
+  if (!['1', '2', '3'].includes(p.codigoFormatoObjetoInformado)) out.push('codigoFormatoObjetoInformado inválido');
+  if (p.codigoFormatoObjetoInformado === '2') for (const k of ['alturaInformada', 'larguraInformada', 'comprimentoInformado']) if (!/^[1-9]\d{0,2}$/.test(p[k] || '')) out.push(`${k} deve ter 1 a 3 dígitos`);
+  if (p.chaveNFe != null && !/^\d{44}$/.test(p.chaveNFe)) out.push('chaveNFe deve ter 44 dígitos');
+  if (p.numeroNotaFiscal != null && !/^\d{1,12}$/.test(p.numeroNotaFiscal)) out.push('numeroNotaFiscal até 12 dígitos');
+  if (!Array.isArray(p.itensDeclaracaoConteudo) || !p.itensDeclaracaoConteudo.length) out.push('itensDeclaracaoConteudo obrigatório');
+  for (const i of p.itensDeclaracaoConteudo || []) {
+    if (!i.conteudo || i.conteudo.length < 2 || i.conteudo.length > 60) out.push('conteudo do item deve ter 2 a 60 caracteres');
+    if (!/^[1-9]\d{0,10}$/.test(i.quantidade || '')) out.push('quantidade do item inválida');
+    if (!/^\d{1,17}\.\d{2}$/.test(i.valor || '')) out.push('valor do item inválido');
+  }
+  if (p.cienteObjetoNaoProibido !== '1') out.push('cienteObjetoNaoProibido deve ser 1');
+  max(p.observacao, 50, 'observacao'); max(p.pedidoExternoOrigem, 25, 'pedidoExternoOrigem');
+  return [...new Set(out)];
+}
 export function buildPrePostagemPayload(input: { sender: Sender; sale: ShipmentSale; serviceCode: string; pkg: { peso_g: number; c: number; l: number; a: number }; nfes: NfeSummary[]; reference: string }) {
   const { sender, sale, serviceCode, pkg, nfes } = input;
   const problems: string[] = [];
@@ -59,23 +101,24 @@ export function buildPrePostagemPayload(input: { sender: Sender; sale: ShipmentS
   if (!nfes.length) problems.push('NF-e autorizada obrigatória');
   const main = nfes[0];
   if (main && !/^\d{44}$/.test(main.chave)) problems.push('Chave da NF-e inválida');
-  const cpf = digits(sale.customer_cpf);
+  const cpf = validCpf(digits(sale.customer_cpf)) ? digits(sale.customer_cpf) : '';
   const others = nfes.slice(1).map((n) => n.numero).filter(Boolean);
   const items = nfes.flatMap((n) => n.itens).filter((i) => i.qtd > 0);
   const payload = {
-    remetente: { nome: senderName, cpfCnpj: digits(sender.cnpj), ...phoneParts(sender.telefone), ...(validEmail(sender.email) ? { email: validEmail(sender.email) } : {}), endereco: { cep: digits(sender.cep), logradouro: clip(sender.logradouro, 50), numero: clip(sender.numero, 6), ...(sender.complemento ? { complemento: clip(sender.complemento, 30) } : {}), bairro: clip(sender.bairro, 30), cidade: clip(sender.cidade, 30), uf: clip(sender.uf, 2).toUpperCase() } },
-    destinatario: { nome: destName, ...(cpf.length === 11 || cpf.length === 14 ? { cpfCnpj: cpf } : {}), ...phoneParts(sale.customer_phone), ...(validEmail(sale.customer_email) ? { email: validEmail(sale.customer_email) } : {}), endereco: { cep: dest.cep, logradouro: dest.logradouro, numero: dest.numero, ...(dest.complemento ? { complemento: dest.complemento } : {}), bairro: dest.bairro, cidade: dest.cidade, uf: dest.uf, regiao: dest.uf } },
+    remetente: { nome: senderName, cpfCnpj: digits(sender.cnpj).slice(0, 14), ...phoneParts(sender.telefone), ...(validEmail(sender.email) ? { email: validEmail(sender.email) } : {}), endereco: { cep: digits(sender.cep), logradouro: clip(sender.logradouro, 50), numero: clip(sender.numero, 6), ...(sender.complemento ? { complemento: clip(sender.complemento, 30) } : {}), bairro: clip(sender.bairro, 30), cidade: clip(sender.cidade, 30), uf: clip(sender.uf, 2).toUpperCase() } },
+    destinatario: { nome: destName, ...(cpf ? { cpfCnpj: cpf } : {}), ...phoneParts(sale.customer_phone), ...(validEmail(sale.customer_email) ? { email: validEmail(sale.customer_email) } : {}), endereco: { cep: dest.cep, logradouro: dest.logradouro, numero: dest.numero, ...(dest.complemento ? { complemento: dest.complemento } : {}), bairro: dest.bairro, cidade: dest.cidade, uf: dest.uf, regiao: dest.uf } },
     codigoServico: serviceCode,
     ...(main ? { numeroNotaFiscal: digits(main.numero).slice(0, 12), chaveNFe: main.chave } : {}),
-    itensDeclaracaoConteudo: (items.length ? items : [{ descricao: 'Calcados', qtd: 1, valor: 0 }]).slice(0, 50).map((i) => ({ conteudo: clip(i.descricao || 'Calcados', 60).padEnd(2, '.'), quantidade: String(Math.round(i.qtd)), valor: i.valor.toFixed(2) })),
+    itensDeclaracaoConteudo: (items.length ? items : [{ descricao: 'Calcados', qtd: 1, valor: 0 }]).slice(0, 50).map((i) => ({ conteudo: itemText(i.descricao), quantidade: String(Math.round(i.qtd)), valor: (Math.max(0, Number(i.valor) || 0)).toFixed(2) })),
     pesoInformado: String(Math.ceil(pkg.peso_g)),
     codigoFormatoObjetoInformado: '2',
     alturaInformada: String(Math.ceil(pkg.a)), larguraInformada: String(Math.ceil(pkg.l)), comprimentoInformado: String(Math.ceil(pkg.c)),
     cienteObjetoNaoProibido: '1',
     solicitarColeta: 'N', emiteDCe: 'N',
     observacao: clip(others.length ? `Tambem NF-e ${others.join(',')}` : `Pedido ${input.reference}`, 50),
-    pedidoExternoOrigem: clip(input.reference, 50),
+    pedidoExternoOrigem: clip(input.reference, 25),
   };
+  problems.push(...schemaProblems(payload));
   return { payload, problems };
 }
 export const correiosTrackingUrl = (code: string) => `https://rastreamento.correios.com.br/app/index.php?objeto=${encodeURIComponent(code)}`;
