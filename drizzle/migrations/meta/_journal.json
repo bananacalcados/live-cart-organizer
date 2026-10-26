@@ -470,6 +470,13 @@
       "when": 1792858642234,
       "tag": "0066_selfservice_verified_last4_late_access",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793029454626,
+      "tag": "0067_correios_shipments",
+      "breakpoints": true
     }
   ]
 }
