@@ -1511,7 +1511,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           {o.payment_on_delivery && (
                             <Button
                               size="lg"
