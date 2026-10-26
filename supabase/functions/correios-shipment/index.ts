@@ -9,7 +9,7 @@ import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
 const BUCKET = 'correios-labels';
 const ACTIVE = '(cancelada,erro)';
 const body = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional() }).refine((v) => !v.simulate_service_code || v.dry_run === true, { message: 'Simulação só em dry_run' }),
+  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional() }),
   z.object({ action: z.literal('label'), shipment_id: z.string().uuid() }),
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
@@ -106,6 +106,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'create') {
+      if (b.simulate_service_code && b.dry_run !== true) throw fail('Simulação só em dry_run');
       const { data: sale } = await userClient.from('pos_sales').select(SALE_COLS).eq('id', b.sale_id).maybeSingle();
       if (!sale) throw fail('Pedido não encontrado ou sem acesso', 404);
       let sales: any[] = [sale];

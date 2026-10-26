@@ -27,11 +27,21 @@ function drawDanfe(page: PDFPage, nfe: NfeSummary, font: PDFFont, bold: PDFFont,
   if (nfe.itens.length > 8) { page.drawText(safe(`+${nfe.itens.length - 8} itens`), { x, y, size: 8, font: bold }); y -= 11; }
   page.drawText('Consulta pela chave de acesso em www.nfe.fazenda.gov.br/portal', { x, y: Math.max(y - 4, 24), size: 8, font });
 }
+/** True when the label page is ~A4/Letter size (would become unreadable if shrunk to half a page). */
+export function isFullPageLabel(w: number, h: number) { const [a, b] = [Math.min(w, h), Math.max(w, h)]; return a >= 500 && b >= 760; }
 export async function buildCombinedPdf(labelPdf: Uint8Array, nfes: NfeSummary[]) {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const [label] = await doc.embedPdf(labelPdf, [0]);
   const half = A4.h / 2;
+  // Full-page (A4-like) label: keep it whole on page 1 and print each DANFE on its own page.
+  if (isFullPageLabel(label.width, label.height)) {
+    const first = doc.addPage([A4.w, A4.h]);
+    const scale = Math.min(A4.w / label.width, A4.h / label.height);
+    first.drawPage(label, { x: (A4.w - label.width * scale) / 2, y: (A4.h - label.height * scale) / 2, width: label.width * scale, height: label.height * scale });
+    nfes.forEach((nfe) => drawDanfe(doc.addPage([A4.w, A4.h]), nfe, font, bold, A4.h - 20));
+    return await doc.save();
+  }
   (nfes.length ? nfes : [null]).forEach((nfe, idx) => {
     const page = doc.addPage([A4.w, A4.h]);
     if (idx === 0) {
