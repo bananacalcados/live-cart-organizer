@@ -4,7 +4,7 @@ const A4 = { w: 595.28, h: 841.89 };
 // Helvetica (WinAnsi) supports Latin-1 accents; strip anything outside it.
 const safe = (s: unknown) => String(s ?? '').normalize('NFC').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, (c) => c.normalize('NFD').replace(/[^\x20-\x7E]/g, '') || '');
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-function fit(text: string, font: PDFFont, size: number, max: number) { let t = safe(text); while (t && font.widthOfTextAtSize(t, size) > max) t = t.slice(0, -2) + '…'.replace('…', '.'); return t; }
+function fit(text: string, font: PDFFont, size: number, max: number) { const full = safe(text); let t = full; while (t && font.widthOfTextAtSize(t === full ? t : `${t}...`, size) > max) t = t.slice(0, -1); return t === full ? t : `${t}...`; }
 function drawDanfe(page: PDFPage, nfe: NfeSummary, font: PDFFont, bold: PDFFont, top: number) {
   const x = 30, w = A4.w - 60; let y = top - 24;
   const line = (label: string, value: string, size = 9) => { page.drawText(safe(label), { x, y, size, font: bold }); page.drawText(fit(value, font, size, w - 110), { x: x + 110, y, size, font }); y -= size + 5; };
