@@ -7,7 +7,7 @@ import { buildPrePostagemPayload, parseNfeXml, correiosTrackingUrl, extractPdfBa
 import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
 
 const BUCKET = 'correios-labels';
-const ACTIVE = '("cancelada","erro")';
+const ACTIVE = '(cancelada,erro)';
 const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional() }),
   z.object({ action: z.literal('label'), shipment_id: z.string().uuid() }),
