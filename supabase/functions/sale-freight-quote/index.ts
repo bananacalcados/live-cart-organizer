@@ -4,6 +4,7 @@ import { freightAuth } from '../_shared/freight-auth.ts';
 import { loadCorreiosSettings, quoteCorreios } from '../_shared/correios.ts';
 import { buildPackage, parseBrl, standardCarrier, localDelivery, type FreightOption, type FreightPackage } from '../_shared/freight-domain.ts';
 const bodySchema = z.object({ sale_id: z.string().uuid(), action: z.enum(['quote','select']).default('quote'), quote_id: z.string().uuid().optional(), option_index: z.number().int().min(0).max(199).optional(), package: z.object({ peso_g: z.number().int().positive().max(1000000), c: z.number().positive().max(100), l: z.number().positive().max(100), a: z.number().positive().max(100) }).strict().optional() }).strict();
+const cepOf = (a: any) => String(a?.zip_code || a?.zip || a?.cep || a?.postal_code || '').replace(/\D/g,'');
 const unique = (v: (string | null)[]) => [...new Set(v.filter((s): s is string => !!s))];
 const checked = (r: any, name: string) => { if (r.error) throw new Error(`Não foi possível carregar ${name}`); return r.data || []; };
 function exactMatch(rows: any[], item: { barcode?: string; sku?: string }, barcodeKey = 'gtin', skuKey = 'sku') {
@@ -40,7 +41,9 @@ Deno.serve(async (req) => {
     const saleCols = 'id,store_id,total,shipping_address,shipping_carrier,shipping_type,is_store_pickup,expedition_group_id,expedition_stage';
     const { data: sale, error } = await userClient.from('pos_sales').select(saleCols).eq('id', b.sale_id).maybeSingle();
     if (error || !sale) return reply({ error: 'Pedido não encontrado ou sem acesso' }, 404);
-    if (sale.expedition_stage !== 'conferencia' || localDelivery(sale)) return reply({ error: 'Cotação disponível somente na Conferência para envio por transportadora' }, 400);
+    // Eligibility mirrors the Expedition screen (item quantities), never the pos_sales.expedition_stage summary.
+    if (sale.is_store_pickup || /retirada|pickup/i.test(`${sale.shipping_type || ''} ${sale.shipping_carrier || ''}`)) return reply({ error: 'Pedido é retirada na loja' }, 400);
+    if (localDelivery(sale)) return reply({ error: 'Pedido é entrega por mototáxi' }, 400);
     if (b.action === 'select') {
       if (!b.quote_id || b.option_index == null) return reply({ error: 'Informe a cotação e a opção' }, 400);
       const { data: q, error: qErr } = await db.from('sale_freight_quotes').select('sale_id').eq('id', b.quote_id).maybeSingle();
@@ -53,13 +56,23 @@ Deno.serve(async (req) => {
     if (sale.expedition_group_id) {
       const r = await userClient.from('pos_sales').select(saleCols).eq('expedition_group_id', sale.expedition_group_id).order('id').limit(101);
       sales = checked(r, 'agrupamento');
-      if (!sales.length || sales.length > 100 || sales.some((s) => s.expedition_stage !== 'conferencia' || localDelivery(s) || JSON.stringify(s.shipping_address) !== JSON.stringify(sale.shipping_address))) return reply({ error: 'Agrupamento/endereço mudou. Confira os pedidos antes de cotar' }, 400);
+      if (!sales.length || sales.length > 100) return reply({ error: 'Agrupamento inválido ou com mais de 100 pedidos' }, 400);
+      if (sales.some((s) => localDelivery(s))) return reply({ error: 'Um pedido do agrupamento é retirada na loja ou mototáxi' }, 400);
+      if (new Set(sales.map((s) => cepOf(s.shipping_address))).size > 1) return reply({ error: 'Pedidos do agrupamento têm CEPs de destino diferentes' }, 400);
     }
     const ids = sales.map((s) => s.id);
-    const items = checked(await db.from('pos_sale_items').select('id,sale_id,sku,barcode,quantity,expedition_conference_qty').in('sale_id', ids).gt('expedition_conference_qty', 0).order('id').limit(201), 'itens');
+    const allItems = checked(await db.from('pos_sale_items').select('id,sale_id,sku,barcode,quantity,expedition_conference_qty,expedition_completed_qty').in('sale_id', ids).order('id').limit(201), 'itens');
+    if (!allItems.length) return reply({ error: 'Pedido sem itens' }, 400);
+    // Package: Conferência items; fallback to not-yet-completed, then full quantity.
+    const pick = (f: (i: any) => number) => allItems.map((i: any) => ({ ...i, pkg_qty: f(i) })).filter((i: any) => i.pkg_qty > 0);
+    let items = pick((i) => Number(i.expedition_conference_qty) || 0);
+    if (!items.length) items = pick((i) => (Number(i.quantity) || 0) - (Number(i.expedition_completed_qty) || 0));
+    if (!items.length) items = pick((i) => Number(i.quantity) || 0);
+    if (!items.length) return reply({ error: 'Nenhum item do pedido tem quantidade para cotar' }, 400);
     if (items.length > 200) return reply({ error: 'Pacote contém mais de 200 linhas de itens; divida o envio' }, 400);
-    const destination = String(sale.shipping_address?.zip_code || sale.shipping_address?.zip || sale.shipping_address?.cep || sale.shipping_address?.postal_code || '').replace(/\D/g,'');
-    if (!/^\d{8}$/.test(destination)) return reply({ error: 'Informe um CEP válido no endereço do pedido' }, 400);
+    const destination = cepOf(sale.shipping_address);
+    if (!destination) return reply({ error: 'Pedido sem CEP' }, 400);
+    if (!/^\d{8}$/.test(destination)) return reply({ error: 'CEP do pedido inválido (precisa ter 8 dígitos)' }, 400);
     const settings = await loadCorreiosSettings(db);
     const skus = unique(items.map((i: any) => i.sku)), barcodes = unique(items.map((i: any) => i.barcode));
     const empty = Promise.resolve({ data: [], error: null });
@@ -90,7 +103,7 @@ Deno.serve(async (req) => {
       const store = sales.find((s) => s.id === item.sale_id)?.store_id;
       const local = exactMatch(locals.filter((v) => v.store_id === store), item, 'barcode');
       const category = categories.find((c: any) => c.id === (master?.category_id || local?.category_id));
-      return { quantity: Number(item.expedition_conference_qty), variantWeight: variant?.weight_kg_override, masterWeight: master?.weight_kg, categoryWeight: category?.default_weight_kg, length: master?.length_cm, width: master?.width_cm, height: master?.height_cm, categoryLength: category?.default_length_cm, categoryWidth: category?.default_width_cm, categoryHeight: category?.default_height_cm };
+      return { quantity: Number(item.pkg_qty), variantWeight: variant?.weight_kg_override, masterWeight: master?.weight_kg, categoryWeight: category?.default_weight_kg, length: master?.length_cm, width: master?.width_cm, height: master?.height_cm, categoryLength: category?.default_length_cm, categoryWidth: category?.default_width_cm, categoryHeight: category?.default_height_cm };
     }), b.package);
     const errors: Record<string,string> = {};
     const sources = await Promise.allSettled([
@@ -106,7 +119,7 @@ Deno.serve(async (req) => {
     });
     options.sort((a,b) => a.price-b.price);
     if (options.length > 200) options.length = 200;
-    const context = { group_id: sale.expedition_group_id || '', address: sale.shipping_address, items: items.map((i: any) => ({ id:i.id, quantity:i.expedition_conference_qty, sku:i.sku, barcode:i.barcode })) };
+    const context = { group_id: sale.expedition_group_id || '', address: sale.shipping_address, items: items.map((i: any) => ({ id:i.id, quantity:i.pkg_qty, sku:i.sku, barcode:i.barcode })) };
     const result = await db.rpc('record_sale_freight_quote', { p_sale_id:sale.id, p_sale_ids:ids, p_package:pkg, p_options:options, p_errors:errors, p_user_id:userId, p_context:context });
     if (result.error) throw new Error(result.error.message || 'Não foi possível salvar a cotação');
     return reply({ id:result.data.id, quoted_at:result.data.quoted_at, package:pkg, options, errors });
