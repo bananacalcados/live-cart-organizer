@@ -477,6 +477,13 @@
       "when": 1793029454626,
       "tag": "0067_correios_shipments",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793032966153,
+      "tag": "0068_freight_context_item_based",
+      "breakpoints": true
     }
   ]
 }
