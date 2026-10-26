@@ -1,8 +1,8 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
-import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch } from '../_shared/correios.ts';
-import { localDelivery } from '../_shared/freight-domain.ts';
+import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch, quoteCorreios } from '../_shared/correios.ts';
+import { localDelivery, buildPackage } from '../_shared/freight-domain.ts';
 import { buildPrePostagemPayload, parseNfeXml, correiosTrackingUrl, extractPdfBase64, saleAddress, type NfeSummary } from '../_shared/correios-prepost-domain.ts';
 import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
 
@@ -120,13 +120,22 @@ Deno.serve(async (req) => {
       if (sales.some((s) => localDelivery(s))) throw fail('Retirada na loja/mototáxi não usa etiqueta Correios');
       const { data: existing } = await db.from('correios_shipments').select('*').overlaps('sale_ids', ids).not('status', 'in', ACTIVE).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (existing && !b.dry_run) return reply({ shipment: await withUrls(existing), existing: true });
-      const { data: quote } = await db.from('sale_freight_quotes').select('id,package,options,selected_option,quoted_at').contains('sale_ids', [sale.id]).order('quoted_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+      const { data: quoteRow } = await db.from('sale_freight_quotes').select('id,package,options,selected_option,quoted_at').contains('sale_ids', [sale.id]).order('quoted_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
       // simulate_service_code (dry_run only) previews a Correios option from the latest quote without selecting it.
+      let quote: any = quoteRow;
+      // Simulation without a usable quote: quote Correios in memory (default package per item), never saved or selected.
+      if (b.simulate_service_code && !(quote?.options || []).some((o: any) => o?.source === 'correios' && String(o.service_code) === b.simulate_service_code)) {
+        const { data: its } = await db.from('pos_sale_items').select('quantity').in('sale_id', ids).limit(200);
+        const pkg = buildPackage((its || []).map((i: any) => ({ quantity: Number(i.quantity) })));
+        const st = await loadCorreiosSettings(db);
+        const r: any = await quoteCorreios(db, st, pkg, saleAddress(sale).cep, false, true);
+        quote = { id: null, package: pkg, options: r.options || [], selected_option: null, simulated_quote: true, quote_error: r.error || null };
+      }
       const option = (b.simulate_service_code ? ((quote as any)?.options || []).find((o: any) => o?.source === 'correios' && String(o.service_code) === b.simulate_service_code) : quote?.selected_option) as any;
       if (!quote || option?.source !== 'correios') throw fail(b.simulate_service_code ? 'A última cotação não tem essa opção dos Correios' : 'Selecione uma opção dos Correios na cotação');
       const nfeMap = await loadNfes(ids);
       const missingNfe = sales.filter((s) => !nfeMap.get(s.id)?.chave_acesso);
-      const summaryBase = { servico: option.service, servico_codigo: option.service_code, price: option.price, package: quote.package, destinatario: { nome: sale.customer_name, endereco: saleAddress(sale) }, sale_ids: ids };
+      const summaryBase = { cotacao_simulada: !!quote.simulated_quote, servico: option.service, servico_codigo: option.service_code, price: option.price, package: quote.package, destinatario: { nome: sale.customer_name, endereco: saleAddress(sale) }, sale_ids: ids };
       if (missingNfe.length) {
         const msg = `NF-e autorizada não encontrada para: ${missingNfe.map((s) => s.customer_name || s.id.slice(0, 8)).join(', ')}`;
         if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [msg], summary: { ...summaryBase, nfes: [...nfeMap.values()].map((d) => ({ numero: d.numero, chave: d.chave_acesso })), nfe_faltantes: missingNfe.map((s) => s.id) } });
