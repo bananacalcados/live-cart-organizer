@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
             entry_value: p.entry_value,
           })),
         )
-        .select("id, phone, display_name");
+        .select("id, phone, display_name, order_id");
 
       if (entriesError || !entries?.length) {
         console.error("[event-raffle] entries insert", entriesError);
@@ -174,17 +174,32 @@ Deno.serve(async (req) => {
       const winners: any[] = [];
 
 
-      for (let i = 0; i < winnersCount; i++) {
+      while (winners.length < winnersCount && remaining.length) {
         const idx = randomInt(remaining.length);
         const picked = remaining.splice(idx, 1)[0];
 
-        let customerPrizeId: string | null = null;
-        const isCoupon = ["discount_percent", "discount_fixed", "free_shipping"].includes(
-          String(raffle.prize_type),
-        );
+        // 1) Grava a ganhadora primeiro: a trava do banco recusa quem já ganhou outro sorteio desta live.
+        const { data: winner, error: winnerError } = await supabase
+          .from("event_raffle_winners")
+          .insert({
+            raffle_id: raffle.id,
+            entry_id: picked.id,
+            phone: picked.phone,
+            display_name: picked.display_name,
+            position: winners.length + 1,
+          })
+          .select("*")
+          .maybeSingle();
+        if (winnerError || !winner) {
+          console.warn("[event-raffle] winner skipped", winnerError?.message);
+          continue;
+        }
+
         const expiresAt = new Date(
           Date.now() + Number(raffle.expiry_days || 30) * 86400_000,
         ).toISOString();
+        const isProduct = String(raffle.prize_type) === "product";
+        const orderId: string | null = picked.order_id || null;
 
         const { data: prize, error: prizeError } = await supabase
           .from("customer_prizes")
@@ -194,33 +209,36 @@ Deno.serve(async (req) => {
             prize_label: raffle.prize_label,
             prize_type: raffle.prize_type,
             prize_value: raffle.prize_value ?? 0,
-            // colunas NOT NULL: sempre gera código e validade (cupom ou prêmio físico)
             coupon_code: couponCode(),
             expires_at: expiresAt,
             source: "event_raffle",
             event_id: raffle.event_id,
-            fulfillment_status: "available",
+            fulfillment_status: isProduct && orderId ? "reserved" : "available",
+            applied_order_id: isProduct && orderId ? orderId : null,
+            reserved_at: isProduct && orderId ? new Date().toISOString() : null,
             notes: `Sorteio: ${raffle.name}`,
           })
           .select("id")
           .maybeSingle();
         if (prizeError) console.error("[event-raffle] customer_prizes insert", prizeError);
-        customerPrizeId = prize?.id || null;
 
+        if (prize?.id) {
+          await supabase.from("event_raffle_winners").update({ customer_prize_id: prize.id }).eq("id", winner.id);
+          winner.customer_prize_id = prize.id;
+        }
 
-        const { data: winner } = await supabase
-          .from("event_raffle_winners")
-          .insert({
-            raffle_id: raffle.id,
-            entry_id: picked.id,
-            phone: picked.phone,
-            display_name: picked.display_name,
-            position: i + 1,
-            customer_prize_id: customerPrizeId,
-          })
-          .select("*")
-          .maybeSingle();
-        if (winner) winners.push(winner);
+        // 2) Prêmio físico vai para o pedido da ganhadora (aparece na Expedição), sem apagar anotação existente.
+        if (isProduct && orderId && prize?.id) {
+          const { data: ord } = await supabase.from("orders").select("gift_description").eq("id", orderId).maybeSingle();
+          const tag = `🎁 Prêmio sorteio: ${raffle.prize_label}`;
+          const cur = String(ord?.gift_description || "");
+          if (!cur.includes(tag)) {
+            await supabase.from("orders")
+              .update({ has_gift: true, gift_description: cur ? `${cur} | ${tag}` : tag })
+              .eq("id", orderId);
+          }
+        }
+        winners.push(winner);
       }
 
       // Avisa o overlay da live (OBS): roleta gira e para na ganhadora, com confete.
