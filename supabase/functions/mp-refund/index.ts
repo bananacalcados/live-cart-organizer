@@ -454,7 +454,14 @@ serve(async (req) => {
       else if (p && !["approved", "partially_refunded"].includes(p.status)) {
         // Cartão recusado no MP e aprovado no próximo gateway da cascata: o código do MP
         // recusado fica guardado, mas o pagamento real está no outro gateway.
-        const rowGw = otherGateway(res.source === "pos_sale" ? sales.get(res.id) : orders.get(res.id));
+        let rowGw = otherGateway(res.source === "pos_sale" ? sales.get(res.id) : orders.get(res.id));
+        if (!rowGw && res.source === "pos_sale" && ["rejected", "cancelled"].includes(p.status)) {
+          const { data: so } = await supabase.from("pos_sales").select("source_order_id").eq("id", res.id).maybeSingle();
+          if (so?.source_order_id) {
+            const { data: o } = await supabase.from("orders").select("appmax_order_id, pagarme_order_id, austpay_transaction_id, vindi_transaction_id").eq("id", so.source_order_id).maybeSingle();
+            if (o) rowGw = otherGateway(o);
+          }
+        }
         if (rowGw && ["rejected", "cancelled"].includes(p.status)) { res.gateway = rowGw; res.reason = `Pago e aprovado na ${rowGw} (Mercado Pago recusou antes) — estorno direto na ${rowGw}`; }
         else res.reason = `Pagamento não aprovado no gateway (status ${p.status})`;
       }
