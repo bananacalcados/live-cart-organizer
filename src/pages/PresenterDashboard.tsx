@@ -551,7 +551,28 @@ export default function PresenterDashboard() {
         )}
       </div>
 
-      {/* Comentários da Live — logo abaixo do painel de métricas */}
+      {eventId && (
+        <div className="mb-6 border-y border-border bg-card px-3 py-2 shadow-sm">
+          <LiveLaneSection
+            id="presenter-order-intents"
+            eventId={eventId}
+            title="PEDIDOS"
+            count={orderIntents.cards.length}
+            tone="text-amber-500"
+            icon={<ShoppingCart className="h-4 w-4 text-amber-500" />}
+          >
+            <LiveOrderIntentCards
+              eventId={eventId}
+              cards={orderIntents.cards}
+              loading={orderIntents.loading}
+              onReload={orderIntents.reload}
+              onDismiss={orderIntents.dismiss}
+            />
+          </LiveLaneSection>
+        </div>
+      )}
+
+      {/* Comentários da Live — logo abaixo da linha de pedidos */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
         <CardContent className="p-4">
           <LiveInstagramComments
