@@ -194,6 +194,7 @@ export default function SelfServiceCartPage() {
             {/* Botões de pagamento ANTES do cronômetro de cashback: a cliente escolhe como pagar sem rolar. */}
             {form && mode === "choose" && (
               <div className="grid gap-2">
+                <p className="text-center text-2xl font-extrabold uppercase leading-tight tracking-tight text-foreground">Escolha a forma de pagamento abaixo</p>
                 <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
                   {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="mr-2 h-5 w-5" />PAGAR NO PIX</>}
                 </Button>
