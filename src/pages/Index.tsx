@@ -17,14 +17,12 @@ import { EventRafflesManager } from "@/components/events/EventRafflesManager";
 
 import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 
-import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { LiveLinksBar } from "@/components/events/LiveLinksBar";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
-import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
 import { EventPaymentCardsBar } from "@/components/events/EventPaymentCardsBar";
 import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
 import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
@@ -39,7 +37,7 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, UserPlus, Users } from "lucide-react";
+import { Calendar, Search, Trophy, MessageSquare, ShoppingCart, Zap, Settings, UserPlus, Users } from "lucide-react";
 
 
 import { Button } from "@/components/ui/button";
@@ -294,16 +292,18 @@ const Index = () => {
           <Tabs value={tab} onValueChange={setTab} className="w-full">
 
 
-            <div className={cn("flex items-center gap-2", tab === "attendance" ? "mb-2" : "mb-4")}>
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por @ ou WhatsApp..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+            <div className={cn("relative w-full", tab === "attendance" ? "mb-2" : "mb-3")}>
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por @ ou WhatsApp..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-12 pl-12 text-lg font-medium md:text-lg"
+              />
+            </div>
+
+            <div className={cn("flex flex-wrap items-center gap-2", tab === "attendance" ? "mb-2" : "mb-4")}>
+
               {tab === "attendance" && (
                 <Button
                   variant="outline"
@@ -350,10 +350,6 @@ const Index = () => {
                   Envios em massa
                 </TabsTrigger>
 
-                <TabsTrigger value="promotions" className="gap-1">
-                  <Tag className="h-3 w-3" />
-                  Promoções
-                </TabsTrigger>
                 <TabsTrigger value="prizes" className="gap-1">
                   <Trophy className="h-3 w-3" />
                   Roleta
@@ -368,10 +364,6 @@ const Index = () => {
                     Carrinhos
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="ig-comments" className="gap-1">
-                  <Instagram className="h-3 w-3" />
-                  Comentários IG
-                </TabsTrigger>
                 <TabsTrigger value="member-leads" className="gap-1">
                   <UserPlus className="h-3 w-3" />
                   Leads Área de Membros
@@ -425,10 +417,6 @@ const Index = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="promotions">
-              <EventPromotionManager eventId={currentEventId} />
-            </TabsContent>
-
             <TabsContent value="prizes" className="space-y-6">
               <MemberAreaLinkBanner event={currentEvent} />
               <Tabs defaultValue="wheel" className="space-y-4">
@@ -457,10 +445,6 @@ const Index = () => {
                 <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
               </TabsContent>
             )}
-
-            <TabsContent value="ig-comments">
-              {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
-            </TabsContent>
 
             <TabsContent value="member-leads">
               <MemberAreaLeadsPanel eventId={currentEventId} />
