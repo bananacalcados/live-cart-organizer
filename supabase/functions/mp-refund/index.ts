@@ -451,7 +451,13 @@ serve(async (req) => {
       const err = check.error || "";
       if (!p && /consultar o pagamento/.test(err)) { res.retry = true; res.reason = RETRY; }
       else if (p && p.status === "refunded") { res.reason = "Já totalmente estornado"; res.remaining = 0; }
-      else if (p && !["approved", "partially_refunded"].includes(p.status)) res.reason = `Pagamento não aprovado no gateway (status ${p.status})`;
+      else if (p && !["approved", "partially_refunded"].includes(p.status)) {
+        // Cartão recusado no MP e aprovado no próximo gateway da cascata: o código do MP
+        // recusado fica guardado, mas o pagamento real está no outro gateway.
+        const rowGw = otherGateway(it.source === "pos_sale" ? sales.get(res.id) : orders.get(res.id));
+        if (rowGw && ["rejected", "cancelled"].includes(p.status)) { res.gateway = rowGw; res.reason = `Pago e aprovado na ${rowGw} (Mercado Pago recusou antes) — estorno direto na ${rowGw}`; }
+        else res.reason = `Pagamento não aprovado no gateway (status ${p.status})`;
+      }
       else if (/mais de \d+ dias/.test(err)) res.reason = `Mais de ${MAX_REFUND_AGE_DAYS} dias da aprovação`;
       else if (/totalmente estornado/.test(err)) { res.reason = "Já totalmente estornado"; res.remaining = 0; }
       else res.reason = err.replace(/\.$/, "");
