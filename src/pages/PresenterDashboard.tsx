@@ -509,27 +509,6 @@ export default function PresenterDashboard() {
       </div>
 
 
-      {eventId && (
-        <div className="mb-6 border-y border-border bg-card px-3 py-2 shadow-sm">
-          <LiveLaneSection
-            id="presenter-order-intents"
-            eventId={eventId}
-            title="PEDIDOS"
-            count={orderIntents.cards.length}
-            tone="text-amber-500"
-            icon={<ShoppingCart className="h-4 w-4 text-amber-500" />}
-          >
-            <LiveOrderIntentCards
-              eventId={eventId}
-              cards={orderIntents.cards}
-              loading={orderIntents.loading}
-              onReload={orderIntents.reload}
-              onDismiss={orderIntents.dismiss}
-            />
-          </LiveLaneSection>
-        </div>
-      )}
-
       {/* Cards fixos: clientes que ainda NÃO clicaram no botão do WhatsApp */}
       <div className="mb-6 rounded-2xl border-2 border-amber-500 bg-zinc-950 p-3 shadow-lg">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
