@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Printer, Copy, XCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { freightCall } from '@/lib/saleFreight';
-import { getCorreiosLabelFormat, saveCorreiosLabelFormat, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
+import { getCorreiosLabelFormat, saveCorreiosLabelFormat, correiosLabelUrl, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 
-export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; thermal_url?: string | null; thermal_label_url?: string | null; a4_url?: string | null; sale_ids?: string[] }
+export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; thermal_url?: string | null; thermal_label_url?: string | null; a4_url?: string | null; own_url?: string | null; own_a4_url?: string | null; sale_ids?: string[] }
 interface Summary { ok: boolean; problems: string[]; summary: { remetente?: { nome: string; cnpj: string }; servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
 interface Props { saleId: string; refreshKey?: unknown; onTracking?: (code: string) => void }
 const STATUS: Record<string, string> = { criada: 'Pré-postagem criada', rotulo_emitido: 'Etiqueta emitida', postada: 'Postada' };
@@ -44,9 +44,9 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
     const tab = reserveCorreiosPrintTab();
     try {
       setPrintFormat(format); saveCorreiosLabelFormat(format);
-      const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'label', shipment_id: shipment.id });
+      const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'label', shipment_id: shipment.id, format });
       apply(r.shipment);
-      const url = format === 'a4' ? r.shipment.a4_url : format === 'label10x15' ? r.shipment.thermal_label_url : r.shipment.thermal_url;
+      const url = correiosLabelUrl(r.shipment, format);
       if (!url) throw new Error('PDF ainda não disponível');
       await printCorreiosLabel(tab, url);
     } catch (e) { tab.close(); throw e; }
@@ -72,11 +72,9 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
         {shipment.codigo_objeto && <Button size="sm" variant="outline" onClick={() => { if (!shipment.codigo_objeto) return; void navigator.clipboard.writeText(shipment.codigo_objeto); toast.success('Código copiado'); }}><Copy className="h-3.5 w-3.5 mr-1" />{shipment.codigo_objeto}</Button>}</div>
       <p className="text-sm font-semibold">Imprimir</p>
       <div role="group" aria-label="Imprimir etiqueta Correios" className="flex flex-wrap gap-2">
-        <Button onClick={() => open('10x15')} disabled={busy} aria-pressed={printFormat === '10x15'} className="h-auto min-h-10 whitespace-normal text-left">{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2 shrink-0" /> : <Printer className="h-4 w-4 mr-2 shrink-0" />}Etiqueta 10×15 (térmica)</Button>
-        <Button variant={printFormat === 'label10x15' ? 'secondary' : 'outline'} onClick={() => open('label10x15')} disabled={busy} aria-pressed={printFormat === 'label10x15'} className="h-auto min-h-10 whitespace-normal">Só rótulo 10×15</Button>
-        <Button variant={printFormat === 'a4' ? 'secondary' : 'outline'} onClick={() => open('a4')} disabled={busy} aria-pressed={printFormat === 'a4'} className="h-auto min-h-10 whitespace-normal">Folha A4 (etiqueta + DANFE)</Button>
+        {CORREIOS_LABEL_FORMATS.map((f, i) => <Button key={f.value} variant={i === 0 ? 'default' : printFormat === f.value ? 'secondary' : 'outline'} onClick={() => open(f.value)} disabled={busy} aria-pressed={printFormat === f.value} className={`h-auto min-h-10 whitespace-normal text-left ${printFormat === f.value ? 'ring-2 ring-ring ring-offset-1' : ''}`}>{i === 0 && (busy ? <Loader2 className="h-4 w-4 animate-spin mr-2 shrink-0" /> : <Printer className="h-4 w-4 mr-2 shrink-0" />)}{f.label}</Button>)}
       </div>
-      <p className="text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real).</p>
+      <p className="text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real). Se a etiqueta do ERP der problema na agência, use o Rótulo oficial Correios.</p>
       <div className="flex flex-wrap gap-2">
         {shipment.status !== 'postada' && <Button variant="outline" onClick={() => setCancelOpen((v) => !v)} disabled={busy}><XCircle className="h-4 w-4 mr-2" />Cancelar pré-postagem</Button>}
       </div>

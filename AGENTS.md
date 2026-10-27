@@ -1,6 +1,6 @@
 # Project architecture rules
 
-- Correios printing derives persisted thermal and A4 PDFs from the original official label and shipment-linked invoice keys; label reopening and batch printing repair missing formats without creating pre-postage. Keep printer preference best-effort and PDF generation server-side to preserve barcodes and customer access control.
+- Correios printing derives persisted thermal/A4 PDFs from the original official label and shipment-linked invoice keys; the default ERP 10x15 label copies the official DataMatrix payload verbatim (it carries a Correios token) and checks object/CEPs before drawing, while the official label stays available as fallback. Reopening and batch printing repair missing formats without creating pre-postage; PDF generation stays server-side.
 
 - Staff self-service drafts use the server's last-ten-digit phone key for contacts without an order, and event-scoped order membership for real orders; manual cart sending saves the exact order registration without claiming WhatsApp confirmation, so provisional phones never select another person's cart.
 
