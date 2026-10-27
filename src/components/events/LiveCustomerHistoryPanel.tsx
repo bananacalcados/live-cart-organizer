@@ -85,7 +85,6 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         }
 
         const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes, selfServiceRes] = await Promise.all([
-          selfServiceQuery ?? Promise.resolve({ data: null as any }),
           customerFilters.length
             ? supabase.from("customers").select("id,instagram_handle,whatsapp,full_name,tags").or(customerFilters.join(",")).limit(10)
             : Promise.resolve({ data: [] as any[] }),
