@@ -401,6 +401,14 @@ Deno.serve(async (req) => {
     };
 
     if (action === "event") return json({ ok: true, event: eventInfo });
+    // Link único enviado no direct: só revela o @ do pedido (nenhum dado pessoal).
+    if (action === "invite") {
+      const t = String(body.invite || "");
+      if (!/^[0-9a-f]{32}$/.test(t)) return json({ ok: false });
+      const { data: n } = await sb.from("ig_live_cart_notifications").select("instagram_handle")
+        .eq("link_token", t).eq("event_id", ev.id).maybeSingle();
+      return json({ ok: !!n, instagram: n?.instagram_handle || null });
+    }
     if (action === "advertising_choice") {
       if (typeof body.accepted !== "boolean") return json({ ok: false }, 400);
       const { data, error } = await sb.rpc("selfservice_save_advertising_choice", { p_id: /^[0-9a-f-]{36}$/i.test(String(body.consent_id || "")) ? body.consent_id : null, p_accept: body.accepted, p_region: /^[A-Z]{2}$/.test(String(body.region || "")) ? body.region : null });
@@ -514,7 +522,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...data });
     }
 
+    // Pedidos do @ que recebeu o link único (mesmo sem os 4 últimos dígitos).
+    async function inviteOrders(): Promise<any[]> {
+      const t = String(body.invite || "");
+      if (!/^[0-9a-f]{32}$/.test(t)) return [];
+      const { data: n } = await sb.from("ig_live_cart_notifications").select("order_id")
+        .eq("link_token", t).eq("event_id", ev.id).maybeSingle();
+      if (!n?.order_id) return [];
+      const { data: base } = await sb.from("orders").select("customer_id").eq("id", n.order_id).eq("event_id", ev.id).maybeSingle();
+      if (!base?.customer_id) return [];
+      const { data } = await sb.from("orders")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .eq("event_id", ev.id).eq("customer_id", base.customer_id).neq("stage", "cancelled").eq("is_paid", false)
+        .order("created_at", { ascending: true }).limit(10);
+      return (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
+    }
+
     async function openOrders() {
+      const byPhone = await openOrdersByPhone();
+      const extra = await inviteOrders();
+      const seen = new Set(byPhone.map((o: any) => o.id));
+      return [...byPhone, ...extra.filter((o: any) => !seen.has(o.id))];
+    }
+
+    async function openOrdersByPhone(): Promise<any[]> {
       const { data: custs } = await sb.from("customers").select("id, whatsapp").ilike("whatsapp", `%${suffix8(phone)}`).limit(100);
       const ids = (custs || []).filter((c: any) => normalizeBrPhone(c.whatsapp || "") === phone).map((c: any) => c.id);
       if (!ids.length) {
