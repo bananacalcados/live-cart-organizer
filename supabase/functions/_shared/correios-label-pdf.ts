@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 import { code128C, groupChave, maskCpf, type NfeSummary } from './correios-prepost-domain.ts';
 const A4 = { w: 595.28, h: 841.89 };
+export const THERMAL = { w: 100 * 72 / 25.4, h: 150 * 72 / 25.4 };
 // Helvetica (WinAnsi) supports Latin-1 accents; strip anything outside it.
 const safe = (s: unknown) => String(s ?? '').normalize('NFC').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, (c) => c.normalize('NFD').replace(/[^\x20-\x7E]/g, '') || '');
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -59,4 +60,75 @@ export async function concatPdfs(files: Uint8Array[]) {
   const doc = await PDFDocument.create();
   for (const f of files) { const src = await PDFDocument.load(f); (await doc.copyPages(src, src.getPageIndices())).forEach((p) => doc.addPage(p)); }
   return await doc.save();
+}
+
+/** Preserve official vector artwork; never rasterize or stretch barcodes. */
+export async function buildThermalLabel(labelPdf: Uint8Array) {
+  const source = await PDFDocument.load(labelPdf);
+  const doc = await PDFDocument.create();
+  for (const src of source.getPages()) {
+    const crop = src.getCropBox();
+    // A4 documents must carry a 100x150 CropBox. Guessing a corner could cut a barcode.
+    const isThermal = Math.abs(crop.width - THERMAL.w) < 3 && Math.abs(crop.height - THERMAL.h) < 3;
+    if (!isThermal) throw new Error('Rótulo fora de 100 × 150 mm e sem recorte seguro. Reemita o rótulo no layout LINEAR_100_150.');
+    const embedded = await doc.embedPage(src, { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height });
+    const page = doc.addPage([THERMAL.w, THERMAL.h]);
+    const scale = Math.min(THERMAL.w / crop.width, THERMAL.h / crop.height);
+    page.drawPage(embedded, { x: 0, y: THERMAL.h - crop.height * scale, width: crop.width * scale, height: crop.height * scale });
+  }
+  return doc.save();
+}
+
+function drawThermalDanfe(page: PDFPage, n: NfeSummary, font: PDFFont, bold: PDFFont) {
+  const x = 10, w = THERMAL.w - 20; let y = THERMAL.h - 16;
+  const text = (s: string, size = 7, strong = false) => { page.drawText(safe(s), { x, y, size, font: strong ? bold : font, color: rgb(0, 0, 0) }); y -= size + 3; };
+  const wrap = (s: string, maxLines = 2, strong = false) => {
+    const words = safe(s).split(/\s+/); let row = '', lines = 0;
+    while (words.length) {
+      if (lines === maxLines - 1) { text(fit([row, ...words].filter(Boolean).join(' '), font, 7, w), 7, strong); return; }
+      const word = words.shift() || '';
+      const next = row ? `${row} ${word}` : word;
+      if (font.widthOfTextAtSize(next, 7) > w && row) { text(row, 7, strong); lines++; row = word; }
+      else row = next;
+    }
+    if (row) text(fit(row, font, 7, w), 7, strong);
+  };
+  text('DANFE Simplificado - Etiqueta', 10, true);
+  text('CHAVE DE ACESSO', 7, true);
+  const key = n.chave.match(/.{1,22}/g) || [n.chave];
+  key.forEach((row) => text(row, 8));
+  if (/^\d{44}$/.test(n.chave)) {
+    const modules = code128C(n.chave), total = modules.reduce((a, b) => a + b, 0);
+    // 0.85 pt/module = ~2.4 printer dots at 203dpi, bars >70 mm + quiet zones.
+    const mw = 0.85, bh = 36; let bx = x + 10 * mw; y -= bh;
+    modules.forEach((m, i) => { if (i % 2 === 0) page.drawRectangle({ x: bx, y, width: m * mw, height: bh, color: rgb(0, 0, 0) }); bx += m * mw; });
+    if (total * mw < 70 * 72 / 25.4) throw new Error('Código de barras da NF-e menor que 70 mm');
+    y -= 12;
+  }
+  const date = n.emissao ? new Date(n.emissao).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+  text(`NF-e ${n.numero} / Série ${n.serie} / ${date}`, 8, true);
+  text(`Protocolo: ${n.protocolo}`);
+  text('EMITENTE', 7, true); wrap(n.emitNome);
+  text(`CNPJ ${n.emitCnpj}${n.emitIe ? ` / IE ${n.emitIe}` : ''}`);
+  text(`${n.emitCidade}/${n.emitUf}`);
+  text('DESTINATÁRIO', 7, true); wrap(n.destNome);
+  if (maskCpf(n.destDoc)) text(maskCpf(n.destDoc));
+  wrap(n.destEndereco, 3);
+  text(`TOTAL ${brl(n.valorTotal)} / ${n.itens.reduce((s, i) => s + i.qtd, 0)} item(ns)`, 8, true);
+  text('ITENS', 7, true);
+  n.itens.slice(0, 6).forEach((i) => text(fit(`${i.qtd}x ${i.descricao}`, font, 7, w)));
+  if (n.itens.length > 6) text(`+${n.itens.length - 6} itens`, 7, true);
+  page.drawText('Consulta pela chave de acesso em', { x, y: 20, size: 7, font, color: rgb(0, 0, 0) });
+  page.drawText('www.nfe.fazenda.gov.br/portal', { x, y: 10, size: 7, font, color: rgb(0, 0, 0) });
+}
+
+export async function buildLabelFormats(labelPdf: Uint8Array, nfes: NfeSummary[]) {
+  if (!nfes.length) throw new Error('XML da NF-e do envio não encontrado para gerar a DANFE');
+  const thermalLabel = await buildThermalLabel(labelPdf);
+  const doc = await PDFDocument.load(thermalLabel);
+  const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  nfes.forEach((n) => drawThermalDanfe(doc.addPage([THERMAL.w, THERMAL.h]), n, font, bold));
+  const thermal = await doc.save();
+  const a4 = await buildCombinedPdf(thermalLabel, nfes);
+  return { thermal, thermalLabel, a4 };
 }

@@ -44,6 +44,8 @@ import { useCanRefund } from "@/hooks/useCanRefund";
 import { freightDate, freightCall } from "@/lib/saleFreight";
 import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
 import { Printer } from "lucide-react";
+import { getCorreiosLabelFormat, saveCorreiosLabelFormat } from '@/lib/correiosLabelFormat';
+import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
 
@@ -81,6 +83,7 @@ const isWaitingIncomplete = (o: ExpOrder) =>
   o.items.some((it) => pickedQty(it) < (Number(it.quantity) || 0));
 
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
+  const [batchFormat, setBatchFormat] = useState<'10x15' | 'a4'>(() => getCorreiosLabelFormat() === 'a4' ? 'a4' : '10x15');
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
@@ -280,14 +283,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   };
 
   const printCorreiosBatch = async () => {
-    const ids = [...new Set(orders.flatMap((o) => (o.group_order_ids?.length ? o.group_order_ids : [o.id])).map((id) => correiosShipments[id]).filter((sh) => sh?.status === "rotulo_emitido").map((sh) => sh!.id))].slice(0, 50);
+    const ids = [...new Set(filtered.flatMap((o) => (o.group_order_ids?.length ? o.group_order_ids : [o.id])).map((id) => correiosShipments[id]).filter((sh) => sh?.status === "rotulo_emitido").flatMap((sh) => sh ? [sh.id] : []))].slice(0, 50);
     if (!ids.length) return toast.error("Nenhuma etiqueta Correios emitida nos pedidos desta etapa");
     setPrintingBatch(true);
+    let tab: Window | undefined;
     try {
-      const r = await freightCall<{ url: string; count: number }>("correios-shipment", { action: "batch_labels", shipment_ids: ids });
-      window.open(r.url, "_blank", "noopener");
+      tab = reserveCorreiosPrintTab();
+      saveCorreiosLabelFormat(batchFormat);
+      const r = await freightCall<{ url: string; count: number }>("correios-shipment", { action: "batch_labels", shipment_ids: ids, format: batchFormat });
+      await printCorreiosLabel(tab, r.url);
       toast.success(`${r.count} etiqueta(s) no PDF`);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao montar as etiquetas"); }
+    } catch (e) { tab?.close(); toast.error(e instanceof Error ? e.message : "Falha ao montar as etiquetas"); }
     finally { setPrintingBatch(false); }
   };
 
@@ -1128,6 +1134,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
             {selected.size > 0 ? "Limpar seleção" : "Selecionar todos"}
           </Button>
+          {stage === 'preparacao' && <div className="flex flex-wrap items-center gap-2">
+            <Select value={batchFormat} onValueChange={(value) => { const f = value === 'a4' ? 'a4' : '10x15'; setBatchFormat(f); saveCorreiosLabelFormat(f); }}>
+              <SelectTrigger aria-label="Formato das etiquetas Correios" className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="10x15">10×15 (térmica)</SelectItem><SelectItem value="a4">Folha A4</SelectItem></SelectContent>
+            </Select>
+            <Button size="sm" disabled={printingBatch} onClick={printCorreiosBatch}><Printer className="h-4 w-4 mr-1" />Imprimir etiquetas Correios do dia</Button>
+            <p className="w-full text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real).</p>
+          </div>}
           {selected.size > 0 && (
             <>
               <span className="text-sm font-bold text-pos-text">
@@ -1144,18 +1158,6 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                   >
                     <BadgePercent className="h-6 w-6 mr-2 shrink-0" />
                     REDUZIR VALOR ({bulkSelectedOrders.length})
-                  </Button>
-                )}
-                {stage === "preparacao" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="font-bold border-exp-prep text-exp-prep"
-                    disabled={printingBatch}
-                    onClick={printCorreiosBatch}
-                  >
-                    {printingBatch ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
-                    IMPRIMIR ETIQUETAS CORREIOS DO DIA
                   </Button>
                 )}
                 {stage === "preparacao" && (

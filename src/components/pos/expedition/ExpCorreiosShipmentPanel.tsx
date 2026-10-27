@@ -6,14 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Printer, Copy, XCircle, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { freightCall } from '@/lib/saleFreight';
+import { getCorreiosLabelFormat, saveCorreiosLabelFormat, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
+import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 
-export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; sale_ids?: string[] }
+export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; thermal_url?: string | null; thermal_label_url?: string | null; a4_url?: string | null; sale_ids?: string[] }
 interface Summary { ok: boolean; problems: string[]; summary: { remetente?: { nome: string; cnpj: string }; servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
 interface Props { saleId: string; refreshKey?: unknown; onTracking?: (code: string) => void }
 const STATUS: Record<string, string> = { criada: 'Pré-postagem criada', rotulo_emitido: 'Etiqueta emitida', postada: 'Postada' };
 
 export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Props) {
   const [shipment, setShipment] = useState<CorreiosShipment | null>(null);
+  const [printFormat, setPrintFormat] = useState(getCorreiosLabelFormat);
   const [correiosSelected, setCorreiosSelected] = useState(false);
   const [preview, setPreview] = useState<Summary | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [reason, setReason] = useState(''), [cancelOpen, setCancelOpen] = useState(false);
@@ -36,13 +39,19 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
   const apply = (s: CorreiosShipment) => { setShipment(s); if (s.codigo_objeto) onTracking?.(s.codigo_objeto); if (s.error_message) setError(s.error_message); };
   const openPreview = () => run(async () => setPreview(await freightCall<Summary>('correios-shipment', { action: 'create', sale_id: saleId, dry_run: true })));
   const create = () => run(async () => { const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'create', sale_id: saleId }); setPreview(null); apply(r.shipment); if (r.shipment.codigo_objeto) toast.success('Etiqueta Correios gerada'); });
-  const open = (kind: 'combined_url' | 'label_url') => run(async () => {
-    const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'label', shipment_id: shipment!.id });
-    apply(r.shipment);
-    const url = r.shipment[kind];
-    if (url) window.open(url, '_blank', 'noopener'); else setError('PDF ainda não disponível');
+  const open = (format: CorreiosLabelFormat) => run(async () => {
+    if (!shipment) return;
+    const tab = reserveCorreiosPrintTab();
+    try {
+      setPrintFormat(format); saveCorreiosLabelFormat(format);
+      const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'label', shipment_id: shipment.id });
+      apply(r.shipment);
+      const url = format === 'a4' ? r.shipment.a4_url : format === 'label10x15' ? r.shipment.thermal_label_url : r.shipment.thermal_url;
+      if (!url) throw new Error('PDF ainda não disponível');
+      await printCorreiosLabel(tab, url);
+    } catch (e) { tab.close(); throw e; }
   });
-  const cancel = () => run(async () => { const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'cancel', shipment_id: shipment!.id, reason }); setShipment(null); setCancelOpen(false); setReason(''); toast.success(r.shipment.status === 'cancelada' ? 'Pré-postagem cancelada' : 'Atualizado'); });
+  const cancel = () => run(async () => { if (!shipment) return; const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'cancel', shipment_id: shipment.id, reason }); setShipment(null); setCancelOpen(false); setReason(''); toast.success(r.shipment.status === 'cancelada' ? 'Pré-postagem cancelada' : 'Atualizado'); });
 
   if (!shipment && !correiosSelected) return null;
   return <div className="space-y-3 rounded-md border border-border p-3">
@@ -60,10 +69,15 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
     </div>}
     {shipment && <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{STATUS[shipment.status] || shipment.status}</Badge>{shipment.servico_nome && <Badge variant="outline">{shipment.servico_nome}</Badge>}
-        {shipment.codigo_objeto && <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard.writeText(shipment.codigo_objeto!); toast.success('Código copiado'); }}><Copy className="h-3.5 w-3.5 mr-1" />{shipment.codigo_objeto}</Button>}</div>
+        {shipment.codigo_objeto && <Button size="sm" variant="outline" onClick={() => { if (!shipment.codigo_objeto) return; void navigator.clipboard.writeText(shipment.codigo_objeto); toast.success('Código copiado'); }}><Copy className="h-3.5 w-3.5 mr-1" />{shipment.codigo_objeto}</Button>}</div>
+      <p className="text-sm font-semibold">Imprimir</p>
+      <div role="group" aria-label="Imprimir etiqueta Correios" className="flex flex-wrap gap-2">
+        <Button onClick={() => open('10x15')} disabled={busy} aria-pressed={printFormat === '10x15'} className="h-auto min-h-10 whitespace-normal text-left">{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2 shrink-0" /> : <Printer className="h-4 w-4 mr-2 shrink-0" />}Etiqueta 10×15 (térmica)</Button>
+        <Button variant={printFormat === 'label10x15' ? 'secondary' : 'outline'} onClick={() => open('label10x15')} disabled={busy} aria-pressed={printFormat === 'label10x15'} className="h-auto min-h-10 whitespace-normal">Só rótulo 10×15</Button>
+        <Button variant={printFormat === 'a4' ? 'secondary' : 'outline'} onClick={() => open('a4')} disabled={busy} aria-pressed={printFormat === 'a4'} className="h-auto min-h-10 whitespace-normal">Folha A4 (etiqueta + DANFE)</Button>
+      </div>
+      <p className="text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real).</p>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => open('combined_url')} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Printer className="h-4 w-4 mr-2" />}{shipment.status === 'criada' ? 'Emitir e imprimir etiqueta + DANFE' : 'Imprimir etiqueta + DANFE'}</Button>
-        <Button variant="outline" onClick={() => open('label_url')} disabled={busy}>Só rótulo</Button>
         {shipment.status !== 'postada' && <Button variant="outline" onClick={() => setCancelOpen((v) => !v)} disabled={busy}><XCircle className="h-4 w-4 mr-2" />Cancelar pré-postagem</Button>}
       </div>
       {cancelOpen && <div className="flex flex-wrap gap-2"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo do cancelamento" className="max-w-sm" /><Button variant="destructive" onClick={cancel} disabled={busy || reason.trim().length < 3}>Confirmar cancelamento</Button></div>}
