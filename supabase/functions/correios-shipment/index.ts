@@ -14,6 +14,7 @@ const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
   z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50) }),
+  z.object({ action: z.literal('contract_services') }),
 ]);
 const SALE_COLS = 'id,customer_name,customer_cpf,customer_phone,customer_email,shipping_address,is_store_pickup,status,status_cancelamento,expedition_group_id,expedition_stage,expedition_deleted_at,shipping_type,shipping_carrier';
 const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
