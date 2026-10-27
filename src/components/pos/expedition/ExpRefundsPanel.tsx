@@ -25,7 +25,7 @@ function periodRange(period: string, from: string, to: string): { from?: string;
 }
 
 /** Expedição > ESTORNOS: aguardando aprovação, em andamento e histórico (tudo paginado no servidor). */
-export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: number; storeId?: string }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [pending, setPending] = useState<RefundListRow[]>([]);
   const [active, setActive] = useState<RefundListRow[]>([]);
@@ -96,7 +96,7 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
         ) : (
           <div className="space-y-2">
             {pending.map((r) => (
-              <RefundRowCard key={r.id} r={r} actions={isAdmin ? <RefundDecisionButtons refundId={r.id} onDone={reload} /> : null} />
+              <RefundRowCard key={r.id} storeId={storeId} r={r} actions={isAdmin ? <RefundDecisionButtons refundId={r.id} onDone={reload} /> : null} />
             ))}
           </div>
         )}
@@ -107,7 +107,7 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
         {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : active.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum estorno em andamento.</p>
         ) : (
-          <div className="space-y-2">{active.map((r) => <RefundRowCard key={r.id} r={r} />)}</div>
+          <div className="space-y-2">{active.map((r) => <RefundRowCard key={r.id} storeId={storeId} r={r} />)}</div>
         )}
       </section>
 
@@ -170,7 +170,7 @@ export function ExpRefundsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
           <p className="text-sm text-muted-foreground">Nenhum estorno encontrado.</p>
         ) : (
           <div className="space-y-2">
-            {history.map((r) => <RefundRowCard key={r.id} r={r} onChanged={reload} />)}
+            {history.map((r) => <RefundRowCard key={r.id} storeId={storeId} r={r} onChanged={reload} />)}
             {hasMore && (
               <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore} className="w-full font-bold">
                 {loadingMore ? "Carregando..." : "Carregar mais"}
