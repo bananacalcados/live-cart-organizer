@@ -505,6 +505,27 @@
       "when": 1793123063928,
       "tag": "0071_selfservice_register_dm",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793126912849,
+      "tag": "0072_selfservice_event_shipping_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793126970005,
+      "tag": "0073_event_shipping_pure_resolver_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793127003456,
+      "tag": "0074_selfservice_manual_exemption_reset",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Frete padrão do evento — 27/10
+- [x] Aplicar regra do evento automaticamente nos pedidos de autoatendimento, preservando isenções e valores manuais; 12 regras verificadas na função instalada e teste de marcar/desmarcar com rollback.
+- [x] Corrigir o pedido aberto do tênis sem frete definido desta live; carrinho real exibiu R$ 19,99 sem erros, sem cobrar nem publicar. Pagos, cancelados e tentativas vinculadas preservados.
+
 ## Direct do Instagram com link de cadastro — 27/10
 - [x] Criar pedido pela conversa de Novos Contatos (botão Editar abre novo pedido com WhatsApp completo).
 - [x] Direct automático com link único (5 variações em rodízio, botão CADASTRAR, 1 por @ por live, sem re-tentativa automática) + Reenviar direct nos Incompletos (máx. 2, 10 min). Envio real ao Instagram ainda não testado.

@@ -27258,6 +27258,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_selfservice_event_shipping: {
+        Args: { p_event: Json; p_order: Json }
+        Returns: Json
+      }
       resolve_typebot_event_id: {
         Args: { p_typebot_id: string }
         Returns: string
