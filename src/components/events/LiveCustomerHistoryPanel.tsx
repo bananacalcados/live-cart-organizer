@@ -52,6 +52,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   const suffix = phone.replace(/\D/g, "").slice(-8);
   const [data, setData] = useState<POSCustomerPanelData | null>(null);
   const [unifiedId, setUnifiedId] = useState<string | undefined>();
+  const [draftPhone, setDraftPhone] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [liveConfigs, setLiveConfigs] = useState<Record<string, any>>({});
   const { byPhone: cbByPhone, byCpf: cbByCpf, byHandle: cbByHandle, refresh: refreshChargebacks } = useChargebackRegistry();
@@ -215,7 +216,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             instagram: cleanHandle(sourceCustomer?.instagram_handle || unified?.instagram_handle || handle) || undefined,
             tags: sourceCustomer?.tags || [],
             cpf,
-            email: cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email),
+            email: cleanValue(draftReg?.email) || cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email),
             address: cleanValue(address),
             cashback: cashback && Number(cashback.total_available) > 0 ? {
               totalAvailable: Number(cashback.total_available), count: Number(cashback.cashback_count) || 0,
