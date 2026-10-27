@@ -15,8 +15,8 @@ function cleanError(msg: string) {
 }
 
 async function userName(db: any, userId: string) {
-  const { data } = await db.from('profiles').select('full_name, username, email').eq('id', userId).maybeSingle();
-  if (data?.full_name || data?.username) return data.full_name || data.username;
+  const { data } = await db.from('profiles').select('display_name').eq('user_id', userId).maybeSingle();
+  if (data?.display_name) return data.display_name;
   const { data: u } = await db.auth.admin.getUserById(userId);
   return (u?.user?.user_metadata as any)?.full_name || u?.user?.email || 'Usuário';
 }
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
       if (search) {
         const num = Number(search.replace(/^t-?/i, ''));
         if (Number.isInteger(num) && num > 0) q = q.eq('numero', num);
-        else q = q.filter('items::text', 'ilike', `%${search}%`);
+        else q = q.ilike('search_text', `%${search.toLowerCase()}%`);
       }
       const { data, error, count } = await q;
       if (error) return json({ ok: false, error: error.message }, 500);
