@@ -59,6 +59,58 @@ async function findLive(accounts: any[]) {
   return null;
 }
 
+// ---------- Direct com link único de cadastro (autoatendimento) ----------
+// Anti-spam: 1 linha por @ por live (índice único), claim atômico, NUNCA re-tentativa automática.
+// Se o envio falhar ou o resultado for incerto, fica "failed" e só a equipe reenvia (máx. 2, 10 min).
+export const REGISTER_DM_VARIANTS = [
+  "Oii @{h} 😊 já separamos seu pedido da live! Agora falta só seu cadastro pra receber o link com foto e participar do sorteio.\n\nClica abaixo pra se cadastrar 👇",
+  "@{h}, seu pedido da live tá separadinho aqui 🛍️ Faz seu cadastro rapidinho pra gente te mandar o link de pagamento no WhatsApp e você concorrer ao sorteio!\n\nÉ só tocar no botão 👇",
+  "Oi @{h}! Montamos seu carrinho da live ✨ Pra receber o link com as fotos e garantir sua chance no sorteio, finaliza seu cadastro aqui embaixo 👇",
+  "@{h}, falta pouquinho! 💛 Seu pedido da live já está reservado. Toca em CADASTRAR, preenche seus dados e a gente te manda o link certinho no WhatsApp.",
+  "Oii @{h} 👋 recebemos seu pedido na live! Cadastra aqui pra receber o link com foto do produto e entrar no sorteio 🎁\n\nToca no botão abaixo 👇",
+];
+const SITE = "https://checkout.bananacalcados.com.br";
+
+async function sendRegisterDm(sb: any, job: any, order: any, accounts: any[], liveByEvent: Map<string, any>, results: any[]) {
+  const done = async (status: string, patch: Record<string, unknown>) => {
+    await sb.from("ig_live_cart_notifications").update({ status, ...patch }).eq("id", job.id).eq("status", "processing");
+    results.push({ id: job.id, status, ...patch });
+  };
+  if (order.registered_at) return done("skipped", { error: "cliente já se cadastrou" });
+  const { data: ev } = await sb.from("events").select("self_service_slug").eq("id", job.event_id).maybeSingle();
+  if (!ev?.self_service_slug || !job.link_token) return done("failed", { error: "evento sem link de autoatendimento" });
+  const url = `${SITE}/pedido/${ev.self_service_slug}?c=${job.link_token}`;
+  const text = REGISTER_DM_VARIANTS[((job.variant_index ?? 0) % 5 + 5) % 5].replace(/\{h\}/g, job.instagram_handle);
+
+  if (!liveByEvent.has(job.event_id)) liveByEvent.set(job.event_id, (await liveFromEvent(sb, job.event_id, accounts)) || (await findLive(accounts)));
+  const live = liveByEvent.get(job.event_id);
+  if (!live) return done("failed", { error: "conta do Instagram da live não encontrada", message: text });
+  const { data: c } = await sb.from("live_comments").select("comment_id")
+    .eq("event_id", job.event_id).ilike("username", job.instagram_handle)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const commentId = c?.comment_id && /^\d+$/.test(c.comment_id) ? c.comment_id : null;
+  if (!commentId) return done("failed", { error: "cliente não comentou nesta live (sem direct possível)", message: text });
+
+  const post = (message: unknown) => g(`${HOSTS[0]}/me/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${live.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient: { comment_id: commentId }, message }),
+  });
+  let r: any;
+  try {
+    r = await post({ attachment: { type: "template", payload: { template_type: "button", text: text.slice(0, 640), buttons: [{ type: "web_url", url, title: "CADASTRAR" }] } } });
+    // Botão recusado com erro claro (não envio incerto): manda texto com o link, uma única vez.
+    if (!r.ok && r.status >= 400 && r.status < 500 && !/already|once|única|limit/i.test(r.err || "")) {
+      const t = await post({ text: `${text}\n\n${url}` });
+      if (t.ok) r = { ...t, fallback: true };
+    }
+  } catch (e) {
+    return done("failed", { error: `resultado incerto, não reenviado automaticamente: ${String(e).slice(0, 200)}`, message: text });
+  }
+  if (r.ok) return done("sent", { channel: r.fallback ? "private_reply_text" : "private_reply_button", message: text, sent_at: new Date().toISOString(), error: null });
+  return done("failed", { error: `direct: ${r.err}`.slice(0, 900), message: text });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
