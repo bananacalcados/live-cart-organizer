@@ -4,7 +4,7 @@ import { freightAuth } from '../_shared/freight-auth.ts';
 import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch, quoteCorreios } from '../_shared/correios.ts';
 import { localDelivery, buildPackage } from '../_shared/freight-domain.ts';
 import { buildPrePostagemPayload, resolveLabelSender, parseNfeXml, correiosTrackingUrl, extractPdfBase64, saleAddress, type NfeSummary } from '../_shared/correios-prepost-domain.ts';
-import { buildCombinedPdf, concatPdfs } from '../_shared/correios-label-pdf.ts';
+import { buildLabelFormats, concatPdfs } from '../_shared/correios-label-pdf.ts';
 
 const BUCKET = 'correios-labels';
 const ACTIVE = '(cancelada,erro)';
@@ -13,7 +13,7 @@ const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('label'), shipment_id: z.string().uuid() }),
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
-  z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50) }),
+  z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50), format: z.enum(['10x15', 'a4']).default('10x15') }),
   z.object({ action: z.literal('contract_services') }),
 ]);
 const SALE_COLS = 'id,customer_name,customer_cpf,customer_phone,customer_email,shipping_address,is_store_pickup,status,status_cancelamento,expedition_group_id,expedition_stage,expedition_deleted_at,shipping_type,shipping_carrier';
@@ -52,13 +52,31 @@ Deno.serve(async (req) => {
       if (error) throw new Error('Etiqueta emitida, mas não foi possível gravar o rastreio no pedido');
     };
     const buildCombined = async (shipment: any, label: Uint8Array) => {
-      const nfeMap = await loadNfes(shipment.sale_ids);
-      const nfes = [...nfeMap.values()].filter((d) => shipment.nfe_chaves.includes(d.chave_acesso)).map(summarize);
-      const pdf = await buildCombinedPdf(label, nfes);
-      const path = `${shipment.id}/etiqueta-conjunta.pdf`;
-      const up = await db.storage.from(BUCKET).upload(path, pdf, { contentType: 'application/pdf', upsert: true });
-      if (up.error) throw new Error('Não foi possível salvar a etiqueta conjunta');
-      return path;
+      // Resolve the exact original invoices, not whichever invoice was issued most recently.
+      const { data: invoices, error } = await db.from('fiscal_documents').select('chave_acesso,numero,serie,protocolo,xml_content').in('chave_acesso', shipment.nfe_chaves).in('pos_sale_id', shipment.sale_ids).eq('modelo', 55).eq('status', 'authorized').limit(200);
+      if (error) throw new Error('Não foi possível ler as NF-e deste envio');
+      const nfes = shipment.nfe_chaves.map((key: string) => invoices?.find((d: any) => d.chave_acesso === key)).filter(Boolean).map(summarize);
+      if (nfes.length !== shipment.nfe_chaves.length) throw new Error('NF-e original do envio não encontrada');
+      const pdfs = await buildLabelFormats(label, nfes);
+      await Promise.all([
+        ['etiqueta-10x15.pdf', pdfs.thermal], ['rotulo-10x15.pdf', pdfs.thermalLabel], ['etiqueta-a4.pdf', pdfs.a4], ['etiqueta-conjunta.pdf', pdfs.a4],
+      ].map(async ([name, pdf]) => {
+        const up = await db.storage.from(BUCKET).upload(`${shipment.id}/${name}`, pdf as Uint8Array, { contentType: 'application/pdf', upsert: true });
+        if (up.error) throw new Error(`Não foi possível salvar ${name}`);
+      }));
+      return `${shipment.id}/etiqueta-conjunta.pdf`;
+    };
+    const ensureFormats = async (shipment: any) => {
+      const names = ['etiqueta-10x15.pdf', 'rotulo-10x15.pdf', 'etiqueta-a4.pdf'];
+      const { data: objects, error } = await db.storage.from(BUCKET).list(shipment.id, { limit: 10 });
+      if (error) throw new Error('Não foi possível conferir os PDFs salvos');
+      if (names.every((name) => objects?.some((o: any) => o.name === name))) return shipment;
+      if (!shipment.label_path) throw new Error('Rótulo salvo não encontrado');
+      const { data } = await db.storage.from(BUCKET).download(shipment.label_path);
+      if (!data) throw new Error('Rótulo salvo não encontrado');
+      const combined_path = await buildCombined(shipment, new Uint8Array(await data.arrayBuffer()));
+      if (shipment.combined_path !== combined_path) await db.from('correios_shipments').update({ combined_path }).eq('id', shipment.id);
+      return { ...shipment, combined_path };
     };
     // Emits label (async CWS flow: request receipt, then download) and stores PDFs.
     const emitLabel = async (shipment: any) => {
@@ -98,7 +116,10 @@ Deno.serve(async (req) => {
       if (code) await writeTracking(shipment, code);
       return { ...shipment, ...patch };
     };
-    const withUrls = async (s: any) => ({ ...s, request: undefined, response: undefined, combined_url: await sign(s.combined_path), label_url: await sign(s.label_path) });
+    const withUrls = async (s: any) => {
+      const [combined_url, label_url, thermal_url, thermal_label_url, a4_url] = await Promise.all([sign(s.combined_path), sign(s.label_path), sign(`${s.id}/etiqueta-10x15.pdf`), sign(`${s.id}/rotulo-10x15.pdf`), sign(`${s.id}/etiqueta-a4.pdf`)]);
+      return { ...s, request: undefined, response: undefined, combined_url, label_url, thermal_url, thermal_label_url, a4_url };
+    };
 
     if (b.action === 'contract_services') {
       const settings = await loadCorreiosSettings(db);
@@ -159,7 +180,7 @@ Deno.serve(async (req) => {
       if (compErr) throw new Error('Não foi possível ler a empresa emitente da NF-e');
       const issuer = ids.map((id) => (companies || []).find((c: any) => c.id === nfeMap.get(id)?.company_id)?.cnpj);
       const resolved = resolveLabelSender(settings.remetente as any, issuer);
-      if (!resolved.sender) { if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [resolved.problem], summary: { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) } }); throw fail(resolved.problem!); }
+      if (!resolved.sender) { if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [resolved.problem], summary: { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) } }); throw fail(resolved.problem || 'Emitente não encontrado'); }
       const { payload, problems } = buildPrePostagemPayload({ sender: resolved.sender, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });
       const summary = { ...summaryBase, remetente: { nome: payload.remetente.nome, cnpj: payload.remetente.cpfCnpj }, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) };
       if (b.dry_run) return reply({ dry_run: true, simulated: !!b.simulate_service_code, ok: !problems.length, problems, payload, summary });
@@ -193,13 +214,7 @@ Deno.serve(async (req) => {
       let shipment = await getShipment(b.shipment_id);
       if (['cancelada', 'erro'].includes(shipment.status) || !shipment.prepostagem_id) throw fail('Este envio não está ativo');
       if (!shipment.label_path || !shipment.codigo_objeto) shipment = await emitLabel(shipment);
-      else if (!shipment.combined_path) {
-        const { data } = await db.storage.from(BUCKET).download(shipment.label_path);
-        if (!data) throw new Error('Rótulo salvo não encontrado');
-        const combined_path = await buildCombined(shipment, new Uint8Array(await data.arrayBuffer()));
-        await db.from('correios_shipments').update({ combined_path }).eq('id', shipment.id);
-        shipment.combined_path = combined_path;
-      }
+      shipment = await ensureFormats(shipment);
       return reply({ shipment: await withUrls(shipment) });
     }
 
@@ -219,18 +234,24 @@ Deno.serve(async (req) => {
     }
 
     // batch_labels
-    const { data: rows, error } = await db.from('correios_shipments').select('id,sale_id,combined_path,status').in('id', b.shipment_ids).eq('status', 'rotulo_emitido').not('combined_path', 'is', null).order('created_at').limit(50);
+    const { data: rows, error } = await db.from('correios_shipments').select('id,sale_id,sale_ids,label_path,combined_path,nfe_chaves,status').in('id', b.shipment_ids).eq('status', 'rotulo_emitido').order('created_at').limit(50);
     if (error || !rows?.length) throw fail('Nenhuma etiqueta emitida para imprimir');
     const saleIds = rows.map((r) => r.sale_id);
     const { data: visible } = await userClient.from('pos_sales').select('id').in('id', saleIds).limit(50);
     if ((visible || []).length !== new Set(saleIds).size) throw fail('Sem acesso a algum pedido do lote', 403);
     const files: Uint8Array[] = [];
-    for (const r of rows) { const { data } = await db.storage.from(BUCKET).download(r.combined_path!); if (data) files.push(new Uint8Array(await data.arrayBuffer())); }
+    for (const r of rows) {
+      await ensureFormats(r);
+      const path = `${r.id}/${b.format === 'a4' ? 'etiqueta-a4.pdf' : 'etiqueta-10x15.pdf'}`;
+      const { data } = await db.storage.from(BUCKET).download(path);
+      if (!data) throw new Error('PDF do lote não encontrado');
+      files.push(new Uint8Array(await data.arrayBuffer()));
+    }
     const merged = await concatPdfs(files);
     const path = `lotes/${crypto.randomUUID()}.pdf`;
     const up = await db.storage.from(BUCKET).upload(path, merged, { contentType: 'application/pdf' });
     if (up.error) throw new Error('Não foi possível montar o lote');
-    return reply({ url: await sign(path), count: files.length });
+    return reply({ url: await sign(path), count: files.length, format: b.format });
   } catch (e) {
     const err = e as Error & { status?: number };
     return reply({ error: err.message || 'Falha no envio Correios' }, err.status || 400);
