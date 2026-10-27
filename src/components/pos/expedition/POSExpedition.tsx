@@ -1229,7 +1229,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
       {showRefunds && (
         <div className="flex-1 overflow-y-auto p-4">
-          <ExpRefundsPanel refreshKey={refundTick} />
+          <ExpRefundsPanel refreshKey={refundTick} storeId={storeId} />
         </div>
       )}
 

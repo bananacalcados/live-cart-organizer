@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { REFUND_REASONS, REFUND_STATUS_LABELS, type RefundListRow } from "@/lib/refunds";
 import { RefundReceiptButton } from "./RefundReceiptButton";
 import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
+import { RefundWhatsAppButton } from "./RefundWhatsAppButton";
 
 export const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const refundReasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
@@ -10,7 +11,7 @@ const paymentDate = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZon
 const GATEWAY_LABELS: Record<string, string> = { mercadopago: "Mercado Pago", appmax: "Appmax", pagarme: "Pagar.me", rinne: "Rinne", austpay: "Rinne" };
 
 /** Linha de um estorno (Expedição > ESTORNOS). Comprovante só aparece para concluído. */
-export function RefundRowCard({ r, actions, onChanged }: { r: RefundListRow; actions?: ReactNode; onChanged?: () => void }) {
+export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundListRow; actions?: ReactNode; onChanged?: () => void; storeId?: string }) {
   const forma = r.card_last4
     ? `Cartão${r.card_brand ? ` ${r.card_brand}` : ""} •••• ${r.card_last4}${r.installments && r.installments > 1 ? ` ${r.installments}x` : ""}`
     : "Pix";
@@ -38,6 +39,7 @@ export function RefundRowCard({ r, actions, onChanged }: { r: RefundListRow; act
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
+        <RefundWhatsAppButton r={r} storeId={storeId} />
         {r.status === "concluido" && <RefundReceiptButton refundId={r.id} />}
         {r.status === "concluido" && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={onChanged} />}
         {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
