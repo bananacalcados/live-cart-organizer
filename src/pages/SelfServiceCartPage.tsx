@@ -191,6 +191,17 @@ export default function SelfServiceCartPage() {
                 </span>
               </span>
             </div>
+            {/* Botões de pagamento ANTES do cronômetro de cashback: a cliente escolhe como pagar sem rolar. */}
+            {form && mode === "choose" && (
+              <div className="grid gap-2">
+                <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="mr-2 h-5 w-5" />PAGAR NO PIX</>}
+                </Button>
+                <Button className="h-14 text-base font-bold" onClick={() => setMode("card")} disabled={!installmentConfig}>
+                  <CreditCard className="mr-2 h-5 w-5" />PAGAR NO CARTÃO
+                </Button>
+              </div>
+            )}
             <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />
             {reserveLeft !== null && (
               <div className="flex items-center gap-2 rounded-2xl bg-muted p-3 text-sm">
@@ -201,16 +212,7 @@ export default function SelfServiceCartPage() {
 
             {!form ? (
               <p className="rounded-2xl border p-3 text-center text-sm text-muted-foreground">Seu cadastro ainda não chegou. Fale com a gente no WhatsApp.</p>
-            ) : mode === "choose" ? (
-              <div className="grid gap-2">
-                <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
-                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="mr-2 h-5 w-5" />PAGAR NO PIX</>}
-                </Button>
-                <Button className="h-14 text-base font-bold" onClick={() => setMode("card")} disabled={!installmentConfig}>
-                  <CreditCard className="mr-2 h-5 w-5" />PAGAR NO CARTÃO
-                </Button>
-              </div>
-            ) : mode === "pix" && pix ? (
+            ) : mode === "choose" ? null : mode === "pix" && pix ? (
               <div className="space-y-3 rounded-2xl border p-4 text-center">
                 <p className="text-lg font-bold">Pix de {brl(pix.amount)}</p>
                 {pix.base64 && <img src={`data:image/png;base64,${pix.base64.replace(/^data:image\/\w+;base64,/, "")}`} alt="QR code Pix" className="mx-auto h-56 w-56" />}

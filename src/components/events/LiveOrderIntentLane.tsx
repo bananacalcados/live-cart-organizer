@@ -51,9 +51,10 @@ function highlight(text: string) {
 export function useLiveOrderIntents(
   eventId: string | undefined,
   orderHandles: Set<string>,
-  opts?: { keepWithOrder?: boolean },
+  opts?: { keepWithOrder?: boolean; paidHandles?: Set<string> },
 ) {
   const keepWithOrder = !!opts?.keepWithOrder;
+  const paidHandles = opts?.paidHandles;
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [dismissals, setDismissals] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
@@ -100,6 +101,20 @@ export function useLiveOrderIntents(
 
   useEffect(() => {
     if (!eventId) return;
+    const applyDismissal = (usernameRaw: string | undefined, dismissedAt: string | undefined, op: string) => {
+      const username = norm(usernameRaw);
+      if (!username) return;
+      if (op === "DELETE") {
+        setDismissals((current) => {
+          const updated = new Map(current);
+          updated.delete(username);
+          return updated;
+        });
+        return;
+      }
+      if (!dismissedAt) return;
+      setDismissals((current) => new Map(current).set(username, dismissedAt));
+    };
     const ch = supabase
       .channel(`live-order-intents-${eventId}`)
       .on(
@@ -116,24 +131,25 @@ export function useLiveOrderIntents(
         (payload) => {
           const next = payload.new as { username?: string; dismissed_at?: string };
           const previous = payload.old as { username?: string };
-          if (payload.eventType === "DELETE") {
-            const username = norm(previous.username);
-            if (!username) return;
-            setDismissals((current) => {
-              const updated = new Map(current);
-              updated.delete(username);
-              return updated;
-            });
-            return;
-          }
-          const username = norm(next.username);
-          if (!username || !next.dismissed_at) return;
-          setDismissals((current) => new Map(current).set(username, next.dismissed_at as string));
+          if (payload.eventType === "DELETE") applyDismissal(previous.username, undefined, "DELETE");
+          else applyDismissal(next.username, next.dismissed_at, "UPSERT");
         },
       )
       .subscribe();
+    // O feed postgres_changes não entrega eventos neste projeto — a exclusão de
+    // cards chega pelo BROADCAST do trigger trg_notify_live_intent_dismissal
+    // (mesmo tópico dos cliques do /zap), assim o X do painel principal some
+    // na hora no painel da apresentadora.
+    const chBroadcast = supabase
+      .channel(`live_clicks_${eventId}`)
+      .on("broadcast", { event: "live_intent_dismissal" }, (msg) => {
+        const p = (msg?.payload || {}) as { username?: string; dismissed_at?: string; op?: string };
+        applyDismissal(p.username, p.dismissed_at, p.op || "UPSERT");
+      })
+      .subscribe();
     return () => {
       supabase.removeChannel(ch);
+      supabase.removeChannel(chBroadcast);
     };
   }, [eventId]);
 
@@ -149,6 +165,8 @@ export function useLiveOrderIntents(
     byUser.forEach((list, u) => {
       const hasOrder = orderHandles.has(u);
       if (hasOrder && !keepWithOrder) return;
+      // Carrinho criado E pago: sai da linha (não há mais o que cobrar na apresentadora).
+      if (paidHandles?.has(u)) return;
       const queros = list.filter((c) => QUERO_RE.test(c.comment_text || ""));
       if (queros.length === 0) return;
       const dismissedAt = dismissals.get(u);
@@ -166,7 +184,7 @@ export function useLiveOrderIntents(
       });
     });
     return out.sort((a, b) => b.lastQuero.created_at.localeCompare(a.lastQuero.created_at));
-  }, [comments, dismissals, orderHandles, keepWithOrder]);
+  }, [comments, dismissals, orderHandles, keepWithOrder, paidHandles]);
 
   const dismiss = useCallback(
     async (username: string) => {
@@ -272,7 +290,7 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
                 {c.queroCount} QUERO · {c.comments.length} comentário{c.comments.length !== 1 ? "s" : ""}
               </span>
-              {builders.length === 0 && (
+              {builders.length === 0 && !c.hasOrder && (
                 <span className={cn(
                   "mt-1 rounded px-1.5 py-0.5 text-center text-[11px] font-extrabold uppercase",
                   mins >= 5 ? "bg-destructive/15 text-destructive" : "bg-amber-400/20 text-amber-700 dark:text-amber-300",

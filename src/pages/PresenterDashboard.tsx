@@ -86,7 +86,17 @@ export default function PresenterDashboard() {
     ),
     [orders],
   );
-  const orderIntents = useLiveOrderIntents(eventId, orderHandles, { keepWithOrder: true });
+  // Quem já PAGOU sai da linha PEDIDOS (carrinho pago não precisa mais de cobrança).
+  const paidHandles = useMemo(
+    () => new Set(
+      orders
+        .filter((order) => order.is_paid)
+        .map((order) => order.customer_name.replace(/^@+/, "").trim().toLowerCase())
+        .filter((handle) => handle && handle !== "cliente"),
+    ),
+    [orders],
+  );
+  const orderIntents = useLiveOrderIntents(eventId, orderHandles, { keepWithOrder: true, paidHandles });
 
   const suffix8 = (p?: string | null) => {
     const d = (p || "").replace(/\D/g, "");
@@ -311,7 +321,9 @@ export default function PresenterDashboard() {
   }, [loadAlerts, loadOrders, loadNoClickLeads]);
 
   // Atualiza os cards quando alguém clica no link /zap (só cliques deste evento;
-  // recargas agrupadas em no máximo 1 a cada 10 s).
+  // recargas agrupadas em no máximo 1 a cada 10 s). O feed postgres_changes não
+  // entrega eventos neste projeto — o aviso chega pelo BROADCAST do trigger
+  // (mesmo tópico usado pelo painel principal), com polling leve de reserva.
   useEffect(() => {
     if (!eventId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -334,7 +346,24 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, schedule)
       .subscribe();
-    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+    const broadcast = supabase
+      .channel(`live_clicks_${eventId}`)
+      .on("broadcast", { event: "live_click" }, schedule)
+      .subscribe();
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") void loadNoClickLeads();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadNoClickLeads();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      supabase.removeChannel(channel);
+      supabase.removeChannel(broadcast);
+    };
   }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
@@ -359,9 +388,15 @@ export default function PresenterDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [eventId, playNotificationSound]);
 
-  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar)
+  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar).
+  // Pedido novo/pago/cancelado também muda a linha "Ainda não clicaram" — recarga agrupada (máx. 1 a cada 10 s).
   useEffect(() => {
     if (!eventId) return;
+    let leadsTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleLeads = () => {
+      if (leadsTimer) return;
+      leadsTimer = setTimeout(() => { leadsTimer = null; void loadNoClickLeads(); }, 10_000);
+    };
     const channel = supabase
       .channel(`presenter-orders-${eventId}`)
       .on("postgres_changes", {
@@ -371,11 +406,12 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
         void applyOrderChange(payload);
+        scheduleLeads();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, applyOrderChange]);
+    return () => { if (leadsTimer) clearTimeout(leadsTimer); supabase.removeChannel(channel); };
+  }, [eventId, applyOrderChange, loadNoClickLeads]);
 
   const markAsRead = async (alertId: string) => {
     await supabase.from("livete_presenter_alerts").update({ is_read: true }).eq("id", alertId);
