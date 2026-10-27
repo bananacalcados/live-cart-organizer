@@ -100,6 +100,15 @@ Deno.serve(async (req) => {
     };
     const withUrls = async (s: any) => ({ ...s, request: undefined, response: undefined, combined_url: await sign(s.combined_path), label_url: await sign(s.label_path) });
 
+    if (b.action === 'contract_services') {
+      const settings = await loadCorreiosSettings(db);
+      const auth = await getCorreiosToken(db, { settings });
+      if (!settings.contrato) throw fail('Contrato não configurado');
+      const cf = createCorreiosFetch(auth.settings, auth.token);
+      const data: any = await cf(`/contrato/v1/contratos/${encodeURIComponent(settings.contrato)}`, { method: 'GET' });
+      return reply({ contrato: settings.contrato, servicos: data?.servicos || data?.servico || data });
+    }
+
     if (b.action === 'list') {
       const { data, error } = await db.from('correios_shipments').select('id,sale_id,sale_ids,codigo_objeto,servico_nome,status,created_at,label_generated_at,error_message').overlaps('sale_ids', b.sale_ids).not('status', 'in', ACTIVE).order('created_at', { ascending: false }).limit(200);
       if (error) throw new Error('Não foi possível listar os envios');
