@@ -205,7 +205,8 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           cep: draft.cep, address: draft.address, address_number: draft.address_number,
           complement: draft.complement, neighborhood: draft.neighborhood, city: draft.city, state: draft.state,
         } : null;
-        const addressSource = (draftReg && cleanValue(draftReg.address)) ? draftReg : registration || posCustomer;
+        const unifiedFull = unifiedFullRes.data as any;
+        const addressSource = [draftReg, registration, posCustomer, unifiedFull].find((src) => cleanValue(src?.address)) || registration || posCustomer;
         const shipping = expedition.find((item) => item.shipping_address)?.shipping_address;
         const address = addressSource?.address
           ? [addressSource.address, addressSource.address_number, addressSource.complement, addressSource.neighborhood, addressSource.city && addressSource.state ? `${addressSource.city}/${addressSource.state}` : addressSource.city || addressSource.state, addressSource.cep].filter(Boolean).join(", ")
@@ -214,9 +215,9 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             : undefined;
         const cashback = ((cashbackRes.data || []) as any[])[0];
         const sourceCustomer = customers.find((item) => item.id === order.customer_id) || customers[0];
-        const name = cleanValue(draftReg?.full_name) || cleanValue(registration?.full_name) || cleanValue(posCustomer?.name) || cleanValue(order.customer?.full_name) || cleanValue(sourceCustomer?.full_name) || cleanValue(`${unified?.first_name || ""} ${unified?.last_name || ""}`);
-        const cpf = cleanValue(draftReg?.cpf) || cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
-        const draftPhone = cleanValue(draftReg?.whatsapp);
+        const name = cleanValue(draftReg?.full_name) || cleanValue(registration?.full_name) || cleanValue(posCustomer?.name) || cleanValue(order.customer?.full_name) || cleanValue(sourceCustomer?.full_name) || cleanValue(unifiedFull?.name) || cleanValue(`${unified?.first_name || ""} ${unified?.last_name || ""}`);
+        const cpf = cleanValue(draftReg?.cpf) || cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(unifiedFull?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
+        const draftPhone = cleanValue(draftReg?.whatsapp) || cleanValue(unifiedFull?.phone_e164);
 
         if (!cancelled) {
           setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).preselected_installments ?? null])));
