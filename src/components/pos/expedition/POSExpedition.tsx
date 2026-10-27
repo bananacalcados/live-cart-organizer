@@ -45,7 +45,7 @@ import { useCanRefund } from "@/hooks/useCanRefund";
 import { freightDate, freightCall } from "@/lib/saleFreight";
 import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
 import { Printer } from "lucide-react";
-import { getCorreiosLabelFormat, saveCorreiosLabelFormat } from '@/lib/correiosLabelFormat';
+import { getCorreiosLabelFormat, saveCorreiosLabelFormat, normalizeCorreiosLabelFormat, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 
@@ -84,7 +84,7 @@ const isWaitingIncomplete = (o: ExpOrder) =>
   o.items.some((it) => pickedQty(it) < (Number(it.quantity) || 0));
 
 export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
-  const [batchFormat, setBatchFormat] = useState<'10x15' | 'a4'>(() => getCorreiosLabelFormat() === 'a4' ? 'a4' : '10x15');
+  const [batchFormat, setBatchFormat] = useState<CorreiosLabelFormat>(getCorreiosLabelFormat);
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
@@ -1136,9 +1136,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             {selected.size > 0 ? "Limpar seleção" : "Selecionar todos"}
           </Button>
           {stage === 'preparacao' && <div className="flex flex-wrap items-center gap-2">
-            <Select value={batchFormat} onValueChange={(value) => { const f = value === 'a4' ? 'a4' : '10x15'; setBatchFormat(f); saveCorreiosLabelFormat(f); }}>
-              <SelectTrigger aria-label="Formato das etiquetas Correios" className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="10x15">10×15 (térmica)</SelectItem><SelectItem value="a4">Folha A4</SelectItem></SelectContent>
+            <Select value={batchFormat} onValueChange={(value) => { const f = normalizeCorreiosLabelFormat(value); setBatchFormat(f); saveCorreiosLabelFormat(f); }}>
+              <SelectTrigger aria-label="Formato das etiquetas Correios" className="w-64"><SelectValue /></SelectTrigger>
+              <SelectContent>{CORREIOS_LABEL_FORMATS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
             </Select>
             <Button size="sm" disabled={printingBatch} onClick={printCorreiosBatch}><Printer className="h-4 w-4 mr-1" />Imprimir etiquetas Correios do dia</Button>
             <p className="w-full text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real).</p>
