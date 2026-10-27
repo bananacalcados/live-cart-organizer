@@ -86,7 +86,17 @@ export default function PresenterDashboard() {
     ),
     [orders],
   );
-  const orderIntents = useLiveOrderIntents(eventId, orderHandles, { keepWithOrder: true });
+  // Quem já PAGOU sai da linha PEDIDOS (carrinho pago não precisa mais de cobrança).
+  const paidHandles = useMemo(
+    () => new Set(
+      orders
+        .filter((order) => order.is_paid)
+        .map((order) => order.customer_name.replace(/^@+/, "").trim().toLowerCase())
+        .filter((handle) => handle && handle !== "cliente"),
+    ),
+    [orders],
+  );
+  const orderIntents = useLiveOrderIntents(eventId, orderHandles, { keepWithOrder: true, paidHandles });
 
   const suffix8 = (p?: string | null) => {
     const d = (p || "").replace(/\D/g, "");
