@@ -3,7 +3,7 @@ import { PDFDocument } from 'pdf-lib';
 import { buildLabelFormats, buildThermalLabel, concatPdfs, THERMAL } from '../../supabase/functions/_shared/correios-label-pdf';
 import type { NfeSummary } from '../../supabase/functions/_shared/correios-prepost-domain';
 const nfe: NfeSummary = { chave: '31261016941125000156550010000025561036850200', numero: '2556', serie: '1', emissao: '2026-10-27T10:00:00-03:00', protocolo: '131260000000001', emitNome: 'Banana Calçados', emitCnpj: '16941125000156', emitIe: '123', emitCidade: 'Governador Valadares', emitUf: 'MG', destNome: 'Maria de Teste', destDoc: '12345678909', destEndereco: 'Rua A, 10, Centro, São Paulo/SP - 01310100', valorTotal: 159.99, itens: [{ descricao: 'Tênis de teste', qtd: 1, valor: 159.99 }] };
-async function label() { const d = await PDFDocument.create(); d.addPage([THERMAL.w, THERMAL.h]); return d.save(); }
+async function label() { const d = await PDFDocument.create(); d.addPage([THERMAL.w, THERMAL.h]).drawText('Correios'); return d.save(); }
 describe('Formatos Correios', () => {
   it('térmica tem exatamente 100×150 mm e uma DANFE por NF-e', async () => {
     const f = await buildLabelFormats(await label(), [nfe, { ...nfe, numero: '2557' }]);
@@ -26,7 +26,7 @@ describe('Formatos Correios', () => {
     d.getPages().forEach((p) => expect(p.getSize()).toEqual({ width: THERMAL.w, height: THERMAL.h }));
   });
   it('recorta um A4 que tenha CropBox térmico sem distorcer o rótulo', async () => {
-    const d = await PDFDocument.create(); const p = d.addPage([595.28, 841.89]); p.setCropBox(0, 400, THERMAL.w, THERMAL.h);
+    const d = await PDFDocument.create(); const p = d.addPage([595.28, 841.89]); p.drawText('Correios'); p.setCropBox(0, 400, THERMAL.w, THERMAL.h);
     expect((await PDFDocument.load(await buildThermalLabel(await d.save()))).getPage(0).getWidth()).toBeCloseTo(THERMAL.w, 8);
   });
   it('não imprime A4 como térmica com recorte adivinhado', async () => {

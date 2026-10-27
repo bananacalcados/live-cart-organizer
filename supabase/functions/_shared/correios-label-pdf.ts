@@ -84,19 +84,14 @@ function drawThermalDanfe(page: PDFPage, n: NfeSummary, font: PDFFont, bold: PDF
   const text = (s: string, size = 7, strong = false) => { page.drawText(safe(s), { x, y, size, font: strong ? bold : font, color: rgb(0, 0, 0) }); y -= size + 3; };
   const wrap = (s: string, maxLines = 2, strong = false) => {
     const words = safe(s).split(/\s+/); let row = '', lines = 0;
-    for (const word of words) {
+    while (words.length) {
+      if (lines === maxLines - 1) { text(fit([row, ...words].filter(Boolean).join(' '), font, 7, w), 7, strong); return; }
+      const word = words.shift() || '';
       const next = row ? `${row} ${word}` : word;
-      if (font.widthOfTextAtSize(next, 7) > w && row) {
-        text(row, 7, strong); lines++; row = word;
-        if (lines >= maxLines - 1) break;
-      } else row = next;
+      if (font.widthOfTextAtSize(next, 7) > w && row) { text(row, 7, strong); lines++; row = word; }
+      else row = next;
     }
-    // Long final line is explicitly truncated instead of shrinking below 7pt.
-    const consumed = words.slice(0, words.indexOf(row.split(' ')[0])).join(' ');
-    if (lines >= maxLines - 1) {
-      const remaining = safe(s).slice(consumed.length).trim();
-      text(fit(remaining || row, font, 7, w), 7, strong);
-    } else if (row) text(fit(row, font, 7, w), 7, strong);
+    if (row) text(fit(row, font, 7, w), 7, strong);
   };
   text('DANFE Simplificado - Etiqueta', 10, true);
   text('CHAVE DE ACESSO', 7, true);
