@@ -14,6 +14,7 @@ import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import type { DbOrder } from "@/types/database";
 import { loadMpSalePayments } from "@/lib/mpSalePayment";
+import { selfServiceDraftPhoneKey } from "@/lib/selfServiceStaff";
 
 interface Props {
   order: DbOrder;
@@ -51,6 +52,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   const suffix = phone.replace(/\D/g, "").slice(-8);
   const [data, setData] = useState<POSCustomerPanelData | null>(null);
   const [unifiedId, setUnifiedId] = useState<string | undefined>();
+  const [draftPhone, setDraftPhone] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [liveConfigs, setLiveConfigs] = useState<Record<string, any>>({});
   const { byPhone: cbByPhone, byCpf: cbByCpf, byHandle: cbByHandle, refresh: refreshChargebacks } = useChargebackRegistry();
@@ -67,7 +69,30 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         if (handle) customerFilters.push(`instagram_handle.ilike.${handle}`);
         if (suffix) customerFilters.push(`whatsapp.ilike.%${suffix}%`);
 
-        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes] = await Promise.all([
+        // Cadastro/rascunho do autoatendimento (mesma fonte da aba Ficha):
+        // sem ele, quem se cadastrou pelo link da live não aparece aqui.
+        const isRealOrder = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(order.id));
+        const draftKey = selfServiceDraftPhoneKey(phone);
+        let selfServiceQuery = null as any;
+        if (order.event_id && (isRealOrder || draftKey)) {
+          selfServiceQuery = supabase
+            .from("live_selfservice_accesses" as any)
+            .select("form_draft,entered_phone")
+            .eq("event_id", order.event_id);
+          selfServiceQuery = isRealOrder
+            ? selfServiceQuery.contains("order_ids", [order.id])
+            : selfServiceQuery.eq("phone_key", draftKey);
+          selfServiceQuery = selfServiceQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        }
+
+        // Cadastro unificado (CRM) — mesma fonte que a Ficha usa no passo 3.
+        // Sem ele, quem se cadastrou pelo link da live (sem pedido pago ainda)
+        // aparecia na Ficha mas ficava em branco aqui no Histórico.
+        const unifiedOrParts: string[] = [];
+        if (handle) unifiedOrParts.push(`instagram_handle.ilike.${handle}`);
+        if (suffix.length === 8) unifiedOrParts.push(`phone_suffix8.eq.${suffix}`);
+
+        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes, selfServiceRes, unifiedFullRes] = await Promise.all([
           customerFilters.length
             ? supabase.from("customers").select("id,instagram_handle,whatsapp,full_name,tags").or(customerFilters.join(",")).limit(10)
             : Promise.resolve({ data: [] as any[] }),
@@ -83,6 +108,10 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           suffix
             ? supabase.from("pos_sales").select("id,sale_type,status,total,tracking_code,tiny_order_number,nfce_number,invoice_number,customer_cpf,created_at,store_id,paid_at,shipped_at,mercadopago_payment_id").eq("phone_suffix8", suffix).order("created_at", { ascending: false }).limit(20)
             : Promise.resolve({ data: [] as any[] }),
+          selfServiceQuery ?? Promise.resolve({ data: null as any }),
+          unifiedOrParts.length
+            ? supabase.from("customers_unified").select("name,cpf,email,phone_e164,cep,address,address_number,complement,neighborhood,city,state").or(unifiedOrParts.join(",")).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+            : Promise.resolve({ data: null as any }),
         ]);
 
         const customers = (customerRes.data || []) as any[];
@@ -166,7 +195,18 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           modality: "Online",
           kind: "expedition",
         }));
-        const addressSource = registration || posCustomer;
+        // Cadastro do autoatendimento (form_draft) tem prioridade, como na Ficha:
+        // é o que a cliente acabou de digitar na página da live.
+        const selfService = selfServiceRes.data as any;
+        const draft = (selfService?.form_draft || null) as Record<string, string> | null;
+        const draftReg = draft ? {
+          full_name: draft.full_name, cpf: draft.cpf, email: draft.email,
+          whatsapp: draft.whatsapp || selfService?.entered_phone,
+          cep: draft.cep, address: draft.address, address_number: draft.address_number,
+          complement: draft.complement, neighborhood: draft.neighborhood, city: draft.city, state: draft.state,
+        } : null;
+        const unifiedFull = unifiedFullRes.data as any;
+        const addressSource = [draftReg, registration, posCustomer, unifiedFull].find((src) => cleanValue(src?.address)) || registration || posCustomer;
         const shipping = expedition.find((item) => item.shipping_address)?.shipping_address;
         const address = addressSource?.address
           ? [addressSource.address, addressSource.address_number, addressSource.complement, addressSource.neighborhood, addressSource.city && addressSource.state ? `${addressSource.city}/${addressSource.state}` : addressSource.city || addressSource.state, addressSource.cep].filter(Boolean).join(", ")
@@ -175,18 +215,20 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             : undefined;
         const cashback = ((cashbackRes.data || []) as any[])[0];
         const sourceCustomer = customers.find((item) => item.id === order.customer_id) || customers[0];
-        const name = cleanValue(registration?.full_name) || cleanValue(posCustomer?.name) || cleanValue(order.customer?.full_name) || cleanValue(sourceCustomer?.full_name) || cleanValue(`${unified?.first_name || ""} ${unified?.last_name || ""}`);
-        const cpf = cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
+        const name = cleanValue(draftReg?.full_name) || cleanValue(registration?.full_name) || cleanValue(posCustomer?.name) || cleanValue(order.customer?.full_name) || cleanValue(sourceCustomer?.full_name) || cleanValue(unifiedFull?.name) || cleanValue(`${unified?.first_name || ""} ${unified?.last_name || ""}`);
+        const cpf = cleanValue(draftReg?.cpf) || cleanValue(registration?.cpf) || cleanValue(posCustomer?.cpf) || cleanValue(unifiedFull?.cpf) || cleanValue(posSales.find((item) => item.customer_cpf)?.customer_cpf) || cleanValue(expedition.find((item) => item.customer_cpf)?.customer_cpf);
+        const draftPhone = cleanValue(draftReg?.whatsapp) || cleanValue(unifiedFull?.phone_e164);
 
         if (!cancelled) {
           setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).preselected_installments ?? null])));
           setUnifiedId(unified?.id || undefined);
+          setDraftPhone(draftPhone);
           setData({
             name,
             instagram: cleanHandle(sourceCustomer?.instagram_handle || unified?.instagram_handle || handle) || undefined,
             tags: sourceCustomer?.tags || [],
             cpf,
-            email: cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email),
+            email: cleanValue(draftReg?.email) || cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email) || cleanValue(unifiedFull?.email),
             address: cleanValue(address),
             cashback: cashback && Number(cashback.total_available) > 0 ? {
               totalAvailable: Number(cashback.total_available), count: Number(cashback.cashback_count) || 0,
@@ -220,7 +262,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   if (loading && !data) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   return <POSCustomerOrdersPanel
-    phone={phone || "Não informado"}
+    phone={phone || draftPhone || "Não informado"}
     customerName={data?.name || order.customer?.full_name || (handle ? `@${handle}` : "Cliente")}
     data={data}
     statusLabels={statusLabels}
