@@ -35,7 +35,7 @@ export function dataMatrixProblems(s: string, x: { objeto: string; cepDestino: s
 }
 
 async function inflate(bytes: Uint8Array) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 /** Reads the DataMatrix from the official label's 1-bit images (the label embeds it as a bitmap). */
