@@ -14,6 +14,7 @@ const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
   z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50) }),
+  z.object({ action: z.literal('contract_services') }),
 ]);
 const SALE_COLS = 'id,customer_name,customer_cpf,customer_phone,customer_email,shipping_address,is_store_pickup,status,status_cancelamento,expedition_group_id,expedition_stage,expedition_deleted_at,shipping_type,shipping_carrier';
 const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -99,6 +100,15 @@ Deno.serve(async (req) => {
     };
     const withUrls = async (s: any) => ({ ...s, request: undefined, response: undefined, combined_url: await sign(s.combined_path), label_url: await sign(s.label_path) });
 
+    if (b.action === 'contract_services') {
+      const settings = await loadCorreiosSettings(db);
+      const auth = await getCorreiosToken(db, { settings });
+      if (!settings.contrato) throw fail('Contrato não configurado');
+      const cf = createCorreiosFetch(auth.settings, auth.token);
+      const data: any = await cf(`/contrato/v1/contratos/${encodeURIComponent(settings.contrato)}`, { method: 'GET' });
+      return reply({ contrato: settings.contrato, servicos: data?.servicos || data?.servico || data });
+    }
+
     if (b.action === 'list') {
       const { data, error } = await db.from('correios_shipments').select('id,sale_id,sale_ids,codigo_objeto,servico_nome,status,created_at,label_generated_at,error_message').overlaps('sale_ids', b.sale_ids).not('status', 'in', ACTIVE).order('created_at', { ascending: false }).limit(200);
       if (error) throw new Error('Não foi possível listar os envios');
@@ -169,7 +179,8 @@ Deno.serve(async (req) => {
         await db.from('correios_shipments').update(patch).eq('id', shipment.id);
         shipment = { ...shipment, ...patch };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Correios: falha ao criar pré-postagem';
+        let msg = e instanceof Error ? e.message : 'Correios: falha ao criar pré-postagem';
+        if (/serviço inexistente|servico inexistente|GTW-003/i.test(msg)) msg = `Os Correios informaram que o serviço ${option.service || option.service_code} não está habilitado no contrato ${settings.contrato || ''}. Habilite esse serviço com o seu gerente de conta dos Correios ou gere a etiqueta pelo outro serviço disponível.`;
         await db.from('correios_shipments').update({ status: 'erro', error_message: msg }).eq('id', shipment.id);
         throw fail(msg, 502);
       }
