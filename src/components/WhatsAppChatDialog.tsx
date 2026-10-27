@@ -18,8 +18,18 @@ import type { DbOrder } from "@/types/database";
 import { OrderDialogDb } from "./OrderDialogDb";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { LiveCustomerHistoryPanel } from "./events/LiveCustomerHistoryPanel";
+import { POSProductCatalogSender } from "./pos/POSProductCatalogSender";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
+import { BookOpen } from "lucide-react";
 
-type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "gift" | "support" | null;
+function LiveCatalogPanel({ phone, onClose }: { phone: string; onClose: () => void }) {
+  const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
+  const num = boundNumber || effectiveNumber;
+  const provider = (num?.provider || "meta") as "meta" | "zapi" | "uazapi" | "wasender";
+  return <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) onClose(); }} storeId="" phone={phone} sendVia={provider} selectedNumberId={boundNumberId || effectiveNumberId} />;
+}
+
+type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "catalog" | "gift" | "support" | null;
 
 interface WhatsAppChatDialogProps {
   open: boolean;
@@ -138,6 +148,7 @@ export function WhatsAppChatDialog({
       return <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
     }
     if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} />;
+    if (activePanel === "catalog" && order.whatsapp) return <LiveCatalogPanel phone={order.whatsapp} onClose={close} />;
     if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
     return null;
   };
@@ -183,6 +194,12 @@ export function WhatsAppChatDialog({
                     if (!order.whatsapp) return;
                      togglePanel("crossell");
                   }}
+                />
+                <SidebarButton
+                  icon={BookOpen}
+                  label="Catálogo"
+                  tone={activePanel === "catalog" ? "accent" : "default"}
+                  onClick={() => { if (order.whatsapp) togglePanel("catalog"); }}
                 />
                 <SidebarButton
                   icon={Gift}
