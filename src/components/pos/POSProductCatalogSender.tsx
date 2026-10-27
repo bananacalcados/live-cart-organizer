@@ -114,6 +114,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
   };
 
   const loadPricingRules = async () => {
+    if (!storeId) return;
     const { data } = await supabase
       .from("pos_product_pricing_rules" as any)
       .select("pickup_discount_percent, delivery_fee, physical_store_markup_percent")
