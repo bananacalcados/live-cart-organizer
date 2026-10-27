@@ -640,7 +640,14 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     }
   };
 
-  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: ReactNode) =>
+  const resendRegisterDm = async (orderId: string) => {
+    const { data, error } = await supabase.rpc("selfservice_resend_register_dm", { p_order_id: orderId });
+    const r = data as { ok?: boolean; error?: string } | null;
+    if (error || !r?.ok) toast.error(r?.error || "Não foi possível reenviar agora.");
+    else toast.success("Direct com link de cadastro na fila de envio.");
+  };
+
+  const renderRow = (list: CardEntry[], paidCard: boolean, emptyText: string, extra?: ReactNode, dmResend = false) =>
     list.length === 0 && !extra ? (
       <div className="text-xs text-muted-foreground py-2 px-1">{emptyText}</div>
     ) : (
@@ -732,6 +739,16 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                     <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
                   </button>
 
+                  {dmResend && order.customer?.instagram_handle && !(order as DbOrder & { registered_at?: string | null }).registered_at && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void resendRegisterDm(order.id); }}
+                      title="Reenviar no direct o link de cadastro (máx. 2 vezes, 10 min entre envios)"
+                      className="absolute bottom-1.5 right-1.5 z-10 rounded-full bg-pink-600 px-2 py-0.5 text-[9px] font-bold uppercase text-white hover:bg-pink-500"
+                    >
+                      Reenviar direct
+                    </button>
+                  )}
                   <div className="flex items-center gap-1.5 min-w-0 pr-7">
                     <span
                       className={cn(
@@ -1006,7 +1023,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
               tone="text-orange-500"
               icon={<AlertCircle className="h-3.5 w-3.5 text-orange-500" />}
             >
-              {renderRow(laneIncomplete, false, "Nenhum pedido incompleto neste evento.")}
+              {renderRow(laneIncomplete, false, "Nenhum pedido incompleto neste evento.", undefined, true)}
             </LiveLaneSection>
 
             <LiveLaneSection
