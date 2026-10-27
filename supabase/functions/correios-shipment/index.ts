@@ -179,7 +179,8 @@ Deno.serve(async (req) => {
         await db.from('correios_shipments').update(patch).eq('id', shipment.id);
         shipment = { ...shipment, ...patch };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Correios: falha ao criar pré-postagem';
+        let msg = e instanceof Error ? e.message : 'Correios: falha ao criar pré-postagem';
+        if (/serviço inexistente|servico inexistente|GTW-003/i.test(msg)) msg = `Os Correios informaram que o serviço ${option.service || option.service_code} não está habilitado no contrato ${settings.contrato || ''}. Habilite esse serviço com o seu gerente de conta dos Correios ou gere a etiqueta pelo outro serviço disponível.`;
         await db.from('correios_shipments').update({ status: 'erro', error_message: msg }).eq('id', shipment.id);
         throw fail(msg, 502);
       }
