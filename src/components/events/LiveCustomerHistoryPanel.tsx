@@ -211,6 +211,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         if (!cancelled) {
           setLiveConfigs(Object.fromEntries(liveOrders.map((item) => [item.id, (item as any).preselected_installments ?? null])));
           setUnifiedId(unified?.id || undefined);
+          setDraftPhone(draftPhone);
           setData({
             name,
             instagram: cleanHandle(sourceCustomer?.instagram_handle || unified?.instagram_handle || handle) || undefined,
