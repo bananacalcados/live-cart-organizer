@@ -1,3 +1,4 @@
+import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -718,9 +719,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     }
     const { error } = await supabase.from("pos_sales").update({
       expedition_stage: target,
-      expedition_waiting_products: true,
     } as any).in("id", list.map((o) => o.id));
     if (error) throw error;
+    await syncWaitingProductsFlag(list.map((o) => o.id));
     toast.success(`${items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} produto(s) movido(s)`);
   };
 
@@ -1670,8 +1671,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                    }));
                                    await supabase.from("pos_sales").update({
                                      expedition_stage: "conferencia",
-                                     expedition_waiting_products: true,
                                    } as any).eq("id", o.id);
+                                   await syncWaitingProductsFlag([o.id]);
                                    await load();
                                  } catch (e: any) {
                                    toast.error(e.message || "Erro ao avançar produto");
