@@ -110,10 +110,10 @@ function fitLines(text: string, font: PDFFont, size: number, min: number, max: n
 function drawNfeBand(page: PDFPage, n: NfeSummary, bold: PDFFont, font: PDFFont, topMm: number) {
   const y = (mm: number) => LABEL.h - mm * MM;
   page.drawText(safe(`NF-e nº ${n.numero}  Série ${n.serie}`), { x: 4 * MM, y: y(topMm + 3.2), size: 8, font: bold, color: BLACK });
-  if (/^\d{44}$/.test(n.chave)) drawLinear(page, 'code128', n.chave, LABEL.w / 2, y(topMm + 17.5), 13 * MM, 0.3 * MM);
+  if (/^\d{44}$/.test(n.chave)) drawLinear(page, 'code128', n.chave, LABEL.w / 2, y(topMm + 17.8), 14 * MM, 0.3 * MM);
   const key = groupChave(n.chave);
   const kw = font.widthOfTextAtSize(key, 7.5);
-  page.drawText(key, { x: (LABEL.w - kw) / 2, y: y(topMm + 20.6), size: 7.5, font, color: BLACK });
+  page.drawText(key, { x: (LABEL.w - kw) / 2, y: y(topMm + 20.9), size: 7.5, font, color: BLACK });
 }
 
 export async function buildOwnLabel(d: OwnLabelData) {

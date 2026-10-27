@@ -5,15 +5,16 @@ import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch, quoteCorre
 import { localDelivery, buildPackage } from '../_shared/freight-domain.ts';
 import { buildPrePostagemPayload, resolveLabelSender, parseNfeXml, correiosTrackingUrl, extractPdfBase64, saleAddress, type NfeSummary } from '../_shared/correios-prepost-domain.ts';
 import { buildLabelFormats, concatPdfs } from '../_shared/correios-label-pdf.ts';
+import { buildOwnLabel, ownLabelsToA4, readOfficialDataMatrix, dataMatrixProblems } from '../_shared/correios-own-label.ts';
 
 const BUCKET = 'correios-labels';
 const ACTIVE = '(cancelada,erro)';
 const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional() }),
-  z.object({ action: z.literal('label'), shipment_id: z.string().uuid() }),
+  z.object({ action: z.literal('label'), shipment_id: z.string().uuid(), format: z.enum(['propria_10x15', 'propria_a4', 'oficial_10x15', 'oficial_a4']).optional() }),
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
-  z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50), format: z.enum(['10x15', 'a4']).default('10x15') }),
+  z.object({ action: z.literal('batch_labels'), shipment_ids: z.array(z.string().uuid()).min(1).max(50), format: z.enum(['propria_10x15', 'propria_a4', 'oficial_10x15', 'oficial_a4', '10x15', 'label10x15', 'a4']).default('propria_10x15') }),
   z.object({ action: z.literal('contract_services') }),
 ]);
 const SALE_COLS = 'id,customer_name,customer_cpf,customer_phone,customer_email,shipping_address,is_store_pickup,status,status_cancelamento,expedition_group_id,expedition_stage,expedition_deleted_at,shipping_type,shipping_carrier';
@@ -51,30 +52,68 @@ Deno.serve(async (req) => {
       const { error } = await db.from('pos_sales').update({ tracking_code: code, tracking_carrier: carrier, tracking_url: correiosTrackingUrl(code) }).in('id', shipment.sale_ids);
       if (error) throw new Error('Etiqueta emitida, mas não foi possível gravar o rastreio no pedido');
     };
-    const buildCombined = async (shipment: any, label: Uint8Array) => {
+    const shipmentNfes = async (shipment: any) => {
       // Resolve the exact original invoices, not whichever invoice was issued most recently.
       const { data: invoices, error } = await db.from('fiscal_documents').select('chave_acesso,numero,serie,protocolo,xml_content').in('chave_acesso', shipment.nfe_chaves).in('pos_sale_id', shipment.sale_ids).eq('modelo', 55).eq('status', 'authorized').limit(200);
       if (error) throw new Error('Não foi possível ler as NF-e deste envio');
       const nfes = shipment.nfe_chaves.map((key: string) => invoices?.find((d: any) => d.chave_acesso === key)).filter(Boolean).map(summarize);
       if (nfes.length !== shipment.nfe_chaves.length) throw new Error('NF-e original do envio não encontrada');
+      return nfes as NfeSummary[];
+    };
+    const save = async (path: string, pdf: Uint8Array) => {
+      const up = await db.storage.from(BUCKET).upload(path, pdf, { contentType: 'application/pdf', upsert: true });
+      if (up.error) throw new Error(`Não foi possível salvar ${path.split('/').pop()}`);
+    };
+    // ERP label: official DataMatrix payload copied verbatim (it carries a Correios token), larger fonts + NF-e band.
+    const buildOwn = async (shipment: any, label: Uint8Array, nfes?: NfeSummary[]) => {
+      const req = shipment.request || {}, dest = req.destinatario || {}, rem = req.remetente || {};
+      if (!shipment.codigo_objeto) throw new Error('Código do objeto ainda não disponível');
+      let dm = shipment.response?.datamatrix as string | undefined;
+      if (!dm) {
+        dm = await readOfficialDataMatrix(label);
+        const response = { ...(shipment.response || {}), datamatrix: dm };
+        await db.from('correios_shipments').update({ response }).eq('id', shipment.id);
+        shipment.response = response;
+      }
+      const bad = dataMatrixProblems(dm, { objeto: shipment.codigo_objeto, cepDestino: dest.endereco?.cep, cepOrigem: rem.endereco?.cep });
+      if (bad.length) throw new Error(`DataMatrix do rótulo oficial não confere (${bad.join(', ')})`);
+      const settings = await loadCorreiosSettings(db);
+      const phone = (p: any) => `${p.dddCelular || p.dddTelefone || ''}${p.celular || p.telefone || ''}`;
+      const pdf = await buildOwnLabel({
+        dataMatrix: dm, objeto: shipment.codigo_objeto, servico: shipment.servico_nome || (shipment.servico_codigo === '03220' ? 'SEDEX' : 'PAC'),
+        contrato: String(settings.contrato || ''), cartao: String(settings.cartao_postagem || req.numeroCartaoPostagem || ''), pesoG: Number(req.pesoInformado || shipment.package?.peso_g || 0), volume: '1/1', reference: shipment.sale_id.slice(0, 8),
+        dest: { nome: dest.nome || '', ...(dest.endereco || {}) }, rem: { nome: rem.nome || '', ...(rem.endereco || {}), cnpj: rem.cpfCnpj || '', telefone: phone(rem) },
+        nfes: nfes || await shipmentNfes(shipment),
+      });
+      await save(`${shipment.id}/etiqueta-propria-10x15.pdf`, pdf);
+      await save(`${shipment.id}/etiqueta-propria-a4.pdf`, await ownLabelsToA4([pdf]));
+      return pdf;
+    };
+    const buildCombined = async (shipment: any, label: Uint8Array) => {
+      const nfes = await shipmentNfes(shipment);
+      // The official formats never depend on the ERP label: its failure is recorded, not thrown.
+      try { await buildOwn(shipment, label, nfes); } catch (e) { console.error('own label', e instanceof Error ? e.message : e); }
       const pdfs = await buildLabelFormats(label, nfes);
       await Promise.all([
         ['etiqueta-10x15.pdf', pdfs.thermal], ['rotulo-10x15.pdf', pdfs.thermalLabel], ['etiqueta-a4.pdf', pdfs.a4], ['etiqueta-conjunta.pdf', pdfs.a4],
-      ].map(async ([name, pdf]) => {
-        const up = await db.storage.from(BUCKET).upload(`${shipment.id}/${name}`, pdf as Uint8Array, { contentType: 'application/pdf', upsert: true });
-        if (up.error) throw new Error(`Não foi possível salvar ${name}`);
-      }));
+      ].map(([name, pdf]) => save(`${shipment.id}/${name}`, pdf as Uint8Array)));
       return `${shipment.id}/etiqueta-conjunta.pdf`;
     };
-    const ensureFormats = async (shipment: any) => {
-      const names = ['etiqueta-10x15.pdf', 'rotulo-10x15.pdf', 'etiqueta-a4.pdf'];
-      const { data: objects, error } = await db.storage.from(BUCKET).list(shipment.id, { limit: 10 });
+    const ensureFormats = async (shipment: any, needOwn = false) => {
+      const names = ['etiqueta-10x15.pdf', 'rotulo-10x15.pdf', 'etiqueta-a4.pdf'], own = ['etiqueta-propria-10x15.pdf', 'etiqueta-propria-a4.pdf'];
+      const { data: objects, error } = await db.storage.from(BUCKET).list(shipment.id, { limit: 20 });
       if (error) throw new Error('Não foi possível conferir os PDFs salvos');
-      if (names.every((name) => objects?.some((o: any) => o.name === name))) return shipment;
+      const has = (name: string) => !!objects?.some((o: any) => o.name === name);
+      const officialOk = names.every(has), ownOk = own.every(has);
+      if (officialOk && (ownOk || !needOwn)) return shipment;
       if (!shipment.label_path) throw new Error('Rótulo salvo não encontrado');
       const { data } = await db.storage.from(BUCKET).download(shipment.label_path);
       if (!data) throw new Error('Rótulo salvo não encontrado');
-      const combined_path = await buildCombined(shipment, new Uint8Array(await data.arrayBuffer()));
+      const label = new Uint8Array(await data.arrayBuffer());
+      // Old shipments: build the ERP label on first opening; requested ERP format surfaces its error.
+      if (officialOk) { await buildOwn(shipment, label); return shipment; }
+      const combined_path = await buildCombined(shipment, label);
+      if (needOwn && !ownOk) { const { data: again } = await db.storage.from(BUCKET).list(shipment.id, { limit: 20 }); if (!own.every((n) => again?.some((o: any) => o.name === n))) await buildOwn(shipment, label); }
       if (shipment.combined_path !== combined_path) await db.from('correios_shipments').update({ combined_path }).eq('id', shipment.id);
       return { ...shipment, combined_path };
     };
@@ -110,15 +149,15 @@ Deno.serve(async (req) => {
         const item = list?.itens?.[0] || list?.content?.[0] || list?.[0];
         code = item?.codigoObjeto || null;
       }
-      const combinedPath = await buildCombined(shipment, label);
+      const combinedPath = await buildCombined({ ...shipment, codigo_objeto: code }, label);
       const patch = { label_path: labelPath, combined_path: combinedPath, codigo_objeto: code, status: code ? 'rotulo_emitido' : 'criada', label_generated_at: new Date().toISOString(), error_message: code ? null : 'Rótulo emitido, mas o código de rastreio ainda não voltou. Tente de novo' };
       await db.from('correios_shipments').update(patch).eq('id', shipment.id);
       if (code) await writeTracking(shipment, code);
       return { ...shipment, ...patch };
     };
     const withUrls = async (s: any) => {
-      const [combined_url, label_url, thermal_url, thermal_label_url, a4_url] = await Promise.all([sign(s.combined_path), sign(s.label_path), sign(`${s.id}/etiqueta-10x15.pdf`), sign(`${s.id}/rotulo-10x15.pdf`), sign(`${s.id}/etiqueta-a4.pdf`)]);
-      return { ...s, request: undefined, response: undefined, combined_url, label_url, thermal_url, thermal_label_url, a4_url };
+      const [combined_url, label_url, thermal_url, thermal_label_url, a4_url, own_url, own_a4_url] = await Promise.all([sign(s.combined_path), sign(s.label_path), sign(`${s.id}/etiqueta-10x15.pdf`), sign(`${s.id}/rotulo-10x15.pdf`), sign(`${s.id}/etiqueta-a4.pdf`), sign(`${s.id}/etiqueta-propria-10x15.pdf`), sign(`${s.id}/etiqueta-propria-a4.pdf`)]);
+      return { ...s, request: undefined, response: undefined, combined_url, label_url, thermal_url, thermal_label_url, a4_url, own_url, own_a4_url };
     };
 
     if (b.action === 'contract_services') {
@@ -214,7 +253,9 @@ Deno.serve(async (req) => {
       let shipment = await getShipment(b.shipment_id);
       if (['cancelada', 'erro'].includes(shipment.status) || !shipment.prepostagem_id) throw fail('Este envio não está ativo');
       if (!shipment.label_path || !shipment.codigo_objeto) shipment = await emitLabel(shipment);
-      shipment = await ensureFormats(shipment);
+      const needOwn = !b.format || b.format.startsWith('propria');
+      try { shipment = await ensureFormats(shipment, needOwn); }
+      catch (e) { if (!needOwn) throw e; throw fail(`Etiqueta 10×15 (ERP) indisponível: ${e instanceof Error ? e.message : 'erro'}. Use o Rótulo oficial Correios.`, 422); }
       return reply({ shipment: await withUrls(shipment) });
     }
 
@@ -234,20 +275,23 @@ Deno.serve(async (req) => {
     }
 
     // batch_labels
-    const { data: rows, error } = await db.from('correios_shipments').select('id,sale_id,sale_ids,label_path,combined_path,nfe_chaves,status').in('id', b.shipment_ids).eq('status', 'rotulo_emitido').order('created_at').limit(50);
+    const { data: rows, error } = await db.from('correios_shipments').select('id,sale_id,sale_ids,label_path,combined_path,nfe_chaves,status,codigo_objeto,servico_nome,servico_codigo,request,response,package').in('id', b.shipment_ids).eq('status', 'rotulo_emitido').order('created_at').limit(50);
     if (error || !rows?.length) throw fail('Nenhuma etiqueta emitida para imprimir');
     const saleIds = rows.map((r) => r.sale_id);
     const { data: visible } = await userClient.from('pos_sales').select('id').in('id', saleIds).limit(50);
     if ((visible || []).length !== new Set(saleIds).size) throw fail('Sem acesso a algum pedido do lote', 403);
     const files: Uint8Array[] = [];
+    const own = b.format.startsWith('propria');
+    const file = ({ propria_10x15: 'etiqueta-propria-10x15.pdf', propria_a4: 'etiqueta-propria-10x15.pdf', oficial_10x15: 'rotulo-10x15.pdf', label10x15: 'rotulo-10x15.pdf', oficial_a4: 'etiqueta-a4.pdf', a4: 'etiqueta-a4.pdf', '10x15': 'etiqueta-10x15.pdf' } as Record<string, string>)[b.format];
     for (const r of rows) {
-      await ensureFormats(r);
-      const path = `${r.id}/${b.format === 'a4' ? 'etiqueta-a4.pdf' : 'etiqueta-10x15.pdf'}`;
-      const { data } = await db.storage.from(BUCKET).download(path);
+      try { await ensureFormats(r, own); }
+      catch (e) { if (own) throw fail(`Etiqueta ERP indisponível para ${r.codigo_objeto || r.id.slice(0, 8)}: ${e instanceof Error ? e.message : 'erro'}. Use o Rótulo oficial.`, 422); throw e; }
+      const { data } = await db.storage.from(BUCKET).download(`${r.id}/${file}`);
       if (!data) throw new Error('PDF do lote não encontrado');
       files.push(new Uint8Array(await data.arrayBuffer()));
     }
-    const merged = await concatPdfs(files);
+    // ERP A4: two real-size labels per sheet across the whole batch.
+    const merged = b.format === 'propria_a4' ? await ownLabelsToA4(files) : await concatPdfs(files);
     const path = `lotes/${crypto.randomUUID()}.pdf`;
     const up = await db.storage.from(BUCKET).upload(path, merged, { contentType: 'application/pdf' });
     if (up.error) throw new Error('Não foi possível montar o lote');
