@@ -18361,6 +18361,92 @@ export type Database = {
           },
         ]
       }
+      pos_stock_transfers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          from_store_id: string
+          id: string
+          idempotency_key: string
+          items: Json
+          notes: string | null
+          numero: number
+          reverse_reason: string | null
+          reversed_at: string | null
+          reversed_by_transfer: string | null
+          reversed_of: string | null
+          status: string
+          to_store_id: string
+          total_items: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_store_id: string
+          id?: string
+          idempotency_key: string
+          items?: Json
+          notes?: string | null
+          numero?: number
+          reverse_reason?: string | null
+          reversed_at?: string | null
+          reversed_by_transfer?: string | null
+          reversed_of?: string | null
+          status?: string
+          to_store_id: string
+          total_items?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          from_store_id?: string
+          id?: string
+          idempotency_key?: string
+          items?: Json
+          notes?: string | null
+          numero?: number
+          reverse_reason?: string | null
+          reversed_at?: string | null
+          reversed_by_transfer?: string | null
+          reversed_of?: string | null
+          status?: string
+          to_store_id?: string
+          total_items?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_stock_transfers_from_store_id_fkey"
+            columns: ["from_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_transfers_reversed_by_transfer_fkey"
+            columns: ["reversed_by_transfer"]
+            isOneToOne: false
+            referencedRelation: "pos_stock_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_transfers_reversed_of_fkey"
+            columns: ["reversed_of"]
+            isOneToOne: false
+            referencedRelation: "pos_stock_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_transfers_to_store_id_fkey"
+            columns: ["to_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_store_sellers: {
         Row: {
           created_at: string
@@ -27000,6 +27086,15 @@ export type Database = {
         Returns: string[]
       }
       pos_estoque_divergence_summary: { Args: never; Returns: Json }
+      pos_reverse_stock_transfer: {
+        Args: {
+          p_reason: string
+          p_transfer_id: string
+          p_user_id: string
+          p_user_name: string
+        }
+        Returns: Json
+      }
       pos_sale_to_faturamento: {
         Args: { p_sale_id: string }
         Returns: undefined
@@ -27010,6 +27105,23 @@ export type Database = {
           phone: string
           sale_id: string
         }[]
+      }
+      pos_transfer_find_dest: {
+        Args: { p_src_id: string; p_to: string }
+        Returns: string
+      }
+      pos_transfer_stock: {
+        Args: {
+          p_dry_run?: boolean
+          p_from: string
+          p_idempotency_key: string
+          p_items: Json
+          p_notes: string
+          p_to: string
+          p_user_id: string
+          p_user_name: string
+        }
+        Returns: Json
       }
       process_pos_sale_sale_event: {
         Args: { p_sale_id: string }

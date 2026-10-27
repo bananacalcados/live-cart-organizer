@@ -526,6 +526,13 @@
       "when": 1793127003456,
       "tag": "0074_selfservice_manual_exemption_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793127963955,
+      "tag": "0075_pos_stock_transfers_engine",
+      "breakpoints": true
     }
   ]
 }
