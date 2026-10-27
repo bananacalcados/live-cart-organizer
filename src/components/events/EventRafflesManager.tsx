@@ -510,7 +510,9 @@ export function EventRafflesManager({ eventId }: { eventId: string }) {
                           <tr key={`${p.phone}-${i}`} className="border-t">
                             <td className="p-2"><p className="font-medium">{p.display_name || "Cliente"}</p><p className="text-muted-foreground">{maskPhone(p.phone)}</p></td>
                             <td className="p-2">{p.product || "—"}</td>
-                            <td className="p-2">{fmtMin(p.registration_minutes)}</td>
+                            <td className="p-2">{p.registration_minutes != null && p.registration_minutes < 0
+                              ? <span title={`Cadastro feito ${String(Math.abs(p.registration_minutes)).replace(".", ",")} min antes do pedido`}>já cadastrada antes do pedido</span>
+                              : fmtMin(p.registration_minutes)}</td>
                             <td className="p-2">{fmtMin(p.payment_minutes)}</td>
                             <td className="p-2">{p.eligible ? <Badge className="bg-emerald-600">sim</Badge> : <span className="text-destructive">não · {p.reason}</span>}</td>
                           </tr>
