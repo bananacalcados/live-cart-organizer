@@ -251,7 +251,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
   if (loading && !data) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   return <POSCustomerOrdersPanel
-    phone={phone || "Não informado"}
+    phone={phone || draftPhone || "Não informado"}
     customerName={data?.name || order.customer?.full_name || (handle ? `@${handle}` : "Cliente")}
     data={data}
     statusLabels={statusLabels}
