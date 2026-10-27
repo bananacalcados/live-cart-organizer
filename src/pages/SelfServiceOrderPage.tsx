@@ -44,6 +44,11 @@ async function call(body: Record<string, unknown>) {
 export default function SelfServiceOrderPage() {
   const { eventSlug = "" } = useParams();
   const slug = eventSlug.toLowerCase();
+  // Link único do direct do Instagram (?c=): identifica o pedido pelo @.
+  const invite = useMemo(() => {
+    const c = new URLSearchParams(window.location.search).get("c") || "";
+    return /^[0-9a-f]{32}$/.test(c) ? c : null;
+  }, []);
   const [ev, setEv] = useState<Ev | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [screen, setScreen] = useState<Screen>("identify");
@@ -85,6 +90,13 @@ export default function SelfServiceOrderPage() {
     call({ action: "event", slug }).then((r) => (r?.ok ? setEv(r.event) : setNotFound(true)));
   }, [slug]);
 
+  useEffect(() => {
+    if (!invite) return;
+    call({ action: "invite", slug, invite }).then((r) => {
+      if (r?.ok && r.instagram) setInstagram((cur) => cur || `@${r.instagram}`);
+    });
+  }, [slug, invite]);
+
   // Relógio só para os cronômetros na tela (não busca dados).
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -120,7 +132,7 @@ export default function SelfServiceOrderPage() {
     const d = digitsOnly(phone);
     if (d.length < 10 || d.length > 13) { toast.error("Digite o WhatsApp completo com DDD."); return; }
     setBusy(true);
-    const r = await call({ action: "identify", slug, phone: d, instagram, access_id: captured.current?.phone === completeInitialPhone(d) ? captured.current.accessId : null });
+    const r = await call({ action: "identify", slug, phone: d, instagram, invite, access_id: captured.current?.phone === completeInitialPhone(d) ? captured.current.accessId : null });
     setBusy(false);
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
@@ -235,7 +247,7 @@ export default function SelfServiceOrderPage() {
     }
     setBusy(true);
     const r = await call({
-      action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null,
+      action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null, invite,
       order_ids: orders.map((o) => o.id), signals: advertisingSignals(), details: form, alt_address: useAlt ? alt : null,
     });
     setBusy(false);
