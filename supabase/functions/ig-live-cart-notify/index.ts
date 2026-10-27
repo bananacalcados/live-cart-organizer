@@ -94,8 +94,12 @@ Deno.serve(async (req) => {
         results.push({ id: job.id, error });
       };
       // pedido ainda válido?
-      const { data: order } = await sb.from("orders").select("stage, phone_last4").eq("id", job.order_id).maybeSingle();
-      if (!order || ["cancelled", "paid", "completed", "shipped"].includes(order.stage)) { await fail("pedido não está mais aberto"); continue; }
+      const { data: order } = await sb.from("orders").select("stage, phone_last4, registered_at, is_paid").eq("id", job.order_id).maybeSingle();
+      if (!order || order.is_paid || ["cancelled", "paid", "completed", "shipped"].includes(order.stage)) { await fail("pedido não está mais aberto"); continue; }
+      if (job.kind === "selfservice_register_dm") {
+        await sendRegisterDm(sb, job, order, accounts!, liveByEvent, results);
+        continue;
+      }
       if (job.kind === "live_cart_missing_last4" && /^\d{4}$/.test(order.phone_last4 || "")) {
         await sb.from("ig_live_cart_notifications").update({ status: "skipped", error: "4 dígitos já preenchidos" }).eq("id", job.id);
         continue;
