@@ -51,9 +51,10 @@ function highlight(text: string) {
 export function useLiveOrderIntents(
   eventId: string | undefined,
   orderHandles: Set<string>,
-  opts?: { keepWithOrder?: boolean },
+  opts?: { keepWithOrder?: boolean; paidHandles?: Set<string> },
 ) {
   const keepWithOrder = !!opts?.keepWithOrder;
+  const paidHandles = opts?.paidHandles;
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [dismissals, setDismissals] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
@@ -149,6 +150,8 @@ export function useLiveOrderIntents(
     byUser.forEach((list, u) => {
       const hasOrder = orderHandles.has(u);
       if (hasOrder && !keepWithOrder) return;
+      // Carrinho criado E pago: sai da linha (não há mais o que cobrar na apresentadora).
+      if (paidHandles?.has(u)) return;
       const queros = list.filter((c) => QUERO_RE.test(c.comment_text || ""));
       if (queros.length === 0) return;
       const dismissedAt = dismissals.get(u);
