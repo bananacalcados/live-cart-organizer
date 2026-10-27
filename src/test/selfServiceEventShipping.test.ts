@@ -20,7 +20,7 @@ const cases = [
 
 describe('persisted self-service event shipping', () => {
   it('executes every rule against the installed database function', () => {
-    const literal = (v: unknown) => `'${JSON.stringify(v).replaceAll("'", "''")}'::jsonb`;
+    const literal = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
     const sql = `SELECT ${cases.map(([name, patch, eventPatch, expected], i) => `public.resolve_selfservice_event_shipping(${literal({ ...order, ...patch })},${literal({ ...event, ...eventPatch })}) IS NOT DISTINCT FROM ${expected === null ? 'NULL::jsonb' : literal(expected)} AS rule_${i}`).join(',')}`;
     const output = execFileSync('lovable', ['supabase', 'query', sql, '--json'], { encoding: 'utf8' });
     const result = JSON.parse(output);
