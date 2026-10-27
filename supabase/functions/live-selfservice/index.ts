@@ -32,6 +32,9 @@ const json = (b: unknown, status = 200) =>
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const suffix8 = (p: string) => digits(p).slice(-8);
+// DDD do telefone normalizado (55 + DDD + número): unificar exige DDD + número iguais.
+const dddOf = (p: string) => digits(p).replace(/^55/, "").slice(0, 2);
+const samePhone = (a: string, b: string) => { const x = digits(a).replace(/^55/, ""), y = digits(b).replace(/^55/, ""); return x.length >= 10 && x.slice(0, 2) === y.slice(0, 2) && x.slice(-8) === y.slice(-8); };
 const phoneKey = selfservicePhoneKey;
 
 function isRealFullName(raw?: string | null) {
@@ -576,23 +579,23 @@ Deno.serve(async (req) => {
     }
 
     async function knownCustomer(): Promise<boolean> {
-      const { count } = await sb.from("customer_registrations").select("id", { count: "exact", head: true })
-        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "");
-      if ((count || 0) > 0) return true;
+      const { data: regs } = await sb.from("customer_registrations").select("whatsapp")
+        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "").limit(50);
+      if ((regs || []).some((r: any) => samePhone(r.whatsapp || "", phone))) return true;
       const { count: c2 } = await sb.from("customers_unified").select("id", { count: "exact", head: true })
-        .eq("phone_suffix8", suffix8(phone)).not("cpf", "is", null);
+        .eq("phone_suffix8", suffix8(phone)).eq("ddd", dddOf(phone)).not("cpf", "is", null);
       return (c2 || 0) > 0;
     }
 
     async function savedDetails(): Promise<any> {
-      const { data: reg } = await sb.from("customer_registrations")
-        .select("full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(1).maybeSingle();
-      let d: any = reg;
+      const { data: regs } = await sb.from("customer_registrations")
+        .select("whatsapp, full_name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
+        .ilike("whatsapp", `%${suffix8(phone)}`).neq("cpf", "").order("created_at", { ascending: false }).limit(50);
+      let d: any = (regs || []).find((r: any) => samePhone(r.whatsapp || "", phone)) || null;
       if (!d) {
         const { data: cu } = await sb.from("customers_unified")
           .select("name, cpf, email, cep, address, address_number, complement, neighborhood, city, state")
-          .eq("phone_suffix8", suffix8(phone)).limit(2);
+          .eq("phone_suffix8", suffix8(phone)).eq("ddd", dddOf(phone)).limit(2);
         if ((cu || []).length === 1) d = { ...cu[0], full_name: (cu[0] as any).name };
       }
       return d || null;
@@ -711,7 +714,7 @@ Deno.serve(async (req) => {
         p_phone: phone, p_name: fullName, p_instagram: null, p_cpf: cpf, p_email: email, p_source: "member_area",
       });
       if (uErr) console.error("[live-selfservice] unified", uErr.message);
-      await sb.from("customers_unified").update(addr).eq("phone_suffix8", suffix8(phone));
+      await sb.from("customers_unified").update(addr).eq("phone_suffix8", suffix8(phone)).eq("ddd", dddOf(phone));
 
       // Endereço alternativo de entrega: vale só para o pedido; o endereço
       // principal da ficha (customers_unified) continua intacto.
@@ -737,8 +740,9 @@ Deno.serve(async (req) => {
         }
       } else {
         // Caso B: lead do evento
-        const { data: lead } = await sb.from("event_leads").select("id, source, metadata")
-          .eq("event_id", ev.id).eq("phone_suffix", suffix8(phone)).order("created_at").limit(1).maybeSingle();
+        const { data: leadRows } = await sb.from("event_leads").select("id, source, metadata, phone")
+          .eq("event_id", ev.id).eq("phone_suffix", suffix8(phone)).order("created_at").limit(20);
+        const lead = (leadRows || []).find((l: any) => samePhone(l.phone || "", phone)) || null;
         const metaBase = (lead?.metadata as any) || {};
         const metadata = {
           ...metaBase,
@@ -749,7 +753,7 @@ Deno.serve(async (req) => {
           await sb.from("event_leads").update({ name: fullName, metadata, instagram: igReg || undefined }).eq("id", lead.id);
         } else {
           const { data: buyers } = await sb.from("customers_unified").select("id")
-            .eq("phone_suffix8", suffix8(phone)).gt("total_orders", 0).limit(1);
+            .eq("phone_suffix8", suffix8(phone)).eq("ddd", dddOf(phone)).gt("total_orders", 0).limit(1);
           if (!buyers?.length) await sb.from("event_leads").insert({ event_id: ev.id, name: fullName, phone, source: "autoatendimento", metadata, instagram: igReg || null });
         }
       }
