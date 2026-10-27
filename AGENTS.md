@@ -1,5 +1,7 @@
 # Project architecture rules
 
+- Self-service event shipping is persisted by guarded order-write triggers so previews, payment providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows carry shipping_info.source=event_rule for item/discount recalculation.
+
 - Correios printing derives persisted thermal/A4 PDFs from the original official label and shipment-linked invoice keys; the default ERP 10x15 label copies the official DataMatrix payload verbatim (it carries a Correios token) and checks object/CEPs before drawing, while the official label stays available as fallback. Reopening and batch printing repair missing formats without creating pre-postage; PDF generation stays server-side.
 
 - Staff self-service drafts use the server's last-ten-digit phone key for contacts without an order, and event-scoped order membership for real orders; manual cart sending saves the exact order registration without claiming WhatsApp confirmation, so provisional phones never select another person's cart.
