@@ -4,9 +4,11 @@ import { formatMmSs } from "@/lib/liveModes";
 export function SelfServiceCashbackBanner({ deadline, now, amount }: { deadline: string | null; now: number; amount: number }) {
   if (!deadline) return null;
   const left = Math.max(0, Date.parse(deadline) - now);
+  // Prazo encerrado: não mostrar nada. Avisar que o bônus "terminou" só deixa a cliente chateada.
+  if (left <= 0) return null;
   const value = amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   return <section aria-label="Cashback da live" className="space-y-3 border-y-2 border-primary bg-primary/10 px-4 py-5 text-center">
-    <p className="flex items-center justify-center gap-2 text-lg font-extrabold"><Gift className="h-6 w-6" />{left > 0 ? "PAGUE AGORA E GANHE" : "O PRAZO DO BÔNUS TERMINOU"}</p>
+    <p className="flex items-center justify-center gap-2 text-lg font-extrabold"><Gift className="h-6 w-6" />PAGUE AGORA E GANHE</p>
     {left > 0 && <>
       <p className="break-words text-4xl font-extrabold text-foreground">{value}</p>
       <p className="text-lg font-bold">DE CASHBACK · 10% DO VALOR PAGO</p>
