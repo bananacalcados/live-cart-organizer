@@ -37,7 +37,7 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, UserPlus, Users } from "lucide-react";
+import { Calendar, Search, Trophy, MessageSquare, ShoppingCart, Zap, Settings, UserPlus, Users } from "lucide-react";
 
 
 import { Button } from "@/components/ui/button";
