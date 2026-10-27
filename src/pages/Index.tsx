@@ -298,7 +298,7 @@ const Index = () => {
                 placeholder="Buscar por @ ou WhatsApp..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-12 pl-12 text-lg font-medium"
+                className="h-12 pl-12 text-lg font-medium md:text-lg"
               />
             </div>
 
