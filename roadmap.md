@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Correios formatos de impressão — 27/10
+- [ ] Medir rótulo original do envio AP664805855BR.
+- [ ] Gerar três formatos persistidos, impressão individual e lote com escolha lembrada.
+- [ ] Validar PDFs reais a 203 dpi, tamanhos, páginas e códigos; sem pré-postagem nova nem publicar.
+
 ## Cadastro sem etapa intermediária — 24/10
 - [x] Unir campos à tela do pedido e de quem não tem pedido, mantendo captura, rascunho e bloqueios existentes.
 - [x] Informar que a confirmação exige enviar a mensagem no WhatsApp; 43 testes passaram e navegador conferiu pedido real com rascunho restaurado, erro por campo e tela mobile. Sem pedido, confirmado e expirado conferidos com respostas simuladas; escritas interceptadas para não alterar cliente, sem mensagem real e sem publicar. Regras e serviços de cadastro, sorteio, pagamento, CAPI e confirmação não alterados.
