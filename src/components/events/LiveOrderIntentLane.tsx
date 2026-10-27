@@ -101,6 +101,20 @@ export function useLiveOrderIntents(
 
   useEffect(() => {
     if (!eventId) return;
+    const applyDismissal = (usernameRaw: string | undefined, dismissedAt: string | undefined, op: string) => {
+      const username = norm(usernameRaw);
+      if (!username) return;
+      if (op === "DELETE") {
+        setDismissals((current) => {
+          const updated = new Map(current);
+          updated.delete(username);
+          return updated;
+        });
+        return;
+      }
+      if (!dismissedAt) return;
+      setDismissals((current) => new Map(current).set(username, dismissedAt));
+    };
     const ch = supabase
       .channel(`live-order-intents-${eventId}`)
       .on(
@@ -117,24 +131,25 @@ export function useLiveOrderIntents(
         (payload) => {
           const next = payload.new as { username?: string; dismissed_at?: string };
           const previous = payload.old as { username?: string };
-          if (payload.eventType === "DELETE") {
-            const username = norm(previous.username);
-            if (!username) return;
-            setDismissals((current) => {
-              const updated = new Map(current);
-              updated.delete(username);
-              return updated;
-            });
-            return;
-          }
-          const username = norm(next.username);
-          if (!username || !next.dismissed_at) return;
-          setDismissals((current) => new Map(current).set(username, next.dismissed_at as string));
+          if (payload.eventType === "DELETE") applyDismissal(previous.username, undefined, "DELETE");
+          else applyDismissal(next.username, next.dismissed_at, "UPSERT");
         },
       )
       .subscribe();
+    // O feed postgres_changes não entrega eventos neste projeto — a exclusão de
+    // cards chega pelo BROADCAST do trigger trg_notify_live_intent_dismissal
+    // (mesmo tópico dos cliques do /zap), assim o X do painel principal some
+    // na hora no painel da apresentadora.
+    const chBroadcast = supabase
+      .channel(`live_clicks_${eventId}`)
+      .on("broadcast", { event: "live_intent_dismissal" }, (msg) => {
+        const p = (msg?.payload || {}) as { username?: string; dismissed_at?: string; op?: string };
+        applyDismissal(p.username, p.dismissed_at, p.op || "UPSERT");
+      })
+      .subscribe();
     return () => {
       supabase.removeChannel(ch);
+      supabase.removeChannel(chBroadcast);
     };
   }, [eventId]);
 
