@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       const cf = createCorreiosFetch(auth.settings, auth.token);
       let recibo = shipment.response?.label_recibo as string | undefined;
       if (!recibo) {
-        const r: any = await cf('/v1/prepostagens/rotulo/assincrono/pdf', { method: 'POST', body: JSON.stringify({ idsPrePostagem: [shipment.prepostagem_id], numeroCartaoPostagem: settings.cartao_postagem, tipoRotulo: 'P', formatoRotulo: 'ET', imprimeRemetente: 'S', layoutImpressao: 'LINEAR_100_150' }) });
+        const r: any = await cf('/prepostagem/v1/prepostagens/rotulo/assincrono/pdf', { method: 'POST', body: JSON.stringify({ idsPrePostagem: [shipment.prepostagem_id], numeroCartaoPostagem: settings.cartao_postagem, tipoRotulo: 'P', formatoRotulo: 'ET', imprimeRemetente: 'S', layoutImpressao: 'LINEAR_100_150' }) });
         recibo = r?.idRecibo || r?.reciboSolicitacao || r?.id;
         if (!recibo) throw new Error('Correios: não retornou o recibo do rótulo');
         await db.from('correios_shipments').update({ response: { ...(shipment.response || {}), label_recibo: recibo } }).eq('id', shipment.id);
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       let pdfB64: string | null = null, lastErr = '';
       for (let i = 0; i < 6 && !pdfB64; i++) {
         if (i) await sleep(1500);
-        try { const d: any = await cf(`/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); pdfB64 = d?.pdfBytes ? null : extractPdfBase64(d); if (d?.pdfBytes) { const label = d.pdfBytes as Uint8Array; return await finishLabel(shipment, label, cf); } }
+        try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); pdfB64 = d?.pdfBytes ? null : extractPdfBase64(d); if (d?.pdfBytes) { const label = d.pdfBytes as Uint8Array; return await finishLabel(shipment, label, cf); } }
         catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
       }
       if (!pdfB64) throw new Error(lastErr || 'Correios: rótulo ainda em processamento. Tente "Gerar etiqueta" novamente em instantes');
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       if (up.error) throw new Error('Não foi possível salvar o rótulo');
       let code = shipment.codigo_objeto as string | null;
       if (!code) {
-        const list: any = await cf(`/v2/prepostagens?id=${encodeURIComponent(shipment.prepostagem_id)}&page=0&size=1`, { method: 'GET' }).catch(() => null);
+        const list: any = await cf(`/prepostagem/v2/prepostagens?id=${encodeURIComponent(shipment.prepostagem_id)}&page=0&size=1`, { method: 'GET' }).catch(() => null);
         const item = list?.itens?.[0] || list?.content?.[0] || list?.[0];
         code = item?.codigoObjeto || null;
       }
@@ -173,14 +173,14 @@ Deno.serve(async (req) => {
       let shipment = ins.data;
       try {
         const auth = await getCorreiosToken(db, { settings });
-        const res: any = await createCorreiosFetch(auth.settings, auth.token)('/v1/prepostagens', { method: 'POST', body: JSON.stringify(payload) });
+        const res: any = await createCorreiosFetch(auth.settings, auth.token)('/prepostagem/v1/prepostagens', { method: 'POST', body: JSON.stringify(payload) });
         if (!res?.id) throw new Error('Correios: pré-postagem sem identificador na resposta');
         const patch = { prepostagem_id: String(res.id), codigo_objeto: res.codigoObjeto || null, response: { id: res.id, codigoObjeto: res.codigoObjeto, statusAtual: res.statusAtual, descStatusAtual: res.descStatusAtual, prazoPostagem: res.prazoPostagem } };
         await db.from('correios_shipments').update(patch).eq('id', shipment.id);
         shipment = { ...shipment, ...patch };
       } catch (e) {
         let msg = e instanceof Error ? e.message : 'Correios: falha ao criar pré-postagem';
-        if (/serviço inexistente|servico inexistente|GTW-003/i.test(msg)) msg = `Os Correios informaram que o serviço ${option.service || option.service_code} não está habilitado no contrato ${settings.contrato || ''}. Habilite esse serviço com o seu gerente de conta dos Correios ou gere a etiqueta pelo outro serviço disponível.`;
+        if (/GTW-003/i.test(msg)) msg = 'Correios: endereço da API de pré-postagem não encontrado. Tente de novo ou avise o suporte técnico.';
         await db.from('correios_shipments').update({ status: 'erro', error_message: msg }).eq('id', shipment.id);
         throw fail(msg, 502);
       }
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       if (shipment.prepostagem_id) {
         const settings = await loadCorreiosSettings(db);
         const auth = await getCorreiosToken(db, { settings });
-        await createCorreiosFetch(auth.settings, auth.token)(`/v1/prepostagens/${encodeURIComponent(shipment.prepostagem_id)}`, { method: 'DELETE' });
+        await createCorreiosFetch(auth.settings, auth.token)(`/prepostagem/v1/prepostagens/${encodeURIComponent(shipment.prepostagem_id)}`, { method: 'DELETE' });
       }
       const patch = { status: 'cancelada', cancelled_at: new Date().toISOString(), cancelled_by: userId, cancel_reason: b.reason };
       await db.from('correios_shipments').update(patch).eq('id', shipment.id);
