@@ -321,7 +321,9 @@ export default function PresenterDashboard() {
   }, [loadAlerts, loadOrders, loadNoClickLeads]);
 
   // Atualiza os cards quando alguém clica no link /zap (só cliques deste evento;
-  // recargas agrupadas em no máximo 1 a cada 10 s).
+  // recargas agrupadas em no máximo 1 a cada 10 s). O feed postgres_changes não
+  // entrega eventos neste projeto — o aviso chega pelo BROADCAST do trigger
+  // (mesmo tópico usado pelo painel principal), com polling leve de reserva.
   useEffect(() => {
     if (!eventId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -344,7 +346,24 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, schedule)
       .subscribe();
-    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+    const broadcast = supabase
+      .channel(`live_clicks_${eventId}`)
+      .on("broadcast", { event: "live_click" }, schedule)
+      .subscribe();
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") void loadNoClickLeads();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadNoClickLeads();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      supabase.removeChannel(channel);
+      supabase.removeChannel(broadcast);
+    };
   }, [eventId, loadNoClickLeads]);
 
   // Realtime subscription for alerts
