@@ -1,9 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Correios formatos de impressão — 27/10
-- [ ] Medir rótulo original do envio AP664805855BR.
-- [ ] Gerar três formatos persistidos, impressão individual e lote com escolha lembrada.
-- [ ] Validar PDFs reais a 203 dpi, tamanhos, páginas e códigos; sem pré-postagem nova nem publicar.
+- [x] Medir rótulo original do envio AP664805855BR: 1 página de aproximadamente 100×150 mm, sem A4 ou recorte necessário.
+- [x] Gerar três formatos persistidos, impressão individual e lote com escolha lembrada; rótulo oficial e DANFE separada térmica, A4 com compatibilidade antiga.
+- [x] Validar PDFs reais a 203 dpi: térmicas exatamente 100×150 mm (2/1 páginas), A4 1 página; objeto e chave NF-e decodificados em ambas, 15 testes passaram e build OK. Botão térmico real abriu PDF no navegador autorizado e lembrou formato, lotes 10×15/A4 retornaram PDFs. Sem pré-postagem nova nem publicar; impressão física na ELGIN não testada. A4 sem CropBox seguro não é recortado por adivinhação.
 
 ## Cadastro sem etapa intermediária — 24/10
 - [x] Unir campos à tela do pedido e de quem não tem pedido, mantendo captura, rascunho e bloqueios existentes.
