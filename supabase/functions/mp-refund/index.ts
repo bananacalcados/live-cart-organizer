@@ -378,7 +378,7 @@ serve(async (req) => {
       return Math.max(0, pt - disc + (d.free_shipping ? 0 : Number(d.shipping_cost || 0)));
     };
     // Decide pelo código de transação existente, nunca pelo rótulo payment_gateway.
-    const otherGateway = (r: any) => r.appmax_order_id ? "Appmax" : r.pagarme_order_id ? "Pagar.me" : r.austpay_transaction_id ? "Rinne" : r.vindi_transaction_id ? "Vindi" : null;
+    const otherGateway = (r: any) => r.appmax_order_id ? "Appmax" : r.pagarme_order_id ? "Pagar.me" : r.austpay_transaction_id ? "AustPay" : r.vindi_transaction_id ? "Vindi" : null;
 
     type Res = { source: string; id: string; eligible: boolean; reason?: string; retry?: boolean; gateway?: string | null; remaining?: number; method?: string; cardLast4?: string | null; installments?: number | null; dateApproved?: string | null };
     const results: Res[] = [];
