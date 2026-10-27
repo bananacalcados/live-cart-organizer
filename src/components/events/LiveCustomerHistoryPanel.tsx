@@ -85,7 +85,14 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           selfServiceQuery = selfServiceQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
         }
 
-        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes, selfServiceRes] = await Promise.all([
+        // Cadastro unificado (CRM) — mesma fonte que a Ficha usa no passo 3.
+        // Sem ele, quem se cadastrou pelo link da live (sem pedido pago ainda)
+        // aparecia na Ficha mas ficava em branco aqui no Histórico.
+        const unifiedOrParts: string[] = [];
+        if (handle) unifiedOrParts.push(`instagram_handle.ilike.${handle}`);
+        if (suffix.length === 8) unifiedOrParts.push(`phone_suffix8.eq.${suffix}`);
+
+        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes, selfServiceRes, unifiedFullRes] = await Promise.all([
           customerFilters.length
             ? supabase.from("customers").select("id,instagram_handle,whatsapp,full_name,tags").or(customerFilters.join(",")).limit(10)
             : Promise.resolve({ data: [] as any[] }),
@@ -102,6 +109,9 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             ? supabase.from("pos_sales").select("id,sale_type,status,total,tracking_code,tiny_order_number,nfce_number,invoice_number,customer_cpf,created_at,store_id,paid_at,shipped_at,mercadopago_payment_id").eq("phone_suffix8", suffix).order("created_at", { ascending: false }).limit(20)
             : Promise.resolve({ data: [] as any[] }),
           selfServiceQuery ?? Promise.resolve({ data: null as any }),
+          unifiedOrParts.length
+            ? supabase.from("customers_unified").select("name,cpf,email,phone_e164,cep,address,address_number,complement,neighborhood,city,state").or(unifiedOrParts.join(",")).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+            : Promise.resolve({ data: null as any }),
         ]);
 
         const customers = (customerRes.data || []) as any[];
