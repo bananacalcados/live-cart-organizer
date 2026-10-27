@@ -110,7 +110,7 @@ function fitLines(text: string, font: PDFFont, size: number, min: number, max: n
 function drawNfeBand(page: PDFPage, n: NfeSummary, bold: PDFFont, font: PDFFont, topMm: number) {
   const y = (mm: number) => LABEL.h - mm * MM;
   page.drawText(safe(`NF-e nº ${n.numero}  Série ${n.serie}`), { x: 4 * MM, y: y(topMm + 3.2), size: 8, font: bold, color: BLACK });
-  if (/^\d{44}$/.test(n.chave)) drawLinear(page, 'code128', `^105${n.chave}`, LABEL.w / 2, y(topMm + 17.5), 13 * MM, 0.3 * MM, { parse: true });
+  if (/^\d{44}$/.test(n.chave)) drawLinear(page, 'code128', n.chave, LABEL.w / 2, y(topMm + 17.5), 13 * MM, 0.3 * MM);
   const key = groupChave(n.chave);
   const kw = font.widthOfTextAtSize(key, 7.5);
   page.drawText(key, { x: (LABEL.w - kw) / 2, y: y(topMm + 20.6), size: 7.5, font, color: BLACK });
@@ -159,8 +159,8 @@ export async function buildOwnLabel(d: OwnLabelData) {
   text(`CEP ${fmtCep(d.dest.cep)}  ${d.dest.cidade}/${d.dest.uf}`, 4, cy, 11, bold);
   // CEP barcode as in the official label (Code128C of the 8 digits), 6 mm quiet zone on the left.
   const cepModule = 0.5;
-  const cepW = linearModules(`^105${digits(d.dest.cep)}`, { parse: true }) * cepModule;
-  drawLinear(page, 'code128', `^105${digits(d.dest.cep)}`, 6 + cepW / 2 === 0 ? 0 : X(6 + cepW / 2), y(106.5), 10 * MM, cepModule * MM, { parse: true });
+  const cepW = linearModules(digits(d.dest.cep)) * cepModule;
+  drawLinear(page, 'code128', digits(d.dest.cep), X(6 + cepW / 2), y(106.5), 10 * MM, cepModule * MM);
   if (d.reference) text(`Pedido ${d.reference}`, 6 + cepW + 8, 102, 9);
   hline(108.5, 3, 97, 1);
 
