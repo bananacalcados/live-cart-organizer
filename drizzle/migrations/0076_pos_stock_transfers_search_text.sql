@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_stock_transfers ADD COLUMN search_text text GENERATED ALWAYS AS (lower(items::text || ' ' || COALESCE(notes,'') || ' ' || COALESCE(created_by_name,''))) STORED;

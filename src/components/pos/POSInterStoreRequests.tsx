@@ -191,32 +191,21 @@ export function POSInterStoreRequests({ storeId }: Props) {
         update.delivered_at = new Date().toISOString();
       }
 
-      const { error } = await supabase.from("pos_inter_store_requests").update(update).eq("id", id);
-      if (error) throw error;
-
-      // When confirmed, trigger automatic internal stock transfer (pos_products)
+      // Na confirmação, transfere o estoque ANTES de mudar o status: se faltar saldo, nada muda.
       if (responseStatus === "confirmed") {
         toast.info("Ajustando estoque interno...");
-        try {
-          const { data: transferResult, error: transferError } = await supabase.functions.invoke("pos-inter-store-stock-transfer", {
-            body: { request_id: id },
-          });
-          if (transferError) throw transferError;
-          if (transferResult?.success) {
-            toast.success("Estoque transferido automaticamente!");
-          } else {
-            const failedItems = transferResult?.results?.filter((r: any) => !r.success) || [];
-            if (failedItems.length > 0) {
-              toast.error(`Erro no estoque: ${failedItems.map((f: any) => `${f.product_name}: ${f.error}`).join(', ')}`);
-            } else {
-              toast.error("Erro ao transferir estoque: " + (transferResult?.error || "Erro desconhecido"));
-            }
-          }
-        } catch (stockErr: any) {
-          console.error("Stock transfer error:", stockErr);
-          toast.error("Erro ao transferir estoque: " + stockErr.message);
+        const { data: transferResult, error: transferError } = await supabase.functions.invoke("pos-stock-transfer-v2", {
+          body: { action: "execute_request", request_id: id },
+        });
+        if (transferError || !transferResult?.ok) {
+          toast.error(transferResult?.error || transferError?.message || "Erro ao transferir estoque", { duration: 10000 });
+          return;
         }
+        toast.success(`Estoque transferido (${transferResult.label})`);
       }
+
+      const { error } = await supabase.from("pos_inter_store_requests").update(update).eq("id", id);
+      if (error) throw error;
 
       toast.success("Status atualizado!");
       setRespondingId(null);

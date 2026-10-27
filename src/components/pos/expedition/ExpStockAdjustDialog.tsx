@@ -71,12 +71,20 @@ export function ExpStockAdjustDialog({ open, onOpenChange, title, rows, onDone }
     try {
       if (moveType === "transferencia") {
         if (!destStoreId) throw new Error("Escolha a loja destino");
-        const { data, error } = await supabase.functions.invoke("pos-stock-transfer", {
-          body: { source_product_id: current.product_id, dest_store_id: destStoreId, quantity: q, reason: reason || "Transferência via Expedição" },
+        const { data, error } = await supabase.functions.invoke("pos-stock-transfer-v2", {
+          body: {
+            action: "execute",
+            from_store_id: current.store_id,
+            to_store_id: destStoreId,
+            items: [{ pos_product_id: current.product_id, quantity: q }],
+            notes: reason || "Transferência via Expedição",
+            idempotency_key: crypto.randomUUID(),
+          },
         });
         if (error) throw new Error(error.message);
-        if (!data?.success) throw new Error(data?.error || "Falha ao transferir");
-        toast.success(`Transferido: ${data.source.store_name} (${data.source.new_stock}) → ${data.dest.store_name} (${data.dest.new_stock})`);
+        if (!data?.ok) throw new Error(data?.error || "Falha ao transferir");
+        const it = data.items?.[0];
+        toast.success(`Transferido ${data.label}: ${data.from_store_name} (${it?.origem_depois}) → ${data.to_store_name} (${it?.destino_depois})`);
       } else {
         const { data, error } = await supabase.functions.invoke("pos-stock-movement", {
           body: { product_id: current.product_id, movement_type: moveType, quantity: q, reason: reason || `${moveType} via Expedição` },

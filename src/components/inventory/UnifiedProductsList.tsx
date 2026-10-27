@@ -1241,26 +1241,31 @@ function PosSkuEditDialog({
     if (qty > available) { toast.error(`Origem só tem ${available} un.`); return; }
     setTransferring(true);
     try {
-      const { data, error } = await supabase.functions.invoke("pos-stock-transfer", {
+      const { data, error } = await supabase.functions.invoke("pos-stock-transfer-v2", {
         body: {
-          source_product_id: sku.id,
-          dest_store_id: destStoreId,
-          quantity: qty,
-          reason: transferReason,
+          action: "execute",
+          from_store_id: sku.store_id,
+          to_store_id: destStoreId,
+          items: [{ pos_product_id: sku.id, quantity: qty }],
+          notes: transferReason,
+          idempotency_key: crypto.randomUUID(),
         },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Falha ao transferir");
-
-      onLocalUpdate({ id: sku.id, stock: data.source.new_stock });
-      if (data.dest.created && data.dest.product) {
-        onLocalCreate(data.dest.product as PosSku);
+      if (!data?.ok) throw new Error(data?.error || "Falha ao transferir");
+      const it = data.items?.[0];
+      onLocalUpdate({ id: sku.id, stock: it.origem_depois });
+      if (it.destino_sera_criado) {
+        const { data: created } = await supabase
+          .from("pos_products")
+          .select("id, parent_sku, store_id, sku, barcode, name, variant, size, color, image_url, cost_price, price, stock, is_active")
+          .eq("id", it.pos_product_id_destino)
+          .maybeSingle();
+        if (created) onLocalCreate(created as PosSku);
       } else {
-        onLocalUpdate({ id: data.dest.product_id, stock: data.dest.new_stock });
+        onLocalUpdate({ id: it.pos_product_id_destino, stock: it.destino_depois });
       }
-      toast.success(
-        `Transferido: ${data.source.store_name} (${data.source.new_stock}) → ${data.dest.store_name} (${data.dest.new_stock})`
-      );
+      toast.success(`Transferido ${data.label}: ${data.from_store_name} (${it.origem_depois}) → ${data.to_store_name} (${it.destino_depois})`);
       onClose();
     } catch (err: any) {
       toast.error("Erro: " + err.message, { duration: 8000 });
