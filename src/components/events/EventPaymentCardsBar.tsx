@@ -739,7 +739,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                     <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
                   </button>
 
-                  {dmResend && order.customer?.instagram_handle && !order.registered_at && (
+                  {dmResend && order.customer?.instagram_handle && !(order as DbOrder & { registered_at?: string | null }).registered_at && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); void resendRegisterDm(order.id); }}
