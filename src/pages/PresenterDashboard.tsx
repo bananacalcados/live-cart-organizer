@@ -388,9 +388,15 @@ export default function PresenterDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [eventId, playNotificationSound]);
 
-  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar)
+  // Realtime for orders: troca só o pedido que mudou (carga completa só na abertura / botão Recarregar).
+  // Pedido novo/pago/cancelado também muda a linha "Ainda não clicaram" — recarga agrupada (máx. 1 a cada 10 s).
   useEffect(() => {
     if (!eventId) return;
+    let leadsTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleLeads = () => {
+      if (leadsTimer) return;
+      leadsTimer = setTimeout(() => { leadsTimer = null; void loadNoClickLeads(); }, 10_000);
+    };
     const channel = supabase
       .channel(`presenter-orders-${eventId}`)
       .on("postgres_changes", {
@@ -400,11 +406,12 @@ export default function PresenterDashboard() {
         filter: `event_id=eq.${eventId}`,
       }, (payload) => {
         void applyOrderChange(payload);
+        scheduleLeads();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, applyOrderChange]);
+    return () => { if (leadsTimer) clearTimeout(leadsTimer); supabase.removeChannel(channel); };
+  }, [eventId, applyOrderChange, loadNoClickLeads]);
 
   const markAsRead = async (alertId: string) => {
     await supabase.from("livete_presenter_alerts").update({ is_read: true }).eq("id", alertId);
