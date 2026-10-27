@@ -74,3 +74,7 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 - [x] Pré-postagem + etiqueta conjunta (correios-shipment, correios_shipments, bucket correios-labels)
 - [x] Cotação automática na Conferência + resumo nos cards
 - [ ] Primeira pré-postagem real (aguardando autorização do Matthews)
+
+## Transferência entre lojas — 27/10
+- [x] Motor atômico, histórico, estorno (admin), aba Transferência no PDV e telas antigas unificadas; testes do banco e prévia real conferidos sem transferir.
+- [ ] Transferência real de validação — aguarda pedido do Matthews.

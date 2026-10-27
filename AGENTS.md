@@ -65,3 +65,4 @@
 - Expedition "waiting products" tag is recomputed from item conference/completed quantities after every stage move (waitingFlag.ts), never set unconditionally, so complete orders never show it.
 
 - Self-service registration DMs use one ig_live_cart_notifications row per event+@ (unique index), atomic claim and no automatic retry; only staff resend (capped) — duplicate Instagram DMs previously reached customers unseen.
+- Stock transfers between stores go only through RPC pos_transfer_stock (via pos-stock-transfer-v2): one transaction, locked rows, official adjustments before stock updates and an idempotency key; legacy transfer functions answer 410 and Shopify is never called because it receives the sum of stores.
