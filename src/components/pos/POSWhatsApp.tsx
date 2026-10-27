@@ -159,6 +159,25 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
   const [selectedPhone, setSelectedPhone] = useState<string | null>(initialPhoneDigits || null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  // Aberto já numa conversa (Expedição/Estornos): descobre a instância da última mensagem
+  // dessa pessoa; sem isso a busca procurava só mensagens "sem instância" e vinha vazia.
+  useEffect(() => {
+    if (!initialPhoneDigits || initialPhoneDigits.length >= 15) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("whatsapp_messages")
+        .select("whatsapp_number_id")
+        .eq("phone", initialPhoneDigits)
+        .not("whatsapp_number_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const id = (data as any)?.whatsapp_number_id as string | undefined;
+      if (!cancelled && id) setSelectedConvNumberId((cur) => cur ?? id);
+    })();
+    return () => { cancelled = true; };
+  }, [initialPhoneDigits]);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   // Grupos: o mesmo grupo é entregue por várias instâncias (cada número nosso que
