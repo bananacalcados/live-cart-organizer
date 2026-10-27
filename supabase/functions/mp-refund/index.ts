@@ -354,7 +354,7 @@ serve(async (req) => {
     const GW_COLS = "id, mercadopago_payment_id, mp_account_id, appmax_order_id, pagarme_order_id, austpay_transaction_id, vindi_transaction_id";
     const none = Promise.resolve({ data: [] as any[] });
     const [salesR, ordersR, splitsS, splitsO, pointR]: any[] = await Promise.all([
-      saleIds.length ? supabase.from("pos_sales").select(`${GW_COLS}, total, created_at`).in("id", saleIds) : none,
+      saleIds.length ? supabase.from("pos_sales").select(`${GW_COLS}, source_order_id, total, created_at`).in("id", saleIds) : none,
       orderIds.length ? supabase.from("orders").select(`${GW_COLS}, products, discount_type, discount_value, free_shipping, shipping_cost, created_at`).in("id", orderIds) : none,
       saleIds.length ? supabase.from("payment_splits").select("sale_id").in("sale_id", saleIds).limit(500) : none,
       orderIds.length ? supabase.from("payment_splits").select("order_id").in("order_id", orderIds).limit(500) : none,
@@ -362,6 +362,10 @@ serve(async (req) => {
     ]);
     const sales = new Map<string, any>((salesR.data || []).map((s: any) => [s.id, s]));
     const orders = new Map<string, any>((ordersR.data || []).map((o: any) => [o.id, o]));
+    // Venda da live: o código do gateway (Pagar.me/AustPay/Vindi) fica no pedido de origem.
+    const srcIds = [...new Set((salesR.data || []).map((s: any) => s.source_order_id).filter(Boolean))] as string[];
+    const srcR: any = srcIds.length ? await supabase.from("orders").select("id, appmax_order_id, pagarme_order_id, austpay_transaction_id, vindi_transaction_id").in("id", srcIds) : { data: [] };
+    const srcOrders = new Map<string, any>((srcR.data || []).map((o: any) => [o.id, o]));
     const splitCount = new Map<string, number>();
     for (const r of [...(splitsS.data || []).map((x: any) => x.sale_id), ...(splitsO.data || []).map((x: any) => x.order_id)]) splitCount.set(r, (splitCount.get(r) || 0) + 1);
     const pointSales = new Set((pointR.data || []).map((x: any) => x.sale_id));
@@ -374,7 +378,7 @@ serve(async (req) => {
       return Math.max(0, pt - disc + (d.free_shipping ? 0 : Number(d.shipping_cost || 0)));
     };
     // Decide pelo código de transação existente, nunca pelo rótulo payment_gateway.
-    const otherGateway = (r: any) => r.appmax_order_id ? "Appmax" : r.pagarme_order_id ? "Pagar.me" : r.austpay_transaction_id ? "Rinne" : r.vindi_transaction_id ? "Vindi" : null;
+    const otherGateway = (r: any) => r.appmax_order_id ? "Appmax" : r.pagarme_order_id ? "Pagar.me" : r.austpay_transaction_id ? "AustPay" : r.vindi_transaction_id ? "Vindi" : null;
 
     type Res = { source: string; id: string; eligible: boolean; reason?: string; retry?: boolean; gateway?: string | null; remaining?: number; method?: string; cardLast4?: string | null; installments?: number | null; dateApproved?: string | null };
     const results: Res[] = [];
@@ -396,7 +400,7 @@ serve(async (req) => {
       } else { paymentId = row.mercadopago_payment_id; accountId = row.mp_account_id; }
       if (!paymentId && it.source === "pos_sale" && saleAx.get(it.id)?.ambiguous) { res.gateway = "Appmax"; res.reason = MULTI; continue; }
       if (!paymentId && !axId) {
-        const g = otherGateway(row);
+        const g = otherGateway(row) || (it.source === "pos_sale" && row.source_order_id ? otherGateway(srcOrders.get(row.source_order_id) || {}) : null);
         res.gateway = g;
         res.reason = g ? `${g} — em breve` : "Pago fora do sistema / sem transação de gateway";
         continue;
