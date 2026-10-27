@@ -1,3 +1,4 @@
+import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -131,9 +132,10 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
       const touchedOrders = [...new Map(deps.map((d) => [d.order.id, d.order])).values()];
       const { error } = await supabase
         .from("pos_sales")
-        .update({ expedition_stage: "conferencia", expedition_waiting_products: true } as any)
+        .update({ expedition_stage: "conferencia" } as any)
         .in("id", touchedOrders.map((o) => o.id));
       if (error) throw error;
+      await syncWaitingProductsFlag(touchedOrders.map((o) => o.id));
       toast.success("Produto avançado para a Conferência");
       await load();
       onRefresh();

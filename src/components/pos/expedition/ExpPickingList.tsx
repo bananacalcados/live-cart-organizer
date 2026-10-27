@@ -1,3 +1,4 @@
+import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -317,9 +318,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
       const ids = entries.map((e) => e.o.id);
       const { error } = await supabase.from("pos_sales").update({
         expedition_stage: to === "conferencia" ? "conferencia" : "aguardando",
-        expedition_waiting_products: true,
       } as any).in("id", ids);
       if (error) throw error;
+      await syncWaitingProductsFlag(ids);
       toast.success(`${Object.values(separated).reduce((s, n) => s + (n || 0), 0)} produto(s) ${label}`);
       setSeparated({});
       onRefresh();
@@ -395,9 +396,9 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
           .from("pos_sales")
           .update({
             expedition_stage: restante > 0 ? "separacao" : "aguardando",
-            expedition_waiting_products: true,
           } as any)
           .eq("id", saleId);
+        await syncWaitingProductsFlag([saleId]);
       }
 
       toast.success(`${qty - left} par(es) movido(s) para Aguardando`);
