@@ -18376,6 +18376,7 @@ export type Database = {
           reversed_at: string | null
           reversed_by_transfer: string | null
           reversed_of: string | null
+          search_text: string | null
           status: string
           to_store_id: string
           total_items: number
@@ -18394,6 +18395,7 @@ export type Database = {
           reversed_at?: string | null
           reversed_by_transfer?: string | null
           reversed_of?: string | null
+          search_text?: string | null
           status?: string
           to_store_id: string
           total_items?: number
@@ -18412,6 +18414,7 @@ export type Database = {
           reversed_at?: string | null
           reversed_by_transfer?: string | null
           reversed_of?: string | null
+          search_text?: string | null
           status?: string
           to_store_id?: string
           total_items?: number

@@ -533,6 +533,13 @@
       "when": 1793127963955,
       "tag": "0075_pos_stock_transfers_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793128080252,
+      "tag": "0076_pos_stock_transfers_search_text",
+      "breakpoints": true
     }
   ]
 }
