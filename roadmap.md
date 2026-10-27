@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Direct do Instagram com link de cadastro — 27/10
+- [x] Criar pedido pela conversa de Novos Contatos (botão Editar abre novo pedido com WhatsApp completo).
+- [ ] Envio automático no direct ao montar carrinho (5 variações com botão CADASTRAR, link único por pedido com @ preenchido) + botão de reenvio — próxima etapa.
+
 ## Correios formatos de impressão — 27/10
 - [x] Medir rótulo original do envio AP664805855BR: 1 página de aproximadamente 100×150 mm, sem A4 ou recorte necessário.
 - [x] Gerar três formatos persistidos, impressão individual e lote com escolha lembrada; rótulo oficial e DANFE separada térmica, A4 com compatibilidade antiga.
