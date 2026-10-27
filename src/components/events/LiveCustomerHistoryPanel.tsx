@@ -228,7 +228,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
             instagram: cleanHandle(sourceCustomer?.instagram_handle || unified?.instagram_handle || handle) || undefined,
             tags: sourceCustomer?.tags || [],
             cpf,
-            email: cleanValue(draftReg?.email) || cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email),
+            email: cleanValue(draftReg?.email) || cleanValue(registration?.email) || cleanValue(posCustomer?.email) || cleanValue(unified?.email) || cleanValue(unifiedFull?.email),
             address: cleanValue(address),
             cashback: cashback && Number(cashback.total_available) > 0 ? {
               totalAvailable: Number(cashback.total_available), count: Number(cashback.cashback_count) || 0,
