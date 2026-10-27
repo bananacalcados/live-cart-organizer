@@ -169,7 +169,7 @@ export function useLiveOrderIntents(
       });
     });
     return out.sort((a, b) => b.lastQuero.created_at.localeCompare(a.lastQuero.created_at));
-  }, [comments, dismissals, orderHandles, keepWithOrder]);
+  }, [comments, dismissals, orderHandles, keepWithOrder, paidHandles]);
 
   const dismiss = useCallback(
     async (username: string) => {
@@ -275,7 +275,7 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
                 {c.queroCount} QUERO · {c.comments.length} comentário{c.comments.length !== 1 ? "s" : ""}
               </span>
-              {builders.length === 0 && (
+              {builders.length === 0 && !c.hasOrder && (
                 <span className={cn(
                   "mt-1 rounded px-1.5 py-0.5 text-center text-[11px] font-extrabold uppercase",
                   mins >= 5 ? "bg-destructive/15 text-destructive" : "bg-amber-400/20 text-amber-700 dark:text-amber-300",
