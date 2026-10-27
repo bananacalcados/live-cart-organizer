@@ -9567,12 +9567,15 @@ export type Database = {
           id: string
           instagram_handle: string
           kind: string
+          link_token: string | null
+          manual_resends: number
           message: string | null
           order_id: string
           rule_id: string | null
           scheduled_at: string
           sent_at: string | null
           status: string
+          variant_index: number | null
         }
         Insert: {
           attempts?: number
@@ -9583,12 +9586,15 @@ export type Database = {
           id?: string
           instagram_handle: string
           kind: string
+          link_token?: string | null
+          manual_resends?: number
           message?: string | null
           order_id: string
           rule_id?: string | null
           scheduled_at?: string
           sent_at?: string | null
           status?: string
+          variant_index?: number | null
         }
         Update: {
           attempts?: number
@@ -9599,12 +9605,15 @@ export type Database = {
           id?: string
           instagram_handle?: string
           kind?: string
+          link_token?: string | null
+          manual_resends?: number
           message?: string | null
           order_id?: string
           rule_id?: string | null
           scheduled_at?: string
           sent_at?: string | null
           status?: string
+          variant_index?: number | null
         }
         Relationships: [
           {
@@ -25589,12 +25598,15 @@ export type Database = {
           id: string
           instagram_handle: string
           kind: string
+          link_token: string | null
+          manual_resends: number
           message: string | null
           order_id: string
           rule_id: string | null
           scheduled_at: string
           sent_at: string | null
           status: string
+          variant_index: number | null
         }[]
         SetofOptions: {
           from: "*"
@@ -27476,6 +27488,10 @@ export type Database = {
         Returns: boolean
       }
       selfservice_queue_requeue: { Args: { p_id: string }; Returns: boolean }
+      selfservice_resend_register_dm: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       selfservice_save_advertising_choice: {
         Args: { p_accept: boolean; p_id: string; p_region: string }
         Returns: string

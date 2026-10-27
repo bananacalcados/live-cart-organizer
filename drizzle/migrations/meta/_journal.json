@@ -498,6 +498,13 @@
       "when": 1793121650000,
       "tag": "0070_live_intent_dismissal_broadcast",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793123063928,
+      "tag": "0071_selfservice_register_dm",
+      "breakpoints": true
     }
   ]
 }
