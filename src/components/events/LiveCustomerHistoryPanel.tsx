@@ -14,6 +14,7 @@ import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import type { DbOrder } from "@/types/database";
 import { loadMpSalePayments } from "@/lib/mpSalePayment";
+import { selfServiceDraftPhoneKey } from "@/lib/selfServiceStaff";
 
 interface Props {
   order: DbOrder;
@@ -67,7 +68,24 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
         if (handle) customerFilters.push(`instagram_handle.ilike.${handle}`);
         if (suffix) customerFilters.push(`whatsapp.ilike.%${suffix}%`);
 
-        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes] = await Promise.all([
+        // Cadastro/rascunho do autoatendimento (mesma fonte da aba Ficha):
+        // sem ele, quem se cadastrou pelo link da live não aparece aqui.
+        const isRealOrder = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(order.id));
+        const draftKey = selfServiceDraftPhoneKey(phone);
+        let selfServiceQuery = null as any;
+        if (order.event_id && (isRealOrder || draftKey)) {
+          selfServiceQuery = supabase
+            .from("live_selfservice_accesses" as any)
+            .select("form_draft,entered_phone")
+            .eq("event_id", order.event_id);
+          selfServiceQuery = isRealOrder
+            ? selfServiceQuery.contains("order_ids", [order.id])
+            : selfServiceQuery.eq("phone_key", draftKey);
+          selfServiceQuery = selfServiceQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        }
+
+        const [customerRes, posCustomerRes, unifiedRes, expeditionRes, posSalesRes, selfServiceRes] = await Promise.all([
+          selfServiceQuery ?? Promise.resolve({ data: null as any }),
           customerFilters.length
             ? supabase.from("customers").select("id,instagram_handle,whatsapp,full_name,tags").or(customerFilters.join(",")).limit(10)
             : Promise.resolve({ data: [] as any[] }),
