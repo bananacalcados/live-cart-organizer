@@ -18,6 +18,7 @@ import { lazy, Suspense } from "react";
 const POSGeneralDashboard = lazyNamed(() => import("@/components/pos/POSGeneralDashboard"), "POSGeneralDashboard");
 const POSSalesView = lazyNamed(() => import("@/components/pos/POSSalesView"), "POSSalesView");
 const POSCashRegister = lazyNamed(() => import("@/components/pos/POSCashRegister"), "POSCashRegister");
+const POSStockTransfer = lazy(() => import("@/components/pos/transfer/POSStockTransfer"));
 const POSConfig = lazy(() => import("@/components/pos/POSConfig").then(m => ({ default: m.POSConfig })));
 const POSExchanges = lazyNamed(() => import("@/components/pos/POSExchanges"), "POSExchanges");
 const POSInterStoreRequests = lazyNamed(() => import("@/components/pos/POSInterStoreRequests"), "POSInterStoreRequests");
@@ -39,7 +40,7 @@ const POSMetaPixelDashboard = lazyNamed(() => import("@/components/pos/POSMetaPi
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel" | "transfer";
 
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
@@ -57,6 +58,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "customers", label: "Clientes", icon: Users },
   { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
+  { id: "transfer", label: "Transferência", icon: ArrowRightLeft },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
   { id: "seller-dashboard", label: "Vendedores", icon: Trophy },
@@ -70,7 +72,10 @@ export default function POS() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [selectedStore, setSelectedStore] = useState<string>("");
-  const [section, setSection] = useState<POSSection>(() => (new URLSearchParams(window.location.search).get("section") === "expedition" ? "expedition" : "dashboard"));
+  const [section, setSection] = useState<POSSection>(() => {
+    const q = new URLSearchParams(window.location.search).get("section");
+    return q === "expedition" || q === "transfer" ? q : "dashboard";
+  });
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
@@ -310,6 +315,11 @@ export default function POS() {
         )}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
+        {section === "transfer" && (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-pos-white/50"><Loader2 className="h-6 w-6 animate-spin mr-2" />Carregando...</div>}>
+            <POSStockTransfer storeId={selectedStore} />
+          </Suspense>
+        )}
         
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} onExitFullScreen={!isMobile ? () => setSection("dashboard") : undefined} />}
         {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
