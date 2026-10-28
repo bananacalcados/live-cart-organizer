@@ -289,6 +289,15 @@ serve(async (req) => {
 
       console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}${isLid ? ' (resolved from LID)' : ''}`);
 
+      // Fase B: só a instância responsável do grupo grava a mensagem (chat do PDV).
+      if (isGroup && !(await isGroupChatOwner(supabase, rawPhone, whatsappNumberId))) {
+        console.log(`[group] ${phone} recebido por instância não responsável (${whatsappNumberId}) — chat não alterado`);
+        return new Response(JSON.stringify({ success: true, skipped: 'group_not_responsible' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       if (fromMe) {
         // Dedup: match by phone suffix (8 digits) + message + whatsapp_number_id
         // Uses RPC function to handle phone format variations (with/without country code)
