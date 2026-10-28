@@ -23,6 +23,18 @@ describe("AustPay integral seguro", () => {
   it("identidade de outra compra bloqueia", () => {
     expect(inspectAustpayTransaction({ ...tx, external_reference: "other" }, src, null).ok).toBe(false);
   });
+  it("Cappta liquidada bloqueia integral", () => {
+    expect(inspectAustpayTransaction({ ...tx, provider: "CAPPTA", ledger_entries: [{ type: "TRANSACTION", settled: true }] }, src, null).ok).toBe(false);
+  });
+  it("valor de outra compra não é aceito", () => {
+    expect(inspectAustpayTransaction({ ...tx, approved_amount: 45999 }, src, null).ok).toBe(false);
+  });
+  it("conclusão exige registro exato e valor devolvido", async () => {
+    const row = { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...tx, status: "REFUNDED", refunded_amount: 35999, refunds: [{ id: "refund", transaction_id: tx.id, status: "COMPLETED", amount: 35999, description: "BCREF:local" }] }))));
+    const result = await submitAustpayRefund({ apiKey: "test", merchantId: null, provider: null, env: "production", baseUrl: "https://example.test" }, row);
+    expect(result.kind).toBe("done");
+  });
   it("mesmo valor sem código exato não comprova estorno", () => {
     expect(matchAustpayRefund({ ...tx, refunds: [{ id: "r", transaction_id: tx.id, amount: 35999, description: "other" }] }, { id: "local", payment_id: tx.id, amount: 359.99 })).toBeNull();
   });

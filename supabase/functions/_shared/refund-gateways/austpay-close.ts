@@ -11,7 +11,8 @@ async function persist(sb: any, row: any, tx: any, match: any, error?: string) {
     mp_response: tx || null, error_message: done ? null : error || `AustPay: estorno ${match?.status || "em conferência"}. Não repetir.`,
     completed_at: done ? match.updated_at || new Date().toISOString() : null, updated_at: new Date().toISOString(),
   };
-  const { data, error: saveError } = await sb.from("gateway_refunds").update(patch).eq("id", row.id).in("status", ["processando", "verificar"]).select("id").maybeSingle();
+  if (status === row.status && patch.refund_id === (row.refund_id || null) && !done && !failed) return { ok: true, status, message: patch.error_message };
+  const { data, error: saveError } = await sb.from("gateway_refunds").update(patch).eq("id", row.id).eq("status", row.status).select("id").maybeSingle();
   if (saveError) throw new Error("Falha ao salvar a confirmação AustPay; não repetir a devolução.");
   if (done && data) await runRefundPostActions(sb, { ...row, ...patch }, null);
   return { ok: done || !failed, status, message: done ? "Estorno concluído na AustPay; comprovante disponível." : patch.error_message };
