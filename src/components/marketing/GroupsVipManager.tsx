@@ -707,25 +707,28 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
-  group: WhatsAppGroup;
+function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
+  group: UnifiedGroup;
+  primaryRow: WhatsAppGroup | null;
   isSelected: boolean;
   instance: InstanceInfo | null;
   canSend: boolean;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: () => void;
   onToggleVip: () => void;
   onToggleFull: () => void;
   onOpenSettings: () => void;
   onOpenMembers: () => void;
 }) {
-  const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
-  const ddd33 = group.ddd33_count;
-  const ddd33Pct = ddd33 != null && group.ddd33_total_resolved
-    ? Math.round((ddd33 / group.ddd33_total_resolved) * 100)
+  const instanceLabel = group.instance_count > 1
+    ? `${group.instance_count} instâncias`
+    : instance ? instance.label : (group.instance_ids.length > 0 ? "Instância desconhecida" : "Sem instância");
+  const ddd33 = primaryRow?.ddd33_count ?? null;
+  const ddd33Pct = ddd33 != null && primaryRow?.ddd33_total_resolved
+    ? Math.round((ddd33 / primaryRow.ddd33_total_resolved) * 100)
     : null;
   return (
     <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${canSend ? 'bg-card hover:bg-muted/50' : 'bg-muted/40 opacity-70'}`}>
-      <Checkbox checked={isSelected} disabled={!canSend} onCheckedChange={() => onToggleSelect(group.id)} />
+      <Checkbox checked={isSelected} disabled={!canSend} onCheckedChange={() => onToggleSelect()} />
       {group.photo_url ? (
         <img src={group.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
       ) : (
@@ -737,6 +740,11 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
         <p className="text-sm font-medium truncate">{group.name}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">{group.participant_count}/{group.max_participants}</span>
+          {group.unique_members > 0 && (
+            <span className="text-xs text-muted-foreground" title="Telefones únicos rastreados (cada pessoa conta uma vez, mesmo vista por mais de uma instância)">
+              · {group.unique_members} rastreados
+            </span>
+          )}
           {group.is_active === false && <Badge variant="destructive" className="text-[10px]">Inativo</Badge>}
           <Badge variant="outline" className="text-[10px] gap-0.5">
             <Smartphone className="h-2.5 w-2.5" />{instanceLabel}
@@ -751,9 +759,9 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
               <AlertTriangle className="h-2.5 w-2.5" />Não envia por esta instância
             </Badge>
           )}
-          {group.is_admin && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
+          {group.is_admin_any && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
           {group.is_full && <Badge variant="destructive" className="text-[10px]">Cheio</Badge>}
-          {group.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
+          {primaryRow?.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
         </div>
       </div>
 
