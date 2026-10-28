@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { searchPosAndUnifiedCustomers, type PosCustomerSearchRow } from "@/lib/posCustomerResolve";
 import { refundApi, type RefundEligibility, type RefundSource } from "@/lib/refunds";
 import { RefundDialog } from "./RefundDialog";
+import { ManualRefundDialog } from "./ManualRefundDialog";
+import { RefundWindowNotice } from "./RefundWindowNotice";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString("pt-BR") : "—");
@@ -221,7 +223,9 @@ export function RefundRequestDialog({ onDone }: { onDone?: () => void }) {
                             <RefundDialog source={p.source as RefundSource} sourceId={p.id} label={`${p.channel} ${p.code}`} customerName={customer.name}
                               onDone={() => { onDone?.(); void checkEligibility([p]); }} />
                           )}
+                          {p.source!=="site" && e?.gateway && !e.eligible && e.gateway_window_open===false && <ManualRefundDialog source={p.source} sourceId={p.id} gateway={e.gateway} maxAmount={e.remaining??p.total} onDone={()=>{onDone?.();void checkEligibility([p]);}}/>}
                         </div>
+                        <RefundWindowNotice closesAt={e?.gateway_window_closes_at} open={e?.gateway_window_open} note={e?.gateway_window_note}/>
                         <p className={`mt-1 text-xs font-bold ${e?.eligible ? "text-primary" : "text-muted-foreground"}`}>
                           {p.source === "site" ? "Pedido do site — apenas informativo"
                             : !e ? (checking ? "Verificando…" : "—")

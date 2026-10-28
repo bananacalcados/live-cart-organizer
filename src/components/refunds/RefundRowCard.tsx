@@ -30,7 +30,7 @@ export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundLis
         <p className="text-[11px] text-muted-foreground">
           {r.paid_at ? `Pago em ${paymentDate(r.paid_at)} · ` : ""}
           Solicitado por {r.requested_by_name || "—"} em {dt(r.created_at)}
-          {r.status === "concluido" && r.completed_at ? ` · concluído em ${dt(r.completed_at)}` : ""}
+          {["concluido","concluido_manual"].includes(r.status) && r.completed_at ? ` · concluído em ${dt(r.completed_at)}` : ""}
         </p>
         {r.status === "recusado" && (
           <p className="text-xs text-destructive">Recusado por {r.approved_by_name || "—"}{r.rejected_reason ? ` — ${r.rejected_reason}` : ""}</p>
@@ -39,9 +39,10 @@ export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundLis
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
+        {r.status==='concluido_manual' && <span className="text-xs text-primary">Manual · protocolo {r.manual_reference}</span>}
         <RefundWhatsAppButton r={r} storeId={storeId} />
-        {r.status === "concluido" && <RefundReceiptButton refundId={r.id} />}
-        {r.status === "concluido" && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={onChanged} />}
+        {["concluido","concluido_manual"].includes(r.status) && <RefundReceiptButton refundId={r.id} />}
+        {["concluido","concluido_manual"].includes(r.status) && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={onChanged} />}
         {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
         {actions}
       </div>

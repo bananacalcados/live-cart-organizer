@@ -8,6 +8,8 @@ import { refundApi, REFUND_REASONS, type RefundPreview, type RefundSource } from
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, parseBrlAmount, validateRefundAmount } from "@/lib/refundRules";
 import { useToast } from "@/hooks/use-toast";
+import { RefundWindowNotice } from "./RefundWindowNotice";
+import { ManualRefundDialog } from "./ManualRefundDialog";
 
 interface Props {
   source: RefundSource;
@@ -171,6 +173,8 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
 
           {step === "error" && (
             <div className="space-y-4">
+              <RefundWindowNotice closesAt={preview?.gateway_window_closes_at} open={preview?.gateway_window_open} note={preview?.gateway_window_note}/>
+              {preview?.gateway_window_open===false && isAdmin && <ManualRefundDialog source={source} sourceId={sourceId} gateway={preview.gateway||'AustPay'} maxAmount={preview.remaining??preview.source?.total??0} onDone={onDone}/>}
               <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-pos-white flex items-start gap-2">
                 <ShieldAlert className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                 <span>{error}</span>
@@ -185,6 +189,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
 
           {step === "form" && preview?.payment && preview.source && (
             <div className="space-y-4 text-sm text-pos-white">
+              <RefundWindowNotice closesAt={preview.gateway_window_closes_at} open={preview.gateway_window_open} note={preview.gateway_window_note}/>
               <div className="rounded-lg border border-pos-white/15 bg-pos-white/5 p-3 space-y-1">
                 <p><span className="text-pos-white/60">Cliente:</span> <b>{customerName || preview.source.customerName || "—"}</b></p>
                 <p><span className="text-pos-white/60">Pedido/venda:</span> <b>{label}</b> <span className="text-pos-white/50">({preview.source.channel === "live" ? "Live" : "PDV"})</span></p>

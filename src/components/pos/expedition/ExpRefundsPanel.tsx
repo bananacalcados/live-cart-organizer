@@ -40,6 +40,7 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [status, setStatus] = useState("all");
+  const [showFailures,setShowFailures]=useState(false);
   const [channel, setChannel] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -48,11 +49,12 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
 
   const historyParams = useCallback((p: number): RefundListParams => ({
     scope: "history", page: p, limit: PAGE,
+    show_failures:showFailures,
     status: status === "all" ? undefined : (status as any),
     channel: channel === "all" ? undefined : (channel as any),
     search: search || undefined,
     ...periodRange(period, from, to),
-  }), [status, channel, search, period, from, to]);
+  }), [status, channel, search, period, from, to,showFailures]);
 
   const reqId = useRef(0);
   const loadAll = useCallback(async () => {
@@ -96,7 +98,7 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
         ) : (
           <div className="space-y-2">
             {pending.map((r) => (
-              <RefundRowCard key={r.id} storeId={storeId} r={r} actions={isAdmin ? <RefundDecisionButtons refundId={r.id} onDone={reload} /> : null} />
+              <RefundRowCard key={r.id} storeId={storeId} r={r} actions={isAdmin ? <RefundDecisionButtons refundId={r.id} row={r} onDone={reload} /> : null} />
             ))}
           </div>
         )}
@@ -114,6 +116,7 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
       <section>
         <h3 className="mb-2 text-lg font-black uppercase text-pos-text">Histórico</h3>
         <div className="mb-3 flex flex-wrap items-end gap-2">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showFailures} onChange={e=>setShowFailures(e.target.checked)}/>Mostrar falhas</label>
           <Select value={period} onValueChange={setPeriod}>
             <SelectTrigger className="h-10 w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -135,6 +138,7 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
               <SelectItem value="concluido">Concluído</SelectItem>
+              <SelectItem value="concluido_manual">Manual</SelectItem>
               <SelectItem value="recusado">Recusado</SelectItem>
               <SelectItem value="falhou">Falhou</SelectItem>
             </SelectContent>

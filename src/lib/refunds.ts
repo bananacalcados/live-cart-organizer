@@ -4,6 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 export type RefundSource = "order" | "pos_sale";
 
 export interface RefundPreview {
+  gateway_window_closes_at?: string | null;
+  gateway_window_open?: boolean;
+  gateway_window_note?: string;
   ok: boolean;
   error?: string;
   gateway?: string;
@@ -47,7 +50,8 @@ export interface RefundRow {
   refund_type: "integral" | "parcial";
   reason: string;
   reason_text: string | null;
-  status: "aguardando_aprovacao" | "recusado" | "processando" | "verificar" | "concluido" | "falhou";
+  status: "aguardando_aprovacao" | "recusado" | "processando" | "verificar" | "concluido" | "concluido_manual" | "falhou";
+  manual_reference?: string | null;
   error_message: string | null;
   card_brand: string | null;
   card_last4: string | null;
@@ -92,6 +96,7 @@ async function call<T = any>(body: Record<string, unknown>): Promise<T> {
 }
 
 export const refundApi = {
+  registerManual: (payload: {source:RefundSource;source_id:string;gateway:string;amount:number;reason:string;manual_reference:string;manual_done_at:string;note:string;password:string}) => call<{ok:boolean;refund_id:string;status:string;message:string}>({action:'register_manual',...payload}),
   preview: (source: RefundSource, id: string) => call<RefundPreview>({ action: "preview", source, id }),
   execute: (payload: {
     source: RefundSource;
@@ -132,6 +137,7 @@ export const REFUND_STATUS_LABELS: Record<string, string> = {
   processando: "Em processamento",
   verificar: "Verificando com o Mercado Pago — não refaça o estorno",
   concluido: "Concluído",
+  concluido_manual: "Concluído · Manual",
   falhou: "Falhou",
 };
 
@@ -188,7 +194,8 @@ export function getCompletedRefunds(sourceId: string): Promise<CompletedRefund[]
 
 export interface RefundListParams {
   scope: "pending" | "active" | "history";
-  status?: "concluido" | "recusado" | "falhou";
+  status?: "concluido" | "concluido_manual" | "recusado" | "falhou";
+  show_failures?: boolean;
   channel?: "live" | "pdv";
   from?: string;
   to?: string;
@@ -244,6 +251,9 @@ export async function reauthWithPassword(password: string) {
 }
 
 export interface RefundEligibility {
+  gateway_window_closes_at?: string | null;
+  gateway_window_open?: boolean;
+  gateway_window_note?: string;
   source: RefundSource;
   id: string;
   eligible: boolean;
