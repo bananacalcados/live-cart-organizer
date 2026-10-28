@@ -35,6 +35,7 @@ import { GroupActionsQueuePanel } from "./GroupActionsQueuePanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { Switch } from "@/components/ui/switch";
 import { applyManualVip } from "@/lib/groupVip";
+import { GroupsLogicalTable } from "./GroupsLogicalTable";
 
 interface WhatsAppGroup {
   id: string;
@@ -96,6 +97,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function GroupsVipManager() {
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
   const [vipSaving, setVipSaving] = useState<string | null>(null);
+  const [groupsView, setGroupsView] = useState<'logical' | 'instance'>('logical');
   const [campaigns, setCampaigns] = useState<GroupCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -395,6 +397,11 @@ export function GroupsVipManager() {
 
         {/* GROUPS TAB */}
         <TabsContent value="groups" className="space-y-4">
+          <div className="flex gap-2">
+            <Button size="sm" variant={groupsView === 'logical' ? 'default' : 'outline'} onClick={() => setGroupsView('logical')}>Por grupo</Button>
+            <Button size="sm" variant={groupsView === 'instance' ? 'default' : 'outline'} onClick={() => setGroupsView('instance')}>Por instância (envios)</Button>
+          </div>
+          {groupsView === 'logical' ? <GroupsLogicalTable /> : (<>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -497,6 +504,7 @@ export function GroupsVipManager() {
               </div>
             </ScrollArea>
           )}
+          </>)}
         </TabsContent>
 
         {/* CAMPAIGNS TAB */}
