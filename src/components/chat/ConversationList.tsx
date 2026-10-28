@@ -61,6 +61,9 @@ interface ConversationListProps {
   getAssignedName?: (conversationKey: string) => string | null;
   /** Cashback disponível por telefone (soma dos cupons ativos) para exibir badge ao lado do nome */
   cashbackMap?: Map<string, { totalAvailable: number }>;
+  /** Mostra chats de grupo de instâncias não responsáveis (espelhos) e arquivados */
+  showGroupMirrors?: boolean;
+  onShowGroupMirrorsChange?: (v: boolean) => void;
 }
 
 // Defaults com identidade estável (um `= {}` inline criaria um objeto novo a cada
@@ -102,6 +105,8 @@ export const ConversationList = memo(function ConversationList({
   productArrivedCount = 0,
   getAssignedName,
   cashbackMap,
+  showGroupMirrors,
+  onShowGroupMirrorsChange,
 }: ConversationListProps) {
 
   const [selectMode, setSelectMode] = useState(false);
@@ -377,6 +382,9 @@ export const ConversationList = memo(function ConversationList({
           <Pill label="Novas" active={newActive} count={newCount} onClick={() => pickNativePill('not_started', 'all')} />
           <Pill label="Não lidas" active={unreadActive} count={unreadCount} badge={unreadCount > 0 && !unreadActive} onClick={() => pickNativePill('awaiting_reply', 'all')} />
           <Pill label="Grupos" active={groupsActive} count={groupsCount} onClick={() => pickNativePill('all', 'groups')} />
+          {groupsActive && onShowGroupMirrorsChange && (
+            <Pill label={showGroupMirrors ? "Ocultar espelhos" : "Mostrar espelhos"} active={!!showGroupMirrors} onClick={() => onShowGroupMirrorsChange(!showGroupMirrors)} />
+          )}
           <Pill label="Follow Up" active={statusFilter === 'awaiting_customer' && !liveFilterActive} count={followUpCount} onClick={() => pickRailStatus('awaiting_customer')} />
           <Pill label="Pedidos da Live" active={!!liveFilterActive} count={liveCount || 0} onClick={() => onLiveFilterToggle?.()} />
           <Pill label="IA Transferiu" active={statusFilter === 'ai_transferred' && !liveFilterActive} count={aiCount} badge={aiCount > 0 && statusFilter !== 'ai_transferred'} onClick={() => pickRailStatus('ai_transferred')} />

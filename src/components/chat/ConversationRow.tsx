@@ -156,6 +156,11 @@ export const ConversationRow = memo(function ConversationRow({
                 {conv.instanceLabel || "WhatsApp"}
               </Badge>
             )}
+            {conv.groupState && conv.groupState !== "normal" && (
+              <Badge variant="outline" className="text-[8px] px-1 py-0 leading-tight text-muted-foreground border-muted-foreground/40">
+                {conv.groupState === "archived" ? "arquivado" : "espelho"}
+              </Badge>
+            )}
             {conv.unreadCount > 0 && (
               <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
                 {conv.unreadCount}

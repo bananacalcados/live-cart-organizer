@@ -23937,6 +23937,7 @@ export type Database = {
           group_jid_base: string
           health: string
           instance_id: string | null
+          manual_instance_id: string | null
           mode: string
           pending_instance_id: string | null
           pending_reason: string | null
@@ -23949,6 +23950,7 @@ export type Database = {
           group_jid_base: string
           health?: string
           instance_id?: string | null
+          manual_instance_id?: string | null
           mode?: string
           pending_instance_id?: string | null
           pending_reason?: string | null
@@ -23961,6 +23963,7 @@ export type Database = {
           group_jid_base?: string
           health?: string
           instance_id?: string | null
+          manual_instance_id?: string | null
           mode?: string
           pending_instance_id?: string | null
           pending_reason?: string | null
@@ -23974,6 +23977,7 @@ export type Database = {
       whatsapp_group_responsible_alerts: {
         Row: {
           acknowledged_at: string | null
+          acknowledged_by: string | null
           created_at: string
           group_jid_base: string
           group_name: string | null
@@ -23985,6 +23989,7 @@ export type Database = {
         }
         Insert: {
           acknowledged_at?: string | null
+          acknowledged_by?: string | null
           created_at?: string
           group_jid_base: string
           group_name?: string | null
@@ -23996,6 +24001,7 @@ export type Database = {
         }
         Update: {
           acknowledged_at?: string | null
+          acknowledged_by?: string | null
           created_at?: string
           group_jid_base?: string
           group_name?: string | null
@@ -25344,6 +25350,10 @@ export type Database = {
         }[]
       }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
+      ack_group_responsible_alert: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       add_business_days: {
         Args: { p_days: number; p_start: string }
         Returns: string
@@ -26419,6 +26429,10 @@ export type Database = {
           total: number
         }[]
       }
+      get_hidden_group_conversations: {
+        Args: { p_limit?: number; p_number_ids?: string[] }
+        Returns: Json
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
@@ -26740,6 +26754,14 @@ export type Database = {
           ord: number
           present: boolean
         }[]
+      }
+      group_logical_overview: {
+        Args: {
+          p_include_archived?: boolean
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: Json
       }
       group_send_in_progress: { Args: { p_base: string }; Returns: boolean }
       guard_automation_dispatch: {
@@ -27755,6 +27777,10 @@ export type Database = {
         }
         Returns: number
       }
+      set_group_responsible_manual: {
+        Args: { p_base: string; p_instance: string }
+        Returns: string
+      }
       shadow_cycle_check_big_live: { Args: never; Returns: Json }
       shadow_cycle_ready_for_report: { Args: never; Returns: Json }
       shadow_report_period: {
@@ -27999,6 +28025,10 @@ export type Database = {
         Returns: undefined
       }
       wa_conv_reconcile: { Args: { p_since?: string }; Returns: number }
+      wa_group_chat_state: {
+        Args: { p_number: string; p_phone: string }
+        Returns: string
+      }
       wa_status_rank: { Args: { s: string }; Returns: number }
       wn_provider: { Args: { p_wn: string }; Returns: string }
       zoppy_origin_class: { Args: { p_zoppy_id: string }; Returns: string }

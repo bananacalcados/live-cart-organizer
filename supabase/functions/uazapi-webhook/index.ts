@@ -6,6 +6,7 @@ import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
 import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
+import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -650,6 +651,18 @@ serve(async (req) => {
       }
       await markSkip("empty");
       return ok({ skipped: "empty" });
+    }
+
+    // Fase B: só a instância responsável do grupo grava a mensagem (cria/atualiza
+    // o chat). As demais seguem alimentando atividade/membros e saem aqui.
+    if (isGroup && !(await isGroupChatOwner(supabase, chatid, numberId))) {
+      if (!fromMe) {
+        scheduleGroupActivity(
+          normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null,
+        );
+      }
+      await markSkip("group_not_responsible");
+      return ok({ skipped: "group_not_responsible" });
     }
 
     const quotedId = asString(message.quoted) || null;

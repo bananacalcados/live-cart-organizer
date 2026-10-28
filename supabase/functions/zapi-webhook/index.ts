@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
+import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -288,6 +289,15 @@ serve(async (req) => {
       }
 
       console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}${isLid ? ' (resolved from LID)' : ''}`);
+
+      // Fase B: só a instância responsável do grupo grava a mensagem (chat do PDV).
+      if (isGroup && !(await isGroupChatOwner(supabase, rawPhone, whatsappNumberId))) {
+        console.log(`[group] ${phone} recebido por instância não responsável (${whatsappNumberId}) — chat não alterado`);
+        return new Response(JSON.stringify({ success: true, skipped: 'group_not_responsible' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       if (fromMe) {
         // Dedup: match by phone suffix (8 digits) + message + whatsapp_number_id
