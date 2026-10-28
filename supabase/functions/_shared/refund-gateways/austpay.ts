@@ -71,7 +71,10 @@ export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
     });
     const raw = await r.json().catch(() => null);
     if (!r.ok) {
-      const error = `AustPay (HTTP ${r.status}): ${String(raw?.error?.message || raw?.message || "resposta não verificável").slice(0, 350)}`;
+      const issue = String(raw?.error?.details?.issues?.[0]?.value || "");
+      const error = /settlement is already in progress/i.test(issue)
+        ? "A AustPay não permite mais estornar esta venda pelo sistema: o repasse (liquidação) dela já começou. Peça o cancelamento direto ao suporte da AustPay."
+        : `AustPay (HTTP ${r.status}): ${String(issue || raw?.error?.message || raw?.message || "resposta não verificável").slice(0, 350)}`;
       return { kind: !raw || raw.status === "PENDING_REFUND" || raw.data?.status === "PENDING_REFUND" || r.status >= 500 || [408, 409, 429].includes(r.status) ? "verificar" : "failed", error, raw };
     }
     const tx = raw?.id ? raw : raw?.data;
