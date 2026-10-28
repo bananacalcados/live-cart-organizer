@@ -361,7 +361,11 @@ export function LegacyProductsList() {
     setSendingTo(masterId);
     try {
       const { data, error } = await supabase.functions.invoke("update-master-product-shopify", { body: { master_id: masterId } });
-      if (error) throw error;
+      if (error) {
+        let detail = error.message;
+        try { const body = await (error as any).context?.json?.(); detail = body?.error || body?.message || detail; } catch { /* keep generic */ }
+        throw new Error(detail);
+      }
       toast.success(data?.message || "Produto atualizado na Shopify");
     } catch (err: any) {
       toast.error("Erro ao atualizar Shopify: " + err.message);
