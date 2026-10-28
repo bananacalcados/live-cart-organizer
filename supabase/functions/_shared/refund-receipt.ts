@@ -97,11 +97,11 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
     .select("name, cnpj, access_token").eq("id", row.mp_account_id).maybeSingle();
   const isPix = !row.card_brand;
   const isAppmax = row.gateway === "appmax";
-  const gwName = row.gateway === "austpay" ? "AustPay" : isAppmax ? "Appmax" : "Mercado Pago";
+  const gwName = ({austpay:'AustPay',appmax:'Appmax',mercadopago:'Mercado Pago',pagarme:'Pagar.me',vindi:'Vindi'} as Record<string,string>)[row.gateway] || row.gateway;
 
   // Pix sem E2E: busca de novo no MP antes de gerar; nunca inventa.
   let e2e: string | null = row.e2e_id || null;
-  if (row.gateway === "mercadopago" && isPix && !e2e && row.refund_id && account?.access_token) {
+  if (row.status!=='concluido_manual' && row.gateway === "mercadopago" && isPix && !e2e && row.refund_id && account?.access_token) {
     try {
       const r = await fetch(`https://api.mercadopago.com/v1/payments/${row.payment_id}/refunds/${row.refund_id}`, {
         headers: { Authorization: `Bearer ${account.access_token}` },

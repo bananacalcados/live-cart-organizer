@@ -2,7 +2,8 @@ import {describe,it,expect} from 'vitest';
 import {austpayRefundWindow} from '../../supabase/functions/_shared/refund-gateways/austpay-window';
 const anticipated=(approved_at:string)=>({payment_method:'CREDIT_CARD',automatic_anticipation:true,approved_at,ledger_entries:[]});
 describe('janela AustPay em Brasília',()=>{
- it('sexta 17:04 fecha sexta 23:59:59',()=>{expect(austpayRefundWindow(anticipated('2026-10-23T20:04:00Z'),new Date('2026-10-23T21:00:00Z'))).toMatchObject({gateway_window_closes_at:'2026-10-24T02:59:59.000Z',gateway_window_open:true,window_source:'estimado'});});
+ it('sexta D+1 útil liquida segunda e fecha domingo 23:59:59',()=>{expect(austpayRefundWindow(anticipated('2026-10-23T20:04:00Z'),new Date('2026-10-23T21:00:00Z'))).toMatchObject({gateway_window_closes_at:'2026-10-26T02:59:59.000Z',gateway_window_open:true,window_source:'estimado'});});
+ it('sexta fecha sexta quando ledger prevê sábado',()=>{expect(austpayRefundWindow({ledger_entries:[{type:'TRANSACTION',payment_date:'2026-10-24'}]},new Date('2026-10-23T21:00:00Z')).gateway_window_closes_at).toBe('2026-10-24T02:59:59.000Z');});
  it('sábado liquida segunda e fecha domingo',()=>{expect(austpayRefundWindow(anticipated('2026-10-24T20:00:00Z')).gateway_window_closes_at).toBe('2026-10-26T02:59:59.000Z');});
  it('feriado nacional adia D+1',()=>{expect(austpayRefundWindow(anticipated('2026-11-19T20:00:00Z')).gateway_window_closes_at).toBe('2026-11-23T02:59:59.000Z');});
  it('sexta santa nacional é respeitada',()=>{expect(austpayRefundWindow(anticipated('2026-04-02T20:00:00Z')).gateway_window_closes_at).toBe('2026-04-06T02:59:59.000Z');});

@@ -223,7 +223,7 @@ export function RefundRequestDialog({ onDone }: { onDone?: () => void }) {
                             <RefundDialog source={p.source as RefundSource} sourceId={p.id} label={`${p.channel} ${p.code}`} customerName={customer.name}
                               onDone={() => { onDone?.(); void checkEligibility([p]); }} />
                           )}
-                          {p.source!=="site" && e?.gateway && !e.eligible && e.gateway_window_open===false && <ManualRefundDialog source={p.source} sourceId={p.id} gateway={e.gateway} maxAmount={e.remaining??p.total} onDone={()=>{onDone?.();void checkEligibility([p]);}}/>}
+                          {p.source!=="site" && e?.gateway && p.systemStatus==='Pago' && e.remaining!==0 && !e.retry && <ManualRefundDialog source={p.source} sourceId={p.id} gateway={e.gateway} maxAmount={e.remaining??p.total} onDone={()=>{onDone?.();void checkEligibility([p]);}}/>}
                         </div>
                         <RefundWindowNotice closesAt={e?.gateway_window_closes_at} open={e?.gateway_window_open} note={e?.gateway_window_note}/>
                         <p className={`mt-1 text-xs font-bold ${e?.eligible ? "text-primary" : "text-muted-foreground"}`}>

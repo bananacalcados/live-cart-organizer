@@ -225,6 +225,9 @@ serve(async (req) => {
     if (loginError || login.user?.id!==userId) return json({error:"Senha incorreta."},403);
     const src=await loadSource(supabase,body.source,body.source_id);
     if (!src || src.paymentError) return json({error:"Compra não verificável."},400);
+    const linkedIds=[src.id,...(src.austpayReferenceIds||[])];
+    const {data:splits,error:splitError}=await supabase.from('payment_splits').select('id').or(`sale_id.in.(${linkedIds.join(',')}),order_id.in.(${linkedIds.join(',')})`).limit(1);
+    if(splitError||splits?.length) return json({error:'Compra com pagamento dividido ou não verificável; registro manual bloqueado.'},400);
     // Check the real captured gateway, ignoring window/refund-history eligibility for manual evidence.
     const gw=await checkAny(supabase,src,null);
     let gateway:string=gw.gateway, paymentId=gw.payId, p=gw.check.payment;
@@ -490,7 +493,7 @@ serve(async (req) => {
     for (const { res, src } of candidates) {
       if (src.paymentId && pointPays.has(src.paymentId)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
       const act = (src.paymentId && activeBy.get(src.paymentId)) || (src.appmaxOrderId && activeBy.get(src.appmaxOrderId)) || (src.austpayTransactionId && activeBy.get(src.austpayTransactionId));
-      if (act) { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
+      if (act && act!=='aguardando_aprovacao') { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
       if (checked >= 10) { res.retry = true; res.reason = RETRY; continue; }
       checked++;
       let gw: GwCheck;
@@ -502,6 +505,7 @@ serve(async (req) => {
         Object.assign(res,{gateway_window_closes_at:c.gateway_window_closes_at,gateway_window_open:c.gateway_window_open,gateway_window_note:c.gateway_window_note,window_source:c.window_source});
         if (p) { res.method = "cartao"; res.cardLast4 = p.card_data?.last_digits; res.installments = p.installments; res.dateApproved = p.approved_at; }
         res.eligible = !!c.ok; res.remaining = c.remaining; res.reason = c.ok ? undefined : c.error; res.retry = c.retry; (res as any).fullOnly = true;
+        if(act){res.eligible=false;res.reason=`Estorno em andamento (${ACTIVE_LABEL[act]||act})`;}
         continue;
       }
       if (gw.gateway === "appmax") {
