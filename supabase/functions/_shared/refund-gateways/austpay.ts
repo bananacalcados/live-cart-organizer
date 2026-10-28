@@ -46,6 +46,7 @@ export async function austpayCheckPayment(sb: any, src: AustpaySource, amount: n
     if (!r.ok) return { ok: false, retry: r.status >= 500 || r.status === 429, error: `Consulta AustPay recusada (HTTP ${r.status}).` };
     const raw = await r.json();
     const tx = raw?.id ? raw : raw?.data;
+    console.log("austpay tx keys", Object.keys(tx || {}).join(","), "merchant", austpayMerchantOf(tx));
     return { ...inspectAustpayTransaction(tx, src, amount), cfg };
   } catch { return { ok: false, retry: true, error: "Não foi possível consultar a AustPay agora." }; }
 }
@@ -60,6 +61,11 @@ export function matchAustpayRefund(tx: any, row: any) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+export function austpayMerchantOf(t: any): string | null {
+  const v = t?.merchant_id ?? t?.merchantId ?? t?.merchant?.id ?? t?.seller_id ?? t?.establishment?.id ?? t?.establishment_id;
+  return v ? String(v) : null;
+}
+
 export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
   // Exactly one request. No automatic resubmission even on HTTP 409/5xx/timeout.
   try {
@@ -70,7 +76,7 @@ export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
       const g = await austpayFetch(cfg, `/v1/transactions/${encodeURIComponent(row.payment_id)}`);
       const gj = await g.json().catch(() => null);
       const t = gj?.id ? gj : gj?.data;
-      merchantId = t?.merchant_id || t?.merchant?.id || null;
+      merchantId = austpayMerchantOf(t);
     }
     const base = merchantId ? `/v1/merchants/${encodeURIComponent(merchantId)}/transactions` : "/v1/transactions";
     const r = await austpayFetch(cfg, `${base}/${encodeURIComponent(row.payment_id)}/refunds`, {
