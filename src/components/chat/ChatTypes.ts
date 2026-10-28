@@ -38,6 +38,8 @@ export interface Conversation {
   unreadCount: number;
   customerName?: string;
   isGroup: boolean;
+  /** Grupo: 'mirror' = chat de instância não responsável; 'archived' = grupo arquivado */
+  groupState?: 'normal' | 'mirror' | 'archived';
   hasUnansweredMessage: boolean;
   stage?: string;
   customerId?: string;
