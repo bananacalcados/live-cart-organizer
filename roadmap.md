@@ -2,8 +2,8 @@
 
 ## Expedição e estorno AustPay — 28/10
 - [x] Investigar 90 pagos: todos vinculados ao PDV, 89 ativos e Sandra cancelada; 62 vendas em Conferência e 27 em Separação. Contadores cortavam mil itens antigos; substituídos por consulta agregada indexada com permissões existentes. Navegador confirmou Adriana em Separação, Ilma em Conferência e novos totais; seis testes passaram, sem movimentar pedidos.
-- [ ] Integrar estorno AustPay ao fluxo protegido existente, com acompanhamento e comprovante; sem publicação nem estorno real durante testes.
-- [ ] Estorno integral da Adriana R$ 359,99 por desistência do modelo antes do envio, somente após integração e conferência das condições reais.
+- [x] Integrar integral AustPay ao fluxo protegido, aprovação condicional atômica, acompanhamento sem repetição e comprovante após conclusão; prévia real da Adriana conferida no Novo estorno. Sem publicação, devolução ou mensagem real nos testes.
+- [ ] Executar integral da Adriana R$ 359,99 por desistência antes do envio e enviar comprovante — aguarda confirmação final na tela; validação real de devolução e comprovante depende dessa execução, separada dos testes conforme plano.
 
 ## Grupos WhatsApp — escopo corrigido 28/10
 - [x] Reverter Bloco 2: visão removida, 203 linhas por instância e seleção/ações individuais restauradas; Bloco 1 preservado.

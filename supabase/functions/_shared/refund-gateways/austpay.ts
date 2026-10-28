@@ -37,6 +37,8 @@ export async function austpayCheckPayment(sb: any, src: AustpaySource, amount: n
   if (!cfg || cfg.env !== "production") return { ok: false, error: "AustPay de produção indisponível para estorno." };
   if (!src.austpayTransactionId) return { ok: false, error: "Cobrança AustPay não vinculada à compra." };
   const ids = [...new Set([src.id, ...(src.austpayReferenceIds || [])])];
+  const { data: parts, error: partsError } = await sb.from("payment_splits").select("id").or(`sale_id.in.(${ids.join(",")}),order_id.in.(${ids.join(",")})`).limit(1);
+  if (partsError || parts?.length) return { ok: false, error: "Compra com pagamento dividido ou não verificável — estorno AustPay bloqueado." };
   const { data: bad, error } = await sb.from("pos_checkout_attempts").select("id").in("sale_id", ids).eq("transaction_id", src.austpayTransactionId).eq("status", "invalidated").limit(1);
   if (error || bad?.length) return { ok: false, error: "Captura AustPay invalidada ou não verificável." };
   try {
@@ -64,14 +66,14 @@ export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
     const r = await austpayFetch(cfg, `/v1/transactions/${encodeURIComponent(row.payment_id)}/refunds`, {
       method: "POST", body: {
         refund_reason: "CUSTOMER_REQUEST", refund_amount: Math.round(Number(row.amount) * 100),
-        description: `${row.reason_text || row.reason} BCREF:${row.id}`.slice(0, 500),
+        description: `BCREF:${row.id} ${row.reason_text || row.reason}`.slice(0, 500),
         metadata: { refund_source: "banana_erp", gateway_refund_id: row.id },
       },
     });
     const raw = await r.json().catch(() => null);
     if (!r.ok) {
       const error = `AustPay (HTTP ${r.status}): ${String(raw?.error?.message || raw?.message || "resposta não verificável").slice(0, 350)}`;
-      return { kind: r.status >= 500 || [408, 409, 429].includes(r.status) ? "verificar" : "failed", error, raw };
+      return { kind: !raw || raw.status === "PENDING_REFUND" || raw.data?.status === "PENDING_REFUND" || r.status >= 500 || [408, 409, 429].includes(r.status) ? "verificar" : "failed", error, raw };
     }
     const tx = raw?.id ? raw : raw?.data;
     const match = matchAustpayRefund(tx, row);
