@@ -187,57 +187,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   };
 
   const loadCounts = async () => {
-    const base = () => {
-      let q = supabase
-        .from("pos_sales")
-        .select("expedition_stage")
-        .in("sale_type", ["live", "online"])
-        .in("expedition_stage", ["novo", "preparacao", "separacao", "aguardando", "conferencia"]);
-      if (!allStores) q = q.eq("store_id", storeId);
-      return q;
-    };
-    let { data, error } = await base()
-      .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
-      .or(PAID_FILTER);
+    const { data, error } = await supabase.rpc("pos_expedition_stage_counts", {
+      p_store_id: allStores ? undefined : storeId,
+    });
     if (error) {
-      const retry = await base().not("status", "in", `(${UNPAID_STATUSES.join(",")})`);
-      data = retry.data as any;
+      console.error("[expedition] stage counts", error.message);
+      return;
     }
     const c: Record<string, number> = {};
-    for (const r of (data || []) as any[]) c[r.expedition_stage] = (c[r.expedition_stage] || 0) + 1;
-    try {
-      let itemQuery = supabase
-        .from("pos_sale_items")
-        .select("sale_id, quantity, expedition_conference_qty, expedition_waiting_qty, expedition_completed_qty, pos_sales!inner(store_id, sale_type, status, paid_at, payment_details)")
-        .in("pos_sales.sale_type", ["live", "online"])
-        .limit(5000);
-      if (!allStores) itemQuery = itemQuery.eq("pos_sales.store_id", storeId);
-      const { data: itemRows } = await itemQuery;
-      const stageSales: Record<"separacao" | "aguardando" | "conferencia", Set<string>> = {
-        separacao: new Set(),
-        aguardando: new Set(),
-        conferencia: new Set(),
-      };
-      for (const row of (itemRows || []) as any[]) {
-        const sale = row.pos_sales;
-        if (!sale || UNPAID_STATUSES.includes(sale.status)) continue;
-        const paid = !!sale.paid_at || !!sale.payment_details?.paid_at || sale.payment_details?.payment_status === "paid";
-        if (!paid) continue;
-        const total = Number(row.quantity) || 0;
-        const conference = Number(row.expedition_conference_qty) || 0;
-        const waiting = Number(row.expedition_waiting_qty) || 0;
-        const completed = Number(row.expedition_completed_qty) || 0;
-        if (total - conference - waiting - completed > 0) stageSales.separacao.add(row.sale_id);
-        if (waiting > 0) stageSales.aguardando.add(row.sale_id);
-        if (conference > 0) stageSales.conferencia.add(row.sale_id);
-      }
-      c.separacao = stageSales.separacao.size;
-      c.aguardando = stageSales.aguardando.size;
-      c.conferencia = stageSales.conferencia.size;
-    } catch {
-      // Mantém os contadores-resumo antigos se o detalhamento por produto falhar.
-    }
-    setCounts(c);
+    for (const row of data || []) c[row.stage] = Number(row.total);
+    setCounts((current) => JSON.stringify(current) === JSON.stringify(c) ? current : c);
   };
 
 
