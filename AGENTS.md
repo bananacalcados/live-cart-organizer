@@ -24,6 +24,7 @@
 - Shopify data updates omit media entirely, preflight linked option values by unique exact dictionary matches, create variants through GraphQL IDs, and reconcile existing combinations only with matching SKU/GTIN; this preserves manual media/legacy links and prevents duplicate retries.
 
 - Expedition gateway badges/filters use pos_sales.payment_gateway only; unified shipments show every gateway.
+- Expedition stage counters use the RLS-invoker pos_expedition_stage_counts aggregate over eligible sales and indexed items, never a capped historical item download; quantities can place one sale in multiple stages.
 
 - Every public payment surface must resolve `payment_splits` before rendering a charge; never fall back to the full order total when split status cannot be loaded — that can double-charge a customer.
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync lives in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only), read before the META_ADS_ACCESS_TOKEN secret — edge functions cannot rewrite secrets.

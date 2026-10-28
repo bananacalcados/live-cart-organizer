@@ -27104,6 +27104,13 @@ export type Database = {
         Returns: string[]
       }
       pos_estoque_divergence_summary: { Args: never; Returns: Json }
+      pos_expedition_stage_counts: {
+        Args: { p_store_id?: string }
+        Returns: {
+          stage: string
+          total: number
+        }[]
+      }
       pos_reverse_stock_transfer: {
         Args: {
           p_reason: string
