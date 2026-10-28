@@ -21,7 +21,9 @@ export function optionValue(variant: any, name: string): string {
 export function exactColor(objects: any[], name: string): string {
   const matches = objects.filter((object) => normalize(object.displayName) === normalize(name));
   if (matches.length !== 1) {
-    throw new Error(`A cor "${name}" precisa de um único padrão correspondente na Shopify. Nada foi atualizado; cadastre ou confira esse padrão de cor.`);
+    const available = objects.map((o) => String(o.displayName)).sort().join(", ");
+    const why = matches.length === 0 ? "não existe" : `existe ${matches.length} vezes`;
+    throw new Error(`A cor "${name}" ${why} na lista de cores da Shopify. Nada foi atualizado. Cores disponíveis: ${available}`);
   }
   return matches[0].id;
 }
