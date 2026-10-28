@@ -1092,7 +1092,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       const byGroup = new Map<string, any>();
       const out: any[] = [];
       for (const r of rows) {
-        if (!isGroupRow(r)) { out.push(r); continue; }
+        // Espelhos/arquivados (só com "mostrar espelhos") ficam como linhas próprias.
+        if (!isGroupRow(r) || (r.group_state && r.group_state !== 'normal')) { out.push(r); continue; }
         const key = String(r.phone);
         const prev = byGroup.get(key);
         if (!prev) {
@@ -1166,6 +1167,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
         hasIncoming: (row as any).has_incoming === false ? false : true,
         lastIsMassDispatch: (row as any).last_is_mass_dispatch === true,
         channel: (row as any).channel || null,
+        groupState: (row as any).group_state || undefined,
       });
     }
     return { convs, phoneMessages };
@@ -1177,7 +1179,9 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const listLoadInFlightRef = useRef(false);
   const listReloadPendingRef = useRef(false);
   // Linhas cruas da última consulta (resumo por telefone+instância).
-  const [listRows, setListRows] = useState<{ regular: any[]; dispatch: any[] } | null>(null);
+  const [listRows, setListRows] = useState<{ regular: any[]; dispatch: any[]; hidden?: any[] } | null>(null);
+  // Chats de grupo de instâncias não responsáveis (espelhos) e grupos arquivados.
+  const [showGroupMirrors, setShowGroupMirrors] = useState(false);
 
   // Load conversations via RPC (summaries, not raw messages)
   useEffect(() => {
@@ -1211,11 +1215,14 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           ? { numberIds: storeNumberIds, includeUnassigned: false }
           : { numberIds: storeNumberIds, includeUnassigned: storeNumbers.some(n => n.provider === 'zapi') };
 
-      const [regular, dispatch, heads] = await Promise.all([
+      const [regular, dispatch, heads, hidden] = await Promise.all([
         fetchConversationRows({ ...scope, dispatchOnly: false }),
         needsDispatch ? fetchConversationRows({ ...scope, dispatchOnly: true }) : Promise.resolve({ rows: [], error: null }),
         // Cabeças dos grupos considerando TODAS as instâncias (~80 linhas).
         (supabase.rpc as any)('get_group_conversation_heads').then((r: any) => r, () => ({ data: null })),
+        showGroupMirrors
+          ? (supabase.rpc as any)('get_hidden_group_conversations', { p_number_ids: scope.numberIds, p_limit: 200 }).then((r: any) => r, () => ({ data: null }))
+          : Promise.resolve({ data: [] }),
       ]);
 
       if (regular.error) { console.error('Error loading conversations:', regular.error); return; }
@@ -1224,7 +1231,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       groupHeadsRef.current = headMap;
       // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
       // acontece no effect abaixo SEM nova ida ao servidor.
-      setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[] });
+      setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[], hidden: (((hidden as any)?.data) || []) as any[] });
     };
 
     loadConversations()
@@ -1240,7 +1247,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     // propósito — mudar nome/CRM/filtro local NÃO refaz a consulta da lista;
     // só o effect de derivação abaixo roda de novo (em memória).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeNumbersLoaded, storeNumberIds, storeNumbers, statusFilter, waMsgTick]);
+  }, [storeNumbersLoaded, storeNumberIds, storeNumbers, statusFilter, waMsgTick, showGroupMirrors]);
 
   // Deriva a lista exibida a partir das linhas cruas em memória. Roda quando
   // chegam linhas novas OU quando muda algo local (nomes, CRM, filtros de
@@ -1248,7 +1255,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   useEffect(() => {
     if (!listRows) return;
     {
-      const regularResults: Array<{ data: any[] }> = [{ data: listRows.regular }];
+      const regularResults: Array<{ data: any[] }> = [{ data: listRows.regular }, ...(listRows.hidden?.length ? [{ data: listRows.hidden }] : [])];
       const dispatchResults: Array<{ data: any[] }> = listRows.dispatch.length ? [{ data: listRows.dispatch }] : [];
 
 
@@ -2440,6 +2447,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
           sideToolOpen ? "hidden" : (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
+            showGroupMirrors={showGroupMirrors}
+            onShowGroupMirrorsChange={setShowGroupMirrors}
             conversations={visibleConversations}
             productArrivedCount={waitlist.arrivedCount}
             searchQuery={searchQuery}
