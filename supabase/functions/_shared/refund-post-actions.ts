@@ -10,7 +10,7 @@ function brl(n: number) {
 
 export async function appendRefundHistory(supabase: any, row: any, userEmail: string | null) {
   const when = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  const line = `[ESTORNO ${row.gateway === "austpay" ? "AUSTPAY" : row.gateway === "appmax" ? "APPMAX" : "MP"} ${when}] ${brl(Number(row.amount))} (${row.refund_type}) — motivo: ${row.reason}${row.reason_text ? ` (${row.reason_text})` : ""} — por ${userEmail || row.requested_by || "sistema"}`;
+  const line = `[ESTORNO ${String(row.gateway).toUpperCase()}${row.status==='concluido_manual'?` MANUAL · protocolo ${row.manual_reference}`:''} ${when}] ${brl(Number(row.amount))} (${row.refund_type}) — motivo: ${row.reason}${row.reason_text ? ` (${row.reason_text})` : ""} — por ${userEmail || row.requested_by || "sistema"}`;
   const table = row.source === "order" ? "orders" : "pos_sales";
   try {
     const { data } = await supabase.from(table).select("notes").eq("id", row.source_id).maybeSingle();

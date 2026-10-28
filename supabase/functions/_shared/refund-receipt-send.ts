@@ -52,7 +52,7 @@ export async function planReceiptSend(supabase: any, refundId: string, preferred
     .select("id, source, source_id, amount, status, card_brand, receipt_path, receipt_code, receipt_sent_at, receipt_sent_to, receipt_sent_channel")
     .eq("id", refundId).maybeSingle();
   if (!row) return { ok: false, error: "Estorno não encontrado." };
-  if (row.status !== "concluido") return { ok: false, error: "Só é possível enviar comprovante de estorno concluído." };
+  if (!["concluido","concluido_manual"].includes(row.status)) return { ok: false, error: "Só é possível enviar comprovante de estorno concluído." };
   if (!row.receipt_path || !row.receipt_code) return { ok: false, error: "O comprovante ainda não foi gerado." };
 
   let rawPhone: string | null = null;
@@ -104,7 +104,8 @@ export async function planReceiptSend(supabase: any, refundId: string, preferred
 
 export async function executeReceiptSend(supabase: any, plan: ReceiptSendPlan, text: string, userId: string, userName: string | null) {
   const row = plan.refund;
-  const inst = plan.instance!;
+  const inst = plan.instance;
+  if (!inst || !row) return {ok:false,error:"Comprovante ou instância não disponível."};
   const { data: signed } = await supabase.storage.from("refund-receipts").createSignedUrl(row.receipt_path, 3600);
   const url = signed?.signedUrl;
   if (!url) return { ok: false, error: "Não consegui gerar o link do comprovante." };

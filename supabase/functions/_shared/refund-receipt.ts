@@ -90,7 +90,7 @@ export const RECEIPT_LAYOUT_SINCE = "2026-10-20T01:00:00Z";
 export async function ensureRefundReceipt(supabase: any, refundId: string, regenerate = false): Promise<{ ok: boolean; path?: string; code?: string; error?: string }> {
   const { data: row } = await supabase.from("gateway_refunds").select("*").eq("id", refundId).maybeSingle();
   if (!row) return { ok: false, error: "Estorno não encontrado." };
-  if (row.status !== "concluido") return { ok: false, error: "Comprovante só pode ser gerado para estorno concluído." };
+  if (!["concluido","concluido_manual"].includes(row.status)) return { ok: false, error: "Comprovante só pode ser gerado para estorno concluído." };
   if (row.receipt_path && row.receipt_code && !regenerate) return { ok: true, path: row.receipt_path, code: row.receipt_code };
 
   const { data: account } = await supabase.from("mercadopago_accounts")
@@ -186,6 +186,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   field("Valor original pago", brl(external?.paidAmount ?? purchase.total));
 
   section("Estorno");
+  if (row.status==='concluido_manual') para(`Estorno registrado manualmente · protocolo ${row.manual_reference}`,10,ink);
   field("Valor estornado", brl(Number(row.amount)));
   field("Tipo", row.refund_type === "integral" ? "Integral" : "Parcial");
   field("Concluído em", external ? external.displayedDate : fmtDate(row.completed_at || row.updated_at, true));
@@ -220,7 +221,7 @@ export async function ensureRefundReceipt(supabase: any, refundId: string, regen
   y -= 4;
   const contact = String(cfg?.receipt_footer_contact || "").trim();
   if (contact) para(contact);
-  para(`Documento interno gerado pelo sistema a partir dos dados da transação no ${gwName}.`);
+  para(row.status==='concluido_manual'?`Documento interno: devolução no painel ${gwName} declarada pelo administrador, protocolo ${row.manual_reference}. Não representa nova devolução nem confirmação automática da operadora.`:`Documento interno gerado pelo sistema a partir dos dados da transação no ${gwName}.`);
   para(`Código de verificação: ${code}`);
 
   const bytes = await pdf.save();
