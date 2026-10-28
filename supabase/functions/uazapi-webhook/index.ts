@@ -442,10 +442,13 @@ serve(async (req) => {
       ).replace("@g.us", "").replace(/\D/g, "");
       const name = asString(chat.wa_name) || asString(chat.name) || asString(ev.Name);
       if (groupId) {
+        // Casa pelo ID normalizado (group_jid_base): o group_id gravado pode
+        // ter sufixo (@g.us / -group) e o match direto nunca encontrava a linha.
         const { data: known } = await supabase
           .from("whatsapp_groups")
           .select("id")
-          .eq("group_id", groupId)
+          .eq("group_jid_base", groupId)
+          .limit(1)
           .maybeSingle();
         if (known) {
           const update: AnyObj = {
@@ -453,7 +456,7 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           };
           if (name) update.name = name;
-          await supabase.from("whatsapp_groups").update(update).eq("group_id", groupId);
+          await supabase.from("whatsapp_groups").update(update).eq("group_jid_base", groupId);
         }
       }
       // Rastreamento de movimentação de membros (entrou/saiu/promovido).

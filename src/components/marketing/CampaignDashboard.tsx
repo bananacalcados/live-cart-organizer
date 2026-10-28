@@ -177,7 +177,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       let q = supabase
         .from("whatsapp_group_members")
         .select("id", { count: "exact", head: true })
-        .in("group_id", jids)
+        .in("group_jid_base", jids)
         .not(col, "is", null);
       if (fromIso) q = q.gte(col, fromIso);
       if (toIso) q = q.lte(col, toIso);

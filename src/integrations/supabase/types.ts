@@ -23775,6 +23775,7 @@ export type Database = {
           customer_id: string | null
           display_name: string | null
           group_id: string
+          group_jid_base: string | null
           id: string
           instance_id: string | null
           is_internal: boolean
@@ -23789,6 +23790,7 @@ export type Database = {
           customer_id?: string | null
           display_name?: string | null
           group_id: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           is_internal?: boolean
@@ -23803,6 +23805,7 @@ export type Database = {
           customer_id?: string | null
           display_name?: string | null
           group_id?: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           is_internal?: boolean
@@ -23820,6 +23823,7 @@ export type Database = {
           display_name: string | null
           event_type: string
           group_id: string
+          group_jid_base: string | null
           id: string
           instance_id: string | null
           is_internal: boolean
@@ -23834,6 +23838,7 @@ export type Database = {
           display_name?: string | null
           event_type: string
           group_id: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           is_internal?: boolean
@@ -23848,6 +23853,7 @@ export type Database = {
           display_name?: string | null
           event_type?: string
           group_id?: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           is_internal?: boolean
@@ -23863,6 +23869,7 @@ export type Database = {
           customer_id: string | null
           display_name: string | null
           group_id: string
+          group_jid_base: string | null
           id: string
           instance_id: string | null
           internal_kind: string | null
@@ -23881,6 +23888,7 @@ export type Database = {
           customer_id?: string | null
           display_name?: string | null
           group_id: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           internal_kind?: string | null
@@ -23899,6 +23907,7 @@ export type Database = {
           customer_id?: string | null
           display_name?: string | null
           group_id?: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           internal_kind?: string | null
@@ -23917,18 +23926,21 @@ export type Database = {
       whatsapp_group_snapshots: {
         Row: {
           group_id: string
+          group_jid_base: string | null
           id: string
           participant_count: number
           recorded_at: string
         }
         Insert: {
           group_id: string
+          group_jid_base?: string | null
           id?: string
           participant_count?: number
           recorded_at?: string
         }
         Update: {
           group_id?: string
+          group_jid_base?: string | null
           id?: string
           participant_count?: number
           recorded_at?: string
@@ -23958,6 +23970,7 @@ export type Database = {
           ddd33_total_resolved: number | null
           description: string | null
           group_id: string
+          group_jid_base: string | null
           id: string
           instance_id: string | null
           invite_link: string | null
@@ -23983,6 +23996,7 @@ export type Database = {
           ddd33_total_resolved?: number | null
           description?: string | null
           group_id: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           invite_link?: string | null
@@ -24008,6 +24022,7 @@ export type Database = {
           ddd33_total_resolved?: number | null
           description?: string | null
           group_id?: string
+          group_jid_base?: string | null
           id?: string
           instance_id?: string | null
           invite_link?: string | null
@@ -25118,6 +25133,28 @@ export type Database = {
           leads: number | null
           orphans: number | null
           total_members: number | null
+        }
+        Relationships: []
+      }
+      whatsapp_groups_unified: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          group_jid_base: string | null
+          group_row_ids: string[] | null
+          instance_count: number | null
+          instance_ids: string[] | null
+          is_active: boolean | null
+          is_admin_any: boolean | null
+          is_full: boolean | null
+          is_vip: boolean | null
+          last_synced_at: string | null
+          max_participants: number | null
+          name: string | null
+          participant_count: number | null
+          photo_url: string | null
+          primary_id: string | null
+          unique_members: number | null
         }
         Relationships: []
       }

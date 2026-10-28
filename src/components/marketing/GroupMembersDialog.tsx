@@ -124,12 +124,12 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
         supabase
           .from("whatsapp_group_members")
           .select("id, phone, status, is_admin, is_internal, customer_id, display_name, joined_at, left_at, last_event_at")
-          .eq("group_id", groupDigits)
+          .eq("group_jid_base", groupDigits)
           .order("last_event_at", { ascending: false }),
         supabase
           .from("whatsapp_group_member_events")
           .select("id, phone, event_type, is_internal, customer_id, display_name, created_at")
-          .eq("group_id", groupDigits)
+          .eq("group_jid_base", groupDigits)
           .order("created_at", { ascending: false })
           .limit(150),
         supabase.rpc("get_group_member_activity", { p_group_id: groupDigits }),

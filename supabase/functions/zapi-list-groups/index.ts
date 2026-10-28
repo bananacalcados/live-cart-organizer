@@ -119,6 +119,7 @@ serve(async (req) => {
 
       const rows = groupsOnly.map((g: any) => ({
         group_id: g.phone || g.id,
+        group_jid_base: groupDigits(String(g.phone || g.id || '')),
         name: g.name || 'Sem nome',
         description: g.description || null,
         photo_url: g.imgUrl || g.profileThumbnail || null,
