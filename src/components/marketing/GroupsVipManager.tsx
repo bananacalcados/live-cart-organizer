@@ -33,10 +33,12 @@ import { VipLinksManager } from "./VipLinksManager";
 import { OrphanBaseManager } from "./OrphanBaseManager";
 import { GroupActionsQueuePanel } from "./GroupActionsQueuePanel";
 import { authHeaders } from "@/lib/authHeaders";
+import { Switch } from "@/components/ui/switch";
 
 interface WhatsAppGroup {
   id: string;
   group_id: string;
+  group_jid_base: string; 
   name: string;
   description: string | null;
   photo_url: string | null;
@@ -55,27 +57,6 @@ interface WhatsAppGroup {
   ddd33_count: number | null;
   ddd33_total_resolved: number | null;
   ddd33_synced_at: string | null;
-}
-
-/** Uma linha por grupo lógico (view whatsapp_groups_unified). */
-interface UnifiedGroup {
-  group_jid_base: string;
-  primary_id: string;
-  group_row_ids: string[];
-  name: string;
-  description: string | null;
-  photo_url: string | null;
-  participant_count: number;
-  max_participants: number;
-  instance_ids: string[];
-  instance_count: number;
-  is_admin_any: boolean;
-  is_active: boolean;
-  is_vip: boolean;
-  is_full: boolean;
-  unique_members: number;
-  last_synced_at: string | null;
-  created_at: string;
 }
 
 interface InstanceInfo {
@@ -113,7 +94,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function GroupsVipManager() {
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
-  const [unifiedGroups, setUnifiedGroups] = useState<UnifiedGroup[]>([]);
+  const [vipSaving, setVipSaving] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<GroupCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -156,20 +137,11 @@ export function GroupsVipManager() {
   const fetchGroups = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Visão unificada (1 linha por grupo lógico) para exibição + linhas
-      // físicas por instância para as ações (settings, sync e disparos são
-      // por instância e continuam intocados).
-      const [uRes, rRes] = await Promise.all([
-        supabase.from('whatsapp_groups_unified').select('*'),
-        supabase.from('whatsapp_groups').select('*'),
-      ]);
-      if (uRes.error) throw uRes.error;
-      setGroups((rRes.data || []) as WhatsAppGroup[]);
-      const sorted = ((uRes.data || []) as unknown as UnifiedGroup[]).sort((a, b) => {
-        if (a.is_vip !== b.is_vip) return a.is_vip ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-      setUnifiedGroups(sorted);
+      const { data, error } = await supabase.from('whatsapp_groups')
+        .select('id,group_id,group_jid_base,name,description,photo_url,participant_count,is_admin,is_active,is_vip,is_full,tags,instance_id,last_synced_at,max_participants,invite_link,only_admins_send,only_admins_add,ddd33_count,ddd33_total_resolved,ddd33_synced_at')
+        .order('is_vip', { ascending: false }).order('name');
+      if (error) throw error;
+      setGroups((data || []) as WhatsAppGroup[]);
     } catch { toast.error("Erro ao carregar grupos"); }
     finally { setIsLoading(false); }
   }, []);
@@ -245,34 +217,32 @@ export function GroupsVipManager() {
     finally { setIsSyncing(false); }
   };
 
-  // Ações em um grupo lógico aplicam em TODAS as linhas de instância dele.
-  const toggleVip = async (group: UnifiedGroup) => {
+  const toggleVip = async (group: WhatsAppGroup) => {
+    if (!group.group_jid_base || vipSaving) return;
     const next = !group.is_vip;
-    await supabase.from('whatsapp_groups').update({ is_vip: next }).in('id', group.group_row_ids);
-    setUnifiedGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_vip: next } : g));
-    setGroups(prev => prev.map(g => group.group_row_ids.includes(g.id) ? { ...g, is_vip: next } : g));
+    setVipSaving(group.group_jid_base);
+    try {
+      const { error } = await supabase.from('whatsapp_groups')
+        .update({ is_vip: next }).eq('group_jid_base', group.group_jid_base).neq('is_vip', next);
+      if (error) throw error;
+      setGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_vip: next } : g));
+    } catch { toast.error("Não foi possível salvar Grupo VIP (clientes)"); }
+    finally { setVipSaving(null); }
   };
 
-  const toggleFull = async (group: UnifiedGroup) => {
+  const toggleFull = async (group: WhatsAppGroup) => {
     const next = !group.is_full;
-    await supabase.from('whatsapp_groups').update({ is_full: next }).in('id', group.group_row_ids);
-    setUnifiedGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_full: next } : g));
-    setGroups(prev => prev.map(g => group.group_row_ids.includes(g.id) ? { ...g, is_full: next } : g));
+    const { error } = await supabase.from('whatsapp_groups').update({ is_full: next }).eq('id', group.id);
+    if (error) { toast.error("Não foi possível atualizar o grupo"); return; }
+    setGroups(prev => prev.map(g => g.id === group.id ? { ...g, is_full: next } : g));
   };
 
-  // Selecionar um grupo lógico seleciona todas as linhas de instância dele —
-  // mesmo efeito de marcar as duplicatas uma a uma na lista antiga.
-  const toggleSelectUnified = (group: UnifiedGroup) => {
-    setSelectedGroups(prev => {
-      const all = group.group_row_ids.every(id => prev.includes(id));
-      return all
-        ? prev.filter(id => !group.group_row_ids.includes(id))
-        : [...new Set([...prev, ...group.group_row_ids])];
-    });
+  const toggleSelect = (group: WhatsAppGroup) => {
+    setSelectedGroups(prev => prev.includes(group.id) ? prev.filter(id => id !== group.id) : [...prev, group.id]);
   };
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedGroups(checked ? [...new Set(filteredGroups.flatMap(g => g.group_row_ids))] : []);
+    setSelectedGroups(checked ? filteredGroups.map(g => g.id) : []);
   };
 
   const createCampaign = async () => {
@@ -347,11 +317,9 @@ export function GroupsVipManager() {
     }
   };
 
-  // Grupos lógicos por instância para o filtro (um grupo conta em cada
-  // instância da qual participa).
-  const instanceGroupCounts = unifiedGroups.reduce<Record<string, number>>((acc, g) => {
-    const ids = g.instance_ids.length > 0 ? g.instance_ids : ['__none__'];
-    for (const key of ids) acc[key] = (acc[key] || 0) + 1;
+  const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    const key = g.instance_id || '__none__';
+    acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
   const instanceOptions = Object.keys(instanceGroupCounts).map(key => {
@@ -360,24 +328,15 @@ export function GroupsVipManager() {
     return { key, label: info ? info.label : `Desconhecida (${key.slice(0, 8)}…)`, count: instanceGroupCounts[key] };
   });
 
-  const sortGroups = (arr: UnifiedGroup[]) =>
-    sortByDdd33
-      ? [...arr].sort((a, b) => (ddd33Of(b) ?? -1) - (ddd33Of(a) ?? -1))
-      : arr;
+  const sortGroups = (arr: WhatsAppGroup[]) => sortByDdd33
+    ? [...arr].sort((a, b) => (b.ddd33_count ?? -1) - (a.ddd33_count ?? -1)) : arr;
 
-  // ddd33 fica na linha física primária (a mais recentemente sincronizada).
-  const ddd33Of = (g: UnifiedGroup) =>
-    groups.find(r => r.id === g.primary_id)?.ddd33_count ?? null;
-
-  const filteredGroups = unifiedGroups.filter(g => {
+  const filteredGroups = groups.filter(g => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!g.name.toLowerCase().includes(q) && !g.group_jid_base.includes(q)) return false;
+      if (!g.name.toLowerCase().includes(q) && !g.group_jid_base?.includes(q)) return false;
     }
-    if (instanceFilter !== 'all') {
-      const ids = g.instance_ids.length > 0 ? g.instance_ids : ['__none__'];
-      if (!ids.includes(instanceFilter)) return false;
-    }
+    if (instanceFilter !== 'all' && (g.instance_id || '__none__') !== instanceFilter) return false;
     if (groupFilter === 'vip') return g.is_vip;
     if (groupFilter === 'full') return g.is_full;
     if (groupFilter === 'available') return !g.is_full;
@@ -487,7 +446,7 @@ export function GroupsVipManager() {
 
           {isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : unifiedGroups.length === 0 ? (
+          ) : groups.length === 0 ? (
             <Card><CardContent className="py-12 text-center">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground">Nenhum grupo sincronizado.</p>
@@ -502,19 +461,16 @@ export function GroupsVipManager() {
                       <Crown className="h-3.5 w-3.5 text-amber-500" /> VIP ({vipGroups.length})
                     </p>
                     <div className="grid gap-2">
-                      {vipGroups.map(g => {
-                        const primaryRow = groups.find(r => r.id === g.primary_id) || null;
-                        return (
-                          <GroupCard key={g.group_jid_base} group={g} primaryRow={primaryRow}
-                            isSelected={g.group_row_ids.every(id => selectedGroups.includes(id))}
-                            instance={g.instance_ids.length === 1 ? resolveInstance(g.instance_ids[0]) : null}
-                            canSend={!selectedNumberId || g.instance_ids.some(iid => resolveInstance(iid)?.id === selectedNumberId)}
-                            onToggleSelect={() => toggleSelectUnified(g)}
-                            onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                            onOpenSettings={() => primaryRow && setSettingsGroup(primaryRow)}
-                            onOpenMembers={() => primaryRow && setMembersGroup(primaryRow)} />
-                        );
-                      })}
+                      {vipGroups.map(g => (
+                        <GroupCard key={g.id} group={g}
+                          isSelected={selectedGroups.includes(g.id)}
+                          instance={resolveInstance(g.instance_id)}
+                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
+                          vipSaving={vipSaving === g.group_jid_base}
+                          onToggleSelect={() => toggleSelect(g)}
+                          onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
+                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
+                      ))}
 
                     </div>
                   </div>
@@ -523,19 +479,16 @@ export function GroupsVipManager() {
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-2">OUTROS ({otherGroups.length})</p>
                     <div className="grid gap-2">
-                      {otherGroups.map(g => {
-                        const primaryRow = groups.find(r => r.id === g.primary_id) || null;
-                        return (
-                          <GroupCard key={g.group_jid_base} group={g} primaryRow={primaryRow}
-                            isSelected={g.group_row_ids.every(id => selectedGroups.includes(id))}
-                            instance={g.instance_ids.length === 1 ? resolveInstance(g.instance_ids[0]) : null}
-                            canSend={!selectedNumberId || g.instance_ids.some(iid => resolveInstance(iid)?.id === selectedNumberId)}
-                            onToggleSelect={() => toggleSelectUnified(g)}
-                            onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                            onOpenSettings={() => primaryRow && setSettingsGroup(primaryRow)}
-                            onOpenMembers={() => primaryRow && setMembersGroup(primaryRow)} />
-                        );
-                      })}
+                      {otherGroups.map(g => (
+                        <GroupCard key={g.id} group={g}
+                          isSelected={selectedGroups.includes(g.id)}
+                          instance={resolveInstance(g.instance_id)}
+                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
+                          vipSaving={vipSaving === g.group_jid_base}
+                          onToggleSelect={() => toggleSelect(g)}
+                          onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
+                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
+                      ))}
 
                     </div>
                   </div>
@@ -707,9 +660,9 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
-  group: UnifiedGroup;
-  primaryRow: WhatsAppGroup | null;
+function GroupCard({ group, isSelected, instance, canSend, vipSaving, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
+  group: WhatsAppGroup;
+  vipSaving: boolean;
   isSelected: boolean;
   instance: InstanceInfo | null;
   canSend: boolean;
@@ -719,13 +672,10 @@ function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleS
   onOpenSettings: () => void;
   onOpenMembers: () => void;
 }) {
-  const instanceLabel = group.instance_count > 1
-    ? `${group.instance_count} instâncias`
-    : instance ? instance.label : (group.instance_ids.length > 0 ? "Instância desconhecida" : "Sem instância");
-  const ddd33 = primaryRow?.ddd33_count ?? null;
-  const ddd33Pct = ddd33 != null && primaryRow?.ddd33_total_resolved
-    ? Math.round((ddd33 / primaryRow.ddd33_total_resolved) * 100)
-    : null;
+  const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
+  const ddd33 = group.ddd33_count ?? null;
+  const ddd33Pct = ddd33 != null && group.ddd33_total_resolved
+    ? Math.round((ddd33 / group.ddd33_total_resolved) * 100) : null;
   return (
     <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${canSend ? 'bg-card hover:bg-muted/50' : 'bg-muted/40 opacity-70'}`}>
       <Checkbox checked={isSelected} disabled={!canSend} onCheckedChange={() => onToggleSelect()} />
@@ -740,11 +690,6 @@ function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleS
         <p className="text-sm font-medium truncate">{group.name}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">{group.participant_count}/{group.max_participants}</span>
-          {group.unique_members > 0 && (
-            <span className="text-xs text-muted-foreground" title="Telefones únicos rastreados (cada pessoa conta uma vez, mesmo vista por mais de uma instância)">
-              · {group.unique_members} rastreados
-            </span>
-          )}
           {group.is_active === false && <Badge variant="destructive" className="text-[10px]">Inativo</Badge>}
           <Badge variant="outline" className="text-[10px] gap-0.5">
             <Smartphone className="h-2.5 w-2.5" />{instanceLabel}
@@ -759,9 +704,9 @@ function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleS
               <AlertTriangle className="h-2.5 w-2.5" />Não envia por esta instância
             </Badge>
           )}
-          {group.is_admin_any && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
+          {group.is_admin && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
           {group.is_full && <Badge variant="destructive" className="text-[10px]">Cheio</Badge>}
-          {primaryRow?.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
+          {group.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
         </div>
       </div>
 
@@ -770,10 +715,11 @@ function GroupCard({ group, primaryRow, isSelected, instance, canSend, onToggleS
           title={group.is_full ? "Marcar disponível" : "Marcar cheio"}>
           <div className={`h-2.5 w-2.5 rounded-full ${group.is_full ? 'bg-red-500' : 'bg-emerald-500'}`} />
         </Button>
-        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); onToggleVip(); }}
-          className={`h-8 w-8 ${group.is_vip ? 'text-amber-500' : 'text-muted-foreground'}`}>
-          <Star className={`h-4 w-4 ${group.is_vip ? 'fill-amber-500' : ''}`} />
-        </Button>
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <span>Grupo VIP (clientes)</span>
+          <Switch aria-label={`Grupo VIP (clientes): ${group.name} — ${instanceLabel}`}
+            checked={group.is_vip} disabled={vipSaving} onCheckedChange={onToggleVip} />
+        </label>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onOpenMembers(); }}
           title="Ver membros e lead scoring">
           <Users className="h-4 w-4" />
