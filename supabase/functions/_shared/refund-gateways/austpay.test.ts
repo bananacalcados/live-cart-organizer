@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { inspectAustpayTransaction, matchAustpayRefund, submitAustpayRefund } from "./austpay";
 
 const src = { id: "sale", austpayTransactionId: "transaction", austpayReferenceIds: ["order"], total: 359.99 };
-const tx = { id: "transaction", currency: "BRL", payment_method: "CREDIT_CARD", status: "APPROVED", approved_amount: 35999, refunded_amount: 0, approved_at: "2026-10-27T20:04:47Z", refunds: [] };
+const tx = { id: "transaction", currency: "BRL", payment_method: "CREDIT_CARD", status: "APPROVED", approved_amount: 35999, refunded_amount: 0, approved_at: "2026-10-27T20:04:47Z", refunds: [], ledger_entries: [{type:"TRANSACTION",payment_date:"2099-01-01"}] };
 afterEach(() => vi.unstubAllGlobals());
 describe("AustPay integral seguro", () => {
   it("Adriana: integral é exatamente 35999 centavos", () => {
@@ -43,7 +43,7 @@ describe("AustPay integral seguro", () => {
     const result = await submitAustpayRefund({ apiKey: "test", merchantId: "m1", provider: null, env: "production", baseUrl: "https://example.test" }, { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" });
     expect(result.kind).toBe("verificar"); expect(fetch).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(payload.refund_amount).toBe(35999); expect(payload.refund_reason).toBe("CUSTOMER_REQUEST");
+    expect(payload).not.toHaveProperty("refund_amount"); expect(payload.refund_reason).toBe("CUSTOMER_REQUEST");
   });
   it("sucesso HTTP pendente não vira comprovante", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...tx, status: "PENDING_REFUND" })));
@@ -51,23 +51,22 @@ describe("AustPay integral seguro", () => {
     const result = await submitAustpayRefund({ apiKey: "test", merchantId: "m1", provider: null, env: "production", baseUrl: "https://example.test" }, { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" });
     expect(result.kind).toBe("verificar"); expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it("resposta 409 mantém trava sem repetir", async () => {
+  it("resposta 409 falha sem repetir", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "conflict" }), { status: 409 })); vi.stubGlobal("fetch", fetch);
     const result = await submitAustpayRefund({ apiKey: "test", merchantId: "m1", provider: null, env: "production", baseUrl: "https://example.test" }, { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" });
-    expect(result.kind).toBe("verificar"); expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.kind).toBe("failed"); expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
-import { describe as d2, it as i2, expect as e2, vi as v2 } from "vitest";
-d2("AustPay rota do estabelecimento", () => {
-  i2("descobre o merchant da transação e estorna pela rota dele", async () => {
-    const calls: string[] = [];
-    v2.stubGlobal("fetch", v2.fn(async (url: string) => {
-      calls.push(url);
-      if (calls.length === 1) return new Response(JSON.stringify({ id: "tx", company_id: "6b56" }), { status: 200 });
-      return new Response(JSON.stringify({ error: { message: "x" } }), { status: 400 });
-    }));
-    await submitAustpayRefund({ apiKey: "t", merchantId: null, provider: null, env: "production", baseUrl: "https://e.t" } as any, { id: "l", payment_id: "tx", amount: 1, reason: "r" });
-    e2(calls[1]).toBe("https://e.t/v1/merchants/6b56/transactions/tx/refunds");
-    v2.unstubAllGlobals();
-  });
+describe("rota direta e mensagens",()=>{
+ it("usa somente rota direta mesmo com merchant configurado",async()=>{
+  const f=vi.fn().mockResolvedValue(new Response(JSON.stringify({status:"PENDING_REFUND"})));vi.stubGlobal("fetch",f);
+  await submitAustpayRefund({apiKey:"test",merchantId:"merchant",provider:null,env:"production",baseUrl:"https://example.test"},{id:"local",payment_id:"transaction",reason:"outro"});
+  expect(f.mock.calls[0][0]).toBe("https://example.test/v1/transactions/transaction/refunds");
+  expect(JSON.parse(f.mock.calls[0][1].body).metadata).toEqual({refund_source:"erp",refund_row_id:"local"});expect(f).toHaveBeenCalledTimes(1);
+ });
+ it.each([[400,"This transaction can no longer be refunded because settlement is already in progress.","liquidação"],[403,"forbidden","transaction.refund"],[409,"conflict","status/limite"]])("HTTP %s claro",async(status,issue,message)=>{
+  vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({details:{issues:[{value:issue}]}}),{status:Number(status)})));
+  const r=await submitAustpayRefund({apiKey:"test",merchantId:null,provider:null,env:"production",baseUrl:"https://example.test"},{id:"local",payment_id:"transaction",reason:"outro"});
+  expect(r.kind).toBe("failed");expect(r.error).toContain(message);
+ });
 });

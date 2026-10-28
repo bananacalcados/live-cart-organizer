@@ -21,6 +21,10 @@ async function persist(sb: any, row: any, tx: any, match: any, error?: string) {
 export async function executeAustpay(sb: any, row: any, src: AustpaySource) {
   const check = await austpayCheckPayment(sb, src, Number(row.amount));
   if (!check.ok || !("cfg" in check) || !check.cfg) {
+    if ('gateway_window_open' in check && check.gateway_window_open===false) {
+      await sb.from('gateway_refunds').update({status:'aguardando_aprovacao',error_message:check.error,updated_at:new Date().toISOString()}).eq('id',row.id).eq('status','processando');
+      return {ok:false,error:check.error};
+    }
     await sb.from("gateway_refunds").update({ status: "verificar", error_message: check.error, updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "processando");
     return { ok: false, verificar: true, error: check.error };
   }

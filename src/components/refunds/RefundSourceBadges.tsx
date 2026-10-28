@@ -10,6 +10,7 @@ const OTHER: Record<string, string> = {
   processando: "Estorno em processamento",
   verificar: "Estorno em verificação — não refaça",
   recusado: "Estorno recusado",
+  concluido_manual: "Estornado · Manual",
 };
 
 /** Selo de estorno no cartão da venda/pedido. Botões só para quem tem permissão (o servidor valida de novo). */
@@ -22,18 +23,18 @@ export function RefundSourceBadges({ badges, canRefund }: { badges: RefundBadge[
         <div
           key={b.id}
           className={`flex flex-wrap items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-bold ${
-            b.status === "concluido" ? "border-primary/40 bg-primary/10 text-primary"
+            ["concluido","concluido_manual"].includes(b.status) ? "border-primary/40 bg-primary/10 text-primary"
               : b.status === "recusado" ? "border-border bg-muted text-muted-foreground"
               : "border-destructive/40 bg-destructive/10 text-destructive"
           }`}
         >
           <span>
-            {b.status === "concluido"
-              ? `Estornado ${brl(b.amount)} em ${dm(b.completed_at || b.created_at)} (${b.refund_type})`
+            {["concluido","concluido_manual"].includes(b.status)
+              ? `Estornado ${brl(b.amount)} em ${dm(b.completed_at || b.created_at)} (${b.refund_type})${b.status==='concluido_manual'?' · Manual':''}`
               : OTHER[b.status] || b.status}
           </span>
-          {b.status === "concluido" && canRefund && <RefundReceiptButton refundId={b.id} />}
-          {b.status === "concluido" && canRefund && b.has_receipt && <SendRefundReceiptButton refundId={b.id} sentAt={b.receipt_sent_at} />}
+          {["concluido","concluido_manual"].includes(b.status) && canRefund && <RefundReceiptButton refundId={b.id} />}
+          {["concluido","concluido_manual"].includes(b.status) && canRefund && b.has_receipt && <SendRefundReceiptButton refundId={b.id} sentAt={b.receipt_sent_at} />}
         </div>
       ))}
     </div>

@@ -232,7 +232,7 @@ serve(async (req) => {
   try {
     const { data: noReceipt } = await supabase
       .from("gateway_refunds").select("id")
-      .eq("status", "concluido").is("receipt_path", null)
+      .in("status", ["concluido","concluido_manual"]).is("receipt_path", null)
       .order("completed_at", { ascending: true }).limit(3);
     for (const r of noReceipt || []) {
       const res = await ensureRefundReceipt(supabase, r.id);
@@ -241,7 +241,7 @@ serve(async (req) => {
     // Comprovantes no layout antigo: regera no mesmo caminho, mesmo código.
     const { data: old } = await supabase
       .from("gateway_refunds").select("id")
-      .eq("status", "concluido").not("receipt_path", "is", null)
+      .in("status", ["concluido","concluido_manual"]).not("receipt_path", "is", null)
       .lt("receipt_generated_at", RECEIPT_LAYOUT_SINCE)
       .order("completed_at", { ascending: true }).limit(3);
     for (const r of old || []) {

@@ -18,6 +18,7 @@ import { loadMpSalePayments, MP_SALE_AMBIGUOUS } from "../_shared/mp-sale-paymen
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 import { applyRefundListFilters } from "../_shared/refund-list.ts";
+import { validateManualRefund, persistManualRefund } from "../_shared/refund-manual.ts";
 
 
 const REASONS = ["cancelamento_antes_envio", "devolucao", "troca_com_diferenca", "outro"] as const;
@@ -213,6 +214,51 @@ serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "Corpo inválido." }, 400); }
   const action = String(body?.action || "");
 
+  // This action records evidence only. No provider refund endpoint is called.
+  if (action === "register_manual") {
+    if (!isAdmin) return json({ error: "Só administradores podem registrar estornos manuais." }, 403);
+    const validation=validateManualRefund(body);
+    if (validation) return json({error:validation},400);
+    if (!userEmail) return json({error:"Sessão inválida."},401);
+    const passwordClient=createClient(supabaseUrl,anonKey,{auth:{persistSession:false,autoRefreshToken:false}});
+    const {data: login,error: loginError}=await passwordClient.auth.signInWithPassword({email:userEmail,password:body.password});
+    if (loginError || login.user?.id!==userId) return json({error:"Senha incorreta."},403);
+    const src=await loadSource(supabase,body.source,body.source_id);
+    if (!src || src.paymentError) return json({error:"Compra não verificável."},400);
+    const linkedIds=[src.id,...(src.austpayReferenceIds||[])];
+    const {data:splits,error:splitError}=await supabase.from('payment_splits').select('id').or(`sale_id.in.(${linkedIds.join(',')}),order_id.in.(${linkedIds.join(',')})`).limit(1);
+    if(splitError||splits?.length) return json({error:'Compra com pagamento dividido ou não verificável; registro manual bloqueado.'},400);
+    // Check the real captured gateway, ignoring window/refund-history eligibility for manual evidence.
+    const gw=await checkAny(supabase,src,null);
+    let gateway:string=gw.gateway, paymentId=gw.payId, p=gw.check.payment;
+    let captured:number|null=null;
+    if (gateway==='austpay' && p?.id===src.austpayTransactionId && p.currency==='BRL' && p.payment_method==='CREDIT_CARD' && ['APPROVED','REFUNDED','PARTIALLY_REFUNDED'].includes(p.status) && Number.isSafeInteger(p.approved_amount) && p.approved_amount===Math.round(src.total*100) && !/invalidada|dividido|referência|identidade/i.test(gw.check.error||'')) {
+      const ref=p.external_reference??p.metadata?.order_id??p.metadata?.sale_id;
+      if(!ref||linkedIds.includes(String(ref))) captured=p.approved_amount/100;
+    }
+    if (gateway==='mercadopago' && p && ['approved','partially_refunded','refunded'].includes(p.status)) captured=Number(p.transaction_amount);
+    if (gateway==='appmax' && p && (gw.check.ok || /estornado/.test(gw.check.error||''))) captured=Number(p.amount);
+    // Other gateways: exact provider IDs persisted on the source, never gateway labels.
+    if (captured===null && !src.austpayTransactionId && !src.appmaxOrderId) {
+      const lookup=body.source==='order'
+        ? await supabase.from('orders').select('pagarme_order_id,vindi_transaction_id').eq('id',src.id).maybeSingle()
+        : await supabase.from('pos_sales').select('pagarme_order_id,vindi_transaction_id,source_order_id').eq('id',src.id).maybeSingle();
+      let ids:any=lookup.data;
+      if (body.source==='pos_sale' && ids?.source_order_id) {
+        const linked=await supabase.from('orders').select('pagarme_order_id,vindi_transaction_id').eq('id',ids.source_order_id).maybeSingle();
+        ids={...linked.data,...Object.fromEntries(Object.entries(ids).filter(([,v])=>v!=null))};
+      }
+      const options=[['pagarme',ids?.pagarme_order_id],['vindi',ids?.vindi_transaction_id]].filter(([,id])=>id);
+      if (options.length===1 && src.isPaid) { gateway=String(options[0][0]);paymentId=String(options[0][1]);captured=src.total; }
+    }
+    if (!paymentId || !captured || gateway!==body.gateway || body.amount>captured || !src.isPaid) return json({error:"Gateway ou valor não confere com a compra paga."},400);
+    const payload={gateway,source:body.source,source_id:src.id,payment_id:paymentId,mp_account_id:gateway==='mercadopago'?gw.check.account?.account_id:null,amount:body.amount,refund_type:Math.abs(body.amount-captured)<0.005?'integral':'parcial',reason:body.reason,reason_text:body.note?.trim()||null,manual_reference:body.manual_reference.trim(),manual_done_at:body.manual_done_at,manual_registered_by:userId,card_brand:gateway==='austpay'?p.card_data?.brand:gateway==='mercadopago'?(p.payment_method_id==='pix'?null:p.payment_method_id):p?.cardBrand||null,card_last4:p?.card_data?.last_digits||p?.card?.last_four_digits||p?.cardLast4||null,installments:p?.installments||null};
+    const {id,error}=await persistManualRefund(supabase,payload,!!isAdmin);
+    if (error || !id) return json({error:error||"Não foi possível registrar; confira se já existe estorno."},409);
+    await runRefundPostActions(supabase,{...payload,id,status:'concluido_manual'},userEmail);
+    return json({ok:true,refund_id:id,status:'concluido_manual',message:'Estorno feito no painel registrado; nenhum dinheiro movimentado pelo sistema.'});
+  }
+
   // ── Configuração (leitura: quem tem permissão; escrita: só admin) ──
   if (action === "get_config") {
     const cfg = await getConfig(supabase);
@@ -280,7 +326,7 @@ serve(async (req) => {
     if (ids.length === 0) return json({ ok: true, refunds: [] });
     const { data } = await supabase.from("gateway_refunds")
       .select("id, source, source_id, amount, completed_at, receipt_code, receipt_path, receipt_sent_at")
-      .in("source_id", ids).eq("status", "concluido")
+      .in("source_id", ids).in("status", ["concluido","concluido_manual"])
       .order("completed_at", { ascending: false }).limit(200);
     return json({ ok: true, refunds: data || [] });
   }
@@ -329,7 +375,7 @@ serve(async (req) => {
     if (scope) {
       const limit = Math.min(100, Math.max(1, Number(body?.limit) || 50));
       const page = Math.max(0, Number(body?.page) || 0);
-      const cols = "id, gateway, mp_account_id, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to";
+      const cols = "id, gateway, mp_account_id, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to, manual_reference, manual_done_at, manual_registered_by";
       const q: any = applyRefundListFilters(supabase.from("gateway_refunds").select(cols), { ...body, scope });
       const search = String(body?.search || "").trim().toLowerCase().slice(0, 60);
       let rows: any[]; let hasMore: boolean;
@@ -352,7 +398,7 @@ serve(async (req) => {
     // Admin > Pagamentos: só o aviso de Pix concluído pronto para enviar.
     const { data: readySrc } = await supabase.from("gateway_refunds")
       .select("id, source, source_id, amount, requested_by, approved_by")
-      .eq("status", "concluido").is("card_brand", null).not("receipt_path", "is", null).is("receipt_sent_at", null)
+      .in("status", ["concluido","concluido_manual"]).is("card_brand", null).not("receipt_path", "is", null).is("receipt_sent_at", null)
       .order("created_at", { ascending: false }).limit(20);
     const readyRows = await enrich(readySrc || []);
     const readyToSend = readyRows.map((r: any) => ({ id: r.id, amount: r.amount, customer_name: r.customer_name }));
@@ -452,7 +498,7 @@ serve(async (req) => {
     for (const { res, src } of candidates) {
       if (src.paymentId && pointPays.has(src.paymentId)) { res.gateway = "Point"; res.reason = "Maquininha Point — ainda não suportado"; continue; }
       const act = (src.paymentId && activeBy.get(src.paymentId)) || (src.appmaxOrderId && activeBy.get(src.appmaxOrderId)) || (src.austpayTransactionId && activeBy.get(src.austpayTransactionId));
-      if (act) { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
+      if (act && act!=='aguardando_aprovacao') { res.reason = `Estorno em andamento (${ACTIVE_LABEL[act] || act})`; continue; }
       if (checked >= 10) { res.retry = true; res.reason = RETRY; continue; }
       checked++;
       let gw: GwCheck;
@@ -461,8 +507,10 @@ serve(async (req) => {
       if (gw.gateway === "austpay") {
         const c = gw.check; const p = c.payment;
         res.gateway = "AustPay";
+        Object.assign(res,{gateway_window_closes_at:c.gateway_window_closes_at,gateway_window_open:c.gateway_window_open,gateway_window_note:c.gateway_window_note,window_source:c.window_source});
         if (p) { res.method = "cartao"; res.cardLast4 = p.card_data?.last_digits; res.installments = p.installments; res.dateApproved = p.approved_at; }
         res.eligible = !!c.ok; res.remaining = c.remaining; res.reason = c.ok ? undefined : c.error; res.retry = c.retry; (res as any).fullOnly = true;
+        if(act){res.eligible=false;res.reason=`Estorno em andamento (${ACTIVE_LABEL[act]||act})`;}
         continue;
       }
       if (gw.gateway === "appmax") {
@@ -529,7 +577,7 @@ serve(async (req) => {
 
     if (gw.gateway === "austpay") {
       const p = check.payment;
-      return json({ ok: check.ok, error: check.error, gateway: "AustPay", fullOnly: true, fullOnlyNotice: AUSTPAY_FULL_ONLY,
+      return json({ ok: check.ok, error: check.error, gateway: "AustPay", fullOnly: true, fullOnlyNotice: AUSTPAY_FULL_ONLY, gateway_window_closes_at:check.gateway_window_closes_at,gateway_window_open:check.gateway_window_open,gateway_window_note:check.gateway_window_note,window_source:check.window_source,
         source: { id: src.id, label: src.label, channel: src.channel, total: src.total, customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped, stageOrStatus: src.stageOrStatus, createdAt: src.createdAt },
         payment: p ? { id: p.id, status: p.status, method: p.card_data?.brand || "cartao", type: "credit_card", amount: p.approved_amount / 100, dateApproved: p.approved_at, cardLast4: p.card_data?.last_digits, installments: p.installments, accountName: "AustPay" } : null,
         remaining: check.remaining, refundedSoFar: check.refundedSoFar, existingRefunds: existing || [] });
