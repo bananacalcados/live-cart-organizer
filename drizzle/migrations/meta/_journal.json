@@ -568,6 +568,13 @@
       "when": 1793161736996,
       "tag": "0080_revert_unified_groups_manual_vip",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793161860264,
+      "tag": "0081_group_vip_report_normalized_members",
+      "breakpoints": true
     }
   ]
 }
