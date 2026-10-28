@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Expedição e estorno AustPay — 28/10
+- [ ] Primeiro investigar os 90 pedidos da live de ontem ausentes na Expedição e corrigir a causa comprovada.
+- [ ] Integrar estorno AustPay ao fluxo protegido existente, com acompanhamento e comprovante; sem publicação nem estorno real durante testes.
+- [ ] Estorno integral da Adriana R$ 359,99 por desistência do modelo antes do envio, somente após integração e conferência das condições reais.
+
 ## Grupos WhatsApp — escopo corrigido 28/10
 - [x] Reverter Bloco 2: visão removida, 203 linhas por instância e seleção/ações individuais restauradas; Bloco 1 preservado.
 - [x] Bloco 3: VIP manual por group_jid_base, inicialmente desmarcado, relatórios VIP só is_vip=true; novas instâncias herdam somente marcação manual existente.
