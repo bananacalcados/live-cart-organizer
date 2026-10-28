@@ -369,6 +369,7 @@ export async function snapshotGroupMembers(
     if (cust) stats.customers++;
     return {
       group_id: groupId,
+      group_jid_base: digitsOf(groupId),
       instance_id: numberId,
       phone: c.phone,
       jid: c.jid,
@@ -492,6 +493,7 @@ export async function recordGroupActivity(
 
     const row: AnyObj = {
       group_id: groupId,
+      group_jid_base: digitsOf(groupId),
       instance_id: input.instanceId,
       phone,
       jid: input.jid ?? null,
