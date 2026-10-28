@@ -10,6 +10,7 @@ import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { LiveQuickActionsDialog } from "./LiveQuickActionsDialog";
 import { SelfServiceQueueAlerts } from "./SelfServiceQueueAlerts";
+import { GroupResponsibleAlerts } from "@/components/marketing/GroupResponsibleAlerts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Plus, Truck, Users, Zap } from "lucide-react";
@@ -154,6 +155,7 @@ export function LiveAttendanceCenter({
   return (
     <>
     <SelfServiceQueueAlerts eventId={eventId} />
+    <div className="px-3 pb-2"><GroupResponsibleAlerts compact /></div>
     <div className="flex h-[calc(100vh-7rem)] min-h-[600px] gap-3 px-3 pb-3">
       {/* Coluna 1 — fila */}
       <div className="hidden w-[280px] shrink-0 lg:block">
