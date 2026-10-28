@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Grupos WhatsApp — escopo corrigido 28/10
+- [ ] Reverter Bloco 2 (visão unificada e seleção/ações deduplicadas), preservando Bloco 1.
+- [ ] Bloco 3: VIP manual por group_jid_base, inicialmente desmarcado, relatórios VIP só is_vip=true.
+- [ ] Verificar tela, persistência, auditoria e arquivos; sem publicar ou alterar disparos/automações.
+
 ## Frete padrão do evento — 27/10
 - [x] Aplicar regra do evento automaticamente nos pedidos de autoatendimento, preservando isenções e valores manuais; 12 regras verificadas na função instalada e teste de marcar/desmarcar com rollback.
 - [x] Corrigir o pedido aberto do tênis sem frete definido desta live; carrinho real exibiu R$ 19,99 sem erros, sem cobrar nem publicar. Pagos, cancelados e tentativas vinculadas preservados.
