@@ -237,8 +237,10 @@ serve(async (req) => {
     if (gateway==='appmax' && p && (gw.check.ok || /estornado/.test(gw.check.error||''))) captured=Number(p.amount);
     // Other gateways: exact provider IDs persisted on the source, never gateway labels.
     if (captured===null) {
-      const lookup=await supabase.from(body.source==='order'?'orders':'pos_sales').select(body.source==='order'?'pagarme_order_id,vindi_transaction_id':'pagarme_order_id,vindi_transaction_id,source_order_id').eq('id',src.id).maybeSingle();
-      let ids=lookup.data;
+      const lookup=body.source==='order'
+        ? await supabase.from('orders').select('pagarme_order_id,vindi_transaction_id').eq('id',src.id).maybeSingle()
+        : await supabase.from('pos_sales').select('pagarme_order_id,vindi_transaction_id,source_order_id').eq('id',src.id).maybeSingle();
+      let ids:any=lookup.data;
       if (body.source==='pos_sale' && ids?.source_order_id) {
         const linked=await supabase.from('orders').select('pagarme_order_id,vindi_transaction_id').eq('id',ids.source_order_id).maybeSingle();
         ids={...linked.data,...Object.fromEntries(Object.entries(ids).filter(([,v])=>v!=null))};
