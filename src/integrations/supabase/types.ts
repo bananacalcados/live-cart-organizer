@@ -25136,28 +25136,6 @@ export type Database = {
         }
         Relationships: []
       }
-      whatsapp_groups_unified: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          group_jid_base: string | null
-          group_row_ids: string[] | null
-          instance_count: number | null
-          instance_ids: string[] | null
-          is_active: boolean | null
-          is_admin_any: boolean | null
-          is_full: boolean | null
-          is_vip: boolean | null
-          last_synced_at: string | null
-          max_participants: number | null
-          name: string | null
-          participant_count: number | null
-          photo_url: string | null
-          primary_id: string | null
-          unique_members: number | null
-        }
-        Relationships: []
-      }
       whatsapp_messages_unified: {
         Row: {
           channel: string | null
