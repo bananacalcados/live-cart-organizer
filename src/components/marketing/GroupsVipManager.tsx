@@ -487,7 +487,7 @@ export function GroupsVipManager() {
 
           {isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : groups.length === 0 ? (
+          ) : unifiedGroups.length === 0 ? (
             <Card><CardContent className="py-12 text-center">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground">Nenhum grupo sincronizado.</p>
