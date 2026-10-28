@@ -232,11 +232,14 @@ serve(async (req) => {
     const gw=await checkAny(supabase,src,null);
     let gateway:string=gw.gateway, paymentId=gw.payId, p=gw.check.payment;
     let captured:number|null=null;
-    if (gateway==='austpay' && p?.id===src.austpayTransactionId && ['APPROVED','REFUNDED','PARTIALLY_REFUNDED'].includes(p.status) && Number.isSafeInteger(p.approved_amount)) captured=p.approved_amount/100;
+    if (gateway==='austpay' && p?.id===src.austpayTransactionId && p.currency==='BRL' && p.payment_method==='CREDIT_CARD' && ['APPROVED','REFUNDED','PARTIALLY_REFUNDED'].includes(p.status) && Number.isSafeInteger(p.approved_amount) && p.approved_amount===Math.round(src.total*100) && !/invalidada|dividido|referência|identidade/i.test(gw.check.error||'')) {
+      const ref=p.external_reference??p.metadata?.order_id??p.metadata?.sale_id;
+      if(!ref||linkedIds.includes(String(ref))) captured=p.approved_amount/100;
+    }
     if (gateway==='mercadopago' && p && ['approved','partially_refunded','refunded'].includes(p.status)) captured=Number(p.transaction_amount);
     if (gateway==='appmax' && p && (gw.check.ok || /estornado/.test(gw.check.error||''))) captured=Number(p.amount);
     // Other gateways: exact provider IDs persisted on the source, never gateway labels.
-    if (captured===null) {
+    if (captured===null && !src.austpayTransactionId && !src.appmaxOrderId) {
       const lookup=body.source==='order'
         ? await supabase.from('orders').select('pagarme_order_id,vindi_transaction_id').eq('id',src.id).maybeSingle()
         : await supabase.from('pos_sales').select('pagarme_order_id,vindi_transaction_id,source_order_id').eq('id',src.id).maybeSingle();
