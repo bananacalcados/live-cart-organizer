@@ -46,7 +46,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [doneRefund, setDoneRefund] = useState<{ id: string; status?: string } | null>(null);
 
-  const parsedAmount = useMemo(() => Number(String(amount).replace(",", ".")), [amount]);
+  const parsedAmount = useMemo(() => parseBrlAmount(amount), [amount]);
   const remaining = preview?.remaining ?? 0;
   const isFull = remaining > 0 && Math.abs(parsedAmount - remaining) < 0.005;
   const canSuggestCancel = source === "order" && isFull && preview?.source && !preview.source.shipped;
@@ -98,7 +98,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
 
   const submit = async () => {
     if (isAdmin) {
-      const typed = Number(String(typedAmount).replace(",", "."));
+      const typed = parseBrlAmount(typedAmount);
       if (!confirmationAmountMatches(typed, parsedAmount)) {
         setError("O valor digitado não confere com o valor do estorno.");
         return;
