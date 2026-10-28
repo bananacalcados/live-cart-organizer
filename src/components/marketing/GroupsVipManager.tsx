@@ -57,6 +57,27 @@ interface WhatsAppGroup {
   ddd33_synced_at: string | null;
 }
 
+/** Uma linha por grupo lógico (view whatsapp_groups_unified). */
+interface UnifiedGroup {
+  group_jid_base: string;
+  primary_id: string;
+  group_row_ids: string[];
+  name: string;
+  description: string | null;
+  photo_url: string | null;
+  participant_count: number;
+  max_participants: number;
+  instance_ids: string[];
+  instance_count: number;
+  is_admin_any: boolean;
+  is_active: boolean;
+  is_vip: boolean;
+  is_full: boolean;
+  unique_members: number;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
 interface InstanceInfo {
   id: string;
   label: string;
@@ -92,6 +113,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function GroupsVipManager() {
   const [groups, setGroups] = useState<WhatsAppGroup[]>([]);
+  const [unifiedGroups, setUnifiedGroups] = useState<UnifiedGroup[]>([]);
   const [campaigns, setCampaigns] = useState<GroupCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -134,13 +156,20 @@ export function GroupsVipManager() {
   const fetchGroups = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('whatsapp_groups')
-        .select('*')
-        .order('is_vip', { ascending: false })
-        .order('name');
-      if (error) throw error;
-      setGroups((data || []) as WhatsAppGroup[]);
+      // Visão unificada (1 linha por grupo lógico) para exibição + linhas
+      // físicas por instância para as ações (settings, sync e disparos são
+      // por instância e continuam intocados).
+      const [uRes, rRes] = await Promise.all([
+        supabase.from('whatsapp_groups_unified').select('*'),
+        supabase.from('whatsapp_groups').select('*'),
+      ]);
+      if (uRes.error) throw uRes.error;
+      setGroups((rRes.data || []) as WhatsAppGroup[]);
+      const sorted = ((uRes.data || []) as unknown as UnifiedGroup[]).sort((a, b) => {
+        if (a.is_vip !== b.is_vip) return a.is_vip ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      setUnifiedGroups(sorted);
     } catch { toast.error("Erro ao carregar grupos"); }
     finally { setIsLoading(false); }
   }, []);
@@ -216,18 +245,34 @@ export function GroupsVipManager() {
     finally { setIsSyncing(false); }
   };
 
-  const toggleVip = async (group: WhatsAppGroup) => {
-    await supabase.from('whatsapp_groups').update({ is_vip: !group.is_vip }).eq('id', group.id);
-    setGroups(prev => prev.map(g => g.id === group.id ? { ...g, is_vip: !g.is_vip } : g));
+  // Ações em um grupo lógico aplicam em TODAS as linhas de instância dele.
+  const toggleVip = async (group: UnifiedGroup) => {
+    const next = !group.is_vip;
+    await supabase.from('whatsapp_groups').update({ is_vip: next }).in('id', group.group_row_ids);
+    setUnifiedGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_vip: next } : g));
+    setGroups(prev => prev.map(g => group.group_row_ids.includes(g.id) ? { ...g, is_vip: next } : g));
   };
 
-  const toggleFull = async (group: WhatsAppGroup) => {
-    await supabase.from('whatsapp_groups').update({ is_full: !group.is_full }).eq('id', group.id);
-    setGroups(prev => prev.map(g => g.id === group.id ? { ...g, is_full: !g.is_full } : g));
+  const toggleFull = async (group: UnifiedGroup) => {
+    const next = !group.is_full;
+    await supabase.from('whatsapp_groups').update({ is_full: next }).in('id', group.group_row_ids);
+    setUnifiedGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_full: next } : g));
+    setGroups(prev => prev.map(g => group.group_row_ids.includes(g.id) ? { ...g, is_full: next } : g));
+  };
+
+  // Selecionar um grupo lógico seleciona todas as linhas de instância dele —
+  // mesmo efeito de marcar as duplicatas uma a uma na lista antiga.
+  const toggleSelectUnified = (group: UnifiedGroup) => {
+    setSelectedGroups(prev => {
+      const all = group.group_row_ids.every(id => prev.includes(id));
+      return all
+        ? prev.filter(id => !group.group_row_ids.includes(id))
+        : [...new Set([...prev, ...group.group_row_ids])];
+    });
   };
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedGroups(checked ? filteredGroups.map(g => g.id) : []);
+    setSelectedGroups(checked ? [...new Set(filteredGroups.flatMap(g => g.group_row_ids))] : []);
   };
 
   const createCampaign = async () => {
