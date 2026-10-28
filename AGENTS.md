@@ -66,3 +66,4 @@
 
 - Self-service registration DMs use one ig_live_cart_notifications row per event+@ (unique index), atomic claim and no automatic retry; only staff resend (capped) — duplicate Instagram DMs previously reached customers unseen.
 - Stock transfers between stores go only through RPC pos_transfer_stock (via pos-stock-transfer-v2): one transaction, locked rows, official adjustments before stock updates and an idempotency key; legacy transfer functions answer 410 and Shopify is never called because it receives the sum of stores.
+- WhatsApp groups: the logical group key is group_jid_base (digits before @/-) on whatsapp_groups, whatsapp_group_members, whatsapp_group_member_events, whatsapp_group_member_activity and whatsapp_group_snapshots; the original group_id keeps the provider suffix and is never used for joins. Screens and reports read the whatsapp_groups_unified view (one row per logical group); instance-level rows stay because dispatches/settings act per instance.
