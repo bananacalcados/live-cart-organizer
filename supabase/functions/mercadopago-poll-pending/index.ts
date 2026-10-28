@@ -6,6 +6,7 @@ import { listAllMpAccountsForPolling, getMpAccountByPaymentId } from "../_shared
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { closeAppmaxRefund } from "../_shared/refund-gateways/appmax-close.ts";
+import { closeAustpayRefund } from "../_shared/refund-gateways/austpay-close.ts";
 import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
 import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 
@@ -214,6 +215,17 @@ serve(async (req) => {
   } catch (err: any) {
     errors.push({ appmax_refunds_sync: err.message });
   }
+
+  // AustPay: bounded read-only reconciliation, never resubmit uncertain refunds.
+  try {
+    const { data } = await supabase.from("gateway_refunds").select("id,payment_id,refund_id,amount,status,source,source_id,refund_type,reason,reason_text,cancel_order,requested_by")
+      .eq("gateway", "austpay").in("status", ["processando", "verificar"]).order("updated_at", { ascending: true }).limit(10);
+    for (const row of data || []) {
+      refundsChecked++;
+      try { if (await closeAustpayRefund(supabase, row) === "done") refundsDone++; }
+      catch { errors.push({ refund: row.id, err: "Conferência AustPay indisponível" }); }
+    }
+  } catch { errors.push({ austpay_refunds_sync: "Consulta indisponível" }); }
 
   // ── Comprovantes pendentes (Fase 3): estornos concluídos sem PDF, poucos por rodada ──
   let receiptsMade = 0;

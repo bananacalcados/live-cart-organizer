@@ -192,7 +192,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 <p><span className="text-pos-white/60">Valor original:</span> <b>{brl(preview.payment.amount)}</b></p>
                 <p><span className="text-pos-white/60">Já estornado:</span> <b>{brl(preview.refundedSoFar ?? 0)}</b></p>
                 <p><span className="text-pos-white/60">Disponível para estorno:</span> <b className="text-amber-300">{brl(remaining)}</b></p>
-                {preview.gateway !== "Appmax" && preview.payment.dateApproved && !isWithinRefundWindow(preview.payment.dateApproved) && (
+                {preview.gateway === "Mercado Pago" && preview.payment.dateApproved && !isWithinRefundWindow(preview.payment.dateApproved) && (
                   <p className="text-destructive text-xs">Pagamento aprovado há mais de 180 dias — o Mercado Pago não permite mais estorno.</p>
                 )}
               </div>

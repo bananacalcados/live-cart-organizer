@@ -8,7 +8,7 @@ export const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "cu
 export const refundReasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
 const dt = (d?: string | null) => (d ? new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "");
 const paymentDate = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-const GATEWAY_LABELS: Record<string, string> = { mercadopago: "Mercado Pago", appmax: "Appmax", pagarme: "Pagar.me", rinne: "Rinne", austpay: "Rinne" };
+const GATEWAY_LABELS: Record<string, string> = { mercadopago: "Mercado Pago", appmax: "Appmax", pagarme: "Pagar.me", rinne: "AustPay", austpay: "AustPay" };
 
 /** Linha de um estorno (Expedição > ESTORNOS). Comprovante só aparece para concluído. */
 export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundListRow; actions?: ReactNode; onChanged?: () => void; storeId?: string }) {
