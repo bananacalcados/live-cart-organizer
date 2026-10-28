@@ -85,6 +85,7 @@ serve(async (req) => {
                   : (g.participantsCount ?? g.size ?? 0);
                 return {
                   group_id: String(groupId),
+                  group_jid_base: groupDigits(String(groupId)),
                   name: g.subject || g.name || "Sem nome",
                   description: g.desc || g.description || null,
                   photo_url: g.imgUrl || g.pictureUrl || g.profilePicUrl || null,
