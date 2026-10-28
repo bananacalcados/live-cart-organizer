@@ -502,14 +502,19 @@ export function GroupsVipManager() {
                       <Crown className="h-3.5 w-3.5 text-amber-500" /> VIP ({vipGroups.length})
                     </p>
                     <div className="grid gap-2">
-                      {vipGroups.map(g => (
-                        <GroupCard key={g.id} group={g} isSelected={selectedGroups.includes(g.id)}
-                          instance={resolveInstance(g.instance_id)}
-                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
-                          onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
-                          onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
-                      ))}
+                      {vipGroups.map(g => {
+                        const primaryRow = groups.find(r => r.id === g.primary_id) || null;
+                        return (
+                          <GroupCard key={g.group_jid_base} group={g} primaryRow={primaryRow}
+                            isSelected={g.group_row_ids.every(id => selectedGroups.includes(id))}
+                            instance={g.instance_ids.length === 1 ? resolveInstance(g.instance_ids[0]) : null}
+                            canSend={!selectedNumberId || g.instance_ids.some(iid => resolveInstance(iid)?.id === selectedNumberId)}
+                            onToggleSelect={() => toggleSelectUnified(g)}
+                            onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
+                            onOpenSettings={() => primaryRow && setSettingsGroup(primaryRow)}
+                            onOpenMembers={() => primaryRow && setMembersGroup(primaryRow)} />
+                        );
+                      })}
 
                     </div>
                   </div>
@@ -518,14 +523,19 @@ export function GroupsVipManager() {
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-2">OUTROS ({otherGroups.length})</p>
                     <div className="grid gap-2">
-                      {otherGroups.map(g => (
-                        <GroupCard key={g.id} group={g} isSelected={selectedGroups.includes(g.id)}
-                          instance={resolveInstance(g.instance_id)}
-                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
-                          onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
-                          onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
-                      ))}
+                      {otherGroups.map(g => {
+                        const primaryRow = groups.find(r => r.id === g.primary_id) || null;
+                        return (
+                          <GroupCard key={g.group_jid_base} group={g} primaryRow={primaryRow}
+                            isSelected={g.group_row_ids.every(id => selectedGroups.includes(id))}
+                            instance={g.instance_ids.length === 1 ? resolveInstance(g.instance_ids[0]) : null}
+                            canSend={!selectedNumberId || g.instance_ids.some(iid => resolveInstance(iid)?.id === selectedNumberId)}
+                            onToggleSelect={() => toggleSelectUnified(g)}
+                            onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
+                            onOpenSettings={() => primaryRow && setSettingsGroup(primaryRow)}
+                            onOpenMembers={() => primaryRow && setMembersGroup(primaryRow)} />
+                        );
+                      })}
 
                     </div>
                   </div>
