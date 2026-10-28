@@ -10,6 +10,8 @@ function brl(n: number) {
 }
 
 export interface SourceRow {
+  austpayTransactionId?: string | null;
+  austpayReferenceIds?: string[];
   appmaxOrderId?: string | null;
   id: string;
   paymentOrderId?: string | null;

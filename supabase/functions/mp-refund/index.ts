@@ -465,14 +465,7 @@ serve(async (req) => {
         res.eligible = !!c.ok; res.remaining = c.remaining; res.reason = c.ok ? undefined : c.error; res.retry = c.retry; (res as any).fullOnly = true;
         continue;
       }
-      if (gw.gateway === "austpay") {
-      const p = check.payment;
-      return json({ ok: check.ok, error: check.error, gateway: "AustPay", fullOnly: true, fullOnlyNotice: AUSTPAY_FULL_ONLY,
-        source: { id: src.id, label: src.label, channel: src.channel, total: src.total, customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped, stageOrStatus: src.stageOrStatus, createdAt: src.createdAt },
-        payment: p ? { id: p.id, status: p.status, method: p.card_data?.brand || "cartao", type: "credit_card", amount: p.approved_amount / 100, dateApproved: p.approved_at, cardLast4: p.card_data?.last_digits, installments: p.installments, accountName: "AustPay" } : null,
-        remaining: check.remaining, refundedSoFar: check.refundedSoFar, existingRefunds: existing || [] });
-    }
-    if (gw.gateway === "appmax") {
+      if (gw.gateway === "appmax") {
         const c = gw.check; const ap = c.payment;
         res.gateway = "Appmax";
         if (ap) { res.method = ap.method || undefined; res.cardLast4 = ap.cardLast4; res.installments = ap.installments; res.dateApproved = ap.dateApproved; }
@@ -534,6 +527,13 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(20);
 
+    if (gw.gateway === "austpay") {
+      const p = check.payment;
+      return json({ ok: check.ok, error: check.error, gateway: "AustPay", fullOnly: true, fullOnlyNotice: AUSTPAY_FULL_ONLY,
+        source: { id: src.id, label: src.label, channel: src.channel, total: src.total, customerName: src.customerName, isPaid: src.isPaid, shipped: src.shipped, stageOrStatus: src.stageOrStatus, createdAt: src.createdAt },
+        payment: p ? { id: p.id, status: p.status, method: p.card_data?.brand || "cartao", type: "credit_card", amount: p.approved_amount / 100, dateApproved: p.approved_at, cardLast4: p.card_data?.last_digits, installments: p.installments, accountName: "AustPay" } : null,
+        remaining: check.remaining, refundedSoFar: check.refundedSoFar, existingRefunds: existing || [] });
+    }
     if (gw.gateway === "appmax") {
       const ap = check.payment;
       return json({
