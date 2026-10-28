@@ -1,4 +1,4 @@
-import { austpayFetch, resolveAustpayConfig, type AustpayConfig } from "../austpay.ts";
+import { austpayFetch, austpayTransactionsPath, resolveAustpayConfig, type AustpayConfig } from "../austpay.ts";
 
 export const AUSTPAY_FULL_ONLY = "Nesta fase, a AustPay permite somente estorno integral pelo sistema. A operadora ainda confere o prazo de cancelamento.";
 const active = new Set(["PENDING", "PROCESSING", "TIMEOUT"]);
