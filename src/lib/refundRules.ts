@@ -38,3 +38,10 @@ export function validateRefundAmount(amount: number, remaining: number): string 
 export function confirmationAmountMatches(typed: number, amount: number): boolean {
   return Number.isFinite(typed) && Math.abs(typed - amount) < 0.005;
 }
+
+/** Lê "R$ 1.359,99", "359,99" ou "359.99" como número. */
+export function parseBrlAmount(v: unknown): number {
+  let t = String(v ?? "").replace(/[^\d,.-]/g, "");
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  return Number(t);
+}
