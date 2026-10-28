@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { inspectAustpayTransaction, matchAustpayRefund, submitAustpayRefund } from "../../supabase/functions/_shared/refund-gateways/austpay";
+import { inspectAustpayTransaction, matchAustpayRefund, submitAustpayRefund } from "./austpay";
 
 const src = { id: "sale", austpayTransactionId: "transaction", austpayReferenceIds: ["order"], total: 359.99 };
 const tx = { id: "transaction", currency: "BRL", payment_method: "CREDIT_CARD", status: "APPROVED", approved_amount: 35999, refunded_amount: 0, approved_at: "2026-10-27T20:04:47Z", refunds: [] };
