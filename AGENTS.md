@@ -68,4 +68,4 @@
 - Self-service registration DMs use one ig_live_cart_notifications row per event+@ (unique index), atomic claim and no automatic retry; only staff resend (capped) — duplicate Instagram DMs previously reached customers unseen.
 - Stock transfers between stores go only through RPC pos_transfer_stock (via pos-stock-transfer-v2): one transaction, locked rows, official adjustments before stock updates and an idempotency key; legacy transfer functions answer 410 and Shopify is never called because it receives the sum of stores.
 - WhatsApp groups: preserve per-instance rows and actions; joins use group_jid_base, never suffixed group_id. Manual is_vip updates mirror by base key, and VIP reports filter that flag; no unified display view, so campaign targeting stays unchanged.
-- Group responsible instance: whatsapp_group_responsible via recompute_group_responsible only; swaps wait for queued group sends and always alert.
+- Group responsible: recompute_group_responsible only; swaps wait for sends and alert. Only it writes group chat; RPCs hide mirrors.
