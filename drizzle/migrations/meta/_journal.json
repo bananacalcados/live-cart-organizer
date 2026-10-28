@@ -575,6 +575,13 @@
       "when": 1793161860264,
       "tag": "0081_group_vip_report_normalized_members",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793199920445,
+      "tag": "0082_expedition_counts_active_items",
+      "breakpoints": true
     }
   ]
 }
