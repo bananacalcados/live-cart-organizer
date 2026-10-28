@@ -46,7 +46,6 @@ export async function austpayCheckPayment(sb: any, src: AustpaySource, amount: n
     if (!r.ok) return { ok: false, retry: r.status >= 500 || r.status === 429, error: `Consulta AustPay recusada (HTTP ${r.status}).` };
     const raw = await r.json();
     const tx = raw?.id ? raw : raw?.data;
-    console.log("austpay tx keys", Object.keys(tx || {}).join(","), "merchant", austpayMerchantOf(tx));
     return { ...inspectAustpayTransaction(tx, src, amount), cfg };
   } catch { return { ok: false, retry: true, error: "Não foi possível consultar a AustPay agora." }; }
 }
@@ -62,7 +61,7 @@ export function matchAustpayRefund(tx: any, row: any) {
 }
 
 export function austpayMerchantOf(t: any): string | null {
-  const v = t?.merchant_id ?? t?.merchantId ?? t?.merchant?.id ?? t?.seller_id ?? t?.establishment?.id ?? t?.establishment_id;
+  const v = t?.merchant_id ?? t?.merchantId ?? t?.merchant?.id ?? t?.seller_id ?? t?.establishment?.id ?? t?.establishment_id ?? t?.company_id;
   return v ? String(v) : null;
 }
 

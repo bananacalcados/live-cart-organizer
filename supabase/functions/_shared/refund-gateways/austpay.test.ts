@@ -63,7 +63,7 @@ d2("AustPay rota do estabelecimento", () => {
     const calls: string[] = [];
     v2.stubGlobal("fetch", v2.fn(async (url: string) => {
       calls.push(url);
-      if (calls.length === 1) return new Response(JSON.stringify({ id: "tx", merchant_id: "6b56" }), { status: 200 });
+      if (calls.length === 1) return new Response(JSON.stringify({ id: "tx", company_id: "6b56" }), { status: 200 });
       return new Response(JSON.stringify({ error: { message: "x" } }), { status: 400 });
     }));
     await submitAustpayRefund({ apiKey: "t", merchantId: null, provider: null, env: "production", baseUrl: "https://e.t" } as any, { id: "l", payment_id: "tx", amount: 1, reason: "r" });
