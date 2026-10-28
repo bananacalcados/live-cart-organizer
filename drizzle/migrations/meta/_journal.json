@@ -589,6 +589,13 @@
       "when": 1793205223063,
       "tag": "0083_manual_refund_registration",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793223607703,
+      "tag": "0084_group_responsible_instance",
+      "breakpoints": true
     }
   ]
 }

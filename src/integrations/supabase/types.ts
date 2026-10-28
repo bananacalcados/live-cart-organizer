@@ -23932,6 +23932,81 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_group_responsible: {
+        Row: {
+          group_jid_base: string
+          health: string
+          instance_id: string | null
+          mode: string
+          pending_instance_id: string | null
+          pending_reason: string | null
+          pending_since: string | null
+          reason: string | null
+          since: string
+          updated_at: string
+        }
+        Insert: {
+          group_jid_base: string
+          health?: string
+          instance_id?: string | null
+          mode?: string
+          pending_instance_id?: string | null
+          pending_reason?: string | null
+          pending_since?: string | null
+          reason?: string | null
+          since?: string
+          updated_at?: string
+        }
+        Update: {
+          group_jid_base?: string
+          health?: string
+          instance_id?: string | null
+          mode?: string
+          pending_instance_id?: string | null
+          pending_reason?: string | null
+          pending_since?: string | null
+          reason?: string | null
+          since?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whatsapp_group_responsible_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          group_jid_base: string
+          group_name: string | null
+          id: string
+          kind: string
+          message: string
+          new_instance_id: string | null
+          old_instance_id: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          group_jid_base: string
+          group_name?: string | null
+          id?: string
+          kind: string
+          message: string
+          new_instance_id?: string | null
+          old_instance_id?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          group_jid_base?: string
+          group_name?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          new_instance_id?: string | null
+          old_instance_id?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_group_snapshots: {
         Row: {
           group_id: string
@@ -26656,6 +26731,17 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      group_instance_presence: {
+        Args: { p_base: string }
+        Returns: {
+          instance_id: string
+          is_admin: boolean
+          label: string
+          ord: number
+          present: boolean
+        }[]
+      }
+      group_send_in_progress: { Args: { p_base: string }; Returns: boolean }
       guard_automation_dispatch: {
         Args: {
           p_flow_id: string
@@ -27197,6 +27283,8 @@ export type Database = {
         Returns: undefined
       }
       recalculate_lead_temperature: { Args: never; Returns: Json }
+      recompute_all_group_responsible: { Args: never; Returns: number }
+      recompute_group_responsible: { Args: { p_base: string }; Returns: string }
       recompute_needs_review: { Args: never; Returns: number }
       record_sale_freight_quote: {
         Args: {
