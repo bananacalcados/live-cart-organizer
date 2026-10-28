@@ -1,7 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Expedição e estorno AustPay — 28/10
-- [ ] Primeiro investigar os 90 pedidos da live de ontem ausentes na Expedição e corrigir a causa comprovada.
+- [x] Investigar 90 pagos: todos vinculados ao PDV, 89 ativos e Sandra cancelada; 62 vendas em Conferência e 27 em Separação. Contadores cortavam mil itens antigos; substituídos por consulta agregada indexada com permissões existentes. Navegador confirmou Adriana em Separação, Ilma em Conferência e novos totais; seis testes passaram, sem movimentar pedidos.
 - [ ] Integrar estorno AustPay ao fluxo protegido existente, com acompanhamento e comprovante; sem publicação nem estorno real durante testes.
 - [ ] Estorno integral da Adriana R$ 359,99 por desistência do modelo antes do envio, somente após integração e conferência das condições reais.
 
