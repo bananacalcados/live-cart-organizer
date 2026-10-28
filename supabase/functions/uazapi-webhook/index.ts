@@ -6,6 +6,7 @@ import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
 import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
+import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
