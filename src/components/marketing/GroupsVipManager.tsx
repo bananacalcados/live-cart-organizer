@@ -34,6 +34,7 @@ import { OrphanBaseManager } from "./OrphanBaseManager";
 import { GroupActionsQueuePanel } from "./GroupActionsQueuePanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { Switch } from "@/components/ui/switch";
+import { applyManualVip } from "@/lib/groupVip";
 
 interface WhatsAppGroup {
   id: string;
@@ -225,7 +226,7 @@ export function GroupsVipManager() {
       const { error } = await supabase.from('whatsapp_groups')
         .update({ is_vip: next }).eq('group_jid_base', group.group_jid_base).neq('is_vip', next);
       if (error) throw error;
-      setGroups(prev => prev.map(g => g.group_jid_base === group.group_jid_base ? { ...g, is_vip: next } : g));
+      setGroups(prev => applyManualVip(prev, group.group_jid_base, next));
     } catch { toast.error("Não foi possível salvar Grupo VIP (clientes)"); }
     finally { setVipSaving(null); }
   };
