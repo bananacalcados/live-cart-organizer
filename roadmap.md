@@ -1,7 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Expedição e estorno AustPay — 28/10
-- [ ] Correção definitiva: consulta real somente GET e campos de liquidação; rota direta, janela antes de tentativa, registro manual admin, comprovante e falhas ocultas; testes sem estorno real e sem publicação.
+- [x] Correção definitiva: GET real CAPPTA/APPROVED/antecipação ativa, refunds vazio e ledger ausente; rota direta sem valor no integral, janela estimada 27/10 23:59:59, registro manual admin com senha no servidor e trava transacional, PDF manual, badges e falhas ocultas. Testes e prévia/tela real sem devolver nem registrar Adriana. Sexta D+1 útil fecha domingo (divergência no exemplo do pedido); janela desconhecida bloqueia. Registro/PDF manual real não executados por limite da tarefa.
 - [x] Investigar 90 pagos: todos vinculados ao PDV, 89 ativos e Sandra cancelada; 62 vendas em Conferência e 27 em Separação. Contadores cortavam mil itens antigos; substituídos por consulta agregada indexada com permissões existentes. Navegador confirmou Adriana em Separação, Ilma em Conferência e novos totais; seis testes passaram, sem movimentar pedidos.
 - [x] Integrar integral AustPay ao fluxo protegido, aprovação condicional atômica, acompanhamento sem repetição e comprovante após conclusão; prévia real da Adriana conferida no Novo estorno. Sem publicação, devolução ou mensagem real nos testes.
 - [ ] Adriana: somente Matthews faz a devolução no painel e depois registra o protocolo no sistema; não executar estorno nem envio automático.

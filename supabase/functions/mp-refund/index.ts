@@ -18,7 +18,7 @@ import { loadMpSalePayments, MP_SALE_AMBIGUOUS } from "../_shared/mp-sale-paymen
 import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt.ts";
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 import { applyRefundListFilters } from "../_shared/refund-list.ts";
-import { validateManualRefund } from "../_shared/refund-manual.ts";
+import { validateManualRefund, persistManualRefund } from "../_shared/refund-manual.ts";
 
 
 const REASONS = ["cancelamento_antes_envio", "devolucao", "troca_com_diferenca", "outro"] as const;
@@ -250,8 +250,8 @@ serve(async (req) => {
     }
     if (!paymentId || !captured || gateway!==body.gateway || body.amount>captured || !src.isPaid) return json({error:"Gateway ou valor não confere com a compra paga."},400);
     const payload={gateway,source:body.source,source_id:src.id,payment_id:paymentId,mp_account_id:gateway==='mercadopago'?gw.check.account?.account_id:null,amount:body.amount,refund_type:Math.abs(body.amount-captured)<0.005?'integral':'parcial',reason:body.reason,reason_text:body.note?.trim()||null,manual_reference:body.manual_reference.trim(),manual_done_at:body.manual_done_at,manual_registered_by:userId,card_brand:gateway==='austpay'?p.card_data?.brand:gateway==='mercadopago'?(p.payment_method_id==='pix'?null:p.payment_method_id):p?.cardBrand||null,card_last4:p?.card_data?.last_digits||p?.card?.last_four_digits||p?.cardLast4||null,installments:p?.installments||null};
-    const {data:id,error}=await supabase.rpc('register_manual_refund',{p_row:payload});
-    if (error || !id) return json({error:error?.message||"Não foi possível registrar; confira se já existe estorno."},409);
+    const {id,error}=await persistManualRefund(supabase,payload,!!isAdmin);
+    if (error || !id) return json({error:error||"Não foi possível registrar; confira se já existe estorno."},409);
     await runRefundPostActions(supabase,{...payload,id,status:'concluido_manual'},userEmail);
     return json({ok:true,refund_id:id,status:'concluido_manual',message:'Estorno feito no painel registrado; nenhum dinheiro movimentado pelo sistema.'});
   }

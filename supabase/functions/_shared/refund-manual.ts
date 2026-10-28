@@ -8,3 +8,10 @@ export function validateManualRefund(body: any, now=new Date()) {
   if (body.note!=null && (typeof body.note!=='string' || body.note.length>500)) return 'Observação inválida.';
   return null;
 }
+
+/** Sole persistence boundary: database RPC locks payment and reuses its pending row. */
+export async function persistManualRefund(sb:any,payload:any,isAdmin:boolean) {
+  if(!isAdmin) return {error:'Só administradores podem registrar estornos manuais.',id:null};
+  const {data:id,error}=await sb.rpc('register_manual_refund',{p_row:payload});
+  return {id:id||null,error:error?.message||(!id?'Não foi possível registrar o estorno.':null)};
+}
