@@ -1,4 +1,4 @@
-import { austpayFetch, austpayTransactionsPath, resolveAustpayConfig, type AustpayConfig } from "../austpay.ts";
+import { austpayFetch, resolveAustpayConfig, type AustpayConfig } from "../austpay.ts";
 
 export const AUSTPAY_FULL_ONLY = "Nesta fase, a AustPay permite somente estorno integral pelo sistema. A operadora ainda confere o prazo de cancelamento.";
 const active = new Set(["PENDING", "PROCESSING", "TIMEOUT"]);
@@ -63,7 +63,17 @@ export function matchAustpayRefund(tx: any, row: any) {
 export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
   // Exactly one request. No automatic resubmission even on HTTP 409/5xx/timeout.
   try {
-    const r = await austpayFetch(cfg, `${austpayTransactionsPath(cfg)}/${encodeURIComponent(row.payment_id)}/refunds`, {
+    // Transações do estabelecimento só aceitam estorno pela rota do próprio merchant
+    // (a rota da empresa responde "settlement already in progress").
+    let merchantId = cfg.merchantId;
+    if (!merchantId) {
+      const g = await austpayFetch(cfg, `/v1/transactions/${encodeURIComponent(row.payment_id)}`);
+      const gj = await g.json().catch(() => null);
+      const t = gj?.id ? gj : gj?.data;
+      merchantId = t?.merchant_id || t?.merchant?.id || null;
+    }
+    const base = merchantId ? `/v1/merchants/${encodeURIComponent(merchantId)}/transactions` : "/v1/transactions";
+    const r = await austpayFetch(cfg, `${base}/${encodeURIComponent(row.payment_id)}/refunds`, {
       method: "POST", body: {
         refund_reason: "CUSTOMER_REQUEST", refund_amount: Math.round(Number(row.amount) * 100),
         description: `BCREF:${row.id} ${row.reason_text || row.reason}`.slice(0, 500),
