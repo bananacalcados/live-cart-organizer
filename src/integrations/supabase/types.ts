@@ -8625,6 +8625,9 @@ export type Database = {
           id: string
           idempotency_key: string
           installments: number | null
+          manual_done_at: string | null
+          manual_reference: string | null
+          manual_registered_by: string | null
           mp_account_id: string | null
           mp_response: Json | null
           payment_id: string
@@ -8661,6 +8664,9 @@ export type Database = {
           id?: string
           idempotency_key: string
           installments?: number | null
+          manual_done_at?: string | null
+          manual_reference?: string | null
+          manual_registered_by?: string | null
           mp_account_id?: string | null
           mp_response?: Json | null
           payment_id: string
@@ -8697,6 +8703,9 @@ export type Database = {
           id?: string
           idempotency_key?: string
           installments?: number | null
+          manual_done_at?: string | null
+          manual_reference?: string | null
+          manual_registered_by?: string | null
           mp_account_id?: string | null
           mp_response?: Json | null
           payment_id?: string
@@ -27238,6 +27247,7 @@ export type Database = {
         }[]
       }
       refund_config: { Args: never; Returns: Json }
+      register_manual_refund: { Args: { p_row: Json }; Returns: string }
       register_template_category_change: {
         Args: {
           p_language: string
