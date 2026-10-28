@@ -347,10 +347,11 @@ export function GroupsVipManager() {
     }
   };
 
-  // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
-  const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
-    const key = g.instance_id || '__none__';
-    acc[key] = (acc[key] || 0) + 1;
+  // Grupos lógicos por instância para o filtro (um grupo conta em cada
+  // instância da qual participa).
+  const instanceGroupCounts = unifiedGroups.reduce<Record<string, number>>((acc, g) => {
+    const ids = g.instance_ids.length > 0 ? g.instance_ids : ['__none__'];
+    for (const key of ids) acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
   const instanceOptions = Object.keys(instanceGroupCounts).map(key => {
@@ -359,19 +360,23 @@ export function GroupsVipManager() {
     return { key, label: info ? info.label : `Desconhecida (${key.slice(0, 8)}…)`, count: instanceGroupCounts[key] };
   });
 
-  const sortGroups = (arr: WhatsAppGroup[]) =>
+  const sortGroups = (arr: UnifiedGroup[]) =>
     sortByDdd33
-      ? [...arr].sort((a, b) => (b.ddd33_count ?? -1) - (a.ddd33_count ?? -1))
+      ? [...arr].sort((a, b) => (ddd33Of(b) ?? -1) - (ddd33Of(a) ?? -1))
       : arr;
 
-  const filteredGroups = groups.filter(g => {
+  // ddd33 fica na linha física primária (a mais recentemente sincronizada).
+  const ddd33Of = (g: UnifiedGroup) =>
+    groups.find(r => r.id === g.primary_id)?.ddd33_count ?? null;
+
+  const filteredGroups = unifiedGroups.filter(g => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!g.name.toLowerCase().includes(q) && !g.group_id.includes(q)) return false;
+      if (!g.name.toLowerCase().includes(q) && !g.group_jid_base.includes(q)) return false;
     }
     if (instanceFilter !== 'all') {
-      const key = g.instance_id || '__none__';
-      if (key !== instanceFilter) return false;
+      const ids = g.instance_ids.length > 0 ? g.instance_ids : ['__none__'];
+      if (!ids.includes(instanceFilter)) return false;
     }
     if (groupFilter === 'vip') return g.is_vip;
     if (groupFilter === 'full') return g.is_full;
