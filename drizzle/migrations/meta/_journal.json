@@ -589,6 +589,27 @@
       "when": 1793205223063,
       "tag": "0083_manual_refund_registration",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793223607703,
+      "tag": "0084_group_responsible_instance",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793223655546,
+      "tag": "0085_group_responsible_release_skipped",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793223672481,
+      "tag": "0086_group_responsible_release_fix",
+      "breakpoints": true
     }
   ]
 }
