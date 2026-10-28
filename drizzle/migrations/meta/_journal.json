@@ -554,6 +554,13 @@
       "when": 1793160539052,
       "tag": "0078_whatsapp_groups_jid_base_unified",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793160604580,
+      "tag": "0079_group_member_activity_jid_base",
+      "breakpoints": true
     }
   ]
 }
