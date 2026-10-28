@@ -6,7 +6,7 @@ import { RefundReceiptButton } from "./RefundReceiptButton";
 import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 import { refundApi, REFUND_REASONS, type RefundPreview, type RefundSource } from "@/lib/refunds";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, validateRefundAmount } from "@/lib/refundRules";
+import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, parseBrlAmount, validateRefundAmount } from "@/lib/refundRules";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
