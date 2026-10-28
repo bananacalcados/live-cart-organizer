@@ -592,7 +592,7 @@ serve(async (req) => {
     if (!["order", "pos_sale"].includes(source) || !id) return json({ error: "Origem ou identificador inválido." }, 400);
     if (!REASONS.includes(reason as any)) return json({ error: "Motivo inválido." }, 400);
     if (reason === "outro" && !reasonText) return json({ error: "Descreva o motivo em \"outro\"." }, 400);
-    if (!(amount > 0)) return json({ error: "Informe o valor do estorno." }, 400);
+    if (!Number.isFinite(amount) || !(amount > 0)) return json({ error: "Informe o valor do estorno." }, 400);
 
     const src = await loadSource(supabase, source, id);
     if (!src) return json({ error: "Venda/pedido não encontrado." }, 404);
@@ -725,7 +725,7 @@ serve(async (req) => {
       if (!check.ok) return json({ error: check.error }, 400);
       const { data: claimed, error } = await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "aguardando_aprovacao").select("id").maybeSingle();
       if (error || !claimed) return json({ error: "Esta solicitação já foi processada por outro administrador." }, 409);
-      return json(await executeAustpay(supabase, row, src));
+      return json(await executeAustpay(supabase, { ...row, status: "processando" }, src));
     }
     if (row.gateway === "appmax") {
       const c = await appmaxCheckPayment(supabase, String(row.payment_id), src.total, Number(row.amount));

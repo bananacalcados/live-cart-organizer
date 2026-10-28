@@ -45,4 +45,15 @@ describe("AustPay integral seguro", () => {
     const payload = JSON.parse(fetch.mock.calls[0][1].body);
     expect(payload.refund_amount).toBe(35999); expect(payload.refund_reason).toBe("CUSTOMER_REQUEST");
   });
+  it("sucesso HTTP pendente não vira comprovante", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...tx, status: "PENDING_REFUND" })));
+    vi.stubGlobal("fetch", fetch);
+    const result = await submitAustpayRefund({ apiKey: "test", merchantId: null, provider: null, env: "production", baseUrl: "https://example.test" }, { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" });
+    expect(result.kind).toBe("verificar"); expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it("resposta 409 mantém trava sem repetir", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "conflict" }), { status: 409 })); vi.stubGlobal("fetch", fetch);
+    const result = await submitAustpayRefund({ apiKey: "test", merchantId: null, provider: null, env: "production", baseUrl: "https://example.test" }, { id: "local", payment_id: tx.id, amount: 359.99, reason: "cancelamento_antes_envio" });
+    expect(result.kind).toBe("verificar"); expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
