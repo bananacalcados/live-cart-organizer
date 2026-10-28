@@ -652,6 +652,18 @@ serve(async (req) => {
       return ok({ skipped: "empty" });
     }
 
+    // Fase B: só a instância responsável do grupo grava a mensagem (cria/atualiza
+    // o chat). As demais seguem alimentando atividade/membros e saem aqui.
+    if (isGroup && !(await isGroupChatOwner(supabase, chatid, numberId))) {
+      if (!fromMe) {
+        scheduleGroupActivity(
+          normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null,
+        );
+      }
+      await markSkip("group_not_responsible");
+      return ok({ skipped: "group_not_responsible" });
+    }
+
     const quotedId = asString(message.quoted) || null;
 
     // ───────── fromMe (enviado pelo celular físico, não via API) ─────────
