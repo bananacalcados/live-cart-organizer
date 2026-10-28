@@ -1,4 +1,5 @@
 import { austpayFetch, resolveAustpayConfig, type AustpayConfig } from "../austpay.ts";
+import { austpayRefundWindow } from "./austpay-window.ts";
 
 export const AUSTPAY_FULL_ONLY = "Nesta fase, a AustPay permite somente estorno integral pelo sistema. A operadora ainda confere o prazo de cancelamento.";
 const active = new Set(["PENDING", "PROCESSING", "TIMEOUT"]);
@@ -12,8 +13,9 @@ export interface AustpaySource {
 }
 
 /** Official amounts are always integer centavos; never infer units from the total. */
-export function inspectAustpayTransaction(tx: any, src: AustpaySource, requested: number | null) {
-  const fail = (error: string) => ({ ok: false, error, payment: tx });
+export function inspectAustpayTransaction(tx: any, src: AustpaySource, requested: number | null, now = new Date()) {
+  const window = austpayRefundWindow(tx, now);
+  const fail = (error: string) => ({ ok: false, error, payment: tx, ...window });
   if (!tx || String(tx.id) !== src.austpayTransactionId) return fail("A identidade da cobrança AustPay não confere.");
   if (tx.currency !== "BRL" || tx.payment_method !== "CREDIT_CARD") return fail("Nesta fase, o estorno AustPay atende somente cartão de crédito em reais.");
   const ref = tx.external_reference ?? tx.metadata?.order_id ?? tx.metadata?.sale_id;
@@ -27,9 +29,9 @@ export function inspectAustpayTransaction(tx: any, src: AustpaySource, requested
   if (tx.refunded_amount !== 0 || tx.refunds.some((r: any) => r.status === "COMPLETED")) return fail("Já existe devolução concluída nesta cobrança; estorno integral bloqueado.");
   const remaining = tx.approved_amount / 100;
   if (Math.round(src.total * 100) !== tx.approved_amount) return fail("Valor capturado na AustPay diverge do valor desta compra. Conferência necessária.");
-  if (tx.provider === "CAPPTA" && Array.isArray(tx.ledger_entries) && tx.ledger_entries.some((l: any) => l.type === "TRANSACTION" && (l.settled === true || l.fully_settled_at || l.settlement_items?.some((i: any) => i.status === "PAID")))) return fail("Cobrança Cappta já liquidada — cancelamento pela API indisponível.");
+  if (!window.gateway_window_open) return { ...fail(window.gateway_window_note), remaining, refundedSoFar: 0 };
   if (requested != null && (!Number.isFinite(requested) || Math.abs(requested * 100 - tx.approved_amount) > 0.001)) return { ...fail(AUSTPAY_FULL_ONLY), remaining };
-  return { ok: true, payment: tx, remaining, refundedSoFar: 0 };
+  return { ok: true, payment: tx, remaining, refundedSoFar: 0, ...window };
 }
 
 export async function austpayCheckPayment(sb: any, src: AustpaySource, amount: number | null) {
@@ -60,37 +62,25 @@ export function matchAustpayRefund(tx: any, row: any) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-export function austpayMerchantOf(t: any): string | null {
-  const v = t?.merchant_id ?? t?.merchantId ?? t?.merchant?.id ?? t?.seller_id ?? t?.establishment?.id ?? t?.establishment_id ?? t?.company_id;
-  return v ? String(v) : null;
-}
-
 export async function submitAustpayRefund(cfg: AustpayConfig, row: any) {
   // Exactly one request. No automatic resubmission even on HTTP 409/5xx/timeout.
   try {
-    // Transações do estabelecimento só aceitam estorno pela rota do próprio merchant
-    // (a rota da empresa responde "settlement already in progress").
-    let merchantId = cfg.merchantId;
-    if (!merchantId) {
-      const g = await austpayFetch(cfg, `/v1/transactions/${encodeURIComponent(row.payment_id)}`);
-      const gj = await g.json().catch(() => null);
-      const t = gj?.id ? gj : gj?.data;
-      merchantId = austpayMerchantOf(t);
-    }
-    const base = merchantId ? `/v1/merchants/${encodeURIComponent(merchantId)}/transactions` : "/v1/transactions";
-    const r = await austpayFetch(cfg, `${base}/${encodeURIComponent(row.payment_id)}/refunds`, {
+    const r = await austpayFetch(cfg, `/v1/transactions/${encodeURIComponent(row.payment_id)}/refunds`, {
       method: "POST", body: {
-        refund_reason: "CUSTOMER_REQUEST", refund_amount: Math.round(Number(row.amount) * 100),
+        refund_reason: "CUSTOMER_REQUEST",
         description: `BCREF:${row.id} ${row.reason_text || row.reason}`.slice(0, 500),
+        metadata: { refund_source: "erp", refund_row_id: row.id },
       },
     });
     const raw = await r.json().catch(() => null);
     if (!r.ok) {
-      const issue = String(raw?.error?.details?.issues?.[0]?.value || "");
-      const error = /settlement is already in progress/i.test(issue)
-        ? "A AustPay não permite mais estornar esta venda pelo sistema: o repasse (liquidação) dela já começou. Peça o cancelamento direto ao suporte da AustPay."
+      const issue = String(raw?.details?.issues?.[0]?.value || raw?.error?.details?.issues?.[0]?.value || "");
+      const error = r.status===403 ? "Chave AustPay sem permissão transaction.refund — verifique a chave no painel"
+        : r.status===409 ? "Transação não permite estorno (status/limite)"
+        : /settlement/i.test(issue)
+        ? "Janela da AustPay encerrada: a liquidação está em andamento. Confira a devolução no painel e registre aqui somente depois de realizada."
         : `AustPay (HTTP ${r.status}): ${String(issue || raw?.error?.message || raw?.message || "resposta não verificável").slice(0, 350)}`;
-      return { kind: !raw || raw.status === "PENDING_REFUND" || raw.data?.status === "PENDING_REFUND" || r.status >= 500 || [408, 409, 429].includes(r.status) ? "verificar" : "failed", error, raw };
+      return { kind: [400,403,409].includes(r.status) ? "failed" : !raw || raw.status === "PENDING_REFUND" || raw.data?.status === "PENDING_REFUND" || r.status >= 500 || [408, 429].includes(r.status) ? "verificar" : "failed", error, raw };
     }
     const tx = raw?.id ? raw : raw?.data;
     const match = matchAustpayRefund(tx, row);
