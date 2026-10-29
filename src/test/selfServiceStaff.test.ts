@@ -20,7 +20,7 @@ describe("staff self-service draft", () => {
 describe("manual live cart", () => {
   const id = "a967d2bc-5bfa-4eb3-9d44-3af09c7cbf78";
   it("allows an exact cart link without a WhatsApp confirmation, opening straight on the card screen", () => {
-    expect(liveStaffCartLink({ operation_mode: "whatsapp_autoatendimento", self_service_slug: "livebanana2310" }, id)).toBe(`https://checkout.bananacalcados.com.br/pedido/livebanana2310/carrinho/${id}?pgto=cartao`);
+    expect(liveStaffCartLink({ operation_mode: "whatsapp_autoatendimento", self_service_slug: "livebanana2310" }, id)).toBe(`https://checkout.bananacalcados.com.br/pedido/livebanana2310/carrinho/${id.replace(/-/g, "")}?pgto=cartao`);
   });
   it.each(["manual", "member_area", "whatsapp"])("keeps old mode %s unchanged", (operation_mode) => {
     expect(liveStaffCartLink({ operation_mode, self_service_slug: "livebanana2310" }, id)).toBeNull();
