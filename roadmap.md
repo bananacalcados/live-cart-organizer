@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Pix — excesso de requisições — 29/10
+- [ ] Investigar erro após somente duas gerações, identificar limite local/provedor e corrigir a causa antes de retomar o Crossell.
+- [ ] Verificar o caminho afetado sem criar cobrança duplicada; Crossell pausado até aprovação posterior.
+
 ## Crossell uazapi e atendimento nos Pagos — 29/10
 - [ ] Revisar plano: envio manual direto de blocos pela instância atual (uazapi/Meta), sem convite prévio; intervalo aleatório de 4–15 s entre blocos. Meta exige janela real de mensagem da cliente, não data da compra.
 - [ ] Priorizar cards pagos com novas mensagens e tag NÃO LIDA usando os sinais existentes — aprovado.
