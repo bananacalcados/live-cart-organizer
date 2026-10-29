@@ -11,7 +11,7 @@
 
 - Overlay test participants live in the event's existing wheel config; participant-only saves merge that field into current settings, preserving layout and unrelated controls without creating real raffle entries.
 
-- Live newcomer activity reads the indexed conversation summary for loaded contacts and shares one unread derivation for redirect and self-service contacts; reuse the existing event-scoped device read marker and WhatsApp broadcast to avoid per-message queries.
+- Live lanes project phones from exact registrations via the existing batch read, never identity writes; products/phone override stale incomplete stages. Cards share broadcast/read markers; newcomers use indexed summaries, never per-message queries.
 
 - Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram or unique conflict-free last four digits, reuse saved registration without overwriting staff fields, and notify through the existing cart queue; repairs link already-sent orders without resending. Payment messages in this mode use the source order's cart URL, never cached cart links or a generic member-area fallback.
 

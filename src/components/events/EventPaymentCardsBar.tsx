@@ -27,6 +27,7 @@ import { ShoppingCart } from "lucide-react";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 import { useInitialLiveContacts } from "@/hooks/events/useInitialLiveContacts";
 import { projectInitialPhones } from "@/lib/selfServiceInitial";
+import { projectRegistrationPhones, isLiveOrderIncomplete } from "@/lib/liveOrderLanes";
 import { paidGroupActivity, paidChatOrder, readLiveSeen, markPaidGroupSeen } from "@/lib/livePaidActivity";
 import { compareLiveContacts, type ContactActivity } from "@/lib/liveContactUnread";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
@@ -83,23 +84,9 @@ function methodLabel(method: string): string {
   return method || "—";
 }
 
-/**
- * Conversa "não lida": a cliente mandou mensagem depois da nossa última resposta.
- * Quando respondemos, o card volta para "Aguardando pagamento" (follow up).
- */
-function isConversationUnread(o: DbOrder): boolean {
-  const inAt = o.last_customer_message_at ? +new Date(o.last_customer_message_at) : 0;
-  const outAt = o.last_sent_message_at ? +new Date(o.last_sent_message_at) : 0;
-  if (inAt || outAt) return inAt > outAt;
-  return !!o.has_unread_messages;
-}
-
-/** Pedido incompleto: sem WhatsApp, sem produto ou marcado como incompleto. */
+/** A etapa antiga não vence um carrinho que já tem telefone e produtos. */
 function isOrderIncomplete(o: DbOrder): boolean {
-  if (o.stage === "incomplete_order" && !o.initialPhoneUnconfirmed) return true;
-  if (!(o.customer?.whatsapp || "").replace(/\D/g, "")) return true;
-  if (!o.products || o.products.length === 0) return true;
-  return false;
+  return isLiveOrderIncomplete(o);
 }
 
 /** Há quantos ms a cliente está sem responder a nossa última mensagem (0 = não se aplica). */
@@ -155,7 +142,8 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  */
 export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, eventId: eventIdProp = null, search }: EventPaymentCardsBarProps) {
   const initial = useInitialLiveContacts(lanes ? (originalOrders[0]?.event_id || eventIdProp) : null, search);
-  const orders = useMemo(() => projectInitialPhones(originalOrders, initial.contacts), [originalOrders, initial.contacts]);
+  const [registrationPhones, setRegistrationPhones] = useState<Record<string, string>>({});
+  const orders = useMemo(() => projectInitialPhones(projectRegistrationPhones(originalOrders, registrationPhones), initial.contacts), [originalOrders, registrationPhones, initial.contacts]);
   const [filter, setFilter] = useState<PayFilter>("awaiting");
   // Aviso rápido para a apresentadora (aparece como modal no Painel da Apresentadora)
   const [presenterMsgOpen, setPresenterMsgOpen] = useState(false);
@@ -197,7 +185,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     window.addEventListener("live-contact-seen", listener);
     return () => window.removeEventListener("live-contact-seen", listener);
   }, [eventId]);
-  const paidPhones = useMemo(() => new Set(orders.filter(isOrderMarkedPaid).map((o) => normalizeBRPhone(o.customer?.whatsapp || ""))), [orders]);
+  const paidPhones = useMemo(() => new Set(orders.map((o) => normalizeBRPhone(o.customer?.whatsapp || ""))), [orders]);
   useWaMessageBroadcast((payload) => {
     if (payload.event === "wa_msg_update" || (payload.direction !== "incoming" && payload.direction !== "outgoing")) return;
     const phone = normalizeBRPhone(payload.phone || "");
@@ -230,7 +218,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   }, [orders]);
 
   // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
-  const { contacts: redirectContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
+  const { contacts: redirectContacts, activity: contactActivity, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
     lanes ? eventId : null,
     orderPhoneKeys,
     search,
@@ -262,7 +250,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   useEffect(() => {
     if (!lanes || laneMarks.size === 0) return;
     for (const o of orders) {
-      if (o.stage === "cancelled" || o.stage === "incomplete_order") continue;
+      if (o.stage === "cancelled" || isOrderIncomplete(o)) continue;
       const d = (o.customer?.whatsapp || "").replace(/\D/g, "");
       const key = d.slice(-8);
       if (key.length === 8 && laneMarks.get(key)?.lane === "doubts") clearLane(d);
@@ -327,10 +315,22 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   // Ao fechar o direct, recalcula (marca como lida).
   useEffect(() => { if (!igOpen) setIgRefresh((n) => n + 1); }, [igOpen]);
 
+  const isOrderUnread = useCallback((order: DbOrder) => {
+    const phone = normalizeBRPhone(order.customer?.whatsapp || "");
+    const summary = contactActivity.get(phone.slice(-8));
+    const update = paidLiveActivity[phone];
+    const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
+    return !!igUnread[igKey(order.customer?.instagram_handle)] || paidGroupActivity([order], { [phone]: {
+      lastIn: latest(summary?.lastIn, update?.lastIn),
+      lastOut: latest(summary?.lastOut, update?.lastOut),
+    } }, paidSeen).unread;
+  }, [contactActivity, paidLiveActivity, paidSeen, igUnread]);
+
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
     // Tem WhatsApp → prioridade sempre é o chat de WhatsApp na instância da conversa.
     if (phone) {
+      if (eventId) markPaidGroupSeen(eventId, [order]);
       setChatOrder(dbOrderToLegacy(order));
       setChatOpen(true);
       return;
@@ -438,13 +438,14 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
 
   // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
   useEffect(() => {
-    const ids = orders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
-    if (ids.length === 0) { setStepByOrder({}); setOpenedByOrder({}); setSplitByOrder({}); return; }
+    const ids = originalOrders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
+    if (ids.length === 0) { setRegistrationPhones((prev) => Object.keys(prev).length ? {} : prev); setStepByOrder({}); setOpenedByOrder({}); setSplitByOrder({}); return; }
     let cancelled = false;
     (async () => {
       const startedMap: Record<string, boolean> = {};
-      for (const o of orders) startedMap[o.id] = !!(o as any).checkout_started_at;
+      for (const o of originalOrders) startedMap[o.id] = !!(o as any).checkout_started_at;
       const map: Record<string, number> = {};
+      const phones: Record<string, string> = {};
       const batchSize = 100;
       for (let i = 0; i < ids.length; i += batchSize) {
         const batch = ids.slice(i, i + batchSize);
@@ -456,6 +457,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
         for (const r of (data || []) as any[]) byOrder.set(r.order_id, r);
         for (const id of batch) {
           const reg = byOrder.get(id);
+          if (reg?.whatsapp && String(reg.whatsapp).replace(/\D/g, "").length >= 10) phones[id] = normalizeBRPhone(reg.whatsapp);
           const notPlaceholder = (v?: string | null, ph?: string) =>
             !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
           const hasIdentification = !!reg && notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp);
@@ -467,7 +469,10 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
           map[id] = hasAddress ? 3 : hasIdentification ? 2 : startedMap[id] ? 1 : 0;
         }
       }
-      if (!cancelled) setStepByOrder(map);
+      if (!cancelled) {
+        setStepByOrder(map);
+        setRegistrationPhones((prev) => JSON.stringify(prev) === JSON.stringify(phones) ? prev : phones);
+      }
 
       // ── Quem já abriu o link da área de membros (consulta segura no servidor) ──
       const opened: Record<string, string> = {};
@@ -503,7 +508,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       if (!cancelled) setSplitByOrder(splits);
     })();
     return () => { cancelled = true; };
-  }, [orders]);
+  }, [originalOrders]);
 
   const { awaiting, paid, incomplete } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
@@ -626,7 +631,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   );
   const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
   // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
-  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isConversationUnread(e.rep)), [laneAwaitingAll]);
+  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isOrderUnread(e.rep)), [laneAwaitingAll, isOrderUnread]);
   // Quem não respondeu ainda, separado pelo tempo desde a NOSSA última mensagem:
   // < 10 min → Aguardando pagamento · 10 min a 1 h → Follow up · > 1 h → Follow +1 hora.
   const { laneAwaiting, laneFollowup, laneFollowupHour } = useMemo(() => {
@@ -634,7 +639,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     const f: CardEntry[] = [];
     const h: CardEntry[] = [];
     for (const e of laneAwaitingAll) {
-      if (isConversationUnread(e.rep)) continue;
+      if (isOrderUnread(e.rep)) continue;
       if (e.rep.initialPhoneUnconfirmed) { a.push(e); continue; }
       const waited = msWaitingReply(e.rep, nowTick);
       if (waited >= ONE_HOUR_MS) h.push(e);
@@ -642,7 +647,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       else a.push(e);
     }
     return { laneAwaiting: a, laneFollowup: f, laneFollowupHour: h };
-  }, [laneAwaitingAll, nowTick]);
+  }, [laneAwaitingAll, nowTick, isOrderUnread]);
   const laneIncomplete = useMemo(() => laneFilter(incompleteEntries), [laneFilter, incompleteEntries]);
 
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
@@ -702,7 +707,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                 ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
                 : getOrderFinalValue(order);
               // Destaque verde (sem piscar) quando a cliente falou por último.
-              const unread = paidCard ? paidGroupActivity(group, paidLiveActivity, paidSeen).unread : isConversationUnread(order);
+              const unread = paidCard ? paidGroupActivity(group, paidLiveActivity, paidSeen).unread : isOrderUnread(order);
 
               const isPinned = pinnedIds.has(order.id);
               // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.

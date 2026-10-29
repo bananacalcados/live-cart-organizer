@@ -1,5 +1,8 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Linhas da live — carrinhos em Novos Contatos — 29/10
+- [x] Cadastro do pedido exato preenche telefone só na exibição; carrinho com produtos/telefone supera etapa incompleta antiga, mensagens WhatsApp/Instagram usam sinais de leitura existentes. 17 testes passaram; tela autenticada confirmou Marina fora de Novos Contatos/Incompletos e em Não Lidas, sem duplicação. Sem consultas novas, escritas em clientes ou publicação; nova mensagem real não enviada nos testes.
+
 ## Pix — excesso de requisições — 29/10
 - [x] Pedido a7d00f4a: logs e histórico confirmaram HTTP 400 payer.email (gmail.coml), não excesso de requisições. Corrigida normalização compartilhada sem alterar cadastro, e ficha passa a mostrar o erro real. Serviços Pix/boleto/cartão atualizados.
 - [x] 21 testes passaram; uma única geração real após confirmar ausência de Pix vinculado retornou R$379,99 e ficou vinculada, pendente, sem pagamento/envio. Página pública abriu sem erro, mas formulário ainda carregava na captura; clique da ficha não foi repetido para evitar novo Pix. Crossell pausado até aprovação posterior; site não publicado.
