@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
     if (!body.sendId) return json({error:"Envio obrigatório"},400);
     const {data:send,error} = await userDb.from("event_bulk_sends").select("id,created_by,manual_blocks,status").eq("id",body.sendId).single();
     check(error);
-    if (!send.manual_blocks || send.created_by!==userId) return json({error:"Envio não pertence a esta sessão"},403);
+    if (!send.manual_blocks) return json({error:"Envio incompatível"},403);
     if (body.action === "cancel") {
       await db.from("event_bulk_sends").update({status:"cancelled"}).eq("id",send.id);
       await db.from("event_bulk_send_items").update({crossell_state:"cancelled",status:"skipped"}).eq("send_id",send.id).in("crossell_state",["pending","paused"]);

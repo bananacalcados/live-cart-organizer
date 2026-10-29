@@ -20,6 +20,7 @@ export type WaMessageInsertPayload = {
   event?: "wa_msg_insert" | "wa_msg_update";
   status?: string | null;
   message_id?: string | null;
+  crossell_interest?: boolean;
 };
 
 // Singleton channel + listener registry so many components can listen to the

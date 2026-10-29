@@ -185,8 +185,10 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   const eventId = orders[0] ? (orders[0] as any).event_id : eventIdProp;
   const [paidSeen, setPaidSeen] = useState<Record<string, number>>({});
   const [paidLiveActivity, setPaidLiveActivity] = useState<Record<string, ContactActivity>>({});
+  const [crossellInterest, setCrossellInterest] = useState<Record<string, boolean>>({});
   useEffect(() => {
     setPaidLiveActivity({});
+    setCrossellInterest({});
     setPaidSeen(eventId ? readLiveSeen(eventId) : {});
     const listener = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -200,6 +202,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     if (payload.event === "wa_msg_update" || (payload.direction !== "incoming" && payload.direction !== "outgoing")) return;
     const phone = normalizeBRPhone(payload.phone || "");
     if (!phone || !paidPhones.has(phone)) return;
+    if (payload.crossell_interest) setCrossellInterest((prev)=>({...prev,[phone]:true}));
     setPaidLiveActivity((prev) => {
       const current = prev[phone] || { lastIn: null, lastOut: null };
       const field = payload.direction === "incoming" ? "lastIn" : "lastOut";
@@ -730,6 +733,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   )}
                 >
                   {/* Selos de novidade: dentro do card, em linha própria, sem cortar no topo */}
+                  {paidCard && group.some((o)=>crossellInterest[normalizeBRPhone(o.customer?.whatsapp || "")]) && <span className="w-fit rounded-md bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">INTERESSE EM CROSSELL</span>}
                   {order.initialPhoneUnconfirmed && (
                     <span className="text-xs text-muted-foreground">
                       {order.initialContactAt
