@@ -375,7 +375,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
           </DialogDescription>
         </DialogHeader>
         <Tabs value={mode} onValueChange={setMode} className="px-4 pt-3"><TabsList className="w-full"><TabsTrigger value="blocks" className="flex-1">Mensagem por blocos</TabsTrigger><TabsTrigger value="template" className="flex-1">Template Meta</TabsTrigger></TabsList></Tabs>
-        {mode === "blocks" ? <CrossellBlocksEditor orderId={order?.id} instanceId={numberId} provider={provider} instanceLabel={numberLabel}/> : <>
+        {mode === "blocks" ? <CrossellBlocksEditor orderId={order?.id} phone={phone} instanceId={numberId} provider={provider} instanceLabel={numberLabel}/> : <>
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
             {!numberId && (

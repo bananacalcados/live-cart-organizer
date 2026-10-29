@@ -28,7 +28,7 @@ async function call(body: Record<string,unknown>) {
   return data;
 }
 
-export function CrossellBlocksEditor({ orderId, instanceId, provider, instanceLabel }: { orderId?: string; instanceId: string | null; provider: string; instanceLabel: string }) {
+export function CrossellBlocksEditor({ orderId, phone, instanceId, provider, instanceLabel }: { orderId?: string; phone:string;instanceId: string | null; provider: string; instanceLabel: string }) {
   const [blocks,setBlocks]=useState<CrossellBlock[]>([]);
   const [name,setName]=useState("");
   const [offers,setOffers]=useState<{id:string;name:string;payload:CrossellBlock[]}[]>([]);
@@ -103,7 +103,7 @@ export function CrossellBlocksEditor({ orderId, instanceId, provider, instanceLa
     if(!instanceId || !orderId)return toast.error("Selecione a instância da conversa e um pedido.");
     sendingRef.current=true;setBusy(true);
     if(!requestId.current)requestId.current=crypto.randomUUID();
-    try{await call({action:"start",orderId,instanceId,blocks,name:name||"Crossell",requestId:requestId.current});toast.success("Envio iniciado");await refresh();}
+    try{await call({action:"start",orderId,phone,instanceId,blocks,name:name||"Crossell",requestId:requestId.current});toast.success("Envio iniciado");await refresh();}
     catch(e){toast.error(e instanceof Error?e.message:"Erro ao iniciar");}finally{sendingRef.current=false;setBusy(false);}
   };
   const command=async(action:"resume"|"cancel"|"retry_review",sendId:string)=>{

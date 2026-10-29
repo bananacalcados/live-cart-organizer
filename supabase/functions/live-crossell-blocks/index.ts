@@ -7,7 +7,7 @@ import { crossellNextAt, metaCrossellWindow, validateCrossellBlocks, type Crosse
 
 const mediaSchema = z.object({ url: z.string().url().max(2048), name: z.string().max(150), mime: z.string().max(100), size: z.number().min(0).max(104857600) });
 const blockSchema = z.object({ id: z.string().uuid(), kind: z.enum(["text","image","document","audio","video","buttons"]), text: z.string().max(4096), media: z.array(mediaSchema).max(20), buttons: z.array(z.object({ title: z.string().min(1).max(20), interest: z.boolean() })).max(3) });
-const schema = z.object({ action: z.enum(["list","save","start","history","resume","cancel","run","retry_review"]), confirmRetry:z.boolean().optional(),eventId: z.string().uuid().optional(), orderId: z.string().uuid().optional(), instanceId: z.string().uuid().optional(), requestId: z.string().uuid().optional(), sendId: z.string().uuid().optional(), presetId: z.string().uuid().optional(), name: z.string().min(1).max(100).optional(), blocks: z.array(blockSchema).min(1).max(50).optional() });
+const schema = z.object({ action: z.enum(["list","save","start","history","resume","cancel","run","retry_review"]), phone:z.string().min(10).max(20).optional(),confirmRetry:z.boolean().optional(),eventId: z.string().uuid().optional(), orderId: z.string().uuid().optional(), instanceId: z.string().uuid().optional(), requestId: z.string().uuid().optional(), sendId: z.string().uuid().optional(), presetId: z.string().uuid().optional(), name: z.string().min(1).max(100).optional(), blocks: z.array(blockSchema).min(1).max(50).optional() });
 const url = Deno.env.get("SUPABASE_URL") || "";
 const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const db = createClient(url, key);
@@ -85,6 +85,9 @@ async function run(sendId: string) {
           return;
         }
         await guarded(item.phone,item.whatsapp_number_id);
+        const dispatchGate=await db.rpc("manual_crossell_dispatch_allowed",{p_item:item.id});
+        check(dispatchGate.error);
+        if(!dispatchGate.data)return;
         const media = block.media[file];
         const buttons = block.buttons.map((b,i) => ({ ...b, id: `cxb:${item.id}:${block.id}:${i}` }));
         let endpoint = provider === "meta" ? "meta-whatsapp-send" : "uazapi-send-message";
@@ -161,6 +164,7 @@ Deno.serve(async (req) => {
       const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
       const phone = normalizeBRPhone(customer?.whatsapp || "");
       if (!phone) return json({error:"Pedido sem WhatsApp confirmado"},400);
+      if(!body.phone || normalizeBRPhone(body.phone)!==phone)return json({error:"O WhatsApp da conversa difere do pedido. Confira a ficha antes de enviar."},400);
       const provider = await guarded(phone,body.instanceId);
       const validation = validateCrossellBlocks(body.blocks,provider);
       if (validation) return json({error:validation},400);
