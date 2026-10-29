@@ -5,6 +5,8 @@ Manter o Crossell por template Meta e acrescentar uma opção de WhatsApp Busine
 
 **Importante:** uazapi não é a API oficial da Meta. Nenhum intervalo, rodízio de texto ou limite garante proteção contra banimento. Para campanhas de marketing em escala, manter a opção oficial como caminho mais adequado.
 
+Referência: [Política de mensagens do WhatsApp Business](https://business.whatsapp.com/policy). Consentimento e respeito ao descadastro continuam necessários; limites internos não substituem essas regras.
+
 ## Fase 1 — Atendimento nos cards pagos
 - Nova mensagem de cliente coloca o card à esquerda da linha PAGOS, com tag **NÃO LIDA**; entre os não lidos, a mensagem mais recente vem primeiro.
 - Abrir a conversa marca como lida, conforme o padrão da live; uma nova mensagem volta a destacar o card.
