@@ -586,10 +586,29 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     (async () => {
       const map = new Map<string, string>();
       // 1) Aproveita o WhatsApp dos pedidos já carregados deste evento
+      const handleSet = new Set(handles);
+      const missingOrderIds: string[] = [];
+      const orderHandle = new Map<string, string>();
       for (const o of orders) {
         const h = cleanHandle(o.customer?.instagram_handle || "");
         const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
         if (h && wa) map.set(h, o.customer!.whatsapp!);
+        else if (h && handleSet.has(h)) {
+          missingOrderIds.push(o.id);
+          orderHandle.set(o.id, h);
+        }
+      }
+      // 1b) Pedido sem WhatsApp na ficha: usa o telefone do cadastro deste pedido (somente leitura)
+      const pendingIds = missingOrderIds.filter((id) => !map.has(orderHandle.get(id)!)).slice(0, 200);
+      if (pendingIds.length) {
+        const { data: regs } = await supabase
+          .from("customer_registrations")
+          .select("order_id, whatsapp")
+          .in("order_id", pendingIds);
+        for (const r of (regs || []) as { order_id: string; whatsapp: string | null }[]) {
+          const h = orderHandle.get(r.order_id);
+          if (h && !map.has(h) && (r.whatsapp || "").replace(/\D/g, "")) map.set(h, r.whatsapp!);
+        }
       }
       // 2) Resolve no banco só os @ ainda desconhecidos (com cache)
       await resolveHandles(handles.filter((h) => !map.has(h)));
