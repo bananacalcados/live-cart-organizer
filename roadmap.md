@@ -1,10 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Crossell uazapi e atendimento nos Pagos — 29/10
-- [ ] Propor fases e proteção contra spam/duplicidade para blocos de Crossell uazapi, preservando templates Meta; aguarda aprovação do plano antes dos envios.
-- [ ] Priorizar cards pagos com novas mensagens e tag NÃO LIDA usando os sinais existentes.
+- [ ] Revisar plano: envio manual direto de blocos pela instância atual (uazapi/Meta), sem convite prévio; intervalo aleatório de 4–15 s entre blocos. Meta exige janela real de mensagem da cliente, não data da compra.
+- [ ] Priorizar cards pagos com novas mensagens e tag NÃO LIDA usando os sinais existentes — aprovado.
 - [ ] Separar abrir WhatsApp da ação de unificar pedidos agrupados.
-- [ ] Editor de blocos texto/foto/áudio/botões e sinalização de interesse para a equipe; testar sem mensagens reais não autorizadas e sem publicar.
+- [ ] Editor de blocos texto/fotos/arquivos/áudios/vídeos e botões opcionais, botão ENVIAR e sinalização de interesse para a equipe; testar sem mensagens reais não autorizadas e sem publicar.
 
 ## Expedição e estorno AustPay — 28/10
 - [x] Correção definitiva: GET real CAPPTA/APPROVED/antecipação ativa, refunds vazio e ledger ausente; rota direta sem valor no integral, janela estimada 27/10 23:59:59, registro manual admin com senha no servidor e trava transacional, PDF manual, badges e falhas ocultas. Testes e prévia/tela real sem devolver nem registrar Adriana. Sexta D+1 útil fecha domingo (divergência no exemplo do pedido); janela desconhecida bloqueia. Registro/PDF manual real não executados por limite da tarefa.
