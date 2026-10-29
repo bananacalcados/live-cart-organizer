@@ -27094,6 +27094,10 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      manual_crossell_dispatch_allowed: {
+        Args: { p_item: string }
+        Returns: boolean
+      }
       mark_dispatch_sent: {
         Args: { p_ids: string[]; p_wamids: string[] }
         Returns: undefined
