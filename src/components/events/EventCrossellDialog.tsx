@@ -34,6 +34,8 @@ import type { DbOrderProduct } from "@/types/database";
 import type { Order } from "@/types/order";
 import { toast } from "sonner";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import { CrossellBlocksEditor } from "./CrossellBlocksEditor";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface EventCrossellDialogProps {
   open: boolean;
@@ -43,6 +45,7 @@ interface EventCrossellDialogProps {
   /** Pedido de contexto para variáveis (nome, @, valores, checkout). */
   order?: Order;
   embedded?: boolean;
+  selectedInstance?: { id: string | null; provider: string; label: string } | null;
 }
 
 interface VariableOption {
@@ -95,13 +98,15 @@ interface CardState {
   uploading: boolean;
 }
 
-export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order, embedded = false }: EventCrossellDialogProps) {
+export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order, embedded = false, selectedInstance }: EventCrossellDialogProps) {
   const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
   const { numbers } = useWhatsAppNumberStore();
 
-  const numberId = boundNumberId || effectiveNumberId;
+  const numberId = selectedInstance ? selectedInstance.id : boundNumberId || effectiveNumberId;
+  const provider = selectedInstance?.provider || boundNumber?.provider || effectiveNumber?.provider || "meta";
+  const [mode, setMode] = useState("blocks");
   const numberLabel =
-    boundNumber?.label || effectiveNumber?.label || numbers.find((n) => n.id === numberId)?.label || "instância";
+    selectedInstance?.label || boundNumber?.label || effectiveNumber?.label || numbers.find((n) => n.id === numberId)?.label || "instância";
 
   const [templates, setTemplates] = useState<DbTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -143,7 +148,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
 
   // Load approved event templates for the bound instance
   useEffect(() => {
-    if (!open) return;
+    if (!open || mode !== "template") return;
     let cancelled = false;
     (async () => {
       setLoadingTemplates(true);
@@ -168,7 +173,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
     return () => {
       cancelled = true;
     };
-  }, [open, numberId]);
+  }, [open, numberId, mode]);
 
   // Reset when dialog closes
   useEffect(() => {
@@ -363,13 +368,14 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
         <DialogHeader className="p-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Images className="h-5 w-5 text-primary" />
-            Enviar Cross-sell (Carrossel)
+            Crossell
           </DialogTitle>
           <DialogDescription>
             Para {customerName || phone} · instância <strong>{numberLabel}</strong>
           </DialogDescription>
         </DialogHeader>
-
+        <Tabs value={mode} onValueChange={setMode} className="px-4 pt-3"><TabsList className="w-full"><TabsTrigger value="blocks" className="flex-1">Mensagem por blocos</TabsTrigger><TabsTrigger value="template" className="flex-1">Template Meta</TabsTrigger></TabsList></Tabs>
+        {mode === "blocks" ? <CrossellBlocksEditor orderId={order?.id} instanceId={numberId} provider={provider} instanceLabel={numberLabel}/> : <>
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
             {!numberId && (
@@ -580,6 +586,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
             )}
           </Button>
         </DialogFooter>
+        </>}
       </EmbeddedDialogContent>
 
       {/* Seletor de imagem via Shopify */}

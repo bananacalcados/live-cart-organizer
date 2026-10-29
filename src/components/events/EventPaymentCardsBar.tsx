@@ -197,7 +197,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   }, [eventId]);
   const paidPhones = useMemo(() => new Set(orders.filter(isOrderMarkedPaid).map((o) => normalizeBRPhone(o.customer?.whatsapp || ""))), [orders]);
   useWaMessageBroadcast((payload) => {
-    if (payload.event === "wa_msg_update" || !["incoming", "outgoing"].includes(payload.direction)) return;
+    if (payload.event === "wa_msg_update" || (payload.direction !== "incoming" && payload.direction !== "outgoing")) return;
     const phone = normalizeBRPhone(payload.phone || "");
     if (!phone || !paidPhones.has(phone)) return;
     setPaidLiveActivity((prev) => {

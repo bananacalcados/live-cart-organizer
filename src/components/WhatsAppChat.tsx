@@ -83,6 +83,7 @@ interface WhatsAppChatProps {
   onOpenSupport?: () => void;
   /** Recebe o canal de envio desta conversa (usado pela ficha lateral para enviar o PIX). */
   pixChannelRef?: React.MutableRefObject<PixSendChannel | null>;
+  onSelectedChannel?: (channel: {id:string|null;provider:string;label:string}) => void;
 }
 
 // Status icon now uses shared component
@@ -120,7 +121,7 @@ interface MetaTemplate {
   }>;
 }
 
-export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha, onOpenDetails, onOpenEditOrder, onOpenSupport, pixChannelRef }: WhatsAppChatProps) {
+export function WhatsAppChat({ order, onBack, orderless = false, conversationNumberId = null, hideInstagramComments = false, onOpenFicha, onOpenDetails, onOpenEditOrder, onOpenSupport, pixChannelRef, onSelectedChannel }: WhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   // Histórico arquivado (whatsapp_messages_archive), carregado SÓ sob demanda
@@ -1609,6 +1610,10 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
   // Canal de envio do PIX do pedido: usa exatamente a instância/provider desta
   // conversa (WhatsApp ou Direct do Instagram) e grava no histórico como as demais.
   const pixProvider = getProvider();
+  const crossellLabel = boundNumber?.label || numbers.find((n)=>n.id===effectiveNumberId)?.label || "Instância não selecionada";
+  useEffect(()=>{
+    onSelectedChannel?.({id:effectiveNumberId || null,provider:pixProvider,label:crossellLabel});
+  },[effectiveNumberId,pixProvider,crossellLabel,onSelectedChannel]);
   const pixChannel: PixSendChannel = {
     provider: pixProvider,
     sendText: async (message) => {

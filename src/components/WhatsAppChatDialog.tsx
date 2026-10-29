@@ -79,6 +79,7 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [activePanel, setActivePanel] = useState<LivePanel>("ficha");
   const pixChannelRef = useRef<PixSendChannel | null>(null);
+  const [crossellInstance, setCrossellInstance] = useState<{id:string|null;provider:string;label:string}|null>(null);
   const allOrders = useDbOrderStore((state) => state.orders);
 
   const normHandle = (v?: string | null) =>
@@ -147,7 +148,7 @@ export function WhatsAppChatDialog({
       if (order.eventId && order.whatsapp) return <OrderDialogDb key={`new-${order.id}`} embedded open onOpenChange={(value) => !value && close()} eventId={order.eventId} prefillWhatsapp={order.whatsapp} prefillInstagram={order.instagramHandle || undefined} />;
       return <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
     }
-    if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} />;
+    if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} selectedInstance={crossellInstance || {id:null,provider:"",label:"Selecione uma instância no chat"}} />;
     if (activePanel === "catalog" && order.whatsapp) return <LiveCatalogPanel phone={order.whatsapp} onClose={close} />;
     if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
     return null;
@@ -219,6 +220,7 @@ export function WhatsAppChatDialog({
                  onOpenEditOrder={withSidebar ? () => togglePanel("edit") : undefined}
                  onOpenSupport={withSidebar ? () => togglePanel("support") : undefined}
                 pixChannelRef={pixChannelRef}
+                onSelectedChannel={setCrossellInstance}
               />
             </div>
              {withSidebar && panelOpen && <div className="relative hidden sm:block w-[480px] shrink-0 h-full border-l border-border/60 bg-card">
