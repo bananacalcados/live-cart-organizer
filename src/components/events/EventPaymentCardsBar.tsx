@@ -84,17 +84,6 @@ function methodLabel(method: string): string {
   return method || "—";
 }
 
-/**
- * Conversa "não lida": a cliente mandou mensagem depois da nossa última resposta.
- * Quando respondemos, o card volta para "Aguardando pagamento" (follow up).
- */
-function isConversationUnread(o: DbOrder): boolean {
-  const inAt = o.last_customer_message_at ? +new Date(o.last_customer_message_at) : 0;
-  const outAt = o.last_sent_message_at ? +new Date(o.last_sent_message_at) : 0;
-  if (inAt || outAt) return inAt > outAt;
-  return !!o.has_unread_messages;
-}
-
 /** A etapa antiga não vence um carrinho que já tem telefone e produtos. */
 function isOrderIncomplete(o: DbOrder): boolean {
   return isLiveOrderIncomplete(o);
