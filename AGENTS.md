@@ -70,3 +70,4 @@
 - WhatsApp groups: preserve per-instance rows and actions; joins use group_jid_base, never suffixed group_id. Manual is_vip updates mirror by base key, and VIP reports filter that flag; no unified display view, so campaign targeting stays unchanged.
 - Group responsible: recompute_group_responsible only; swaps wait for sends and alert. Only it writes group chat; RPCs hide mirrors.
 - Live Crossell/paid-chat rules also live in supabase/functions/AGENTS.md.
+- Self-service confirmation phone wins: the #CODE sender becomes the ficha's principal number and the typed one goes to previous_phones via selfservice_reconcile_confirmed_phone; another ficha owning that number is merged only when name plus CPF/e-mail/address agree and no orders/cashback would be lost, else a conflict is annotated — a wrong merge mixes two customers.
