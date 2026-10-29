@@ -186,7 +186,6 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     return () => window.removeEventListener("live-contact-seen", listener);
   }, [eventId]);
   const paidPhones = useMemo(() => new Set(orders.map((o) => normalizeBRPhone(o.customer?.whatsapp || ""))), [orders]);
-  const isOrderUnread = useCallback((order: DbOrder) => paidGroupActivity([order], paidLiveActivity, paidSeen).unread, [paidLiveActivity, paidSeen]);
   useWaMessageBroadcast((payload) => {
     if (payload.event === "wa_msg_update" || (payload.direction !== "incoming" && payload.direction !== "outgoing")) return;
     const phone = normalizeBRPhone(payload.phone || "");
@@ -219,13 +218,23 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   }, [orders]);
 
   // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
-  const { contacts: redirectContacts, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
+  const { contacts: redirectContacts, activity: contactActivity, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
     lanes ? eventId : null,
     orderPhoneKeys,
     search,
     initial.contacts,
   );
   const linkContacts = redirectContacts;
+  const isOrderUnread = useCallback((order: DbOrder) => {
+    const phone = normalizeBRPhone(order.customer?.whatsapp || "");
+    const summary = contactActivity.get(phone.slice(-8));
+    const update = paidLiveActivity[phone];
+    const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
+    return paidGroupActivity([order], { [phone]: {
+      lastIn: latest(summary?.lastIn, update?.lastIn),
+      lastOut: latest(summary?.lastOut, update?.lastOut),
+    } }, paidSeen).unread;
+  }, [contactActivity, paidLiveActivity, paidSeen]);
   const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
 
   // Linha PEDIDOS: quem comentou QUERO na live e ainda não tem pedido neste evento.

@@ -409,7 +409,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
     return filtered.sort(compareLiveContacts);
   }, [rows, excludeKeys, search, activity, seen, identities, initialHandles]);
 
-  return { contacts, loading, reload: load };
+  return { contacts, activity, loading, reload: load };
 }
 
 interface LiveContactCardsProps {
