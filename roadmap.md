@@ -5,7 +5,7 @@
 - [x] 21 testes passaram; uma única geração real após confirmar ausência de Pix vinculado retornou R$379,99 e ficou vinculada, pendente, sem pagamento/envio. Página pública abriu sem erro, mas formulário ainda carregava na captura; clique da ficha não foi repetido para evitar novo Pix. Crossell pausado até aprovação posterior; site não publicado.
 
 ## Crossell uazapi e atendimento nos Pagos — 29/10
-- [ ] Revisar plano: envio manual direto de blocos pela instância atual (uazapi/Meta), sem convite prévio; intervalo aleatório de 4–15 s entre blocos. Meta exige janela real de mensagem da cliente, não data da compra.
+- [x] Plano aprovado em 29/10 às 17:16 UTC: envio manual direto de blocos pela instância atual (uazapi/Meta), sem convite prévio; intervalo aleatório de 4–15 s entre blocos. Meta exige janela real de mensagem da cliente, não data da compra.
 - [ ] Priorizar cards pagos com novas mensagens e tag NÃO LIDA usando os sinais existentes — aprovado.
 - [ ] Separar abrir WhatsApp da ação de unificar pedidos agrupados.
 - [ ] Editor de blocos texto/fotos/arquivos/áudios/vídeos e botões opcionais, botão ENVIAR e sinalização de interesse para a equipe; testar sem mensagens reais não autorizadas e sem publicar.
