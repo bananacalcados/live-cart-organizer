@@ -1,6 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Linhas da live — carrinhos em Novos Contatos — 29/10
+- [ ] Corrigir regressão: comentário Instagram não pode sobrepor resposta mais recente no WhatsApp; validar regras e tela sem publicar.
 - [x] Cadastro do pedido exato preenche telefone só na exibição; carrinho com produtos/telefone supera etapa incompleta antiga, mensagens WhatsApp/Instagram usam sinais de leitura existentes. 17 testes passaram; tela autenticada confirmou Marina fora de Novos Contatos/Incompletos e em Não Lidas, sem duplicação. Sem consultas novas, escritas em clientes ou publicação; nova mensagem real não enviada nos testes.
 
 ## Pix — excesso de requisições — 29/10
