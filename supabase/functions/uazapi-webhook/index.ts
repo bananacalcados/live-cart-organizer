@@ -498,7 +498,10 @@ serve(async (req) => {
     const messageId = asString(message.messageid) || asString(message.id);
     const uazMediaType = asString(message.mediaType);
     let sysMediaType = mapMediaType(uazMediaType);
-    const text = asString(message.text) || "";
+    const buttonContent = (message.content as AnyObj) || {};
+    const buttonReply = (buttonContent.buttonsResponseMessage as AnyObj) || (buttonContent.templateButtonReplyMessage as AnyObj) || (buttonContent.button_reply as AnyObj) || {};
+    const buttonPayload = asString(buttonReply.selectedButtonId) || asString(buttonReply.selectedId) || asString(buttonReply.id) || null;
+    const text = asString(message.text) || asString(buttonReply.selectedDisplayText) || asString(buttonReply.title) || "";
     const senderName =
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
@@ -783,6 +786,7 @@ serve(async (req) => {
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
       ...(adReferral ? { referral: adReferral } : {}),
+      ...(buttonPayload ? { button_payload: buttonPayload } : {}),
       ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
     }).select("id").maybeSingle();
 

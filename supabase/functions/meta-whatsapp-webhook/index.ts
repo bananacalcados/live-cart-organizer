@@ -411,8 +411,10 @@ serve(async (req) => {
                 // Interactive button/list response
                 if (msg.interactive?.type === 'button_reply') {
                   messageText = msg.interactive.button_reply?.title || '';
+                  buttonPayload = msg.interactive.button_reply?.id || null;
                 } else if (msg.interactive?.type === 'list_reply') {
                   messageText = msg.interactive.list_reply?.title || '';
+                  buttonPayload = msg.interactive.list_reply?.id || null;
                 } else {
                   messageText = '[interativo]';
                 }
