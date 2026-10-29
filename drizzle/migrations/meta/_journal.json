@@ -617,6 +617,34 @@
       "when": 1793224692104,
       "tag": "0087_group_responsible_phase_b",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793294505336,
+      "tag": "0088_live_manual_crossell_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793294608957,
+      "tag": "0089_manual_crossell_atomic_start",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793294775219,
+      "tag": "0090_crossell_interest_broadcast",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793295076172,
+      "tag": "0091_manual_crossell_dispatch_gate",
+      "breakpoints": true
     }
   ]
 }

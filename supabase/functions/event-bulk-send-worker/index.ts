@@ -104,6 +104,7 @@ Deno.serve(async (req) => {
       .from("event_bulk_sends")
       .select("id")
       .in("status", ["queued", "processing"])
+      .eq("manual_blocks", false)
       .lt("updated_at", new Date(Date.now() - 2 * 60_000).toISOString())
       .limit(20);
     for (const s of stale || []) {
@@ -114,8 +115,9 @@ Deno.serve(async (req) => {
     // (sem cron por minuto). Itens em retry esperam até o lock expirar.
     const { data: nextPending } = await supabase
       .from("event_bulk_send_items")
-      .select("locked_until")
+      .select("locked_until,event_bulk_sends!inner(manual_blocks)")
       .eq("status", "pending")
+      .eq("event_bulk_sends.manual_blocks", false)
       .order("locked_until", { ascending: true, nullsFirst: true })
       .limit(1)
       .maybeSingle();

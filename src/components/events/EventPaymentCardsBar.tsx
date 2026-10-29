@@ -27,6 +27,10 @@ import { ShoppingCart } from "lucide-react";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 import { useInitialLiveContacts } from "@/hooks/events/useInitialLiveContacts";
 import { projectInitialPhones } from "@/lib/selfServiceInitial";
+import { paidGroupActivity, paidChatOrder, readLiveSeen, markPaidGroupSeen } from "@/lib/livePaidActivity";
+import { compareLiveContacts, type ContactActivity } from "@/lib/liveContactUnread";
+import { normalizeBRPhone } from "@/lib/phoneUtils";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
@@ -179,6 +183,33 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   // Agrupamento por cliente (aba Pagos) + unificação de pedidos.
   const { fetchOrdersByEvent } = useDbOrderStore();
   const eventId = orders[0] ? (orders[0] as any).event_id : eventIdProp;
+  const [paidSeen, setPaidSeen] = useState<Record<string, number>>({});
+  const [paidLiveActivity, setPaidLiveActivity] = useState<Record<string, ContactActivity>>({});
+  const [crossellInterest, setCrossellInterest] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setPaidLiveActivity({});
+    setCrossellInterest({});
+    setPaidSeen(eventId ? readLiveSeen(eventId) : {});
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.eventId === eventId) setPaidSeen((prev) => ({ ...prev, [detail.key]: detail.seenAt }));
+    };
+    window.addEventListener("live-contact-seen", listener);
+    return () => window.removeEventListener("live-contact-seen", listener);
+  }, [eventId]);
+  const paidPhones = useMemo(() => new Set(orders.filter(isOrderMarkedPaid).map((o) => normalizeBRPhone(o.customer?.whatsapp || ""))), [orders]);
+  useWaMessageBroadcast((payload) => {
+    if (payload.event === "wa_msg_update" || (payload.direction !== "incoming" && payload.direction !== "outgoing")) return;
+    const phone = normalizeBRPhone(payload.phone || "");
+    if (!phone || !paidPhones.has(phone)) return;
+    if (payload.crossell_interest) setCrossellInterest((prev)=>({...prev,[phone]:true}));
+    setPaidLiveActivity((prev) => {
+      const current = prev[phone] || { lastIn: null, lastOut: null };
+      const field = payload.direction === "incoming" ? "lastIn" : "lastOut";
+      if (current[field] && current[field] >= payload.created_at) return prev;
+      return { ...prev, [phone]: { ...current, [field]: payload.created_at } };
+    });
+  });
   const refreshOrders = useCallback(() => {
     if (eventId) fetchOrdersByEvent(eventId);
   }, [eventId, fetchOrdersByEvent]);
@@ -546,8 +577,11 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
             new Date(a.paid_at || a.created_at).getTime(),
         )[0];
       return { rep, group: g };
-    });
-  }, [paid, paidRegs]);
+    }).sort((a, b) => compareLiveContacts(
+      { ...paidGroupActivity(a.group, paidLiveActivity, paidSeen), createdAt: a.rep.created_at, key: a.rep.id },
+      { ...paidGroupActivity(b.group, paidLiveActivity, paidSeen), createdAt: b.rep.created_at, key: b.rep.id },
+    ));
+  }, [paid, paidRegs, paidLiveActivity, paidSeen]);
 
   type CardEntry = { rep: DbOrder; group: DbOrder[] };
 
@@ -668,15 +702,15 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                 ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
                 : getOrderFinalValue(order);
               // Destaque verde (sem piscar) quando a cliente falou por último.
-              const unread = !paidCard && isConversationUnread(order);
+              const unread = paidCard ? paidGroupActivity(group, paidLiveActivity, paidSeen).unread : isConversationUnread(order);
 
               const isPinned = pinnedIds.has(order.id);
               // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
               const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
               const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
               const onCardClick = () => {
-                if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
-                else handleCardClick(order);
+                if (paidCard && eventId) markPaidGroupSeen(eventId, group);
+                handleCardClick(paidChatOrder(order, group));
               };
               return (
                 <div
@@ -685,7 +719,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   tabIndex={0}
                   onClick={onCardClick}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onCardClick(); }}
-                  title={isGroup ? "Ver todos os pedidos deste cliente" : unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
+                  title={unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
                   className={cn(
                     "group relative flex flex-col gap-1 min-w-[210px] max-w-[250px] min-h-[104px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0 cursor-pointer",
                     paidCard
@@ -699,6 +733,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   )}
                 >
                   {/* Selos de novidade: dentro do card, em linha própria, sem cortar no topo */}
+                  {paidCard && group.some((o)=>crossellInterest[normalizeBRPhone(o.customer?.whatsapp || "")]) && <span className="w-fit rounded-md bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">INTERESSE EM CROSSELL</span>}
                   {order.initialPhoneUnconfirmed && (
                     <span className="text-xs text-muted-foreground">
                       {order.initialContactAt
@@ -706,10 +741,10 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                         : "Telefone digitado · não confirmou no WhatsApp"}
                     </span>
                   )}
-                  {!paidCard && (unread || igUnread[igKey(order.customer?.instagram_handle)]) && (
+                  {(unread || (!paidCard && igUnread[igKey(order.customer?.instagram_handle)])) && (
                     <div className="flex flex-wrap items-center gap-1 pr-7 -mb-0.5">
                       {unread && (
-                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white shadow">
+                        <span className="inline-flex items-center rounded-md bg-stage-paid px-2 py-0.5 text-[11px] font-bold uppercase text-primary-foreground">
                           Não lida
                         </span>
                       )}

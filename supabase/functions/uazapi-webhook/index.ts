@@ -7,6 +7,7 @@ import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityTyp
 import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
 import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
+import { extractCrossellButton } from "../_shared/crossell-blocks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -498,7 +499,10 @@ serve(async (req) => {
     const messageId = asString(message.messageid) || asString(message.id);
     const uazMediaType = asString(message.mediaType);
     let sysMediaType = mapMediaType(uazMediaType);
-    const text = asString(message.text) || "";
+    const buttonContent = (message.content as AnyObj) || {};
+    const buttonReply = extractCrossellButton(buttonContent);
+    const buttonPayload = buttonReply.id;
+    const text = asString(message.text) || buttonReply.title || "";
     const senderName =
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
@@ -783,6 +787,7 @@ serve(async (req) => {
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
       ...(adReferral ? { referral: adReferral } : {}),
+      ...(buttonPayload ? { button_payload: buttonPayload } : {}),
       ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
     }).select("id").maybeSingle();
 

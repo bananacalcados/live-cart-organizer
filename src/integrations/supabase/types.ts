@@ -5524,6 +5524,11 @@ export type Database = {
           attempts: number
           components: Json
           created_at: string
+          crossell_interest_at: string | null
+          crossell_interest_message_id: string | null
+          crossell_next_at: string | null
+          crossell_progress: Json
+          crossell_state: string | null
           customer_name: string | null
           id: string
           locked_until: string | null
@@ -5542,6 +5547,11 @@ export type Database = {
           attempts?: number
           components?: Json
           created_at?: string
+          crossell_interest_at?: string | null
+          crossell_interest_message_id?: string | null
+          crossell_next_at?: string | null
+          crossell_progress?: Json
+          crossell_state?: string | null
           customer_name?: string | null
           id?: string
           locked_until?: string | null
@@ -5560,6 +5570,11 @@ export type Database = {
           attempts?: number
           components?: Json
           created_at?: string
+          crossell_interest_at?: string | null
+          crossell_interest_message_id?: string | null
+          crossell_next_at?: string | null
+          crossell_progress?: Json
+          crossell_state?: string | null
           customer_name?: string | null
           id?: string
           locked_until?: string | null
@@ -5595,6 +5610,7 @@ export type Database = {
           failed_count: number
           id: string
           kind: string
+          manual_blocks: boolean
           sent_count: number
           skipped_count: number
           stages: string[]
@@ -5617,6 +5633,7 @@ export type Database = {
           failed_count?: number
           id?: string
           kind: string
+          manual_blocks?: boolean
           sent_count?: number
           skipped_count?: number
           stages?: string[]
@@ -5639,6 +5656,7 @@ export type Database = {
           failed_count?: number
           id?: string
           kind?: string
+          manual_blocks?: boolean
           sent_count?: number
           skipped_count?: number
           stages?: string[]
@@ -25725,6 +25743,11 @@ export type Database = {
           attempts: number
           components: Json
           created_at: string
+          crossell_interest_at: string | null
+          crossell_interest_message_id: string | null
+          crossell_next_at: string | null
+          crossell_progress: Json
+          crossell_state: string | null
           customer_name: string | null
           id: string
           locked_until: string | null
@@ -25809,6 +25832,38 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "ig_live_cart_notifications"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_manual_crossell: {
+        Args: { p_item_id: string }
+        Returns: {
+          attempts: number
+          components: Json
+          created_at: string
+          crossell_interest_at: string | null
+          crossell_interest_message_id: string | null
+          crossell_next_at: string | null
+          crossell_progress: Json
+          crossell_state: string | null
+          customer_name: string | null
+          id: string
+          locked_until: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string
+          reason: string | null
+          rendered_message: string | null
+          send_id: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "event_bulk_send_items"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -27039,6 +27094,10 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      manual_crossell_dispatch_allowed: {
+        Args: { p_item: string }
+        Returns: boolean
+      }
       mark_dispatch_sent: {
         Args: { p_ids: string[]; p_wamids: string[] }
         Returns: undefined
@@ -27799,6 +27858,19 @@ export type Database = {
           p_group_jid: string
         }
         Returns: number
+      }
+      start_manual_crossell: {
+        Args: {
+          p_blocks: Json
+          p_event: string
+          p_id: string
+          p_instance: string
+          p_name: string
+          p_order: string
+          p_phone: string
+          p_user: string
+        }
+        Returns: string
       }
       sync_lead_pix_data: {
         Args: {
