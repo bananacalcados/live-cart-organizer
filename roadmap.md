@@ -1,5 +1,8 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Confirmação da Katia — 29/10
+- [x] Conflito de telefone em leads isolado da confirmação; testes transacionais de colisão/idempotência passaram com rollback. Confirmação real das 16:27 recuperada pelo código e identidade exata do pedido/cadastro; resposta única marcada sent às 16:37:20. Sem publicar; leitura pela cliente não confirmada.
+
 ## Linhas da live — carrinhos em Novos Contatos — 29/10
 - [x] Regressão corrigida: linha segue o canal aberto pelo card; comentário Instagram não sobrepõe resposta no WhatsApp. 14 testes passaram; Marina real saiu de Não Lidas para Aguardando, sem tag indevida; build OK. Sem consultas extras, publicação ou envio real de teste.
 - [x] Cadastro do pedido exato preenche telefone só na exibição; carrinho com produtos/telefone supera etapa incompleta antiga, mensagens WhatsApp/Instagram usam sinais de leitura existentes. 17 testes passaram; tela autenticada confirmou Marina fora de Novos Contatos/Incompletos e em Não Lidas, sem duplicação. Sem consultas novas, escritas em clientes ou publicação; nova mensagem real não enviada nos testes.
