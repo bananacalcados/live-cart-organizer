@@ -1,7 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Linhas da live — carrinhos em Novos Contatos — 29/10
-- [ ] Corrigir classificação de carrinho não pago para Aguardando Pagamento, com prioridade para Não Lidas; validar com testes e tela real sem publicar.
+- [x] Cadastro do pedido exato preenche telefone só na exibição; carrinho com produtos/telefone supera etapa incompleta antiga, mensagens WhatsApp/Instagram usam sinais de leitura existentes. 17 testes passaram; tela autenticada confirmou Marina fora de Novos Contatos/Incompletos e em Não Lidas, sem duplicação. Sem consultas novas, escritas em clientes ou publicação; nova mensagem real não enviada nos testes.
 
 ## Pix — excesso de requisições — 29/10
 - [x] Pedido a7d00f4a: logs e histórico confirmaram HTTP 400 payer.email (gmail.coml), não excesso de requisições. Corrigida normalização compartilhada sem alterar cadastro, e ficha passa a mostrar o erro real. Serviços Pix/boleto/cartão atualizados.
