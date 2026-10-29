@@ -27,7 +27,7 @@ import { ShoppingCart } from "lucide-react";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 import { useInitialLiveContacts } from "@/hooks/events/useInitialLiveContacts";
 import { projectInitialPhones } from "@/lib/selfServiceInitial";
-import { projectRegistrationPhones, isLiveOrderIncomplete } from "@/lib/liveOrderLanes";
+import { projectRegistrationPhones, isLiveOrderIncomplete, isLiveOrderConversationUnread } from "@/lib/liveOrderLanes";
 import { paidGroupActivity, paidChatOrder, readLiveSeen, markPaidGroupSeen } from "@/lib/livePaidActivity";
 import { compareLiveContacts, type ContactActivity } from "@/lib/liveContactUnread";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
@@ -320,10 +320,11 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     const summary = contactActivity.get(phone.slice(-8));
     const update = paidLiveActivity[phone];
     const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
-    return !!igUnread[igKey(order.customer?.instagram_handle)] || paidGroupActivity([order], { [phone]: {
+    const whatsappUnread = paidGroupActivity([order], { [phone]: {
       lastIn: latest(summary?.lastIn, update?.lastIn),
       lastOut: latest(summary?.lastOut, update?.lastOut),
     } }, paidSeen).unread;
+    return isLiveOrderConversationUnread(!!phone, whatsappUnread, !!igUnread[igKey(order.customer?.instagram_handle)]);
   }, [contactActivity, paidLiveActivity, paidSeen, igUnread]);
 
   const handleCardClick = (order: DbOrder) => {
@@ -746,14 +747,14 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                         : "Telefone digitado · não confirmou no WhatsApp"}
                     </span>
                   )}
-                  {(unread || (!paidCard && igUnread[igKey(order.customer?.instagram_handle)])) && (
+                  {unread && (
                     <div className="flex flex-wrap items-center gap-1 pr-7 -mb-0.5">
                       {unread && (
                         <span className="inline-flex items-center rounded-md bg-stage-paid px-2 py-0.5 text-[11px] font-bold uppercase text-primary-foreground">
                           Não lida
                         </span>
                       )}
-                      {igUnread[igKey(order.customer?.instagram_handle)] && (
+                      {!order.customer?.whatsapp && igUnread[igKey(order.customer?.instagram_handle)] && (
                         <span className="inline-flex items-center rounded-full bg-pink-600 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white shadow">
                           {igUnread[igKey(order.customer?.instagram_handle)] === "comment" ? "Não lida · comentou na live" : "Não lida · direct"}
                         </span>

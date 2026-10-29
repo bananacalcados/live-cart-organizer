@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { DbOrder } from "@/types/database";
-import { isLiveOrderIncomplete, projectRegistrationPhones } from "@/lib/liveOrderLanes";
+import { isLiveOrderIncomplete, projectRegistrationPhones, isLiveOrderConversationUnread } from "@/lib/liveOrderLanes";
 import { paidGroupActivity } from "@/lib/livePaidActivity";
 
 const order = { id: "cart", stage: "incomplete_order", is_paid: false, products: [{ id: "product" }], customer: { whatsapp: "" } } as DbOrder;
 describe("linhas da live com carrinho montado", () => {
+  it("resposta mais recente no WhatsApp não vira não lida por comentário antigo no Instagram", () => {
+    const answered = paidGroupActivity([{ ...order, customer: { whatsapp: "5541999231736" }, last_customer_message_at: "2026-10-29T19:00:00Z", last_sent_message_at: "2026-10-29T19:01:00Z" }], {}, {}).unread;
+    expect(isLiveOrderConversationUnread(true, answered, true)).toBe(false);
+    expect(isLiveOrderConversationUnread(true, true, false)).toBe(true);
+    expect(isLiveOrderConversationUnread(false, false, true)).toBe(true);
+  });
   it("usa cadastro do pedido exato para retirar o contato de Novos Contatos", () => {
     const projected = projectRegistrationPhones([order], { cart: "5541999231736" })[0];
     expect(projected.customer?.whatsapp).toBe("5541999231736");
