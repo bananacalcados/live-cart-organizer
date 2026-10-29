@@ -323,7 +323,12 @@ Deno.serve(async (req) => {
         }
       }
       if (!o.registered_at) await sb.from("orders").update({ registered_at: a.registered_at }).eq("id", orderId).is("registered_at", null);
+      // O card abre o WhatsApp que mandou o código; o número digitado só é trocado quando é ele que está no card.
+      const cardPhone = normalizeBrPhone(String((c as any)?.whatsapp || ""));
       if (!c?.whatsapp) await sb.from("customers").update({ whatsapp: cp, updated_at: new Date().toISOString() }).eq("id", o.customer_id).or("whatsapp.is.null,whatsapp.eq.");
+      else if (cardPhone && cardPhone !== cp && cardPhone === normalizeBrPhone(a.metadata?.entered_phone_original || a.entered_phone || "")) {
+        await sb.from("customers").update({ whatsapp: cp, updated_at: new Date().toISOString() }).eq("id", o.customer_id);
+      }
       await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
       if (o.selfservice_cart_sent_at) return json({ ok: true, sent: false, already: true });
       const cbOne = await cashbackHint(orderTotal(o));
