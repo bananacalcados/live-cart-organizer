@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { sampleCrossellDelay, crossellNextAt, metaCrossellWindow, validateCrossellBlocks, type CrossellBlock } from "../../supabase/functions/_shared/crossell-blocks";
+import { sampleCrossellDelay, crossellNextAt, metaCrossellWindow, validateCrossellBlocks, extractCrossellButton, type CrossellBlock } from "../../supabase/functions/_shared/crossell-blocks";
 const text: CrossellBlock = { id: "1", kind: "text", text: "Oferta", media: [], buttons: [] };
 describe("envio manual de Crossell", () => {
+  it("mantém ID e título do clique da uazapi sem classificação por IA", () => {
+    expect(extractCrossellButton({ buttonsResponseMessage: { selectedButtonId:"cxb:test",selectedDisplayText:"Quero" } })).toEqual({id:"cxb:test",title:"Quero"});
+    expect(extractCrossellButton({})).toEqual({id:null,title:null});
+  });
   it("intervalo mínimo é 4.000 ms", () => expect(sampleCrossellDelay(() => 0)).toBe(4000));
   it("intervalo máximo é 15.000 ms", () => expect(sampleCrossellDelay(() => 0.999999)).toBe(15000));
   it("sorteia independentemente a cada transição", () => {

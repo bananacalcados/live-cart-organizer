@@ -16,6 +16,11 @@ export function metaCrossellWindow(lastIncoming: string | null, now = Date.now()
   const at = Date.parse(lastIncoming || "");
   return Number.isFinite(at) && at <= now && now - at < 86400000;
 }
+export function extractCrossellButton(content: Record<string, unknown>) {
+  const nested = (content.buttonsResponseMessage || content.templateButtonReplyMessage || content.button_reply || content) as Record<string, unknown>;
+  const value = (v: unknown) => typeof v === "string" ? v : null;
+  return { id: value(nested.selectedButtonId) || value(nested.selectedId) || value(nested.id), title: value(nested.selectedDisplayText) || value(nested.title) };
+}
 export function validateCrossellBlocks(blocks: CrossellBlock[], provider: string): string | null {
   if (!["uazapi", "meta"].includes(provider)) return "Selecione uma instância uazapi ou Meta API.";
   if (!Array.isArray(blocks) || !blocks.length || blocks.length > 50) return "Monte entre 1 e 50 blocos.";

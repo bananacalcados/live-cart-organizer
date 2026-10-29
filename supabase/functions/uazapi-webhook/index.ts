@@ -7,6 +7,7 @@ import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityTyp
 import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-attribution-memory.ts";
 import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
 import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
+import { extractCrossellButton } from "../_shared/crossell-blocks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -499,9 +500,9 @@ serve(async (req) => {
     const uazMediaType = asString(message.mediaType);
     let sysMediaType = mapMediaType(uazMediaType);
     const buttonContent = (message.content as AnyObj) || {};
-    const buttonReply = (buttonContent.buttonsResponseMessage as AnyObj) || (buttonContent.templateButtonReplyMessage as AnyObj) || (buttonContent.button_reply as AnyObj) || {};
-    const buttonPayload = asString(buttonReply.selectedButtonId) || asString(buttonReply.selectedId) || asString(buttonReply.id) || null;
-    const text = asString(message.text) || asString(buttonReply.selectedDisplayText) || asString(buttonReply.title) || "";
+    const buttonReply = extractCrossellButton(buttonContent);
+    const buttonPayload = buttonReply.id;
+    const text = asString(message.text) || buttonReply.title || "";
     const senderName =
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);

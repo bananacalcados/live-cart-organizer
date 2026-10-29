@@ -7,13 +7,27 @@ import { crossellNextAt, metaCrossellWindow, validateCrossellBlocks, type Crosse
 
 const mediaSchema = z.object({ url: z.string().url().max(2048), name: z.string().max(150), mime: z.string().max(100), size: z.number().min(0).max(104857600) });
 const blockSchema = z.object({ id: z.string().uuid(), kind: z.enum(["text","image","document","audio","video","buttons"]), text: z.string().max(4096), media: z.array(mediaSchema).max(20), buttons: z.array(z.object({ title: z.string().min(1).max(20), interest: z.boolean() })).max(3) });
-const schema = z.object({ action: z.enum(["list","save","start","history","resume","cancel","run"]), eventId: z.string().uuid().optional(), orderId: z.string().uuid().optional(), instanceId: z.string().uuid().optional(), requestId: z.string().uuid().optional(), sendId: z.string().uuid().optional(), presetId: z.string().uuid().optional(), name: z.string().min(1).max(100).optional(), blocks: z.array(blockSchema).min(1).max(50).optional() });
+const schema = z.object({ action: z.enum(["list","save","start","history","resume","cancel","run","retry_review"]), confirmRetry:z.boolean().optional(),eventId: z.string().uuid().optional(), orderId: z.string().uuid().optional(), instanceId: z.string().uuid().optional(), requestId: z.string().uuid().optional(), sendId: z.string().uuid().optional(), presetId: z.string().uuid().optional(), name: z.string().min(1).max(100).optional(), blocks: z.array(blockSchema).min(1).max(50).optional() });
 const url = Deno.env.get("SUPABASE_URL") || "";
 const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const db = createClient(url, key);
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const check = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
 const fields = "id,send_id,order_id,phone,whatsapp_number_id,crossell_state,crossell_progress,crossell_next_at,crossell_interest_at,reason,created_at";
+async function validateMedia(blocks: CrossellBlock[]) {
+  for (const block of blocks) for (const media of block.media) {
+    const source = new URL(media.url);
+    const storage = new URL(url);
+    if (!(source.hostname === storage.hostname && source.pathname.startsWith("/storage/v1/object/public/whatsapp-media/")) && source.hostname !== "cdn.shopify.com") throw new Error("Use arquivos carregados aqui ou fotos do catálogo.");
+    const response = await fetch(media.url,{method:"HEAD",redirect:"error",signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw new Error("Arquivo indisponível.");
+    const size=Number(response.headers.get("content-length"));
+    const mime=(response.headers.get("content-type")||"").split(";")[0];
+    if(!Number.isFinite(size)||size<=0)throw new Error("Não foi possível validar o tamanho do arquivo.");
+    const error=validateCrossellBlocks([{...block,media:[{...media,size,mime}]}],"uazapi");
+    if(error)throw new Error(error);
+  }
+}
 
 async function guarded(phone: string, instanceId: string) {
   const variants = buildPhoneVariations(phone);
@@ -150,15 +164,17 @@ Deno.serve(async (req) => {
       const provider = await guarded(phone,body.instanceId);
       const validation = validateCrossellBlocks(body.blocks,provider);
       if (validation) return json({error:validation},400);
+      await validateMedia(body.blocks);
       const {data:sendId,error:createError} = await db.rpc("start_manual_crossell",{p_id:body.requestId,p_event:order.event_id,p_order:order.id,p_phone:phone,p_instance:body.instanceId,p_user:userId,p_name:body.name || "Crossell",p_blocks:body.blocks});
       check(createError);
       background(run(sendId)); return json({sendId});
     }
     if (body.action === "history") {
       if (!body.orderId) return json({error:"Pedido obrigatório"},400);
-      const {data:order,error} = await userDb.from("orders").select("id").eq("id",body.orderId).single();
+      const {data:order,error} = await userDb.from("orders").select("id,event_id,customer:customers(whatsapp)").eq("id",body.orderId).single();
       check(error);
-      const {data,error:historyError} = await db.from("event_bulk_send_items").select(`${fields},event_bulk_sends!inner(template_label,manual_blocks,base_components)`).eq("order_id",order.id).eq("event_bulk_sends.manual_blocks",true).order("created_at",{ascending:false}).limit(10);
+      const customer=Array.isArray(order.customer)?order.customer[0]:order.customer;
+      const {data,error:historyError} = await db.from("event_bulk_send_items").select(`${fields},event_bulk_sends!inner(template_label,manual_blocks,base_components)`).eq("phone",normalizeBRPhone(customer?.whatsapp || "")).eq("event_bulk_sends.event_id",order.event_id).eq("event_bulk_sends.manual_blocks",true).order("created_at",{ascending:false}).limit(10);
       check(historyError); return json({history:data});
     }
     if (!body.sendId) return json({error:"Envio obrigatório"},400);
@@ -173,6 +189,16 @@ Deno.serve(async (req) => {
     if (body.action === "resume") {
       await db.from("event_bulk_send_items").update({crossell_state:"pending",reason:null}).eq("send_id",send.id).eq("crossell_state","paused");
       background(run(send.id)); return json({ok:true});
+    }
+    if (body.action === "retry_review") {
+      if(body.confirmRetry!==true)return json({error:"Confirme que conferiu a conversa antes de reenviar."},400);
+      const {data:item,error:itemError}=await db.from("event_bulk_send_items").select("id,crossell_progress,crossell_state,locked_until").eq("send_id",send.id).single();
+      check(itemError);
+      if(item.crossell_state!=="review" && !(item.crossell_state==="sending" && Date.parse(item.locked_until || "")<Date.now()))return json({error:"Envio ainda em andamento ou não está em revisão."},409);
+      const progress=item.crossell_progress as Record<string,unknown>;
+      const reviews=Array.isArray(progress.reviews)?progress.reviews:[];
+      const result=await db.from("event_bulk_send_items").update({crossell_state:"pending",reason:null,crossell_progress:{...progress,reviews:[...reviews,{at:new Date().toISOString(),userId,block:progress.block,file:progress.file}]}}).eq("id",item.id).eq("crossell_state",item.crossell_state);
+      check(result.error);background(run(send.id));return json({ok:true});
     }
     return json({error:"Ação inválida"},400);
   } catch(e) { return json({error:e instanceof Error ? e.message : "Erro no Crossell"},400); }
