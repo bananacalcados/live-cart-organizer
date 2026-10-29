@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 type History = { id: string; send_id: string; crossell_state: string; crossell_interest_at: string | null; reason: string | null; crossell_progress: { block: number; sent: { messageId: string }[]; reviews?: {at:string}[] }; event_bulk_sends: { template_label: string; base_components: CrossellBlock[] } };
 const kinds = [{ kind:"text",label:"Texto",Icon:MessageSquare },{ kind:"image",label:"Fotos",Icon:Image },{ kind:"document",label:"Arquivo",Icon:File },{ kind:"audio",label:"Áudio",Icon:Mic },{ kind:"video",label:"Vídeo",Icon:Video },{ kind:"buttons",label:"Botões",Icon:MousePointerClick }] as const;
+const VARS = [["{{nome}}","Nome"],["{{nome_completo}}","Nome completo"],["{{instagram}}","@ Instagram"],["{{valor_cashback}}","Cashback"],["{{codigo_cashback}}","Cupom cashback"],["{{validade_cashback}}","Validade cashback"],["{{dias_para_expirar}}","Dias p/ expirar"],["{{compra_minima}}","Compra mínima"]] as const;
 const labels: Record<string,string> = { pending:"Aguardando próximo bloco",sending:"Enviando",done:"Enviado",paused:"Pausado",review:"Confira o envio na conversa",cancelled:"Cancelado" };
 async function call(body: Record<string,unknown>) {
   const {data,error} = await supabase.functions.invoke("live-crossell-blocks",{body});
@@ -126,6 +127,7 @@ export function CrossellBlocksEditor({ orderId, phone, instanceId, provider, ins
           <Button size="icon" variant="ghost" aria-label={`Descer bloco ${index+1}`} disabled={index===blocks.length-1 || busy} onClick={()=>move(index,1)}><ArrowDown className="h-4 w-4"/></Button>
           <Button size="icon" variant="ghost" aria-label={`Remover bloco ${index+1}`} disabled={busy} onClick={()=>{requestId.current=null;setBlocks((prev)=>prev.filter((b)=>b.id!==block.id));}}><Trash2 className="h-4 w-4"/></Button>
         </div>
+        {block.kind!=="audio" && <div className="flex flex-wrap gap-1">{VARS.map(([v,l])=><Button key={v} type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={()=>edit(block.id,{text:`${block.text}${block.text && !block.text.endsWith(" ")?" ":""}${v}`})}>+ {l}</Button>)}</div>}
         {block.kind!=="audio" && <Textarea aria-label={`Texto do bloco ${index+1}`} placeholder={block.kind==="text" || block.kind==="buttons" ? "Mensagem" : "Legenda (opcional)"} value={block.text} onChange={(e)=>edit(block.id,{text:e.target.value})} disabled={busy}/>}
         {!["text","buttons"].includes(block.kind) && <>
           <Input type="file" aria-label={`Arquivos do bloco ${index+1}`} multiple={block.kind==="image"} accept={block.kind==="image"?"image/jpeg,image/png":block.kind==="audio"?"audio/mpeg,audio/mp4,audio/ogg,audio/aac,audio/amr":block.kind==="video"?"video/mp4,video/3gpp":undefined} disabled={busy || uploading!==null} onChange={(e)=>void upload(block,e.target.files)}/>

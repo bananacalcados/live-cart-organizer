@@ -1,3 +1,4 @@
+import { cashbackVars, fetchActiveCashback } from "../_shared/automation-context.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
@@ -127,6 +128,21 @@ async function run(sendId: string) {
   // Continuation does not reclaim a sending/uncertain block, and adds no cron.
   background(fetch(`${url}/functions/v1/live-crossell-blocks`,{ method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({action:"run",sendId}) }).then((r)=>r.text()));
 }
+async function crossellVars(orderId: string, phone: string): Promise<Record<string,string>> {
+  const [{data:o},{data:reg},cb] = await Promise.all([
+    db.from("orders").select("customer:customers(full_name,instagram_handle)").eq("id",orderId).maybeSingle(),
+    db.from("customer_registrations").select("full_name").eq("order_id",orderId).order("created_at",{ascending:false}).limit(1).maybeSingle(),
+    fetchActiveCashback(db, phone),
+  ]);
+  const c: any = Array.isArray(o?.customer) ? o?.customer[0] : o?.customer;
+  const full = String(reg?.full_name || c?.full_name || "").trim();
+  const ig = String(c?.instagram_handle || "").replace(/^@/,"");
+  return { "{{nome}}": full.split(/\s+/)[0] || "", "{{nome_completo}}": full, "{{instagram}}": ig ? `@${ig}` : "", ...cashbackVars(cb) };
+}
+function fillVars(text: string, vars: Record<string,string>) {
+  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi,(m,k)=>vars[`{{${String(k).toLowerCase()}}}`] ?? m).replace(/[ \t]{2,}/g," ");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders});
   try {
@@ -169,7 +185,9 @@ Deno.serve(async (req) => {
       const validation = validateCrossellBlocks(body.blocks,provider);
       if (validation) return json({error:validation},400);
       await validateMedia(body.blocks);
-      const {data:sendId,error:createError} = await db.rpc("start_manual_crossell",{p_id:body.requestId,p_event:order.event_id,p_order:order.id,p_phone:phone,p_instance:body.instanceId,p_user:userId,p_name:body.name || "Crossell",p_blocks:body.blocks});
+      const vars = await crossellVars(order.id, phone);
+      const blocks = body.blocks.map((b)=>({...b,text:fillVars(b.text,vars),buttons:b.buttons.map((x)=>({...x,title:fillVars(x.title,vars).slice(0,20)}))}));
+      const {data:sendId,error:createError} = await db.rpc("start_manual_crossell",{p_id:body.requestId,p_event:order.event_id,p_order:order.id,p_phone:phone,p_instance:body.instanceId,p_user:userId,p_name:body.name || "Crossell",p_blocks:blocks});
       check(createError);
       background(run(sendId)); return json({sendId});
     }
