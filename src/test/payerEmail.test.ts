@@ -18,6 +18,12 @@ describe("e-mail do pagador sem bloquear Pix por endereço inválido", () => {
   it("preserva normalização de domínio existente", () => {
     expect(normalizePayerEmail(" Cliente@GMAIL.CON ")).toBe("cliente@gmail.com");
   });
+  it("corrige o domínio gmail.coml recusado pelo Mercado Pago sem mudar a caixa postal", () => {
+    const original = "cliente@gmail.coml";
+    expect(resolvePayerEmail({ email: original })).toEqual({
+      email: "cliente@gmail.com", fallbackUsed: true, original,
+    });
+  });
   it("usa o pedido exato quando telefone e CPF não estão disponíveis", () => {
     expect(resolvePayerEmail({ email: "cliente.@hotmail.com", orderId: "pedido-123" }).email).toBe("pedido123@cliente.bananacalcados.com.br");
   });

@@ -13,6 +13,7 @@ const DOMAIN_TYPOS: Record<string, string> = {
   "gmail.c0m": "gmail.com",
   "gmail.om": "gmail.com",
   "gmail.comb": "gmail.com",
+  "gmail.coml": "gmail.com",
   "gmail.cm": "gmail.com",
   "gmail.co": "gmail.com",
   "gamil.com": "gmail.com",
