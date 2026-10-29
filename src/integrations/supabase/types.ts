@@ -27716,6 +27716,7 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: string
       }
+      selfservice_br_phone: { Args: { p: string }; Returns: string }
       selfservice_capture_initial: {
         Args: {
           p_access_id?: string
@@ -27808,6 +27809,10 @@ export type Database = {
         Returns: boolean
       }
       selfservice_queue_requeue: { Args: { p_id: string }; Returns: boolean }
+      selfservice_reconcile_confirmed_phone: {
+        Args: { p_access_id: string }
+        Returns: string
+      }
       selfservice_resend_register_dm: {
         Args: { p_order_id: string }
         Returns: Json
