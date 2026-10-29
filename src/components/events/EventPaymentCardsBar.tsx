@@ -225,16 +225,6 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     initial.contacts,
   );
   const linkContacts = redirectContacts;
-  const isOrderUnread = useCallback((order: DbOrder) => {
-    const phone = normalizeBRPhone(order.customer?.whatsapp || "");
-    const summary = contactActivity.get(phone.slice(-8));
-    const update = paidLiveActivity[phone];
-    const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
-    return paidGroupActivity([order], { [phone]: {
-      lastIn: latest(summary?.lastIn, update?.lastIn),
-      lastOut: latest(summary?.lastOut, update?.lastOut),
-    } }, paidSeen).unread;
-  }, [contactActivity, paidLiveActivity, paidSeen]);
   const { marks: laneMarks, setLane, clearLane } = useEventContactLanes(lanes ? eventId : null);
 
   // Linha PEDIDOS: quem comentou QUERO na live e ainda não tem pedido neste evento.
@@ -324,6 +314,17 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
 
   // Ao fechar o direct, recalcula (marca como lida).
   useEffect(() => { if (!igOpen) setIgRefresh((n) => n + 1); }, [igOpen]);
+
+  const isOrderUnread = useCallback((order: DbOrder) => {
+    const phone = normalizeBRPhone(order.customer?.whatsapp || "");
+    const summary = contactActivity.get(phone.slice(-8));
+    const update = paidLiveActivity[phone];
+    const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
+    return !!igUnread[igKey(order.customer?.instagram_handle)] || paidGroupActivity([order], { [phone]: {
+      lastIn: latest(summary?.lastIn, update?.lastIn),
+      lastOut: latest(summary?.lastOut, update?.lastOut),
+    } }, paidSeen).unread;
+  }, [contactActivity, paidLiveActivity, paidSeen, igUnread]);
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
