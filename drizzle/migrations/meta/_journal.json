@@ -624,6 +624,13 @@
       "when": 1793294505336,
       "tag": "0088_live_manual_crossell_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793294608957,
+      "tag": "0089_manual_crossell_atomic_start",
+      "breakpoints": true
     }
   ]
 }

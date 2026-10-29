@@ -27855,6 +27855,19 @@ export type Database = {
         }
         Returns: number
       }
+      start_manual_crossell: {
+        Args: {
+          p_blocks: Json
+          p_event: string
+          p_id: string
+          p_instance: string
+          p_name: string
+          p_order: string
+          p_phone: string
+          p_user: string
+        }
+        Returns: string
+      }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string
