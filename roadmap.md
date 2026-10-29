@@ -1,5 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Pix — excesso de requisições — 29/10
+- [x] Pedido a7d00f4a: logs e histórico confirmaram HTTP 400 payer.email (gmail.coml), não excesso de requisições. Corrigida normalização compartilhada sem alterar cadastro, e ficha passa a mostrar o erro real. Serviços Pix/boleto/cartão atualizados.
+- [x] 21 testes passaram; uma única geração real após confirmar ausência de Pix vinculado retornou R$379,99 e ficou vinculada, pendente, sem pagamento/envio. Página pública abriu sem erro, mas formulário ainda carregava na captura; clique da ficha não foi repetido para evitar novo Pix. Crossell pausado até aprovação posterior; site não publicado.
+
 ## Crossell uazapi e atendimento nos Pagos — 29/10
 - [ ] Revisar plano: envio manual direto de blocos pela instância atual (uazapi/Meta), sem convite prévio; intervalo aleatório de 4–15 s entre blocos. Meta exige janela real de mensagem da cliente, não data da compra.
 - [ ] Priorizar cards pagos com novas mensagens e tag NÃO LIDA usando os sinais existentes — aprovado.

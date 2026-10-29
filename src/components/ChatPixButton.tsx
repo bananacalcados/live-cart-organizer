@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { parseChargebackBlock, chargebackBlockMessage } from "@/lib/chargebackBlock";
 import {
@@ -95,6 +96,10 @@ export function ChatPixButton({ orderId, variant = "icon-light", className, chan
       }
       const blocked = await parseChargebackBlock(error, data);
       if (blocked) throw new Error(chargebackBlockMessage(blocked));
+      if (error instanceof FunctionsHttpError) {
+        const detail = await error.context.clone().json().catch(() => null);
+        if (typeof detail?.error === "string") throw new Error(detail.error);
+      }
       if (error) throw error;
       if (data?.qrCode) {
         setPixCode(data.qrCode);
