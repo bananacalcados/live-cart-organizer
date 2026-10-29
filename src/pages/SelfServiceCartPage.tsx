@@ -42,7 +42,9 @@ async function call(body: Record<string, unknown>) {
 }
 
 export default function SelfServiceCartPage() {
-  const { eventSlug = "", orderId = "" } = useParams();
+  const { eventSlug = "", orderId: rawOrderId = "" } = useParams();
+  // Links sem hífens: o WhatsApp confundia o UUID com "chave Pix aleatória" e copiava em vez de abrir.
+  const orderId = /^[0-9a-f]{32}$/i.test(rawOrderId) ? rawOrderId.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5") : rawOrderId;
   const [searchParams] = useSearchParams();
   const slug = eventSlug.toLowerCase();
   const [ev, setEv] = useState<Ev | null>(null);
