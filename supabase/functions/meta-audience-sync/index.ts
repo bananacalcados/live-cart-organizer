@@ -70,22 +70,22 @@ async function syncDefinition(def: any, token: string, opts: { force: boolean })
 
     // candidatos paginados
     const candidates: any[] = [];
-    for (let from = 0; ; from += 5000) {
-      const { data, error } = await admin.from("meta_audience_candidates").select("key,phone,email,full_name,city,state,zip").eq("definition_id", def.id).order("key").range(from, from + 4999);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin.from("meta_audience_candidates").select("key,phone,email,full_name,city,state,zip").eq("definition_id", def.id).order("key").range(from, from + 999);
       if (error) throw new Error(error.message);
       candidates.push(...(data || []));
-      if (!data || data.length < 5000) break;
+      if (!data || data.length < 1000) break;
     }
     const rows = [];
     for (const c of candidates) rows.push(await buildAudienceRow(c, normalizeMetaPhone));
     const valid = rows.filter((r) => r.hashes.some((h: string) => h));
 
     const members: any[] = [];
-    for (let from = 0; ; from += 5000) {
-      const { data, error } = await admin.from("meta_audience_members").select("key,row_hash,hashes").eq("definition_id", def.id).eq("status", "active").order("key").range(from, from + 4999);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin.from("meta_audience_members").select("key,row_hash,hashes").eq("definition_id", def.id).eq("status", "active").order("key").range(from, from + 999);
       if (error) throw new Error(error.message);
       members.push(...(data || []));
-      if (!data || data.length < 5000) break;
+      if (!data || data.length < 1000) break;
     }
 
     let metaLower: number | null = null;
