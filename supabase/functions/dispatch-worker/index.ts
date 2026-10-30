@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
 import { tagTrackedComponents } from "../_shared/tracked-links.ts";
+import { hasTrackableLink, tagDispatchComponents } from "../_shared/dispatch-tracking.ts";
 import { resolveMetaMediaId } from "../_shared/meta-media-cache.ts";
 import { sendTextFallback } from "../_shared/meta-fallback.ts";
 
@@ -357,7 +358,7 @@ serve(async (req) => {
     // Load dispatch metadata once
     const { data: dispatch, error: dispErr } = await supabase
       .from('dispatch_history')
-      .select('id,status,template_name,template_language,template_components,variables_config,has_dynamic_vars,header_media_url,whatsapp_number_id')
+      .select('id,status,template_name,template_language,template_components,variables_config,has_dynamic_vars,header_media_url,whatsapp_number_id,track_clicks')
       .eq('id', dispatchId)
       .single();
 
@@ -559,12 +560,22 @@ serve(async (req) => {
 
       if (hasDynamicVars && usesCashback(variablesConfig)) await attachCashback(supabase, claimed);
 
+      // Rastreamento por pessoa: só quando o disparo tem link do nosso domínio de live.
+      const trackCodes = new Map<string, string>();
+      if (dispatch.track_clicks !== false && (hasTrackableLink(templateComponents) || hasTrackableLink(variablesConfig))) {
+        const { data: codes, error: codeErr } = await supabase.rpc('dispatch_assign_tracking_codes', { p_ids: claimed.map((c: any) => c.id) });
+        if (codeErr) console.error(`[${workerId}] tracking codes`, codeErr.message);
+        for (const c of (codes || []) as any[]) if (c?.code) trackCodes.set(c.id, c.code);
+      }
+
       async function sendOne(rcp: any) {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
+        const built = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds);
+        const trackCode = trackCodes.get(rcp.id);
         const components = await tagTrackedComponents(supabase, formatted,
-          buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId, mediaIds),
+          trackCode ? tagDispatchComponents(built, templateComponents, trackCode, dispatchId) : built,
           { source: 'dispatch', ref: dispatchId, whatsappNumberId: dispatch.whatsapp_number_id || null });
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
         const carouselPayload = buildCarouselPayloadForChat(templateComponents, components, variablesConfig);

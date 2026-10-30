@@ -68,6 +68,20 @@ serve(async (req) => {
         console.error("[tracked click]", e);
       }
     }
+    // Disparo em massa com código por pessoa (?d=): clique já nasce identificado.
+    const dispatchCode = (url.searchParams.get("d") || "").trim().toLowerCase();
+    if (/^[a-z0-9]{6,8}$/.test(dispatchCode)) {
+      try {
+        const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+        await supabase.rpc("dispatch_link_click", { p_code: dispatchCode, p_page: `ao-vivo:${slug}`, p_ua: req.headers.get("user-agent"), p_ip: ip });
+        if (!phone) {
+          const { data: rcp } = await supabase.from("dispatch_recipients").select("phone").eq("tracking_code", dispatchCode).maybeSingle();
+          if (rcp?.phone) phone = rcp.phone;
+        }
+      } catch (e) {
+        console.error("[dispatch click]", e);
+      }
+    }
     const utmSource = url.searchParams.get("utm_source") || null;
     const fbclid = url.searchParams.get("fbclid") || null;
     const fbcParam = url.searchParams.get("fbc") || null;
