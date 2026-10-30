@@ -256,6 +256,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Autoatendimento: sinais capturados na primeira página (/pedido/<slug>) completam o que a ficha não tem.
+    // Só acesso exato do pedido; se não houver, o acesso único do MESMO evento pelo telefone da ficha.
+    if (selfservice && order_id && (!_fbc || !_fbp || !_clientIpStored || !_clientUaStored)) {
+      try {
+        let { data: accs } = await supabase.from("live_selfservice_accesses")
+          .select("advertising_signals").contains("order_ids", [order_id]).not("advertising_signals", "is", null)
+          .order("updated_at", { ascending: false }).limit(1);
+        let source = "access_order";
+        if (!accs?.length && _phone && selfserviceOrder?.event_id) {
+          const key = normalizePhone(_phone).slice(-10);
+          if (key.length === 10) {
+            const { data: byPhone } = await supabase.from("live_selfservice_accesses")
+              .select("advertising_signals").eq("event_id", selfserviceOrder.event_id)
+              .or(`confirmed_phone_key.eq.${key},phone_key.eq.${key}`).not("advertising_signals", "is", null).limit(2);
+            if (byPhone?.length === 1) { accs = byPhone; source = "access_phone"; }
+          }
+        }
+        const sig: any = accs?.[0]?.advertising_signals;
+        if (sig) {
+          _fbc = _fbc || sig.fbc || undefined;
+          _fbp = _fbp || sig.fbp || undefined;
+          _clientIpStored = _clientIpStored || sig.client_ip || undefined;
+          _clientUaStored = _clientUaStored || sig.client_user_agent || undefined;
+          _sourceUrlStored = _sourceUrlStored || sig.event_source_url || undefined;
+          selfserviceSignalsSource = source;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-event] access signals lookup failed:", e);
+      }
+    }
+
     // ---- Ponto 1: dados dos produtos do pedido (content_ids / contents / num_items) ----
     // Sem isso a Meta recebe a compra "vazia" e a qualidade do match cai.
     let _contentIds: string[] | undefined =
