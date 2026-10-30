@@ -76,6 +76,11 @@ export interface DuplicateDispatchData {
   // When set, the dispatcher should UPDATE this existing dispatch instead of creating a new one
   edit_dispatch_id?: string | null;
   campaign_name?: string | null;
+  /** Edit mode: number of recipients already stored (list is kept as-is). */
+  existing_recipients_count?: number | null;
+  scheduled_at?: string | null;
+  tipo_comunicacao?: string | null;
+  track_clicks?: boolean | null;
 }
 
 interface DispatchHistoryListProps {
@@ -617,7 +622,18 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     e.stopPropagation();
     if (!onDuplicate) return;
     try {
-      const recs = await fetchDispatchRecipients(dispatch.id);
+      // Editing keeps the stored recipient list (and tracking codes) untouched:
+      // only count it, never download/re-enqueue it.
+      let existingCount: number | null = null;
+      let recs: { phone: string; recipient_name: string | null }[] = [];
+      if (editMode) {
+        const { count } = await supabase
+          .from('dispatch_recipients')
+          .select('id', { count: 'exact', head: true })
+          .eq('dispatch_id', dispatch.id);
+        existingCount = count || 0;
+      }
+      if (!existingCount) recs = await fetchDispatchRecipients(dispatch.id);
 
       const d = dispatch as any;
       onDuplicate({
@@ -634,6 +650,10 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         recipients: (recs || []).map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
         edit_dispatch_id: editMode ? dispatch.id : null,
         campaign_name: d.campaign_name || null,
+        existing_recipients_count: existingCount,
+        scheduled_at: d.scheduled_at || null,
+        tipo_comunicacao: d.tipo_comunicacao || null,
+        track_clicks: d.track_clicks ?? null,
       });
       toast.success(editMode
         ? "Disparo carregado para edição — altere e salve novamente"
