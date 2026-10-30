@@ -1,0 +1,47 @@
+CREATE OR REPLACE FUNCTION public.trigger_meta_capi_purchase_on_paid()
+ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_should_send boolean := false;
+  v_supabase_url text := 'https://tqxhcyuxgqbzqwoidpie.supabase.co';
+  v_total numeric := 0;
+  v_request_id bigint;
+  v_event_id text;
+  v_is_now_paid boolean;
+  v_was_paid boolean;
+BEGIN
+  IF NEW.meta_capi_purchase_sent_at IS NOT NULL THEN RETURN NEW; END IF;
+  v_is_now_paid := (NEW.stage = 'paid') OR COALESCE(NEW.is_paid, false) OR COALESCE(NEW.paid_externally, false);
+  IF NOT v_is_now_paid THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' THEN
+    v_should_send := true;
+  ELSE
+    v_was_paid := (COALESCE(OLD.stage,'') = 'paid') OR COALESCE(OLD.is_paid, false) OR COALESCE(OLD.paid_externally, false);
+    IF NOT v_was_paid THEN v_should_send := true; END IF;
+  END IF;
+  IF NOT v_should_send THEN RETURN NEW; END IF;
+  -- Já registrado (pendente/enviado) no log: não dispara de novo.
+  IF EXISTS (SELECT 1 FROM public.meta_capi_purchase_log l WHERE l.order_id = NEW.id AND l.event_name = 'Purchase' AND l.status IN ('pending','sent')) THEN RETURN NEW; END IF;
+
+  SELECT COALESCE(SUM((item->>'price')::numeric * (item->>'quantity')::numeric), 0) INTO v_total
+  FROM jsonb_array_elements(COALESCE(NEW.products, '[]'::jsonb)) AS item;
+  IF NEW.discount_type = 'fixed' THEN
+    v_total := v_total - COALESCE(NEW.discount_value, 0);
+  ELSIF NEW.discount_type = 'percentage' THEN
+    v_total := v_total - ROUND(v_total * COALESCE(NEW.discount_value, 0) / 100, 2);
+  END IF;
+  IF NOT COALESCE(NEW.free_shipping, false) THEN v_total := v_total + COALESCE(NEW.shipping_cost, 0); END IF;
+  IF v_total <= 0 THEN RETURN NEW; END IF;
+  v_event_id := 'purchase_order_' || NEW.id::text;
+  SELECT net.http_post(
+    url := v_supabase_url || '/functions/v1/meta-capi-event',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body := jsonb_build_object('event_name','Purchase','event_id',v_event_id,'order_id',NEW.id::text,'value',v_total,'currency','BRL','action_source','website','from_server',true)
+  ) INTO v_request_id;
+  -- meta_capi_purchase_sent_at agora só é gravado pela função depois do OK da Meta.
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING '[trigger_meta_capi_purchase_on_paid] error for order %: %', NEW.id, SQLERRM;
+  RETURN NEW;
+END;
+$function$;

@@ -118,6 +118,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Mode 1b: lista de pedidos (reenvio retroativo pontual, até 100), mesmo event_id e horário real do pagamento
+    if (Array.isArray(body?.order_ids) && body.order_ids.length) {
+      const ids = body.order_ids.map(String).filter((s: string) => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 100);
+      const { data: orders } = await supabase.from("orders")
+        .select("id, products, discount_type, discount_value, free_shipping, shipping_cost").in("id", ids);
+      const results: any[] = [];
+      for (const order of orders || []) {
+        results.push(await dispatchOne(supabase, supabaseUrl, serviceKey, order));
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return new Response(JSON.stringify({ ok: true, processed: results.length, sent: results.filter((r) => r.ok).length, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Mode 2: reconcile — orders pagos sem log
     if (body?.reconcile) {
       const limit = Math.min(Math.max(Number(body?.limit) || 100, 1), 500);
