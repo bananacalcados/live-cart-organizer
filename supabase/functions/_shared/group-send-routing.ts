@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isLikelyGroupId } from "./group-send-guard.ts";
+import { requireUser } from "./require-user.ts";
 
 export interface GroupSendRoute {
   base: string; instance_id: string | null; label: string | null; provider: string;
@@ -48,6 +49,8 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
       const body = await req.clone().json();
       const phone = body.phone || body.groupId || body.groupJid;
       if (typeof phone !== "string" || !isLikelyGroupId(phone) || (kind === "groups" && body.action !== "sendMessage")) return handler(req);
+      const auth = await requireUser(req);
+      if (!auth.ok) return auth.response;
       route = await beginDirectGroupSend(phone, body.whatsapp_number_id);
       if (!route?.instance_id) throw new Error("Instância indisponível");
       const rewritten = { ...body, whatsapp_number_id: route.instance_id };
@@ -67,7 +70,11 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
         response = await handler(new Request(req.url, { method: req.method, headers: req.headers, body: JSON.stringify(rewritten) }));
       }
       const result = await response.clone().json().catch(() => ({}));
-      await finishDirectGroupSend(route, response.ok && !result.error ? "sent" : "failed", result.messageId || null);
+      const messageId = result.messageId || result.data?.messageid || result.data?.id || result.data?.data?.msgId || null;
+      await finishDirectGroupSend(route, response.ok && !result.error ? "sent" : "failed", messageId);
+      if (response.headers.get("content-type")?.includes("json")) {
+        return new Response(JSON.stringify({ ...result, whatsapp_number_id: route.instance_id, instance_label: route.label, messageId }), { status: response.status, headers: response.headers });
+      }
       return response;
     } catch (error) {
       await finishDirectGroupSend(route, "failed");

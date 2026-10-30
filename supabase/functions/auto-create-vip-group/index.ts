@@ -127,7 +127,7 @@ serve(async (req) => {
     const instanceKey = provider === "zapi" ? (inst.zapi_instance_id || inst.id) : inst.id;
     const { data: newGroup, error: insErr } = await supabase.from("whatsapp_groups").insert({
       group_id: newJid, group_jid_base: String(newJid).split("@")[0].split("-")[0].replace(/\D/g, ""),
-      name: newName, is_vip: false, is_active: true,
+      name: newName, is_vip: false, is_active: true, is_admin: true,
       instance_id: instanceKey, participant_count: adminPhones.length + 1, max_participants: 1024,
       invite_link: inviteLink,
     }).select("id").single();
