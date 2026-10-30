@@ -1065,6 +1065,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           <DialogTitle>{editingMessage ? "Editar Mensagem" : "Enviar Mensagem"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {open && targetGroups.length > 0 && <GroupSendRoutingPanel groupIds={targetGroups} fallback={fallbackNumberId} overrides={groupInstanceOverrides} onChange={setGroupInstanceOverrides} />}
           {/* Templates */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowTemplates(!showTemplates)}>
