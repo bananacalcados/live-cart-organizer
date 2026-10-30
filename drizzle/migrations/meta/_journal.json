@@ -687,6 +687,13 @@
       "when": 1793369770702,
       "tag": "0097_group_admin_routes_and_invite_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1793369919655,
+      "tag": "0098_group_admin_claim_responsible_validation",
+      "breakpoints": true
     }
   ]
 }

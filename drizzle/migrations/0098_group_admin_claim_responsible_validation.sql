@@ -1,0 +1,33 @@
+CREATE OR REPLACE FUNCTION public.claim_next_group_admin_action(p_number_id uuid) RETURNS public.group_admin_actions LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE t group_admin_throttle; a group_admin_actions; v_now timestamptz:=clock_timestamp(); v_time time; v_gap int; v_hour bigint; v_day bigint; v_provider text; v_active boolean; route jsonb;
+BEGIN
+ INSERT INTO group_admin_throttle(whatsapp_number_id) VALUES(p_number_id) ON CONFLICT DO NOTHING;
+ SELECT * INTO t FROM group_admin_throttle WHERE whatsapp_number_id=p_number_id FOR UPDATE;
+ v_now:=clock_timestamp();
+ SELECT is_active,provider INTO v_active,v_provider FROM whatsapp_numbers WHERE id=p_number_id;
+ IF v_active IS DISTINCT FROM true THEN RETURN NULL; END IF;
+ IF t.paused OR (t.next_allowed_at IS NOT NULL AND v_now<t.next_allowed_at) THEN RETURN NULL; END IF;
+ IF EXISTS(SELECT 1 FROM group_admin_actions WHERE whatsapp_number_id=p_number_id AND status='running' AND locked_until>v_now) THEN RETURN NULL; END IF;
+ v_time:=(v_now AT TIME ZONE 'America/Sao_Paulo')::time;
+ IF NOT(CASE WHEN t.window_start<=t.window_end THEN v_time BETWEEN t.window_start AND t.window_end ELSE v_time>=t.window_start OR v_time<=t.window_end END) THEN RETURN NULL; END IF;
+ SELECT hour_count,day_count INTO v_hour,v_day FROM group_admin_attempt_counts(p_number_id,v_now);
+ IF v_hour>=t.max_per_hour OR v_day>=t.max_per_day THEN RETURN NULL; END IF;
+ SELECT * INTO a FROM group_admin_actions WHERE whatsapp_number_id=p_number_id AND status='queued' AND(not_before IS NULL OR not_before<=v_now) ORDER BY created_at,seq NULLS LAST,id LIMIT 1 FOR UPDATE SKIP LOCKED;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ PERFORM 1 FROM whatsapp_group_responsible WHERE group_jid_base=split_part(split_part(a.group_jid,'@',1),'-',1) FOR UPDATE;
+ route:=resolve_group_send_route(a.group_jid,coalesce(a.fallback_number_id,a.whatsapp_number_id),a.override_number_id);
+ IF group_send_responsible_enabled() AND NOT(route->>'is_admin')::boolean THEN UPDATE group_admin_actions SET status='failed',error_message='instância responsável não é admin',finished_at=v_now,updated_at=v_now WHERE id=a.id; RETURN NULL; END IF;
+ IF NOT(route->>'online')::boolean THEN RETURN NULL; END IF;
+ IF (route->>'instance_id')::uuid IS DISTINCT FROM p_number_id THEN UPDATE group_admin_actions SET whatsapp_number_id=(route->>'instance_id')::uuid,updated_at=v_now WHERE id=a.id; RETURN NULL; END IF;
+ IF a.action_type='pin_message' AND EXISTS(SELECT 1 FROM group_campaign_block_dispatches WHERE whatsapp_number_id=p_number_id AND status IN('pending','sending')) THEN UPDATE group_admin_actions SET not_before=v_now+interval '5 minutes',error_message='disparo de mensagem agendada em andamento',updated_at=v_now WHERE id=a.id; RETURN NULL; END IF;
+ IF v_provider NOT IN('uazapi','zapi','wasender') OR v_provider IS NULL OR(v_provider='wasender' AND a.action_type NOT IN('set_only_admins_send','set_only_admins_add','promote_admin','demote_admin','add_participant','remove_participant')) THEN UPDATE group_admin_actions SET status='failed',error_message=format('Ação "%s" não suportada pelo provedor %s',a.action_type,coalesce(v_provider,'desconhecido')),finished_at=v_now,updated_at=v_now WHERE id=a.id; RETURN NULL; END IF;
+ UPDATE group_admin_actions SET status='running',group_jid=route->>'group_jid',started_at=v_now,last_attempt_at=v_now,attempt_history=array_append(attempt_history,v_now),locked_until=v_now+interval '3 minutes',attempts=attempts+1,updated_at=v_now WHERE id=a.id RETURNING * INTO a;
+ IF t.actions_since_long_pause+1>=greatest(t.long_pause_every,1) THEN v_gap:=t.long_pause_min_seconds+floor(random()*(greatest(t.long_pause_max_seconds-t.long_pause_min_seconds,0)+1))::int;
+ ELSE v_gap:=t.min_gap_seconds+floor(random()*(greatest(t.max_gap_seconds-t.min_gap_seconds,0)+1))::int; END IF;
+ UPDATE group_admin_throttle SET last_action_at=v_now,next_allowed_at=v_now+make_interval(secs=>v_gap),actions_since_long_pause=CASE WHEN t.actions_since_long_pause+1>=greatest(t.long_pause_every,1) THEN 0 ELSE t.actions_since_long_pause+1 END WHERE whatsapp_number_id=p_number_id;
+ RETURN a;
+END $$;
+REVOKE ALL ON FUNCTION public.claim_next_group_admin_action(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_next_group_admin_action(uuid) TO service_role;
+CREATE INDEX group_dispatch_busy_base ON public.group_campaign_block_dispatches((split_part(split_part(group_zapi_id,'@',1),'-',1))) WHERE status IN('pending','processing','running','sending','queued','claimed','in_progress');
+CREATE INDEX group_admin_busy_base ON public.group_admin_actions((split_part(split_part(group_jid,'@',1),'-',1))) WHERE status IN('pending','processing','running','sending','queued','claimed','in_progress');
