@@ -177,6 +177,9 @@ Deno.serve(async (req) => {
     let selfservice = false;
     let selfserviceOrdinary = false;
     let selfserviceOrder: any = null;
+    let selfserviceCashbackError: string | null = null;
+    let selfserviceSplitValue: number | null = null;
+    let selfserviceSignalsSource: string | null = null;
     if (order_id) {
       const { data: linked, error: linkedError } = await supabase.from("orders").select("id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
       if (linkedError) throw linkedError;
@@ -193,9 +196,21 @@ Deno.serve(async (req) => {
         selfserviceOrdinary = (linked?.events as any)?.capi_advanced_matching === false;
         if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
         if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
-          await grantSelfserviceCashback(supabase, order_id);
-          const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
-          selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+          // Cashback não verificado NÃO bloqueia a compra na Meta (ex.: Appmax não informa horário de aprovação).
+          try {
+            await grantSelfserviceCashback(supabase, order_id);
+            const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
+            selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+          } catch (e) {
+            selfserviceCashbackError = e instanceof Error ? e.message : String(e);
+            console.warn("[meta-capi-event] cashback pendente, Purchase segue:", selfserviceCashbackError);
+          }
+        }
+        if (event_name === "Purchase" && !selfserviceOrder?.selfservice_cashback_receipt?.amount_paid) {
+          // Divisão de pagamento (ex.: VPS): conta só as partes aprovadas em dinheiro/cartão.
+          const { data: parts } = await supabase.from("payment_splits").select("method,status,charge_amount").eq("order_id", order_id).limit(20);
+          const paidParts = (parts || []).filter((p: any) => p.status === "approved" && p.method !== "vps");
+          if (paidParts.length) selfserviceSplitValue = paidParts.reduce((s: number, p: any) => s + Number(p.charge_amount || 0), 0);
         }
       }
     }
