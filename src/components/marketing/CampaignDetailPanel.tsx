@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
+import { GroupMessageSendHistory } from "./GroupMessageSendHistory";
 import { TrackedLinkStats } from "./TrackedLinkStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -1841,6 +1842,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                       </span>
                                     )}
                                   </div>
+                                  {!isDraft && <GroupMessageSendHistory messageId={msg.id} />}
                                   {missingMedia && (
                                     <p className="text-[11px] font-semibold text-amber-600 mb-1">⚠️ Falta subir mídia</p>
                                   )}
@@ -2099,6 +2101,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                 </span>
                               )}
                             </div>
+                            <GroupMessageSendHistory messageId={msg.id} />
                             <ScrollArea className="max-h-[250px]">
                               {msg.media_url && ['image'].includes(msg.message_type) && (
                                 <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
