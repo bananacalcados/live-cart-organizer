@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isAreaUnlocked, unlockArea } from "@/lib/areaPassword";
+import { ChangeAreaPasswordButton } from "./ChangeAreaPasswordButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +14,6 @@ import { exportFiscalXmlZip } from "@/lib/fiscal/exportFiscalXml";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
 import { AccountantSendSection } from "./AccountantSendSection";
 
-const FISCAL_PASSWORD = "joey102030";
 
 interface Props {
   periodRange: { start: Date; end: Date; label: string };
@@ -39,7 +40,8 @@ interface Entrada {
 const BRL = (n: number) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function POSFiscalTab({ periodRange }: Props) {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(() => isAreaUnlocked("fiscal"));
+  const [checkingPw, setCheckingPw] = useState(false);
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
@@ -218,10 +220,14 @@ export function POSFiscalTab({ periodRange }: Props) {
         <p className="text-sm text-zinc-400">Digite a senha para acessar os relatórios fiscais</p>
         <form
           className="flex items-center gap-2"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (pw === FISCAL_PASSWORD) { setUnlocked(true); setPw(""); }
-            else toast.error("Senha incorreta");
+            if (checkingPw || !pw) return;
+            setCheckingPw(true);
+            const r = await unlockArea("fiscal", pw);
+            setCheckingPw(false);
+            if (r.ok) { setUnlocked(true); setPw(""); }
+            else toast.error(r.message || "Senha incorreta");
           }}
         >
           <Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Senha" autoFocus
