@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, FileDown, AlertTriangle } from "lucide-react";
-import { startOfMonth, endOfMonth, format } from "date-fns";
+import { format } from "date-fns";
 import {
-  assembleSintegra, downloadSintegra, type SintegraInput, type SintegraNote,
+  assembleSintegra, downloadSintegra, fiscalMonthBounds, type SintegraInput, type SintegraNote,
   type SintegraItem, type SintegraNfceDay, type SintegraProduct, type SintegraCompany,
 } from "@/lib/fiscal/sintegra";
 import { parseSaleXml } from "@/lib/fiscal/parseSaleXml";
@@ -54,19 +54,15 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
 
   const setF = (k: keyof CompanyRow, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const periodBounds = useMemo(() => {
-    const [y, m] = monthStr.split("-").map(Number);
-    const base = new Date(y, (m || 1) - 1, 1);
-    return { start: startOfMonth(base), end: endOfMonth(base) };
-  }, [monthStr]);
+  // Mesmo período do pacote do contador (mês fechado em Brasília).
+  const periodBounds = useMemo(() => fiscalMonthBounds(monthStr), [monthStr]);
 
   const generate = async () => {
     if (!company) { toast.error("Selecione a empresa"); return; }
     setGenerating(true);
     setResult(null);
     try {
-      const startIso = periodBounds.start.toISOString();
-      const endIso = new Date(periodBounds.end.getTime() + 86399999).toISOString();
+      const { startIso, endIso } = periodBounds;
       const warnings: string[] = [];
 
       // 1) Saídas NF-e (modelo 55) autorizadas
@@ -78,7 +74,8 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
         .in("status", ["authorized", "autorizada", "autorizado"])
         .gte("data_autorizacao", startIso)
         .lte("data_autorizacao", endIso)
-        .order("numero", { ascending: true });
+        .order("data_autorizacao", { ascending: true })
+        .order("id", { ascending: true }); // mesma ordem do pacote do contador
 
       // 2) Saídas NFC-e (modelo 65) — resumo diário para registro 60
       const { data: docs65 } = await supabase

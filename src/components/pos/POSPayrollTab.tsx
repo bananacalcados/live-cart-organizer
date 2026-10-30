@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isAreaUnlocked, unlockArea } from "@/lib/areaPassword";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -20,7 +21,6 @@ import {
   type PayrollScaleRow, type StoreKey,
 } from "@/lib/pos/payroll";
 
-const FOLHA_PASSWORD = "joey102030";
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const REVENUE_STATUSES = ["completed", "pending_sync", "paid"];
 
@@ -43,7 +43,8 @@ interface Seller { id: string; name: string; store_id: string | null; }
 interface Store { id: string; name: string; }
 
 export function POSPayrollTab({ periodRange }: Props) {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(() => isAreaUnlocked("folha"));
+  const [checkingPw, setCheckingPw] = useState(false);
   const [pw, setPw] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (id: string) => setExpanded((prev) => {
@@ -375,10 +376,14 @@ export function POSPayrollTab({ periodRange }: Props) {
         <p className="text-sm text-zinc-400">Digite a senha para acessar o comissionamento</p>
         <form
           className="flex items-center gap-2"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (pw === FOLHA_PASSWORD) { setUnlocked(true); setPw(""); }
-            else toast.error("Senha incorreta");
+            if (checkingPw || !pw) return;
+            setCheckingPw(true);
+            const r = await unlockArea("folha", pw);
+            setCheckingPw(false);
+            if (r.ok) { setUnlocked(true); setPw(""); }
+            else toast.error(r.message || "Senha incorreta");
           }}
         >
           <Input

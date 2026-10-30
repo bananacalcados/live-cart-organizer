@@ -8400,6 +8400,51 @@ export type Database = {
           },
         ]
       }
+      fiscal_access_attempts: {
+        Row: {
+          area: string
+          failed_count: number
+          locked_until: string | null
+          updated_at: string
+          user_key: string
+        }
+        Insert: {
+          area: string
+          failed_count?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_key: string
+        }
+        Update: {
+          area?: string
+          failed_count?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_key?: string
+        }
+        Relationships: []
+      }
+      fiscal_access_settings: {
+        Row: {
+          area: string
+          password_hash: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          area: string
+          password_hash: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          area?: string
+          password_hash?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       fiscal_documents: {
         Row: {
           ambiente: string
@@ -25920,6 +25965,10 @@ export type Database = {
           used_count: number
         }[]
       }
+      change_area_password: {
+        Args: { p_area: string; p_current: string; p_new: string }
+        Returns: boolean
+      }
       chargeback_gate: {
         Args: {
           p_cpf?: string
@@ -28320,6 +28369,11 @@ export type Database = {
         Args: { p_context: Json; p_sale_id: string; p_sale_ids: string[] }
         Returns: undefined
       }
+      verify_area_password: {
+        Args: { p_area: string; p_password: string }
+        Returns: Json
+      }
+      verify_fiscal_password: { Args: { p_password: string }; Returns: boolean }
       vip_group_member_phone_suffixes: { Args: never; Returns: string[] }
       vip_groups_interaction_ranking: {
         Args: { p_days?: number }
