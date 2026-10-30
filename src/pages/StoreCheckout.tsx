@@ -1237,6 +1237,10 @@ export default function StoreCheckout() {
 
   const paymentConfirmedRef = useRef(false);
 
+  const [vpsAmount, setVpsAmount] = useState(0);
+  const handleSplitBalance = useCallback((b: { vps?: number }) => {
+    setVpsAmount((cur) => (cur === (b.vps || 0) ? cur : b.vps || 0));
+  }, []);
   const handlePaymentConfirmed = useCallback(async () => {
     if (paymentConfirmedRef.current) return;
     paymentConfirmedRef.current = true;
