@@ -2375,12 +2375,21 @@ export function MassTemplateDispatcher() {
                   {audienceLoaded ? `${filteredRecipients.length} disponíveis` : 'Audiência não carregada'}
                 </Badge>
                 <Badge className="text-xs bg-primary">
-                  {selectedCount} selecionados
+                  {lockedRecipientCount !== null ? `${lockedRecipientCount} na lista` : `${selectedCount} selecionados`}
                 </Badge>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {lockedRecipientCount !== null && (
+              <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-xs space-y-1">
+                <p className="font-medium">Público já resolvido: {lockedRecipientCount.toLocaleString('pt-BR')} destinatários (somente leitura)</p>
+                <p className="text-muted-foreground">
+                  Ao salvar, a lista e os códigos de rastreamento continuam iguais. Filtros e seleção abaixo são ignorados
+                  — só mudam imagem, horário, variáveis e nome. Para trocar o público use "Recalcular público" (gera lista nova).
+                </p>
+              </div>
+            )}
             {/* Público salvo (campanha_publicos) — filtro adicional final */}
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2">
               <span className="text-xs font-medium text-blue-800">Público salvo:</span>
