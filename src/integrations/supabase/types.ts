@@ -80,6 +80,135 @@ export type Database = {
           },
         ]
       }
+      accountant_recipients: {
+        Row: {
+          ativo: boolean
+          company_id: string
+          created_at: string
+          email: string
+          id: string
+          nome: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          company_id: string
+          created_at?: string
+          email: string
+          id?: string
+          nome?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          company_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountant_recipients_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accountant_send_config: {
+        Row: {
+          auto_send_enabled: boolean
+          cc_emails: string[]
+          company_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_send_enabled?: boolean
+          cc_emails?: string[]
+          company_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_send_enabled?: boolean
+          cc_emails?: string[]
+          company_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountant_send_config_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accountant_send_history: {
+        Row: {
+          attached: boolean
+          attempt: number
+          cc: string[]
+          company_id: string
+          counts: Json
+          created_at: string
+          created_by: string | null
+          email_log_id: string | null
+          error: string | null
+          id: string
+          notes_count: number
+          recipients: string[]
+          reference_month: string
+          status: string
+          storage_path: string | null
+          trigger_type: string
+        }
+        Insert: {
+          attached?: boolean
+          attempt?: number
+          cc?: string[]
+          company_id: string
+          counts?: Json
+          created_at?: string
+          created_by?: string | null
+          email_log_id?: string | null
+          error?: string | null
+          id?: string
+          notes_count?: number
+          recipients?: string[]
+          reference_month: string
+          status?: string
+          storage_path?: string | null
+          trigger_type: string
+        }
+        Update: {
+          attached?: boolean
+          attempt?: number
+          cc?: string[]
+          company_id?: string
+          counts?: Json
+          created_at?: string
+          created_by?: string | null
+          email_log_id?: string | null
+          error?: string | null
+          id?: string
+          notes_count?: number
+          recipients?: string[]
+          reference_month?: string
+          status?: string
+          storage_path?: string | null
+          trigger_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountant_send_history_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_campaign_nurture_steps: {
         Row: {
           campaign_id: string
@@ -5456,6 +5585,72 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          categoria: string
+          cc: string[]
+          company_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          metadata: Json
+          provider_message_id: string | null
+          status: string
+          subject: string | null
+          to: string[]
+        }
+        Insert: {
+          categoria: string
+          cc?: string[]
+          company_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          provider_message_id?: string | null
+          status?: string
+          subject?: string | null
+          to?: string[]
+        }
+        Update: {
+          categoria?: string
+          cc?: string[]
+          company_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          provider_message_id?: string | null
+          status?: string
+          subject?: string | null
+          to?: string[]
+        }
+        Relationships: []
+      }
+      email_settings: {
+        Row: {
+          category: string
+          from_email: string
+          from_name: string
+          reply_to: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          from_email: string
+          from_name: string
+          reply_to?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          from_email?: string
+          from_name?: string
+          reply_to?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           blocks: Json | null
@@ -8398,6 +8593,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fiscal_holidays: {
+        Row: {
+          date: string
+          descricao: string
+        }
+        Insert: {
+          date: string
+          descricao: string
+        }
+        Update: {
+          date?: string
+          descricao?: string
+        }
+        Relationships: []
       }
       fiscal_inutilizations: {
         Row: {

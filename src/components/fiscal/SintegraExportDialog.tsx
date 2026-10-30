@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Loader2, FileDown, AlertTriangle } from "lucide-react";
 import { startOfMonth, endOfMonth, format } from "date-fns";
 import {
-  buildSintegra, downloadSintegra, type SintegraInput, type SintegraNote,
+  assembleSintegra, downloadSintegra, type SintegraInput, type SintegraNote,
   type SintegraItem, type SintegraNfceDay, type SintegraProduct, type SintegraCompany,
 } from "@/lib/fiscal/sintegra";
 import { parseSaleXml } from "@/lib/fiscal/parseSaleXml";
@@ -80,41 +80,6 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
         .lte("data_autorizacao", endIso)
         .order("numero", { ascending: true });
 
-      const notes: SintegraNote[] = [];
-      const productMap = new Map<string, SintegraProduct>();
-      let semXml = 0;
-
-      for (const d of docs55 || []) {
-        const parsed = d.xml_content ? parseSaleXml(d.xml_content) : null;
-        if (!parsed) semXml++;
-        const itens: SintegraItem[] = (parsed?.items || []).map((it) => {
-          if (it.codigo && !productMap.has(it.codigo)) {
-            productMap.set(it.codigo, {
-              codigo: it.codigo, descricao: it.descricao, ncm: it.ncm,
-              unidade: it.unidade, aliquota_icms: it.aliquota_icms,
-            });
-          }
-          return {
-            cnpj_contraparte: d.cpf_destinatario || "",
-            modelo: 55, serie: d.serie ?? 1, numero: d.numero ?? 0,
-            cfop: it.cfop, cst: it.cst, ordem: it.ordem, codigo: it.codigo,
-            descricao: it.descricao, ncm: it.ncm, unidade: it.unidade,
-            quantidade: it.quantidade, valor_bruto: it.valor_bruto, desconto: it.desconto,
-            base_icms: it.base_icms, base_icms_st: 0, valor_ipi: it.valor_ipi,
-            aliquota_icms: it.aliquota_icms,
-          };
-        });
-        notes.push({
-          cnpj_contraparte: d.cpf_destinatario || "",
-          data: d.data_autorizacao!, modelo: 55, serie: d.serie ?? 1, numero: d.numero ?? 0,
-          cfop: parsed?.cfop_predominante || "5102", emitente: "P",
-          valor_total: Number(d.valor_total) || 0,
-          base_icms: parsed?.base_icms || 0, valor_icms: parsed?.valor_icms || 0,
-          valor_isento: 0, outras: 0, aliquota: 0, situacao: "N", itens,
-        });
-      }
-      if (semXml > 0) warnings.push(`${semXml} NF-e sem XML salvo — geradas sem detalhe de itens (registro 54).`);
-
       // 2) Saídas NFC-e (modelo 65) — resumo diário para registro 60
       const { data: docs65 } = await supabase
         .from("fiscal_documents")
@@ -125,22 +90,6 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
         .gte("data_autorizacao", startIso)
         .lte("data_autorizacao", endIso)
         .order("data_autorizacao", { ascending: true });
-
-      const dayMap = new Map<string, SintegraNfceDay>();
-      for (const d of docs65 || []) {
-        const day = format(new Date(d.data_autorizacao!), "yyyy-MM-dd");
-        const key = `${day}|${d.serie ?? 1}`;
-        const cur = dayMap.get(key) || {
-          data: day, serie: d.serie ?? 1, primeiro_numero: Number(d.numero) || 0,
-          ultimo_numero: Number(d.numero) || 0, qtde: 0, valor_bruto: 0,
-        };
-        cur.qtde += 1;
-        cur.valor_bruto += Number(d.valor_total) || 0;
-        cur.primeiro_numero = Math.min(cur.primeiro_numero || Number(d.numero) || 0, Number(d.numero) || 0);
-        cur.ultimo_numero = Math.max(cur.ultimo_numero, Number(d.numero) || 0);
-        dayMap.set(key, cur);
-      }
-      const nfceDays = Array.from(dayMap.values());
 
       // 3) Entradas (purchase_invoices + itens) — registro 50/54 com emitente T
       const { data: entradas } = await supabase
@@ -159,38 +108,6 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
           .in("invoice_id", entradaIds);
         entradaItems = items || [];
       }
-      const itemsByInvoice = new Map<string, any[]>();
-      for (const it of entradaItems) {
-        const arr = itemsByInvoice.get(it.invoice_id) || [];
-        arr.push(it);
-        itemsByInvoice.set(it.invoice_id, arr);
-      }
-
-      for (const e of entradas || []) {
-        const its = (itemsByInvoice.get(e.id) || []).sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
-        const itens: SintegraItem[] = its.map((it, idx) => {
-          const code = it.supplier_product_code || String(idx + 1);
-          if (code && !productMap.has(code)) {
-            productMap.set(code, { codigo: code, descricao: it.description, ncm: it.ncm, unidade: it.unit });
-          }
-          return {
-            cnpj_contraparte: e.supplier_cnpj || "",
-            modelo: 55, serie: e.invoice_series ?? 1, numero: e.invoice_number ?? 0,
-            cfop: it.cfop, cst: "000", ordem: idx + 1, codigo: code,
-            descricao: it.description, ncm: it.ncm, unidade: it.unit,
-            quantidade: Number(it.quantity) || 0, valor_bruto: Number(it.total_cost) || 0,
-            desconto: 0, base_icms: 0, base_icms_st: 0, valor_ipi: 0, aliquota_icms: 0,
-          };
-        });
-        notes.push({
-          cnpj_contraparte: e.supplier_cnpj || "",
-          ie_contraparte: e.supplier_ie || undefined,
-          data: e.emission_date!, modelo: 55, serie: e.invoice_series ?? 1, numero: e.invoice_number ?? 0,
-          cfop: its[0]?.cfop || "1102", emitente: "T", valor_total: Number(e.total_value) || 0,
-          base_icms: 0, valor_icms: 0, valor_isento: 0, outras: 0, aliquota: 0, situacao: "N", itens,
-        });
-      }
-
       const companyInput: SintegraCompany = {
         cnpj: form.cnpj || company.cnpj,
         ie: form.ie || company.ie || "",
@@ -207,20 +124,14 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
         contact_phone: contactPhone,
       };
 
-      const products: SintegraProduct[] = Array.from(productMap.values());
-
-      const input: SintegraInput = {
-        company: companyInput,
-        periodStart: periodBounds.start,
-        periodEnd: periodBounds.end,
-        natureza, finalidade,
-        notes, nfceDays, products,
-      };
-
-      const res = buildSintegra(input);
+      const res = assembleSintegra({
+        company: companyInput, periodStart: periodBounds.start, periodEnd: periodBounds.end,
+        natureza, finalidade, docs55: docs55 || [], docs65: docs65 || [],
+        entradas: entradas || [], entradaItems, parseXml: parseSaleXml,
+      });
       res.warnings.unshift(...warnings);
 
-      if (!notes.length && !nfceDays.length) {
+      if (!res.noteCount && !res.nfceDayCount) {
         toast.error("Nenhuma nota encontrada no período para esta empresa.");
         setGenerating(false);
         return;

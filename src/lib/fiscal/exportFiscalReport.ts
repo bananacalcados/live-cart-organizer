@@ -33,15 +33,4 @@ export function downloadCsv(filename: string, headers: string[], rows: unknown[]
   URL.revokeObjectURL(url);
 }
 
-/** Formata número como moeda BRL para célula de CSV (sem símbolo, vírgula decimal). */
-export function brlCell(n: number): string {
-  return (Number(n) || 0).toFixed(2).replace(".", ",");
-}
-
-/** Formata data ISO para dd/mm/aaaa. */
-export function dateCell(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("pt-BR");
-}
+export { brlCell, dateCell } from "../../../supabase/functions/_shared/fiscal/fiscal-csv";

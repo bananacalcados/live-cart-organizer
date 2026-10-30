@@ -3,6 +3,7 @@
 
 import { zipSync, strToU8 } from "fflate";
 import { supabase } from "@/integrations/supabase/client";
+import { XmlPackage } from "../../../supabase/functions/_shared/fiscal/xml-package";
 
 export interface XmlExportParams {
   startIso: string;
@@ -18,43 +19,16 @@ export interface XmlExportResult {
   entradasSemXml: number;
 }
 
-function dateStamp(iso: string | null | undefined): string {
-  if (!iso) return "sem-data";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "sem-data";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
-}
-
-/** Remove caracteres inválidos para nome de arquivo. */
-function safeName(s: string): string {
-  return (s || "").replace(/[^\w.-]+/g, "_").slice(0, 80);
-}
-
 /**
  * Gera e baixa um ZIP com os XMLs de entrada e saída do período.
  * Estrutura: SAIDAS/NFe|NFCe_<data>_<chave|numero>.xml e ENTRADAS/<data>_<chave|numero>.xml
  */
 export async function exportFiscalXmlZip(params: XmlExportParams): Promise<XmlExportResult> {
   const { startIso, endIso, companyId, onProgress } = params;
-  const files: Record<string, Uint8Array> = {};
-  const usedNames = new Set<string>();
-
-  const addFile = (folder: string, base: string, xml: string) => {
-    let name = `${folder}/${base}.xml`;
-    let i = 2;
-    while (usedNames.has(name)) {
-      name = `${folder}/${base}_${i}.xml`;
-      i++;
-    }
-    usedNames.add(name);
-    files[name] = strToU8(xml);
-  };
+  const pkg = new XmlPackage();
 
   // ---------- SAÍDAS ----------
   onProgress?.("Carregando XMLs de saída…");
-  let saidas = 0;
-  let saidasSemXml = 0;
   const pageSize = 200;
   let from = 0;
   while (true) {
@@ -70,21 +44,13 @@ export async function exportFiscalXmlZip(params: XmlExportParams): Promise<XmlEx
     const { data, error } = await q;
     if (error) throw error;
     const rows = (data as any[]) || [];
-    for (const r of rows) {
-      if (!r.xml_content) { saidasSemXml++; continue; }
-      const tipo = r.modelo === 65 ? "NFCe" : "NFe";
-      const id = r.chave_acesso || `num${r.numero ?? "s-n"}`;
-      addFile("SAIDAS", `${tipo}_${dateStamp(r.data_autorizacao)}_${safeName(id)}`, r.xml_content);
-      saidas++;
-    }
+    for (const r of rows) pkg.addSaida(r);
     if (rows.length < pageSize) break;
     from += pageSize;
   }
 
   // ---------- ENTRADAS ----------
   onProgress?.("Carregando XMLs de entrada…");
-  let entradas = 0;
-  let entradasSemXml = 0;
   from = 0;
   while (true) {
     const { data, error } = await supabase
@@ -96,31 +62,19 @@ export async function exportFiscalXmlZip(params: XmlExportParams): Promise<XmlEx
       .range(from, from + pageSize - 1);
     if (error) throw error;
     const rows = (data as any[]) || [];
-    for (const r of rows) {
-      if (!r.raw_xml) { entradasSemXml++; continue; }
-      const id = r.nfe_key || `num${r.invoice_number ?? "s-n"}`;
-      addFile("ENTRADAS", `NFe_${dateStamp(r.emission_date)}_${safeName(id)}`, r.raw_xml);
-      entradas++;
-    }
+    for (const r of rows) pkg.addEntrada(r);
     if (rows.length < pageSize) break;
     from += pageSize;
   }
 
+  const { saidas, entradas, saidasSemXml, entradasSemXml } = pkg;
   if (saidas === 0 && entradas === 0) {
     return { saidas: 0, entradas: 0, saidasSemXml, entradasSemXml };
   }
 
-  // Manifesto simples (índice) dentro do ZIP
-  const manifest = [
-    "Pacote de XMLs fiscais",
-    `Período: ${startIso.slice(0, 10)} a ${endIso.slice(0, 10)}`,
-    `Empresa: ${companyId && companyId !== "all" ? companyId : "Todas"}`,
-    `Gerado em: ${new Date().toLocaleString("pt-BR")}`,
-    "",
-    `XMLs de saída incluídos: ${saidas}${saidasSemXml ? ` (sem XML: ${saidasSemXml})` : ""}`,
-    `XMLs de entrada incluídos: ${entradas}${entradasSemXml ? ` (sem XML: ${entradasSemXml})` : ""}`,
-  ].join("\r\n");
-  files["LEIA-ME.txt"] = strToU8(manifest);
+  const files: Record<string, Uint8Array> = {};
+  for (const [k, v] of Object.entries(pkg.files)) files[k] = strToU8(v);
+  files["LEIA-ME.txt"] = strToU8(pkg.manifest(startIso, endIso, companyId && companyId !== "all" ? companyId : "Todas"));
 
   onProgress?.("Compactando…");
   const zipped = zipSync(files, { level: 6 });

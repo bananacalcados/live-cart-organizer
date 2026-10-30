@@ -10,6 +10,7 @@ import { downloadCsv, brlCell, dateCell } from "@/lib/fiscal/exportFiscalReport"
 import { generateFiscalPdf } from "@/lib/fiscal/exportFiscalPdf";
 import { exportFiscalXmlZip } from "@/lib/fiscal/exportFiscalXml";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
+import { AccountantSendSection } from "./AccountantSendSection";
 
 const FISCAL_PASSWORD = "joey102030";
 
@@ -352,6 +353,8 @@ export function POSFiscalTab({ periodRange }: Props) {
               </table>
             </div>
           </section>
+
+          <AccountantSendSection />
 
           <p className="text-[11px] text-zinc-500">
             Notas de prestadores de serviço (NFS-e) não são capturadas automaticamente pelo módulo de Estoque e por isso não aparecem nas entradas.

@@ -701,6 +701,13 @@
       "when": 1793370316687,
       "tag": "0099_group_dispatch_uncertain_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1793371208826,
+      "tag": "0100_email_and_accountant_packages",
+      "breakpoints": true
     }
   ]
 }
