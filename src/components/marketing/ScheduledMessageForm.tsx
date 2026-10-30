@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { VipLinkBlockControls, VipDayLock, VIP_LINK_PLACEHOLDER, type VipLinkMode, type VipLinkProduct } from "./VipLinkControls";
 import { appendDraftMedia, removeDraftMedia } from "@/lib/marketing/draftMediaCaption";
 import { getOfficialProductUrl } from "@/lib/marketing/officialProductUrl";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
 
 export interface MediaItem {
   url: string;
@@ -52,6 +53,7 @@ export interface MessageBlock {
 }
 
 export interface ScheduledMessageData {
+  groupInstanceOverrides?: Record<string, string>;
   // Legacy single-message fields (kept for backward compat)
   messageType: string;
   messageContent: string;
@@ -68,6 +70,7 @@ export interface ScheduledMessageData {
 }
 
 interface EditingMessage {
+  group_instance_overrides?: Record<string, string> | null;
   id: string;
   message_type: string;
   message_content: string | null;
@@ -112,6 +115,8 @@ interface ScheduledMessageFormProps {
   /** Salva a mensagem INTEIRA (todos os blocos do grupo) preservando ids e metadados. */
   onUpdateGroup?: (anchorId: string, data: ScheduledMessageData) => Promise<void>;
   campaignId?: string;
+  targetGroups?: string[];
+  fallbackNumberId?: string | null;
   otherCampaigns?: { id: string; name: string }[];
   onScheduleToCampaign?: (data: ScheduledMessageData, targetCampaignId: string) => Promise<void>;
 }
@@ -665,7 +670,8 @@ function BlockEditor({
 }
 
 // ─── Main Composer ───
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, onSaveDraft, editingMessage, editingGroupMessages, onUpdate, onUpdateGroup, campaignId, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, onSaveDraft, editingMessage, editingGroupMessages, onUpdate, onUpdateGroup, campaignId, targetGroups = [], fallbackNumberId = null, otherCampaigns = [], onScheduleToCampaign }: ScheduledMessageFormProps) {
+  const [groupInstanceOverrides, setGroupInstanceOverrides] = useState<Record<string, string>>({});
   const [showOtherCampaigns, setShowOtherCampaigns] = useState(false);
   const [selectedOtherCampaignId, setSelectedOtherCampaignId] = useState<string | null>(null);
   const [isSchedulingOther, setIsSchedulingOther] = useState(false);
@@ -700,6 +706,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       ? [...editingGroupMessages].sort((a, b) => (a.block_order ?? 0) - (b.block_order ?? 0))
       : (editingMessage ? [editingMessage] : null);
     if (rows) {
+      setGroupInstanceOverrides(rows[0].group_instance_overrides || {});
       const multiMediaTypes = ['image', 'video', 'document'];
       const loaded = rows.map(row => {
         const b = createBlock(row.message_type as MessageBlock['type']);
@@ -764,6 +771,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   const resetForm = () => {
+    setGroupInstanceOverrides({});
     setBlocks([createBlock('text')]);
     setAiPrompt('');
     setTemplateName('');
@@ -799,6 +807,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const buildData = (dateOverride?: Date, timeOverride?: string, asDraft = false): ScheduledMessageData => {
     const first = blocks[0];
     return {
+      groupInstanceOverrides,
       messageType: first.type,
       messageContent: first.content,
       mediaUrl: first.mediaUrl,
