@@ -8973,6 +8973,7 @@ export type Database = {
           block_order: number
           block_type: string | null
           campaign_id: string | null
+          claim_token: string | null
           created_at: string
           delay_after_ms: number
           error_message: string | null
@@ -9000,6 +9001,7 @@ export type Database = {
           block_order?: number
           block_type?: string | null
           campaign_id?: string | null
+          claim_token?: string | null
           created_at?: string
           delay_after_ms?: number
           error_message?: string | null
@@ -9027,6 +9029,7 @@ export type Database = {
           block_order?: number
           block_type?: string | null
           campaign_id?: string | null
+          claim_token?: string | null
           created_at?: string
           delay_after_ms?: number
           error_message?: string | null
@@ -25849,6 +25852,7 @@ export type Database = {
           block_order: number
           block_type: string | null
           campaign_id: string | null
+          claim_token: string | null
           created_at: string
           delay_after_ms: number
           error_message: string | null
@@ -26200,6 +26204,17 @@ export type Database = {
           p_result?: Json
         }
         Returns: undefined
+      }
+      finish_group_dispatch_job: {
+        Args: {
+          p_attempts?: number
+          p_error?: string
+          p_id: string
+          p_message_id?: string
+          p_outcome: string
+          p_token: string
+        }
+        Returns: boolean
       }
       forfeit_physical_prize: {
         Args: { p_order_id: string; p_reason?: string }
@@ -26895,6 +26910,10 @@ export type Database = {
         Returns: Json
       }
       group_send_in_progress: { Args: { p_base: string }; Returns: boolean }
+      group_send_offline_summary: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       group_send_responsible_enabled: { Args: never; Returns: boolean }
       group_send_routes: {
         Args: { p_fallback?: string; p_group_ids: string[]; p_overrides?: Json }

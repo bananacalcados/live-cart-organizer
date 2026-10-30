@@ -673,6 +673,13 @@
       "when": 1793369618570,
       "tag": "0095_group_send_responsible_routes",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1793369679138,
+      "tag": "0096_group_dispatch_atomic_instance_finish",
+      "breakpoints": true
     }
   ]
 }
