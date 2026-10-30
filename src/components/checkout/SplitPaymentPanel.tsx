@@ -10,13 +10,14 @@ import { toast } from "sonner";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import { maskCardNumber, maskCardExpiry } from "@/lib/formatMasks";
 import {
-  MAX_SPLIT_PARTS, SPLIT_METHOD_LABEL, rebalanceLastPart, validateSplit,
+  MAX_SPLIT_PARTS, SPLIT_METHOD_LABEL, hasVps, rebalanceLastPart, validateSplit,
   type SplitMethod, type SplitPartInput,
 } from "@/lib/splitPayment";
 
 interface Part {
   id: string; seq: number; method: SplitMethod; amount: number; discount_amount: number;
   charge_amount: number; installments: number; status: string;
+  vps_reference?: string | null;
 }
 
 interface Payer { fullName: string; email: string; cpf: string }
@@ -79,11 +80,12 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
     const activeParts = parts.filter((p) => !["refunded", "canceled"].includes(p.status));
     onBalanceChange?.({
       hasSplit: activeParts.length > 0,
+      // VPS é entregue à parte: não entra no que a cliente paga pelo link.
       remaining: activeParts
-        .filter((p) => p.status !== "approved")
+        .filter((p) => p.status !== "approved" && p.method !== "vps")
         .reduce((sum, p) => sum + Number(p.charge_amount), 0),
       paid: activeParts
-        .filter((p) => p.status === "approved")
+        .filter((p) => p.status === "approved" || p.method === "vps")
         .reduce((sum, p) => sum + Number(p.charge_amount), 0),
     });
   }, [parts, onBalanceChange]);
@@ -111,8 +113,17 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
   }
 
   const anyPaid = parts.some((p) => p.status === "approved");
+  const withVps = parts.some((p) => p.method === "vps");
   const sumParts = parts.reduce((a, p) => a + Number(p.amount), 0);
   const totalMismatch = parts.length > 0 && !anyPaid && Math.abs(sumParts - total) > 0.009;
+
+  if (withVps && totalMismatch) {
+    return (
+      <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-center">
+        <p className="text-sm font-medium text-destructive">O valor do pedido mudou. Fale com a nossa equipe para ajustar o pagamento com VPS.</p>
+      </div>
+    );
+  }
 
   if (editing || (parts.length > 0 && totalMismatch)) {
     return (
@@ -151,13 +162,14 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
     );
   }
 
-  const active = parts.find((p) => !["approved", "refunded", "canceled"].includes(p.status));
+  const active = parts.find((p) => p.method !== "vps" && !["approved", "refunded", "canceled"].includes(p.status));
+  const vpsPending = parts.some((p) => p.method === "vps" && p.status !== "approved");
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border p-3 space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold flex items-center gap-2"><Split className="h-4 w-4" /> Pagamento em {parts.length} partes</p>
-          {!anyPaid && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>Alterar</Button>}
+          {!anyPaid && !withVps && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>Alterar</Button>}
         </div>
         {parts.map((p) => (
           <div key={p.id} className={`flex items-center justify-between text-sm rounded-md px-2 py-1.5 ${p.id === active?.id ? "bg-muted" : ""}`}>
@@ -169,8 +181,8 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
             <span className="flex items-center gap-2 font-semibold">
               {BRL(p.charge_amount)}
               {p.status === "approved"
-                ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Pago</Badge>
-                : <Badge variant="outline">Pendente</Badge>}
+                ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />{p.method === "vps" ? "Conferido" : "Pago"}</Badge>
+                : <Badge variant="outline">{p.method === "vps" ? "Em conferência" : "Pendente"}</Badge>}
             </span>
           </div>
         ))}
@@ -179,13 +191,18 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
       {active && (active.method === "pix"
         ? <SplitPixPart key={active.id} part={active} form={form} onApproved={load} />
         : <SplitCardPart key={active.id} part={active} form={form} maxInstallments={maxInstallments} onApproved={load} />)}
+      {!active && vpsPending && (
+        <p className="text-center text-sm font-semibold">Pagamento recebido ✅ Falta só a nossa equipe conferir o seu VPS.</p>
+      )}
       {allPaid && <p className="text-center text-sm font-semibold">Todas as partes pagas ✅</p>}
     </div>
   );
 }
 
-export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, onSave, onCancel }: {
+export function SplitEditor({ total, pixPct: basePixPct, maxInstallments, initial, notice, allowVps, onSave, onCancel }: {
   total: number; pixPct: number; maxInstallments: number; initial?: SplitPartInput[]; notice?: string;
+  /** Só a equipe pode lançar VPS. */
+  allowVps?: boolean;
   onSave: (p: SplitPartInput[]) => Promise<void>; onCancel: () => void;
 }) {
   const half = Math.round((total / 2) * 100) / 100;
@@ -194,6 +211,7 @@ export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, o
   );
   const [saving, setSaving] = useState(false);
   const v = validateSplit(total, list, maxInstallments);
+  const pixPct = hasVps(list) ? 0 : basePixPct;
 
   const update = (i: number, patch: Partial<SplitPartInput>) => {
     const next = list.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
@@ -215,6 +233,7 @@ export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, o
                 <SelectItem value="pix">Pix</SelectItem>
                 <SelectItem value="credit">Crédito</SelectItem>
                 <SelectItem value="debit">Débito</SelectItem>
+                {allowVps && <SelectItem value="vps">VPS</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -237,6 +256,13 @@ export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, o
               </Select>
             </div>
           )}
+          {p.method === "vps" && (
+            <div className="w-40">
+              <Label className="text-xs">Código do voucher</Label>
+              <Input className="h-9" value={p.reference || ""} maxLength={120} placeholder="opcional"
+                onChange={(e) => setList(list.map((x, k) => (k === i ? { ...x, reference: e.target.value } : x)))} />
+            </div>
+          )}
           {p.method === "pix" && pixPct > 0 && p.amount > 0 && (
             <span className="text-xs text-muted-foreground pb-2">paga {BRL(Math.round(p.amount * (1 - pixPct / 100) * 100) / 100)} ({pixPct}% off)</span>
           )}
@@ -252,6 +278,7 @@ export function SplitEditor({ total, pixPct, maxInstallments, initial, notice, o
           <Plus className="h-4 w-4 mr-1" /> Adicionar forma
         </Button>
       )}
+      {hasVps(list) && basePixPct > 0 && <p className="text-xs text-muted-foreground">Com VPS, a diferença não tem desconto no Pix.</p>}
       {!v.ok && <ul className="text-xs text-destructive space-y-0.5">{v.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" onClick={onCancel}>Pagar de uma forma só</Button>
