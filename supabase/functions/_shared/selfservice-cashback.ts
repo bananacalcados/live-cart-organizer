@@ -15,14 +15,15 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
   if (existing) return { applicable: true, ...existing };
   let amount: number | null = null, paidAt: string | null = null, gateway = "", txId = "", note: string | null = null;
   const vpsParts: any[] = [];
+  let gw: string | null = null;
   try {
     const { data: parts, error: splitError } = await sb.from("payment_splits").select("method,status,charge_amount,gateway,gateway_tx_id,paid_at").eq("order_id", orderId).limit(20);
     if (splitError) throw splitError;
     const { data: attempts } = await sb.from("pos_checkout_attempts").select("gateway,status,created_at").eq("sale_id", orderId).order("created_at", { ascending: false }).limit(20);
-    const gw = pickConfirmedGateway(o, attempts || []);
+    gw = pickConfirmedGateway(o, attempts || []);
     // VPS não gera cashback: só as partes pagas por Pix/cartão contam.
     vpsParts.push(...(parts || []).filter((p: any) => p.method === "vps" && !["cancelled", "canceled", "refunded"].includes(p.status)));
-  const active = (parts || []).filter((p: any) => !["cancelled", "canceled", "refunded"].includes(p.status) && p.method !== "vps");
+    const active = (parts || []).filter((p: any) => !["cancelled", "canceled", "refunded"].includes(p.status) && p.method !== "vps");
     if (active.length) {
       if (active.length > 10 || active.some((p: any) => p.status !== "approved" || p.gateway !== "mercadopago" || !p.gateway_tx_id)) throw new Error("Partes ainda não confirmadas");
       const account = await getMpAccountForOrder(sb, orderId);
