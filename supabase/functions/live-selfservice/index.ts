@@ -520,6 +520,15 @@ Deno.serve(async (req) => {
     const phone = normalizeBrPhone(body.phone);
     if (!phone) return json({ ok: false, error: "Digite o WhatsApp completo com DDD." }, 400);
 
+    // Disparo em massa (?d=): liga o acesso ao destinatário e carimba os pedidos. Best-effort.
+    async function linkDispatch(accessId: string | null | undefined) {
+      if (!accessId) return;
+      const dc = String(body.dispatch_code || "").toLowerCase();
+      try {
+        await sb.rpc("dispatch_link_access", { p_access_id: accessId, p_code: /^[a-z0-9]{6,8}$/.test(dc) ? dc : null });
+      } catch (e) { console.error("[dispatch link]", e); }
+    }
+
     if (action === "capture") {
       if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Aguarde alguns minutos." }, 429);
       const { data, error } = await sb.rpc("selfservice_capture_initial", {
@@ -527,6 +536,7 @@ Deno.serve(async (req) => {
         p_access_id: /^[0-9a-f-]{36}$/i.test(String(body.access_id || "")) ? body.access_id : null,
       });
       if (error) return json({ ok: false, error: "Não foi possível guardar o contato agora." }, 400);
+      await linkDispatch((data as any)?.access_id);
       return json({ ok: true, ...data });
     }
 
@@ -621,6 +631,7 @@ Deno.serve(async (req) => {
       await sb.from("live_selfservice_accesses").update({
         instagram: igHint, order_ids: orders.map((o: any) => o.id),
       }).eq("id", acc.id).is("whatsapp_confirmed_at", null);
+      await linkDispatch(acc.id);
       const details = known ? await savedDetails() : null;
       // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
       // a cliente continua o cadastro de onde parou.
@@ -792,6 +803,7 @@ Deno.serve(async (req) => {
         if (!error) code = cand;
       }
       if (!code) return json({ ok: false, error: "Não foi possível gerar a confirmação. Tente novamente." }, 503);
+      await linkDispatch(accessId);
       // Lead na Meta via CAPI (servidor; os dados são hasheados na função de eventos).
       // Base legal validada pelo controlador; respeita o flag do evento e a recusa da cliente.
       try {
