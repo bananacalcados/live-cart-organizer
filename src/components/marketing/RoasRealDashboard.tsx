@@ -347,7 +347,7 @@ export function RoasRealDashboard() {
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <div>
             <CardTitle className="text-base">Vendas de quem veio de anúncio</CardTitle>
-            <p className="text-xs text-muted-foreground">Compras contadas até 14 dias após o 1º contato — podem cair no {attrAgg(agg) === "month" ? "mês" : "semana"} seguinte ao do contato.</p>
+            <p className="text-xs text-muted-foreground">Compras contadas até 14 dias após o 1º contato — podem cair {attrAgg(agg) === "month" ? "no mês seguinte" : "na semana seguinte"} ao do contato.</p>
             <p className="text-xs text-muted-foreground">* custo estimado: contatos × custo/contato do período (sem gasto próprio da fonte).{agg === "day" ? " Agrupamento por dia usa a semana do 1º contato." : ""}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => downloadCsv("vendas-anuncios.csv", attrHeader, attrRows.map(attrCells))}>
