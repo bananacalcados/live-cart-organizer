@@ -26,6 +26,7 @@ describe("pagamento dividido", () => {
     expect(validateSplit(100, [
       { method: "pix", amount: 20 }, { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
       { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
+      { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
     ]).ok).toBe(false);
   });
 
