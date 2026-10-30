@@ -715,6 +715,13 @@
       "when": 1793372699741,
       "tag": "0101_payment_splits_vps",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1793375036968,
+      "tag": "0102_capi_trigger_mark_after_send",
+      "breakpoints": true
     }
   ]
 }

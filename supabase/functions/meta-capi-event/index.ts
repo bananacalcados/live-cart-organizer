@@ -100,10 +100,12 @@ const STANDARD_EVENTS = new Set([
 ]);
 
 Deno.serve(async (req) => {
+  let failBody: any = null;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json().catch(() => ({}));
+    failBody = body;
     const {
       event_name,
       event_id: eventIdFromClient,
@@ -177,8 +179,11 @@ Deno.serve(async (req) => {
     let selfservice = false;
     let selfserviceOrdinary = false;
     let selfserviceOrder: any = null;
+    let selfserviceCashbackError: string | null = null;
+    let selfserviceSplitValue: number | null = null;
+    let selfserviceSignalsSource: string | null = null;
     if (order_id) {
-      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
+      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,event_id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
       if (linkedError) throw linkedError;
       selfserviceOrder = linked;
       selfservice = linked?.events?.operation_mode === "whatsapp_autoatendimento";
@@ -193,9 +198,21 @@ Deno.serve(async (req) => {
         selfserviceOrdinary = (linked?.events as any)?.capi_advanced_matching === false;
         if (event_name === "Purchase" && !(linked.is_paid || linked.paid_externally)) return new Response(JSON.stringify({ error: "purchase_not_paid" }), { status: 409, headers: corsHeaders });
         if (event_name === "Purchase" && !linked.selfservice_cashback_receipt) {
-          await grantSelfserviceCashback(supabase, order_id);
-          const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
-          selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+          // Cashback não verificado NÃO bloqueia a compra na Meta (ex.: Appmax não informa horário de aprovação).
+          try {
+            await grantSelfserviceCashback(supabase, order_id);
+            const { data: refreshed } = await supabase.from("orders").select("selfservice_cashback_receipt").eq("id", order_id).maybeSingle();
+            selfserviceOrder.selfservice_cashback_receipt = refreshed?.selfservice_cashback_receipt;
+          } catch (e) {
+            selfserviceCashbackError = e instanceof Error ? e.message : String(e);
+            console.warn("[meta-capi-event] cashback pendente, Purchase segue:", selfserviceCashbackError);
+          }
+        }
+        if (event_name === "Purchase" && !selfserviceOrder?.selfservice_cashback_receipt?.amount_paid) {
+          // Divisão de pagamento (ex.: VPS): conta só as partes aprovadas em dinheiro/cartão.
+          const { data: parts } = await supabase.from("payment_splits").select("method,status,charge_amount").eq("order_id", order_id).limit(20);
+          const paidParts = (parts || []).filter((p: any) => p.status === "approved" && p.method !== "vps");
+          if (paidParts.length) selfserviceSplitValue = paidParts.reduce((s: number, p: any) => s + Number(p.charge_amount || 0), 0);
         }
       }
     }
@@ -238,6 +255,37 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         console.warn("[meta-capi-event] order enrichment failed:", e);
+      }
+    }
+
+    // Autoatendimento: sinais capturados na primeira página (/pedido/<slug>) completam o que a ficha não tem.
+    // Só acesso exato do pedido; se não houver, o acesso único do MESMO evento pelo telefone da ficha.
+    if (selfservice && order_id && (!_fbc || !_fbp || !_clientIpStored || !_clientUaStored)) {
+      try {
+        let { data: accs } = await supabase.from("live_selfservice_accesses")
+          .select("advertising_signals").contains("order_ids", [order_id]).not("advertising_signals", "is", null)
+          .order("updated_at", { ascending: false }).limit(1);
+        let source = "access_order";
+        if (!accs?.length && _phone && selfserviceOrder?.event_id) {
+          const key = normalizePhone(_phone).slice(-10);
+          if (key.length === 10) {
+            const { data: byPhone } = await supabase.from("live_selfservice_accesses")
+              .select("advertising_signals").eq("event_id", selfserviceOrder.event_id)
+              .or(`confirmed_phone_key.eq.${key},phone_key.eq.${key}`).not("advertising_signals", "is", null).limit(2);
+            if (byPhone?.length === 1) { accs = byPhone; source = "access_phone"; }
+          }
+        }
+        const sig: any = accs?.[0]?.advertising_signals;
+        if (sig) {
+          _fbc = _fbc || sig.fbc || undefined;
+          _fbp = _fbp || sig.fbp || undefined;
+          _clientIpStored = _clientIpStored || sig.client_ip || undefined;
+          _clientUaStored = _clientUaStored || sig.client_user_agent || undefined;
+          _sourceUrlStored = _sourceUrlStored || sig.event_source_url || undefined;
+          selfserviceSignalsSource = source;
+        }
+      } catch (e) {
+        console.warn("[meta-capi-event] access signals lookup failed:", e);
       }
     }
 
@@ -465,7 +513,7 @@ Deno.serve(async (req) => {
     const customData: Record<string, unknown> = {
       currency,
     };
-    if (value !== undefined && value !== null) customData.value = Number(selfservice && selfserviceOrder?.selfservice_cashback_receipt?.amount_paid || value);
+    if (value !== undefined && value !== null) customData.value = Number(selfservice && (selfserviceOrder?.selfservice_cashback_receipt?.amount_paid || selfserviceSplitValue) || value);
     if (_contentIds && _contentIds.length > 0) {
       customData.content_ids = _contentIds;
       customData.content_type = content_type || "product";
@@ -501,7 +549,7 @@ Deno.serve(async (req) => {
           test_event_code: TEST_CODE || null,
           status: "pending",
           payload_summary: {
-            value: Number(value),
+            value: Number(customData.value ?? value),
             currency,
             num_items: typeof _numItems === "number" ? _numItems : null,
             content_ids: _contentIds ?? null,
@@ -512,7 +560,9 @@ Deno.serve(async (req) => {
               has_external_id: !!externalId, has_fbc: !!_fbc, has_fbp: !!_fbp,
               has_ip: !!clientIp,
               attribution_origin: _attrOrigin,
+              selfservice_signals: selfserviceSignalsSource,
             },
+            selfservice_cashback_error: selfserviceCashbackError,
             action_source: actionSource,
           },
         }, { onConflict: "order_id,event_name" });
@@ -593,6 +643,16 @@ Deno.serve(async (req) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[meta-capi-event] error:", message);
+    // Purchase que falhou antes do envio também fica registrado (antes sumia sem log).
+    try {
+      if (failBody?.event_name === "Purchase" && failBody?.order_id) {
+        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        const { data: existing } = await sb.from("meta_capi_purchase_log").select("status").eq("order_id", String(failBody.order_id)).eq("event_name", "Purchase").maybeSingle();
+        if (existing?.status !== "sent") {
+          await sb.from("meta_capi_purchase_log").upsert({ order_id: String(failBody.order_id), event_name: "Purchase", event_id: `purchase_order_${failBody.order_id}`, pixel_id: Deno.env.get("VITE_META_PIXEL_ID") || null, status: "error", error_message: message.slice(0, 500), sent_at: new Date().toISOString() }, { onConflict: "order_id,event_name" });
+        }
+      }
+    } catch (_) { /* best-effort */ }
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
