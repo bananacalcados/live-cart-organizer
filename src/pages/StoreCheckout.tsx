@@ -151,7 +151,7 @@ function StepIndicator({ currentStep, isCustom }: { currentStep: number; isCusto
 }
 
 // ── OrderSummary ────────────────────────────────────────────────
-function OrderSummary({ saleData }: { saleData: SaleData }) {
+function OrderSummary({ saleData, vpsAmount = 0 }: { saleData: SaleData; vpsAmount?: number }) {
   const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
   const fullSubtotal = saleData.items.reduce((s, i) => {
     const full = i.compare_at_price && i.compare_at_price > i.price ? i.compare_at_price : i.price;
@@ -260,6 +260,18 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
           <span>Total Final</span>
           <span className="text-primary">R$ {totalFinal.toFixed(2)}</span>
         </div>
+        {vpsAmount > 0 && (
+          <>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Pago com VPS</span>
+              <span>-R$ {vpsAmount.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-sm">
+              <span>A pagar agora</span>
+              <span className="text-primary">R$ {Math.max(0, totalFinal - vpsAmount).toFixed(2)}</span>
+            </div>
+          </>
+        )}
       </div>
       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <Store className="h-3 w-3" />
@@ -1604,6 +1616,7 @@ export default function StoreCheckout() {
                           form={customerForm}
                           maxInstallments={Math.min(installmentConfig?.max_installments || 6, 12)}
                           onPaid={handlePaymentConfirmed}
+                          onBalanceChange={handleSplitBalance}
                         >
                          <div className="space-y-2">
                            {/* Cartão de crédito */}
@@ -1697,7 +1710,7 @@ export default function StoreCheckout() {
           </div>
           <div className="lg:col-span-1">
             <div className="lg:sticky lg:top-4">
-              <OrderSummary saleData={saleData} />
+              <OrderSummary saleData={saleData} vpsAmount={vpsAmount} />
             </div>
           </div>
         </div>

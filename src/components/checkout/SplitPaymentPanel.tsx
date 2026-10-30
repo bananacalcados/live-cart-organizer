@@ -29,7 +29,7 @@ interface Props {
   form: Payer;
   maxInstallments?: number;
   onPaid: () => void;
-  onBalanceChange?: (balance: { hasSplit: boolean; remaining: number; paid: number }) => void;
+  onBalanceChange?: (balance: { hasSplit: boolean; remaining: number; paid: number; vps?: number }) => void;
   /** Pagamento normal (exibido quando não há divisão). */
   children: ReactNode;
 }
@@ -87,6 +87,7 @@ export function SplitPaymentPanel({ orderId, saleId, total, form, maxInstallment
       paid: activeParts
         .filter((p) => p.status === "approved" || p.method === "vps")
         .reduce((sum, p) => sum + Number(p.charge_amount), 0),
+      vps: activeParts.filter((p) => p.method === "vps").reduce((sum, p) => sum + Number(p.amount), 0),
     });
   }, [parts, onBalanceChange]);
 
@@ -350,7 +351,7 @@ function SplitCardPart({ part, form, maxInstallments, onApproved }: { part: Part
   const cvvRef = useRef<HTMLInputElement>(null);
   const [invalidFields, setInvalidFields] = useState<string[]>([]);
   const isDebit = part.method === "debit";
-  const maxInst = Math.max(1, maxInstallments, part.installments || 1);
+  const maxInst = Math.max(1, Math.min(maxInstallments, 6), part.installments || 1);
   const [inst, setInst] = useState(isDebit ? 1 : Math.min(part.installments || 1, maxInst));
   const perInst = Number(part.charge_amount) / inst;
 
