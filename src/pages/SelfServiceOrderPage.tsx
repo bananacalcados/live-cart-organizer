@@ -92,7 +92,7 @@ export default function SelfServiceOrderPage() {
     if (!DISPATCH_RE.test(fromUrl)) return;
     const flag = `ss_dispatch_click_${fromUrl}`;
     try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch { /* ignore */ }
-    void supabase.rpc("dispatch_link_click" as any, { p_code: fromUrl, p_page: `pedido:${slug}` });
+    supabase.rpc("dispatch_link_click" as any, { p_code: fromUrl, p_page: `pedido:${slug}` }).then(() => {}, () => {});
   }, [slug]);
   const captured = useRef<{ phone: string; accessId: string } | null>(null);
   const latestPhone = useRef(phone);
