@@ -24,14 +24,14 @@ export function GroupSendRoutingPanel({ groupIds, fallback, overrides = EMPTY, o
     }).catch(() => { if (active) { setFailed(true); toast.error("Não foi possível conferir as instâncias dos grupos"); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [idsKey, fallback, overrideKey]);
-  return <section className="space-y-2 border-t border-border pt-3">
+  return <section className="min-w-0 space-y-2 border-t border-border pt-3">
     <p className="text-xs font-medium">{loading ? "Conferindo instâncias…" : failed ? "Instâncias não conferidas" : groupRoutingSummary(routes, overrides)}</p>
-    <div className="max-h-48 overflow-y-auto space-y-2">
+    <div className="max-h-48 overflow-y-auto overflow-x-hidden space-y-2">
       {routes.map(route => <div key={route.base} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="min-w-0 flex-1"><p className="break-words">{route.name}</p><span className="text-muted-foreground">Responsável: {route.responsible_label || "sem responsável"}</span>{!route.online && <Badge variant="destructive" className="ml-2">aguardando conexão</Badge>}</div>
+        <div className="min-w-0 w-full sm:w-auto sm:flex-1"><p className="break-words">{route.name}</p><span className="text-muted-foreground">Responsável: {route.responsible_label || "sem responsável"}</span>{!route.online && <Badge variant="destructive" className="ml-2">aguardando conexão</Badge>}</div>
         {onChange ? <Select value={overrides[route.base] || "__auto__"} onValueChange={value => {
           const next = { ...overrides }; if (value === "__auto__") delete next[route.base]; else next[route.base] = value; onChange(next);
-        }}><SelectTrigger aria-label={`Instância neste envio: ${route.name}`} className="w-56 h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent>
+        }}><SelectTrigger aria-label={`Instância neste envio: ${route.name}`} className="w-full sm:w-56 shrink-0 max-w-full h-8 text-xs"><SelectValue /></SelectTrigger><SelectContent>
           <SelectItem value="__auto__">Responsável (padrão)</SelectItem>
           {numbers.filter(n => n.is_active && ["uazapi", "wasender", "zapi"].includes(n.provider || "")).map(n => <SelectItem key={n.id} value={n.id}>{n.label} · só neste envio</SelectItem>)}
         </SelectContent></Select> : <Badge variant="outline">{route.label || "sem instância"}</Badge>}
