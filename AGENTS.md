@@ -72,4 +72,4 @@
 - Meta Custom Audiences: meta-audience-sync diffs ERP rules (meta_audience_refresh_candidates) vs meta_audience_members; frozen audiences are never touched, the first replace load waits for initial_load_not_before, and 70% replace / 20% removal guards block runs, so ad sets are not reset or emptied.
 - Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
-- Editing a dispatch that already has dispatch_recipients keeps the list read-only: saves update only dispatch_history (media, schedule, variables, name); only explicit 'Recalcular público' re-enqueues, because re-resolving regenerates tracking codes.
+- Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
