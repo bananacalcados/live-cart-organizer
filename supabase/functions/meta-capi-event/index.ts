@@ -100,10 +100,12 @@ const STANDARD_EVENTS = new Set([
 ]);
 
 Deno.serve(async (req) => {
+  let failBody: any = null;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json().catch(() => ({}));
+    failBody = body;
     const {
       event_name,
       event_id: eventIdFromClient,
@@ -511,7 +513,7 @@ Deno.serve(async (req) => {
     const customData: Record<string, unknown> = {
       currency,
     };
-    if (value !== undefined && value !== null) customData.value = Number(selfservice && selfserviceOrder?.selfservice_cashback_receipt?.amount_paid || value);
+    if (value !== undefined && value !== null) customData.value = Number(selfservice && (selfserviceOrder?.selfservice_cashback_receipt?.amount_paid || selfserviceSplitValue) || value);
     if (_contentIds && _contentIds.length > 0) {
       customData.content_ids = _contentIds;
       customData.content_type = content_type || "product";
@@ -547,7 +549,7 @@ Deno.serve(async (req) => {
           test_event_code: TEST_CODE || null,
           status: "pending",
           payload_summary: {
-            value: Number(value),
+            value: Number(customData.value ?? value),
             currency,
             num_items: typeof _numItems === "number" ? _numItems : null,
             content_ids: _contentIds ?? null,
@@ -558,7 +560,9 @@ Deno.serve(async (req) => {
               has_external_id: !!externalId, has_fbc: !!_fbc, has_fbp: !!_fbp,
               has_ip: !!clientIp,
               attribution_origin: _attrOrigin,
+              selfservice_signals: selfserviceSignalsSource,
             },
+            selfservice_cashback_error: selfserviceCashbackError,
             action_source: actionSource,
           },
         }, { onConflict: "order_id,event_name" });
@@ -639,6 +643,16 @@ Deno.serve(async (req) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[meta-capi-event] error:", message);
+    // Purchase que falhou antes do envio também fica registrado (antes sumia sem log).
+    try {
+      if (failBody?.event_name === "Purchase" && failBody?.order_id) {
+        const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        const { data: existing } = await sb.from("meta_capi_purchase_log").select("status").eq("order_id", String(failBody.order_id)).eq("event_name", "Purchase").maybeSingle();
+        if (existing?.status !== "sent") {
+          await sb.from("meta_capi_purchase_log").upsert({ order_id: String(failBody.order_id), event_name: "Purchase", event_id: `purchase_order_${failBody.order_id}`, pixel_id: Deno.env.get("VITE_META_PIXEL_ID") || null, status: "error", error_message: message.slice(0, 500), sent_at: new Date().toISOString() }, { onConflict: "order_id,event_name" });
+        }
+      }
+    } catch (_) { /* best-effort */ }
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
