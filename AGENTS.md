@@ -73,3 +73,4 @@
 - Live Crossell/paid-chat rules also live in supabase/functions/AGENTS.md.
 - Self-service #CODE sender becomes the ficha's principal phone (typed one kept in previous_phones); auto-merge another ficha only when name plus CPF/e-mail/address agree and no orders/cashback are lost, else annotate conflict.
 - E-mail: every send goes through supabase/functions/_shared/email-send.ts (Resend + email_send_log); fiscal packaging/Sintegra logic lives only in supabase/functions/_shared/fiscal and src/lib/fiscal re-exports it, so browser downloads and the accountant package never diverge.
+- Fiscal/Folha tab passwords are verified only by server RPCs over bcrypt hashes (verify_area_password, 5 tries then 5-min lock; admin-only change_area_password); never ship a password literal to the browser. Sintegra button and accountant package share fiscalMonthBounds and note ordering so files stay identical.
