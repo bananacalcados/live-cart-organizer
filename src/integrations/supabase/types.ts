@@ -9525,6 +9525,8 @@ export type Database = {
       group_redirect_links: {
         Row: {
           cached_at: string | null
+          cached_group_base: string | null
+          cached_instance_id: string | null
           cached_invite_url: string | null
           campaign_id: string
           click_count: number
@@ -9540,6 +9542,8 @@ export type Database = {
         }
         Insert: {
           cached_at?: string | null
+          cached_group_base?: string | null
+          cached_instance_id?: string | null
           cached_invite_url?: string | null
           campaign_id: string
           click_count?: number
@@ -9555,6 +9559,8 @@ export type Database = {
         }
         Update: {
           cached_at?: string | null
+          cached_group_base?: string | null
+          cached_instance_id?: string | null
           cached_invite_url?: string | null
           campaign_id?: string
           click_count?: number
@@ -27496,6 +27502,10 @@ export type Database = {
       refresh_event_bulk_send_counts: {
         Args: { p_send_id: string }
         Returns: undefined
+      }
+      refresh_group_admin_send_routes: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
       refresh_vip_orphans: { Args: never; Returns: Json }
