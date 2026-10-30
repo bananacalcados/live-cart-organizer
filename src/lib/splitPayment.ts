@@ -2,12 +2,14 @@
  * Pagamento dividido: um pedido, várias partes (Pix / Crédito / Débito).
  * Desconto Pix vale SOMENTE sobre a parte Pix. Cartão sem desconto.
  */
-export type SplitMethod = "pix" | "credit" | "debit";
+export type SplitMethod = "pix" | "credit" | "debit" | "vps";
 
 export interface SplitPartInput {
   method: SplitMethod;
   amount: number; // valor do pedido coberto por esta parte (antes do desconto)
   installments?: number;
+  /** Código/comprovante do voucher VPS (só método vps). */
+  reference?: string;
 }
 
 export interface SplitPart extends SplitPartInput {
@@ -18,7 +20,7 @@ export interface SplitPart extends SplitPartInput {
 }
 
 export const MIN_SPLIT_PARTS = 2;
-export const MAX_SPLIT_PARTS = 4;
+export const MAX_SPLIT_PARTS = 6;
 export const DEFAULT_PIX_DISCOUNT_PCT = 5;
 export const MIN_PART_AMOUNT = 1;
 
@@ -28,7 +30,11 @@ export const SPLIT_METHOD_LABEL: Record<SplitMethod, string> = {
   pix: "Pix",
   credit: "Crédito",
   debit: "Débito",
+  vps: "VPS",
 };
+
+/** VPS presente: a diferença não ganha desconto Pix. */
+export const hasVps = (parts: { method: string }[]) => parts.some((p) => p.method === "vps");
 
 /** Ajusta a última parte para cobrir exatamente o restante do total. */
 export function rebalanceLastPart(total: number, parts: SplitPartInput[]): SplitPartInput[] {
@@ -43,9 +49,10 @@ export function buildSplitParts(
   parts: SplitPartInput[],
   pixDiscountPct = DEFAULT_PIX_DISCOUNT_PCT,
 ): SplitPart[] {
+  const pct = hasVps(parts) ? 0 : pixDiscountPct;
   return parts.map((p, i) => {
     const amount = round2(Number(p.amount) || 0);
-    const discount = p.method === "pix" ? round2(amount * (pixDiscountPct / 100)) : 0;
+    const discount = p.method === "pix" && pct > 0 ? round2(amount * (pct / 100)) : 0;
     const installments = p.method === "credit" ? Math.max(1, Math.floor(p.installments || 1)) : 1;
     return {
       seq: i + 1,
@@ -54,6 +61,7 @@ export function buildSplitParts(
       discount_amount: discount,
       charge_amount: round2(amount - discount),
       installments,
+      ...(p.method === "vps" && p.reference ? { reference: p.reference } : {}),
     };
   });
 }
@@ -73,6 +81,7 @@ export function validateSplit(total: number, parts: SplitPartInput[], maxInstall
       errors.push(`Parte ${i + 1}: máximo ${maxInstallments}x.`);
     if (p.method !== "credit" && (p.installments || 1) > 1) errors.push(`Parte ${i + 1}: só crédito parcela.`);
   });
+  if (hasVps(parts) && parts.every((p) => p.method === "vps")) errors.push("Inclua ao menos uma forma para a diferença.");
   const sum = round2(parts.reduce((a, p) => a + (Number(p.amount) || 0), 0));
   if (Math.abs(sum - round2(total)) > 0.009)
     errors.push(`A soma das partes (R$ ${sum.toFixed(2)}) precisa ser igual ao total (R$ ${round2(total).toFixed(2)}).`);
@@ -81,6 +90,11 @@ export function validateSplit(total: number, parts: SplitPartInput[], maxInstall
 
 export function splitCustomerTotal(parts: SplitPart[]): number {
   return round2(parts.reduce((a, p) => a + p.charge_amount, 0));
+}
+
+/** Quanto a cliente ainda paga pelo link (VPS é entregue à parte). */
+export function splitLinkTotal(parts: SplitPart[]): number {
+  return round2(parts.filter((p) => p.method !== "vps").reduce((a, p) => a + p.charge_amount, 0));
 }
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
