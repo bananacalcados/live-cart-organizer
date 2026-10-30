@@ -160,7 +160,7 @@ serve(async (req) => {
     });
     const data = await r.json().catch(() => ({}));
     const ok = r.ok && data?.success !== false && !data?.error;
-    return { ok, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
+    return { ok, messageId: data?.messageId || null, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
   }
 
   // ===== Roteamento de envio por provider =====
@@ -252,6 +252,15 @@ serve(async (req) => {
       if (noPreview) body.linkPreview = false;
     }
     return callFn("zapi-send-group-message", body);
+  }
+
+  // Legacy helpers retained for cancellation only; completion is atomic below.
+  async function finishJob(job: any, outcome: string, attempts: number, error: string | null = null, messageId: string | null = null) {
+    const { data, error: finishError } = await supabase.rpc("finish_group_dispatch_job", {
+      p_id: job.id, p_token: job.claim_token, p_outcome: outcome, p_attempts: attempts,
+      p_error: error, p_message_id: messageId,
+    });
+    if (finishError || !data) throw finishError || new Error("stale group send claim");
   }
 
   // Agenda o próximo job da MESMA campanha (libera após o delay deste job)
@@ -376,16 +385,13 @@ serve(async (req) => {
     const paused = await getPausedGroupSendUntil(supabase);
     if (paused) {
       await cancelDispatch(job);
+      await finishJob(job, "cancelled", 0);
       return true;
     }
 
     let block = await getBlock(job);
     if (!block) {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "failed", error_message: "block_not_found", locked_until: null })
-        .eq("id", job.id);
-      await scheduleNext(job);
-      await reconcile(job);
+      await finishJob(job, "failed", 0, "block_not_found");
       return true;
     }
 
@@ -405,19 +411,8 @@ serve(async (req) => {
       attempts = 2;
     }
 
-    if (res.ok) {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "sent", attempts, sent_at: new Date().toISOString(), locked_until: null })
-        .eq("id", job.id);
-    } else {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "failed", attempts, error_message: String(res.error || "send_failed").slice(0, 500), locked_until: null })
-        .eq("id", job.id);
-    }
-
-    // Avança a fila (mesmo em falha, para não travar o disparo)
-    await scheduleNext(job);
-    await reconcile(job);
+    await finishJob(job, res.ok ? "sent" : "failed", attempts,
+      res.ok ? null : String(res.error || "send_failed").slice(0, 500), res.messageId);
     return true;
   }
 
