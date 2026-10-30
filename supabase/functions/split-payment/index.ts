@@ -10,10 +10,10 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const UUID = /^[0-9a-f-]{36}$/i;
-const MAX_PARTS = 4;
+const MAX_PARTS = 6;
 const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-const PUBLIC_COLS = "id, seq, method, amount, discount_amount, charge_amount, installments, status, paid_at, gateway_tx_id";
+const PUBLIC_COLS = "id, seq, method, amount, discount_amount, charge_amount, installments, status, paid_at, gateway_tx_id, vps_reference, vps_confirmed_at";
 
 async function isTargetPaid(sb: any, orderId?: string, saleId?: string) {
   if (orderId) {
@@ -27,6 +27,13 @@ async function isTargetPaid(sb: any, orderId?: string, saleId?: string) {
 function listParts(sb: any, orderId?: string, saleId?: string) {
   const q = sb.from("payment_splits").select(PUBLIC_COLS).order("seq");
   return orderId ? q.eq("order_id", orderId) : q.eq("sale_id", saleId);
+}
+
+async function staffUser(sb: any, req: Request) {
+  const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!tok) return null;
+  const { data } = await sb.auth.getUser(tok);
+  return data?.user ?? null;
 }
 
 async function loadSplit(sb: any, splitId: string) {
@@ -51,7 +58,8 @@ Deno.serve(async (req) => {
       const enabled = await splitPaymentEnabled(sb);
       const { data } = await listParts(sb, orderId, saleId);
       let pix = 0;
-      if (orderId) {
+      const hasVps = (data || []).some((p: any) => p.method === "vps");
+      if (orderId && !hasVps) {
         // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
         const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
         const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
@@ -79,10 +87,14 @@ Deno.serve(async (req) => {
       const parts = Array.isArray(body.parts) ? body.parts : [];
       if (!(total > 0 && total < 100000)) return json({ error: "Total inválido" }, 400);
       if (parts.length < 2 || parts.length > MAX_PARTS) return json({ error: `Use de 2 a ${MAX_PARTS} formas` }, 400);
+      // VPS (moeda digital sem integração): só a equipe lança, e a diferença não ganha desconto Pix.
+      const hasVps = parts.some((p: any) => String(p?.method) === "vps");
+      if (hasVps && !(await staffUser(sb, req))) return json({ error: "Apenas a equipe pode lançar VPS" }, 403);
+      if (hasVps && parts.every((p: any) => String(p?.method) === "vps")) return json({ error: "Inclua ao menos uma forma para a diferença" }, 400);
       // Desconto Pix: mesmo percentual do checkout do pedido (app_settings); links do PDV não têm desconto Pix.
       // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
       let pixPct = 0;
-      if (orderId) {
+      if (orderId && !hasVps) {
         const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
         const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
         if (!hasCashback) {
@@ -95,7 +107,7 @@ Deno.serve(async (req) => {
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
         const method = String(p.method);
-        if (!["pix", "credit", "debit"].includes(method)) return json({ error: `Parte ${i + 1}: forma inválida` }, 400);
+        if (!["pix", "credit", "debit", "vps"].includes(method)) return json({ error: `Parte ${i + 1}: forma inválida` }, 400);
         const amount = r2(Number(p.amount));
         if (!(amount >= 1)) return json({ error: `Parte ${i + 1}: valor mínimo R$ 1,00` }, 400);
         const inst = method === "credit" ? Math.floor(Number(p.installments || 1)) : 1;
@@ -105,11 +117,13 @@ Deno.serve(async (req) => {
         rows.push({
           order_id: orderId ?? null, sale_id: saleId ?? null, seq: i + 1, method, amount,
           discount_amount: discount, charge_amount: r2(amount - discount), installments: inst,
+          vps_reference: method === "vps" ? (String(p.reference || "").trim().slice(0, 120) || null) : null,
         });
       }
       if (Math.abs(sum - total) > 0.009) return json({ error: "A soma das partes precisa ser igual ao total" }, 400);
       const { data: existing } = await listParts(sb, orderId, saleId);
       if ((existing || []).some((p: any) => p.status === "approved")) return json({ error: "Já existe parte paga — divisão travada" }, 409);
+      if ((existing || []).some((p: any) => p.method === "vps") && !(await staffUser(sb, req))) return json({ error: "Divisão com VPS só pode ser alterada pela equipe" }, 403);
       const del = sb.from("payment_splits").delete();
       await (orderId ? del.eq("order_id", orderId) : del.eq("sale_id", saleId));
       const { error } = await sb.from("payment_splits").insert(rows);
@@ -123,6 +137,7 @@ Deno.serve(async (req) => {
       if (!orderId && !saleId) return json({ error: "orderId ou saleId obrigatório" }, 400);
       const { data: existing } = await listParts(sb, orderId, saleId);
       if ((existing || []).some((p: any) => p.status === "approved")) return json({ error: "Já existe parte paga" }, 409);
+      if ((existing || []).some((p: any) => p.method === "vps") && !(await staffUser(sb, req))) return json({ error: "Divisão com VPS só pode ser alterada pela equipe" }, 403);
       const del = sb.from("payment_splits").delete();
       await (orderId ? del.eq("order_id", orderId) : del.eq("sale_id", saleId));
       return json({ ok: true });
@@ -185,7 +200,7 @@ Deno.serve(async (req) => {
     // ── charge_card: crédito/débito só desta parte (token do MercadoPago.JS) ──
     if (action === "charge_card") {
       const s = await loadSplit(sb, body.splitId);
-      if (s.method === "pix") return json({ error: "Esta parte é Pix" }, 400);
+      if (s.method === "pix" || s.method === "vps") return json({ error: "Esta parte não é cartão" }, 400);
       if (s.status === "approved") return json({ error: "Parte já paga", already_paid: true }, 409);
       const tgt = await isTargetPaid(sb, s.order_id ?? undefined, s.sale_id ?? undefined);
       if (tgt.paid) return json({ error: "Pedido já pago", already_paid: true }, 409);
@@ -233,6 +248,20 @@ Deno.serve(async (req) => {
       }
       // parte continua pendente: a cliente pode tentar outro cartão
       return json({ success: false, error: mp?.status_detail || mp?.message || "Pagamento recusado" });
+    }
+
+    // ── confirm_vps: equipe confere o voucher VPS recebido (sem integração) ──
+    if (action === "confirm_vps") {
+      const u = await staffUser(sb, req);
+      if (!u) return json({ error: "Apenas a equipe pode conferir VPS" }, 403);
+      const s = await loadSplit(sb, body.splitId);
+      if (s.method !== "vps") return json({ error: "Esta parte não é VPS" }, 400);
+      if (s.status === "approved") return json({ status: "approved", already: true });
+      const ref = String(body.reference || s.vps_reference || "").trim().slice(0, 120);
+      await sb.from("payment_splits").update({ vps_reference: ref || null, vps_confirmed_by: u.id, vps_confirmed_at: new Date().toISOString() }).eq("id", s.id);
+      const out = await approveSplitPart(sb, s.id, "vps", ref || `vps-${s.id}`);
+      console.log("[split-payment] vps confirmed", s.id, "by", u.id);
+      return json({ status: "approved", ...out });
     }
 
     // ── refund: equipe estorna uma parte paga (só enquanto o pedido NÃO está 100% pago) ──
