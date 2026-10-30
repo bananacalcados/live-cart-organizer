@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AVG_GAP_SECONDS } from "@/lib/marketing/groupAdminQueue";
+import { GroupResponsibleAlerts } from "./GroupResponsibleAlerts";
 
 interface QueueAction {
   id: string;
@@ -226,6 +227,7 @@ export function GroupActionsQueuePanel({ campaignId }: Props) {
 
   return (
     <div className="space-y-4">
+      <GroupResponsibleAlerts compact />
       {/* Painel de ritmo por instância */}
       {instanceIds.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2">

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isLikelyGroupId } from "./group-send-guard.ts";
 import { requireUser } from "./require-user.ts";
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 export interface GroupSendRoute {
   base: string; instance_id: string | null; label: string | null; provider: string;
@@ -54,14 +55,32 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
       route = await beginDirectGroupSend(phone, body.whatsapp_number_id);
       if (!route?.instance_id) throw new Error("Instância indisponível");
       const rewritten = { ...body, whatsapp_number_id: route.instance_id };
+      if (body.phone) rewritten.phone = route.group_jid;
+      if (body.groupId) rewritten.groupId = route.group_jid;
+      if (body.groupJid) rewritten.groupJid = route.group_jid;
       let response: Response;
       if (route.provider !== provider) {
-        const target = kind === "groups" ? `${route.provider}-groups` : kind === "group" ? `${route.provider}-send-${body.type === 'text' || !body.type ? 'message' : body.type === 'poll' ? 'extra' : 'media'}` : `${route.provider}-send-${kind}`;
-        if (kind === "group") {
-          rewritten.phone = phone;
-          if (body.type === "poll") { rewritten.kind = "poll"; rewritten.poll = { question: body.message, options: body.pollOptions, selectableCount: body.pollMaxOptions }; }
-          else if (body.mediaUrl) { rewritten.mediaType = body.type; }
+        let target = kind === "groups" ? `${route.provider}-groups` : kind === "group" ? `${route.provider}-send-${body.type === 'text' || !body.type ? 'message' : body.type === 'poll' ? 'extra' : 'media'}` : `${route.provider}-send-${kind}`;
+        if (!["uazapi", "wasender", "zapi"].includes(route.provider)) throw new Error("Instância não suporta envio para grupo");
+        if (route.provider === "zapi") {
+          target = "zapi-send-group-message";
+          rewritten.groupId = route.group_jid;
+          rewritten.type = kind === "media" ? body.mediaType : body.kind === "poll" ? "poll" : "text";
+          if (kind === "extra" && body.kind !== "poll") throw new Error("Esse formato não é suportado pela instância responsável");
+          if (body.poll) {
+            rewritten.message = body.poll.question || body.poll.name;
+            rewritten.pollOptions = body.poll.options;
+            rewritten.pollMaxOptions = body.poll.selectableCount;
+          }
+          rewritten.mentionAll = body.mentionAll || false;
         }
+        if (kind === "group") {
+          rewritten.phone = route.group_jid;
+          if (body.type === "poll") { rewritten.kind = "poll"; rewritten.poll = { question: body.message, name: body.message, options: body.pollOptions, selectableCount: body.pollMaxOptions }; }
+          else if (body.mediaUrl) { rewritten.mediaType = body.type; }
+          else if (body.mentionAll) { target = `${route.provider}-groups`; rewritten.action = "sendMessage"; rewritten.groupJid = route.group_jid; }
+        }
+        if (kind === "extra" && body.poll) rewritten.poll = { ...body.poll, name: body.poll.name || body.poll.question, question: body.poll.question || body.poll.name };
         const url = Deno.env.get("SUPABASE_URL");
         const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (!url || !key) throw new Error("Configuração indisponível");
@@ -71,14 +90,14 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
       }
       const result = await response.clone().json().catch(() => ({}));
       const messageId = result.messageId || result.data?.messageid || result.data?.id || result.data?.data?.msgId || null;
-      await finishDirectGroupSend(route, response.ok && !result.error ? "sent" : "failed", messageId);
+      await finishDirectGroupSend(route, response.ok && result.success !== false && !result.error ? "sent" : "failed", messageId);
       if (response.headers.get("content-type")?.includes("json")) {
         return new Response(JSON.stringify({ ...result, whatsapp_number_id: route.instance_id, instance_label: route.label, messageId }), { status: response.status, headers: response.headers });
       }
       return response;
     } catch (error) {
       await finishDirectGroupSend(route, "failed");
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Falha no envio para grupo" }), { status: 409, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Falha no envio para grupo" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   };
 }
