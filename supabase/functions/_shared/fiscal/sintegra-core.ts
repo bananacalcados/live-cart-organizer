@@ -467,3 +467,11 @@ export function assembleSintegra(a: AssembleSintegraArgs): SintegraResult & { no
   res.warnings.unshift(...warnings);
   return { ...res, noteCount: notes.length, nfceDayCount: nfceDays.length };
 }
+
+/** Mês fechado em Brasília: dia 1 00:00:00 até o último dia 23:59:59.999 (America/Sao_Paulo, UTC-3). */
+export function fiscalMonthBounds(ref: string) {
+  const [y, m] = ref.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, 1, 3));
+  const end = new Date(Date.UTC(y, m, 1, 3) - 1);
+  return { start, end, startIso: start.toISOString(), endIso: end.toISOString() };
+}
