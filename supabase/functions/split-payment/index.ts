@@ -13,7 +13,7 @@ const UUID = /^[0-9a-f-]{36}$/i;
 const MAX_PARTS = 6;
 const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
-const PUBLIC_COLS = "id, seq, method, amount, discount_amount, charge_amount, installments, status, paid_at, gateway_tx_id, vps_reference, vps_confirmed_at";
+const PUBLIC_COLS = "id, seq, method, amount, discount_amount, charge_amount, installments, status, paid_at, gateway, gateway_tx_id, vps_reference, vps_confirmed_at";
 
 async function isTargetPaid(sb: any, orderId?: string, saleId?: string) {
   if (orderId) {
