@@ -2993,7 +2993,7 @@ export function MassTemplateDispatcher() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate || lockedRecipientCount !== null}
                   onClick={() => setConfirmOpen(true)}
                 >
                   {isSending ? (
