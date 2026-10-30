@@ -323,6 +323,9 @@ export function MassTemplateDispatcher() {
   // futuro por decisão de config, não por deploy).
   const [tipoComunicacao, setTipoComunicacao] = useState<TipoComunicacao>("");
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
+  // Editing a dispatch whose recipients are already stored: the audience is
+  // read-only and saving never touches dispatch_recipients (tracking codes stay).
+  const [lockedRecipientCount, setLockedRecipientCount] = useState<number | null>(null);
   // Split dispatch: divide the audience into N disjoint parts, each becoming its
   // own dispatch (same template/variables) so each part can fire at a different
   // time and prompt for its own external field value (e.g. a fresh live link).
@@ -1623,6 +1626,39 @@ export function MassTemplateDispatcher() {
       return;
     }
 
+    if (editDispatchId && lockedRecipientCount !== null) {
+      if (savingScheduledRef.current) return;
+      savingScheduledRef.current = true;
+      try {
+        const patch: Record<string, any> = {
+          template_name: selectedTemplate.name,
+          campaign_name: campaignName.trim() || null,
+          template_language: selectedTemplate.language,
+          rendered_message: renderedMessage || null,
+          variables_config: variables as any,
+          track_clicks: trackClicks,
+          template_components: selectedTemplate.components as any,
+          has_dynamic_vars: hasDynamicVars,
+          header_media_url: headerMediaUrl || null,
+        };
+        if (scheduledDate) patch.scheduled_at = new Date(scheduledDate).toISOString();
+        const { error } = await supabase.from('dispatch_history').update(patch as any).eq('id', editDispatchId);
+        if (error) throw error;
+        toast.success(`✅ Disparo atualizado — lista mantida (${lockedRecipientCount} destinatários)`);
+        setEditDispatchId(null);
+        setLockedRecipientCount(null);
+        setScheduleMode('none');
+        setScheduledDate('');
+        setHistoryKey(k => k + 1);
+      } catch (err) {
+        console.error('Error updating dispatch:', err);
+        toast.error("Erro ao salvar disparo");
+      } finally {
+        savingScheduledRef.current = false;
+      }
+      return;
+    }
+
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
       toast.error("Selecione pelo menos um destinatário");
@@ -1873,6 +1909,15 @@ export function MassTemplateDispatcher() {
     // Track edit mode (update existing dispatch instead of creating a new one)
     setEditDispatchId(data.edit_dispatch_id || null);
     setCampaignName(data.campaign_name || "");
+    const locked = data.edit_dispatch_id && data.existing_recipients_count ? data.existing_recipients_count : null;
+    setLockedRecipientCount(locked);
+    if (data.tipo_comunicacao) setTipoComunicacao(data.tipo_comunicacao as TipoComunicacao);
+    if (data.track_clicks !== null && data.track_clicks !== undefined) setTrackClicks(!!data.track_clicks);
+    if (data.edit_dispatch_id && data.scheduled_at) {
+      const d = new Date(data.scheduled_at);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      setScheduledDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    }
 
     // Set WhatsApp number
     if (data.whatsapp_number_id) {
@@ -2330,12 +2375,21 @@ export function MassTemplateDispatcher() {
                   {audienceLoaded ? `${filteredRecipients.length} disponíveis` : 'Audiência não carregada'}
                 </Badge>
                 <Badge className="text-xs bg-primary">
-                  {selectedCount} selecionados
+                  {lockedRecipientCount !== null ? `${lockedRecipientCount} na lista` : `${selectedCount} selecionados`}
                 </Badge>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {lockedRecipientCount !== null && (
+              <div className="rounded-md border border-primary/40 bg-primary/10 p-3 text-xs space-y-1">
+                <p className="font-medium">Público já resolvido: {lockedRecipientCount.toLocaleString('pt-BR')} destinatários (somente leitura)</p>
+                <p className="text-muted-foreground">
+                  Ao salvar, a lista e os códigos de rastreamento continuam iguais. Filtros e seleção abaixo são ignorados
+                  — só mudam imagem, horário, variáveis e nome. Para trocar o público use "Recalcular público" (gera lista nova).
+                </p>
+              </div>
+            )}
             {/* Público salvo (campanha_publicos) — filtro adicional final */}
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2">
               <span className="text-xs font-medium text-blue-800">Público salvo:</span>
@@ -2871,10 +2925,26 @@ export function MassTemplateDispatcher() {
                   <span className="flex items-center gap-2 text-amber-600 font-medium">
                     <Pencil className="h-3 w-3" />
                     Editando disparo existente
+                    {lockedRecipientCount !== null && (
+                      <span className="text-muted-foreground font-normal">
+                        · público já resolvido: {lockedRecipientCount.toLocaleString('pt-BR')} destinatários
+                        <button
+                          type="button"
+                          className="ml-2 underline"
+                          onClick={() => {
+                            if (!confirm("Recalcular o público vai apagar a lista atual e gerar novos destinatários (e novos códigos de rastreamento) ao salvar. Continuar?")) return;
+                            setLockedRecipientCount(null);
+                            toast.info("Selecione o público novamente");
+                          }}
+                        >
+                          Recalcular público
+                        </button>
+                      </span>
+                    )}
                     <button
                       type="button"
                       className="underline hover:text-amber-700"
-                      onClick={() => { setEditDispatchId(null); toast.info("Edição cancelada"); }}
+                      onClick={() => { setEditDispatchId(null); setLockedRecipientCount(null); toast.info("Edição cancelada"); }}
                     >
                       cancelar
                     </button>
@@ -2915,7 +2985,7 @@ export function MassTemplateDispatcher() {
                 <Button
                   variant="outline"
                   className="gap-1.5 text-xs"
-                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  disabled={isSending || (lockedRecipientCount === null && selectedCount === 0) || !selectedTemplate}
                   onClick={() => setScheduleMode('paused')}
                 >
                   <Save className="h-3.5 w-3.5" />
@@ -2924,7 +2994,7 @@ export function MassTemplateDispatcher() {
                 <Button
                   variant="outline"
                   className="gap-1.5 text-xs"
-                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  disabled={isSending || (lockedRecipientCount === null && selectedCount === 0) || !selectedTemplate}
                   onClick={() => setScheduleMode('schedule')}
                 >
                   <Calendar className="h-3.5 w-3.5" />
@@ -2932,7 +3002,7 @@ export function MassTemplateDispatcher() {
                 </Button>
                 <Button
                   className="gap-2"
-                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate || lockedRecipientCount !== null}
                   onClick={() => setConfirmOpen(true)}
                 >
                   {isSending ? (
