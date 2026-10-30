@@ -38,3 +38,40 @@ export async function finishDirectGroupSend(route: GroupSendRoute | null, outcom
   const { error } = await createClient(url, key).rpc("finish_direct_group_send", { p_id: route.lease_id, p_outcome: outcome, p_message_id: messageId || null });
   if (error) console.error("group send history persistence failed", error.message);
 }
+
+/** Wrap provider endpoints without changing message content or private-contact flows. */
+export function withGroupSendRouting(provider: string, kind: string, handler: (req: Request) => Promise<Response>) {
+  return async (req: Request): Promise<Response> => {
+    if (req.method === "OPTIONS") return handler(req);
+    let route: GroupSendRoute | null = null;
+    try {
+      const body = await req.clone().json();
+      const phone = body.phone || body.groupId || body.groupJid;
+      if (typeof phone !== "string" || !isLikelyGroupId(phone) || (kind === "groups" && body.action !== "sendMessage")) return handler(req);
+      route = await beginDirectGroupSend(phone, body.whatsapp_number_id);
+      if (!route?.instance_id) throw new Error("Instância indisponível");
+      const rewritten = { ...body, whatsapp_number_id: route.instance_id };
+      let response: Response;
+      if (route.provider !== provider) {
+        const target = kind === "groups" ? `${route.provider}-groups` : kind === "group" ? `${route.provider}-send-${body.type === 'text' || !body.type ? 'message' : body.type === 'poll' ? 'extra' : 'media'}` : `${route.provider}-send-${kind}`;
+        if (kind === "group") {
+          rewritten.phone = phone;
+          if (body.type === "poll") { rewritten.kind = "poll"; rewritten.poll = { question: body.message, options: body.pollOptions, selectableCount: body.pollMaxOptions }; }
+          else if (body.mediaUrl) { rewritten.mediaType = body.type; }
+        }
+        const url = Deno.env.get("SUPABASE_URL");
+        const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        if (!url || !key) throw new Error("Configuração indisponível");
+        response = await fetch(`${url}/functions/v1/${target}`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(rewritten) });
+      } else {
+        response = await handler(new Request(req.url, { method: req.method, headers: req.headers, body: JSON.stringify(rewritten) }));
+      }
+      const result = await response.clone().json().catch(() => ({}));
+      await finishDirectGroupSend(route, response.ok && !result.error ? "sent" : "failed", result.messageId || null);
+      return response;
+    } catch (error) {
+      await finishDirectGroupSend(route, "failed");
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Falha no envio para grupo" }), { status: 409, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" } });
+    }
+  };
+}
