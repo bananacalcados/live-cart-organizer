@@ -13,7 +13,7 @@ import { toast } from "sonner";
 const sb = supabase as any;
 const GROUPS = ["LIVE", "WHATSAPP", "LEADS", "ENGAJAMENTO", "OUTROS"] as const;
 type Group = (typeof GROUPS)[number];
-type Agg = "week" | "month";
+type Agg = "day" | "week" | "month";
 
 const brl = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -30,10 +30,15 @@ function classify(name: string | null): Group {
 
 function bucketKey(date: string, agg: Agg) {
   const d = parseISO(date);
+  if (agg === "day") return format(d, "yyyy-MM-dd");
   return agg === "week" ? format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd") : format(d, "yyyy-MM");
 }
 const bucketLabel = (k: string, agg: Agg) =>
-  agg === "week" ? format(parseISO(k), "dd/MM/yy") : format(parseISO(k + "-01"), "MM/yyyy");
+  agg === "month" ? format(parseISO(k + "-01"), "MM/yyyy") : format(parseISO(k), "dd/MM/yy");
+// Contact table only has weekly first-touch granularity: "day" falls back to week.
+const attrAgg = (agg: Agg): Agg => (agg === "day" ? "week" : agg);
+const STICKY0 = "sticky left-0 z-10 bg-background min-w-[84px]";
+const STICKY1 = "sticky left-[84px] z-10 bg-background border-r";
 
 function downloadCsv(name: string, header: string[], rows: (string | number)[][]) {
   const esc = (v: string | number) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -73,6 +78,7 @@ export function RoasRealDashboard() {
   const [disp, setDisp] = useState<any[]>([]);
   const [rev, setRev] = useState<any[]>([]);
   const [attr, setAttr] = useState<any[]>([]);
+  const [lojaAttr, setLojaAttr] = useState<any[]>([]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [lastRun, setLastRun] = useState<any>(null);
   const [rates, setRates] = useState<{ category: string; unit_cost_brl: number }[]>([]);
@@ -81,7 +87,7 @@ export function RoasRealDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, d, r, a, o, lr, rt] = await Promise.all([
+      const [s, d, r, a, o, lr, rt, la] = await Promise.all([
         fetchAll("meta_ads_campaign_spend_daily", "campaign_id,campaign_name,date,spend", "date", from, to),
         fetchAll("v_dispatch_cost_daily", "date,cost_brl", "date", from, to),
         fetchAll("v_revenue_daily_by_channel", "date,rec_live,rec_whatsapp,rec_online,rec_loja,rec_total", "date", from, to),
@@ -89,7 +95,9 @@ export function RoasRealDashboard() {
         sb.from("meta_ads_campaign_group_overrides").select("campaign_id,group_override"),
         sb.from("meta_ads_sync_runs").select("*").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
         sb.from("dispatch_unit_cost_rates").select("category,unit_cost_brl").order("category"),
+        fetchAll("v_ad_attributed_store_daily", "date,rec_loja_attr", "date", from, to),
       ]);
+      setLojaAttr(la);
       const ts = await sb.from("meta_ads_token_state").select("token_expires_at,last_refreshed_at,last_error").eq("id", 1).maybeSingle();
       setTokenState(ts.data ?? null);
       setSpend(s); setDisp(d); setRev(r); setAttr(a);
@@ -128,10 +136,16 @@ export function RoasRealDashboard() {
     rev.forEach((r) => {
       const x = get(bucketKey(r.date, agg)).rec;
       x.live += Number(r.rec_live) || 0; x.whatsapp += Number(r.rec_whatsapp) || 0;
-      x.online += Number(r.rec_online) || 0; x.loja += Number(r.rec_loja) || 0; x.total += Number(r.rec_total) || 0;
+      // Rec. Total = all channels except store, plus only ad-attributed store revenue below.
+      x.online += Number(r.rec_online) || 0; x.total += (Number(r.rec_total) || 0) - (Number(r.rec_loja) || 0);
+    });
+    lojaAttr.forEach((l) => {
+      const x = get(bucketKey(l.date, agg)).rec;
+      const v = Number(l.rec_loja_attr) || 0;
+      x.loja += v; x.total += v;
     });
     return [...m.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [spend, disp, rev, agg, groupOf]);
+  }, [spend, disp, rev, lojaAttr, agg, groupOf]);
 
   const total = useMemo(() => {
     const t: Row = { key: "TOTAL", disparos: 0, ads: { LIVE: 0, WHATSAPP: 0, LEADS: 0, ENGAJAMENTO: 0, OUTROS: 0 }, rec: { live: 0, whatsapp: 0, online: 0, loja: 0, total: 0 } };
@@ -156,25 +170,37 @@ export function RoasRealDashboard() {
 
   // Attributed sales table
   const attrRows = useMemo(() => {
+    const agg2 = attrAgg(agg);
     const spendBy = new Map<string, number>();
     spend.forEach((s) => {
       const g = groupOf(s.campaign_id, s.campaign_name);
       const src = g === "WHATSAPP" ? "whatsapp_ad" : g === "LEADS" ? "leads_ad" : null;
       if (!src) return;
-      const k = bucketKey(s.date, agg) + "|" + src;
+      const k = bucketKey(s.date, agg2) + "|" + src;
       spendBy.set(k, (spendBy.get(k) || 0) + (Number(s.spend) || 0));
     });
     const m = new Map<string, any>();
     attr.forEach((a) => {
-      const k = bucketKey(a.week_start, agg) + "|" + a.source;
-      const cur = m.get(k) || { key: bucketKey(a.week_start, agg), source: a.source, contacts: 0, bf: 0, rf: 0, bl: 0, rl: 0 };
+      const k = bucketKey(a.week_start, agg2) + "|" + a.source;
+      const cur = m.get(k) || { key: bucketKey(a.week_start, agg2), source: a.source, contacts: 0, bf: 0, rf: 0, bl: 0, rl: 0 };
       cur.contacts += Number(a.contacts) || 0;
       cur.bf += Number(a.buyers_fora_live) || 0; cur.rf += Number(a.revenue_fora_live) || 0;
       cur.bl += Number(a.buyers_live) || 0; cur.rl += Number(a.revenue_live) || 0;
       m.set(k, cur);
     });
+    // Fallback when the source has no own spend in the bucket: contacts x period cost/contact (marked *).
+    const bucketSpend = new Map<string, number>(), bucketContacts = new Map<string, number>();
+    spendBy.forEach((v, k) => { const b = k.split("|")[0]; bucketSpend.set(b, (bucketSpend.get(b) || 0) + v); });
+    m.forEach((v) => bucketContacts.set(v.key, (bucketContacts.get(v.key) || 0) + v.contacts));
+    let totS = 0, totC = 0; bucketSpend.forEach((v) => (totS += v)); bucketContacts.forEach((v) => (totC += v));
     return [...m.entries()]
-      .map(([k, v]) => ({ ...v, spend: spendBy.get(k) || 0 }))
+      .map(([k, v]) => {
+        const own = spendBy.get(k) || 0;
+        if (own > 0) return { ...v, spend: own, estimated: false };
+        const bs = bucketSpend.get(v.key) || 0, bc = bucketContacts.get(v.key) || 0;
+        const rate = bs > 0 && bc > 0 ? bs / bc : totC > 0 ? totS / totC : 0;
+        return { ...v, spend: rate * v.contacts, estimated: rate > 0 };
+      })
       .sort((a, b) => a.key.localeCompare(b.key) || a.source.localeCompare(b.source));
   }, [attr, spend, agg, groupOf]);
 
@@ -226,7 +252,16 @@ export function RoasRealDashboard() {
     return [r.key === "TOTAL" ? "Total" : bucketLabel(r.key, agg), ad("LIVE"), ad("WHATSAPP"), ad("LEADS"), ad("ENGAJAMENTO"), ad("OUTROS"), brl(r.disparos), brl(c.cost), brl(r.rec.live), brl(r.rec.whatsapp), brl(r.rec.online), brl(r.rec.loja), brl(r.rec.total), c.roasLive, c.roasSemLoja, c.roasComLoja];
   };
   const srcLabel = (s: string) => (s === "whatsapp_ad" ? "WhatsApp ad" : "Leads ad");
-  const attrCells = (a: any) => [bucketLabel(a.key, agg), srcLabel(a.source), a.contacts, a.bf, brl(a.rf), a.bl, brl(a.rl), a.spend > 0 && a.contacts > 0 ? brl(a.spend / a.contacts) : "—"];
+  const attrPeriodLabel = attrAgg(agg) === "month" ? "Mês do 1º contato" : "Semana do 1º contato";
+  const attrHeader = [attrPeriodLabel, "Fonte", "Contatos", "Compr. fora live", "Receita fora live", "Compr. na live", "Receita na live", "Custo/contato", "Custo total", "Receita total", "ROAS"];
+  const attrCells = (a: any) => {
+    const star = a.estimated ? "*" : "";
+    const recT = a.rf + a.rl;
+    return [bucketLabel(a.key, attrAgg(agg)), srcLabel(a.source), a.contacts, a.bf, brl(a.rf), a.bl, brl(a.rl),
+      a.spend > 0 && a.contacts > 0 ? brl(a.spend / a.contacts) + star : "—",
+      a.spend > 0 ? brl(a.spend) + star : "—", brl(recT), a.spend > 0 ? roas(recT, a.spend) + star : "—"];
+  };
+  const LOJA_TIP = "Só vendas presenciais das lojas físicas de quem teve 1º contato por anúncio (WhatsApp ad ou Leads ad) e comprou em até 14 dias depois — mesma régua da tabela de vendas de anúncio. Não é a receita total das lojas.";
 
   return (
     <div className="space-y-4">
@@ -237,7 +272,7 @@ export function RoasRealDashboard() {
           <label className="text-xs text-muted-foreground">Agrupar por</label>
           <Select value={agg} onValueChange={(v) => setAgg(v as Agg)}>
             <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="week">Semana</SelectItem><SelectItem value="month">Mês</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="day">Dia</SelectItem><SelectItem value="week">Semana</SelectItem><SelectItem value="month">Mês</SelectItem></SelectContent>
           </Select>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -287,18 +322,22 @@ export function RoasRealDashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <CardTitle className="text-base">Custo × Receita</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => downloadCsv("roas-real.csv", mainHeader, [...rows, total].map(mainCells))}>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv("roas-real.csv", mainHeader, (rows.length > 1 ? [...rows, total] : rows).map(mainCells))}>
             <Download className="h-4 w-4 mr-1" />Exportar CSV
           </Button>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
-            <TableHeader><TableRow>{mainHeader.map((h) => <TableHead key={h} className="whitespace-nowrap text-xs">{h}</TableHead>)}</TableRow></TableHeader>
+            <TableHeader><TableRow>{mainHeader.map((h, i) => (
+              <TableHead key={h} className={`whitespace-nowrap text-xs ${i === 0 ? STICKY0 : i === 1 ? STICKY1 : ""}`}
+                title={h === "Rec. Loja" || h === "ROAS com loja" ? LOJA_TIP : h === "Rec. Total" ? "Live + WhatsApp + Online + outros + Rec. Loja atribuída a anúncio." : undefined}>
+                {h}{h === "Rec. Loja" || h === "ROAS com loja" ? " ⓘ" : ""}
+              </TableHead>))}</TableRow></TableHeader>
             <TableBody>
               {rows.map((r) => (
-                <TableRow key={r.key}>{mainCells(r).map((c, i) => <TableCell key={i} className="whitespace-nowrap text-xs">{c}</TableCell>)}</TableRow>
+                <TableRow key={r.key}>{mainCells(r).map((c, i) => <TableCell key={i} className={`whitespace-nowrap text-xs ${i === 0 ? STICKY0 : i === 1 ? STICKY1 : ""}`}>{c}</TableCell>)}</TableRow>
               ))}
-              <TableRow className="bg-muted/50 font-semibold">{mainCells(total).map((c, i) => <TableCell key={i} className="whitespace-nowrap text-xs">{c}</TableCell>)}</TableRow>
+              {rows.length > 1 && <TableRow className="bg-muted/50 font-semibold">{mainCells(total).map((c, i) => <TableCell key={i} className={`whitespace-nowrap text-xs ${i === 0 ? STICKY0 : i === 1 ? STICKY1 : ""} bg-muted`}>{c}</TableCell>)}</TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -308,17 +347,18 @@ export function RoasRealDashboard() {
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <div>
             <CardTitle className="text-base">Vendas de quem veio de anúncio</CardTitle>
-            <p className="text-xs text-muted-foreground">Primeiro toque por telefone; compras em até 14 dias depois. Semana = semana do primeiro toque.</p>
+            <p className="text-xs text-muted-foreground">Compras contadas até 14 dias após o 1º contato — podem cair no {attrAgg(agg) === "month" ? "mês" : "semana"} seguinte ao do contato.</p>
+            <p className="text-xs text-muted-foreground">* custo estimado: contatos × custo/contato do período (sem gasto próprio da fonte).{agg === "day" ? " Agrupamento por dia usa a semana do 1º contato." : ""}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => downloadCsv("vendas-anuncios.csv", ["Período", "Fonte", "Contatos", "Compradores fora da live", "Receita fora da live", "Compradores na live", "Receita na live", "Custo por contato"], attrRows.map(attrCells))}>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv("vendas-anuncios.csv", attrHeader, attrRows.map(attrCells))}>
             <Download className="h-4 w-4 mr-1" />Exportar CSV
           </Button>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
-            <TableHeader><TableRow>{["Período", "Fonte", "Contatos", "Compr. fora live", "Receita fora live", "Compr. na live", "Receita na live", "Custo/contato"].map((h) => <TableHead key={h} className="whitespace-nowrap text-xs">{h}</TableHead>)}</TableRow></TableHeader>
+            <TableHeader><TableRow>{attrHeader.map((h) => <TableHead key={h} className="whitespace-nowrap text-xs">{h}</TableHead>)}</TableRow></TableHeader>
             <TableBody>
-              {attrRows.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground">Sem dados no período</TableCell></TableRow>}
+              {attrRows.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-xs text-muted-foreground">Sem dados no período</TableCell></TableRow>}
               {attrRows.map((a) => (
                 <TableRow key={a.key + a.source}>{attrCells(a).map((c, i) => <TableCell key={i} className="whitespace-nowrap text-xs">{c}</TableCell>)}</TableRow>
               ))}
