@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { uazapiInstance } from "../_shared/uazapi-credentials.ts";
 import { resumeAutomationWait } from "../_shared/automation-wait-response.ts";
+import { resolveGroupRoutes } from "../_shared/group-send-routing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ serve(async (req) => {
     // Single query: fetch link with cached URL
     const { data: link, error: linkErr } = await supabase
       .from('group_redirect_links')
-      .select('id, slug, campaign_id, click_count, redirect_count, is_active, is_deep_link, cached_invite_url, cached_at, forced_group_id, forced_strict, group_campaigns!inner(target_groups, is_deep_link)')
+      .select('id, slug, campaign_id, click_count, redirect_count, is_active, is_deep_link, cached_invite_url, cached_at, forced_group_id, forced_strict, cached_group_base, cached_instance_id, group_campaigns!inner(target_groups, is_deep_link, whatsapp_number_id)')
       .eq('slug', slug)
       .eq('is_active', true)
       .single();
@@ -91,7 +92,12 @@ serve(async (req) => {
     // ─── FAST PATH: cached URL ───
     let redirectUrl: string | null = null;
     const cachedAt = link.cached_at ? new Date(link.cached_at).getTime() : 0;
-    const isCacheFresh = link.cached_invite_url && (Date.now() - cachedAt < CACHE_TTL_MS);
+    let cacheOwnerValid = false;
+    if (link.cached_group_base && link.cached_instance_id) {
+      const { data: cachedRoute, error } = await supabase.rpc("resolve_group_send_route", { p_jid: link.cached_group_base, p_fallback: (link.group_campaigns as any)?.whatsapp_number_id || null });
+      cacheOwnerValid = !error && cachedRoute?.instance_id === link.cached_instance_id && cachedRoute?.online;
+    }
+    const isCacheFresh = link.cached_invite_url && cacheOwnerValid && (Date.now() - cachedAt < CACHE_TTL_MS);
 
     if (isCacheFresh) {
       redirectUrl = link.cached_invite_url;
@@ -106,7 +112,7 @@ serve(async (req) => {
       // Cache the result for next time (non-blocking)
       if (redirectUrl) {
         supabase.from('group_redirect_links')
-          .update({ cached_invite_url: redirectUrl, cached_at: new Date().toISOString() })
+          .update({ cached_invite_url: redirectUrl, cached_at: new Date().toISOString(), cached_group_base: link.resolved_group_base || null, cached_instance_id: link.resolved_instance_id || null })
           .eq('id', link.id)
           .then(() => {});
       }
@@ -217,7 +223,15 @@ function hasCapacity(group: any): boolean {
 // O cache de 2 min do link (cached_invite_url) evita excesso de chamadas.
 const BLOCKED = '__blocked__';
 
-async function inviteForGroup(supabase: any, group: any): Promise<string | null> {
+async function inviteForGroup(supabase: any, group: any, link: any): Promise<string | null> {
+  const routes = await resolveGroupRoutes(supabase, [group.id], link.group_campaigns?.whatsapp_number_id || null);
+  const route = routes[0];
+  if (!route?.instance_id || !route.present || !route.online) return null;
+  const { data: participation } = await supabase.from('whatsapp_groups').select('id,group_id,invite_link,instance_id').eq('id', route.group_db_id).maybeSingle();
+  if (!participation) return null;
+  group = { ...group, ...participation, instance_id: route.instance_id };
+  link.resolved_group_base = route.base;
+  link.resolved_instance_id = route.instance_id;
   const fresh = await fetchInviteLink(supabase, group);
   if (fresh === BLOCKED) {
     // WhatsApp travou o convite (ex.: "growth-locked"): o link salvo está morto.
@@ -261,7 +275,7 @@ async function resolveGroupUrl(
       const forcedHasRoom = !forced.is_full && hasCapacity(forced);
       // Usa o grupo fixo quando tem vaga, OU quando é estrito (mantém mesmo cheio).
       if (forcedHasRoom || link.forced_strict) {
-        const invite = await inviteForGroup(supabase, forced);
+        const invite = await inviteForGroup(supabase, forced, link);
         if (invite) return invite;
       }
       // Se não é estrito e o grupo lotou, cai para a rotação automática abaixo.
@@ -287,7 +301,7 @@ async function resolveGroupUrl(
   // Sempre valida o invite no provedor (com fallback pro salvo) — evita servir
   // convite revogado, que era a causa de cliques sem entradas no grupo.
   for (const group of groups) {
-    const inviteLink = await inviteForGroup(supabase, group);
+    const inviteLink = await inviteForGroup(supabase, group, link);
     if (inviteLink) return inviteLink;
   }
 

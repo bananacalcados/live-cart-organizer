@@ -35,6 +35,7 @@ import { GroupActionsQueuePanel } from "./GroupActionsQueuePanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { Switch } from "@/components/ui/switch";
 import { applyManualVip } from "@/lib/groupVip";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
 import { GroupsLogicalTable } from "./GroupsLogicalTable";
 
 interface WhatsAppGroup {
@@ -473,7 +474,7 @@ export function GroupsVipManager() {
                         <GroupCard key={g.id} group={g}
                           isSelected={selectedGroups.includes(g.id)}
                           instance={resolveInstance(g.instance_id)}
-                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
+                          canSend={g.is_active !== false}
                           vipSaving={vipSaving === g.group_jid_base}
                           onToggleSelect={() => toggleSelect(g)}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
@@ -491,7 +492,7 @@ export function GroupsVipManager() {
                         <GroupCard key={g.id} group={g}
                           isSelected={selectedGroups.includes(g.id)}
                           instance={resolveInstance(g.instance_id)}
-                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
+                          canSend={g.is_active !== false}
                           vipSaving={vipSaving === g.group_jid_base}
                           onToggleSelect={() => toggleSelect(g)}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
@@ -624,6 +625,7 @@ export function GroupsVipManager() {
           <DialogHeader><DialogTitle>Nova Campanha</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <Input placeholder="Nome da campanha" value={newCampaignName} onChange={e => setNewCampaignName(e.target.value)} />
+            <GroupSendRoutingPanel groupIds={selectedGroups} fallback={selectedNumberId} />
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
               <p className="font-medium">🐢 Modo Humano (padrão)</p>
               <p className="text-muted-foreground leading-relaxed">

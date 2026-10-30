@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchGroupSendRoutes } from "@/lib/marketing/groupSendRouting";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
 import { toast } from "sonner";
 import {
   ArrowLeft, Loader2, Image, FileText, Shield, Type, Upload, Pin, Crown, Save, CheckCircle
@@ -43,6 +45,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [promotePhone, setPromotePhone] = useState("");
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
   const [campaignWhatsappNumberId, setCampaignWhatsappNumberId] = useState<string | null>(null);
+  const [sendOverrides, setSendOverrides] = useState<Record<string, string>>({});
 
   // Confirmação/pré-visualização antes de aplicar ações que alteram os grupos reais
   type PendingAction = {
@@ -114,68 +117,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const groupDigits = (raw: string | null | undefined): string => (raw || '').replace(/\D/g, '');
 
   const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
-    const { data: groups } = await supabase
-      .from('whatsapp_groups')
-      .select('id, group_id, name, instance_id')
-      .in('id', targetGroups);
-    if (!groups || groups.length === 0) return [];
-
-    // Candidatos a instância: UUIDs válidos gravados nos grupos + nº da campanha + nº selecionado no topo.
-    // (instance_id pode ser um token cru antigo, ex.: instância Z-API desativada — esses são ignorados no roteamento)
-    const candidateIds = [...new Set([
-      ...groups.map((g: any) => g.instance_id).filter(isUuid),
-      campaignWhatsappNumberId,
-      selectedNumberId,
-    ].filter(Boolean))] as string[];
-
-    const numbersMap = new Map<string, { provider: string; active: boolean }>();
-    if (candidateIds.length > 0) {
-      const { data: nums } = await supabase
-        .from('whatsapp_numbers')
-        .select('id, provider, is_active')
-        .in('id', candidateIds);
-      (nums || []).forEach((n: any) => numbersMap.set(n.id, { provider: n.provider, active: !!n.is_active }));
-    }
-
-    // Instância "operante": prioriza o número ATIVO da campanha; senão, o número ATIVO selecionado no topo.
-    const operating =
-      (campaignWhatsappNumberId && numbersMap.get(campaignWhatsappNumberId)?.active ? campaignWhatsappNumberId : null) ||
-      (selectedNumberId && numbersMap.get(selectedNumberId)?.active ? selectedNumberId : null);
-
-    const mapped: GroupRow[] = groups.map((g: any) => {
-      // Só confia no instance_id do grupo se for um UUID de instância ATIVA. Caso contrário usa a operante.
-      const storedActive = isUuid(g.instance_id) && numbersMap.get(g.instance_id)?.active;
-      const effectiveInstanceId = storedActive ? g.instance_id : operating;
-      const provider = effectiveInstanceId ? (numbersMap.get(effectiveInstanceId)?.provider || 'zapi') : 'zapi';
-      return {
-        id: g.id,
-        group_id: g.group_id,
-        name: g.name,
-        storedInstanceId: g.instance_id ?? null,
-        effectiveInstanceId: effectiveInstanceId ?? null,
-        provider,
-      };
-    });
-
-    // Deduplica por grupo FÍSICO (dígitos do JID). O mesmo grupo aparece várias vezes
-    // (1 linha por instância + registro legado "-group" de instância morta). Mantemos
-    // apenas o melhor registro: prioriza JID moderno "@g.us" com instância UUID ativa
-    // sobre registros legados/token cru — evita renomear o mesmo grupo 2x ou via instância errada.
-    const score = (g: GroupRow): number => {
-      let s = 0;
-      if (isUuid(g.storedInstanceId) && numbersMap.get(g.storedInstanceId!)?.active) s += 4; // instância própria ativa
-      if (/@g\.us$/i.test(g.group_id)) s += 2; // formato moderno
-      if (!/-group$/i.test(g.group_id)) s += 1; // não é legado
-      return s;
-    };
-    const bestByDigits = new Map<string, GroupRow>();
-    for (const g of mapped) {
-      const key = groupDigits(g.group_id);
-      if (!key) continue;
-      const cur = bestByDigits.get(key);
-      if (!cur || score(g) > score(cur)) bestByDigits.set(key, g);
-    }
-    return Array.from(bestByDigits.values());
+    const routes = await fetchGroupSendRoutes(targetGroups, campaignWhatsappNumberId || selectedNumberId, sendOverrides);
+    return routes.map(route => ({ id: route.target_id, group_id: route.group_jid, name: route.name, storedInstanceId: route.instance_id, effectiveInstanceId: route.instance_id, provider: route.provider }));
   };
 
   // Verifica se algum dos grupos físicos também pertence a OUTRA campanha,
@@ -258,6 +201,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       if (!g.effectiveInstanceId) continue;
       const base = {
         whatsapp_number_id: g.effectiveInstanceId,
+        fallback_number_id: campaignWhatsappNumberId || selectedNumberId,
+        override_number_id: sendOverrides[groupDigits(g.group_id)] || null,
         group_db_id: g.id,
         group_jid: g.group_id,
         group_name_snapshot: g.name,
@@ -370,6 +315,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       </Alert>
 
       <div className="space-y-3">
+        <GroupSendRoutingPanel groupIds={targetGroups} fallback={campaignWhatsappNumberId || selectedNumberId} overrides={sendOverrides} onChange={setSendOverrides} />
         {/* Rename */}
         <Card>
           <CardHeader className="p-3 pb-2">

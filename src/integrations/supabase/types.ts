@@ -8810,6 +8810,7 @@ export type Database = {
           campaign_id: string | null
           created_at: string
           error_message: string | null
+          fallback_number_id: string | null
           finished_at: string | null
           group_db_id: string | null
           group_jid: string
@@ -8819,6 +8820,7 @@ export type Database = {
           locked_until: string | null
           not_before: string | null
           notes: string | null
+          override_number_id: string | null
           payload: Json
           requested_by: string
           result: Json | null
@@ -8836,6 +8838,7 @@ export type Database = {
           campaign_id?: string | null
           created_at?: string
           error_message?: string | null
+          fallback_number_id?: string | null
           finished_at?: string | null
           group_db_id?: string | null
           group_jid: string
@@ -8845,6 +8848,7 @@ export type Database = {
           locked_until?: string | null
           not_before?: string | null
           notes?: string | null
+          override_number_id?: string | null
           payload?: Json
           requested_by?: string
           result?: Json | null
@@ -8862,6 +8866,7 @@ export type Database = {
           campaign_id?: string | null
           created_at?: string
           error_message?: string | null
+          fallback_number_id?: string | null
           finished_at?: string | null
           group_db_id?: string | null
           group_jid?: string
@@ -8871,6 +8876,7 @@ export type Database = {
           locked_until?: string | null
           not_before?: string | null
           notes?: string | null
+          override_number_id?: string | null
           payload?: Json
           requested_by?: string
           result?: Json | null
@@ -8967,19 +8973,25 @@ export type Database = {
           block_order: number
           block_type: string | null
           campaign_id: string | null
+          claim_token: string | null
           created_at: string
           delay_after_ms: number
           error_message: string | null
+          fallback_number_id: string | null
           group_db_id: string
           group_name: string | null
           group_zapi_id: string
           id: string
           locked_until: string | null
           message_group_id: string | null
+          override_number_id: string | null
+          provider_message_id: string | null
+          routing_source: string | null
           scheduled_message_id: string
           send_after: string | null
           sent_at: string | null
           seq: number | null
+          started_at: string | null
           status: string
           updated_at: string
           whatsapp_number_id: string | null
@@ -8989,19 +9001,25 @@ export type Database = {
           block_order?: number
           block_type?: string | null
           campaign_id?: string | null
+          claim_token?: string | null
           created_at?: string
           delay_after_ms?: number
           error_message?: string | null
+          fallback_number_id?: string | null
           group_db_id: string
           group_name?: string | null
           group_zapi_id: string
           id?: string
           locked_until?: string | null
           message_group_id?: string | null
+          override_number_id?: string | null
+          provider_message_id?: string | null
+          routing_source?: string | null
           scheduled_message_id: string
           send_after?: string | null
           sent_at?: string | null
           seq?: number | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -9011,19 +9029,25 @@ export type Database = {
           block_order?: number
           block_type?: string | null
           campaign_id?: string | null
+          claim_token?: string | null
           created_at?: string
           delay_after_ms?: number
           error_message?: string | null
+          fallback_number_id?: string | null
           group_db_id?: string
           group_name?: string | null
           group_zapi_id?: string
           id?: string
           locked_until?: string | null
           message_group_id?: string | null
+          override_number_id?: string | null
+          provider_message_id?: string | null
+          routing_source?: string | null
           scheduled_message_id?: string
           send_after?: string | null
           sent_at?: string | null
           seq?: number | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -9100,6 +9124,7 @@ export type Database = {
           draft_notes: string | null
           execution_count: number
           failed_count: number
+          group_instance_overrides: Json
           id: string
           last_execution_at: string | null
           locked_until: string | null
@@ -9135,6 +9160,7 @@ export type Database = {
           draft_notes?: string | null
           execution_count?: number
           failed_count?: number
+          group_instance_overrides?: Json
           id?: string
           last_execution_at?: string | null
           locked_until?: string | null
@@ -9170,6 +9196,7 @@ export type Database = {
           draft_notes?: string | null
           execution_count?: number
           failed_count?: number
+          group_instance_overrides?: Json
           id?: string
           last_execution_at?: string | null
           locked_until?: string | null
@@ -9498,6 +9525,8 @@ export type Database = {
       group_redirect_links: {
         Row: {
           cached_at: string | null
+          cached_group_base: string | null
+          cached_instance_id: string | null
           cached_invite_url: string | null
           campaign_id: string
           click_count: number
@@ -9513,6 +9542,8 @@ export type Database = {
         }
         Insert: {
           cached_at?: string | null
+          cached_group_base?: string | null
+          cached_instance_id?: string | null
           cached_invite_url?: string | null
           campaign_id: string
           click_count?: number
@@ -9528,6 +9559,8 @@ export type Database = {
         }
         Update: {
           cached_at?: string | null
+          cached_group_base?: string | null
+          cached_instance_id?: string | null
           cached_invite_url?: string | null
           campaign_id?: string
           click_count?: number
@@ -9550,6 +9583,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      group_send_leases: {
+        Row: {
+          expires_at: string
+          finished_at: string | null
+          group_jid_base: string
+          id: string
+          outcome: string | null
+          provider_message_id: string | null
+          started_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          expires_at?: string
+          finished_at?: string | null
+          group_jid_base: string
+          id?: string
+          outcome?: string | null
+          provider_message_id?: string | null
+          started_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          expires_at?: string
+          finished_at?: string | null
+          group_jid_base?: string
+          id?: string
+          outcome?: string | null
+          provider_message_id?: string | null
+          started_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: []
       }
       identity_blacklist: {
         Row: {
@@ -25792,19 +25858,25 @@ export type Database = {
           block_order: number
           block_type: string | null
           campaign_id: string | null
+          claim_token: string | null
           created_at: string
           delay_after_ms: number
           error_message: string | null
+          fallback_number_id: string | null
           group_db_id: string
           group_name: string | null
           group_zapi_id: string
           id: string
           locked_until: string | null
           message_group_id: string | null
+          override_number_id: string | null
+          provider_message_id: string | null
+          routing_source: string | null
           scheduled_message_id: string
           send_after: string | null
           sent_at: string | null
           seq: number | null
+          started_at: string | null
           status: string
           updated_at: string
           whatsapp_number_id: string | null
@@ -25886,6 +25958,7 @@ export type Database = {
           campaign_id: string | null
           created_at: string
           error_message: string | null
+          fallback_number_id: string | null
           finished_at: string | null
           group_db_id: string | null
           group_jid: string
@@ -25895,6 +25968,7 @@ export type Database = {
           locked_until: string | null
           not_before: string | null
           notes: string | null
+          override_number_id: string | null
           payload: Json
           requested_by: string
           result: Json | null
@@ -26123,6 +26197,10 @@ export type Database = {
         }
         Returns: string
       }
+      finish_direct_group_send: {
+        Args: { p_id: string; p_message_id?: string; p_outcome: string }
+        Returns: undefined
+      }
       finish_group_admin_action: {
         Args: {
           p_error?: string
@@ -26132,6 +26210,17 @@ export type Database = {
           p_result?: Json
         }
         Returns: undefined
+      }
+      finish_group_dispatch_job: {
+        Args: {
+          p_attempts?: number
+          p_error?: string
+          p_id: string
+          p_message_id?: string
+          p_outcome: string
+          p_token: string
+        }
+        Returns: boolean
       }
       forfeit_physical_prize: {
         Args: { p_order_id: string; p_reason?: string }
@@ -26827,6 +26916,15 @@ export type Database = {
         Returns: Json
       }
       group_send_in_progress: { Args: { p_base: string }; Returns: boolean }
+      group_send_offline_summary: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      group_send_responsible_enabled: { Args: never; Returns: boolean }
+      group_send_routes: {
+        Args: { p_fallback?: string; p_group_ids: string[]; p_overrides?: Json }
+        Returns: Json
+      }
       guard_automation_dispatch: {
         Args: {
           p_flow_id: string
@@ -27405,6 +27503,10 @@ export type Database = {
         Args: { p_send_id: string }
         Returns: undefined
       }
+      refresh_group_admin_send_routes: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
       refresh_vip_orphans: { Args: never; Returns: Json }
       refund_badges_for_sources: {
@@ -27444,6 +27546,10 @@ export type Database = {
       }
       reopen_physical_prize: {
         Args: { p_prize_id: string; p_reason?: string }
+        Returns: Json
+      }
+      reserve_direct_group_send: {
+        Args: { p_fallback?: string; p_jid: string; p_override?: string }
         Returns: Json
       }
       resolve_campaign_template: {
@@ -27518,6 +27624,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_group_send_route: {
+        Args: { p_fallback?: string; p_jid: string; p_override?: string }
+        Returns: Json
       }
       resolve_ig_handles: {
         Args: { _handles: string[] }

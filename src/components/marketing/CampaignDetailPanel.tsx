@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
+import { GroupMessageSendHistory } from "./GroupMessageSendHistory";
 import { TrackedLinkStats } from "./TrackedLinkStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -109,6 +111,7 @@ interface ScheduledMessage {
   vip_link_mode?: string | null;
   contact_phone?: string | null;
   whatsapp_number_id?: string | null;
+  group_instance_overrides?: Record<string, string> | null;
 }
 
 interface RedirectLink {
@@ -418,6 +421,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -438,6 +442,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               disable_link_preview: !!(block as any).disableLinkPreview,
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
               whatsapp_number_id: campaignNumberId,
               message_group_id: messageGroupId,
               block_order: offset,
@@ -455,6 +460,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: scheduledAtIso,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -473,6 +479,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -491,6 +498,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             disable_link_preview: false,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -508,6 +516,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             disable_link_preview: !!(block as any).disableLinkPreview,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -547,6 +556,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: itemTime,
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             created_by: 'user',
             status: asDraft ? 'draft' : 'pending',
@@ -565,6 +575,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: scheduledAtIso,
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
           whatsapp_number_id: campaignNumberId,
           created_by: 'user',
           status: asDraft ? 'draft' : 'pending',
@@ -607,6 +618,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               scheduled_at: new Date(now.getTime()).toISOString(),
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
               whatsapp_number_id: campaignNumberId,
               message_group_id: messageGroupId,
               block_order: offset,
@@ -623,6 +635,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -639,6 +652,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -655,6 +669,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -669,6 +684,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
             message_group_id: messageGroupId,
             block_order: offset,
@@ -715,6 +731,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: now.toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
             whatsapp_number_id: campaignNumberId,
           } as any).select().single();
           if (error) throw error;
@@ -731,6 +748,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: now.toISOString(),
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
           whatsapp_number_id: campaignNumberId,
         } as any).select().single();
         if (error) throw error;
@@ -802,6 +820,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         scheduled_at: scheduledAtIso,
         send_speed: data.sendSpeed,
         mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
       };
       if (i < existing.length) {
         if (!groupId && finalGroupId) { payload.message_group_id = finalGroupId; payload.block_order = i; }
@@ -930,6 +949,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       scheduled_at: data.scheduledAt ? scheduledAt.toISOString() : null,
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
+            group_instance_overrides: data.groupInstanceOverrides || {},
       disable_link_preview: !!block?.disableLinkPreview,
       vip_link_mode: ['product', 'general'].includes((block as any)?.vipLinkMode) ? (block as any).vipLinkMode : 'none',
       vip_link_product: (block as any)?.vipLinkMode === 'product' ? ((block as any).vipLinkProduct || null) : null,
@@ -1506,7 +1526,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           </Button>
         </div>
         <div className="flex items-center gap-2 pl-10">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Instância WhatsApp:</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Instância fallback:</span>
           <WhatsAppNumberSelector
             className="w-56"
             allowedProviders={["zapi", "wasender", "uazapi"]}
@@ -1518,6 +1538,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         </div>
       </div>
 
+      <GroupSendRoutingPanel groupIds={targetGroups} fallback={(campaign as any)?.whatsapp_number_id || null} />
       <ScrollArea className="h-[calc(100vh-300px)]">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-7">
@@ -1821,6 +1842,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                       </span>
                                     )}
                                   </div>
+                                  {!isDraft && <GroupMessageSendHistory messageId={msg.id} />}
                                   {missingMedia && (
                                     <p className="text-[11px] font-semibold text-amber-600 mb-1">⚠️ Falta subir mídia</p>
                                   )}
@@ -2079,6 +2101,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                 </span>
                               )}
                             </div>
+                            <GroupMessageSendHistory messageId={msg.id} />
                             <ScrollArea className="max-h-[250px]">
                               {msg.media_url && ['image'].includes(msg.message_type) && (
                                 <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
@@ -2317,6 +2340,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         onUpdate={handleUpdateMessage}
         onUpdateGroup={handleUpdateGroupMessage}
         campaignId={campaignId}
+        targetGroups={targetGroups}
+        fallbackNumberId={(campaign as any)?.whatsapp_number_id || null}
         otherCampaigns={otherCampaignGroups.map(c => ({ id: c.id, name: c.name }))}
         onScheduleToCampaign={handleScheduleToCampaign}
       />

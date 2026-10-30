@@ -1,3 +1,4 @@
+import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -42,7 +43,7 @@ interface SendGroupRequest {
   whatsapp_number_id?: string; // UUID to resolve Z-API credentials dynamically
 }
 
-serve(async (req) => {
+serve(withGroupSendRouting("zapi", "group", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -240,4 +241,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

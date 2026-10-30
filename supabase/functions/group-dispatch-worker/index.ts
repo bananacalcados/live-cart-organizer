@@ -26,8 +26,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const start = Date.now();
@@ -41,7 +41,7 @@ serve(async (req) => {
   // Participantes do grupo (uazapi) para "marcar todos" — 1 busca por grupo por execução.
   async function getUazapiParticipants(groupJid: string, numberId: string | null): Promise<string[] | null> {
     const key = `${numberId}:${groupJid}`;
-    if (participantsCache.has(key)) return participantsCache.get(key)!;
+    if (participantsCache.has(key)) return participantsCache.get(key) ?? null;
     let phones: string[] | null = null;
     try {
       const r = await fetch(`${supabaseUrl}/functions/v1/uazapi-groups`, {
@@ -92,7 +92,7 @@ serve(async (req) => {
   const normVar = (n: string) => String(n || "").trim().toLowerCase().replace(/-/g, "_");
 
   async function getCampaignVars(campaignId: string): Promise<Record<string, string>> {
-    if (varsCache.has(campaignId)) return varsCache.get(campaignId)!;
+    if (varsCache.has(campaignId)) return varsCache.get(campaignId) || {};
     const { data } = await supabase
       .from("campaign_variables")
       .select("variable_name, variable_value")
@@ -108,7 +108,7 @@ serve(async (req) => {
 
   async function getProvider(numberId: string | null): Promise<string> {
     if (!numberId) return "zapi";
-    if (providerCache.has(numberId)) return providerCache.get(numberId)!;
+    if (providerCache.has(numberId)) return providerCache.get(numberId) || "zapi";
     const { data } = await supabase
       .from("whatsapp_numbers")
       .select("provider")
@@ -159,8 +159,8 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
-    const ok = r.ok && data?.success !== false && !data?.error;
-    return { ok, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
+    const ok = r.ok && data?.success !== false && !data?.error && !data?.uncertain;
+    return { ok, uncertain: data?.uncertain === true, messageId: data?.messageId || null, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
   }
 
   // ===== Roteamento de envio por provider =====
@@ -254,97 +254,13 @@ serve(async (req) => {
     return callFn("zapi-send-group-message", body);
   }
 
-  // Agenda o próximo job da MESMA campanha (libera após o delay deste job)
-  async function scheduleNext(job: any) {
-    const { data: next } = await dispatchFilter(
-      supabase
-        .from("group_campaign_block_dispatches")
-        .select("id")
-        .eq("status", "pending")
-        .not("seq", "is", null)
-        .is("send_after", null)
-        .gt("seq", job.seq)
-        .order("seq", { ascending: true })
-        .limit(1),
-      job,
-    );
-    if (next && next.length > 0) {
-      const delay = Math.max(0, job.delay_after_ms || 0);
-      await supabase
-        .from("group_campaign_block_dispatches")
-        .update({ send_after: new Date(Date.now() + delay).toISOString() })
-        .eq("id", next[0].id);
-    }
-  }
-
-  // Conclusão de grupo / disparo → atualiza as mensagens agendadas
-  async function reconcile(job: any) {
-    // Jobs restantes pendentes do grupo
-    const { count: groupPending } = await dispatchFilter(
-      supabase
-        .from("group_campaign_block_dispatches")
-        .select("id", { count: "exact", head: true })
-        .eq("group_db_id", job.group_db_id)
-        .not("seq", "is", null)
-        .eq("status", "pending"),
-      job,
-    );
-
-    if (groupPending === 0) {
-      // Grupo concluído: marca sent_group_ids + contadores
-      const { data: gJobs } = await dispatchFilter(
-        supabase
-          .from("group_campaign_block_dispatches")
-          .select("status")
-          .eq("group_db_id", job.group_db_id)
-          .not("seq", "is", null),
-        job,
-      );
-      const anyFailed = (gJobs || []).some((j: any) => j.status === "failed");
-      const allFailed = (gJobs || []).length > 0 && (gJobs || []).every((j: any) => j.status === "failed");
-
-      const { data: cur } = await supabase
-        .from("group_campaign_scheduled_messages")
-        .select("sent_group_ids, sent_count, failed_count")
-        .eq("id", job.scheduled_message_id)
-        .maybeSingle();
-
-      const sentIds: string[] = cur?.sent_group_ids || [];
-      if (!sentIds.includes(job.group_db_id)) {
-        sentIds.push(job.group_db_id);
-        const col = job.message_group_id ? "message_group_id" : "id";
-        const val = job.message_group_id || job.scheduled_message_id;
-        await supabase
-          .from("group_campaign_scheduled_messages")
-          .update({
-            sent_group_ids: sentIds,
-            sent_count: (cur?.sent_count || 0) + (allFailed ? 0 : 1),
-            failed_count: (cur?.failed_count || 0) + (anyFailed ? 1 : 0),
-            locked_until: new Date(Date.now() + 120_000).toISOString(),
-          })
-          .eq(col, val);
-      }
-    }
-
-    // Jobs restantes do disparo inteiro
-    const { count: dispatchPending } = await dispatchFilter(
-      supabase
-        .from("group_campaign_block_dispatches")
-        .select("id", { count: "exact", head: true })
-        .not("seq", "is", null)
-        .eq("status", "pending"),
-      job,
-    );
-
-    if (dispatchPending === 0) {
-      const col = job.message_group_id ? "message_group_id" : "id";
-      const val = job.message_group_id || job.scheduled_message_id;
-      await supabase
-        .from("group_campaign_scheduled_messages")
-        .update({ status: "sent", sent_at: new Date().toISOString(), locked_until: null })
-        .eq(col, val)
-        .in("status", ["sending", "pending", "grouped"]);
-    }
+  // Legacy helpers retained for cancellation only; completion is atomic below.
+  async function finishJob(job: any, outcome: string, attempts: number, error: string | null = null, messageId: string | null = null) {
+    const { data, error: finishError } = await supabase.rpc("finish_group_dispatch_job", {
+      p_id: job.id, p_token: job.claim_token, p_outcome: outcome, p_attempts: attempts,
+      p_error: error, p_message_id: messageId,
+    });
+    if (finishError || !data) throw finishError || new Error("stale group send claim");
   }
 
   // Cancela toda a fila pendente do disparo (pausa global)
@@ -376,16 +292,13 @@ serve(async (req) => {
     const paused = await getPausedGroupSendUntil(supabase);
     if (paused) {
       await cancelDispatch(job);
+      await finishJob(job, "cancelled", 0);
       return true;
     }
 
     let block = await getBlock(job);
     if (!block) {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "failed", error_message: "block_not_found", locked_until: null })
-        .eq("id", job.id);
-      await scheduleNext(job);
-      await reconcile(job);
+      await finishJob(job, "failed", 0, "block_not_found");
       return true;
     }
 
@@ -399,25 +312,14 @@ serve(async (req) => {
     // Envio com 1 retry
     let res = await sendBlock(provider, block, job, content);
     let attempts = 1;
-    if (!res.ok) {
+    if (!res.ok && !("uncertain" in res && res.uncertain)) {
       await sleep(RETRY_DELAY_MS);
       res = await sendBlock(provider, block, job, content);
       attempts = 2;
     }
 
-    if (res.ok) {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "sent", attempts, sent_at: new Date().toISOString(), locked_until: null })
-        .eq("id", job.id);
-    } else {
-      await supabase.from("group_campaign_block_dispatches")
-        .update({ status: "failed", attempts, error_message: String(res.error || "send_failed").slice(0, 500), locked_until: null })
-        .eq("id", job.id);
-    }
-
-    // Avança a fila (mesmo em falha, para não travar o disparo)
-    await scheduleNext(job);
-    await reconcile(job);
+    await finishJob(job, res.ok ? "sent" : "failed", attempts,
+      res.ok ? null : String(res.error || "send_failed").slice(0, 500), res.messageId);
     return true;
   }
 

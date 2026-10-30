@@ -1,9 +1,9 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Grupos — Fase C — 30/10
-- [ ] Resolver responsável em campanhas, agendamentos, administração, convites e envio avulso; preservar criação, textos e cadência.
-- [ ] Escolha por envio e resumo nas telas, chave reversível, travas e alertas de desconexão.
-- [ ] Testes, envio real em um grupo autorizado e relatório por item; não publicar site.
+- [x] Resolver responsável em campanhas, agendamentos, administração, convites e envio avulso; preservar criação, textos e cadência.
+- [x] Escolha por envio e resumo nas telas, chave reversível, travas e alertas de desconexão.
+- [x] Testes de filas/reconexão/reversão/admin com rollback e envio real único Teste 235 pela Whats Carol (3EB046EAB884153CE155DD), histórico relido na tela; site não publicado. Não testados ao vivo: 2/3 instâncias, mídia, administração, criação e convite.
 
 ## Confirmação da Katia — 29/10
 - [x] Conflito de telefone em leads isolado da confirmação; testes transacionais de colisão/idempotência passaram com rollback. Confirmação real das 16:27 recuperada pelo código e identidade exata do pedido/cadastro; resposta única marcada sent às 16:37:20. Sem publicar; leitura pela cliente não confirmada.
@@ -21,7 +21,7 @@
 - [x] Pagos priorizam não lidas com os sinais existentes e atividade de todos os pedidos agrupados; clique principal abre WhatsApp, Ver pedidos/Unificar fica separado.
 - [x] Editor com texto/fotos/arquivos/áudios/vídeos/botões, catálogo, prévia, ofertas reutilizáveis, ENVIAR pela instância selecionada e histórico; fila persistida isolada com 4–15s, cancelamento, bloqueios, janela Meta e revisão sem retry automático.
 - [x] 19 testes e validação transacional com rollback (clique repetido, claim exclusivo, review, prazo, cancelamento, interesse). Navegador autenticado abriu Pagos/chat, montou todos os tipos, salvou e releu texto/botões; oferta temporária removida. Serviços atualizados, site não publicado; nenhum envio real.
-- [ ] Entrega e clique reais, mídias reais e chegada simultânea de mensagem: aguardam número de teste autorizado. Interesse usa broadcast durante sessão e histórico persistido no editor; restauração da tag do card após recarga ainda não validada. Fase C dos grupos não iniciada.
+- [ ] Entrega e clique reais, mídias reais e chegada simultânea de mensagem: aguardam número de teste autorizado. Interesse usa broadcast durante sessão e histórico persistido no editor; restauração da tag do card após recarga ainda não validada. Fase C dos grupos entregue nesta rodada.
 
 ## Expedição e estorno AustPay — 28/10
 - [x] Correção definitiva: GET real CAPPTA/APPROVED/antecipação ativa, refunds vazio e ledger ausente; rota direta sem valor no integral, janela estimada 27/10 23:59:59, registro manual admin com senha no servidor e trava transacional, PDF manual, badges e falhas ocultas. Testes e prévia/tela real sem devolver nem registrar Adriana. Sexta D+1 útil fecha domingo (divergência no exemplo do pedido); janela desconhecida bloqueia. Registro/PDF manual real não executados por limite da tarefa.

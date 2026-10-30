@@ -18,6 +18,7 @@ interface Alert {
 export function GroupResponsibleAlerts({ compact = false, onChange }: { compact?: boolean; onChange?: () => void }) {
   const [rows, setRows] = useState<Alert[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [offline, setOffline] = useState<{id: string; label: string; groups: number}[]>([]);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -28,6 +29,9 @@ export function GroupResponsibleAlerts({ compact = false, onChange }: { compact?
       .limit(50);
     const next = (data || []) as Alert[];
     setRows(prev => (prev.length === next.length && prev.every((r, i) => r.id === next[i].id) ? prev : next));
+    const { data: waiting } = await supabase.rpc("group_send_offline_summary", { p_limit: 50, p_offset: 0 });
+    const summary = (waiting || []) as unknown as {id: string; label: string; groups: number}[];
+    setOffline(prev => JSON.stringify(prev) === JSON.stringify(summary) ? prev : summary);
   }, []);
 
   useEffect(() => {
@@ -45,7 +49,7 @@ export function GroupResponsibleAlerts({ compact = false, onChange }: { compact?
     onChange?.();
   };
 
-  if (rows.length === 0) return compact ? null : (
+  if (rows.length === 0 && offline.length === 0) return compact ? null : (
     <p className="text-sm text-muted-foreground">Nenhum alerta de troca de responsável pendente.</p>
   );
 
@@ -53,8 +57,9 @@ export function GroupResponsibleAlerts({ compact = false, onChange }: { compact?
     <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
       <div className="flex items-center gap-2 text-sm font-semibold">
         <ArrowLeftRight className="h-4 w-4" />
-        Troca de instância responsável nos grupos ({rows.length})
+        Alertas dos grupos ({rows.length})
       </div>
+      {offline.map(n => <p key={n.id} className="text-sm font-medium">{n.label} desconectada — {n.groups} grupos aguardando</p>)}
       {rows.map(a => (
         <div key={a.id} className="flex items-start justify-between gap-2 text-sm">
           <div>

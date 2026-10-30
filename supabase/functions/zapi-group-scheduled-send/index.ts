@@ -15,6 +15,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPausedGroupSendUntil } from "../_shared/group-send-guard.ts";
+import { resolveGroupRoutes } from "../_shared/group-send-routing.ts";
+import { partitionGroupRoutes } from "./planning.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,8 +38,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { scheduledMessageId } = await req.json();
@@ -126,7 +128,9 @@ serve(async (req) => {
     const messageGroupId = msg.message_group_id;
 
     // ===== Valida instância online (apenas zapi tem flag confiável) =====
-    if (resolvedNumberId) {
+    const { data: responsibleEnabled, error: settingError } = await supabase.rpc("group_send_responsible_enabled");
+    if (settingError) throw settingError;
+    if (!responsibleEnabled && resolvedNumberId) {
       const { data: inst } = await supabase
         .from("whatsapp_numbers")
         .select("id, label, is_online, provider")
@@ -177,6 +181,7 @@ serve(async (req) => {
 
     const alreadySentGroupIds: string[] = msg.sent_group_ids || [];
     const pendingGroups = allGroups.filter((g) => !alreadySentGroupIds.includes(g.id));
+    const routes = await resolveGroupRoutes(supabase, pendingGroups.map(g => g.id), resolvedNumberId, msg.group_instance_overrides || {});
     if (pendingGroups.length === 0) {
       await supabase.from("group_campaign_scheduled_messages")
         .update({ status: "sent", sent_at: new Date().toISOString(), locked_until: null })
@@ -210,10 +215,11 @@ serve(async (req) => {
       // ===== PLANEJAMENTO: monta todos os jobs com delays VARIÁVEIS =====
       const nowIso = new Date().toISOString();
       const jobs: any[] = [];
+      for (const lane of partitionGroupRoutes(routes)) {
       let seq = 0;
-      for (let gi = 0; gi < pendingGroups.length; gi++) {
-        const group = pendingGroups[gi];
-        const isLastGroup = gi === pendingGroups.length - 1;
+      for (let gi = 0; gi < lane.length; gi++) {
+        const route = lane[gi];
+        const isLastGroup = gi === lane.length - 1;
         const groupNum = gi + 1; // cadência de pausa longa
 
         for (let bi = 0; bi < allBlocks.length; bi++) {
@@ -242,12 +248,15 @@ serve(async (req) => {
             scheduled_message_id: scheduledMessageId,
             message_group_id: messageGroupId || null,
             campaign_id: campaignId,
-            group_db_id: group.id,
-            group_zapi_id: group.group_id,
-            group_name: group.name,
+            group_db_id: route.target_id,
+            group_zapi_id: route.group_jid,
+            group_name: route.name,
             block_order: block.block_order ?? bi,
             block_type: block.message_type || "text",
-            whatsapp_number_id: resolvedNumberId,
+            whatsapp_number_id: route.instance_id,
+            fallback_number_id: resolvedNumberId,
+            override_number_id: msg.group_instance_overrides?.[route.base] || null,
+            routing_source: route.source,
             seq,
             delay_after_ms: delayAfter,
             send_after: seq === 1 ? nowIso : null, // só o 1º já está liberado
@@ -255,6 +264,7 @@ serve(async (req) => {
             attempts: 0,
           });
         }
+      }
       }
 
       const { error: insertErr } = await supabase

@@ -151,6 +151,8 @@ serve(async (req) => {
   };
 
   try {
+    const { error: routingError } = await supabase.rpc("refresh_group_admin_send_routes", { p_limit: 200 });
+    if (routingError) throw routingError;
     // Resgata ações travadas há mais de 3 min (worker morreu no meio)
     await supabase.from("group_admin_actions")
       .update({ status: "queued", locked_until: null, updated_at: new Date().toISOString() })

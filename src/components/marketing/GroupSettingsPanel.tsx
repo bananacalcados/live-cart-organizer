@@ -12,6 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchGroupSendRoutes } from "@/lib/marketing/groupSendRouting";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
 import { enqueueGroupAdminActions, type GroupAdminActionType } from "@/lib/marketing/groupAdminQueue";
 
 interface GroupSettingsPanelProps {
@@ -52,6 +54,7 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
   const [newPhone, setNewPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
+  const [sendOverrides, setSendOverrides] = useState<Record<string, string>>({});
 
   // Instância do grupo (resolvida por whatsapp_groups.instance_id) → roteia pelo provedor real.
   const [inst, setInst] = useState<InstanceInfo | null>(null);
@@ -62,7 +65,9 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
     setInstState('loading');
     (async () => {
       const { data } = await supabase.from('whatsapp_groups').select('instance_id').eq('id', group.id).maybeSingle();
-      const info = await resolveInstanceByKey((data as any)?.instance_id);
+      const original = await resolveInstanceByKey((data as any)?.instance_id);
+      const routes = await fetchGroupSendRoutes([group.id], original?.id || null);
+      const info = routes[0]?.instance_id ? await resolveInstanceByKey(routes[0].instance_id) : original;
       if (!alive) return;
       setInst(info);
       setInstState(info ? 'ok' : 'missing');
@@ -83,6 +88,8 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
     try {
       await enqueueGroupAdminActions([{
         whatsapp_number_id: inst.id,
+        fallback_number_id: inst.id,
+        override_number_id: sendOverrides[group.group_id.replace(/\D/g, "")] || null,
         group_db_id: group.id,
         group_jid: group.group_id,
         group_name_snapshot: group.name,
@@ -178,6 +185,7 @@ export function GroupSettingsPanel({ group, open, onOpenChange, onUpdate }: Grou
             <Settings className="h-4 w-4" /> Configurações: {group.name}
           </DialogTitle>
         </DialogHeader>
+        {open && <GroupSendRoutingPanel groupIds={[group.id]} fallback={inst?.id || null} overrides={sendOverrides} onChange={setSendOverrides} />}
 
         {instState === 'missing' && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
