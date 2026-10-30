@@ -1,0 +1,40 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isLikelyGroupId } from "./group-send-guard.ts";
+
+export interface GroupSendRoute {
+  base: string; instance_id: string | null; label: string | null; provider: string;
+  online: boolean; present: boolean; is_admin: boolean; group_db_id: string | null;
+  group_jid: string; source: string; target_id: string; name: string;
+  responsible_id: string | null; responsible_label: string | null; lease_id?: string;
+}
+
+export async function resolveGroupRoutes(client: any, ids: string[], fallback: string | null, overrides: Record<string, string> = {}): Promise<GroupSendRoute[]> {
+  const routes: GroupSendRoute[] = [];
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const { data, error } = await client.rpc("group_send_routes", { p_group_ids: ids.slice(offset, offset + 200), p_fallback: fallback, p_overrides: overrides });
+    if (error) throw error;
+    routes.push(...(data || []));
+  }
+  return [...new Map(routes.map(route => [route.base, route])).values()];
+}
+
+/** Direct sends preserve explicit choices; reservations prevent a concurrent responsible swap. */
+export async function beginDirectGroupSend(phone: string, explicit?: string | null): Promise<GroupSendRoute | null> {
+  if (!isLikelyGroupId(phone)) return null;
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) throw new Error("Configuração indisponível");
+  const client = createClient(url, key);
+  const { data, error } = await client.rpc("reserve_direct_group_send", { p_jid: phone, p_fallback: explicit || null, p_override: explicit || null });
+  if (error) throw error;
+  return data as GroupSendRoute;
+}
+
+export async function finishDirectGroupSend(route: GroupSendRoute | null, outcome: string, messageId?: string | null) {
+  if (!route?.lease_id) return;
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return;
+  const { error } = await createClient(url, key).rpc("finish_direct_group_send", { p_id: route.lease_id, p_outcome: outcome, p_message_id: messageId || null });
+  if (error) console.error("group send history persistence failed", error.message);
+}
