@@ -8,6 +8,8 @@ export type GroupAdminActionType =
 
 export interface EnqueueGroupActionInput {
   whatsapp_number_id: string;
+  fallback_number_id?: string | null;
+  override_number_id?: string | null;
   group_db_id?: string | null;
   group_jid: string;
   group_name_snapshot?: string | null;
@@ -41,6 +43,8 @@ export async function enqueueGroupAdminActions(items: EnqueueGroupActionInput[])
   if (items.length === 0) return 0;
   const rows = items.map((it, i) => ({
     whatsapp_number_id: it.whatsapp_number_id,
+    fallback_number_id: it.fallback_number_id ?? it.whatsapp_number_id,
+    override_number_id: it.override_number_id ?? null,
     group_db_id: it.group_db_id ?? null,
     group_jid: it.group_jid,
     group_name_snapshot: it.group_name_snapshot ?? null,

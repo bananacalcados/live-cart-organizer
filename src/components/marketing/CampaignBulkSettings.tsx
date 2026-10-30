@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchGroupSendRoutes } from "@/lib/marketing/groupSendRouting";
+import { GroupSendRoutingPanel } from "./GroupSendRoutingPanel";
 import { toast } from "sonner";
 import {
   ArrowLeft, Loader2, Image, FileText, Shield, Type, Upload, Pin, Crown, Save, CheckCircle
@@ -43,6 +45,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [promotePhone, setPromotePhone] = useState("");
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
   const [campaignWhatsappNumberId, setCampaignWhatsappNumberId] = useState<string | null>(null);
+  const [sendOverrides, setSendOverrides] = useState<Record<string, string>>({});
 
   // Confirmação/pré-visualização antes de aplicar ações que alteram os grupos reais
   type PendingAction = {
@@ -114,6 +117,11 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const groupDigits = (raw: string | null | undefined): string => (raw || '').replace(/\D/g, '');
 
   const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
+    const routes = await fetchGroupSendRoutes(targetGroups, campaignWhatsappNumberId || selectedNumberId, sendOverrides);
+    return routes.map(route => ({ id: route.target_id, group_id: route.group_jid, name: route.name, storedInstanceId: route.instance_id, effectiveInstanceId: route.instance_id, provider: route.provider }));
+  };
+
+  const legacyFetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
     const { data: groups } = await supabase
       .from('whatsapp_groups')
       .select('id, group_id, name, instance_id')
@@ -258,6 +266,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       if (!g.effectiveInstanceId) continue;
       const base = {
         whatsapp_number_id: g.effectiveInstanceId,
+        fallback_number_id: campaignWhatsappNumberId || selectedNumberId,
+        override_number_id: sendOverrides[groupDigits(g.group_id)] || null,
         group_db_id: g.id,
         group_jid: g.group_id,
         group_name_snapshot: g.name,
@@ -370,6 +380,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       </Alert>
 
       <div className="space-y-3">
+        <GroupSendRoutingPanel groupIds={targetGroups} fallback={campaignWhatsappNumberId || selectedNumberId} overrides={sendOverrides} onChange={setSendOverrides} />
         {/* Rename */}
         <Card>
           <CardHeader className="p-3 pb-2">
