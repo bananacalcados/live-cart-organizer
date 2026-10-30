@@ -56,9 +56,26 @@ Deno.serve(async (req) => {
     if (action === "get") {
       if (!orderId && !saleId) return json({ error: "orderId ou saleId obrigatório" }, 400);
       const enabled = await splitPaymentEnabled(sb);
-      const { data } = await listParts(sb, orderId, saleId);
+      let { data } = await listParts(sb, orderId, saleId);
       let pix = 0;
       const hasVps = (data || []).some((p: any) => p.method === "vps");
+      // VPS + uma única diferença ainda não cobrada: se o valor da venda mudou (ex.: frete),
+      // a diferença acompanha o total oficial da venda, lido no servidor.
+      if (saleId && hasVps) {
+        const { data: sale } = await sb.from("pos_sales").select("total,status").eq("id", saleId).maybeSingle();
+        const parts = data || [];
+        const vpsSum = r2(parts.filter((p: any) => p.method === "vps").reduce((a: number, p: any) => a + Number(p.amount), 0));
+        const others = parts.filter((p: any) => p.method !== "vps" && !["refunded", "canceled"].includes(p.status));
+        const t = r2(Number(sale?.total || 0));
+        const newAmt = r2(t - vpsSum);
+        if (sale && !["paid", "completed"].includes(String(sale.status)) && others.length === 1
+          && others[0].status === "pending" && !others[0].gateway_tx_id && newAmt >= 1
+          && Math.abs(newAmt - Number(others[0].amount)) > 0.009) {
+          await sb.from("payment_splits").update({ amount: newAmt, discount_amount: 0, charge_amount: newAmt })
+            .eq("id", others[0].id).eq("status", "pending").is("gateway_tx_id", null);
+          ({ data } = await listParts(sb, orderId, saleId));
+        }
+      }
       if (orderId && !hasVps) {
         // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
         const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
