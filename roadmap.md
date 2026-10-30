@@ -1,5 +1,10 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Grupos — Fase C — 30/10
+- [ ] Resolver responsável em campanhas, agendamentos, administração, convites e envio avulso; preservar criação, textos e cadência.
+- [ ] Escolha por envio e resumo nas telas, chave reversível, travas e alertas de desconexão.
+- [ ] Testes, envio real em um grupo autorizado e relatório por item; não publicar site.
+
 ## Confirmação da Katia — 29/10
 - [x] Conflito de telefone em leads isolado da confirmação; testes transacionais de colisão/idempotência passaram com rollback. Confirmação real das 16:27 recuperada pelo código e identidade exata do pedido/cadastro; resposta única marcada sent às 16:37:20. Sem publicar; leitura pela cliente não confirmada.
 
