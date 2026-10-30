@@ -50,6 +50,7 @@ const PublicTracking = lazy(() => import("./pages/PublicTracking"));
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
 const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
+const MetaAudiences = lazy(() => import("./pages/MetaAudiences"));
 const LiveOrtopedicosLP = lazy(() => import("./pages/LiveOrtopedicosLP"));
 const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP"));
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
@@ -152,6 +153,7 @@ const App = () => (
               <Route path="/marketing" element={<ProtectedRoute requiredModule="marketing"><Marketing /></ProtectedRoute>} />
               <Route path="/marketing/new" element={<ProtectedRoute requiredModule="marketing"><NewCampaign /></ProtectedRoute>} />
               <Route path="/marketing/email-marketing" element={<ProtectedRoute requiredModule="marketing"><EmailMarketing /></ProtectedRoute>} />
+              <Route path="/marketing/publicos-meta" element={<ProtectedRoute requiredModule="marketing"><MetaAudiences /></ProtectedRoute>} />
               <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Expedition /></ProtectedRoute>} />
               <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><ExpeditionBeta /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute requiredModule="pos"><POS /></ProtectedRoute>} />

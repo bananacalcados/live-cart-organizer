@@ -1359,6 +1359,9 @@ export default function Marketing() {
             <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={() => navigate('/marketing/email-marketing')}>
               <Mail className="h-4 w-4" />Email Marketing
             </Button>
+            <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={() => navigate('/marketing/publicos-meta')}>
+              <Users className="h-4 w-4" />Públicos Meta
+            </Button>
           </div>
 
           {/* Desktop: Scrollable TabsList */}
@@ -1385,6 +1388,7 @@ export default function Marketing() {
                 <TabsTrigger value="live_campaigns" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Radio className="h-3.5 w-3.5" />Campanhas Live</TabsTrigger>
                 <TabsTrigger value="triggers" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Zap className="h-3.5 w-3.5" />Triggers</TabsTrigger>
                 <button onClick={() => navigate('/marketing/email-marketing')} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium gap-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"><Mail className="h-3.5 w-3.5" />Email Marketing</button>
+                <button onClick={() => navigate('/marketing/publicos-meta')} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium gap-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"><Users className="h-3.5 w-3.5" />Públicos Meta</button>
               </TabsList>
             </ScrollArea>
           </div>
