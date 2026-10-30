@@ -16,7 +16,7 @@ Deno.serve(async () => {
   const { data: c } = await sb.from("companies").select("*").eq("id", CID).single();
   const { start, end, startIso, endIso } = fiscalMonthBounds(REF);
   const sel = "id, modelo, serie, numero, valor_total, cpf_destinatario, data_autorizacao, chave_acesso, xml_content, status";
-  const { data: d55 } = await sb.from("fiscal_documents").select(sel).eq("company_id", CID).eq("modelo", 55).in("status", ST).gte("data_autorizacao", startIso).lte("data_autorizacao", endIso).order("numero");
+  const { data: d55 } = await sb.from("fiscal_documents").select(sel).eq("company_id", CID).eq("modelo", 55).in("status", ST).gte("data_autorizacao", startIso).lte("data_autorizacao", endIso).order("data_autorizacao").order("id");
   const { data: d65 } = await sb.from("fiscal_documents").select("serie, numero, valor_total, data_autorizacao, status").eq("company_id", CID).eq("modelo", 65).in("status", ST).gte("data_autorizacao", startIso).lte("data_autorizacao", endIso).order("data_autorizacao");
   const { data: ent } = await sb.from("purchase_invoices").select("id, invoice_number, invoice_series, supplier_cnpj, supplier_ie, emission_date, total_value").gte("emission_date", startIso).lte("emission_date", endIso).order("emission_date");
   const ids = (ent || []).map((e) => e.id);

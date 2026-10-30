@@ -74,7 +74,8 @@ export function SintegraExportDialog({ open, onOpenChange, companies, defaultCom
         .in("status", ["authorized", "autorizada", "autorizado"])
         .gte("data_autorizacao", startIso)
         .lte("data_autorizacao", endIso)
-        .order("numero", { ascending: true });
+        .order("data_autorizacao", { ascending: true })
+        .order("id", { ascending: true }); // mesma ordem do pacote do contador
 
       // 2) Saídas NFC-e (modelo 65) — resumo diário para registro 60
       const { data: docs65 } = await supabase
