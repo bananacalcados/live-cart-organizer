@@ -104,7 +104,15 @@ Deno.serve(async (req) => {
         cfg = globalCfg;
       }
 
-      if (cfg && cfg.is_enabled && Number(sale.total) >= Number(cfg.min_sale_value || 0)) {
+      // VPS (moeda digital) não gera cashback: só a diferença paga em dinheiro/Pix/cartão.
+      const { data: vpsParts } = await supabase.from("payment_splits").select("amount")
+        .eq("method", "vps").neq("status", "refunded")
+        .or(sale.source_order_id ? `sale_id.eq.${sale.id},order_id.eq.${sale.source_order_id}` : `sale_id.eq.${sale.id}`)
+        .limit(10);
+      const vpsTotal = (vpsParts || []).reduce((t: number, p: any) => t + Number(p.amount || 0), 0);
+      const cashbackBase = Math.max(0, Number(sale.total) - vpsTotal);
+
+      if (cfg && cfg.is_enabled && cashbackBase > 0 && cashbackBase >= Number(cfg.min_sale_value || 0)) {
         // Cooldown: já existe cashback ativo recente?
         let canGenerate = true;
         if (cfg.cooldown_days && cfg.cooldown_days > 0) {
@@ -123,7 +131,7 @@ Deno.serve(async (req) => {
 
         if (canGenerate) {
           const pct = Number(cfg.percentage || 0) / 100;
-          let amount = Number(sale.total) * pct;
+          let amount = cashbackBase * pct;
           if (cfg.max_cashback && amount > Number(cfg.max_cashback)) amount = Number(cfg.max_cashback);
           amount = Math.round(amount * 100) / 100;
 
