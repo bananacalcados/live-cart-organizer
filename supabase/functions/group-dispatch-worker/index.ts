@@ -26,8 +26,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const start = Date.now();
@@ -41,7 +41,7 @@ serve(async (req) => {
   // Participantes do grupo (uazapi) para "marcar todos" — 1 busca por grupo por execução.
   async function getUazapiParticipants(groupJid: string, numberId: string | null): Promise<string[] | null> {
     const key = `${numberId}:${groupJid}`;
-    if (participantsCache.has(key)) return participantsCache.get(key)!;
+    if (participantsCache.has(key)) return participantsCache.get(key) ?? null;
     let phones: string[] | null = null;
     try {
       const r = await fetch(`${supabaseUrl}/functions/v1/uazapi-groups`, {
@@ -92,7 +92,7 @@ serve(async (req) => {
   const normVar = (n: string) => String(n || "").trim().toLowerCase().replace(/-/g, "_");
 
   async function getCampaignVars(campaignId: string): Promise<Record<string, string>> {
-    if (varsCache.has(campaignId)) return varsCache.get(campaignId)!;
+    if (varsCache.has(campaignId)) return varsCache.get(campaignId) || {};
     const { data } = await supabase
       .from("campaign_variables")
       .select("variable_name, variable_value")
@@ -108,7 +108,7 @@ serve(async (req) => {
 
   async function getProvider(numberId: string | null): Promise<string> {
     if (!numberId) return "zapi";
-    if (providerCache.has(numberId)) return providerCache.get(numberId)!;
+    if (providerCache.has(numberId)) return providerCache.get(numberId) || "zapi";
     const { data } = await supabase
       .from("whatsapp_numbers")
       .select("provider")
