@@ -32,7 +32,25 @@ type Screen = "identify" | "product" | "no_order" | "code" | "register" | "confi
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+// Código do disparo em massa (?d=): segue com a cliente até o cadastro/pedido.
+const DISPATCH_RE = /^[a-z0-9]{6,8}$/;
+function readDispatchCode(slug: string): string | null {
+  const key = `ss_dispatch_${slug}`;
+  const fromUrl = (new URLSearchParams(window.location.search).get("d") || "").toLowerCase();
+  try {
+    if (DISPATCH_RE.test(fromUrl)) {
+      localStorage.setItem(key, JSON.stringify({ code: fromUrl, at: Date.now() }));
+      return fromUrl;
+    }
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    if (saved && DISPATCH_RE.test(saved.code) && Date.now() - saved.at < 7 * 86400000) return saved.code;
+  } catch { /* armazenamento bloqueado: segue só com a URL */ }
+  return DISPATCH_RE.test(fromUrl) ? fromUrl : null;
+}
+let currentDispatchCode: string | null = null;
+
 async function call(body: Record<string, unknown>) {
+  if (currentDispatchCode && ["capture", "identify", "register"].includes(String(body.action))) body = { ...body, dispatch_code: currentDispatchCode };
   const { data, error } = await supabase.functions.invoke("live-selfservice", { body });
   if (error) {
     try { const j = await (error as any).context?.json?.(); if (j) return j; } catch { /* ignore */ }
@@ -68,6 +86,14 @@ export default function SelfServiceOrderPage() {
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig | null>(null);
   useEffect(() => { ensureAdvertisingRegion().then(() => trackSelfservice("PageView")); }, [slug]);
+  useEffect(() => {
+    currentDispatchCode = readDispatchCode(slug);
+    const fromUrl = (new URLSearchParams(window.location.search).get("d") || "").toLowerCase();
+    if (!DISPATCH_RE.test(fromUrl)) return;
+    const flag = `ss_dispatch_click_${fromUrl}`;
+    try { if (sessionStorage.getItem(flag)) return; sessionStorage.setItem(flag, "1"); } catch { /* ignore */ }
+    supabase.rpc("dispatch_link_click" as any, { p_code: fromUrl, p_page: `pedido:${slug}` }).then(() => {}, () => {});
+  }, [slug]);
   const captured = useRef<{ phone: string; accessId: string } | null>(null);
   const latestPhone = useRef(phone);
   latestPhone.current = phone;

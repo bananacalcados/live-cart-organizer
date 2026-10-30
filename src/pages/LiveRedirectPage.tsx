@@ -37,6 +37,8 @@ export default function LiveRedirectPage() {
     if (code) qs.set("code", code);
     const lead = params.get("lead") || params.get("phone");
     const utm = attr.utm_source || params.get("utm_source");
+    const dispatchCode = params.get("d");
+    if (dispatchCode) qs.set("d", dispatchCode);
     if (lead) qs.set("lead", lead);
     if (utm) qs.set("utm_source", utm);
     if (attr.utm_medium) qs.set("utm_medium", attr.utm_medium);

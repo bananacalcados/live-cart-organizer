@@ -5141,6 +5141,7 @@ export type Database = {
           template_name: string
           tipo_comunicacao: string | null
           total_recipients: number | null
+          track_clicks: boolean
           unit_cost_at_send: number | null
           variables_config: Json | null
           whatsapp_number_id: string | null
@@ -5177,6 +5178,7 @@ export type Database = {
           template_name: string
           tipo_comunicacao?: string | null
           total_recipients?: number | null
+          track_clicks?: boolean
           unit_cost_at_send?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
@@ -5213,9 +5215,52 @@ export type Database = {
           template_name?: string
           tipo_comunicacao?: string | null
           total_recipients?: number | null
+          track_clicks?: boolean
           unit_cost_at_send?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      dispatch_link_clicks: {
+        Row: {
+          clicked_at: string
+          code: string
+          dispatch_id: string
+          first_click: boolean
+          id: string
+          ip: string | null
+          page: string | null
+          phone: string | null
+          phone_key: string | null
+          recipient_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          code: string
+          dispatch_id: string
+          first_click?: boolean
+          id?: string
+          ip?: string | null
+          page?: string | null
+          phone?: string | null
+          phone_key?: string | null
+          recipient_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          code?: string
+          dispatch_id?: string
+          first_click?: boolean
+          id?: string
+          ip?: string | null
+          page?: string | null
+          phone?: string | null
+          phone_key?: string | null
+          recipient_id?: string
+          user_agent?: string | null
         }
         Relationships: []
       }
@@ -5239,6 +5284,7 @@ export type Database = {
           shadow_mode: boolean
           status: string | null
           template_category_at_send: string | null
+          tracking_code: string | null
           unified_customer_id: string | null
           unit_cost_at_send: number | null
           worker_id: string | null
@@ -5262,6 +5308,7 @@ export type Database = {
           shadow_mode?: boolean
           status?: string | null
           template_category_at_send?: string | null
+          tracking_code?: string | null
           unified_customer_id?: string | null
           unit_cost_at_send?: number | null
           worker_id?: string | null
@@ -5285,6 +5332,7 @@ export type Database = {
           shadow_mode?: boolean
           status?: string | null
           template_category_at_send?: string | null
+          tracking_code?: string | null
           unified_customer_id?: string | null
           unit_cost_at_send?: number | null
           worker_id?: string | null
@@ -14665,6 +14713,7 @@ export type Database = {
           ai_paused: boolean | null
           ai_paused_at: string | null
           appmax_order_id: string | null
+          attribution: Json | null
           austpay_transaction_id: string | null
           cart_link: string | null
           cashback_amount: number
@@ -14681,6 +14730,9 @@ export type Database = {
           delivery_method: string | null
           discount_type: string | null
           discount_value: number | null
+          dispatch_clicked_at: string | null
+          dispatch_id: string | null
+          dispatch_recipient_id: string | null
           eligible_for_prize: boolean | null
           event_id: string | null
           expected_payment_method: string | null
@@ -14740,6 +14792,7 @@ export type Database = {
           ai_paused?: boolean | null
           ai_paused_at?: string | null
           appmax_order_id?: string | null
+          attribution?: Json | null
           austpay_transaction_id?: string | null
           cart_link?: string | null
           cashback_amount?: number
@@ -14756,6 +14809,9 @@ export type Database = {
           delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
+          dispatch_clicked_at?: string | null
+          dispatch_id?: string | null
+          dispatch_recipient_id?: string | null
           eligible_for_prize?: boolean | null
           event_id?: string | null
           expected_payment_method?: string | null
@@ -14815,6 +14871,7 @@ export type Database = {
           ai_paused?: boolean | null
           ai_paused_at?: string | null
           appmax_order_id?: string | null
+          attribution?: Json | null
           austpay_transaction_id?: string | null
           cart_link?: string | null
           cashback_amount?: number
@@ -14831,6 +14888,9 @@ export type Database = {
           delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
+          dispatch_clicked_at?: string | null
+          dispatch_id?: string | null
+          dispatch_recipient_id?: string | null
           eligible_for_prize?: boolean | null
           event_id?: string | null
           expected_payment_method?: string | null
@@ -25924,6 +25984,7 @@ export type Database = {
           touch_wa: string
         }[]
       }
+      _dispatch_can_read: { Args: never; Returns: boolean }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
       ack_group_responsible_alert: {
         Args: { p_id: string }
@@ -26548,6 +26609,39 @@ export type Database = {
         Returns: Json
       }
       delete_unsent_dispatch: { Args: { p_dispatch_id: string }; Returns: Json }
+      dispatch_assign_tracking_codes: {
+        Args: { p_ids: string[] }
+        Returns: {
+          code: string
+          id: string
+        }[]
+      }
+      dispatch_attributed_revenue_daily: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          date: string
+          orders: number
+          revenue: number
+        }[]
+      }
+      dispatch_clicked_not_bought: {
+        Args: { p_dispatch_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          clicks: number
+          first_clicked_at: string
+          phone: string
+          recipient_name: string
+          registered: boolean
+        }[]
+      }
+      dispatch_link_access: {
+        Args: { p_access_id: string; p_code?: string }
+        Returns: Json
+      }
+      dispatch_link_click: {
+        Args: { p_code: string; p_ip?: string; p_page?: string; p_ua?: string }
+        Returns: Json
+      }
       dispatch_quota_summary: {
         Args: {
           p_candidates: Json
@@ -26556,6 +26650,10 @@ export type Database = {
           p_sample_size?: number
           p_tipo_comunicacao: string
         }
+        Returns: Json
+      }
+      dispatch_tracking_funnel: {
+        Args: { p_dispatch_id: string }
         Returns: Json
       }
       dispatch_unit_cost_for: {

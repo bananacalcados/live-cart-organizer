@@ -18,6 +18,17 @@ export default function VipGroupRedirectPage() {
     captureAttribution();
     const attr = attributionPayload();
 
+    // Disparo em massa com código por pessoa (?d=): registra o clique sem atrasar o redirect.
+    const dCode = (new URLSearchParams(window.location.search).get('d') || '').toLowerCase();
+    if (/^[a-z0-9]{6,8}$/.test(dCode)) {
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      fetch(`${supabaseUrl}/rest/v1/rpc/dispatch_link_click`, {
+        method: 'POST', keepalive: true,
+        headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_code: dCode, p_page: `vip:${slug}` }),
+      }).catch(() => {});
+    }
+
     const ua = navigator.userAgent || '';
     const isInstagram = /Instagram/i.test(ua);
     const isFacebook = /FBAN|FBAV/i.test(ua);

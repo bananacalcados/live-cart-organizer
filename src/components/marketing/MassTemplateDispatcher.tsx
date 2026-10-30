@@ -309,6 +309,7 @@ export function MassTemplateDispatcher() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
+  const [trackClicks, setTrackClicks] = useState(true);
   // "Furar teto": libera quem foi barrado só por cota mensal / cooldown / classe×tipo.
   // Nunca libera opt-out (PARAR), banido, silêncio ou sem telefone.
   const [overrideQuota, setOverrideQuota] = useState(false);
@@ -1518,6 +1519,7 @@ export function MassTemplateDispatcher() {
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
+          track_clicks: trackClicks,
           // Create in a HOLDING status first. The dispatch must NOT be visible to
           // the orchestrator/worker until every recipient row is inserted, otherwise
           // a partial set could be picked up (and prematurely finalized).
@@ -1654,6 +1656,7 @@ export function MassTemplateDispatcher() {
         rendered_message: renderedMessage || null,
         variables_config: variables as any,
         force_resend: forceResend,
+        track_clicks: trackClicks,
         status,
         template_components: selectedTemplate.components as any,
         has_dynamic_vars: hasDynamicVars,
@@ -1813,6 +1816,7 @@ export function MassTemplateDispatcher() {
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
+          track_clicks: trackClicks,
           status,
           template_components: selectedTemplate.components as any,
           has_dynamic_vars: hasDynamicVars,
@@ -3031,6 +3035,13 @@ export function MassTemplateDispatcher() {
               </Label>
             </div>
             <div className="flex items-start gap-2">
+              <Checkbox id="track-clicks-0" checked={trackClicks} onCheckedChange={(v) => setTrackClicks(!!v)} />
+              <Label htmlFor="track-clicks-0" className="text-sm font-medium cursor-pointer">
+                🔗 Rastrear cliques por pessoa
+                <span className="block text-xs font-normal text-muted-foreground">Links da live (/ao-vivo, /pedido, /vip) saem com um código por cliente para medir clique, cadastro, pedido e pago.</span>
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
               <Checkbox
                 id="override-quota-now"
                 checked={overrideQuota}
@@ -3153,6 +3164,13 @@ export function MassTemplateDispatcher() {
               </Label>
             </div>
             <div className="flex items-start gap-2">
+              <Checkbox id="track-clicks-1" checked={trackClicks} onCheckedChange={(v) => setTrackClicks(!!v)} />
+              <Label htmlFor="track-clicks-1" className="text-sm font-medium cursor-pointer">
+                🔗 Rastrear cliques por pessoa
+                <span className="block text-xs font-normal text-muted-foreground">Links da live (/ao-vivo, /pedido, /vip) saem com um código por cliente para medir clique, cadastro, pedido e pago.</span>
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
               <Checkbox
                 id="override-quota-split"
                 checked={overrideQuota}
@@ -3245,6 +3263,13 @@ export function MassTemplateDispatcher() {
               />
               <Label htmlFor="force-resend-schedule" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
                 ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox id="track-clicks-2" checked={trackClicks} onCheckedChange={(v) => setTrackClicks(!!v)} />
+              <Label htmlFor="track-clicks-2" className="text-sm font-medium cursor-pointer">
+                🔗 Rastrear cliques por pessoa
+                <span className="block text-xs font-normal text-muted-foreground">Links da live (/ao-vivo, /pedido, /vip) saem com um código por cliente para medir clique, cadastro, pedido e pago.</span>
               </Label>
             </div>
             <div className="flex items-start gap-2">

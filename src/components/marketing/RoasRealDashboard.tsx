@@ -65,7 +65,7 @@ interface Row {
   key: string;
   ads: Record<Group, number>;
   disparos: number;
-  rec: { live: number; whatsapp: number; online: number; loja: number; total: number };
+  rec: { live: number; whatsapp: number; online: number; loja: number; total: number; dispatch: number };
 }
 
 export function RoasRealDashboard() {
@@ -79,6 +79,7 @@ export function RoasRealDashboard() {
   const [rev, setRev] = useState<any[]>([]);
   const [attr, setAttr] = useState<any[]>([]);
   const [lojaAttr, setLojaAttr] = useState<any[]>([]);
+  const [dispRev, setDispRev] = useState<any[]>([]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [lastRun, setLastRun] = useState<any>(null);
   const [rates, setRates] = useState<{ category: string; unit_cost_brl: number }[]>([]);
@@ -98,6 +99,9 @@ export function RoasRealDashboard() {
         fetchAll("v_ad_attributed_store_daily", "date,rec_loja_attr", "date", from, to),
       ]);
       setLojaAttr(la);
+      // Receita atribuída a disparo (clique rastreado por pessoa), por dia do pagamento.
+      const dr = await sb.rpc("dispatch_attributed_revenue_daily", { p_from: from, p_to: to });
+      setDispRev(dr.data || []);
       const ts = await sb.from("meta_ads_token_state").select("token_expires_at,last_refreshed_at,last_error").eq("id", 1).maybeSingle();
       setTokenState(ts.data ?? null);
       setSpend(s); setDisp(d); setRev(r); setAttr(a);
@@ -127,7 +131,7 @@ export function RoasRealDashboard() {
         m.set(k, {
           key: k, disparos: 0,
           ads: { LIVE: 0, WHATSAPP: 0, LEADS: 0, ENGAJAMENTO: 0, OUTROS: 0 },
-          rec: { live: 0, whatsapp: 0, online: 0, loja: 0, total: 0 },
+          rec: { live: 0, whatsapp: 0, online: 0, loja: 0, total: 0, dispatch: 0 },
         });
       return m.get(k)!;
     };
@@ -144,11 +148,13 @@ export function RoasRealDashboard() {
       const v = Number(l.rec_loja_attr) || 0;
       x.loja += v; x.total += v;
     });
+    // Só informativo: já está dentro das receitas por canal, não soma no total.
+    dispRev.forEach((d) => { get(bucketKey(d.date, agg)).rec.dispatch += Number(d.revenue) || 0; });
     return [...m.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [spend, disp, rev, lojaAttr, agg, groupOf]);
+  }, [spend, disp, rev, lojaAttr, dispRev, agg, groupOf]);
 
   const total = useMemo(() => {
-    const t: Row = { key: "TOTAL", disparos: 0, ads: { LIVE: 0, WHATSAPP: 0, LEADS: 0, ENGAJAMENTO: 0, OUTROS: 0 }, rec: { live: 0, whatsapp: 0, online: 0, loja: 0, total: 0 } };
+    const t: Row = { key: "TOTAL", disparos: 0, ads: { LIVE: 0, WHATSAPP: 0, LEADS: 0, ENGAJAMENTO: 0, OUTROS: 0 }, rec: { live: 0, whatsapp: 0, online: 0, loja: 0, total: 0, dispatch: 0 } };
     rows.forEach((r) => {
       GROUPS.forEach((g) => (t.ads[g] += r.ads[g]));
       t.disparos += r.disparos;
@@ -245,11 +251,11 @@ export function RoasRealDashboard() {
     load();
   };
 
-  const mainHeader = ["Período", "Ads Live", "Ads WhatsApp", "Ads Leads", "Ads Engajamento", "Ads Outros", "Disparos", "Custo total", "Rec. Live", "Rec. WhatsApp", "Rec. Online", "Rec. Loja", "Rec. Total", "ROAS Live", "ROAS sem loja", "ROAS com loja"];
+  const mainHeader = ["Período", "Ads Live", "Ads WhatsApp", "Ads Leads", "Ads Engajamento", "Ads Outros", "Disparos", "Custo total", "Rec. Live", "Rec. WhatsApp", "Rec. Online", "Rec. Loja", "Rec. Total", "Receita atribuída a disparo", "ROAS Live", "ROAS sem loja", "ROAS com loja"];
   const mainCells = (r: Row) => {
     const c = calc(r);
     const ad = (g: Group) => (hasSpend ? brl(r.ads[g]) : "—");
-    return [r.key === "TOTAL" ? "Total" : bucketLabel(r.key, agg), ad("LIVE"), ad("WHATSAPP"), ad("LEADS"), ad("ENGAJAMENTO"), ad("OUTROS"), brl(r.disparos), brl(c.cost), brl(r.rec.live), brl(r.rec.whatsapp), brl(r.rec.online), brl(r.rec.loja), brl(r.rec.total), c.roasLive, c.roasSemLoja, c.roasComLoja];
+    return [r.key === "TOTAL" ? "Total" : bucketLabel(r.key, agg), ad("LIVE"), ad("WHATSAPP"), ad("LEADS"), ad("ENGAJAMENTO"), ad("OUTROS"), brl(r.disparos), brl(c.cost), brl(r.rec.live), brl(r.rec.whatsapp), brl(r.rec.online), brl(r.rec.loja), brl(r.rec.total), brl(r.rec.dispatch), c.roasLive, c.roasSemLoja, c.roasComLoja];
   };
   const srcLabel = (s: string) => (s === "whatsapp_ad" ? "WhatsApp ad" : "Leads ad");
   const attrPeriodLabel = attrAgg(agg) === "month" ? "Mês do 1º contato" : "Semana do 1º contato";

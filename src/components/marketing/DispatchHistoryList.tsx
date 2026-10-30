@@ -18,6 +18,7 @@ import {
   Download, FileSpreadsheet, FileText, TestTube,
 } from "lucide-react";
 import { DispatchAttributionPanel } from "./DispatchAttributionPanel";
+import { DispatchTrackingFunnel } from "./DispatchTrackingFunnel";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -1021,6 +1022,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                     </>
                   );
                 })()}
+
+                <DispatchTrackingFunnel dispatchId={selectedDispatch.id} />
 
                 {/* Metadata */}
                 <DispatchMetadataCard

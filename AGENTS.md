@@ -52,12 +52,10 @@
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 
 - VIP inserts normalize names; captions never use media_brief. Shared media helpers preserve draft captions on append/remove.
-- Refunds (mp-refund + _shared/refund-gateways): JWT + estornos permission server-side, service-only writes, one in-flight per payment; details in supabase/functions/AGENTS.md.
 
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
 - Self-service capture is idempotent/service-only; provisional last-four matches are display-only and revalidated against the sender. Lead uniqueness conflicts cannot roll back WhatsApp confirmation: preserve acquisition rows, annotate conflict, never merge identities.
 - Self-service greetings resolve Instagram through the current event's orders, never arbitrary shared-phone profiles; phone keys match event_phone_key and each fresh confirmation code resets only that access's reply lifecycle. Prize uploads reuse event-landing-assets and the prize banner is shared between product and registration screens.
-- Correios rules (service-only credentials, Conference-group quotes, atomic selection) live in supabase/functions/AGENTS.md.
 - Self-service live mode (/pedido/:slug): public page never sets eligible_for_prize or registered_at; registration ends in WhatsApp #CODE confirmation and payment only on the cart link; form_draft is debounce-saved and mirrored to CustomerFichaPanel without overwriting staff edits; alt_address only goes to the order's registration.
 
 - Self-service cashback is per source order, service-only and transactionally idempotent; the first provider-confirmed cart send is immutable, and exact linked payment evidence determines the credit. Both POS automation and live confirmation use the shared grant to prevent divergent amounts.
@@ -68,8 +66,9 @@
 - Stock transfers between stores go only through RPC pos_transfer_stock (via pos-stock-transfer-v2): one transaction, locked rows, official adjustments before stock updates and an idempotency key; legacy transfer functions answer 410 and Shopify is never called because it receives the sum of stores.
 - WhatsApp groups: preserve per-instance rows and actions; joins use group_jid_base, never suffixed group_id. Manual is_vip updates mirror by base key, and VIP reports filter that flag; no unified display view, so campaign targeting stays unchanged.
 - Group responsible: recompute_group_responsible only; swaps wait for queues/direct leases. Group routing is shared, overrides are per-send, and dispatch claim/finish serialize each instance and reconcile parallel totals atomically to preserve pacing and prevent duplicates. Only the responsible instance writes group chat; RPCs hide mirrors.
-- Live Crossell/paid-chat rules also live in supabase/functions/AGENTS.md.
 - Self-service #CODE sender becomes the ficha's principal phone (typed one kept in previous_phones); auto-merge another ficha only when name plus CPF/e-mail/address agree and no orders/cashback are lost, else annotate conflict.
 - E-mail: every send goes through supabase/functions/_shared/email-send.ts (Resend + email_send_log); fiscal packaging/Sintegra logic lives only in supabase/functions/_shared/fiscal and src/lib/fiscal re-exports it, so browser downloads and the accountant package never diverge.
 - Fiscal/Folha tab passwords are verified only by server RPCs over bcrypt hashes (verify_area_password, 5 tries then 5-min lock; admin-only change_area_password); never ship a password literal to the browser. Sintegra button and accountant package share fiscalMonthBounds and note ordering so files stay identical.
 - Meta Custom Audiences: meta-audience-sync diffs ERP rules (meta_audience_refresh_candidates) vs meta_audience_members; frozen audiences are never touched, the first replace load waits for initial_load_not_before, and 70% replace / 20% removal guards block runs, so ad sets are not reset or emptied.
+- Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
+- Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
