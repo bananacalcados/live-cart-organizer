@@ -254,6 +254,7 @@ export function POSFiscalTab({ periodRange }: Props) {
           </SelectContent>
         </Select>
         <span className="text-xs text-zinc-400">Período: {periodRange.label}</span>
+        <ChangeAreaPasswordButton area="fiscal" label="Alterar senha da aba Fiscal" />
         <div className="ml-auto flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={load} disabled={loading}
             className="gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700">
