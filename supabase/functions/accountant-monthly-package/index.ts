@@ -122,7 +122,7 @@ async function buildPackage(companyId: string, ref: string) {
   const cnpjDigits = (company.cnpj || "").replace(/\D/g, "");
   const files: Record<string, Uint8Array> = {};
   for (const [k, v] of Object.entries(pkg.files)) files[`XMLS/${k}`] = strToU8(v);
-  files["XMLS/LEIA-ME.txt"] = strToU8(pkg.manifest(startIso, endIso, `${company.legal_name} — ${company.cnpj}`));
+  files["XMLS/LEIA-ME.txt"] = strToU8(pkg.manifest(`${ref}-01`, new Date(end.getTime() - 3 * 3600 * 1000).toISOString(), `${company.legal_name} — ${company.cnpj}`));
   files[`SINTEGRA_${cnpjDigits}_${ref.replace("-", "")}.txt`] = strToU8(sintegra.content);
   if (sintegra.warnings.length) files["SINTEGRA_AVISOS.txt"] = strToU8(sintegra.warnings.join("\r\n"));
   files[`RESUMO_${ref}.csv`] = strToU8(csv);
