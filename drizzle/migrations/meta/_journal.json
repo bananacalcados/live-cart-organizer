@@ -708,6 +708,13 @@
       "when": 1793371208826,
       "tag": "0100_email_and_accountant_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1793372699741,
+      "tag": "0101_payment_splits_vps",
+      "breakpoints": true
     }
   ]
 }

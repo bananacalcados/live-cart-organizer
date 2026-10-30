@@ -5,7 +5,7 @@ import { syncOrderPaymentToPosSale } from "./payment-method-sync.ts";
 
 export const SPLIT_REF_PREFIX = "split:";
 
-const LABEL: Record<string, string> = { pix: "Pix", credit: "Crédito", debit: "Débito" };
+const LABEL: Record<string, string> = { pix: "Pix", credit: "Crédito", debit: "Débito", vps: "VPS" };
 const brl = (v: number) => `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
 
 export function describeSplitRows(rows: any[]): string {

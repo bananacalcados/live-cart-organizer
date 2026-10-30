@@ -26,6 +26,7 @@ describe("pagamento dividido", () => {
     expect(validateSplit(100, [
       { method: "pix", amount: 20 }, { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
       { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
+      { method: "pix", amount: 20 }, { method: "pix", amount: 20 },
     ]).ok).toBe(false);
   });
 
@@ -37,5 +38,17 @@ describe("pagamento dividido", () => {
     ]);
     expect(parts[2].discount_amount).toBe(5);
     expect(splitCustomerTotal(parts)).toBe(294.99);
+  });
+});
+
+import { buildSplitParts as _b, splitLinkTotal as _l, validateSplit as _v } from "@/lib/splitPayment";
+describe("VPS + diferença", () => {
+  it("VPS 300 + Pix na diferença de 379,99 cobra 79,99 sem desconto Pix", () => {
+    const parts = _b([{ method: "vps", amount: 300 }, { method: "pix", amount: 79.99 }], 5);
+    expect(parts[1].discount_amount).toBe(0);
+    expect(_l(parts)).toBe(79.99);
+  });
+  it("só VPS não é aceito", () => {
+    expect(_v(300, [{ method: "vps", amount: 150 }, { method: "vps", amount: 150 }]).ok).toBe(false);
   });
 });

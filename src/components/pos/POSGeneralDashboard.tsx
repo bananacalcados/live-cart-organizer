@@ -91,7 +91,7 @@ function paymentShares(r: any): { bucket: string; amount: number }[] {
   const total = Number(r.total || 0);
   const parts = r.payment_details?.split_payment;
   if (Array.isArray(parts) && parts.length > 1) {
-    const LBL: Record<string, string> = { pix: "PIX", credit: "Crédito", debit: "Débito" };
+    const LBL: Record<string, string> = { pix: "PIX", credit: "Crédito", debit: "Débito", vps: "VPS" };
     const sum = parts.reduce((a: number, p: any) => a + Number(p.charged ?? p.amount ?? 0), 0);
     if (sum > 0) return parts.map((p: any) => ({ bucket: LBL[p.method] || "Outros", amount: total * Number(p.charged ?? p.amount ?? 0) / sum }));
   }

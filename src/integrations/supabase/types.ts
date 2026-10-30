@@ -14822,6 +14822,9 @@ export type Database = {
           seq: number
           status: string
           updated_at: string
+          vps_confirmed_at: string | null
+          vps_confirmed_by: string | null
+          vps_reference: string | null
         }
         Insert: {
           amount: number
@@ -14841,6 +14844,9 @@ export type Database = {
           seq: number
           status?: string
           updated_at?: string
+          vps_confirmed_at?: string | null
+          vps_confirmed_by?: string | null
+          vps_reference?: string | null
         }
         Update: {
           amount?: number
@@ -14860,6 +14866,9 @@ export type Database = {
           seq?: number
           status?: string
           updated_at?: string
+          vps_confirmed_at?: string | null
+          vps_confirmed_by?: string | null
+          vps_reference?: string | null
         }
         Relationships: [
           {
