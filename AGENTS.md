@@ -2,7 +2,6 @@
 
 - Self-service event shipping is persisted by guarded order-write triggers so previews, payment providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows carry shipping_info.source=event_rule for item/discount recalculation.
 
-- Correios printing derives persisted thermal/A4 PDFs from the original official label and shipment-linked invoice keys; the default ERP 10x15 label copies the official DataMatrix payload verbatim (it carries a Correios token) and checks object/CEPs before drawing, while the official label stays available as fallback. Reopening and batch printing repair missing formats without creating pre-postage; PDF generation stays server-side.
 
 - Staff self-service drafts use the server's last-ten-digit phone key for contacts without an order, and event-scoped order membership for real orders; manual cart sending saves the exact order registration without claiming WhatsApp confirmation, so provisional phones never select another person's cart.
 
@@ -19,7 +18,6 @@
 
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
-- Checkout success cache prevents duplicate charges, never restores paid state. AustPay approvals: production re-query, captured, exact transaction/reference/amount, no invalidated attempt. Reversal: privileged DB, invalidated sandbox attempt, no remaining success. Audits: admin/read-only, 50 rows, ≤3 provider reads.
 - Shopify product links use shared officialProductUrl; attribution rebuilds from validated handles and fails closed, never trusting provider destinations.
 - Shopify data updates omit media entirely, preflight linked option values by unique exact dictionary matches, create variants through GraphQL IDs, and reconcile existing combinations only with matching SKU/GTIN; this preserves manual media/legacy links and prevents duplicate retries.
 
