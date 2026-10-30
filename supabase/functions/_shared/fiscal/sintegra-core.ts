@@ -346,3 +346,124 @@ export function buildSintegra(input: SintegraInput): SintegraResult {
 
   return { content, stats, warnings };
 }
+
+// ---------- Montagem a partir das linhas do banco (única versão) ----------
+
+export interface SaleXmlLike {
+  base_icms: number; valor_icms: number; cfop_predominante?: string;
+  items: { ordem: number; codigo: string; descricao: string; ncm?: string; cfop?: string; cst?: string;
+    unidade?: string; quantidade: number; valor_bruto: number; desconto: number; base_icms: number;
+    valor_ipi: number; aliquota_icms: number }[];
+}
+
+export interface AssembleSintegraArgs {
+  company: SintegraCompany;
+  periodStart: Date;
+  periodEnd: Date;
+  natureza: "1" | "2" | "3";
+  finalidade: "1" | "2" | "3";
+  docs55: any[]; // fiscal_documents modelo 55 autorizadas
+  docs65: any[]; // fiscal_documents modelo 65 autorizadas
+  entradas: any[]; // purchase_invoices
+  entradaItems: any[]; // purchase_invoice_items
+  parseXml: (xml: string) => SaleXmlLike | null;
+}
+
+/** Data civil AAAA-MM-DD em São Paulo. */
+export function spDay(iso: string): string {
+  const d = new Date(new Date(iso).getTime() - 3 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+export function assembleSintegra(a: AssembleSintegraArgs): SintegraResult & { noteCount: number; nfceDayCount: number } {
+  const warnings: string[] = [];
+  const notes: SintegraNote[] = [];
+  const productMap = new Map<string, SintegraProduct>();
+  let semXml = 0;
+
+  for (const d of a.docs55 || []) {
+    const parsed = d.xml_content ? a.parseXml(d.xml_content) : null;
+    if (!parsed) semXml++;
+    const itens: SintegraItem[] = (parsed?.items || []).map((it) => {
+      if (it.codigo && !productMap.has(it.codigo)) {
+        productMap.set(it.codigo, {
+          codigo: it.codigo, descricao: it.descricao, ncm: it.ncm,
+          unidade: it.unidade, aliquota_icms: it.aliquota_icms,
+        });
+      }
+      return {
+        cnpj_contraparte: d.cpf_destinatario || "",
+        modelo: 55, serie: d.serie ?? 1, numero: d.numero ?? 0,
+        cfop: it.cfop, cst: it.cst, ordem: it.ordem, codigo: it.codigo,
+        descricao: it.descricao, ncm: it.ncm, unidade: it.unidade,
+        quantidade: it.quantidade, valor_bruto: it.valor_bruto, desconto: it.desconto,
+        base_icms: it.base_icms, base_icms_st: 0, valor_ipi: it.valor_ipi,
+        aliquota_icms: it.aliquota_icms,
+      };
+    });
+    notes.push({
+      cnpj_contraparte: d.cpf_destinatario || "",
+      data: d.data_autorizacao!, modelo: 55, serie: d.serie ?? 1, numero: d.numero ?? 0,
+      cfop: parsed?.cfop_predominante || "5102", emitente: "P",
+      valor_total: Number(d.valor_total) || 0,
+      base_icms: parsed?.base_icms || 0, valor_icms: parsed?.valor_icms || 0,
+      valor_isento: 0, outras: 0, aliquota: 0, situacao: "N", itens,
+    });
+  }
+  if (semXml > 0) warnings.push(`${semXml} NF-e sem XML salvo — geradas sem detalhe de itens (registro 54).`);
+
+  const dayMap = new Map<string, SintegraNfceDay>();
+  for (const d of a.docs65 || []) {
+    const day = spDay(d.data_autorizacao);
+    const key = `${day}|${d.serie ?? 1}`;
+    const cur = dayMap.get(key) || {
+      data: day, serie: d.serie ?? 1, primeiro_numero: Number(d.numero) || 0,
+      ultimo_numero: Number(d.numero) || 0, qtde: 0, valor_bruto: 0,
+    };
+    cur.qtde += 1;
+    cur.valor_bruto += Number(d.valor_total) || 0;
+    cur.primeiro_numero = Math.min(cur.primeiro_numero || Number(d.numero) || 0, Number(d.numero) || 0);
+    cur.ultimo_numero = Math.max(cur.ultimo_numero, Number(d.numero) || 0);
+    dayMap.set(key, cur);
+  }
+  const nfceDays = Array.from(dayMap.values());
+
+  const itemsByInvoice = new Map<string, any[]>();
+  for (const it of a.entradaItems || []) {
+    const arr = itemsByInvoice.get(it.invoice_id) || [];
+    arr.push(it);
+    itemsByInvoice.set(it.invoice_id, arr);
+  }
+  for (const e of a.entradas || []) {
+    const its = (itemsByInvoice.get(e.id) || []).sort((x, y) => (x.line_number || 0) - (y.line_number || 0));
+    const itens: SintegraItem[] = its.map((it, idx) => {
+      const code = it.supplier_product_code || String(idx + 1);
+      if (code && !productMap.has(code)) {
+        productMap.set(code, { codigo: code, descricao: it.description, ncm: it.ncm, unidade: it.unit });
+      }
+      return {
+        cnpj_contraparte: e.supplier_cnpj || "",
+        modelo: 55, serie: e.invoice_series ?? 1, numero: e.invoice_number ?? 0,
+        cfop: it.cfop, cst: "000", ordem: idx + 1, codigo: code,
+        descricao: it.description, ncm: it.ncm, unidade: it.unit,
+        quantidade: Number(it.quantity) || 0, valor_bruto: Number(it.total_cost) || 0,
+        desconto: 0, base_icms: 0, base_icms_st: 0, valor_ipi: 0, aliquota_icms: 0,
+      };
+    });
+    notes.push({
+      cnpj_contraparte: e.supplier_cnpj || "",
+      ie_contraparte: e.supplier_ie || undefined,
+      data: e.emission_date!, modelo: 55, serie: e.invoice_series ?? 1, numero: e.invoice_number ?? 0,
+      cfop: its[0]?.cfop || "1102", emitente: "T", valor_total: Number(e.total_value) || 0,
+      base_icms: 0, valor_icms: 0, valor_isento: 0, outras: 0, aliquota: 0, situacao: "N", itens,
+    });
+  }
+
+  const res = buildSintegra({
+    company: a.company, periodStart: a.periodStart, periodEnd: a.periodEnd,
+    natureza: a.natureza, finalidade: a.finalidade,
+    notes, nfceDays, products: Array.from(productMap.values()),
+  });
+  res.warnings.unshift(...warnings);
+  return { ...res, noteCount: notes.length, nfceDayCount: nfceDays.length };
+}
