@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     let selfserviceSplitValue: number | null = null;
     let selfserviceSignalsSource: string | null = null;
     if (order_id) {
-      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
+      const { data: linked, error: linkedError } = await supabase.from("orders").select("id,event_id,customer_id,is_paid,paid_externally,paid_at,selfservice_cashback_receipt,events(operation_mode,capi_advanced_matching)").eq("id", order_id).maybeSingle();
       if (linkedError) throw linkedError;
       selfserviceOrder = linked;
       selfservice = linked?.events?.operation_mode === "whatsapp_autoatendimento";
