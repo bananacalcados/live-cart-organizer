@@ -58,7 +58,7 @@ export function tagDispatchComponents(components: any[], templateComponents: any
     if (comp?.type === "button" && comp?.sub_type === "url") {
       const def = dynUrlButtons[Number(comp.index) || 0];
       const base = String(def?.url || "");
-      if (!BASE_RE.test(base)) return walk(comp);
+      if (!BASE_RE.test(base) || !/\{\{\d+\}\}$/.test(base)) return walk(comp);
       return {
         ...comp,
         parameters: (comp.parameters || []).map((p: any) => {
