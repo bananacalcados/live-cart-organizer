@@ -1519,7 +1519,6 @@ export function MassTemplateDispatcher() {
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
-        track_clicks: trackClicks,
           track_clicks: trackClicks,
           // Create in a HOLDING status first. The dispatch must NOT be visible to
           // the orchestrator/worker until every recipient row is inserted, otherwise
@@ -1817,7 +1816,6 @@ export function MassTemplateDispatcher() {
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
-        track_clicks: trackClicks,
           track_clicks: trackClicks,
           status,
           template_components: selectedTemplate.components as any,
