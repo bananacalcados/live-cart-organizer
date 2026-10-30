@@ -1,74 +1,47 @@
-# Públicos Meta sincronizados automaticamente pelo ERP
+# Auditoria (só leitura) — templates Meta: UTILITY + imagem + 2 ou mais variáveis
 
-## 0. Resultado da auditoria do token (feita agora, só leitura)
+Consulta feita na Meta em 30/10/2026, às 17:40 UTC, com o token de cada número. Nada foi alterado. A nota de qualidade veio "UNKNOWN" em todos.
 
-- Token usado nos gastos de anúncios: válido, **token de usuário (Carolina Aguiar)**, não é usuário de sistema. Vence em **29/11/2026**. A rotina diária de anúncios já renova e guarda a versão nova no cofre; a sincronização de públicos vai ler do mesmo lugar.
-- Permissões: **tem `ads_management` e `ads_read`**. Serve para escrever nos públicos, sem token novo.
-- Termos de Público Personalizado da conta `act_2253897104825255`: **aceitos** (conta e usuário).
-- Tokens do CAPI/offline: só servem para o pixel, não leem nem escrevem públicos. Não serão usados.
-- Risco: se a Carolina sair do Business Manager ou trocar a senha, o token para. Recomendação para depois (não bloqueia): criar um usuário de sistema no Business Manager com `ads_management` na conta. Hoje não precisa fazer nada.
+## Pérola e Centro: são contas diferentes
+- Meta Pérola (ae453235): conta 1297001419017577, 94 modelos
+- Meta Centro (c01d2777): conta 1240368761111264, 70 modelos
+- As listas são diferentes e nenhum par de números tem modelos iguais. Os outros 4 números Meta (Zoppy, Banana Calçados, Datacrazy, Ravena) também têm cada um a sua conta.
 
-## 1. Públicos existentes (atualizar no lugar, nunca apagar)
-
-| Público | Hoje na Meta | Regra | Estimativa ERP |
-|---|---|---|---|
-| compradores_live_90d | ~1.000 | pedido de live pago nos últimos 90d | 1.415 |
-| compradores-online-desde-mar2026 | 1,0–1,2 mil | live/WhatsApp/site pagos desde 01/03 | 2.611 |
-| compradores-loja-fisica-desde-mar2026 | 1,3–1,6 mil | venda presencial desde 01/03 | 1.714 |
-| compradores_loja_180d | 1,9–2,2 mil | venda presencial últimos 180d | 1.714 |
-| leads-que-nunca-compraram | 13,8–16,2 mil | leads sem nenhuma compra | 11.428 |
-| todos-os-clientes-base | 26,2–30,9 mil | qualquer compra, todas as fontes | ~20.000 (base unificada) |
-
-Contagens = pessoas únicas pelo telefone (DDD + 8 últimos). A Meta mostra só quantas ela conseguiu casar, então o número dela será menor.
-
-Os dois "estranhos":
-- **Clientes Março a 19 Setembro** (2,4–2,8 mil): lista feita à mão em 20/09 com compradores de mar a 19/set. É a base do "Semelhante 1%". Proposta: **manter congelada** (mexer nela muda o semelhante usado nas campanhas).
-- **audiencia_meta_banana.csv** (14,3–16,8 mil, de 02/05): lista antiga, base de dois semelhantes. Proposta: **manter congelada** também; o "todos-os-clientes-base" já cobre a mesma ideia atualizada.
-
-## 2. Públicos novos ("ERP –")
-
-| Público | Regra | Estimativa |
+## Os 6 modelos pedidos
+| Modelo | Pérola | Centro |
 |---|---|---|
-| ERP – Compraram últimos 7 dias | qualquer compra paga em 7d (para exclusão) | ~335 |
-| ERP – Incompletos última live | pedidos "incompleto" do último evento | 7 pedidos (ver pergunta 3) |
-| ERP – Pediram e não pagaram 14d | pedido criado em 14d, não pago, sem compra no período | 112 |
-| ERP – Clientes sem compra 60–180d | última compra entre 60 e 180 dias | ~2.000–2.200 |
-| ERP – Grupos VIP membros | membros ativos (não internos) de grupos VIP | 5.729 |
+| aviso_3 | APROVADO, UTILITY (antes era MARKETING), 3 variáveis | não existe |
+| aviso_conv | APROVADO, UTILITY (antes era MARKETING), 2 variáveis | não existe |
+| gru_lemb | APROVADO, UTILITY (antes era MARKETING), 3 variáveis | não existe |
+| liv_lembr3 | APROVADO, UTILITY, 3 variáveis | **APROVADO, mas a Meta passou para MARKETING (era UTILITY)** |
+| lanc_26 | não existe | APROVADO, UTILITY (antes era MARKETING), 3 variáveis |
+| livefechames | APROVADO, **MARKETING** (já foi criado assim), não entra no critério | não existe |
 
-Públicos abaixo de 100 pessoas casadas não entregam anúncio; os pequenos servem mais para exclusão.
+## Todos os modelos que atendem aos critérios
+| Número | Modelo | Variáveis | Botões | Texto |
+|---|---|---|---|---|
+| Pérola | aviso_3 | 3 | — | *Aviso*: Oii {{1}} estou passando para te avisar {{2}} / *Só clicar:* {{3}} / Se quiser ajuda ou tiver dúvidas me fala 😊 |
+| Pérola | aviso_conv | 2 | — | Oii {{1}} / *Para acompanhar é só clicar:* {{2}} / Qualquer dúvida é só chamar ta bom?😊 |
+| Pérola | gru_lemb | 3 | — | *LEMBRETE:* Oii {{1}} estou passando para te avisar {{2}} / {{3}} / Se quiser ajuda ou tiver dúvidas me fala 😊 |
+| Pérola | liv_lembr3 | 3 | — | *CONFIRMAÇÃO:* Seu pedido foi confirmado {{1}}. Estamos enviando {{2}} / {{3}} / Tenho certeza que irá gostar... |
+| Pérola | arq_3 | 2 | — | Oii {{1}} aqui está o {{2}}. / Posso enviar? |
+| Pérola | lemb_liv2 | 3 | — | Sua presença no evento {{1}} de {{2}} está confirmada. / {{3}} / Obrigado. |
+| Centro | grup_conv5 | 4 | — | *Você tem um Evento Próximo* / Oii {{1}} to passando pra te lembrar {{2}} / Online: {{3}} / ou / Físico: {{4}}... |
+| Centro | liv_lemb4 | 3 | — | *CONFIRMAÇÃO:* Seu pedido foi confirmado {{1}}. Estamos enviando {{2}} / {{3}} / ... |
+| Centro | lanc_26 | 3 | — | *Aviso:* Oii {{1}} estou passando pra te falar sobre {{2}} / {{3}} / Qualquer coisa é só chamar😃 |
+| Centro | aviso_1 | 3 | — | *Aviso:* Oii {{1}} estou passando pra te falar {{2}} chegou. / {{3}} / ... |
+| Banana Calçados | lemb_liv2 | 3 | — | igual ao da Pérola |
+| Banana Calçados | lanc2_2026 | 3 | CONFIRMAR / NÃO CONFIRMAR | *CONFIRMADO:* Oii {{1}} to passando pra te falar {{2}}. / {{3}} / Confirme abaixo por favor👇 |
+| Banana Calçados | lanc_2026 | 3 | Confirmar / Não confirmar | *Lembrete:* Oii {{1}} to passando pra te falar {{2}}. / {{3}} / Confirme abaixo... |
+| Banana Calçados | lan_ | 3 | Confirmar / Não confirmar | *ATENÇÃO*: Fica atento {{1}} que já ta quase chegando {{2}}. / {{3}} / ... |
+| Datacrazy | lan_ | 3 | Confirmar / Não confirmar | igual ao do Banana Calçados |
+| Ravena | lemb_liv2 | 3 | — | igual ao da Pérola |
+| Ravena | namo_rav | 3 | — | Oláá {{1}} estou enviando {{2}} / {{3}} / Tenho certeza que irá gostar 😁 |
+| Ravena | aviso_01 | 3 | — | Oii {{1}} estamos enviando {{2}} / {{3}} / Tenho certeza que irá gostar! |
 
-## 3. Como vai funcionar
+## O que a Meta mudou
+- **Passou de UTILITY para MARKETING:** só o **liv_lembr3 do Centro**. No Centro esse modelo tem outro texto ("*LEMBRETE:* ... Já estamos te aguardando na {{2}}"), por isso não entra mais na lista.
+- No número Zoppy, vários modelos antigos também foram para MARKETING, mas nenhum deles tem imagem e 2 variáveis ao mesmo tempo.
+- Os que estão marcados "antes era MARKETING" hoje estão como UTILITY.
 
-- Cadastro de cada público (id na Meta, nome, regra, ligado/desligado, última sincronização, quantos entraram/saíram, último erro).
-- Lista de quem está em cada público hoje no ERP; a cada rodada compara com o critério: **adiciona só quem entrou, remove só quem saiu**.
-- Dados enviados com hash SHA-256 e a mesma normalização do CAPI: telefone, e-mail, nome, sobrenome, cidade, estado, CEP, país. CPF nunca vai.
-- Lotes de até 10.000; tentativas com espera crescente; erros da Meta guardados.
-- Horários: todo dia 03:00 BRT; em dia de live, também 10:00 e 12:00. Sem cron de minuto.
-- Tela **Marketing > Públicos Meta**: status por público (contagem ERP, contagem aproximada na Meta, última sincronização, erros) e botão "Sincronizar agora" (só admin).
-- Primeira carga: a Meta recomenda trocar a lista inteira de uma vez (sessão de substituição). Uso isso na primeira rodada dos públicos CSV, porque eles têm gente que o ERP não sabe que está lá; depois disso, só diferenças.
-- Recusa de publicidade: quem recusou não entra em nenhum público e é removido se já estiver (hoje são 2 recusas).
-
-## 4. Riscos
-
-- **Remoção indevida**: se uma regra quebrar e devolver zero ou muito menos, o sistema esvaziaria o público. Trava: se a rodada for remover mais de 20% do público (ou o critério vier vazio), para, não remove e mostra alerta.
-- **Primeira carga com substituição**: quem estava no CSV e não está no ERP sai. No "todos-os-clientes-base" a lista cai de ~26 mil para ~20 mil; nos outros sobe.
-- **Mudança de público ativo**: a Meta pode reiniciar o aprendizado dos conjuntos que usam esse público e dos semelhantes ligados a ele.
-- **Limites da API**: cada lote conta no limite de chamadas da conta; com ~30 mil pessoas no total são poucas chamadas por dia. Em erro de limite, espera e tenta de novo uma vez.
-- **Token de usuário** (ver item 0).
-- **Banco**: as listas são montadas no servidor em lotes, de madrugada, sem varrer tabelas grandes de mensagens.
-
-## 5. Perguntas
-
-1. Os dois públicos antigos (Março a 19 Setembro e audiencia_meta_banana): **manter congelados**? 
-2. Primeira carga: posso **substituir a lista inteira** nos 6 públicos existentes (quem não está no ERP sai), ou prefere só adicionar e nunca tirar quem veio do CSV?
-3. "Incompletos última live": "última live" = o evento mais recente que teve pedido, mesmo que ainda esteja acontecendo? (Encontrei 7 pedidos nessa etapa no último evento; vou confirmar o telefone deles na implementação.)
-4. "todos-os-clientes-base": usar a base unificada de clientes (inclui compras antigas importadas, ~20 mil) ou só compras registradas no sistema (~4.200)?
-5. Leads: além dos leads de evento, entram leads de captação/landing pages e membros de grupo que nunca compraram?
-
-## Detalhes técnicos
-
-- Nova migração: tabelas `meta_audience_definitions` e `meta_audience_members` (audience_id, phone_key, hash, status, since), com GRANT/RLS só admin + service_role; RPCs por regra com paginação por cursor (máx. 10 mil por página).
-- Nova edge function `meta-audience-sync` (cron 03:00 BRT; 10:00/12:00 só quando houver evento ativo no dia, checado pela própria função): token via `meta_ads_get_token` com fallback ao secret; POST/DELETE `/{id}/users` com `schema` multi-chave; `session` para substituição na 1ª carga; guarda de 20%.
-- Reaproveitar a normalização/hash do `meta-capi-event` movendo-a para `_shared/meta-hash.ts`.
-- Front: `src/pages/marketing/MetaAudiences.tsx` + item no menu de Marketing; teste unitário da diferença (entrou/saiu) e da trava de 20%.
-- Registrar a regra no AGENTS.md.
+Não há nada para implementar. É só leitura.
