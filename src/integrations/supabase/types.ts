@@ -13554,6 +13554,225 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_audience_candidates: {
+        Row: {
+          city: string | null
+          definition_id: string
+          email: string | null
+          full_name: string | null
+          key: string
+          phone: string | null
+          state: string | null
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          definition_id: string
+          email?: string | null
+          full_name?: string | null
+          key: string
+          phone?: string | null
+          state?: string | null
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          definition_id?: string
+          email?: string | null
+          full_name?: string | null
+          key?: string
+          phone?: string | null
+          state?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_audience_candidates_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "meta_audience_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_audience_definitions: {
+        Row: {
+          added_last: number | null
+          audience_id: string | null
+          created_at: string
+          description: string | null
+          duplicate_count: number | null
+          enabled: boolean
+          erp_count: number | null
+          frozen: boolean
+          id: string
+          initial_load_done: boolean
+          initial_load_not_before: string | null
+          initial_mode: string
+          invalid_count: number | null
+          kind: string
+          last_error: string | null
+          last_status: string | null
+          last_sync_at: string | null
+          meta_approx_lower: number | null
+          meta_approx_upper: number | null
+          meta_checked_at: string | null
+          name: string
+          removed_last: number | null
+          rule_key: string
+          total_removed: number
+          total_sent: number
+          updated_at: string
+        }
+        Insert: {
+          added_last?: number | null
+          audience_id?: string | null
+          created_at?: string
+          description?: string | null
+          duplicate_count?: number | null
+          enabled?: boolean
+          erp_count?: number | null
+          frozen?: boolean
+          id?: string
+          initial_load_done?: boolean
+          initial_load_not_before?: string | null
+          initial_mode?: string
+          invalid_count?: number | null
+          kind?: string
+          last_error?: string | null
+          last_status?: string | null
+          last_sync_at?: string | null
+          meta_approx_lower?: number | null
+          meta_approx_upper?: number | null
+          meta_checked_at?: string | null
+          name: string
+          removed_last?: number | null
+          rule_key: string
+          total_removed?: number
+          total_sent?: number
+          updated_at?: string
+        }
+        Update: {
+          added_last?: number | null
+          audience_id?: string | null
+          created_at?: string
+          description?: string | null
+          duplicate_count?: number | null
+          enabled?: boolean
+          erp_count?: number | null
+          frozen?: boolean
+          id?: string
+          initial_load_done?: boolean
+          initial_load_not_before?: string | null
+          initial_mode?: string
+          invalid_count?: number | null
+          kind?: string
+          last_error?: string | null
+          last_status?: string | null
+          last_sync_at?: string | null
+          meta_approx_lower?: number | null
+          meta_approx_upper?: number | null
+          meta_checked_at?: string | null
+          name?: string
+          removed_last?: number | null
+          rule_key?: string
+          total_removed?: number
+          total_sent?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_audience_members: {
+        Row: {
+          definition_id: string
+          hashes: Json
+          key: string
+          removed_at: string | null
+          row_hash: string
+          since: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          definition_id: string
+          hashes: Json
+          key: string
+          removed_at?: string | null
+          row_hash: string
+          since?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          definition_id?: string
+          hashes?: Json
+          key?: string
+          removed_at?: string | null
+          row_hash?: string
+          since?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_audience_members_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "meta_audience_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_audience_sync_runs: {
+        Row: {
+          added: number | null
+          definition_id: string | null
+          details: Json | null
+          erp_count: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          mode: string | null
+          removed: number | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          added?: number | null
+          definition_id?: string | null
+          details?: Json | null
+          erp_count?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode?: string | null
+          removed?: number | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          added?: number | null
+          definition_id?: string | null
+          details?: Json | null
+          erp_count?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mode?: string | null
+          removed?: number | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_audience_sync_runs_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "meta_audience_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_capi_lead_events: {
         Row: {
           campaign_id: string | null
@@ -27536,6 +27755,12 @@ export type Database = {
       meta_ads_set_token: {
         Args: { p_expires_at: string; p_token: string }
         Returns: undefined
+      }
+      meta_aud_email: { Args: { e: string }; Returns: string }
+      meta_aud_phone: { Args: { p: string }; Returns: string }
+      meta_audience_refresh_candidates: {
+        Args: { p_definition_id: string }
+        Returns: Json
       }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
