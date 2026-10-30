@@ -6,7 +6,7 @@ import { capturedAustpayEvidence } from "./selfservice-payment-evidence.ts";
 
 /** Only exact linked transactions; missing provider evidence blocks credit, never guesses time/amount. */
 export async function grantSelfserviceCashback(sb: any, orderId: string) {
-  const { data: o, error } = await sb.from("orders").select("id,event_id,is_paid,paid_externally,stage,mercadopago_payment_id,appmax_order_id,pagarme_order_id,austpay_transaction_id,selfservice_cashback_receipt,events(operation_mode)").eq("id", orderId).maybeSingle();
+  const { data: o, error } = await sb.from("orders").select("id,event_id,is_paid,paid_externally,stage,mercadopago_payment_id,appmax_order_id,pagarme_order_id,austpay_transaction_id,selfservice_cashback_receipt,paid_at,payment_confirmed_source,events(operation_mode)").eq("id", orderId).maybeSingle();
   if (error) throw error;
   if (!o || o.events?.operation_mode !== "whatsapp_autoatendimento") return { applicable: false };
   if (!(o.is_paid || o.paid_externally) || o.stage === "cancelled") throw new Error("Pedido ainda não pago");
@@ -59,7 +59,9 @@ export async function grantSelfserviceCashback(sb: any, orderId: string) {
   if (!amount && o.appmax_order_id) {
     const result = await appmaxGetPayment(sb, String(o.appmax_order_id), null);
     if (result.kind !== "ok" || !APPMAX_PAID.includes(result.payment.status)) throw new Error("Pagamento Appmax não confirmado");
-    amount = result.payment.amount; paidAt = result.payment.dateApproved;
+    amount = result.payment.amount;
+    // Appmax não informa a hora da aprovação: vale a hora em que o webhook da Appmax nos avisou (orders.paid_at).
+    paidAt = result.payment.dateApproved || (o.payment_confirmed_source === "gateway_webhook" ? o.paid_at : null);
     gateway = "appmax"; txId = result.payment.orderId;
   } else if (!amount && o.pagarme_order_id) {
     const key = Deno.env.get("PAGARME_SECRET_KEY");
