@@ -25043,6 +25043,14 @@ export type Database = {
         }
         Relationships: []
       }
+      v_ad_attributed_store_daily: {
+        Row: {
+          date: string | null
+          n_loja_attr: number | null
+          rec_loja_attr: number | null
+        }
+        Relationships: []
+      }
       v_dispatch_cost_daily: {
         Row: {
           cost_brl: number | null
