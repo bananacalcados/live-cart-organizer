@@ -1,3 +1,4 @@
+import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
@@ -8,7 +9,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-force-instance",
 };
 
-serve(async (req) => {
+serve(withGroupSendRouting("uazapi", "message", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -83,4 +84,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

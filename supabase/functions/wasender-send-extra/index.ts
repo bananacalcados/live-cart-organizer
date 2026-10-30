@@ -1,3 +1,4 @@
+import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveWasenderCredentials, WASENDER_BASE, formatWasenderJid } from "../_shared/wasender-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
@@ -21,7 +22,7 @@ const formatPhone = formatWasenderJid;
  *  - poll: { name, options: string[], selectableCount?: number }
  *  - text?: legenda opcional
  */
-serve(async (req) => {
+serve(withGroupSendRouting("wasender", "extra", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -122,4 +123,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

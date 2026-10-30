@@ -1,3 +1,4 @@
+import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
@@ -40,7 +41,7 @@ function groupDigits(raw: string): string {
  *  - updateParticipants  → { groupJid, participants: string[], participantAction: 'add'|'remove'|'promote'|'demote' }
  *  - sendMessage         → { groupJid, message, mentions?: string[] }
  */
-serve(async (req) => {
+serve(withGroupSendRouting("uazapi", "groups", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -485,4 +486,4 @@ serve(async (req) => {
     console.error("[uazapi-groups] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));
