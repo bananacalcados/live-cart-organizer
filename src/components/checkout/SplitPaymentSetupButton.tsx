@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Split, X } from "lucide-react";
+import { CheckCircle2, Loader2, Split, X } from "lucide-react";
 import { toast } from "sonner";
 import { SplitEditor } from "./SplitPaymentPanel";
-import { buildSplitParts, describeSplit, splitCustomerTotal, type SplitPartInput } from "@/lib/splitPayment";
+import { buildSplitParts, describeSplit, hasVps, splitLinkTotal, type SplitPartInput } from "@/lib/splitPayment";
 
 interface Props {
   orderId?: string;
@@ -62,8 +62,11 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
 
   const desc = (list: any[]) => {
     if (!list.length) return "";
-    const built = buildSplitParts(list.map((p) => ({ method: p.method, amount: Number(p.amount), installments: p.installments })), pixPct);
-    return `💳 Pagamento dividido: ${describeSplit(built)} = ${BRL(splitCustomerTotal(built))}`;
+    const built = buildSplitParts(list.map((p) => ({ method: p.method, amount: Number(p.amount), installments: p.installments, reference: p.reference ?? p.vps_reference ?? undefined })), pixPct);
+    const link = splitLinkTotal(built);
+    return hasVps(built)
+      ? `💳 Pagamento: ${describeSplit(built)}. Pelo link você paga só ${BRL(link)}.`
+      : `💳 Pagamento dividido: ${describeSplit(built)} = ${BRL(link)}`;
   };
 
   const anyPaid = parts.some((p) => p.status === "approved");
@@ -83,6 +86,18 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
     onChange?.(desc(d.parts || []));
     setOpen(false);
     toast.success("Divisão salva no link");
+  };
+
+  const confirmVps = async (part: any) => {
+    if (!window.confirm(`Confirmar que o VPS de ${BRL(Number(part.amount))} foi recebido e conferido?`)) return;
+    setLoading(true);
+    try {
+      await call({ action: "confirm_vps", splitId: part.id });
+      const d = await call({ action: "get", ...target });
+      setParts(d.parts || []);
+      toast.success("VPS conferido");
+    } catch (e: any) { toast.error(e.message); }
+    setLoading(false);
   };
 
   const remove = async () => {
@@ -110,12 +125,20 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
               </span>
             )}
           </div>
-          <p className="text-muted-foreground">{desc(parts).replace("💳 Pagamento dividido: ", "")}</p>
+          <p className="text-muted-foreground">{desc(parts).replace(/^💳 Pagamento( dividido)?: /, "")}</p>
+          {parts.filter((p) => p.method === "vps" && p.id).map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2">
+              <span>VPS {BRL(Number(p.amount))}{p.vps_reference ? ` · ${p.vps_reference}` : ""}</span>
+              {p.status === "approved"
+                ? <span className="flex items-center gap-1 font-semibold"><CheckCircle2 className="h-3.5 w-3.5" /> Conferido</span>
+                : <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={loading} onClick={() => confirmVps(p)}>VPS conferido</Button>}
+            </div>
+          ))}
           {anyPaid && <p className="font-semibold">{parts.filter((p) => p.status === "approved").length}/{parts.length} partes pagas</p>}
         </div>
       ) : (
         <Button type="button" variant="outline" size="sm" className="w-full gap-2" disabled={total == null} onClick={() => setOpen(true)}>
-          {total == null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Split className="h-4 w-4" />} Dividir pagamento
+          {total == null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Split className="h-4 w-4" />} Dividir pagamento / VPS
         </Button>
       )}
 
@@ -130,7 +153,8 @@ export function SplitPaymentSetupButton({ orderId, saleId, total: totalProp, max
               total={total}
               pixPct={pixPct}
               maxInstallments={maxInstallments}
-              initial={parts.length ? parts.map((p) => ({ method: p.method, amount: Number(p.amount), installments: p.installments })) : undefined}
+              allowVps
+              initial={parts.length ? parts.map((p) => ({ method: p.method, amount: Number(p.amount), installments: p.installments, reference: p.reference ?? p.vps_reference ?? undefined })) : undefined}
               onSave={save}
               onCancel={() => setOpen(false)}
             />
