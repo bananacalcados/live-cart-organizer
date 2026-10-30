@@ -159,8 +159,8 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
-    const ok = r.ok && data?.success !== false && !data?.error;
-    return { ok, messageId: data?.messageId || null, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
+    const ok = r.ok && data?.success !== false && !data?.error && !data?.uncertain;
+    return { ok, uncertain: data?.uncertain === true, messageId: data?.messageId || null, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
   }
 
   // ===== Roteamento de envio por provider =====
@@ -312,7 +312,7 @@ serve(async (req) => {
     // Envio com 1 retry
     let res = await sendBlock(provider, block, job, content);
     let attempts = 1;
-    if (!res.ok) {
+    if (!res.ok && !("uncertain" in res && res.uncertain)) {
       await sleep(RETRY_DELAY_MS);
       res = await sendBlock(provider, block, job, content);
       attempts = 2;

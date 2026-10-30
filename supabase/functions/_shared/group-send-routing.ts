@@ -46,6 +46,7 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
   return async (req: Request): Promise<Response> => {
     if (req.method === "OPTIONS") return handler(req);
     let route: GroupSendRoute | null = null;
+    let dispatched = false;
     try {
       const body = await req.clone().json();
       const phone = body.phone || body.groupId || body.groupJid;
@@ -84,20 +85,23 @@ export function withGroupSendRouting(provider: string, kind: string, handler: (r
         const url = Deno.env.get("SUPABASE_URL");
         const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
         if (!url || !key) throw new Error("Configuração indisponível");
+        dispatched = true;
         response = await fetch(`${url}/functions/v1/${target}`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(rewritten) });
       } else {
+        dispatched = true;
         response = await handler(new Request(req.url, { method: req.method, headers: req.headers, body: JSON.stringify(rewritten) }));
       }
       const result = await response.clone().json().catch(() => ({}));
       const messageId = result.messageId || result.data?.messageid || result.data?.id || result.data?.data?.msgId || null;
-      await finishDirectGroupSend(route, response.ok && result.success !== false && !result.error ? "sent" : "failed", messageId);
+      const uncertain = response.status >= 500 || (response.ok && !messageId && result.success !== true);
+      await finishDirectGroupSend(route, uncertain ? "uncertain" : response.ok && result.success !== false && !result.error ? "sent" : "failed", messageId);
       if (response.headers.get("content-type")?.includes("json")) {
-        return new Response(JSON.stringify({ ...result, whatsapp_number_id: route.instance_id, instance_label: route.label, messageId }), { status: response.status, headers: response.headers });
+        return new Response(JSON.stringify({ ...result, uncertain, whatsapp_number_id: route.instance_id, instance_label: route.label, messageId }), { status: response.status, headers: response.headers });
       }
       return response;
     } catch (error) {
-      await finishDirectGroupSend(route, "failed");
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Falha no envio para grupo" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await finishDirectGroupSend(route, dispatched ? "uncertain" : "failed");
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Falha no envio para grupo", uncertain: dispatched }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   };
 }
