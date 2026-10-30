@@ -112,3 +112,8 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 ## Transferência entre lojas — 27/10
 - [x] Motor atômico, histórico, estorno (admin), aba Transferência no PDV e telas antigas unificadas; testes do banco e prévia real conferidos sem transferir.
 - [ ] Transferência real de validação — aguarda pedido do Matthews.
+
+## Públicos Meta automáticos — 30/10
+- [x] Tabelas, regra no servidor, sincronização por diferença, travas 70%/20%, recusas fora, rodadas 03:00 e 10:00/12:00 em dia de live, tela Marketing > Públicos Meta.
+- [x] 5 públicos "ERP –" criados e carregados; conferência da base unificada entregue.
+- [ ] 1ª carga por substituição dos 6 públicos existentes: agendada para 03/11 03:00 (aguarda a data).
