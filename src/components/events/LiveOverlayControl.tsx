@@ -49,6 +49,7 @@ function ItemList({ items, onChange, onShowNow }: { items: OverlayItem[]; onChan
 
 export function LiveOverlayControl({ eventId }: { eventId: string }) {
   const [token, setToken] = useState<string | null>(null);
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
   const [cfg, setCfg] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [hidden, setHidden] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -86,6 +87,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
       sb.from("live_overlay_settings").select("config, hidden").eq("event_id", eventId).maybeSingle(),
     ]);
     setToken(fixed || ev?.overlay_token || null);
+    setPreviewToken(ev?.overlay_token || null);
     if (st) {
       setCfg(withOverlayDefaults(st.config));
       setHidden(!!st.hidden);
@@ -333,10 +335,10 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
             <p role="status" className="mt-2 text-xs text-muted-foreground">{layoutSaving ? "Salvando posições…" : "Posições aplicadas na live"}</p>
           </> :
           <div className="relative overflow-hidden rounded-xl bg-muted-foreground/40" style={{ width: 324, height: 576 }}>
-            {token && (
+            {previewToken && (
               <iframe
-                key={token}
-                src={`/overlay/${token}`}
+                key={previewToken}
+                src={`/overlay/${previewToken}`}
                 title="Prévia do overlay"
                 style={{ width: 1080, height: 1920, transform: "scale(0.3)", transformOrigin: "0 0", border: 0, background: "transparent" }}
               />
