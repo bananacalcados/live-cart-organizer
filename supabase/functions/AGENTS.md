@@ -15,3 +15,4 @@
 - Checkout success cache prevents duplicate charges, never restores paid state. AustPay approvals: production re-query, captured, exact transaction/reference/amount, no invalidated attempt. Reversal: privileged DB, invalidated sandbox attempt, no remaining success. Audits: admin/read-only, 50 rows, ≤3 provider reads.
 - Live catalog invites: one row per event+phone; the paid-order trigger only schedules (never blocks payment), live-catalog-invite enqueues via the self-service queue, and manual resends reuse the row with a new message key so auto invites stay single.
 - AppMax: AppStore OAuth2 via appmax-install; appmax_installations credentials service-role-only, no fixed secrets.
+- Meta Ads token renewed by meta-ads-sync lives in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only), read before the META_ADS_ACCESS_TOKEN secret — edge functions cannot rewrite secrets.
