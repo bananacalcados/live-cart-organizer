@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tagIdsByOrder } from "@/lib/orderCardBatches";
 import { Tag, Plus, X, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,12 +57,9 @@ export function OrderTagsBar({ orderId }: Props) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data } = await supabase
-        .from("order_tag_assignments" as any)
-        .select("tag_id")
-        .eq("order_id", orderId);
+      const ids = await tagIdsByOrder.load(orderId);
       if (alive) {
-        setSelected(((data as any[]) || []).map((r) => r.tag_id));
+        setSelected(ids || []);
         setLoading(false);
       }
     })();

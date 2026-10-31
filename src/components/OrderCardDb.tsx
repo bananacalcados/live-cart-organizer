@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, memo } from "react";
+import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale } from "@/lib/orderCardBatches";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
@@ -144,15 +145,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
   // Calcula em que etapa do link de checkout o cliente parou (com base no que ele
   // já preencheu na ficha) e se o link chegou a ser aberto.
+  const linkStepLoadedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("full_name,cpf,whatsapp,cep,address,city,state")
-          .eq("order_id", order.id)
-          .maybeSingle();
+        const reg = await registrationByOrder.load(order.id, linkStepLoadedRef.current);
+        linkStepLoadedRef.current = true;
         if (cancelled) return;
 
         const notPlaceholder = (v?: string | null, ph?: string) =>
@@ -206,11 +205,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
     if (!order.event_id) { setIsPhysicalEvent(false); setIsManualRoutingEvent(false); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('events')
-        .select('channel, default_store_id, manual_pos_routing')
-        .eq('id', order.event_id)
-        .maybeSingle();
+      const data = await eventInfoById.load(order.event_id);
       if (cancelled) return;
       const manual = !!(data as any)?.manual_pos_routing;
       const physical = manual || (!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
@@ -235,9 +230,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       return;
     }
 
-    const { data } = await supabase
-      .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
-      .maybeSingle();
+    const data = await latestRegistrationByCustomer.load(order.customer_id);
 
     setHasRegistration(!!data);
 
@@ -258,19 +251,6 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
           .limit(20);
 
         if (expeditions && expeditions.length > 0) {
-          const crmVariantIds = new Set<string>();
-          for (const p of order.products) {
-            if (p.shopifyId) {
-              const match = p.shopifyId.match(/ProductVariant\/(\d+)/);
-              if (match) crmVariantIds.add(match[1]);
-            }
-          }
-
-          if (crmVariantIds.size > 0) {
-            applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
-            return;
-          }
-
           applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
           return;
         }
@@ -297,7 +277,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
     setHasShopifyOrder(null);
     setShopifyOrderName(null);
-  }, [applyShopifyVerification, order.customer?.whatsapp, order.customer_id, order.id, order.is_paid, order.paid_externally, order.products]);
+  }, [applyShopifyVerification, order.customer?.whatsapp, order.customer_id, order.id, order.is_paid, order.paid_externally]);
 
   useEffect(() => {
     void refreshShopifyStatus();
@@ -355,14 +335,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('pos_checkout_attempts')
-        .select('payment_method, metadata')
-        .eq('sale_id', order.id)
-        .eq('status', 'success')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const data = await successAttemptBySale.load(order.id);
       if (cancelled || !data) return;
       setCheckoutMethod(data.payment_method || null);
       const meta = (data.metadata as Record<string, unknown> | null) || {};
