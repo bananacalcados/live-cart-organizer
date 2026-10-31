@@ -51,3 +51,14 @@ export const latestRegistrationByCustomer = createKeyedCache(async (customerId: 
   const { data } = await supabase.rpc("get_latest_registration_by_customer", { p_customer_id: customerId }).maybeSingle();
   return data as any;
 });
+
+export const liveIncomingByPhone = createKeyedCache(async (phone: string) => {
+  const { data } = await supabase
+    .from("whatsapp_messages")
+    .select("message")
+    .eq("phone", phone)
+    .eq("direction", "incoming")
+    .order("created_at", { ascending: false })
+    .limit(5);
+  return (data || []) as { message: string | null }[];
+}, 30_000);

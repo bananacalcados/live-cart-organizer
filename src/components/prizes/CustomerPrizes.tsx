@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createKeyedCache } from "@/lib/cardBatch";
 import { Gift, Ticket, Truck, Percent, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,17 @@ export interface ActivePrize {
  * Por padrão só os ativos (monetário no prazo / físico disponível ou reservado).
  * `includeHistory` traz também enviados, perdidos e expirados.
  */
+// Mesmo telefone em vários cartões/remontes: 1 consulta a cada 30 s.
+const prizesCache = createKeyedCache(async (key: string) => {
+  const [digits, hist] = key.split("|");
+  const { data, error } = await supabase.rpc("get_customer_active_prizes", {
+    p_phone: digits,
+    p_include_history: hist === "1",
+  } as any);
+  if (error) throw error;
+  return data;
+}, 30_000);
+
 export function useCustomerPrizes(phone?: string | null, enabled = true, includeHistory = false) {
   const [prizes, setPrizes] = useState<ActivePrize[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,11 +53,7 @@ export function useCustomerPrizes(phone?: string | null, enabled = true, include
     (async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase.rpc("get_customer_active_prizes", {
-          p_phone: digits,
-          p_include_history: includeHistory,
-        } as any);
-        if (error) throw error;
+        const data = await prizesCache.load(`${digits}|${includeHistory ? 1 : 0}`);
         if (alive) setPrizes((data as any[]) || []);
       } catch (e) {
         console.error("[useCustomerPrizes]", e);

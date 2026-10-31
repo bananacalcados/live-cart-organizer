@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale } from "@/lib/orderCardBatches";
+import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale, liveIncomingByPhone } from "@/lib/orderCardBatches";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
@@ -306,13 +306,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
     const phone = order.customer.whatsapp.replace(/\D/g, '');
     if (!phone) return;
     const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('whatsapp_messages')
-        .select('message')
-        .eq('phone', phone)
-        .eq('direction', 'incoming')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const data = await liveIncomingByPhone.load(phone);
       if (data) setLiveMessages(data.map(m => m.message).filter(Boolean));
     };
     fetchMessages();
