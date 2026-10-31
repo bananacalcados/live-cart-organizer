@@ -454,7 +454,8 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     const ids = originalOrders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
     if (ids.length === 0) { setRegistrationPhones((prev) => Object.keys(prev).length ? {} : prev); setStepByOrder({}); setOpenedByOrder({}); setSplitByOrder({}); return; }
     let cancelled = false;
-    (async () => {
+    // Junta rajadas de atualizações de pedidos em uma só recarga (2 s).
+    const timer = setTimeout(() => { void (async () => {
       const startedMap: Record<string, boolean> = {};
       for (const o of originalOrders) startedMap[o.id] = !!(o as any).checkout_started_at;
       const map: Record<string, number> = {};
@@ -519,8 +520,8 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
         }
       }
       if (!cancelled) setSplitByOrder(splits);
-    })();
-    return () => { cancelled = true; };
+    })(); }, 2000);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [unpaidRegKey]);
 
   const { awaiting, paid, incomplete } = useMemo(() => {
