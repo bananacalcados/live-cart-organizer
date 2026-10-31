@@ -32,6 +32,9 @@ const db = supabase as any;
 export function EventCatalogManager({ eventId }: { eventId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [hours, setHours] = useState("48");
+  const [autoInvite, setAutoInvite] = useState(false);
+  const [delayMin, setDelayMin] = useState("2");
+  const [delayMax, setDelayMax] = useState("5");
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -39,10 +42,14 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
 
   const load = useCallback(async () => {
     const [ev, cp] = await Promise.all([
-      db.from("events").select("catalog_enabled,catalog_link_hours").eq("id", eventId).maybeSingle(),
+      db.from("events").select("catalog_enabled,catalog_link_hours,catalog_auto_invite,catalog_invite_delay_min,catalog_invite_delay_max").eq("id", eventId).maybeSingle(),
       db.from("event_catalog_products").select(COLS).eq("event_id", eventId).order("position").limit(200),
     ]);
-    if (ev.data) { setEnabled(!!ev.data.catalog_enabled); setHours(String(ev.data.catalog_link_hours ?? 48)); }
+    if (ev.data) {
+      setEnabled(!!ev.data.catalog_enabled); setHours(String(ev.data.catalog_link_hours ?? 48));
+      setAutoInvite(!!ev.data.catalog_auto_invite);
+      setDelayMin(String(ev.data.catalog_invite_delay_min ?? 2)); setDelayMax(String(ev.data.catalog_invite_delay_max ?? 5));
+    }
     if (cp.error) toast.error("Erro ao carregar o catálogo"); else setRows(cp.data || []);
     setLoading(false);
   }, [eventId]);
@@ -52,6 +59,13 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
   const saveEvent = async (patch: Record<string, unknown>) => {
     const { error } = await db.from("events").update(patch).eq("id", eventId);
     if (error) toast.error("Erro ao salvar: " + error.message); else toast.success("Salvo");
+  };
+  const saveDelay = () => {
+    const a = parseInt(delayMin, 10), b = parseInt(delayMax, 10);
+    if (!(a >= 0) || !(b >= 0)) { toast.error("Informe minutos válidos"); return; }
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    setDelayMin(String(lo)); setDelayMax(String(hi));
+    saveEvent({ catalog_invite_delay_min: lo, catalog_invite_delay_max: hi });
   };
 
   const patchRow = async (id: string, patch: Partial<CatalogRow>, ok = "Salvo") => {
@@ -127,7 +141,7 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
     <div className="space-y-4 rounded-lg border p-4">
       <div>
         <h3 className="font-semibold">Catálogo cross-sell</h3>
-        <p className="text-xs text-muted-foreground">Produtos oferecidos à cliente depois que ela paga o primeiro pedido. Nada é enviado ainda.</p>
+        <p className="text-xs text-muted-foreground">Produtos oferecidos à cliente depois que ela paga o primeiro pedido.</p>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex items-center gap-2">
@@ -140,6 +154,24 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
             onBlur={() => { const n = parseInt(hours, 10); if (n > 0) saveEvent({ catalog_link_hours: n }); else setHours("48"); }} />
         </div>
         <Button type="button" size="sm" onClick={() => setPickerOpen(true)}><Plus className="mr-1 h-4 w-4" />Adicionar produto</Button>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-dashed p-3">
+        <div className="flex items-center gap-2">
+          <Switch disabled={!enabled} checked={enabled && autoInvite}
+            onCheckedChange={(v) => { setAutoInvite(v); saveEvent({ catalog_auto_invite: v }); }} />
+          <Label>Enviar convite automático após o pagamento</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {enabled ? "Teste o link manualmente antes de ligar." : "Ligue “Catálogo ativo” para poder enviar convites."}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span>Enviar entre</span>
+          <Input type="number" min={0} className="w-20" value={delayMin} disabled={!enabled} onChange={(e) => setDelayMin(e.target.value)} onBlur={saveDelay} />
+          <span>e</span>
+          <Input type="number" min={0} className="w-20" value={delayMax} disabled={!enabled} onChange={(e) => setDelayMax(e.target.value)} onBlur={saveDelay} />
+          <span>minutos após o pagamento</span>
+        </div>
       </div>
 
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : rows.length === 0 ? (
