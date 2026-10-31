@@ -67,8 +67,7 @@
 - E-mail: every send goes through supabase/functions/_shared/email-send.ts (Resend + email_send_log); fiscal packaging/Sintegra logic lives only in supabase/functions/_shared/fiscal and src/lib/fiscal re-exports it, so browser downloads and the accountant package never diverge.
 - Fiscal/Folha tab passwords are verified only by server RPCs over bcrypt hashes (verify_area_password, 5 tries then 5-min lock; admin-only change_area_password); never ship a password literal to the browser. Sintegra button and accountant package share fiscalMonthBounds and note ordering so files stay identical.
 - Meta Custom Audiences: meta-audience-sync diffs ERP rules (meta_audience_refresh_candidates) vs meta_audience_members; frozen audiences are never touched, the first replace load waits for initial_load_not_before, and 70% replace / 20% removal guards block runs, so ad sets are not reset or emptied.
-- Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
+- Refund, Correios, Live Crossell/paid-chat and live catalog invite rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
 - Live cross-sell catalog: own tables + orders.origin='catalog' skipped by cart-notify trigger; page only via live-catalog fn, one open cart per customer.
-- Live catalog invites: one row per event+phone in live_catalog_invites; the paid-order trigger only schedules (never blocks payment), live-catalog-invite enqueues via the self-service queue, and manual resends reuse the row with a new message key so the unique guard keeps auto invites single.
