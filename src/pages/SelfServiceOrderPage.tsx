@@ -359,7 +359,7 @@ export default function SelfServiceOrderPage() {
               </div>
             )}
             {ev.prize_name && !registrationConfirmed && (
-              <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
+              <SelfServicePrizeBanner name={ev.prize_name} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description={prizeActive ? "Confirme seus dados antes do tempo acabar para concorrer ao sorteio." : primary.registered_at || known ? "Confira e confirme seus dados para concluir seu cadastro no WhatsApp." : "O prazo para cadastrar e concorrer terminou. Você ainda pode confirmar seus dados."} />
             )}
             {registrationConfirmed ? (
               <div className="grid gap-2">
@@ -377,7 +377,7 @@ export default function SelfServiceOrderPage() {
 
         {screen === "no_order" && (
           <div className="py-4 text-center">
-            <p>Ainda não encontrei um pedido seu nesta live. Preencha seus dados abaixo e confirme no WhatsApp.</p>
+            <p>{known ? "Ainda não encontrei um pedido seu nesta live, mas você já tem cadastro." : "Ainda não encontrei um pedido seu nesta live. Preencha seus dados abaixo e confirme no WhatsApp."}</p>
           </div>
         )}
 
@@ -397,9 +397,16 @@ export default function SelfServiceOrderPage() {
             {screen === "register" && prizeTimer && (
               <SelfServicePrizeBanner name={ev.prize_name || ""} image={ev.prize_image_url} left={prizeLeft} active={prizeTimer} description="Conclua seu cadastro antes do tempo acabar para concorrer ao sorteio." />
             )}
-            <h2 className="text-lg font-bold">Preencha seus dados</h2>
-            <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois de enviar a mensagem de confirmação no WhatsApp.</p>
-            {known && <p className="text-xs text-muted-foreground">Já preenchemos com seu último cadastro — só confira.</p>}
+            {known ? (
+              <div className="space-y-1 rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <h2 className="text-lg font-bold">Você já tem cadastro ✅</h2>
+                <p className="text-sm font-semibold">{orders.length ? "Só confira se seus dados estão corretos e confirme seu pedido." : "Só confirme aqui se seus dados estão corretos."}</p>
+                <p className="text-xs text-muted-foreground">{orders.length ? "Ao confirmar, o WhatsApp abre com a mensagem do seu pedido. Envie para receber o link do seu carrinho." : "Ao confirmar, o WhatsApp abre com a mensagem pronta. Envie para concluir."}</p>
+              </div>
+            ) : (<>
+              <h2 className="text-lg font-bold">Preencha seus dados</h2>
+              <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois de enviar a mensagem de confirmação no WhatsApp.</p>
+            </>)}
             <div className="space-y-1"><Label>Nome completo</Label><Input {...fieldProps("full_name")} autoComplete="name" value={form.full_name} onChange={set("full_name")} />{fieldError("full_name")}</div>
             <div className="space-y-1"><Label>CEP</Label><Input {...fieldProps("cep")} inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} />{fieldError("cep")}</div>
             <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("address")} value={form.address} onChange={set("address")} />{fieldError("address")}</div>
@@ -439,7 +446,7 @@ export default function SelfServiceOrderPage() {
             {attemptedSubmit && Object.keys(errors).length > 0 && <p role="alert" className="text-sm font-semibold text-destructive">Corrija os campos destacados acima para confirmar seu cadastro.</p>}
             <p className="text-sm text-muted-foreground">Ao tocar abaixo, o WhatsApp vai abrir. Envie a mensagem pronta para concluir a confirmação — só abrir o WhatsApp não confirma.</p>
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy}>
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />CONFIRMAR CADASTRO NO WHATSAPP</>}
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <><MessageCircle className="mr-2 h-5 w-5" />{known ? (orders.length ? "CONFIRMAR MEU PEDIDO NO WHATSAPP" : "CONFIRMAR MEUS DADOS NO WHATSAPP") : "CONFIRMAR CADASTRO NO WHATSAPP"}</>}
             </Button>
           </div>
         )}
@@ -448,7 +455,7 @@ export default function SelfServiceOrderPage() {
           <div className="space-y-4 rounded-2xl border p-4 text-center">
             <MessageCircle className="mx-auto h-12 w-12 text-primary" />
             <p className="font-semibold">Falta só um passo: envie a mensagem que abriu no WhatsApp</p>
-            <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois que essa mensagem chegar para nós.</p>
+            <p className="text-sm font-semibold">{known && orders.length ? "Seu pedido só fica confirmado depois que essa mensagem chegar para nós." : "Seu cadastro só fica confirmado depois que essa mensagem chegar para nós."}</p>
             <p className="text-sm text-muted-foreground">
               {orders.length ? "Assim que ela chegar, a gente te responde com o link do seu carrinho." : "Assim que ela chegar, seu cadastro fica confirmado."}
             </p>
