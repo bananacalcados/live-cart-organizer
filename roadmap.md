@@ -124,3 +124,8 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 - [x] Tabelas, regra no servidor, sincronização por diferença, travas 70%/20%, recusas fora, rodadas 03:00 e 10:00/12:00 em dia de live, tela Marketing > Públicos Meta.
 - [x] 5 públicos "ERP –" criados e carregados; conferência da base unificada entregue.
 - [ ] 1ª carga por substituição dos 6 públicos existentes: agendada para 03/11 03:00 (aguarda a data).
+
+## Lentidão live 31/10
+- [ ] Fase 1: cartões do quadro sem buscas repetidas (lote) + Central sem vazamento
+- [ ] Fase 3: PDV WhatsApp sem recarga completa em laço
+- [ ] Fase 2: restante em lote
