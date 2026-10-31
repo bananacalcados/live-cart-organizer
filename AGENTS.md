@@ -39,9 +39,8 @@
 - Card gateway split (Admin > Pagamentos, gateway_split_config) picks only the FIRST gateway of the card cascade, deterministic by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins only as drawn start gateway, config read failure falls back to the fixed order — retries must never land on a different gateway.
 
 - Wait-reply outcomes use stable step IDs and conditional row consumption: replies and timeouts choose only one branch while preserving legacy routing.
-- Presenter alerts: team_message only; order realtime never interrupts the live panel.
 
-- Lazy imports: one reload/tab, visible stale-module fallback.
+- Lazy imports: one reload/tab, visible stale-module fallback. Presenter alerts: team_message only; order realtime never interrupts the live panel.
 - Checkout installments expand inline; staff selections stay locked and cannot be filtered by MP-only offers — the server cascade must honor the agreed terms.
 - Self-service product and cart pages resolve event installment ceilings through resolveSelfServiceInstallments per order, not combined totals; the event threshold expands only interest-free terms, preventing contradictory offers.
 
@@ -73,4 +72,4 @@
 - Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
-- Live cross-sell catalog uses its own tables (event_catalog_products, live_catalog_links) and orders.origin='catalog'; catalog orders bypass enqueue_ig_live_cart_notification so they never trigger the standard cart link or Instagram DMs. Legacy crossell tables stay untouched.
+- Live cross-sell catalog: own tables + orders.origin='catalog', which the cart-notify trigger skips (no standard cart link/IG DMs); legacy crossell tables untouched.
