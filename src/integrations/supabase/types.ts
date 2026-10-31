@@ -80,6 +80,36 @@ export type Database = {
           },
         ]
       }
+      _perf_snap: {
+        Row: {
+          calls: number | null
+          q: string | null
+          queryid: number | null
+          taken_at: string | null
+          toplevel: boolean | null
+          total_ms: number | null
+          userid: unknown
+        }
+        Insert: {
+          calls?: number | null
+          q?: string | null
+          queryid?: number | null
+          taken_at?: string | null
+          toplevel?: boolean | null
+          total_ms?: number | null
+          userid?: unknown
+        }
+        Update: {
+          calls?: number | null
+          q?: string | null
+          queryid?: number | null
+          taken_at?: string | null
+          toplevel?: boolean | null
+          total_ms?: number | null
+          userid?: unknown
+        }
+        Relationships: []
+      }
       accountant_recipients: {
         Row: {
           ativo: boolean
