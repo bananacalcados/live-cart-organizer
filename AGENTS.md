@@ -31,8 +31,7 @@
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e lê unit_price e o imposto incide só sobre o valor real; bloqueada após NF-e emitida.
 - Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows syncs server-side only for active lives (one 30s second pass), avoiding browser polling and extra crons.
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders — página pública não toca em orders/comentários/clientes.
-- Raffle eligibility only in RPC event_raffle_pool (bar, list, draw match).
-- Fixed OBS token in live_overlay_templates follows newest event; new events inherit last layout without overwrites; reset queues/cursor on live change.
+- Raffle eligibility only in RPC event_raffle_pool. Fixed OBS token in live_overlay_templates follows newest event; new events inherit last layout without overwrites; reset queues/cursor on live change.
 - Leads already customers (customers_unified.total_orders > 0, last 8 phone digits) stay in lp_leads marked dispatch_excluded_reason='ja_cliente' via BEFORE INSERT trigger: history preserved, dispatches target only real prospects.
 - Event revenue metrics (src/lib/eventRevenue.ts and RPC event_inner_dashboard) count cancelled orders in totals and the conversion denominator, never as paid/received — the business wants real conversion.
 - Card gateway split (Admin > Pagamentos, gateway_split_config) picks only the FIRST gateway of the card cascade, deterministic by order id via _shared/gateway-split.ts; Pix/debit stay on Mercado Pago, AustPay (card only) joins only as drawn start gateway, config read failure falls back to the fixed order — retries must never land on a different gateway.
