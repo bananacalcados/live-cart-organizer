@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, MessageSquare, ClipboardList, Layers, Link2, PackageCheck, Megaphone, UserPlus, Eye, EyeOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -205,7 +205,9 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   const [groupDialogOrders, setGroupDialogOrders] = useState<DbOrder[] | null>(null);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
-  const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+  // Chave primitiva: só muda quando o CONJUNTO de pedidos muda (não a cada atualização de pedido).
+  const orderIdsKey = useMemo(() => orders.map((o) => o.id).sort().join(","), [orders]);
+  const orderIds = useMemo(() => (orderIdsKey ? orderIdsKey.split(",") : []), [orderIdsKey]);
 
   // Telefones (DDD + 8 dígitos) que já têm pedido neste evento — não aparecem em "Novos contatos".
   const orderPhoneKeys = useMemo(() => {
@@ -438,7 +440,17 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   }, [pinnedIds, currentUserId, loadPins]);
 
   // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
+  // Fichas/aberturas/divisões só recarregam quando muda algo relevante dos pedidos
+  // não pagos (id, início do checkout, versão), não a cada nova referência de array.
+  const originalOrdersRef = useRef(originalOrders);
+  originalOrdersRef.current = originalOrders;
+  const unpaidRegKey = useMemo(
+    () => originalOrders.filter((o) => !isOrderMarkedPaid(o))
+      .map((o) => `${o.id}:${(o as any).checkout_started_at || ""}:${(o as any).updated_at || ""}`).sort().join(","),
+    [originalOrders],
+  );
   useEffect(() => {
+    const originalOrders = originalOrdersRef.current;
     const ids = originalOrders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
     if (ids.length === 0) { setRegistrationPhones((prev) => Object.keys(prev).length ? {} : prev); setStepByOrder({}); setOpenedByOrder({}); setSplitByOrder({}); return; }
     let cancelled = false;
@@ -509,7 +521,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       if (!cancelled) setSplitByOrder(splits);
     })();
     return () => { cancelled = true; };
-  }, [originalOrders]);
+  }, [unpaidRegKey]);
 
   const { awaiting, paid, incomplete } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
