@@ -1271,6 +1271,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
       // acontece no effect abaixo SEM nova ida ao servidor.
       setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[], hidden: (((hidden as any)?.data) || []) as any[] });
+      listSyncRef.current = { paramsKey, since: fullStartedAt, lastFullAt: fullStartedAt };
     };
 
     loadConversations()
