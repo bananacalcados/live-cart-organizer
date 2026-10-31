@@ -443,6 +443,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   // Fichas/aberturas/divisões só recarregam quando muda algo relevante dos pedidos
   // não pagos (id, início do checkout, versão), não a cada nova referência de array.
   const originalOrdersRef = useRef(originalOrders);
+  const regLoadedOnceRef = useRef(false);
   originalOrdersRef.current = originalOrders;
   const unpaidRegKey = useMemo(
     () => originalOrders.filter((o) => !isOrderMarkedPaid(o))
@@ -520,7 +521,8 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
         }
       }
       if (!cancelled) setSplitByOrder(splits);
-    })(); }, 2000);
+    })(); }, regLoadedOnceRef.current ? 2000 : 0);
+    regLoadedOnceRef.current = true;
     return () => { cancelled = true; clearTimeout(timer); };
   }, [unpaidRegKey]);
 
