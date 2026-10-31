@@ -19,8 +19,11 @@ export function inviteName(handle?: string | null, fullName?: string | null): st
 export function buildInviteText(nome: string, link: string, rand: number = Math.random()): string {
   const i = Math.min(INVITE_VARIATIONS.length - 1, Math.max(0, Math.floor(rand * INVITE_VARIATIONS.length)));
   let t = INVITE_VARIATIONS[i].replace("{nome}", nome).replace("{link}", link);
-  if (!nome) t = t.replace(/^\s*[,!]?\s*/, "").replace("Oii ! ", "Oii! ").replace("Oii !", "Oii!");
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  if (!nome) {
+    t = t.replace(/^\s*[,!]?\s*/, "").replace("Oii !", "Oii!");
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  return t;
 }
 
 /** Espelho do sorteio do banco: segundos entre min e max minutos (inclusive). */
