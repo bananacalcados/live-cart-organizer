@@ -696,6 +696,9 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
           isPaid={!!order.is_paid || !!order.paid_externally}
           whatsapp={order.customer?.whatsapp}
         />
+        {(order as any).origin === "catalog" && (
+          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/40">🛍️ Catálogo</Badge>
+        )}
         {/* Status do link de checkout — só exibe enquanto o pedido não está pago */}
         {!order.is_paid && !order.paid_externally && linkStep >= 0 && (
           linkStep === 0 ? (

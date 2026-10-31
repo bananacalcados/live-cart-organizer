@@ -26386,6 +26386,15 @@ export type Database = {
           used_count: number
         }[]
       }
+      catalog_available_cashback: {
+        Args: { p_order_id: string; p_phone: string }
+        Returns: {
+          cashback_amount: number
+          expires_at: string
+          id: string
+          min_purchase: number
+        }[]
+      }
       change_area_password: {
         Args: { p_area: string; p_current: string; p_new: string }
         Returns: boolean
