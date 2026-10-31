@@ -62,3 +62,12 @@ export const liveIncomingByPhone = createKeyedCache(async (phone: string) => {
     .limit(5);
   return (data || []) as { message: string | null }[];
 }, 30_000);
+
+export const expeditionBySuffix = createKeyedCache(async (suffix: string) => {
+  const { data } = await supabase
+    .from("expedition_orders")
+    .select("shopify_order_name, customer_phone")
+    .or(`customer_phone.ilike.%${suffix}`)
+    .limit(20);
+  return (data || []) as { shopify_order_name: string | null; customer_phone: string | null }[];
+});

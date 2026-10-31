@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale, liveIncomingByPhone } from "@/lib/orderCardBatches";
+import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale, liveIncomingByPhone, expeditionBySuffix } from "@/lib/orderCardBatches";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
@@ -244,11 +244,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
       if (phone.length >= 8) {
         const phoneSuffix = phone.slice(-8);
-        const { data: expeditions } = await supabase
-          .from("expedition_orders")
-          .select("shopify_order_name, customer_phone")
-          .or(`customer_phone.ilike.%${phoneSuffix}`)
-          .limit(20);
+        const expeditions = await expeditionBySuffix.load(phoneSuffix);
 
         if (expeditions && expeditions.length > 0) {
           applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
