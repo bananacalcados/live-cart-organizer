@@ -1470,11 +1470,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
         />
       )}
 
-      <SendToPOSDialog
-        open={showPOSDialog}
-        onOpenChange={setShowPOSDialog}
-        order={order}
-      />
+      {showPOSDialog && (
+        <SendToPOSDialog
+          open={showPOSDialog}
+          onOpenChange={setShowPOSDialog}
+          order={order}
+        />
+      )}
 
       <Dialog open={showShopifyActionsDialog} onOpenChange={setShowShopifyActionsDialog}>
         <DialogContent onClick={(e) => e.stopPropagation()}>
