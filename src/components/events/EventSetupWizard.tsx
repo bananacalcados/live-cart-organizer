@@ -32,6 +32,7 @@ import { MessagePresetControls } from "./MessagePresetControls";
 import { LivePrizeImageUpload } from "./LivePrizeImageUpload";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
+import { EventCatalogManager } from "./EventCatalogManager";
 import {
   Truck,
   FileText,
@@ -1011,14 +1012,19 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           )}
 
           {currentStep.key === "crossell" && (
-            <CrossellConfigStep
-              noCrossell={crossellNone}
-              offers={crossellOffers}
-              onChange={({ noCrossell, offers }) => {
-                setCrossellNone(noCrossell);
-                setCrossellOffers(offers);
-              }}
-            />
+            <div className="space-y-6">
+              {isSelfServiceMode(operationMode) && (
+                <EventCatalogManager eventId={event.id} />
+              )}
+              <CrossellConfigStep
+                noCrossell={crossellNone}
+                offers={crossellOffers}
+                onChange={({ noCrossell, offers }) => {
+                  setCrossellNone(noCrossell);
+                  setCrossellOffers(offers);
+                }}
+              />
+            </div>
           )}
 
 
