@@ -172,7 +172,7 @@ function CatalogCard({ row, busy, first, last, onPatch, onUp, onDown, onRefresh,
     const val = raw === "" ? null : Number(raw);
     if (val !== null && (!isFinite(val) || val <= 0)) { toast.error("Preço de oferta inválido"); return; }
     if (val === row.offer_price) return;
-    onPatch({ offer_price: val });
+    onPatch(val === null ? { offer_price: null, allow_cashback: true } : { offer_price: val });
   };
 
   return (

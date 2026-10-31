@@ -73,3 +73,4 @@
 - Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
+- Live cross-sell catalog uses its own tables (event_catalog_products, live_catalog_links) and orders.origin='catalog'; catalog orders bypass enqueue_ig_live_cart_notification so they never trigger the standard cart link or Instagram DMs. Legacy crossell tables stay untouched.
