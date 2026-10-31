@@ -52,7 +52,6 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   const [cfg, setCfg] = useState<OverlayConfig>(DEFAULT_OVERLAY_CONFIG);
   const [hidden, setHidden] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [previewKey, setPreviewKey] = useState(0);
   const [editPositions, setEditPositions] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -81,11 +80,12 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   };
 
   const load = useCallback(async () => {
-    const [{ data: ev }, { data: st }] = await Promise.all([
+    const [{ data: fixed }, { data: ev }, { data: st }] = await Promise.all([
+      sb.rpc("overlay_fixed_token"),
       sb.from("events").select("overlay_token").eq("id", eventId).maybeSingle(),
       sb.from("live_overlay_settings").select("config, hidden").eq("event_id", eventId).maybeSingle(),
     ]);
-    setToken(ev?.overlay_token || null);
+    setToken(fixed || ev?.overlay_token || null);
     if (st) {
       setCfg(withOverlayDefaults(st.config));
       setHidden(!!st.hidden);
@@ -121,15 +121,6 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
     const { error } = await sb.from("live_overlay_settings").update({ hidden: next, updated_at: new Date().toISOString() }).eq("event_id", eventId);
     if (error) return toast.error("Não foi possível alterar");
     setHidden(next);
-  };
-
-  const rotate = async () => {
-    if (!confirm("Gerar um novo link? O link antigo para de funcionar no OBS.")) return;
-    const { data, error } = await sb.rpc("rotate_overlay_token", { p_event_id: eventId });
-    if (error) return toast.error("Não foi possível gerar");
-    setToken(data);
-    setPreviewKey((k) => k + 1);
-    toast.success("Novo link gerado");
   };
 
   const showNow = async (text: string) => {
@@ -192,13 +183,13 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
     toast.info("Modelo carregado — clique em Aplicar para valer na live");
   };
 
-  const url = token ? `${window.location.origin}/overlay/${token}` : "";
+  const url = token ? `https://checkout.bananacalcados.com.br/overlay/${token}` : "";
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="flex-1 space-y-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">Link do OBS</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Link fixo do OBS</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             <div className="flex gap-2">
               <Input readOnly value={url} />
@@ -206,7 +197,6 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
             </div>
             <p className="text-xs text-muted-foreground">No OBS: Fonte de navegador, largura 1080, altura 1920.</p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="gap-1" onClick={rotate}><RefreshCw className="h-4 w-4" /> Gerar novo link</Button>
               <Button variant={hidden ? "default" : "destructive"} className="gap-1" onClick={toggleHidden}>
                 {hidden ? <><Eye className="h-4 w-4" /> Mostrar</> : <><EyeOff className="h-4 w-4" /> Ocultar tudo</>}
               </Button>
@@ -345,7 +335,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
           <div className="relative overflow-hidden rounded-xl bg-muted-foreground/40" style={{ width: 324, height: 576 }}>
             {token && (
               <iframe
-                key={`${token}-${previewKey}`}
+                key={token}
                 src={`/overlay/${token}`}
                 title="Prévia do overlay"
                 style={{ width: 1080, height: 1920, transform: "scale(0.3)", transformOrigin: "0 0", border: 0, background: "transparent" }}
