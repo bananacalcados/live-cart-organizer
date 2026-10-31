@@ -19,7 +19,7 @@
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
 - Shopify product links use shared officialProductUrl; attribution rebuilds from validated handles and fails closed, never trusting provider destinations.
-- Shopify data updates omit media entirely, preflight linked option values by unique exact dictionary matches, create variants through GraphQL IDs, and reconcile existing combinations only with matching SKU/GTIN; this preserves manual media/legacy links and prevents duplicate retries.
+- Shopify data updates omit media, preflight option values by unique exact dictionary match, create variants via GraphQL IDs and reconcile combinations only by matching SKU/GTIN, preserving manual media/legacy links and avoiding duplicates.
 
 - Expedition gateway badges/filters use pos_sales.payment_gateway only (unified shipments show all). Stage counters use the RLS-invoker pos_expedition_stage_counts aggregate over eligible sales and indexed items, never a capped historical item download; quantities can place one sale in multiple stages.
 
@@ -49,7 +49,7 @@
 
 - Event orders reconcile paginated ID/version/phone every 60s while visible, batching changed carts with edit locks; change feeds may be absent.
 
-- VIP inserts normalize names; captions never use media_brief. Shared media helpers preserve draft captions on append/remove.
+- VIP inserts normalize names; captions never use media_brief; media helpers preserve draft captions.
 
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
 - Self-service capture is idempotent/service-only; provisional last-four matches are display-only and revalidated against the sender. Lead uniqueness conflicts cannot roll back WhatsApp confirmation: preserve acquisition rows, annotate conflict, never merge identities.
