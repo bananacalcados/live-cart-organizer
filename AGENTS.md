@@ -24,9 +24,8 @@
 - Expedition gateway badges/filters use pos_sales.payment_gateway only (unified shipments show all). Stage counters use the RLS-invoker pos_expedition_stage_counts aggregate over eligible sales and indexed items, never a capped historical item download; quantities can place one sale in multiple stages.
 
 - Every public payment surface must resolve `payment_splits` before rendering a charge; never fall back to the full order total when split status cannot be loaded — that can double-charge a customer.
-- WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync lives in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only), read before the META_ADS_ACCESS_TOKEN secret — edge functions cannot rewrite secrets.
+- WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.
 - DRE (PDV > Dashboard Geral) só via RPC dre_period sobre as views v_sale_* (sem grant ao front); custo do item fica em pos_sale_items.cost_price_at_sale via trigger, porque o custo do cadastro muda com o tempo.
-- AppMax: AppStore OAuth2 via appmax-install; appmax_installations credentials service-role-only, no fixed secrets.
 - VIP attendance uses vip_links/daily_destination/clicks/conversations, vip-go and /g/:code; never reuse /zap or /vip engines: matching rules differ.
 - Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e lê unit_price e o imposto incide só sobre o valor real; bloqueada após NF-e emitida.
 - Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows syncs server-side only for active lives (one 30s second pass), avoiding browser polling and extra crons.
@@ -50,6 +49,7 @@
 
 - VIP inserts normalize names; captions never use media_brief; media helpers preserve draft captions.
 
+- Live board cards use batched/cached reads (src/lib/orderCardBatches) and mount dialogs only when open; POS WhatsApp list syncs incrementally (full reload on scope change/10 min): per-card work froze lives.
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
 - Self-service capture is idempotent/service-only; provisional last-four matches are display-only and revalidated against the sender. Lead uniqueness conflicts cannot roll back WhatsApp confirmation: preserve acquisition rows, annotate conflict, never merge identities.
 - Self-service greetings resolve Instagram through the current event's orders, never arbitrary shared-phone profiles; phone keys match event_phone_key and each fresh confirmation code resets only that access's reply lifecycle. Prize uploads reuse event-landing-assets and the prize banner is shared between product and registration screens.

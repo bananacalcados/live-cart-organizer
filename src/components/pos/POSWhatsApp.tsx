@@ -24,6 +24,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { fetchConversationRows } from "@/lib/chat/fetchConversations";
+import { mergeConversationRows } from "@/lib/chat/conversationSync";
+
+const LIST_FULL_RESYNC_MS = 10 * 60_000;
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -450,7 +453,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       }
     };
     loadLive();
-    const id = setInterval(loadLive, 20000);
+    const id = setInterval(() => { if (!document.hidden) void loadLive(); }, 60000);
     return () => { cancelled = true; clearInterval(id); };
   }, [storeId]);
 
@@ -853,6 +856,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   }, [conversations, contactPhotos, metaNumbers]);
 
   // Load CRM data when phone is selected
+  const selectedContactName = selectedPhone ? (chatContacts[selectedPhone] || null) : null;
+  const selectedContactPhoto = selectedPhone ? (contactPhotos[selectedPhone] || null) : null;
   useEffect(() => {
     if (!selectedPhone) {
       setCrmData(null);
@@ -1076,7 +1081,10 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
 
     loadCrmData();
-  }, [selectedPhone, chatContacts, contactPhotos, igLinkPhone]);
+    // Depende só do nome/foto DESTA conversa (texto), não dos mapas inteiros —
+    // antes cada atualização da lista refazia as 6+ consultas da ficha.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPhone, selectedContactName, selectedContactPhoto, igLinkPhone]);
 
   // Helper to map RPC rows to Conversation objects (same pattern as Chat page)
   const mapRowsToConvs = useMemo(() => (rows: any[]) => {
@@ -1178,6 +1186,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   // executada UMA vez ao final (com os filtros mais recentes).
   const listLoadInFlightRef = useRef(false);
   const listReloadPendingRef = useRef(false);
+  const listSyncRef = useRef<{ paramsKey: string; since: number | null; lastFullAt: number }>({ paramsKey: '', since: null, lastFullAt: 0 });
   // Linhas cruas da última consulta (resumo por telefone+instância).
   const [listRows, setListRows] = useState<{ regular: any[]; dispatch: any[]; hidden?: any[] } | null>(null);
   // Chats de grupo de instâncias não responsáveis (espelhos) e grupos arquivados.
@@ -1196,6 +1205,41 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     const loadConversations = async () => {
       // Determine which number IDs to query (store-specific filtering)
       const needsDispatch = statusFilter === 'dispatch';
+
+      // Atualização INCREMENTAL: mensagem nova / poll de segurança não baixa mais a
+      // lista inteira (~2,5 MB) — só as conversas alteradas desde a última leitura.
+      // Carga completa apenas ao trocar loja/filtro/espelhos ou a cada 10 min.
+      const paramsKey = `${storeNumberIds.join(',')}|${statusFilter}|${showGroupMirrors}`;
+      const sync = listSyncRef.current;
+      const canIncremental = storeNumberIds.length > 0 && sync.paramsKey === paramsKey
+        && sync.since !== null && Date.now() - sync.lastFullAt < LIST_FULL_RESYNC_MS;
+      if (canIncremental) {
+        const startedAt = Date.now();
+        const since = new Date(sync.since! - 2 * 60_000).toISOString();
+        const calls = storeNumberIds.flatMap((id) => [
+          (supabase.rpc as any)('get_conversations_since', { p_number_id: id, p_dispatch_only: false, p_since: since }),
+          ...(needsDispatch ? [(supabase.rpc as any)('get_conversations_since', { p_number_id: id, p_dispatch_only: true, p_since: since })] : []),
+        ]);
+        const results = await Promise.all(calls);
+        if (!results.some((r: any) => r?.error)) {
+          const regularInc: any[] = []; const dispatchInc: any[] = [];
+          results.forEach((r: any, i: number) => {
+            const isDispatch = needsDispatch && i % 2 === 1;
+            (isDispatch ? dispatchInc : regularInc).push(...((r.data || []) as any[]));
+          });
+          sync.since = startedAt;
+          if (regularInc.length || dispatchInc.length) {
+            setListRows((prev) => prev ? {
+              ...prev,
+              regular: mergeConversationRows(prev.regular, regularInc),
+              dispatch: needsDispatch ? mergeConversationRows(prev.dispatch, dispatchInc) : prev.dispatch,
+            } : prev);
+          }
+          return;
+        }
+        // erro no incremental: cai para a carga completa abaixo
+      }
+      const fullStartedAt = Date.now();
 
       // Fase 2 — UMA chamada por recarga (antes eram até 7):
       // `get_conversations_multi` recebe TODAS as instâncias da loja de uma vez e
@@ -1232,6 +1276,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       // Só guarda as linhas cruas; a derivação (nomes, CRM, filtros, enriquecimento)
       // acontece no effect abaixo SEM nova ida ao servidor.
       setListRows({ regular: regular.rows as any[], dispatch: dispatch.rows as any[], hidden: (((hidden as any)?.data) || []) as any[] });
+      listSyncRef.current = { paramsKey, since: fullStartedAt, lastFullAt: fullStartedAt };
     };
 
     loadConversations()

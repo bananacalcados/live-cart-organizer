@@ -124,3 +124,8 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 - [x] Tabelas, regra no servidor, sincronização por diferença, travas 70%/20%, recusas fora, rodadas 03:00 e 10:00/12:00 em dia de live, tela Marketing > Públicos Meta.
 - [x] 5 públicos "ERP –" criados e carregados; conferência da base unificada entregue.
 - [ ] 1ª carga por substituição dos 6 públicos existentes: agendada para 03/11 03:00 (aguarda a data).
+
+## Lentidão live 31/10
+- [x] Fase 1: cartões em lote/cache, janelas só quando abertas, memória estável. Pendente: travadas >200 ms no redesenho do quadro (cartões pesados).
+- [x] Fase 3: PDV WhatsApp incremental (32 → 3–4,6 MB/min)
+- [ ] Fase 2: lote para prêmios/último cadastro/mensagens por telefone (precisa função nova no servidor) e aliviar redesenho do quadro

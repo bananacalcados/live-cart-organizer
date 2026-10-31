@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale, liveIncomingByPhone, expeditionBySuffix } from "@/lib/orderCardBatches";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
@@ -144,15 +145,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
   // Calcula em que etapa do link de checkout o cliente parou (com base no que ele
   // já preencheu na ficha) e se o link chegou a ser aberto.
+  const linkStepLoadedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("full_name,cpf,whatsapp,cep,address,city,state")
-          .eq("order_id", order.id)
-          .maybeSingle();
+        const reg = await registrationByOrder.load(order.id, linkStepLoadedRef.current);
+        linkStepLoadedRef.current = true;
         if (cancelled) return;
 
         const notPlaceholder = (v?: string | null, ph?: string) =>
@@ -206,11 +205,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
     if (!order.event_id) { setIsPhysicalEvent(false); setIsManualRoutingEvent(false); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('events')
-        .select('channel, default_store_id, manual_pos_routing')
-        .eq('id', order.event_id)
-        .maybeSingle();
+      const data = await eventInfoById.load(order.event_id);
       if (cancelled) return;
       const manual = !!(data as any)?.manual_pos_routing;
       const physical = manual || (!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
@@ -235,9 +230,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       return;
     }
 
-    const { data } = await supabase
-      .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
-      .maybeSingle();
+    const data = await latestRegistrationByCustomer.load(order.customer_id);
 
     setHasRegistration(!!data);
 
@@ -251,26 +244,9 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
       if (phone.length >= 8) {
         const phoneSuffix = phone.slice(-8);
-        const { data: expeditions } = await supabase
-          .from("expedition_orders")
-          .select("shopify_order_name, customer_phone")
-          .or(`customer_phone.ilike.%${phoneSuffix}`)
-          .limit(20);
+        const expeditions = await expeditionBySuffix.load(phoneSuffix);
 
         if (expeditions && expeditions.length > 0) {
-          const crmVariantIds = new Set<string>();
-          for (const p of order.products) {
-            if (p.shopifyId) {
-              const match = p.shopifyId.match(/ProductVariant\/(\d+)/);
-              if (match) crmVariantIds.add(match[1]);
-            }
-          }
-
-          if (crmVariantIds.size > 0) {
-            applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
-            return;
-          }
-
           applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
           return;
         }
@@ -297,7 +273,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
     setHasShopifyOrder(null);
     setShopifyOrderName(null);
-  }, [applyShopifyVerification, order.customer?.whatsapp, order.customer_id, order.id, order.is_paid, order.paid_externally, order.products]);
+  }, [applyShopifyVerification, order.customer?.whatsapp, order.customer_id, order.id, order.is_paid, order.paid_externally]);
 
   useEffect(() => {
     void refreshShopifyStatus();
@@ -326,13 +302,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
     const phone = order.customer.whatsapp.replace(/\D/g, '');
     if (!phone) return;
     const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('whatsapp_messages')
-        .select('message')
-        .eq('phone', phone)
-        .eq('direction', 'incoming')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const data = await liveIncomingByPhone.load(phone);
       if (data) setLiveMessages(data.map(m => m.message).filter(Boolean));
     };
     fetchMessages();
@@ -355,14 +325,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('pos_checkout_attempts')
-        .select('payment_method, metadata')
-        .eq('sale_id', order.id)
-        .eq('status', 'success')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const data = await successAttemptBySale.load(order.id);
       if (cancelled || !data) return;
       setCheckoutMethod(data.payment_method || null);
       const meta = (data.metadata as Record<string, unknown> | null) || {};
@@ -1427,55 +1390,67 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       </div>
 
 
-      <SendWhatsAppDialog
-        open={showWhatsAppDialog}
-        onOpenChange={setShowWhatsAppDialog}
-        order={orderForDialog}
-      />
+      {showWhatsAppDialog && (
+        <SendWhatsAppDialog
+          open={showWhatsAppDialog}
+          onOpenChange={setShowWhatsAppDialog}
+          order={orderForDialog}
+        />
+      )}
 
-      <CustomerFichaDialog
-        open={showFichaDialog}
-        onOpenChange={setShowFichaDialog}
-        order={order}
-      />
+      {showFichaDialog && (
+        <CustomerFichaDialog
+          open={showFichaDialog}
+          onOpenChange={setShowFichaDialog}
+          order={order}
+        />
+      )}
 
-      <OrderFullViewDialog
-        open={showFullViewDialog}
-        onOpenChange={setShowFullViewDialog}
-        order={order}
-      />
+      {showFullViewDialog && (
+        <OrderFullViewDialog
+          open={showFullViewDialog}
+          onOpenChange={setShowFullViewDialog}
+          order={order}
+        />
+      )}
 
-      <MarkOrderPaidDialog
-        open={showMarkPaidDialog}
-        onOpenChange={setShowMarkPaidDialog}
-        orderId={order.id}
-        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showMarkPaidDialog && (
+        <MarkOrderPaidDialog
+          open={showMarkPaidDialog}
+          onOpenChange={setShowMarkPaidDialog}
+          orderId={order.id}
+          customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
-      <PayOnDeliveryDialog
-        open={showPayOnDeliveryDialog}
-        onOpenChange={setShowPayOnDeliveryDialog}
-        orderId={order.id}
-        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showPayOnDeliveryDialog && (
+        <PayOnDeliveryDialog
+          open={showPayOnDeliveryDialog}
+          onOpenChange={setShowPayOnDeliveryDialog}
+          orderId={order.id}
+          customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
-      <StorePickupWizard
-        open={showPickupWizard}
-        onOpenChange={setShowPickupWizard}
-        orderId={order.id}
-        eventId={order.event_id}
-        alreadyPaid={!!(order.is_paid || order.paid_externally)}
-        customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showPickupWizard && (
+        <StorePickupWizard
+          open={showPickupWizard}
+          onOpenChange={setShowPickupWizard}
+          orderId={order.id}
+          eventId={order.event_id}
+          alreadyPaid={!!(order.is_paid || order.paid_externally)}
+          customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
 
 
 
 
-      {order.customer?.whatsapp && (
+      {showChatDialog && order.customer?.whatsapp && (
         <WhatsAppChatDialog
           open={showChatDialog}
           onOpenChange={setShowChatDialog}
@@ -1484,7 +1459,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
         />
       )}
 
-      {order.customer?.instagram_handle && (
+      {showIgChatDialog && order.customer?.instagram_handle && (
         <InstagramDMChat
           open={showIgChatDialog}
           onOpenChange={setShowIgChatDialog}
@@ -1495,11 +1470,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
         />
       )}
 
-      <SendToPOSDialog
-        open={showPOSDialog}
-        onOpenChange={setShowPOSDialog}
-        order={order}
-      />
+      {showPOSDialog && (
+        <SendToPOSDialog
+          open={showPOSDialog}
+          onOpenChange={setShowPOSDialog}
+          order={order}
+        />
+      )}
 
       <Dialog open={showShopifyActionsDialog} onOpenChange={setShowShopifyActionsDialog}>
         <DialogContent onClick={(e) => e.stopPropagation()}>

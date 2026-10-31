@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tagIdsByOrder } from "@/lib/orderCardBatches";
 import { Tag, Plus, X, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +22,20 @@ const COLORS = [
 let tagsCache: OrderTag[] | null = null;
 const listeners = new Set<(t: OrderTag[]) => void>();
 
+let tagsInFlight: Promise<OrderTag[]> | null = null;
 async function loadTags(force = false): Promise<OrderTag[]> {
   if (tagsCache && !force) return tagsCache;
-  const { data } = await supabase
-    .from("order_tags" as any)
-    .select("id, name, color")
-    .order("name");
-  tagsCache = ((data as any) || []) as OrderTag[];
-  listeners.forEach((l) => l(tagsCache!));
-  return tagsCache;
+  if (tagsInFlight && !force) return tagsInFlight; // 1 consulta para todos os cartões
+  tagsInFlight = (async () => {
+    const { data } = await supabase
+      .from("order_tags" as any)
+      .select("id, name, color")
+      .order("name");
+    tagsCache = ((data as any) || []) as OrderTag[];
+    listeners.forEach((l) => l(tagsCache!));
+    return tagsCache;
+  })().finally(() => { tagsInFlight = null; });
+  return tagsInFlight;
 }
 
 interface Props {
@@ -56,12 +62,9 @@ export function OrderTagsBar({ orderId }: Props) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const { data } = await supabase
-        .from("order_tag_assignments" as any)
-        .select("tag_id")
-        .eq("order_id", orderId);
+      const ids = await tagIdsByOrder.load(orderId);
       if (alive) {
-        setSelected(((data as any[]) || []).map((r) => r.tag_id));
+        setSelected(ids || []);
         setLoading(false);
       }
     })();
@@ -71,6 +74,7 @@ export function OrderTagsBar({ orderId }: Props) {
   }, [orderId]);
 
   const toggle = async (tagId: string) => {
+    tagIdsByOrder.invalidate(orderId);
     if (selected.includes(tagId)) {
       setSelected((s) => s.filter((t) => t !== tagId));
       const { error } = await supabase
