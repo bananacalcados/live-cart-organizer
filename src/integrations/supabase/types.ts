@@ -11601,6 +11601,7 @@ export type Database = {
           id: string
           invite_kind: string | null
           invite_sent_at: string | null
+          last_opened_at: string | null
           open_count: number
           opened_at: string | null
           phone_key: string
@@ -11615,6 +11616,7 @@ export type Database = {
           id?: string
           invite_kind?: string | null
           invite_sent_at?: string | null
+          last_opened_at?: string | null
           open_count?: number
           opened_at?: string | null
           phone_key: string
@@ -11629,6 +11631,7 @@ export type Database = {
           id?: string
           invite_kind?: string | null
           invite_sent_at?: string | null
+          last_opened_at?: string | null
           open_count?: number
           opened_at?: string | null
           phone_key?: string
@@ -27952,6 +27955,7 @@ export type Database = {
           id: string
           invite_kind: string | null
           invite_sent_at: string | null
+          last_opened_at: string | null
           open_count: number
           opened_at: string | null
           phone_key: string
@@ -28002,6 +28006,10 @@ export type Database = {
           p_phone: string
         }
         Returns: Json
+      }
+      live_catalog_staff_link_last_open: {
+        Args: { p_link_id: string }
+        Returns: string
       }
       live_catalog_staff_send: {
         Args: {
