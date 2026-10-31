@@ -35,6 +35,7 @@ import { EventCustomerOrderSearch } from "@/components/events/EventCustomerOrder
 
 import { EventTeamManager } from "@/components/events/EventTeamManager";
 import { EventTeamSelector } from "@/components/events/EventTeamSelector";
+import { EventCatalogManager } from "@/components/events/EventCatalogManager";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -795,6 +796,9 @@ const Events = () => {
                     automations={igAutomations}
                     onChange={setIgAutomations}
                   />
+                  {editingEvent && operationMode === "whatsapp_autoatendimento" && (
+                    <EventCatalogManager eventId={editingEvent} />
+                  )}
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
                   )}
