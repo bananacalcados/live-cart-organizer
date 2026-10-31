@@ -5922,6 +5922,68 @@ export type Database = {
           },
         ]
       }
+      event_catalog_products: {
+        Row: {
+          allow_cashback: boolean
+          created_at: string
+          event_id: string
+          id: string
+          image_url: string | null
+          images: Json
+          is_active: boolean
+          offer_price: number | null
+          original_price: number
+          position: number
+          product_handle: string | null
+          shopify_product_id: string
+          title: string
+          updated_at: string
+          variants: Json
+        }
+        Insert: {
+          allow_cashback?: boolean
+          created_at?: string
+          event_id: string
+          id?: string
+          image_url?: string | null
+          images?: Json
+          is_active?: boolean
+          offer_price?: number | null
+          original_price: number
+          position?: number
+          product_handle?: string | null
+          shopify_product_id: string
+          title: string
+          updated_at?: string
+          variants?: Json
+        }
+        Update: {
+          allow_cashback?: boolean
+          created_at?: string
+          event_id?: string
+          id?: string
+          image_url?: string | null
+          images?: Json
+          is_active?: boolean
+          offer_price?: number | null
+          original_price?: number
+          position?: number
+          product_handle?: string | null
+          shopify_product_id?: string
+          title?: string
+          updated_at?: string
+          variants?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_catalog_products_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_contact_lanes: {
         Row: {
           created_at: string
@@ -7009,7 +7071,9 @@ export type Database = {
           active_product_delay_seconds: number
           automation_enabled: boolean
           capi_advanced_matching: boolean
+          catalog_enabled: boolean
           catalog_lead_page_id: string | null
+          catalog_link_hours: number
           channel: Database["public"]["Enums"]["event_channel"]
           channel_preference: string
           channel_preferences: string[]
@@ -7073,7 +7137,9 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           capi_advanced_matching?: boolean
+          catalog_enabled?: boolean
           catalog_lead_page_id?: string | null
+          catalog_link_hours?: number
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
           channel_preferences?: string[]
@@ -7137,7 +7203,9 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           capi_advanced_matching?: boolean
+          catalog_enabled?: boolean
           catalog_lead_page_id?: string | null
+          catalog_link_hours?: number
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
           channel_preferences?: string[]
@@ -11433,6 +11501,73 @@ export type Database = {
         }
         Relationships: []
       }
+      live_catalog_links: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          event_id: string
+          expires_at: string
+          id: string
+          invite_kind: string | null
+          invite_sent_at: string | null
+          open_count: number
+          opened_at: string | null
+          phone_key: string
+          source_order_id: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          event_id: string
+          expires_at: string
+          id?: string
+          invite_kind?: string | null
+          invite_sent_at?: string | null
+          open_count?: number
+          opened_at?: string | null
+          phone_key: string
+          source_order_id?: string | null
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          event_id?: string
+          expires_at?: string
+          id?: string
+          invite_kind?: string | null
+          invite_sent_at?: string | null
+          open_count?: number
+          opened_at?: string | null
+          phone_key?: string
+          source_order_id?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_catalog_links_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_catalog_links_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_catalog_links_source_order_id_fkey"
+            columns: ["source_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_chat_messages: {
         Row: {
           created_at: string
@@ -14760,6 +14895,7 @@ export type Database = {
           meta_capi_purchase_sent_at: string | null
           mp_account_id: string | null
           notes: string | null
+          origin: string | null
           pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
@@ -14839,6 +14975,7 @@ export type Database = {
           meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
+          origin?: string | null
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
@@ -14918,6 +15055,7 @@ export type Database = {
           meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
+          origin?: string | null
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null

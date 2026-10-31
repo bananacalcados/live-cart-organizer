@@ -750,6 +750,13 @@
       "when": 1793452160360,
       "tag": "0106_fixed_live_overlay",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793460109206,
+      "tag": "0107_live_catalog_block1",
+      "breakpoints": true
     }
   ]
 }
