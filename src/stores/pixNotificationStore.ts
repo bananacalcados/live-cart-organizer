@@ -145,13 +145,18 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
     // Throttle (não debounce): com eventos contínuos o debounce adiava a recarga
     // indefinidamente e atrasava a confirmação de pagamento.
+    // Durante a live chegam dezenas de mudanças de pedido por minuto (de todo o
+    // sistema): no máximo 1 recarga a cada 8 s, sempre com a última atualização.
+    let lastRefreshAt = 0;
     const scheduleRefresh = () => {
       if (get()._refreshTimer) return;
+      const wait = Math.max(1500, 8000 - (Date.now() - lastRefreshAt));
       set({
         _refreshTimer: setTimeout(() => {
           set({ _refreshTimer: null });
+          lastRefreshAt = Date.now();
           get().refresh();
-        }, 1500),
+        }, wait),
       });
     };
 
@@ -193,7 +198,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
     const poll = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       if (get().tabs.some((t) => t.status === "pending")) get().refresh();
-    }, 15000);
+    }, 30000);
 
     set({ _channel: channel, _poll: poll });
   },
