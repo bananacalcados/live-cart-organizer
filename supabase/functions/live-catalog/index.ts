@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
       }
       if (!to || !numberId) { console.error("[live-catalog] sem telefone/instância para avisar o carrinho", orderId); return; }
       const nome = handle || firstName((await regSource())?.full_name) || "";
-      const text = VARIATIONS[Math.floor(Math.random() * VARIATIONS.length)].replace("{nome}", nome).replace(" ,", ",").replace("{link}", cartUrl(slug, orderId));
+      const text = VARIATIONS[Math.floor(Math.random() * VARIATIONS.length)].replace("{nome}", nome).replace(" ,", ",").replace(" !", "!").replace("{link}", cartUrl(slug, orderId));
       const { error } = await sb.rpc("selfservice_queue_enqueue", {
         p_message_key: `catalog-cart:${orderId}`, p_event_id: (ev as any).id, p_order_id: orderId, p_kind: "cart_link",
         p_phone: to, p_whatsapp_number_id: numberId, p_payload: { text, order_ids: [orderId] },
