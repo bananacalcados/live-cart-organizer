@@ -1,5 +1,8 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Overlay fixo — 31/10
+- [ ] Reutilizar link da última live, acompanhar a live mais recente e herdar tamanhos/posições sem sobrescrever ajustes existentes; validar sem publicar.
+
 ## Rastreamento por pessoa nos disparos — 30/10
 - [x] Código por destinatário nos links da live, clique identificado, ligação ao cadastro/pedido, funil no detalhe do disparo, lista exportável e coluna no Custo × Receita. Teste com disparo cancelado de 1 destinatário, sem envio real.
 - [ ] Primeiro disparo real (31/10) — conferir funil depois do envio.
