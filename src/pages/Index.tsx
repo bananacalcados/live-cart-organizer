@@ -1,5 +1,5 @@
 import { isWhatsAppLikeMode } from "@/lib/liveModes";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { useNavigate, Link } from "react-router-dom";
 import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
@@ -157,12 +157,13 @@ const Index = () => {
     setDialogOpen(true);
   };
 
-  const handleEditOrder = (order: DbOrder) => {
+  // Referência estável: evita redesenhar os ~130 cartões a cada atualização da tela.
+  const handleEditOrder = useCallback((order: DbOrder) => {
     // Trava atualizações externas do pedido enquanto ele está aberto
     lockOrderEditing(order.id);
     setEditingOrder(order);
     setDialogOpen(true);
-  };
+  }, [lockOrderEditing]);
 
   const handleOrderDialogOpenChange = (open: boolean) => {
     if (!open && editingOrder) {
