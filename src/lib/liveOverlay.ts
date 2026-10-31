@@ -1,4 +1,8 @@
 export interface OverlayItem { id: string; text: string; enabled: boolean }
+/** A fixed link starts a fresh cursor when the live changes, never replaying the previous live. */
+export function overlayEventChanged(previous: string | null, incoming: string | null): boolean {
+  return previous !== null && incoming !== null && previous !== incoming;
+}
 export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel" | "timers";
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;

@@ -11751,6 +11751,7 @@ export type Database = {
         Row: {
           config: Json
           created_at: string
+          fixed_token: string | null
           id: string
           is_default: boolean
           name: string
@@ -11758,6 +11759,7 @@ export type Database = {
         Insert: {
           config?: Json
           created_at?: string
+          fixed_token?: string | null
           id?: string
           is_default?: boolean
           name: string
@@ -11765,6 +11767,7 @@ export type Database = {
         Update: {
           config?: Json
           created_at?: string
+          fixed_token?: string | null
           id?: string
           is_default?: boolean
           name?: string
@@ -27888,6 +27891,7 @@ export type Database = {
         }[]
       }
       normalize_wa_status: { Args: { raw: string }; Returns: string }
+      overlay_fixed_token: { Args: never; Returns: string }
       overlay_pull: {
         Args: { p_after_id?: number; p_token: string }
         Returns: Json

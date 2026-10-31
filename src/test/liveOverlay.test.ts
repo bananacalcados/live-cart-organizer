@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayPosition, withOverlayDefaults } from "@/lib/liveOverlay";
+import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayPosition, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+
+describe("fixed overlay live selection", () => {
+  it("resets the cursor only when the fixed link moves to another live", () => {
+    expect(overlayEventChanged("live-29-10", "live-31-10")).toBe(true);
+    expect(overlayEventChanged("live-29-10", "live-29-10")).toBe(false);
+    expect(overlayEventChanged(null, "live-29-10")).toBe(false);
+    expect(overlayEventChanged("live-29-10", null)).toBe(false);
+  });
+  it("preserves the last live's custom sizes and positions rather than restoring defaults", () => {
+    const layout = { ticker: { x: 24.444580078125, y: 83.33333333333333, width: 1040, font_size: 48, align: "center" }, wheel: { x: 22.222086588541664, y: 824.4447835286458, width: 1040, font_size: 91, align: "center" } };
+    const config = withOverlayDefaults({ layout });
+    expect(config.layout.ticker).toEqual(layout.ticker);
+    expect(config.layout.wheel).toEqual(layout.wheel);
+  });
+});
 
 describe("overlay layout", () => {
   it("preserves saved fictional participants independently of real raffle entries", () => {

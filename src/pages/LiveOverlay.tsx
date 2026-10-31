@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
@@ -25,6 +25,8 @@ export default function LiveOverlay() {
   const [raffleWinner, setRaffleWinner] = useState<{ key: number; label: string } | null>(null);
   const spinBusy = useRef(false);
   const lastId = useRef(0);
+  const liveId = useRef<string | null>(null);
+  const liveGeneration = useRef(0);
   const queue = useRef<Alert[]>([]);
   const ctaIdx = useRef(0);
   const ctaTimer = useRef<number | null>(null);
@@ -68,18 +70,20 @@ export default function LiveOverlay() {
     const s = spinQueue.current.shift();
     if (!s) return;
     spinBusy.current = true;
+    const generation = liveGeneration.current;
     const labels = s.labels.length ? s.labels : [s.winner];
     let i = 0; let delay = 70; let elapsed = 0;
     const step = () => {
+      if (generation !== liveGeneration.current) return;
       if (elapsed >= 6000) {
         setSpin({ key: s.key, handle: s.handle, text: s.winner, done: true, raffle: s.raffle, prize: s.prize });
         if (s.raffle) {
           // Sorteio: ganhadora fica em destaque 10 s e a barra vira "Ganhadora: @x".
           setRaffleWinner({ key: s.key, label: s.winner });
-          window.setTimeout(() => setRaffleWinner((w) => (w && w.key === s.key ? null : w)), 30_000);
+          window.setTimeout(() => { if (generation === liveGeneration.current) setRaffleWinner((w) => (w && w.key === s.key ? null : w)); }, 30_000);
         }
         const secs = s.raffle ? 10 : Math.max(3, cfgRef.current?.wheel.result_seconds || 8);
-        window.setTimeout(() => { setSpin(null); spinBusy.current = false; runSpin(); }, secs * 1000);
+        window.setTimeout(() => { if (generation !== liveGeneration.current) return; setSpin(null); spinBusy.current = false; runSpin(); }, secs * 1000);
         return;
       }
       setSpin({ key: s.key, handle: s.handle, text: labels[i % labels.length], done: false, raffle: s.raffle, prize: s.prize });
@@ -93,10 +97,31 @@ export default function LiveOverlay() {
   useEffect(() => {
     if (!token) return;
     let stop = false;
+    let pulling = false;
     const pull = async () => {
-      const { data } = await supabase.rpc("overlay_pull" as any, { p_token: token, p_after_id: lastId.current });
+      if (pulling || document.hidden) return;
+      pulling = true;
+      let data: any;
+      try {
+        const result = await supabase.rpc("overlay_pull" as any, { p_token: token, p_after_id: lastId.current });
+        data = result.data;
+      } finally { pulling = false; }
       if (stop || !data || (data as any).error) return;
       const d = data as any;
+      if (overlayEventChanged(liveId.current, d.event_id || null)) {
+        liveId.current = d.event_id;
+        liveGeneration.current += 1;
+        lastId.current = 0;
+        queue.current = [];
+        timerQueue.current = [];
+        spinQueue.current = [];
+        spinBusy.current = false;
+        setAlert(null); setCurrentTimer(null); setSpin(null); setRaffleWinner(null); setCta(null);
+        setTickerIdx(0); ctaIdx.current = 0;
+        if (ctaTimer.current) window.clearTimeout(ctaTimer.current);
+        return; // Next pull starts at the latest cursor for this live, skipping its history.
+      }
+      liveId.current = d.event_id || liveId.current;
       const key = JSON.stringify(d.settings?.config || {});
       if (key !== cfgKey.current) {
         cfgKey.current = key;
