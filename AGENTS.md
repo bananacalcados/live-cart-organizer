@@ -70,4 +70,4 @@
 - Refund, Correios and Live Crossell/paid-chat rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
-- Live cross-sell catalog: own tables + orders.origin='catalog' (cart-notify trigger skips it); public page only via live-catalog function, one open cart per customer (unique index), cashback rule in live-catalog/cashback.ts; legacy crossell untouched.
+- Live cross-sell catalog: own tables + orders.origin='catalog' skipped by cart-notify trigger; page only via live-catalog fn, one open cart per customer.
