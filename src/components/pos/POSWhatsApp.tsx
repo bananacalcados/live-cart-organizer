@@ -856,6 +856,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   }, [conversations, contactPhotos, metaNumbers]);
 
   // Load CRM data when phone is selected
+  const selectedContactName = selectedPhone ? (chatContacts[selectedPhone] || null) : null;
+  const selectedContactPhoto = selectedPhone ? (contactPhotos[selectedPhone] || null) : null;
   useEffect(() => {
     if (!selectedPhone) {
       setCrmData(null);
@@ -1079,7 +1081,10 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
 
 
     loadCrmData();
-  }, [selectedPhone, chatContacts, contactPhotos, igLinkPhone]);
+    // Depende só do nome/foto DESTA conversa (texto), não dos mapas inteiros —
+    // antes cada atualização da lista refazia as 6+ consultas da ficha.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPhone, selectedContactName, selectedContactPhoto, igLinkPhone]);
 
   // Helper to map RPC rows to Conversation objects (same pattern as Chat page)
   const mapRowsToConvs = useMemo(() => (rows: any[]) => {
