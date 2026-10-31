@@ -453,7 +453,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
       }
     };
     loadLive();
-    const id = setInterval(loadLive, 20000);
+    const id = setInterval(() => { if (!document.hidden) void loadLive(); }, 60000);
     return () => { cancelled = true; clearInterval(id); };
   }, [storeId]);
 
