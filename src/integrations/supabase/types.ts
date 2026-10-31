@@ -7071,7 +7071,10 @@ export type Database = {
           active_product_delay_seconds: number
           automation_enabled: boolean
           capi_advanced_matching: boolean
+          catalog_auto_invite: boolean
           catalog_enabled: boolean
+          catalog_invite_delay_max: number
+          catalog_invite_delay_min: number
           catalog_lead_page_id: string | null
           catalog_link_hours: number
           channel: Database["public"]["Enums"]["event_channel"]
@@ -7137,7 +7140,10 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           capi_advanced_matching?: boolean
+          catalog_auto_invite?: boolean
           catalog_enabled?: boolean
+          catalog_invite_delay_max?: number
+          catalog_invite_delay_min?: number
           catalog_lead_page_id?: string | null
           catalog_link_hours?: number
           channel?: Database["public"]["Enums"]["event_channel"]
@@ -7203,7 +7209,10 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           capi_advanced_matching?: boolean
+          catalog_auto_invite?: boolean
           catalog_enabled?: boolean
+          catalog_invite_delay_max?: number
+          catalog_invite_delay_min?: number
           catalog_lead_page_id?: string | null
           catalog_link_hours?: number
           channel?: Database["public"]["Enums"]["event_channel"]
@@ -11500,6 +11509,88 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Relationships: []
+      }
+      live_catalog_invites: {
+        Row: {
+          attempts: number
+          created_at: string
+          customer_id: string | null
+          enqueued_at: string | null
+          error: string | null
+          event_id: string
+          id: string
+          kind: string
+          link_id: string | null
+          order_id: string | null
+          phone: string | null
+          phone_key: string
+          requested_by: string | null
+          send_after: string
+          send_seq: number
+          sent_message_key: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          customer_id?: string | null
+          enqueued_at?: string | null
+          error?: string | null
+          event_id: string
+          id?: string
+          kind: string
+          link_id?: string | null
+          order_id?: string | null
+          phone?: string | null
+          phone_key: string
+          requested_by?: string | null
+          send_after?: string
+          send_seq?: number
+          sent_message_key?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          customer_id?: string | null
+          enqueued_at?: string | null
+          error?: string | null
+          event_id?: string
+          id?: string
+          kind?: string
+          link_id?: string | null
+          order_id?: string | null
+          phone?: string | null
+          phone_key?: string
+          requested_by?: string | null
+          send_after?: string
+          send_seq?: number
+          sent_message_key?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_catalog_invites_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_catalog_invites_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "live_catalog_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_catalog_invites_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       live_catalog_links: {
         Row: {
@@ -27846,6 +27937,81 @@ export type Database = {
       }
       live_backfill_order_phone: { Args: { p_order_id: string }; Returns: Json }
       live_buyer_phone_suffixes: { Args: never; Returns: string[] }
+      live_catalog_ensure_link: {
+        Args: {
+          p_customer_id: string
+          p_event_id: string
+          p_order_id: string
+          p_phone_key: string
+        }
+        Returns: {
+          created_at: string
+          customer_id: string | null
+          event_id: string
+          expires_at: string
+          id: string
+          invite_kind: string | null
+          invite_sent_at: string | null
+          open_count: number
+          opened_at: string | null
+          phone_key: string
+          source_order_id: string | null
+          token: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "live_catalog_links"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      live_catalog_invites_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          customer_id: string | null
+          enqueued_at: string | null
+          error: string | null
+          event_id: string
+          id: string
+          kind: string
+          link_id: string | null
+          order_id: string | null
+          phone: string | null
+          phone_key: string
+          requested_by: string | null
+          send_after: string
+          send_seq: number
+          sent_message_key: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "live_catalog_invites"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      live_catalog_invites_tick: { Args: never; Returns: undefined }
+      live_catalog_staff_link: {
+        Args: {
+          p_customer_id?: string
+          p_event_id: string
+          p_order_id?: string
+          p_phone: string
+        }
+        Returns: Json
+      }
+      live_catalog_staff_send: {
+        Args: {
+          p_customer_id?: string
+          p_event_id: string
+          p_order_id?: string
+          p_phone: string
+        }
+        Returns: string
+      }
       live_link_open_status: {
         Args: { p_order_ids: string[] }
         Returns: {

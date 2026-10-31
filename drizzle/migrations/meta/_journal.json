@@ -771,6 +771,13 @@
       "when": 1793460559803,
       "tag": "0109_live_catalog_cashback_fn_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1793461974123,
+      "tag": "0110_live_catalog_block3",
+      "breakpoints": true
     }
   ]
 }
