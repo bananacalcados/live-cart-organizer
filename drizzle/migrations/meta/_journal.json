@@ -743,6 +743,13 @@
       "when": 1793382391884,
       "tag": "0105_dispatch_recipient_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1793452160360,
+      "tag": "0106_fixed_live_overlay",
+      "breakpoints": true
     }
   ]
 }
