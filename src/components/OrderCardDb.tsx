@@ -1390,55 +1390,67 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       </div>
 
 
-      <SendWhatsAppDialog
-        open={showWhatsAppDialog}
-        onOpenChange={setShowWhatsAppDialog}
-        order={orderForDialog}
-      />
+      {showWhatsAppDialog && (
+        <SendWhatsAppDialog
+          open={showWhatsAppDialog}
+          onOpenChange={setShowWhatsAppDialog}
+          order={orderForDialog}
+        />
+      )}
 
-      <CustomerFichaDialog
-        open={showFichaDialog}
-        onOpenChange={setShowFichaDialog}
-        order={order}
-      />
+      {showFichaDialog && (
+        <CustomerFichaDialog
+          open={showFichaDialog}
+          onOpenChange={setShowFichaDialog}
+          order={order}
+        />
+      )}
 
-      <OrderFullViewDialog
-        open={showFullViewDialog}
-        onOpenChange={setShowFullViewDialog}
-        order={order}
-      />
+      {showFullViewDialog && (
+        <OrderFullViewDialog
+          open={showFullViewDialog}
+          onOpenChange={setShowFullViewDialog}
+          order={order}
+        />
+      )}
 
-      <MarkOrderPaidDialog
-        open={showMarkPaidDialog}
-        onOpenChange={setShowMarkPaidDialog}
-        orderId={order.id}
-        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showMarkPaidDialog && (
+        <MarkOrderPaidDialog
+          open={showMarkPaidDialog}
+          onOpenChange={setShowMarkPaidDialog}
+          orderId={order.id}
+          customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
-      <PayOnDeliveryDialog
-        open={showPayOnDeliveryDialog}
-        onOpenChange={setShowPayOnDeliveryDialog}
-        orderId={order.id}
-        customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showPayOnDeliveryDialog && (
+        <PayOnDeliveryDialog
+          open={showPayOnDeliveryDialog}
+          onOpenChange={setShowPayOnDeliveryDialog}
+          orderId={order.id}
+          customerLabel={order.customer?.instagram_handle || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
-      <StorePickupWizard
-        open={showPickupWizard}
-        onOpenChange={setShowPickupWizard}
-        orderId={order.id}
-        eventId={order.event_id}
-        alreadyPaid={!!(order.is_paid || order.paid_externally)}
-        customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
-        total={finalValue}
-      />
+      {showPickupWizard && (
+        <StorePickupWizard
+          open={showPickupWizard}
+          onOpenChange={setShowPickupWizard}
+          orderId={order.id}
+          eventId={order.event_id}
+          alreadyPaid={!!(order.is_paid || order.paid_externally)}
+          customerLabel={order.customer?.instagram_handle || order.customer?.full_name || order.customer?.whatsapp || null}
+          total={finalValue}
+        />
+      )}
 
 
 
 
 
-      {order.customer?.whatsapp && (
+      {showChatDialog && order.customer?.whatsapp && (
         <WhatsAppChatDialog
           open={showChatDialog}
           onOpenChange={setShowChatDialog}
@@ -1447,7 +1459,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
         />
       )}
 
-      {order.customer?.instagram_handle && (
+      {showIgChatDialog && order.customer?.instagram_handle && (
         <InstagramDMChat
           open={showIgChatDialog}
           onOpenChange={setShowIgChatDialog}
