@@ -50,6 +50,7 @@
 
 - VIP inserts normalize names; captions never use media_brief; media helpers preserve draft captions.
 
+- Kanban order cards read per-card data through src/lib/orderCardBatches (batched/cached) and mount dialogs only when open; POS WhatsApp list refreshes incrementally with full reload only on scope change or every 10 min — per-card queries and closed dialogs froze browsers during lives.
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
 - Self-service capture is idempotent/service-only; provisional last-four matches are display-only and revalidated against the sender. Lead uniqueness conflicts cannot roll back WhatsApp confirmation: preserve acquisition rows, annotate conflict, never merge identities.
 - Self-service greetings resolve Instagram through the current event's orders, never arbitrary shared-phone profiles; phone keys match event_phone_key and each fresh confirmation code resets only that access's reply lifecycle. Prize uploads reuse event-landing-assets and the prize banner is shared between product and registration screens.

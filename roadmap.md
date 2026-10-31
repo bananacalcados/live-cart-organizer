@@ -126,6 +126,6 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 - [ ] 1ª carga por substituição dos 6 públicos existentes: agendada para 03/11 03:00 (aguarda a data).
 
 ## Lentidão live 31/10
-- [ ] Fase 1: cartões do quadro sem buscas repetidas (lote) + Central sem vazamento
-- [ ] Fase 3: PDV WhatsApp sem recarga completa em laço
-- [ ] Fase 2: restante em lote
+- [x] Fase 1: cartões em lote/cache, janelas só quando abertas, memória estável. Pendente: travadas >200 ms no redesenho do quadro (cartões pesados).
+- [x] Fase 3: PDV WhatsApp incremental (32 → 3–4,6 MB/min)
+- [ ] Fase 2: lote para prêmios/último cadastro/mensagens por telefone (precisa função nova no servidor) e aliviar redesenho do quadro
