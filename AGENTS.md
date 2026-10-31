@@ -14,15 +14,14 @@
 
 - Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram or unique conflict-free last four digits, reuse saved registration without overwriting staff fields, and notify through the existing cart queue; repairs link already-sent orders without resending. Payment messages in this mode use the source order's cart URL, never cached cart links or a generic member-area fallback.
 
-- Self-service queue pacing is sampled and persisted atomically per instance; claims reserve only its FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.
+- Self-service queue pacing is sampled/persisted atomically per instance; claims reserve only the FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.
 
 - Group administration claims serialize on the instance throttle row and persist the sampled delay; finish RPCs preserve that delay and attempt history, because overlapping workers/retries must not bypass anti-ban limits. Only successful actions mirror settings.
 
 - Shopify product links use shared officialProductUrl; attribution rebuilds from validated handles and fails closed, never trusting provider destinations.
 - Shopify data updates omit media entirely, preflight linked option values by unique exact dictionary matches, create variants through GraphQL IDs, and reconcile existing combinations only with matching SKU/GTIN; this preserves manual media/legacy links and prevents duplicate retries.
 
-- Expedition gateway badges/filters use pos_sales.payment_gateway only; unified shipments show every gateway.
-- Expedition stage counters use the RLS-invoker pos_expedition_stage_counts aggregate over eligible sales and indexed items, never a capped historical item download; quantities can place one sale in multiple stages.
+- Expedition gateway badges/filters use pos_sales.payment_gateway only (unified shipments show all). Stage counters use the RLS-invoker pos_expedition_stage_counts aggregate over eligible sales and indexed items, never a capped historical item download; quantities can place one sale in multiple stages.
 
 - Every public payment surface must resolve `payment_splits` before rendering a charge; never fall back to the full order total when split status cannot be loaded — that can double-charge a customer.
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.- Meta Ads token renewed by meta-ads-sync lives in Vault (meta_ads_token_state + meta_ads_get_token/set_token RPCs, service_role only), read before the META_ADS_ACCESS_TOKEN secret — edge functions cannot rewrite secrets.
