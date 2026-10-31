@@ -20,7 +20,9 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { LiveCustomerHistoryPanel } from "./events/LiveCustomerHistoryPanel";
 import { POSProductCatalogSender } from "./pos/POSProductCatalogSender";
 import { useConversationInstance } from "@/hooks/useConversationInstance";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { LiveCatalogInviteBlock } from "./events/LiveCatalogInviteBlock";
 
 function LiveCatalogPanel({ phone, onClose }: { phone: string; onClose: () => void }) {
   const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
@@ -29,7 +31,7 @@ function LiveCatalogPanel({ phone, onClose }: { phone: string; onClose: () => vo
   return <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) onClose(); }} storeId="" phone={phone} sendVia={provider} selectedNumberId={boundNumberId || effectiveNumberId} />;
 }
 
-type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "catalog" | "gift" | "support" | null;
+type LivePanel = "ficha" | "historico" | "details" | "edit" | "crossell" | "catalog" | "xcatalog" | "gift" | "support" | null;
 
 interface WhatsAppChatDialogProps {
   open: boolean;
@@ -81,6 +83,14 @@ export function WhatsAppChatDialog({
   const pixChannelRef = useRef<PixSendChannel | null>(null);
   const [crossellInstance, setCrossellInstance] = useState<{id:string|null;provider:string;label:string}|null>(null);
   const allOrders = useDbOrderStore((state) => state.orders);
+  const [crossCatalogOn, setCrossCatalogOn] = useState(false);
+  useEffect(() => {
+    if (!open || !order.eventId) { setCrossCatalogOn(false); return; }
+    let alive = true;
+    (supabase as any).from("events").select("operation_mode,catalog_enabled").eq("id", order.eventId).maybeSingle()
+      .then(({ data }: any) => { if (alive) setCrossCatalogOn(data?.operation_mode === "whatsapp_autoatendimento" && !!data?.catalog_enabled); });
+    return () => { alive = false; };
+  }, [open, order.eventId]);
 
   const normHandle = (v?: string | null) =>
     String(v || "").trim().replace(/^@/, "").toLowerCase();
@@ -150,6 +160,7 @@ export function WhatsAppChatDialog({
     }
     if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} selectedInstance={crossellInstance || {id:null,provider:"",label:"Selecione uma instância no chat"}} />;
     if (activePanel === "catalog" && order.whatsapp) return <LiveCatalogPanel phone={order.whatsapp} onClose={close} />;
+    if (activePanel === "xcatalog" && order.eventId && order.whatsapp) return <LiveCatalogInviteBlock eventId={order.eventId} phone={order.whatsapp} customerId={dbOrder?.customer_id || null} orderId={dbOrder && (dbOrder.is_paid || (dbOrder as any).paid_externally) ? dbOrder.id : null} />;
     if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
     return null;
   };
@@ -202,6 +213,9 @@ export function WhatsAppChatDialog({
                   tone={activePanel === "catalog" ? "accent" : "default"}
                   onClick={() => { if (order.whatsapp) togglePanel("catalog"); }}
                 />
+                {crossCatalogOn && order.whatsapp && (
+                  <SidebarButton icon={Sparkles} label="Cross-sell" tone={activePanel === "xcatalog" ? "accent" : "default"} onClick={() => togglePanel("xcatalog")} />
+                )}
                 <SidebarButton
                   icon={Gift}
                   label="Brinde"

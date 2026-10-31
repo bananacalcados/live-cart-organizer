@@ -24,7 +24,9 @@ export function LiveCatalogInviteBlock({ eventId, phone, customerId, orderId }: 
   const load = useCallback(async () => {
     const { data, error } = await db.rpc("live_catalog_staff_link", { p_event_id: eventId, p_phone: phone, p_customer_id: customerId || null, p_order_id: orderId || null });
     if (error) { setErr(error.message); return; }
-    setErr(null); setInfo(data as Info);
+    const d = data as Info & { link_id: string };
+    const { data: l } = await db.from("live_catalog_links").select("last_opened_at").eq("id", d.link_id).maybeSingle();
+    setErr(null); setInfo({ ...d, opened_at: l?.last_opened_at || d.opened_at });
   }, [eventId, phone, customerId, orderId]);
 
   useEffect(() => { load(); }, [load]);

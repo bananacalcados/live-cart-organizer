@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "open") {
-      await sb.from("live_catalog_links").update({ opened_at: L.opened_at || new Date().toISOString(), open_count: Number(L.open_count || 0) + 1 }).eq("id", L.id);
+      await sb.from("live_catalog_links").update({ opened_at: L.opened_at || new Date().toISOString(), last_opened_at: new Date().toISOString(), open_count: Number(L.open_count || 0) + 1 }).eq("id", L.id);
       const st = await stateOf();
       let officialLast4: string | null = null;
       const { data: wl } = await sb.from("live_whatsapp_links").select("whatsapp_number_id, target_phone").eq("event_id", (ev as any).id).order("is_active", { ascending: false }).limit(1).maybeSingle();
