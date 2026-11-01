@@ -51,6 +51,7 @@ export default function LiveCatalogPage() {
   const [error, setError] = useState<"expired" | "invalid" | null>(null);
   const [sel, setSel] = useState<Product | null>(null);
   const [variant, setVariant] = useState<string | null>(null);
+  const [color, setColor] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -78,7 +79,7 @@ export default function LiveCatalogPage() {
     return () => clearInterval(t);
   }, [!!st, error, merge]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const openProduct = (p: Product) => { setSel(p); setVariant(p.variants.length === 1 ? p.variants[0].variant_id : null); setQty(1); };
+  const openProduct = (p: Product) => { setSel(p); setColor(null); setVariant(p.variants.length === 1 ? p.variants[0].variant_id : null); setQty(1); };
 
   const add = async () => {
     if (!sel || !variant) return;
@@ -228,10 +229,23 @@ export default function LiveCatalogPage() {
           {sel && (() => {
             const promo = sel.offer_price != null;
             const pr = priceOf(sel.id);
-            const imgs = sel.images.length ? sel.images : sel.image_url ? [sel.image_url] : [];
+            const baseImgs = sel.images.length ? sel.images : sel.image_url ? [sel.image_url] : [];
+            const parsed = sel.variants.map((v) => {
+              const parts = v.title.split("/").map((x) => x.trim()).filter(Boolean);
+              const sizeIdx = parts.findIndex((x) => /^\d+([.,]\d+)?$/.test(x));
+              const size = sizeIdx >= 0 ? parts[sizeIdx] : parts.length > 1 ? parts[parts.length - 1] : parts[0] || v.title;
+              const colorParts = parts.filter((_, i) => i !== (sizeIdx >= 0 ? sizeIdx : parts.length > 1 ? parts.length - 1 : 0));
+              return { ...v, color: colorParts.join(" / ") || null, size };
+            });
+            const colors = Array.from(new Set(parsed.map((v) => v.color).filter(Boolean))) as string[];
+            const activeColor = colors.length ? (color && colors.includes(color) ? color : null) : null;
+            const colorImg = activeColor ? parsed.find((v) => v.color === activeColor && v.image)?.image || null : null;
+            const imgs = colorImg ? [colorImg, ...baseImgs.filter((x) => x !== colorImg)] : baseImgs;
+            const sizes = parsed.filter((v) => !colors.length || v.color === activeColor)
+              .sort((a, b) => parseFloat(a.size.replace(",", ".")) - parseFloat(b.size.replace(",", ".")) || a.size.localeCompare(b.size));
             return (
               <div className="overflow-y-auto pb-4">
-                <Carousel className="w-full">
+                <Carousel key={colorImg || "base"} className="w-full">
                   <CarouselContent>
                     {imgs.map((src, i) => (
                       <CarouselItem key={i}><div className="px-4"><div className="overflow-hidden rounded-2xl"><ProductImage src={src} alt={sel.title} /></div></div></CarouselItem>
@@ -250,15 +264,32 @@ export default function LiveCatalogPage() {
                 </DrawerHeader>
                 <div className="space-y-4 px-4">
                   <div>
-                    <p className="mb-2 text-sm font-semibold">Escolha a numeração</p>
-                    <div className="flex flex-wrap gap-2">
-                      {sel.variants.map((v) => (
-                        <button key={v.variant_id} type="button" onClick={() => setVariant(v.variant_id)}
-                          className={`rounded-xl border-2 px-3 py-2 text-sm font-semibold transition ${variant === v.variant_id ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
-                          {v.title}
-                        </button>
-                      ))}
-                    </div>
+                    {colors.length > 0 && (
+                      <>
+                        <p className="mb-2 text-sm font-semibold">Escolha a cor</p>
+                        <div className="mb-4 flex flex-wrap gap-2">
+                          {colors.map((c) => (
+                            <button key={c} type="button" onClick={() => { setColor(c); setVariant(null); }}
+                              className={`rounded-xl border-2 px-3 py-2 text-sm font-semibold transition ${activeColor === c ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {(!colors.length || activeColor) && (
+                      <>
+                        <p className="mb-2 text-sm font-semibold">Escolha a numeração</p>
+                        <div className="flex flex-wrap gap-2">
+                          {sizes.map((v) => (
+                            <button key={v.variant_id} type="button" onClick={() => setVariant(v.variant_id)}
+                              className={`min-w-12 rounded-xl border-2 px-3 py-2 text-sm font-semibold transition ${variant === v.variant_id ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
+                              {v.size}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-semibold">Quantidade</span>
@@ -267,7 +298,7 @@ export default function LiveCatalogPage() {
                     <Button size="icon" variant="outline" onClick={() => setQty((q) => Math.min(10, q + 1))}><Plus className="h-4 w-4" /></Button>
                   </div>
                   <Button className="h-14 w-full text-base font-extrabold" disabled={!variant || busy} onClick={() => setConfirmOpen(true)}>ADICIONAR AO CARRINHO</Button>
-                  {!variant && <p className="text-center text-xs text-muted-foreground">Escolha a numeração pra adicionar</p>}
+                  {!variant && <p className="text-center text-xs text-muted-foreground">Escolha a cor e a numeração pra adicionar</p>}
                 </div>
               </div>
             );
