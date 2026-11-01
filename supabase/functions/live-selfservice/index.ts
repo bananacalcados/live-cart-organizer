@@ -164,9 +164,9 @@ Deno.serve(async (req) => {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
     const cb = cashback ? `\n\n💰 *Pagando em até 20 minutos* do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
-      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉\n\nPra voltar pra live:\n${LIVE_URL}`,
-      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?\n\nVolta pra live por aqui 👇\n${LIVE_URL}`,
-      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?\n\nLink da live pra você voltar:\n${LIVE_URL}`,
+      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
     ];
     return variants[Math.floor(Math.random() * variants.length)];
   }
