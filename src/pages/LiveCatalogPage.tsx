@@ -9,6 +9,7 @@ import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carouse
 import { Loader2, ShieldCheck, ShoppingBag, Minus, Plus, Trash2, Sparkles, Gift, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
+import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -18,7 +19,7 @@ interface CartItem { id: string; title: string; variant: string; price: number; 
 interface Cart { order_id: string; cart_url: string; items: CartItem[]; subtotal: number; cashback_applied: number; shipping: { free_shipping: boolean; shipping_cost: number }; total: number; pix_total: number }
 interface Price { id: string; your_price: number; cashback_discount: number }
 interface State {
-  event?: { name: string; product_notice: string | null; official_last4: string | null; google_rating: string | null; google_url: string | null };
+  event?: { installment_max?: number | null; installment_min_value?: number | null; name: string; product_notice: string | null; official_last4: string | null; google_rating: string | null; google_url: string | null };
   customer?: { greet: string | null };
   catalog?: Product[];
   prices?: Price[];
@@ -58,6 +59,15 @@ export default function LiveCatalogPage() {
   const [busy, setBusy] = useState(false);
   const [bump, setBump] = useState(false);
   const base = useRef({ slug: eventSlug.toLowerCase(), token: token.toLowerCase() });
+
+  const [payCfg, setPayCfg] = useState<{ inst: InstallmentConfig | null; pix: number }>({ inst: null, pix: 0 });
+  useEffect(() => {
+    supabase.from("app_settings").select("key,value").in("key", ["installment_config", "pix_discount_percent"]).then(({ data }) => {
+      const get = (k: string) => (data || []).find((r: any) => r.key === k)?.value as any;
+      const px = get("pix_discount_percent");
+      setPayCfg({ inst: parseInstallmentRule(get("installment_config")), pix: Number(px?.percent ?? px ?? 0) || 0 });
+    });
+  }, []);
 
   const merge = useCallback((d: any) => setSt((prev) => ({ ...(prev || {}), ...d } as State)), []);
 
@@ -178,8 +188,14 @@ export default function LiveCatalogPage() {
                     <p className="line-clamp-2 text-xs font-medium leading-snug">{p.title}</p>
                     {promo && <p className="text-[11px] text-muted-foreground line-through">{brl(p.original_price)}</p>}
                     <p className="text-base font-extrabold">{brl(price)}</p>
-                    {!promo && pr && pr.cashback_discount > 0 && <p className="text-[11px] font-semibold text-primary">com seu cashback: {brl(pr.your_price)}</p>}
+                    {!promo && pr && pr.cashback_discount > 0 && (
+                      <div className="mt-1 rounded-lg bg-cashback/10 px-2 py-1">
+                        <p className="text-[11px] font-semibold text-cashback">com seu cashback</p>
+                        <p className="text-lg font-extrabold leading-tight text-cashback">{brl(pr.your_price)}</p>
+                      </div>
+                    )}
                     {(promo || !p.allow_cashback) && <p className="text-[10px] text-muted-foreground">não aceita cashback</p>}
+                    <span className="mt-2 flex h-9 w-full items-center justify-center rounded-xl bg-foreground text-xs font-extrabold text-background">VER PRODUTO</span>
                   </div>
                 </button>
               );
@@ -215,7 +231,7 @@ export default function LiveCatalogPage() {
             </button>
             <div className="min-w-0 flex-1 text-xs leading-tight">
               <p className="font-bold">{itemsCount} {itemsCount === 1 ? "item" : "itens"} · {brl(cart.total)}</p>
-              {cart.cashback_applied > 0 && <p className="text-primary">−{brl(cart.cashback_applied)} de cashback</p>}
+              {cart.cashback_applied > 0 && <p className="font-bold text-cashback">−{brl(cart.cashback_applied)} de cashback</p>}
               {cart.pix_total < cart.total && <p className="text-muted-foreground">{brl(cart.pix_total)} no Pix</p>}
             </div>
             <Button className="h-12 font-extrabold" onClick={() => { window.location.href = cart.cart_url; }}>FINALIZAR COMPRA</Button>
@@ -259,8 +275,29 @@ export default function LiveCatalogPage() {
                     {promo && <span className="text-sm text-muted-foreground line-through">{brl(sel.original_price)}</span>}
                     <span className="text-2xl font-extrabold">{brl(promo ? sel.offer_price! : sel.original_price)}</span>
                   </div>
-                  {!promo && pr && pr.cashback_discount > 0 && <p className="text-sm font-semibold text-primary">com seu cashback: {brl(pr.your_price)}</p>}
+                  {!promo && pr && pr.cashback_discount > 0 && (
+                    <div className="rounded-xl bg-cashback/10 px-3 py-2">
+                      <p className="text-xs font-semibold text-cashback">Com seu cashback você paga</p>
+                      <p className="text-3xl font-extrabold leading-tight text-cashback">{brl(pr.your_price)}</p>
+                    </div>
+                  )}
                   {(promo || !sel.allow_cashback) && <p className="text-xs text-muted-foreground">Produto em oferta — não aceita cashback</p>}
+                  {(() => {
+                    const price = promo ? sel.offer_price! : sel.original_price;
+                    const cfg = payCfg.inst ? resolveSelfServiceInstallments(payCfg.inst, price, ev.installment_max, ev.installment_min_value) : null;
+                    const opts = cfg ? buildInstallmentOptions(price, cfg) : [];
+                    const free = opts.filter((o) => !o.hasInterest).at(-1);
+                    const withInt = opts.filter((o) => o.hasInterest).at(-1);
+                    return (
+                      <div className="space-y-0.5 rounded-xl border bg-muted/30 px-3 py-2 text-sm">
+                        <p className="font-semibold">Valor do produto: {brl(price)}</p>
+                        {payCfg.pix > 0 && <p>💠 No Pix: <strong>{brl(Math.round(price * (100 - payCfg.pix)) / 100)}</strong> <span className="text-xs text-muted-foreground">({payCfg.pix}% off, sem cashback)</span></p>}
+                        {free && free.installments > 1 && <p>💳 Cartão: até <strong>{free.installments}x de {brl(free.installmentAmount)}</strong> sem juros</p>}
+                        {withInt && <p className="text-muted-foreground">ou até {withInt.installments}x de {brl(withInt.installmentAmount)} com juros</p>}
+                        {(!free || free.installments <= 1) && !withInt && <p>💳 Cartão: {brl(price)} à vista</p>}
+                      </div>
+                    );
+                  })()}
                 </DrawerHeader>
                 <div className="space-y-4 px-4">
                   <div>
@@ -341,7 +378,7 @@ export default function LiveCatalogPage() {
             {cart && (
               <div className="space-y-1 rounded-xl bg-muted/40 p-3 text-sm">
                 <p className="flex justify-between"><span>Produtos</span><span>{brl(cart.subtotal)}</span></p>
-                {cart.cashback_applied > 0 && <p className="flex justify-between text-primary"><span>Cashback</span><span>−{brl(cart.cashback_applied)}</span></p>}
+                {cart.cashback_applied > 0 && <p className="flex justify-between font-bold text-cashback"><span>Cashback</span><span>−{brl(cart.cashback_applied)}</span></p>}
                 <p className="flex justify-between"><span>Frete</span><span>{cart.shipping.free_shipping ? "Grátis" : brl(cart.shipping.shipping_cost)}</span></p>
                 <p className="flex justify-between font-bold"><span>Total</span><span>{brl(cart.total)}</span></p>
                 {cart.pix_total < cart.total && <p className="text-right text-xs text-muted-foreground">{brl(cart.pix_total)} no Pix</p>}

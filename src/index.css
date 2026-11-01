@@ -25,6 +25,8 @@
 
     /* Vivid Yellow primary */
     --primary: 48 95% 50%;
+    --cashback: 145 75% 28%;
+    --cashback-foreground: 0 0% 100%;
     --primary-foreground: 0 0% 5%;
 
     /* Warm gray secondary */
@@ -133,6 +135,8 @@
     --popover-foreground: 45 10% 95%;
 
     --primary: 48 95% 55%;
+    --cashback: 145 65% 45%;
+    --cashback-foreground: 0 0% 5%;
     --primary-foreground: 0 0% 5%;
 
     --secondary: 0 0% 15%;
