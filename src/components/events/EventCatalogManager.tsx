@@ -129,6 +129,18 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
     setRows(next);
   };
 
+  const moveTo = async (idx: number, target: number) => {
+    const to = Math.min(rows.length, Math.max(1, Math.round(target))) - 1;
+    if (to === idx || !isFinite(to)) return;
+    const next = [...rows];
+    const [it] = next.splice(idx, 1);
+    next.splice(to, 0, it);
+    const changed = next.map((r, i) => ({ ...r, position: i })).filter((r, i) => r.position !== rows.find((x) => x.id === r.id)?.position || false);
+    const results = await Promise.all(changed.map((r) => db.from("event_catalog_products").update({ position: r.position }).eq("id", r.id)));
+    if (results.some((r: any) => r.error)) { toast.error("Erro ao reordenar"); return; }
+    setRows(next.map((r, i) => ({ ...r, position: i })));
+  };
+
   const remove = async (row: CatalogRow) => {
     if (!confirm(`Remover "${row.title}" do catálogo?`)) return;
     const { error } = await db.from("event_catalog_products").delete().eq("id", row.id);
@@ -180,6 +192,7 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
         <div className="space-y-3">
           {rows.map((row, idx) => (
             <CatalogCard key={row.id} row={row} busy={busy === row.id} first={idx === 0} last={idx === rows.length - 1}
+              index={idx} total={rows.length} onMoveTo={(n) => moveTo(idx, n)}
               onPatch={(p) => patchRow(row.id, p)} onUp={() => move(idx, -1)} onDown={() => move(idx, 1)}
               onRefresh={() => refreshFromShopify(row)} onRemove={() => remove(row)} />
           ))}
@@ -192,12 +205,16 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
   );
 }
 
-function CatalogCard({ row, busy, first, last, onPatch, onUp, onDown, onRefresh, onRemove }: {
-  row: CatalogRow; busy: boolean; first: boolean; last: boolean;
+function CatalogCard({ row, busy, first, last, index, total, onMoveTo, onPatch, onUp, onDown, onRefresh, onRemove }: {
+  row: CatalogRow; busy: boolean; first: boolean; last: boolean; index: number; total: number; onMoveTo: (n: number) => void;
   onPatch: (p: Partial<CatalogRow>) => void; onUp: () => void; onDown: () => void; onRefresh: () => void; onRemove: () => void;
 }) {
   const [offer, setOffer] = useState(row.offer_price != null ? String(row.offer_price) : "");
   useEffect(() => { setOffer(row.offer_price != null ? String(row.offer_price) : ""); }, [row.offer_price]);
+
+  const [pos, setPos] = useState(String(index + 1));
+  useEffect(() => { setPos(String(index + 1)); }, [index]);
+  const commitPos = () => { const n = parseInt(pos, 10); if (n > 0 && n !== index + 1) onMoveTo(n); else setPos(String(index + 1)); };
 
   const commitOffer = () => {
     const raw = offer.trim().replace(",", ".");
@@ -233,7 +250,12 @@ function CatalogCard({ row, busy, first, last, onPatch, onUp, onDown, onRefresh,
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-end gap-2">
+      <div className="mt-3 flex items-end gap-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Posição no catálogo (1 a {total})</Label>
+          <Input type="number" min={1} max={total} className="w-24" value={pos} onChange={(e) => setPos(e.target.value)}
+            onBlur={commitPos} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitPos(); } }} />
+        </div>
         <div className="space-y-1">
           <Label className="text-xs">Preço de oferta (opcional)</Label>
           <Input className="w-32" inputMode="decimal" placeholder="—" value={offer} onChange={(e) => setOffer(e.target.value)}

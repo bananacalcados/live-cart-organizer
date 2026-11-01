@@ -147,14 +147,26 @@ Deno.serve(async (req) => {
     return Math.round(total * 10) / 100;
   }
 
+  const LIVE_URL = "https://checkout.bananacalcados.com.br/ao-vivo/whats";
+  /** Confirmação de cadastro sem carrinho: sempre com o link para voltar à live. */
+  function registerConfirmText(greet: string) {
+    const variants = [
+      `Oii ${greet}, seu cadastro está confirmado! ✅\n\nQuando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉\n\nPra voltar pra live é só tocar aqui:\n${LIVE_URL}`,
+      `Oi ${greet}! Cadastro confirmado com sucesso 😁\n\nAgora é só pedir na live que o link chega aqui pra você.\n\nVolta pra live por aqui 👇\n${LIVE_URL}`,
+      `Prontinho ${greet}, seu cadastro tá confirmado ✅\n\nPediu na live, o link do carrinho sai direto aqui no WhatsApp 😉\n\nNão perde nada, volta pra live:\n${LIVE_URL}`,
+      `Oii ${greet}, deu tudo certo com seu cadastro! 🎉\n\nQualquer produto que você pedir na live, mando o link aqui.\n\nClica pra voltar pra live:\n${LIVE_URL}`,
+    ];
+    return variants[Math.floor(Math.random() * variants.length)];
+  }
+
   /** Texto do link do carrinho (3 variações, quebras de linha reais). */
   function cartText(greet: string, slug: string, orderIds: string[], cashback: number | null) {
     const links = orderIds.map((id) => cartUrl(slug, id)).join("\n");
     const cb = cashback ? `\n\n💰 *Pagando em até 20 minutos* do primeiro envio do carrinho você ganha *${fmtBRL(cashback)}* de cashback pra usar no próximo produto!` : "";
     const variants = [
-      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉`,
-      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?`,
-      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?`,
+      `Oii ${greet}, cadastro confirmado 😁\n\nSegue o link do seu carrinho:\n${links}${cb}\n\nDaqui a pouco volto pra ver se deu tudo certinho, tá bom? 😉\n\nPra voltar pra live:\n${LIVE_URL}`,
+      `Oi ${greet}! Seu cadastro já está confirmado ✅\n\nAqui está o link do seu carrinho:\n${links}${cb}\n\nJá já passo aqui pra confirmar se você conseguiu, combinado?\n\nVolta pra live por aqui 👇\n${LIVE_URL}`,
+      `Oii ${greet}, tudo certo com seu cadastro 😁\n\nLink do seu carrinho:\n${links}${cb}\n\nVou voltar daqui a pouquinho pra ver se deu certo, pode ser?\n\nLink da live pra você voltar:\n${LIVE_URL}`,
     ];
     return variants[Math.floor(Math.random() * variants.length)];
   }
@@ -254,7 +266,7 @@ Deno.serve(async (req) => {
         const open = openRows.map((o) => o.id as string);
         const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
-        const confirmText = `Oii ${greet}, seu cadastro está confirmado! ✅\n\nQuando você pedir um produto na live, seu link já vai sair prontinho por aqui 😉`;
+        const confirmText = registerConfirmText(greet);
         const queued = await queueAuto({
           key: `confirm:${a.id}`,
           eventId: a.event_id,
