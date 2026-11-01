@@ -263,6 +263,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   // última resposta e depois da última vez que abrimos o direct dela. ──
   const igKey = (h?: string | null) => (h || "").replace(/^@+/, "").trim().toLowerCase();
   const [igUnread, setIgUnread] = useState<Record<string, "dm" | "comment">>({});
+  const [igUnanswered, setIgUnanswered] = useState<Record<string, boolean>>({});
   const [igRefresh, setIgRefresh] = useState(0);
   const igHandlesKey = useMemo(
     () => Array.from(new Set(orders.filter((o) => o.stage !== "cancelled" && !isOrderMarkedPaid(o))
@@ -271,7 +272,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   );
   useEffect(() => {
     const handles = igHandlesKey ? igHandlesKey.split(",") : [];
-    if (handles.length === 0 || !currentUserId) { setIgUnread({}); return; }
+    if (handles.length === 0 || !currentUserId) { setIgUnread({}); setIgUnanswered({}); return; }
     let cancelled = false;
     const load = async () => {
       const since = new Date(Date.now() - 3 * 86400000).toISOString();
@@ -304,10 +305,12 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
         for (const r of (rd || []) as any[]) reads[igKey(r.username)] = +new Date(r.last_read_at);
       }
       const res: Record<string, "dm" | "comment"> = {};
+      const unanswered: Record<string, boolean> = {};
       for (const [k, v] of Object.entries(lastIn)) {
+        if (v.at > (lastOut[k] || 0)) unanswered[k] = true;
         if (v.at > Math.max(lastOut[k] || 0, reads[k] || 0)) res[k] = v.comment ? "comment" : "dm";
       }
-      if (!cancelled) setIgUnread(res);
+      if (!cancelled) { setIgUnread(res); setIgUnanswered(unanswered); }
     };
     load();
     const t = setInterval(() => { if (!document.hidden) load(); }, 60000);
@@ -317,17 +320,24 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   // Ao fechar o direct, recalcula (marca como lida).
   useEffect(() => { if (!igOpen) setIgRefresh((n) => n + 1); }, [igOpen]);
 
-  const isOrderUnread = useCallback((order: DbOrder) => {
+  const orderConversationActivity = useCallback((order: DbOrder) => {
     const phone = normalizeBRPhone(order.customer?.whatsapp || "");
     const summary = contactActivity.get(phone.slice(-8));
     const update = paidLiveActivity[phone];
     const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
-    const whatsappUnread = paidGroupActivity([order], { [phone]: {
+    const whatsapp = paidGroupActivity([order], { [phone]: {
       lastIn: latest(summary?.lastIn, update?.lastIn),
       lastOut: latest(summary?.lastOut, update?.lastOut),
-    } }, paidSeen).unread;
-    return isLiveOrderConversationUnread(!!phone, whatsappUnread, !!igUnread[igKey(order.customer?.instagram_handle)]);
-  }, [contactActivity, paidLiveActivity, paidSeen, igUnread]);
+    } }, paidSeen);
+    return {
+      unread: isLiveOrderConversationUnread(!!phone, whatsapp.unread, !!igUnread[igKey(order.customer?.instagram_handle)]),
+      unanswered: isLiveOrderConversationUnread(!!phone, whatsapp.unanswered, !!igUnanswered[igKey(order.customer?.instagram_handle)]),
+    };
+  }, [contactActivity, paidLiveActivity, paidSeen, igUnread, igUnanswered]);
+  const isOrderPendingReply = useCallback((order: DbOrder) => {
+    const activity = orderConversationActivity(order);
+    return activity.unread || activity.unanswered;
+  }, [orderConversationActivity]);
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
@@ -647,7 +657,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   );
   const laneAwaitingAll = useMemo(() => laneFilter(awaitingEntries), [laneFilter, awaitingEntries]);
   // Linha "Não lidas": pedido da live cuja última mensagem é da cliente.
-  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isOrderUnread(e.rep)), [laneAwaitingAll, isOrderUnread]);
+  const laneUnread = useMemo(() => laneAwaitingAll.filter((e) => isOrderPendingReply(e.rep)), [laneAwaitingAll, isOrderPendingReply]);
   // Quem não respondeu ainda, separado pelo tempo desde a NOSSA última mensagem:
   // < 10 min → Aguardando pagamento · 10 min a 1 h → Follow up · > 1 h → Follow +1 hora.
   const { laneAwaiting, laneFollowup, laneFollowupHour } = useMemo(() => {
@@ -655,7 +665,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
     const f: CardEntry[] = [];
     const h: CardEntry[] = [];
     for (const e of laneAwaitingAll) {
-      if (isOrderUnread(e.rep)) continue;
+      if (isOrderPendingReply(e.rep)) continue;
       if (e.rep.initialPhoneUnconfirmed) { a.push(e); continue; }
       const waited = msWaitingReply(e.rep, nowTick);
       if (waited >= ONE_HOUR_MS) h.push(e);
@@ -663,7 +673,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       else a.push(e);
     }
     return { laneAwaiting: a, laneFollowup: f, laneFollowupHour: h };
-  }, [laneAwaitingAll, nowTick, isOrderUnread]);
+  }, [laneAwaitingAll, nowTick, isOrderPendingReply]);
   const laneIncomplete = useMemo(() => laneFilter(incompleteEntries), [laneFilter, incompleteEntries]);
 
   const lanePaid = useMemo(() => laneFilter(paidEntries), [laneFilter, paidEntries]);
@@ -723,10 +733,11 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                 ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
                 : getOrderFinalValue(order);
               // Destaque verde (sem piscar) quando a cliente falou por último.
-              const unread = paidCard ? paidGroupActivity(group, paidLiveActivity, paidSeen).unread : isOrderUnread(order);
+              const conversation = paidCard ? paidGroupActivity(group, paidLiveActivity, paidSeen) : orderConversationActivity(order);
+              const { unread, unanswered } = conversation;
 
               const isPinned = pinnedIds.has(order.id);
-              // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
+              // Preserve the separate signal for a customer who never replied to the template.
               const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
               const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
               const onCardClick = () => {
@@ -746,7 +757,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
-                    unread && "ring-2 ring-emerald-500 ring-offset-2 ring-offset-background border-l-emerald-500",
+                    (unread || unanswered) && "ring-2 ring-stage-paid ring-offset-2 ring-offset-background border-l-stage-paid",
                     isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
                     isGroup && !needsUnify && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
                     // Precisa unificar → anel âmbar pulsante para chamar atenção.
@@ -775,6 +786,12 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                         </span>
                       )}
                     </div>
+                  )}
+
+                  {unanswered && (
+                    <span className="inline-flex w-fit items-center gap-1 rounded-md bg-destructive px-2 py-0.5 text-[11px] font-bold uppercase text-destructive-foreground">
+                      <MessageSquareOff className="h-3 w-3" /> Sem resposta
+                    </span>
                   )}
 
 
@@ -931,7 +948,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                       {noResponse && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 text-red-300 border border-red-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
                           <MessageSquareOff className="h-2.5 w-2.5" />
-                          Sem resposta
+                          Cliente não respondeu
                         </span>
                       )}
                       {step > 0 && (
@@ -1063,7 +1080,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
             <LiveLaneSection
               id="unread"
               eventId={eventId}
-              title="Não lidas"
+              title="Não lidas / Sem resposta"
               count={laneUnread.length}
               tone="text-emerald-500"
               icon={<MessageSquare className="h-3.5 w-3.5 text-emerald-500" />}

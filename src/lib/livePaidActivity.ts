@@ -1,4 +1,4 @@
-import { isLiveContactUnread, type ContactActivity } from "./liveContactUnread";
+import { isLiveContactUnread, isLiveContactUnanswered, type ContactActivity } from "./liveContactUnread";
 import { normalizeBRPhone } from "./phoneUtils";
 
 export interface PaidActivityOrder {
@@ -11,18 +11,20 @@ export interface PaidActivityOrder {
 export function paidGroupActivity(group: PaidActivityOrder[], live: Record<string, ContactActivity>, seen: Record<string, number>) {
   let lastIncomingAt: string | null = null;
   let unread = false;
+  let unanswered = false;
   for (const order of group) {
     const phone = normalizeBRPhone(order.customer?.whatsapp || "");
     const update = live[phone];
     const latest = (a?: string | null, b?: string | null) => !a ? b || null : !b ? a : a > b ? a : b;
     const activity = { lastIn: latest(order.last_customer_message_at, update?.lastIn), lastOut: latest(order.last_sent_message_at, update?.lastOut) };
     lastIncomingAt = latest(lastIncomingAt, activity.lastIn);
+    unanswered ||= isLiveContactUnanswered(activity);
     const seenAt = seen[phone.slice(-8)] || 0;
     unread ||= activity.lastIn || activity.lastOut
       ? isLiveContactUnread(activity, seenAt)
       : !!order.has_unread_messages && !seenAt;
   }
-  return { unread, lastIncomingAt };
+  return { unread, unanswered, lastIncomingAt };
 }
 
 export function paidChatOrder<T extends PaidActivityOrder>(representative: T, group: T[]): T {

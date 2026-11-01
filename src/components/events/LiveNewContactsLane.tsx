@@ -21,7 +21,7 @@ import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActio
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { buildPhoneVariations } from "@/lib/phoneUtils";
 import type { InitialLiveContact } from "@/lib/selfServiceInitial";
-import { compareLiveContacts, isLiveContactUnread } from "@/lib/liveContactUnread";
+import { compareLiveContacts, isLiveContactUnread, isLiveContactUnanswered } from "@/lib/liveContactUnread";
 
 interface ClickRow {
   id: string;
@@ -43,6 +43,7 @@ export interface NewContact {
   createdAt: string;
   /** Há mensagem da cliente mais recente que a última resposta nossa e que a última abertura do chat. */
   unread: boolean;
+  unanswered: boolean;
   lastIncomingAt: string | null;
 }
 
@@ -389,6 +390,7 @@ export function useLiveNewContacts(eventId: string | null | undefined, excludeKe
         talked: !!r.phone || !!act?.lastIn,
         createdAt: r.created_at,
         unread,
+        unanswered: isLiveContactUnanswered(act),
         lastIncomingAt: act?.lastIn || null,
       };
       if (!existing) byKey.set(key, contact);
@@ -480,12 +482,18 @@ export function LiveContactCards({
         className={cn(
           "group relative flex min-h-[104px] w-[230px] shrink-0 cursor-pointer flex-col gap-1 rounded-lg border border-y-neutral-700 border-r-neutral-700 border-l-4 bg-neutral-900 px-3 py-2 text-left text-white transition-colors hover:bg-neutral-800",
           isDoubts ? "border-l-neutral-400" : "border-l-sky-400",
-          c.unread && "border-l-stage-paid ring-2 ring-stage-paid ring-offset-2 ring-offset-background",
+          (c.unread || c.unanswered) && "border-l-stage-paid ring-2 ring-stage-paid ring-offset-2 ring-offset-background",
         )}
       >
         {c.unread && (
           <span className="rounded bg-stage-paid px-2 py-0.5 text-[10px] font-bold text-accent-foreground self-start">
             Não lida
+          </span>
+        )}
+
+        {c.unanswered && (
+          <span className="self-start rounded bg-destructive px-2 py-0.5 text-[11px] font-bold uppercase text-destructive-foreground">
+            Sem resposta
           </span>
         )}
 
