@@ -785,6 +785,13 @@
       "when": 1793462093659,
       "tag": "0111_live_catalog_last_opened",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1793565841395,
+      "tag": "0112_block_items_added_to_paid_orders",
+      "breakpoints": true
     }
   ]
 }
