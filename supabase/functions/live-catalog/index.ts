@@ -18,7 +18,7 @@ const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const firstName = (n?: string | null) => { const f = String(n || "").trim().split(/\s+/)[0] || ""; return f ? f.charAt(0).toUpperCase() + f.slice(1).toLowerCase() : ""; };
 const cartUrl = (slug: string, id: string) => `${PUBLIC_BASE}/pedido/${slug}/carrinho/${id.replace(/-/g, "")}`;
-const ORDER_COLS = "id, customer_id, products, is_paid, paid_externally, stage, cashback_id, cashback_amount, discount_type, discount_value, free_shipping, shipping_cost, created_at";
+const ORDER_COLS = "id, customer_id, products, is_paid, paid_externally, stage, cashback_id, cashback_amount, discount_type, discount_value, free_shipping, shipping_cost, created_at, origin";
 
 const VARIATIONS = [
   "Oii {nome}, seu novo carrinho já tá pronto 😊\n\nPra finalizar o pagamento clica no link:\n{link}\n\nJá já eu volto pra ver se deu certo, ok? 😊",
@@ -97,6 +97,11 @@ Deno.serve(async (req) => {
     };
     const latestCart = async () => {
       if (!customerId) return null;
+      // Pedido em aberto da live (qualquer origem): itens do catálogo entram nele, num card só.
+      const { data: live } = await sb.from("orders").select(ORDER_COLS).eq("event_id", (ev as any).id).eq("customer_id", customerId)
+        .eq("is_paid", false).eq("paid_externally", false).neq("stage", "cancelled").is("merged_into_order_id", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (live) return live as any;
       const { data } = await sb.from("orders").select(ORDER_COLS).eq("event_id", (ev as any).id).eq("customer_id", customerId)
         .eq("origin", "catalog").neq("stage", "cancelled").is("merged_into_order_id", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
       return data as any;
@@ -104,6 +109,8 @@ Deno.serve(async (req) => {
     /** Aplica a regra do cashback; só grava se algo mudou. */
     const syncCashback = async (o: any, coupon: Coupon | null) => {
       const r = computeCatalogCashback(o.products || [], coupon);
+      // Pedido criado pela equipe: desconto/cashback dele é preservado.
+      if (o.origin !== "catalog") return { o, r: { ...r, min_purchase_hint: null } };
       const next = r.amount > 0
         ? { cashback_id: r.cashback_id, cashback_amount: r.amount, discount_type: "fixed", discount_value: r.amount }
         : { cashback_id: null, cashback_amount: 0, discount_type: null, discount_value: 0 };
@@ -233,10 +240,10 @@ Deno.serve(async (req) => {
       }
       const itemId = `${P.shopify_product_id}-${V.variant_id}`;
       const products = Array.isArray(o.products) ? [...o.products] : [];
-      const idx = products.findIndex((p: any) => p.id === itemId);
+      const idx = products.findIndex((p: any) => p.id === itemId && p.catalog_product_id);
       const promo = P.offer_price != null || !P.allow_cashback;
       if (idx >= 0) products[idx] = { ...products[idx], quantity: Number(products[idx].quantity || 1) + qty };
-      else products.push({ id: itemId, shopifyId: V.variant_id, sku: V.sku || null, title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
+      else products.push({ id: products.some((p: any) => p.id === itemId) ? `${itemId}-cat` : itemId, shopifyId: V.variant_id, sku: V.sku || null, title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
       const up = await sb.from("orders").update({ products }).eq("id", o.id).eq("is_paid", false).select(ORDER_COLS).single();
       if (up.error) throw up.error;
       const coupon = await loadCoupon(o.id, phone);
@@ -250,8 +257,9 @@ Deno.serve(async (req) => {
     const o = st0.open;
     if (!o) return respond(st0);
     const itemId = String(body.item_id || "");
+    if (o.origin !== "catalog" && !(o.products || []).some((p: any) => p.id === itemId && p.catalog_product_id)) return respond(st0);
     const products = (o.products || []).flatMap((p: any) => p.id !== itemId ? [p] : Number(p.quantity || 1) > 1 ? [{ ...p, quantity: Number(p.quantity) - 1 }] : []);
-    if (!products.length) {
+    if (!products.length && o.origin === "catalog") {
       await sb.from("orders").update({ products, stage: "cancelled", cashback_id: null, cashback_amount: 0, discount_type: null, discount_value: 0 }).eq("id", o.id).eq("is_paid", false);
       return respond({ coupon: st0.coupon, hint: st0.coupon?.min_purchase || null, cart: null, last_paid_order_id: null, open: null });
     }
