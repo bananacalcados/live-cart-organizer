@@ -158,7 +158,14 @@ export function WhatsAppChatDialog({
       if (order.eventId && order.whatsapp) return <OrderDialogDb key={`new-${order.id}`} embedded open onOpenChange={(value) => !value && close()} eventId={order.eventId} prefillWhatsapp={order.whatsapp} prefillInstagram={order.instagramHandle || undefined} />;
       return <div className="p-4 text-sm text-muted-foreground">O pedido ainda não está disponível para edição.</div>;
     }
-    if (activePanel === "crossell" && order.whatsapp) return <EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} selectedInstance={crossellInstance || {id:null,provider:"",label:"Selecione uma instância no chat"}} />;
+    if (activePanel === "crossell" && order.whatsapp) return (
+      <div className="flex h-full flex-col">
+        {order.eventId && crossCatalogOn && (
+          <div className="shrink-0 border-b"><LiveCatalogInviteBlock eventId={order.eventId} phone={order.whatsapp} customerId={dbOrder?.customer_id || null} orderId={dbOrder && (dbOrder.is_paid || (dbOrder as any).paid_externally) ? dbOrder.id : null} /></div>
+        )}
+        <div className="min-h-0 flex-1"><EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} selectedInstance={crossellInstance || {id:null,provider:"",label:"Selecione uma instância no chat"}} /></div>
+      </div>
+    );
     if (activePanel === "catalog" && order.whatsapp) return <LiveCatalogPanel phone={order.whatsapp} onClose={close} />;
     if (activePanel === "xcatalog" && order.eventId && order.whatsapp) return <LiveCatalogInviteBlock eventId={order.eventId} phone={order.whatsapp} customerId={dbOrder?.customer_id || null} orderId={dbOrder && (dbOrder.is_paid || (dbOrder as any).paid_externally) ? dbOrder.id : null} />;
     if (activePanel === "support") return <CreateSupportTicketDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} onCreated={close} />;
