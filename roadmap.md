@@ -1,7 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Conversas sem resposta — 01/11
-- [ ] Separar leitura de resposta na live: manter SEM RESPOSTA após abrir/ler e remover após resposta, usando os sinais em lote existentes; testar sem publicar.
+- [x] Separar leitura de resposta na live usando sinais existentes, sem consultas extras. 19 testes passaram; conversa real aberta/fechada manteve SEM RESPOSTA e removeu NÃO LIDA. Resposta/nova mensagem verificadas em testes, sem enviar mensagem real nem publicar.
 
 ## Overlay fixo — 31/10
 - [x] Link de 29/10 fixado: acompanha a live mais recentemente criada; novas lives herdam posições e tamanhos. Dez testes passaram, teste transacional confirmou troca/herança/links antigos com rollback e navegador conferiu a faixa real. Sem publicar.
