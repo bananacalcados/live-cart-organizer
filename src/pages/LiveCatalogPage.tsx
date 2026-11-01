@@ -238,7 +238,7 @@ export default function LiveCatalogPage() {
               return { ...v, color: colorParts.join(" / ") || null, size };
             });
             const colors = Array.from(new Set(parsed.map((v) => v.color).filter(Boolean))) as string[];
-            const activeColor = colors.length ? (color && colors.includes(color) ? color : null) : null;
+            const activeColor = colors.length ? (color && colors.includes(color) ? color : colors.length === 1 ? colors[0] : null) : null;
             const colorImg = activeColor ? parsed.find((v) => v.color === activeColor && v.image)?.image || null : null;
             const imgs = colorImg ? [colorImg, ...baseImgs.filter((x) => x !== colorImg)] : baseImgs;
             const sizes = parsed.filter((v) => !colors.length || v.color === activeColor)
