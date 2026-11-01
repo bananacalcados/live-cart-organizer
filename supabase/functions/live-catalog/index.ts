@@ -18,7 +18,7 @@ const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const firstName = (n?: string | null) => { const f = String(n || "").trim().split(/\s+/)[0] || ""; return f ? f.charAt(0).toUpperCase() + f.slice(1).toLowerCase() : ""; };
 const cartUrl = (slug: string, id: string) => `${PUBLIC_BASE}/pedido/${slug}/carrinho/${id.replace(/-/g, "")}`;
-const ORDER_COLS = "id, customer_id, products, is_paid, paid_externally, stage, cashback_id, cashback_amount, discount_type, discount_value, free_shipping, shipping_cost, created_at";
+const ORDER_COLS = "id, customer_id, products, is_paid, paid_externally, stage, cashback_id, cashback_amount, discount_type, discount_value, free_shipping, shipping_cost, created_at, origin";
 
 const VARIATIONS = [
   "Oii {nome}, seu novo carrinho já tá pronto 😊\n\nPra finalizar o pagamento clica no link:\n{link}\n\nJá já eu volto pra ver se deu certo, ok? 😊",
