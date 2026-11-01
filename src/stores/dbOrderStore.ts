@@ -160,6 +160,51 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         } catch {}
       }
 
+      // Unpaid order of the same customer in this event → add items to it (one card per customer)
+      try {
+        const { data: open } = await supabase
+          .from('orders')
+          .select(`*, customer:customers(*)`)
+          .eq('event_id', eventId)
+          .eq('customer_id', customer.id)
+          .eq('is_paid', false)
+          .is('merged_into_order_id', null)
+          .neq('stage', 'cancelled')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (open) {
+          const merged = [...((open.products as unknown as DbOrderProduct[]) || [])];
+          for (const p of products) {
+            const same = merged.find((m) => m.shopifyId && m.shopifyId === p.shopifyId && m.variant === p.variant);
+            if (same) same.quantity = (same.quantity || 1) + (p.quantity || 1);
+            else merged.push(p);
+          }
+          if (products.length > 0) {
+            const { error: upErr } = await supabase
+              .from('orders')
+              .update({ products: productsToJson(merged) })
+              .eq('id', open.id);
+            if (upErr) throw upErr;
+          }
+          const order = {
+            ...open,
+            products: merged,
+            customer: open.customer as DbCustomer,
+            discount_type: open.discount_type as DiscountType | undefined,
+          } as DbOrder;
+          set((state) => ({
+            orders: state.orders.some((o) => o.id === order.id)
+              ? state.orders.map((o) => (o.id === order.id ? order : o))
+              : [order, ...state.orders],
+          }));
+          toast.success('Cliente já tinha pedido em aberto: itens adicionados nele');
+          return order;
+        }
+      } catch (e) {
+        console.error('Error checking open order:', e);
+      }
+
       // Cart link will be set after insert (needs orderId for transparent checkout)
 
       // Shipping is now calculated dynamically at checkout — no longer applied from event config
