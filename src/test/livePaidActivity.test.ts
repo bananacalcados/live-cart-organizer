@@ -8,7 +8,7 @@ const rep = { id: "master", customer: { whatsapp: phone }, last_customer_message
 describe("atendimento em pedidos pagos", () => {
   it("considera a mensagem de outro pedido agrupado, não apenas do mestre", () => {
     const state = paidGroupActivity([rep, { ...rep, id: "child", last_customer_message_at: newer }], {}, { [phone.slice(-8)]: Date.parse(older) });
-    expect(state).toEqual({ unread: true, lastIncomingAt: newer });
+    expect(state).toEqual({ unread: true, unanswered: true, lastIncomingAt: newer });
   });
   it("abrir o chat lê os pedidos e nova mensagem volta a destacar", () => {
     localStorage.clear();

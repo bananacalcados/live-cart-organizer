@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { compareLiveContacts, isLiveContactUnread } from "@/lib/liveContactUnread";
+import { compareLiveContacts, isLiveContactUnread, isLiveContactUnanswered } from "@/lib/liveContactUnread";
 
 const first = "2026-10-24T16:54:00Z";
 const next = "2026-10-24T16:55:00Z";
 describe("não lidas em Novos Contatos", () => {
+  it("ler não resolve a mensagem sem resposta", () => {
+    const activity = { lastIn: first, lastOut: null };
+    expect(isLiveContactUnread(activity, Date.parse(next))).toBe(false);
+    expect(isLiveContactUnanswered(activity)).toBe(true);
+  });
+  it("responder resolve a pendência", () => {
+    expect(isLiveContactUnanswered({ lastIn: first, lastOut: next })).toBe(false);
+  });
+  it("nova mensagem da cliente reabre a pendência", () => {
+    expect(isLiveContactUnanswered({ lastIn: next, lastOut: first })).toBe(true);
+  });
+  it("sem mensagem da cliente não há resposta pendente", () => {
+    expect(isLiveContactUnanswered({ lastIn: null, lastOut: first })).toBe(false);
+  });
+  it("prioriza pendências já lidas antes de conversas respondidas", () => {
+    const answered = { key: "answered", unread: false, unanswered: false, lastIncomingAt: next, createdAt: next };
+    const pending = { ...answered, key: "pending", unanswered: true, lastIncomingAt: first };
+    expect([answered, pending].sort(compareLiveContacts).map(c => c.key)).toEqual(["pending", "answered"]);
+  });
   it("mensagem recebida não visualizada fica não lida", () => {
     expect(isLiveContactUnread({ lastIn: first, lastOut: null })).toBe(true);
     expect(isLiveContactUnread({ lastIn: null, lastOut: null })).toBe(false);
