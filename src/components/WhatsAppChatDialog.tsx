@@ -160,7 +160,7 @@ export function WhatsAppChatDialog({
     }
     if (activePanel === "crossell" && order.whatsapp) return (
       <div className="flex h-full flex-col">
-        {order.eventId && isSelfServiceMode(liveOperationMode) && (
+        {order.eventId && crossCatalogOn && (
           <div className="shrink-0 border-b"><LiveCatalogInviteBlock eventId={order.eventId} phone={order.whatsapp} customerId={dbOrder?.customer_id || null} orderId={dbOrder && (dbOrder.is_paid || (dbOrder as any).paid_externally) ? dbOrder.id : null} /></div>
         )}
         <div className="min-h-0 flex-1"><EventCrossellDialog embedded open onOpenChange={(value) => !value && close()} phone={order.whatsapp} customerName={order.instagramHandle || undefined} order={order} selectedInstance={crossellInstance || {id:null,provider:"",label:"Selecione uma instância no chat"}} /></div>
