@@ -10,13 +10,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { toast } from "sonner";
 import type { DbOrderProduct } from "@/types/database";
+import { fetchProducts, getVariantImage } from "@/lib/shopify";
 
 const db = supabase as any;
 const brl = (v?: number | null) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 
 export interface CodeIntentItem {
   code: string; product_name?: string; color?: string; size?: string | null; price?: number;
-  sku?: string; shopify_variant_id?: string | null; stock?: number; status?: string; warnings?: string[];
+  sku?: string; shopify_variant_id?: string | null; master_id?: string | null; stock?: number; status?: string; warnings?: string[];
 }
 export interface CodeIntent {
   id: string; username: string; items: CodeIntentItem[]; phone_last4: string | null; phone: string | null;
@@ -61,6 +62,8 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
   const [orderOpen, setOrderOpen] = useState(false);
   const [catalog, setCatalog] = useState<CatalogRow[] | null>(null);
   const [comments, setComments] = useState<{ id: string; comment_text: string; created_at: string }[]>([]);
+  // Itens fora do catálogo: localizados na Shopify (mesma busca do montar pedido). null = ainda buscando.
+  const [shopifyHits, setShopifyHits] = useState<Record<string, DbOrderProduct> | null>(null);
   const [sizeDraft, setSizeDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -96,15 +99,55 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, eventId]);
 
+  // b) itens não achados no catálogo: products_master.shopify_product_id → Shopify, variação pelo shopify_variant_id.
+  useEffect(() => {
+    if (!active || !catalog) { setShopifyHits(null); return; }
+    const pending = (active.items || []).filter((it) => it.shopify_variant_id && it.master_id && !matchCatalogItem(it, catalog));
+    if (pending.length === 0) { setShopifyHits({}); return; }
+    let stop = false;
+    setShopifyHits(null);
+    (async () => {
+      const hits: Record<string, DbOrderProduct> = {};
+      try {
+        const masterIds = [...new Set(pending.map((it) => it.master_id as string))];
+        const { data: masters } = await db.from("products_master").select("id, shopify_product_id").in("id", masterIds);
+        const pidByMaster = new Map<string, string>((masters || []).filter((m: any) => m.shopify_product_id).map((m: any) => [m.id, numId(m.shopify_product_id)]));
+        const pids = [...new Set([...pidByMaster.values()])];
+        const prods = pids.length ? await fetchProducts(Math.min(pids.length, 50), pids.map((id) => `id:${id}`).join(" OR ")) : [];
+        for (const it of pending) {
+          const pid = pidByMaster.get(it.master_id as string);
+          const product = prods.find((p) => numId(p.node.id) === pid);
+          const variant = product?.node.variants.edges.find((e) => numId(e.node.id) === numId(it.shopify_variant_id))?.node;
+          if (!product || !variant) continue;
+          const price = parseFloat(variant.price.amount);
+          hits[numId(it.shopify_variant_id)] = {
+            id: `${product.node.id}-${variant.id}`,
+            shopifyId: variant.id,
+            sku: variant.sku || undefined,
+            title: product.node.title,
+            variant: variant.title !== "Default Title" ? variant.title : "",
+            price: Number(it.price ?? price),
+            quantity: 1,
+            image: getVariantImage(product, variant),
+          };
+        }
+      } catch (e) { console.error("code-intent shopify lookup", e); }
+      if (!stop) setShopifyHits(hits);
+    })();
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.updated_at, catalog]);
+
   const resolved = useMemo(() => {
     if (!active) return { products: [] as DbOrderProduct[], missing: [] as CodeIntentItem[] };
     const products: DbOrderProduct[] = []; const missing: CodeIntentItem[] = [];
     for (const it of active.items || []) {
-      const m = it.shopify_variant_id || it.sku ? matchCatalogItem(it, catalog || []) : null;
+      const m = (it.shopify_variant_id || it.sku ? matchCatalogItem(it, catalog || []) : null)
+        || (it.shopify_variant_id ? shopifyHits?.[numId(it.shopify_variant_id)] : null) || null;
       if (m) products.push(m); else missing.push(it);
     }
     return { products, missing };
-  }, [active, catalog]);
+  }, [active, catalog, shopifyHits]);
 
   const setSize = async (intentId: string, index: number) => {
     const key = `${intentId}:${index}`;
@@ -211,7 +254,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
                 {resolved.missing.length > 0 && (
                   <div className="space-y-1 border-t bg-amber-400/10 p-3 text-xs">
                     {resolved.missing.map((it, i) => (
-                      <div key={i}><b>{it.code}</b> {it.product_name} {it.color} {it.size ? `nº ${it.size}` : ""} — não localizado no catálogo, adicione manualmente</div>
+                      <div key={i}><b>{it.code}</b> {it.product_name} {it.color} {it.size ? `nº ${it.size}` : ""} — não localizado, adicione manualmente</div>
                     ))}
                   </div>
                 )}
@@ -229,7 +272,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
                   </Button>
                 </div>
               </div>
-              {orderOpen && catalog && (
+              {orderOpen && catalog && shopifyHits && (
                 <div className="min-w-0 flex-1 overflow-y-auto">
                   <OrderDialogDb
                     key={active.id}
