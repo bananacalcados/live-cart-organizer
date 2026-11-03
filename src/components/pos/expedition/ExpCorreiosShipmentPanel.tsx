@@ -11,10 +11,10 @@ import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosL
 
 export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; thermal_url?: string | null; thermal_label_url?: string | null; a4_url?: string | null; own_url?: string | null; own_a4_url?: string | null; sale_ids?: string[] }
 interface Summary { ok: boolean; problems: string[]; summary: { remetente?: { nome: string; cnpj: string }; servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
-interface Props { saleId: string; refreshKey?: unknown; onTracking?: (code: string) => void }
+interface Props { saleId: string; refreshKey?: unknown; onTracking?: (code: string) => void; printOnly?: boolean }
 const STATUS: Record<string, string> = { criada: 'Pré-postagem criada', rotulo_emitido: 'Etiqueta emitida', postada: 'Postada' };
 
-export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Props) {
+export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, printOnly }: Props) {
   const [shipment, setShipment] = useState<CorreiosShipment | null>(null);
   const [printFormat, setPrintFormat] = useState(getCorreiosLabelFormat);
   const [correiosSelected, setCorreiosSelected] = useState(false);
@@ -53,6 +53,7 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
   });
   const cancel = () => run(async () => { if (!shipment) return; const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'cancel', shipment_id: shipment.id, reason }); setShipment(null); setCancelOpen(false); setReason(''); toast.success(r.shipment.status === 'cancelada' ? 'Pré-postagem cancelada' : 'Atualizado'); });
 
+  if (printOnly && !shipment) return <p className="rounded-md border border-border p-3 text-sm text-muted-foreground">Este envio não tem etiqueta Correios do contrato no sistema (mototaxi, retirada ou transportadora avulsa).</p>;
   if (!shipment && !correiosSelected) return null;
   return <div className="space-y-3 rounded-md border border-border p-3">
     <p className="font-bold flex items-center gap-2"><Tag className="h-4 w-4" />Correios (contrato)</p>
@@ -76,7 +77,7 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking }: Pro
       </div>
       <p className="text-xs text-muted-foreground">Na impressora térmica, selecione papel 100 × 150 mm e escala 100% (tamanho real). Se a etiqueta do ERP der problema na agência, use o Rótulo oficial Correios.</p>
       <div className="flex flex-wrap gap-2">
-        {shipment.status !== 'postada' && <Button variant="outline" onClick={() => setCancelOpen((v) => !v)} disabled={busy}><XCircle className="h-4 w-4 mr-2" />Cancelar pré-postagem</Button>}
+        {!printOnly && shipment.status !== 'postada' && <Button variant="outline" onClick={() => setCancelOpen((v) => !v)} disabled={busy}><XCircle className="h-4 w-4 mr-2" />Cancelar pré-postagem</Button>}
       </div>
       {cancelOpen && <div className="flex flex-wrap gap-2"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo do cancelamento" className="max-w-sm" /><Button variant="destructive" onClick={cancel} disabled={busy || reason.trim().length < 3}>Confirmar cancelamento</Button></div>}
     </div>}

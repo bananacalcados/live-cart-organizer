@@ -1653,6 +1653,17 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                               <ScanBarcode className="h-5 w-5 mr-1" /> CONFERIR E FINALIZAR
                             </Button>
                           )}
+                          {stage === "concluido" && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 text-base font-black"
+                              onClick={(event) => { event.stopPropagation(); setExpanded(o.id); }}
+                              title="Reimprimir a etiqueta sem mudar a etapa nem a data"
+                            >
+                              <Printer className="h-5 w-5 mr-1" /> IMPRIMIR ETIQUETA
+                            </Button>
+                          )}
                           {stage === "concluido" && o.resolved_phone && (
                             <>
                               <Button
@@ -1691,6 +1702,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                     {expanded === o.id && (
                       <div className="border-t-2 border-pos-border bg-pos-elevated p-4 space-y-2">
                         {stage === "preparacao" && !isStorePickupOrder(o) && <ExpCorreiosShipmentPanel saleId={o.id} onTracking={() => load()} />}
+                        {stage === "concluido" && <ExpCorreiosShipmentPanel saleId={o.id} printOnly />}
                         {o.items.map((it) => (
                           <div key={it.id} className="flex items-start justify-between gap-3 py-2 border-b border-pos-border/60 last:border-0">
                             <div>
