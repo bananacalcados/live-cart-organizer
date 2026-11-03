@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { hiddenByConflict, measureBlocks } from "@/lib/overlayConflicts";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
@@ -257,6 +258,25 @@ export default function LiveOverlay() {
     return () => window.clearInterval(t);
   }, [config?.cta]);
 
+  // Prioridade por sobreposição: só o bloco de maior prioridade aparece onde dois se cruzam.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const applyConflicts = useRef(() => {});
+  applyConflicts.current = () => {
+    const blocks = measureBlocks(stageRef.current);
+    const hide = hiddenByConflict(blocks);
+    for (const b of blocks) {
+      const h = hide.has(b.key);
+      b.el.style.transition = "opacity 300ms ease";
+      b.el.style.opacity = h ? "0" : "1";
+      b.el.style.visibility = h ? "hidden" : "visible";
+    }
+  };
+  useLayoutEffect(() => { applyConflicts.current(); });
+  useEffect(() => {
+    const t = window.setInterval(() => applyConflicts.current(), 500);
+    return () => window.clearInterval(t);
+  }, []);
+
   if (!config) return null;
   const rb = config.raffle_bar;
   const remaining = Math.max(0, (rb.goal_count || 0) - raffleCount);
@@ -270,6 +290,7 @@ export default function LiveOverlay() {
   return (
     <div className="fixed inset-0 overflow-hidden">
     <div
+      ref={stageRef}
       className="absolute top-0 overflow-hidden font-sans"
       style={{ width: 1080, height: 1920, left: offset, transform: `scale(${scale})`, transformOrigin: "top left", background: "transparent", opacity: hidden ? 0 : 1, transition: "opacity 600ms ease" }}
     >
