@@ -95,8 +95,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
           fetchCommissionSales({
             startIso: monthStart.toISOString(), endIso, storeId, requireReleased: true,
             select: "id, total, shipping_cost, payment_details, subtotal, discount",
-          }).then((data) => ({ data }), () => ({ data: [] as any[] }))
-            .limit(20000),
+          }).then((data) => ({ data }), () => ({ data: [] as any[] })),
         ]);
 
         // Meta mensal da loja: prioriza custom vigente, senão a monthly mais recente.
@@ -116,8 +115,8 @@ export function POSStoreGoalCards({ storeId }: Props) {
 
         let dayDone = 0, weekDone = 0, monthDone = 0;
         for (const s of (salesRes.data || []) as any[]) {
-          const total = Number(s.total) || 0;
-          const eff = s.paid_at ? new Date(s.paid_at) : new Date(s.created_at);
+          const total = saleNet(s);
+          const eff = new Date(s.effective_at);
           monthDone += total;
           if (eff >= weekStart) weekDone += total;
           if (eff >= todayStart) dayDone += total;
