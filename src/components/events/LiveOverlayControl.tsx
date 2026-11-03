@@ -302,6 +302,16 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Produto em exibição</CardTitle>
+            <Switch checked={cfg.shown_product.enabled} onCheckedChange={(v) => update("shown_product", { enabled: v })} />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">Mostra o código do produto marcado em "Produtos em exibição" e os anteriores. Posição e tamanho no bloco "Produto" do editor de posições. Também precisa estar ligado "Mostrar códigos no overlay" nas configurações da live.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Roleta ao vivo</CardTitle>
             <Switch checked={cfg.wheel.enabled} onCheckedChange={(v) => update("wheel", { enabled: v })} />
           </CardHeader>

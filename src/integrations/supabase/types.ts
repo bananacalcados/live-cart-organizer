@@ -28556,6 +28556,7 @@ export type Database = {
         Returns: Json
       }
       overlay_raffle_count: { Args: { p_event_id: string }; Returns: number }
+      overlay_shown_products: { Args: { p_token: string }; Returns: Json }
       parse_brand_from_name: { Args: { p_name: string }; Returns: string }
       parse_category_from_name: { Args: { p_name: string }; Returns: string }
       parse_payment_methods: { Args: { p_text: string }; Returns: string[] }

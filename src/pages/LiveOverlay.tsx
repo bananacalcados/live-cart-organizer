@@ -5,6 +5,9 @@ import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, t
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
+interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; shown_at?: string }
+interface ShownData { show_codes: boolean; current: ShownItem | null; previous: ShownItem[] }
+const brl = (v?: number) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 interface Alert { key: number; text: string; duration: number; tone?: "expired" }
 
 /**
@@ -36,6 +39,28 @@ export default function LiveOverlay() {
   const timerQueue = useRef<PaymentTimer[]>([]);
   const [currentTimer, setCurrentTimer] = useState<PaymentTimer | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Produto em exibição: só via overlay_shown_products (respeita minutos e is_current).
+  const [shown, setShown] = useState<ShownData | null>(null);
+  const shownBusy = useRef(false);
+  const loadShown = useRef<() => void>(() => {});
+  loadShown.current = async () => {
+    if (!token || shownBusy.current) return;
+    shownBusy.current = true;
+    try {
+      const { data } = await supabase.rpc("overlay_shown_products" as any, { p_token: token });
+      const d = data as any;
+      setShown((prev) => {
+        const next: ShownData | null = d && !d.error ? { show_codes: !!d.show_codes, current: d.current || null, previous: (d.previous || []).slice(0, 8) } : null;
+        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      });
+    } finally { shownBusy.current = false; }
+  };
+  useEffect(() => {
+    if (!token) return;
+    loadShown.current();
+    const t = window.setInterval(() => { if (!document.hidden) loadShown.current(); }, 60_000);
+    return () => window.clearInterval(t);
+  }, [token]);
 
   useEffect(() => {
     const resize = () => setViewport((current) => {
@@ -111,6 +136,7 @@ export default function LiveOverlay() {
       if (overlayEventChanged(liveId.current, d.event_id || null)) {
         liveId.current = d.event_id;
         liveGeneration.current += 1;
+        loadShown.current();
         lastId.current = 0;
         queue.current = [];
         timerQueue.current = [];
@@ -135,6 +161,7 @@ export default function LiveOverlay() {
       const cfg = cfgRef.current;
       for (const e of (d.events || []) as OvEvent[]) {
         lastId.current = Math.max(lastId.current, e.id);
+        if (e.kind === "product_shown") { loadShown.current(); continue; }
         if (!cfg) continue;
         if (Date.now() - new Date(e.created_at).getTime() > 120_000) continue;
         const p = e.payload || {};
@@ -311,6 +338,26 @@ export default function LiveOverlay() {
               {spin.raffle ? `🎁 Sorteio${spin.prize ? ` · ${spin.prize}` : ""}` : fill(config.wheel.title_template, { handle: spin.handle })}
             </div>
             <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
+          </div>
+        </OverlayBlock>
+      )}
+
+      {config.shown_product.enabled && shown?.show_codes && (shown.current || shown.previous.length > 0) && (
+        <OverlayBlock position={config.layout.shown_product} blockKey="shown_product">
+          <div className="flex flex-col gap-[0.25em]">
+            {shown.current && (
+              <div key={shown.current.code + (shown.current.shown_at || "")} className={`${panel} animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.1 }}>
+                <div className="font-black tracking-wide" style={{ fontSize: "2.2em" }}>{shown.current.code}</div>
+                <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
+                {shown.current.color && <div style={{ fontSize: "0.5em" }}>{shown.current.color}</div>}
+                {shown.current.sale_price != null && <div className="font-extrabold mt-[0.15em]" style={{ fontSize: "0.75em" }}>{brl(shown.current.sale_price)}</div>}
+              </div>
+            )}
+            {shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (
+              <div key={p.code} className={`${panel} font-bold animate-in fade-in duration-500`} style={{ fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {p.code} · {(p.product_name || "").split(" ").slice(0, 3).join(" ")}{p.color ? ` · ${p.color}` : ""}
+              </div>
+            ))}
           </div>
         </OverlayBlock>
       )}

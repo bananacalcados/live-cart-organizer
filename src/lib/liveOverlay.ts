@@ -3,7 +3,7 @@ export interface OverlayItem { id: string; text: string; enabled: boolean }
 export function overlayEventChanged(previous: string | null, incoming: string | null): boolean {
   return previous !== null && incoming !== null && previous !== incoming;
 }
-export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel" | "timers";
+export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel" | "timers" | "shown_product";
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
 /**
@@ -18,6 +18,8 @@ export const DEFAULT_OVERLAY_LAYOUT: OverlayLayout = {
   cta: { x: 20, y: 620, width: 1040, font_size: 84, align: "center" },
   wheel: { x: 20, y: 620, width: 1040, font_size: 108, align: "center" },
   timers: { x: 20, y: 1250, width: 1040, font_size: 44, align: "left" },
+  // Produto em exibição: coluna à direita, entre a faixa e a barra do sorteio.
+  shown_product: { x: 720, y: 360, width: 340, font_size: 48, align: "right" },
 };
 export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition {
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
@@ -35,6 +37,8 @@ export interface OverlayConfig {
   payment_timers: { enabled: boolean; template: string; duration_seconds: number };
   /** Aviso de par liberado quando o prazo de pagamento vence. */
   expired_alert: { enabled: boolean; template: string; template_no_stock: string; duration_seconds: number };
+  /** Código do produto em exibição (dados vêm de overlay_shown_products). */
+  shown_product: { enabled: boolean };
 }
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
@@ -57,6 +61,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   wheel: { enabled: true, title_template: "🎰 Roleta de @{handle}", result_seconds: 8 },
   payment_timers: { enabled: true, template: "✅ @{handle}, seu carrinho está pronto! ⏳ {timer} para pagar e concorrer à bolsa 🎁", duration_seconds: 6 },
   expired_alert: { enabled: true, template: "🔁 Liberou o {size} do {product}! Quem quer?", template_no_stock: "⌛ @{handle}, o prazo da bolsa acabou!", duration_seconds: 8 },
+  shown_product: { enabled: true },
 };
 
 /** Junta o config salvo com os padrões, para nunca faltar campo. */
@@ -73,6 +78,7 @@ export function withOverlayDefaults(raw: any): OverlayConfig {
     wheel: { ...d.wheel, ...(c.wheel || {}) },
     payment_timers: { ...d.payment_timers, ...(c.payment_timers || {}) },
     expired_alert: { ...d.expired_alert, ...(c.expired_alert || {}) },
+    shown_product: { ...d.shown_product, ...(c.shown_product || {}) },
   };
 }
 
