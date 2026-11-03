@@ -14,6 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";

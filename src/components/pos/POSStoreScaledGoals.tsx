@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns";
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 import { ScaledGoalTiers } from "./ScaledGoalTiers";
 import { PayrollLiveEventsDialog, type LiveEventInfo } from "./PayrollLiveEventsDialog";
