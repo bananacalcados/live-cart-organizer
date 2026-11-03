@@ -27,7 +27,24 @@ type CodeRow = {
 type Letter = { letter: string; label: string };
 
 const PAGE = 50;
-const COLS = "code,letter,master_id,product_name,color,category,sale_price,total_stock";
+const COLS = "code,letter,master_id,product_name,color,category,sale_price";
+// total_stock na view é caro (~0,25 s por linha): busca só para os códigos necessários, em lotes pequenos.
+async function fetchStock(codes: string[], onProgress?: (done: number) => void): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const chunks: string[][] = [];
+  for (let i = 0; i < codes.length; i += 8) chunks.push(codes.slice(i, i + 8));
+  let idx = 0, done = 0;
+  const worker = async () => {
+    while (idx < chunks.length) {
+      const chunk = chunks[idx++];
+      const { data } = await (supabase.from("v_product_color_codes" as any).select("code,total_stock") as any).in("code", chunk);
+      (data ?? []).forEach((r: any) => out.set(r.code, Number(r.total_stock ?? 0)));
+      done += chunk.length; onProgress?.(done);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
 const brl = (v: number | null) =>
   `R$ ${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const normColor = (c: string | null) => (c ?? "").trim().toLowerCase();
@@ -53,7 +70,7 @@ export default function InventoryProductCodes() {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => setPage(0), [debounced, letter, onlyStock]);
+  useEffect(() => setPage(0), [debounced, letter]);
 
   useEffect(() => {
     supabase.from("product_code_letters").select("letter,label").order("letter").then(({ data }) => setLetters((data as Letter[]) ?? []));
@@ -66,7 +83,6 @@ export default function InventoryProductCodes() {
       q = q.or(`code.ilike.%${s}%,product_name.ilike.%${s}%,color.ilike.%${s}%`);
     }
     if (letter !== "all") q = q.eq("letter", letter);
-    if (onlyStock || opts.stock) q = q.gt("total_stock", 0);
     return q.order("letter").order("seq");
   };
 
@@ -78,13 +94,17 @@ export default function InventoryProductCodes() {
       .then(({ data, count, error }: any) => {
         if (cancel) return;
         if (error) toast.error("Erro ao carregar códigos: " + error.message);
-        setRows(data ?? []);
+        const list: CodeRow[] = (data ?? []).map((r: any) => ({ ...r, total_stock: null }));
+        setRows(list);
         setTotal(count ?? 0);
         setLoading(false);
+        if (list.length) fetchStock(list.map(r => r.code)).then(m => {
+          if (!cancel) setRows(prev => prev.map(r => ({ ...r, total_stock: m.get(r.code) ?? 0 })));
+        });
       });
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, letter, onlyStock, page, reload]);
+  }, [debounced, letter, page, reload]);
 
   const fetchAll = async (stock = false): Promise<CodeRow[]> => {
     const out: CodeRow[] = [];
@@ -94,7 +114,11 @@ export default function InventoryProductCodes() {
       out.push(...(data ?? []));
       if (!data || data.length < 1000) break;
     }
-    return out;
+    const tid = toast.loading(`Buscando estoque de ${out.length} códigos…`);
+    const m = await fetchStock(out.map(r => r.code), d => toast.loading(`Buscando estoque ${d}/${out.length}…`, { id: tid }));
+    toast.dismiss(tid);
+    const withStock = out.map(r => ({ ...r, total_stock: m.get(r.code) ?? 0 }));
+    return stock ? withStock.filter(r => (r.total_stock ?? 0) > 0) : withStock;
   };
 
   const toggle = (r: CodeRow) => {
@@ -174,7 +198,7 @@ export default function InventoryProductCodes() {
   const exportPdf = async () => {
     setExporting(true);
     try {
-      const list = pdfMode === "selected" ? Array.from(selected.values()) : await fetchAll(pdfMode === "stock");
+      const list = pdfMode === "selected" ? Array.from(selected.values()) : await fetchAll(pdfMode === "stock" || onlyStock);
       if (!list.length) { toast.error("Nenhum código para exportar"); return; }
       const doc = new jsPDF({ unit: "mm", format: "a4" });
       const W = 80, H = 50, GAP = 4, cols = 2, rowsPer = 5;
@@ -251,7 +275,7 @@ export default function InventoryProductCodes() {
             </SelectContent>
           </Select>
           <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={onlyStock} onCheckedChange={v => setOnlyStock(!!v)} /> Com estoque
+            <Checkbox checked={onlyStock} onCheckedChange={v => setOnlyStock(!!v)} /> Com estoque <span className="text-xs text-muted-foreground">(nesta página)</span>
           </label>
         </CardContent>
       </Card>
@@ -272,7 +296,7 @@ export default function InventoryProductCodes() {
                   <tr><td colSpan={7} className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin inline text-muted-foreground" /></td></tr>
                 ) : rows.length === 0 ? (
                   <tr><td colSpan={7} className="p-8 text-center text-muted-foreground"><Hash className="h-5 w-5 inline mr-1" />Nenhum código encontrado</td></tr>
-                ) : rows.map(r => (
+                ) : rows.filter(r => !onlyStock || r.total_stock === null || r.total_stock > 0).map(r => (
                   <tr key={r.code} className="border-t hover:bg-muted/30">
                     <td className="p-2"><Checkbox checked={selected.has(r.code)} onCheckedChange={() => toggle(r)} /></td>
                     <td className="p-2 text-xl font-bold font-mono text-primary">{r.code}</td>
@@ -280,7 +304,7 @@ export default function InventoryProductCodes() {
                     <td className="p-2">{r.color ?? <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-2 text-muted-foreground">{r.category ?? (r.letter ? letterLabel.get(r.letter) : "")}</td>
                     <td className="p-2 text-right whitespace-nowrap">{brl(r.sale_price)}</td>
-                    <td className={`p-2 text-right ${Number(r.total_stock ?? 0) > 0 ? "" : "text-muted-foreground"}`}>{r.total_stock ?? 0}</td>
+                    <td className={`p-2 text-right ${Number(r.total_stock ?? 0) > 0 ? "" : "text-muted-foreground"}`}>{r.total_stock === null ? <Loader2 className="h-3 w-3 animate-spin inline" /> : r.total_stock}</td>
                   </tr>
                 ))}
               </tbody>
