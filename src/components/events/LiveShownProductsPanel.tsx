@@ -1,3 +1,4 @@
+import { LiveCodeSettingsSection } from "./LiveCodeSettingsSection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, RotateCcw, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,6 +104,7 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
 
   return (
     <div className="space-y-3">
+      <LiveCodeSettingsSection eventId={eventId} />
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, cor ou código (ex.: T001)" className="pl-8" />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,14 @@ import { toast } from "sonner";
 
 const db = supabase as any;
 
+/** Configuração compacta de "Códigos na live", no topo da aba Produtos em exibição. */
 export function LiveCodeSettingsSection({ eventId }: { eventId: string }) {
   const [active, setActive] = useState(false);
   const [minutes, setMinutes] = useState(10);
   const [showCodes, setShowCodes] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -29,32 +31,44 @@ export function LiveCodeSettingsSection({ eventId }: { eventId: string }) {
     return () => { alive = false; };
   }, [eventId]);
 
-  const save = async () => {
+  const persist = async (next: { active: boolean; minutes: number; showCodes: boolean }, msg: string) => {
     setSaving(true);
     const { error } = await db.from("live_code_settings").upsert({
-      event_id: eventId, mode: active ? "active" : "off",
-      overlay_previous_minutes: Math.max(0, Math.round(minutes || 0)),
-      overlay_show_codes: showCodes, updated_at: new Date().toISOString(),
+      event_id: eventId, mode: next.active ? "active" : "off",
+      overlay_previous_minutes: Math.max(0, Math.round(next.minutes || 0)),
+      overlay_show_codes: next.showCodes, updated_at: new Date().toISOString(),
     }, { onConflict: "event_id" });
     setSaving(false);
-    if (error) toast.error("Erro ao salvar: " + error.message);
-    else toast.success("Códigos na live salvos");
+    if (error) { toast.error("Erro ao salvar: " + error.message); return false; }
+    toast.success(msg);
+    return true;
   };
 
+  const toggleActive = async (v: boolean) => {
+    const prev = active;
+    setActive(v);
+    const ok = await persist({ active: v, minutes, showCodes }, v ? "Anotação automática ativada" : "Anotação automática desligada");
+    if (!ok) setActive(prev);
+  };
+
+  if (loading) return <div className="rounded-lg border p-3"><Loader2 className="h-4 w-4 animate-spin" /></div>;
+
   return (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div>
-        <h3 className="font-semibold">Códigos na live</h3>
-        <p className="text-xs text-muted-foreground">
-          Por enquanto, "Ativo" só guarda a configuração. A anotação automática pelos comentários vem numa etapa futura.
-        </p>
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Switch checked={active} onCheckedChange={toggleActive} disabled={saving} />
+        <span className="font-semibold text-sm">
+          Anotação automática por código: <span className={active ? "text-primary" : "text-muted-foreground"}>{active ? "Ativo" : "Desligado"}</span>
+        </span>
+        <Button size="sm" variant="ghost" className="ml-auto h-7 gap-1" onClick={() => setOpen((o) => !o)}>
+          <Settings2 className="h-3.5 w-3.5" /> Configurar
+        </Button>
       </div>
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-        <>
-          <div className="flex items-center justify-between">
-            <Label>{active ? "Ativo" : "Desligado"}</Label>
-            <Switch checked={active} onCheckedChange={setActive} />
-          </div>
+      <p className="text-xs text-muted-foreground">
+        Quando Ativo, comentários com código (ex.: T101 37 final 8531) viram cards 'Por código' na linha PEDIDOS.
+      </p>
+      {open && (
+        <div className="space-y-2 border-t pt-2">
           <div className="flex items-center justify-between gap-3">
             <Label>Manter anteriores no overlay por (minutos)</Label>
             <Input type="number" min={0} className="w-24" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} />
@@ -63,10 +77,10 @@ export function LiveCodeSettingsSection({ eventId }: { eventId: string }) {
             <Label>Mostrar códigos no overlay</Label>
             <Switch checked={showCodes} onCheckedChange={setShowCodes} />
           </div>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Salvar códigos na live
+          <Button size="sm" onClick={() => persist({ active, minutes, showCodes }, "Configuração salva")} disabled={saving}>
+            {saving && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Salvar
           </Button>
-        </>
+        </div>
       )}
     </div>
   );

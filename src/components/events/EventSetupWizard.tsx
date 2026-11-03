@@ -1,4 +1,3 @@
-import { LiveCodeSettingsSection } from "./LiveCodeSettingsSection";
 import { SELF_SERVICE_MODE, isSelfServiceMode, isWhatsAppLikeMode } from "@/lib/liveModes";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -1044,7 +1043,6 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           {currentStep.key === "live" && (
             <div className="space-y-6">
               <LiveActivationStep event={event} />
-              <LiveCodeSettingsSection eventId={event.id} />
             </div>
           )}
 
