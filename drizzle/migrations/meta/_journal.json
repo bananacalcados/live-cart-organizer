@@ -792,6 +792,13 @@
       "when": 1793565841395,
       "tag": "0112_block_items_added_to_paid_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1793729913683,
+      "tag": "0113_overlay_events_allow_product_shown",
+      "breakpoints": true
     }
   ]
 }

@@ -609,6 +609,18 @@ export default function PresenterDashboard() {
         </div>
       )}
 
+      {/* Produtos em exibição — acima dos comentários */}
+      {eventId && (
+        <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
+          <CardContent className="p-4">
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" /> Produtos em exibição
+            </h2>
+            <LiveShownProductsPanel eventId={eventId} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Comentários da Live — logo abaixo da linha de pedidos */}
       <Card className="mb-6 bg-muted-foreground/5 border-muted-foreground/15">
         <CardContent className="p-4">
