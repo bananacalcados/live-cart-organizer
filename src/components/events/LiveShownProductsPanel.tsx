@@ -50,11 +50,25 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
     setLoading(false);
   }, [eventId]);
 
-  // A tabela não está no tempo real: atualiza a cada 5 s, só com a aba visível.
+  // Tempo real: INSERT/UPDATE em live_shown_products desta live disparam load();
+  // recarregamento de segurança a cada 60 s cobre qualquer evento perdido.
   useEffect(() => {
     load();
-    const t = setInterval(() => { if (!document.hidden) load(); }, 5000);
-    return () => clearInterval(t);
+    const channel = supabase
+      .channel(`live-shown-${eventId}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "live_shown_products", filter: `event_id=eq.${eventId}` },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "live_shown_products", filter: `event_id=eq.${eventId}` },
+        () => load(),
+      )
+      .subscribe();
+    const t = setInterval(() => { if (!document.hidden) load(); }, 60000);
+    return () => { clearInterval(t); supabase.removeChannel(channel); };
   }, [load]);
 
   useEffect(() => {
