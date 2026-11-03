@@ -631,7 +631,16 @@ export default function PresenterDashboard() {
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
           </TabsTrigger>
+          <TabsTrigger value="shown" className="gap-1 data-[state=active]:bg-primary/20">
+            <Package className="h-4 w-4" /> Produtos em exibição
+          </TabsTrigger>
         </TabsList>
+
+        {eventId && (
+          <TabsContent value="shown">
+            <LiveShownProductsPanel eventId={eventId} />
+          </TabsContent>
+        )}
 
         <TabsContent value="live">
 

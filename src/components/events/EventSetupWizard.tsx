@@ -1041,7 +1041,10 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           )}
 
           {currentStep.key === "live" && (
-            <LiveActivationStep event={event} />
+            <div className="space-y-6">
+              <LiveActivationStep event={event} />
+              <LiveCodeSettingsSection eventId={event.id} />
+            </div>
           )}
 
         </div>
