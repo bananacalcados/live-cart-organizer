@@ -19937,6 +19937,109 @@ export type Database = {
         }
         Relationships: []
       }
+      product_code_category_map: {
+        Row: {
+          category_id: string
+          letter: string
+        }
+        Insert: {
+          category_id: string
+          letter: string
+        }
+        Update: {
+          category_id?: string
+          letter?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_code_category_map_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: true
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_code_category_map_letter_fkey"
+            columns: ["letter"]
+            isOneToOne: false
+            referencedRelation: "product_code_letters"
+            referencedColumns: ["letter"]
+          },
+        ]
+      }
+      product_code_letters: {
+        Row: {
+          label: string
+          last_seq: number
+          letter: string
+        }
+        Insert: {
+          label: string
+          last_seq?: number
+          letter: string
+        }
+        Update: {
+          label?: string
+          last_seq?: number
+          letter?: string
+        }
+        Relationships: []
+      }
+      product_color_codes: {
+        Row: {
+          code: string
+          color: string | null
+          color_key: string
+          created_at: string
+          id: string
+          letter: string
+          master_id: string
+          seq: number
+        }
+        Insert: {
+          code: string
+          color?: string | null
+          color_key?: string
+          created_at?: string
+          id?: string
+          letter: string
+          master_id: string
+          seq: number
+        }
+        Update: {
+          code?: string
+          color?: string | null
+          color_key?: string
+          created_at?: string
+          id?: string
+          letter?: string
+          master_id?: string
+          seq?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_color_codes_letter_fkey"
+            columns: ["letter"]
+            isOneToOne: false
+            referencedRelation: "product_code_letters"
+            referencedColumns: ["letter"]
+          },
+          {
+            foreignKeyName: "product_color_codes_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_color_codes_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
+          },
+        ]
+      }
       product_colors: {
         Row: {
           created_at: string
@@ -20322,6 +20425,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_variants_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
+          },
+          {
             foreignKeyName: "product_variants_size_id_fkey"
             columns: ["size_id"]
             isOneToOne: false
@@ -20590,6 +20700,30 @@ export type Database = {
           },
         ]
       }
+      products_master_category_backup_20261103: {
+        Row: {
+          backed_up_at: string | null
+          category: string | null
+          category_id: string | null
+          category_source: string | null
+          id: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          category?: string | null
+          category_id?: string | null
+          category_source?: string | null
+          id?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          category?: string | null
+          category_id?: string | null
+          category_source?: string | null
+          id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -20848,6 +20982,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products_master"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoice_items_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
           },
           {
             foreignKeyName: "purchase_invoice_items_variant_id_fkey"
@@ -25834,6 +25975,13 @@ export type Database = {
             referencedRelation: "products_master"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_variants_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
+          },
         ]
       }
       product_variant_stock: {
@@ -25860,6 +26008,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products_master"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
           },
         ]
       }
@@ -25978,6 +26133,32 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_product_color_codes: {
+        Row: {
+          brand: string | null
+          category: string | null
+          code: string | null
+          color: string | null
+          created_at: string | null
+          gender: string | null
+          letter: string | null
+          master_id: string | null
+          product_name: string | null
+          sale_price: number | null
+          seq: number | null
+          sku_root: string | null
+          total_stock: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_color_codes_letter_fkey"
+            columns: ["letter"]
+            isOneToOne: false
+            referencedRelation: "product_code_letters"
+            referencedColumns: ["letter"]
           },
         ]
       }
@@ -26988,6 +27169,10 @@ export type Database = {
           p_tipo_comunicacao: string
         }
         Returns: Json
+      }
+      ensure_product_color_code: {
+        Args: { p_color: string; p_master_id: string }
+        Returns: string
       }
       event_buyer_origin_matrix: { Args: { p_event_id: string }; Returns: Json }
       event_buyer_origin_matrix_v2: {
