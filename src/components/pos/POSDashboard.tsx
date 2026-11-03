@@ -14,6 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
@@ -48,14 +49,8 @@ async function loadPayrollTotals(start: Date, end: Date, storeId: string) {
     supabase.from("pos_commission_people_sellers").select("person_id, seller_id"),
     supabase.from("pos_commission_live_participants").select("person_id, store_id, period_start, period_end"),
     supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
-    supabase.from("pos_sales")
-      .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
-      .in("status", PAYROLL_REVENUE_STATUSES)
-      .neq("revenue_attribution", "site_pickup_only")
-      // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
-      .neq("status_cancelamento", "cancelado")
-      .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
-      .limit(20000),
+    fetchCommissionSales({ startIso, endIso, select: "id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, subtotal, discount" })
+      .then((data) => ({ data }), () => ({ data: [] as any[] })),
     supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
   ]);
 
@@ -206,37 +201,32 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     setLoading(true);
     try {
       const { start, end } = getPeriodRange(period, customRange);
-      const { data: sales } = await supabase
-        .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id, customer_name, customer_phone, payment_method, customer_cpf")
-        .eq("store_id", storeId)
-        .not("sale_released_at", "is", null)
-        .in("status", revenueStatuses)
-        .neq("status_cancelamento", "cancelado")
-        .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
+      // Live só conta com Expedição concluída (pela data de conclusão). Valores sempre sem frete.
+      const sales = await fetchCommissionSales({
+        startIso: start.toISOString(), endIso: end.toISOString(), storeId, requireReleased: true,
+        select: "id, total, shipping_cost, seller_id, status, sale_type, subtotal, discount, payment_details, revenue_attribution, customer_name, customer_phone, payment_method, customer_cpf",
+      });
 
-      const completedSales = (sales || []).filter((s: any) => s.revenue_attribution !== "site_pickup_only");
-      const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
+      const completedSales = (sales || []) as any[];
+      const net = (s: any) => saleNet(s as PayrollSale);
+      const revenue = completedSales.reduce((s, sale) => s + net(sale), 0);
       const count = completedSales.length;
       setTotalRevenue(revenue);
       setSalesCount(count);
       setAvgTicket(count > 0 ? revenue / count : 0);
 
-      const online = completedSales.filter((s: any) => s.sale_type === 'online');
-      const physical = completedSales.filter((s: any) => s.sale_type !== 'online' && s.sale_type !== 'live');
-      setOnlineRevenue(online.reduce((sum, s) => sum + (s.total || 0), 0));
+      const online = completedSales.filter((s: any) => s.sale_type === 'online' && !s.event_id);
+      const physical = completedSales.filter((s: any) => s.sale_type !== 'online' && s.sale_type !== 'live' && !s.event_id);
+      setOnlineRevenue(online.reduce((sum, s) => sum + net(s), 0));
       setOnlineSalesCount(online.length);
-      setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
+      setPhysicalRevenue(physical.reduce((sum, s) => sum + net(s), 0));
       setPhysicalSalesCount(physical.length);
       setOnlineSales(online as ChannelSale[]);
       setPhysicalSales(physical as ChannelSale[]);
 
-      // Faturamento Live: vendas pagas vinculadas a um evento.
-      // `completedSales` já está filtrado pelos status pagos (completed/paid/pending_sync),
-      // então não precisamos exigir paid_at aqui — pedidos `completed` legados sem paid_at
-      // também são vendas pagas legítimas.
+      // Faturamento Live: só vendas de live com Expedição concluída no período.
       const liveList = completedSales.filter((s: any) => s.event_id);
-      setLiveRevenue(liveList.reduce((sum, s) => sum + (s.total || 0), 0));
+      setLiveRevenue(liveList.reduce((sum, s) => sum + net(s), 0));
       setLiveSalesCount(liveList.length);
       setLiveSales(liveList as ChannelSale[]);
 

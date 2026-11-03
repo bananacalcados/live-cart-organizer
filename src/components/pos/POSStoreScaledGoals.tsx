@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns";
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 import { ScaledGoalTiers } from "./ScaledGoalTiers";
 import { PayrollLiveEventsDialog, type LiveEventInfo } from "./PayrollLiveEventsDialog";
@@ -90,26 +91,9 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
         supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
         supabase.from("pos_goals").select("seller_id, goal_value, period, period_start, period_end")
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
-        (async () => {
-          // O servidor devolve no máximo 1000 linhas por chamada: paginar por id.
-          const PAGE = 1000;
-          const all: any[] = [];
-          for (let from = 0; from < 20000; from += PAGE) {
-            const { data, error } = await supabase.from("pos_sales")
-              .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
-              .in("status", REVENUE_STATUSES)
-              .neq("revenue_attribution", "site_pickup_only")
-              // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
-              .neq("status_cancelamento", "cancelado")
-              .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
-              .order("id")
-              .range(from, from + PAGE - 1);
-            if (error) return { data: all, error };
-            all.push(...(data || []));
-            if (!data || data.length < PAGE) break;
-          }
-          return { data: all, error: null };
-        })(),
+        // Live só conta com Expedição concluída (pela data de conclusão); valor sem frete via saleNet.
+        fetchCommissionSales({ startIso, endIso, select: "id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, subtotal, discount" })
+          .then((data) => ({ data, error: null }), (error) => ({ data: [] as any[], error })),
         supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
       ]);
       setStores((storesRes.data || []) as PayrollStore[]);

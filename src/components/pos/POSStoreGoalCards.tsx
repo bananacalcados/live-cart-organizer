@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CalendarRange, CalendarClock, Loader2, ChevronDown, ChevronRight, CheckCircle2, Circle, TrendingUp, TrendingDown } from "lucide-react";
+import { saleNet } from "@/lib/pos/payroll";
+import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate, formatDateKey } from "@/lib/businessDays";
 
@@ -90,16 +92,11 @@ export function POSStoreGoalCards({ storeId }: Props) {
             .select("goal_value, period, period_start, period_end, created_at")
             .eq("store_id", storeId).eq("is_active", true)
             .eq("goal_type", "revenue").is("seller_id", null),
-          supabase.from("pos_sales")
-            .select("total, paid_at, created_at")
-            .eq("store_id", storeId)
-            .not("sale_released_at", "is", null)
-            .in("status", REVENUE_STATUSES)
-            .neq("revenue_attribution", "site_pickup_only")
-            // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
-            .neq("status_cancelamento", "cancelado")
-            .or(`and(paid_at.gte.${monthStart.toISOString()},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${monthStart.toISOString()},created_at.lte.${endIso})`)
-            .limit(20000),
+          // Live só conta com Expedição concluída (data de conclusão); valor sem frete.
+          fetchCommissionSales({
+            startIso: monthStart.toISOString(), endIso, storeId, requireReleased: true,
+            select: "id, total, shipping_cost, payment_details, subtotal, discount",
+          }).then((data) => ({ data }), () => ({ data: [] as any[] })),
         ]);
 
         // Meta mensal da loja: prioriza custom vigente, senão a monthly mais recente.
@@ -119,8 +116,8 @@ export function POSStoreGoalCards({ storeId }: Props) {
 
         let dayDone = 0, weekDone = 0, monthDone = 0;
         for (const s of (salesRes.data || []) as any[]) {
-          const total = Number(s.total) || 0;
-          const eff = s.paid_at ? new Date(s.paid_at) : new Date(s.created_at);
+          const total = saleNet(s);
+          const eff = new Date(s.effective_at);
           monthDone += total;
           if (eff >= weekStart) weekDone += total;
           if (eff >= todayStart) dayDone += total;
