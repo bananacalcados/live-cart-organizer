@@ -131,10 +131,20 @@ export function EventsDashboard() {
         return;
       }
 
-      const { data: ordersData } = await supabase
-        .from("orders")
-        .select("id, event_id, products, is_paid, paid_externally, paid_at, stage, discount_type, discount_value, shipping_cost, free_shipping, created_at")
-        .in("event_id", eventIds);
+      // O servidor devolve no máximo 1000 linhas por chamada: paginar por id.
+      const ordersData: any[] = [];
+      const PAGE = 1000;
+      for (let fromRow = 0; fromRow < 50000; fromRow += PAGE) {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("id, event_id, products, is_paid, paid_externally, paid_at, stage, discount_type, discount_value, shipping_cost, free_shipping, created_at")
+          .in("event_id", eventIds)
+          .order("id")
+          .range(fromRow, fromRow + PAGE - 1);
+        if (error) break;
+        ordersData.push(...(data || []));
+        if (!data || data.length < PAGE) break;
+      }
 
       const parsed = (ordersData || []).map((o: any) => ({
         ...o,
