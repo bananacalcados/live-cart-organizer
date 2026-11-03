@@ -90,14 +90,26 @@ export function POSPayrollTab({ periodRange }: Props) {
         supabase.from("pos_commission_scale").select("achievement_percent, commission_percent"),
         supabase.from("pos_goals").select("seller_id, goal_value, period, period_start, period_end")
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
-        supabase.from("pos_sales")
-          .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
-          .in("status", REVENUE_STATUSES)
-          .neq("revenue_attribution", "site_pickup_only")
-          // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
-          .neq("status_cancelamento", "cancelado")
-          .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
-          .limit(20000),
+        (async () => {
+          // O servidor devolve no máximo 1000 linhas por chamada: paginar por id.
+          const PAGE = 1000;
+          const all: any[] = [];
+          for (let from = 0; from < 20000; from += PAGE) {
+            const { data, error } = await supabase.from("pos_sales")
+              .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details, event_id, subtotal, discount")
+              .in("status", REVENUE_STATUSES)
+              .neq("revenue_attribution", "site_pickup_only")
+              // Pedido devolvido/trocado integralmente nao conta faturamento (mesmo com status pago)
+              .neq("status_cancelamento", "cancelado")
+              .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
+              .order("id")
+              .range(from, from + PAGE - 1);
+            if (error) return { data: all, error };
+            all.push(...(data || []));
+            if (!data || data.length < PAGE) break;
+          }
+          return { data: all, error: null };
+        })(),
         supabase.from("pos_commission_live_event_optouts").select("person_id, event_id"),
         supabase.from("pos_payroll_period_entries")
           .select("person_id, overtime_hours, overtime_value, benefits_bonus")
