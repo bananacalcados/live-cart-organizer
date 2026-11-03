@@ -1,3 +1,4 @@
+import { LiveShownProductsPanel } from "@/components/events/LiveShownProductsPanel";
 import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
