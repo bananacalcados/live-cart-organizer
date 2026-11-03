@@ -70,9 +70,13 @@ interface OrderDialogDbProps {
   /** Nome do lead, usado como identificador quando não há @ do Instagram */
   prefillName?: string;
   embedded?: boolean;
+  /** Itens já localizados (ex.: pedido por código na live). */
+  prefillProducts?: DbOrderProduct[];
+  /** Chamado com o id do pedido criado (ou existente que recebeu os itens). */
+  onCreated?: (orderId: string) => void;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false, prefillProducts, onCreated }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
