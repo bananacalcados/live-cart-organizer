@@ -1669,6 +1669,25 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </div>
             )}
 
+            {/* Etiqueta dos Correios — reimprime sem mexer na etapa da Expedição */}
+            {isRemoteSale && !isTinyOnly && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Etiqueta dos Correios</p>
+                {!showCorreiosLabel ? (
+                  <Button
+                    onClick={() => setShowCorreiosLabel(true)}
+                    variant="outline"
+                    className="w-full gap-2 h-10 text-xs border-indigo-300 text-indigo-800 hover:bg-indigo-50 font-semibold"
+                    title="Reimprimir a etiqueta sem mudar a etapa nem a data"
+                  >
+                    <Printer className="h-4 w-4" /> Imprimir etiqueta
+                  </Button>
+                ) : (
+                  <ExpCorreiosShipmentPanel saleId={sale.id} printOnly />
+                )}
+              </div>
+            )}
+
             {/* Print / Fiscal Actions */}
 
             {!isTinyOnly && (
