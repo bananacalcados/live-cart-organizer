@@ -158,9 +158,14 @@ interface Props {
   isTinyOnly?: boolean;
   storeId?: string;
   onDeleted?: () => void;
+  /** Abre já a impressão da etiqueta dos Correios (vinda do botão da lista de Pedidos). */
+  showLabelOnOpen?: boolean;
 }
 
-export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, sellers, onResend, resending, isTinyOnly, storeId, onDeleted }: Props) {
+export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, sellers, onResend, resending, isTinyOnly, storeId, onDeleted, showLabelOnOpen }: Props) {
+  const [showCorreiosLabel, setShowCorreiosLabel] = useState(false);
+  // Só consulta o envio quando a pessoa abre esta seção (ou chega nela pelo botão da lista).
+  useEffect(() => { setShowCorreiosLabel(Boolean(sale && showLabelOnOpen)); }, [sale?.id, showLabelOnOpen]);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
