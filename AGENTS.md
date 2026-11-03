@@ -71,3 +71,4 @@
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
+- PDV revenue/commission screens load sales only via src/lib/pos/commissionSales.ts (live sales count by expedition conclusion date) and sum saleNet, so payroll, goals and dashboard never diverge.
