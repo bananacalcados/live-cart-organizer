@@ -1,3 +1,4 @@
+import { LiveShownProductsPanel } from "@/components/events/LiveShownProductsPanel";
 import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -631,7 +632,16 @@ export default function PresenterDashboard() {
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
           </TabsTrigger>
+          <TabsTrigger value="shown" className="gap-1 data-[state=active]:bg-primary/20">
+            <Package className="h-4 w-4" /> Produtos em exibição
+          </TabsTrigger>
         </TabsList>
+
+        {eventId && (
+          <TabsContent value="shown">
+            <LiveShownProductsPanel eventId={eventId} />
+          </TabsContent>
+        )}
 
         <TabsContent value="live">
 

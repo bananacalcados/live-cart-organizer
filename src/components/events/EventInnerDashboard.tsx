@@ -1,3 +1,4 @@
+import { LiveShownProductsPanel } from "@/components/events/LiveShownProductsPanel";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -127,9 +128,13 @@ export function EventInnerDashboard({ eventId }: Props) {
       <TabsList>
         <TabsTrigger value="dashboard">Resumo do evento</TabsTrigger>
         <TabsTrigger value="overlay">Overlay da Live</TabsTrigger>
+        <TabsTrigger value="shown">Produtos em exibição</TabsTrigger>
       </TabsList>
       <TabsContent value="overlay">
         <LiveOverlayControl key={eventId} eventId={eventId} />
+      </TabsContent>
+      <TabsContent value="shown">
+        <LiveShownProductsPanel key={eventId} eventId={eventId} />
       </TabsContent>
       <TabsContent value="dashboard" className="space-y-2">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">

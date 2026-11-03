@@ -11730,6 +11730,38 @@ export type Database = {
           },
         ]
       }
+      live_code_settings: {
+        Row: {
+          event_id: string
+          mode: string
+          overlay_previous_minutes: number
+          overlay_show_codes: boolean
+          updated_at: string
+        }
+        Insert: {
+          event_id: string
+          mode?: string
+          overlay_previous_minutes?: number
+          overlay_show_codes?: boolean
+          updated_at?: string
+        }
+        Update: {
+          event_id?: string
+          mode?: string
+          overlay_previous_minutes?: number
+          overlay_show_codes?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_code_settings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_comment_dms: {
         Row: {
           comment_id: string
@@ -12271,6 +12303,58 @@ export type Database = {
           youtube_video_id?: string | null
         }
         Relationships: []
+      }
+      live_shown_products: {
+        Row: {
+          code: string
+          event_id: string
+          id: string
+          is_current: boolean
+          shown_at: string
+          shown_by: string | null
+          source: string
+        }
+        Insert: {
+          code: string
+          event_id: string
+          id?: string
+          is_current?: boolean
+          shown_at?: string
+          shown_by?: string | null
+          source?: string
+        }
+        Update: {
+          code?: string
+          event_id?: string
+          id?: string
+          is_current?: boolean
+          shown_at?: string
+          shown_by?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_shown_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_shown_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_shown_products_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       live_viewers: {
         Row: {
@@ -26136,6 +26220,45 @@ export type Database = {
           },
         ]
       }
+      v_live_shown_products: {
+        Row: {
+          category: string | null
+          code: string | null
+          color: string | null
+          event_id: string | null
+          id: string | null
+          is_current: boolean | null
+          product_name: string | null
+          sale_price: number | null
+          shown_at: string | null
+          shown_by: string | null
+          source: string | null
+          total_stock: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_shown_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_shown_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_shown_products_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_product_color_codes: {
         Row: {
           brand: string | null
@@ -29093,6 +29216,29 @@ export type Database = {
       set_group_responsible_manual: {
         Args: { p_base: string; p_instance: string }
         Returns: string
+      }
+      set_live_shown_product: {
+        Args: {
+          p_code: string
+          p_event_id: string
+          p_shown_by?: string
+          p_source?: string
+        }
+        Returns: {
+          code: string
+          event_id: string
+          id: string
+          is_current: boolean
+          shown_at: string
+          shown_by: string | null
+          source: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "live_shown_products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       shadow_cycle_check_big_live: { Args: never; Returns: Json }
       shadow_cycle_ready_for_report: { Args: never; Returns: Json }
