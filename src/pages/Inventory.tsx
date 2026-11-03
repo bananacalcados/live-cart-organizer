@@ -1286,6 +1286,11 @@ export default function Inventory() {
                       <Tag className="h-3 w-3" /> Categorias
                     </Button>
                   </Link>
+                  <Link to="/inventory/codigos">
+                    <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+                      <Tag className="h-3 w-3" /> Códigos
+                    </Button>
+                  </Link>
                 </>
               )}
             </div>
