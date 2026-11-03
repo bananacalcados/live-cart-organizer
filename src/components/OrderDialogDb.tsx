@@ -260,6 +260,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setPixCode("");
     } else {
       resetForm();
+      if (prefillProducts?.length) setLocalProducts(prefillProducts.map((p) => ({ ...p })));
       if (prefillName) setFullName(prefillName);
       if (prefillInstagram) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
@@ -783,6 +784,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
           }
           toast.success("Produtos adicionados ao pedido existente!");
+          onCreated?.(activeOrder.id);
         } else {
           const newOrder = await createOrder(eventId, newCustomer, localProducts);
           
@@ -843,6 +845,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 .eq("comment_id", prefillCommentId);
               await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
             }
+            onCreated?.(newOrder.id);
           }
         }
       }
