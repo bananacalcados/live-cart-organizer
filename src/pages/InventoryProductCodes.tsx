@@ -138,7 +138,7 @@ export default function InventoryProductCodes() {
       }
       let created = 0, failed = 0;
       for (const m of missing.values()) {
-        const { error } = await (supabase.rpc as any)("ensure_product_color_code", { master_id: m.master_id, color: m.color });
+        const { error } = await (supabase.rpc as any)("ensure_product_color_code", { p_master_id: m.master_id, p_color: m.color });
         error ? failed++ : created++;
       }
       toast.success(`${created} código(s) criado(s)${failed ? ` · ${failed} com erro` : ""}`);
