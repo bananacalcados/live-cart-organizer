@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CalendarRange, CalendarClock, Loader2, ChevronDown, ChevronRight, CheckCircle2, Circle, TrendingUp, TrendingDown } from "lucide-react";
+import { saleNet } from "@/lib/pos/payroll";
 import { fetchCommissionSales } from "@/lib/pos/commissionSales";
 import { supabase } from "@/integrations/supabase/client";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate, formatDateKey } from "@/lib/businessDays";
