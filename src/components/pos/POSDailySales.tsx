@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
   Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
   CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers,
-  Clock, AlertTriangle, Truck
+  Clock, AlertTriangle, Truck, Printer
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -126,6 +126,7 @@ export function POSDailySales({ storeId }: Props) {
 
   // Detail dialog
   const [selectedSale, setSelectedSale] = useState<SaleSummary | null>(null);
+  const [labelOnOpen, setLabelOnOpen] = useState(false);
   const [detailItems, setDetailItems] = useState<SaleItem[]>([]);
   const [detailCustomer, setDetailCustomer] = useState<CustomerInfo | null>(null);
   const [tinyDetailLoading, setTinyDetailLoading] = useState(false);
@@ -311,8 +312,9 @@ export function POSDailySales({ storeId }: Props) {
     }
   };
 
-  const openSaleDetail = async (sale: SaleSummary) => {
+  const openSaleDetail = async (sale: SaleSummary, openLabel = false) => {
     setSelectedSale(sale);
+    setLabelOnOpen(openLabel);
     setIsTinyOnlyDetail(false);
     let items = saleItems.filter(i => i.sale_id === sale.id);
     if (items.length === 0 && showGlobalResults) {
@@ -803,6 +805,17 @@ export function POSDailySales({ storeId }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          {(sale.sale_type === 'online' || sale.sale_type === 'live') && (
+            <button
+              type="button"
+              title="Imprimir etiqueta dos Correios"
+              aria-label="Imprimir etiqueta dos Correios"
+              className="shrink-0 rounded-md border border-indigo-400/40 p-2 text-indigo-300 hover:bg-indigo-500/15 hover:text-indigo-200 transition-colors"
+              onClick={(event) => { event.stopPropagation(); void openSaleDetail(sale, true); }}
+            >
+              <Printer className="h-4 w-4" />
+            </button>
+          )}
           <div className="text-right">
             <p className="font-bold text-sm text-pos-white">R$ {(sale.total || 0).toFixed(2)}</p>
             {sale.discount > 0 && (
@@ -1306,7 +1319,8 @@ export function POSDailySales({ storeId }: Props) {
       {/* Sale Detail Dialog */}
       <POSSaleDetailDialog
         sale={selectedSale}
-        onClose={() => setSelectedSale(null)}
+        onClose={() => { setSelectedSale(null); setLabelOnOpen(false); }}
+        showLabelOnOpen={labelOnOpen}
         customer={detailCustomer}
         items={detailItems}
         sellerName={isTinyOnlyDetail && tinySellerName ? tinySellerName : (selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null)}
