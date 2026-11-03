@@ -1,4 +1,5 @@
-import { PointerEvent, useRef } from "react";
+import { PointerEvent, useLayoutEffect, useRef, useState } from "react";
+import { measureBlocks, overlappingPairs } from "@/lib/overlayConflicts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,12 @@ const keys = Object.keys(names) as OverlayBlockKey[];
 export function OverlayLayoutEditor({ config, onChange, onSave }: { config: OverlayConfig; onChange: (layout: OverlayLayout) => void; onSave: (layout: OverlayLayout) => void }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef(config.layout);
+  const [pairs, setPairs] = useState<[OverlayBlockKey, OverlayBlockKey][]>([]);
+  useLayoutEffect(() => {
+    const next = overlappingPairs(measureBlocks(canvasRef.current)) as [OverlayBlockKey, OverlayBlockKey][];
+    setPairs((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  });
+  const conflicted = new Set(pairs.flat());
   layoutRef.current = config.layout;
   const gesture = useRef<{ key: OverlayBlockKey; mode: "move" | "width"; x: number; y: number; scale: number; initial: OverlayLayout; pointer: number } | null>(null);
   const start = (event: PointerEvent<HTMLElement>, key: OverlayBlockKey, mode: "move" | "width") => {
@@ -53,13 +60,16 @@ export function OverlayLayoutEditor({ config, onChange, onSave }: { config: Over
         <div className="overlay-guide absolute inset-x-0 top-0 flex items-center justify-center text-foreground" style={{ height: 180, fontSize: 34 }}>Perfil do Instagram</div>
         <div className="overlay-guide absolute inset-x-0 bottom-0 flex items-end justify-center pb-10 text-foreground" style={{ height: 420, fontSize: 34 }}>Comentários do Instagram</div>
         {keys.map((key) => <OverlayBlock key={key} position={config.layout[key]} blockKey={key}>
-          <div aria-label={`Arrastar ${names[key]}`} role="group" className="relative cursor-move touch-none select-none border-4 border-dashed border-primary overlay-panel font-bold" onPointerDown={(e) => start(e, key, "move")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
+          <div aria-label={`Arrastar ${names[key]}`} role="group" className={`relative cursor-move touch-none select-none border-4 border-dashed overlay-panel ${conflicted.has(key) ? "border-destructive" : "border-primary"} font-bold`} onPointerDown={(e) => start(e, key, "move")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
             {texts[key]}
             <Button aria-label={`Largura ${names[key]}`} title={`Largura ${names[key]}`} variant="secondary" size="icon" className="absolute bottom-0 right-0 h-16 w-16 cursor-ew-resize touch-none" onPointerDown={(e) => start(e, key, "width")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}><MoveDiagonal2 className="h-10 w-10" /></Button>
           </div>
         </OverlayBlock>)}
       </div>
     </div>
+    {pairs.length > 0 && <div className="space-y-0.5 text-xs font-semibold text-destructive">
+      {pairs.map(([a, b]) => <p key={a + b}>Sobrepondo: {names[a]} e {names[b]}</p>)}
+    </div>}
     {keys.map((key) => <div key={key} className="flex items-center justify-between gap-2">
       <Label htmlFor={`font-${key}`}>{names[key]} · fonte</Label>
       <div className="flex items-center gap-1">

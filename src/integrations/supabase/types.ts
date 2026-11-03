@@ -11730,12 +11730,49 @@ export type Database = {
           },
         ]
       }
+      live_code_parse_log: {
+        Row: {
+          comment_id: string
+          comment_text: string | null
+          created_at: string
+          event_id: string | null
+          id: number
+          intent_id: string | null
+          outcome: string | null
+          parsed: Json | null
+          username: string | null
+        }
+        Insert: {
+          comment_id: string
+          comment_text?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: number
+          intent_id?: string | null
+          outcome?: string | null
+          parsed?: Json | null
+          username?: string | null
+        }
+        Update: {
+          comment_id?: string
+          comment_text?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: number
+          intent_id?: string | null
+          outcome?: string | null
+          parsed?: Json | null
+          username?: string | null
+        }
+        Relationships: []
+      }
       live_code_settings: {
         Row: {
           event_id: string
           mode: string
           overlay_previous_minutes: number
           overlay_show_codes: boolean
+          store_usernames: string[]
           updated_at: string
         }
         Insert: {
@@ -11743,6 +11780,7 @@ export type Database = {
           mode?: string
           overlay_previous_minutes?: number
           overlay_show_codes?: boolean
+          store_usernames?: string[]
           updated_at?: string
         }
         Update: {
@@ -11750,6 +11788,7 @@ export type Database = {
           mode?: string
           overlay_previous_minutes?: number
           overlay_show_codes?: boolean
+          store_usernames?: string[]
           updated_at?: string
         }
         Relationships: [
@@ -11976,6 +12015,68 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      live_order_intents: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          event_id: string
+          id: string
+          items: Json
+          last_comment_text: string | null
+          order_id: string | null
+          phone: string | null
+          phone_last4: string | null
+          source_comment_ids: string[]
+          status: string
+          updated_at: string
+          username: string
+          warnings: string[]
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          items?: Json
+          last_comment_text?: string | null
+          order_id?: string | null
+          phone?: string | null
+          phone_last4?: string | null
+          source_comment_ids?: string[]
+          status?: string
+          updated_at?: string
+          username: string
+          warnings?: string[]
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          items?: Json
+          last_comment_text?: string | null
+          order_id?: string | null
+          phone?: string | null
+          phone_last4?: string | null
+          source_comment_ids?: string[]
+          status?: string
+          updated_at?: string
+          username?: string
+          warnings?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_order_intents_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       live_overlay_events: {
         Row: {
@@ -28559,6 +28660,7 @@ export type Database = {
       overlay_shown_products: { Args: { p_token: string }; Returns: Json }
       parse_brand_from_name: { Args: { p_name: string }; Returns: string }
       parse_category_from_name: { Args: { p_name: string }; Returns: string }
+      parse_live_comment_codes: { Args: { p_text: string }; Returns: Json }
       parse_payment_methods: { Args: { p_text: string }; Returns: string[] }
       parse_size_from_name: { Args: { p_name: string }; Returns: string }
       participant_score_ranking: {
@@ -28684,6 +28786,15 @@ export type Database = {
           p_user_name: string
         }
         Returns: Json
+      }
+      process_live_comment_codes: {
+        Args: {
+          p_comment_id: string
+          p_event_id: string
+          p_text: string
+          p_username: string
+        }
+        Returns: string
       }
       process_pos_sale_sale_event: {
         Args: { p_sale_id: string }
@@ -28908,6 +29019,37 @@ export type Database = {
           cost: number
           source: string
         }[]
+      }
+      resolve_live_order_intent: {
+        Args: {
+          p_action: string
+          p_by?: string
+          p_intent_id: string
+          p_order_id?: string
+        }
+        Returns: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          event_id: string
+          id: string
+          items: Json
+          last_comment_text: string | null
+          order_id: string | null
+          phone: string | null
+          phone_last4: string | null
+          source_comment_ids: string[]
+          status: string
+          updated_at: string
+          username: string
+          warnings: string[]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "live_order_intents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       resolve_meta_template_category: {
         Args: { p_fallback?: string; p_template: string; p_wn: string }
@@ -29347,6 +29489,32 @@ export type Database = {
           p_source_table: string
         }
         Returns: undefined
+      }
+      update_live_order_intent_item: {
+        Args: { p_index: number; p_intent_id: string; p_size: string }
+        Returns: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          event_id: string
+          id: string
+          items: Json
+          last_comment_text: string | null
+          order_id: string | null
+          phone: string | null
+          phone_last4: string | null
+          source_comment_ids: string[]
+          status: string
+          updated_at: string
+          username: string
+          warnings: string[]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "live_order_intents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_meta_capi_vault_secret: {
         Args: { p_id: string; p_secret: string }

@@ -11,6 +11,7 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { toast } from "sonner";
 import { useCartBuildingTracker, useCartBuildingWatcher } from "@/hooks/events/useCartBuildingPresence";
+import { LiveCodeIntentCards } from "@/components/events/LiveCodeIntentLane";
 
 const QUERO_RE = /quero/i;
 const norm = (h?: string | null) => (h || "").replace(/^@+/, "").trim().toLowerCase();
@@ -240,6 +241,7 @@ export function LiveOrderIntentCards({ eventId, cards, loading, onReload, onDism
 
   return (
     <>
+      <LiveCodeIntentCards eventId={eventId} />
       {cards.length === 0 ? (
         <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
           Ninguém comentou "QUERO" na live de hoje ainda.

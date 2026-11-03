@@ -70,9 +70,13 @@ interface OrderDialogDbProps {
   /** Nome do lead, usado como identificador quando não há @ do Instagram */
   prefillName?: string;
   embedded?: boolean;
+  /** Itens já localizados (ex.: pedido por código na live). */
+  prefillProducts?: DbOrderProduct[];
+  /** Chamado com o id do pedido criado (ou existente que recebeu os itens). */
+  onCreated?: (orderId: string) => void;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false, prefillProducts, onCreated }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
@@ -256,6 +260,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setPixCode("");
     } else {
       resetForm();
+      if (prefillProducts?.length) setLocalProducts(prefillProducts.map((p) => ({ ...p })));
       if (prefillName) setFullName(prefillName);
       if (prefillInstagram) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
@@ -779,6 +784,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
           }
           toast.success("Produtos adicionados ao pedido existente!");
+          onCreated?.(activeOrder.id);
         } else {
           const newOrder = await createOrder(eventId, newCustomer, localProducts);
           
@@ -839,6 +845,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 .eq("comment_id", prefillCommentId);
               await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
             }
+            onCreated?.(newOrder.id);
           }
         }
       }
