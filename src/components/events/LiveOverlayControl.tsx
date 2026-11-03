@@ -306,7 +306,8 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
             <Switch checked={cfg.shown_product.enabled} onCheckedChange={(v) => update("shown_product", { enabled: v })} />
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">Mostra o código do produto marcado em "Produtos em exibição" e os anteriores. Posição e tamanho no bloco "Produto" do editor de posições. Também precisa estar ligado "Mostrar códigos no overlay" nas configurações da live.</p>
+            <p className="text-xs text-muted-foreground">Mostra o código do produto marcado em "Produtos em exibição" e os anteriores. Posição e tamanho no bloco "Produto" do editor de posições. Também precisa estar ligado "Mostrar códigos no overlay" na aba Produtos em exibição.</p>
+            <p className="text-xs text-muted-foreground mt-1">Isto só controla o cartão no overlay. A anotação automática liga na aba Produtos em exibição.</p>
           </CardContent>
         </Card>
 
