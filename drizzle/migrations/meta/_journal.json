@@ -799,6 +799,13 @@
       "when": 1793729913683,
       "tag": "0113_overlay_events_allow_product_shown",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1793730284036,
+      "tag": "0114_overlay_events_kind_product_shown",
+      "breakpoints": true
     }
   ]
 }
