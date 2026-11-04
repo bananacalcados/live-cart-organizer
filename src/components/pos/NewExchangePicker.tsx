@@ -676,13 +676,13 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                           }
                         />
                       </div>
-                      <div className="w-14">
+                      <div className="w-20 shrink-0">
                         <label className="text-pos-white/50 text-[10px]">Qtd</label>
                         <Input
                           type="number" min={1}
                           value={r.quantidade}
                           onChange={(e) => setRepos((arr) => arr.map((x) => x.id === r.id ? { ...x, quantidade: Math.max(1, Number(e.target.value) || 1) } : x))}
-                          className="h-8 text-xs bg-pos-white/5 border-purple-400/30 text-pos-white"
+                          className="h-8 px-2 text-center text-sm font-semibold bg-pos-white/5 border-purple-400/30 text-pos-white"
                         />
                       </div>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-red-400"

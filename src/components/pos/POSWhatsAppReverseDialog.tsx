@@ -155,7 +155,15 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     if (!it.codigo_objeto) { toast.error("Código de postagem ainda não disponível"); return; }
     setBusyId(it.id);
     try {
-      await posSendText({ provider: sendVia, phone, numberId: selectedNumberId, message: reverseWhatsAppText(it.codigo_objeto, purpose, brDate(it.valid_until)) });
+      const text = reverseWhatsAppText(it.codigo_objeto, purpose, brDate(it.valid_until));
+      const mid = await posSendText({ provider: sendVia, phone, numberId: selectedNumberId, message: text });
+      // Registra no histórico do chat (o envio pela API não volta sozinho para a conversa).
+      try {
+        await supabase.from("whatsapp_messages").insert({
+          phone, message: text, direction: "outgoing", status: "sent",
+          message_id: mid || null, whatsapp_number_id: selectedNumberId || null,
+        } as any);
+      } catch { /* histórico não deve quebrar o envio */ }
       if (it.label_url) await posSendMedia({ provider: sendVia, phone, numberId: selectedNumberId, mediaUrl: it.label_url, mediaType: "document", fileName: `etiqueta-devolucao-${it.codigo_objeto}.pdf` }).catch(() => toast.warning("Mensagem enviada, mas o PDF não foi"));
       const r = await call({ action: "mark_sent", id: it.id });
       setItems((prev) => prev.map((x) => (x.id === it.id ? r.item : x)));
