@@ -60,7 +60,16 @@ Deno.serve(async (req) => {
       let pdf: Uint8Array | null = null, lastErr = '';
       for (let i = 0; i < 6 && !pdf; i++) {
         if (i) await sleep(1500);
-        try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); if (d?.pdfBytes) pdf = d.pdfBytes; else { const s = extractPdfBase64(d); if (s) pdf = fromB64(s); } }
+        try {
+          const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' });
+          // Reverse pre-postages stay "Pendente" until the customer posts: Correios refuse the PDF (PPN-288) — the code alone is what the agency uses.
+          if (typeof d?.mensagem === 'string' && d.mensagem.includes('PPN-288')) throw Object.assign(new Error(NO_PDF_MSG), { noPdf: true });
+          if (d?.pdfBytes) pdf = d.pdfBytes; else { const s = extractPdfBase64(d); if (s) pdf = fromB64(s); }
+        }
+        catch (e) { if ((e as any)?.noPdf) throw e; lastErr = e instanceof Error ? e.message : String(e); continue; }
+        continue;
+        // deno-lint-ignore no-unreachable
+        try {}
         catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
       }
       if (!pdf) throw new Error(lastErr || 'Correios: etiqueta ainda em processamento. Tente de novo em instantes');

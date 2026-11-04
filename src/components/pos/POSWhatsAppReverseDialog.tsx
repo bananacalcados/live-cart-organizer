@@ -16,9 +16,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   phone: string;
   customerName?: string;
-  sendVia: PosSendProvider;
-  selectedNumberId: string | null;
+  /** Sem provedor (ex.: tela de trocas) o botão "Enviar à cliente" fica oculto. */
+  sendVia?: PosSendProvider;
+  selectedNumberId?: string | null;
   embedded?: boolean;
+  /** Quando informado, mostra "Usar nesta troca" para preencher o código em outra tela. */
+  onUseCode?: (code: string) => void;
 }
 
 interface ReverseItem {
@@ -55,7 +58,7 @@ export function reverseWhatsAppText(firstName: string, code: string, service: st
   return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\n⚠️ Atenção: esse código só vale até essa data. Se não postar até lá, é preciso pedir uma nova etiqueta.\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
 }
 
-export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId, embedded = false }: Props) {
+export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId = null, embedded = false, onUseCode }: Props) {
   const [form, setForm] = useState({ nome: customerName || "", cpf: "", email: "", cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" });
   const [service, setService] = useState("03301");
   const [peso, setPeso] = useState("1000");
@@ -200,7 +203,8 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
                   {it.error_message && <div className="text-destructive">{it.error_message}</div>}
                   {!["cancelada", "erro"].includes(it.status) && (
                     <div className="flex flex-wrap gap-1 pt-1">
-                      <Button size="sm" className="h-7" onClick={() => sendToCustomer(it)} disabled={busyId === it.id || !it.codigo_objeto}><Send className="h-3 w-3 mr-1" />{it.sent_at ? "Reenviar" : "Enviar à cliente"}</Button>
+                      {onUseCode && it.codigo_objeto && <Button size="sm" className="h-7" onClick={() => { onUseCode(it.codigo_objeto!); onOpenChange(false); }}>Usar nesta troca</Button>}
+                      {sendVia && <Button size="sm" className="h-7" onClick={() => sendToCustomer(it)} disabled={busyId === it.id || !it.codigo_objeto}><Send className="h-3 w-3 mr-1" />{it.sent_at ? "Reenviar" : "Enviar à cliente"}</Button>}
                       <Button size="sm" variant="outline" className="h-7" onClick={() => reprint(it)} disabled={busyId === it.id}><Printer className="h-3 w-3 mr-1" />Etiqueta</Button>
                       {it.codigo_objeto && <Button size="sm" variant="outline" className="h-7" onClick={() => { navigator.clipboard.writeText(it.codigo_objeto!); toast.success("Código copiado"); }}><Copy className="h-3 w-3 mr-1" />Copiar</Button>}
                       {it.status !== "postada" && it.status !== "entregue" && <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => cancel(it)} disabled={busyId === it.id}><XCircle className="h-3 w-3 mr-1" />Cancelar</Button>}
