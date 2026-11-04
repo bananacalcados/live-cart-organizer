@@ -3,6 +3,7 @@
 //        -> selecionar itens devolvidos (parcial) -> troca/devolução -> motivo
 //        -> (se troca) reposição + reserva -> modo de expedição -> gerar registro + PDF.
 import { useState, useEffect, useCallback } from "react";
+import { POSWhatsAppReverseDialog } from "./POSWhatsAppReverseDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,6 +117,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
   const [tipo, setTipo] = useState<"troca" | "devolucao">("devolucao");
   const [motivo, setMotivo] = useState<TdMotivo | "">("");
   const [postagemReversa, setPostagemReversa] = useState("");
+  const [reverseOpen, setReverseOpen] = useState(false);
   const [modoExpedicao, setModoExpedicao] = useState<"aguarda_retorno" | "despacho_antecipado">("aguarda_retorno");
   const [produtoEmMaos, setProdutoEmMaos] = useState(false);
   const [repos, setRepos] = useState<ReposRow[]>([]);
@@ -618,6 +620,24 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                   placeholder="Ex: PR123456789BR"
                   className="bg-pos-white/5 border-purple-400/30 text-pos-white"
                 />
+                <Button
+                  type="button" size="sm" variant="outline"
+                  className="mt-2 h-8 w-full border-purple-400/30 text-pos-white text-xs"
+                  disabled={!customer?.whatsapp}
+                  onClick={() => setReverseOpen(true)}
+                >
+                  Gerar código de reversa nos Correios
+                </Button>
+                {!customer?.whatsapp && <p className="text-[10px] text-pos-white/40 mt-1">A venda não tem WhatsApp da cliente para gerar a reversa.</p>}
+                {reverseOpen && customer?.whatsapp && (
+                  <POSWhatsAppReverseDialog
+                    open
+                    onOpenChange={setReverseOpen}
+                    phone={customer.whatsapp}
+                    customerName={customer.name}
+                    onUseCode={(code) => { setPostagemReversa(code); toast.success("Código preenchido na troca"); }}
+                  />
+                )}
               </div>
 
               {/* Reposição (troca) */}
