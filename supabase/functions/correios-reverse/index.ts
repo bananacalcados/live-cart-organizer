@@ -149,7 +149,11 @@ Deno.serve(async (req) => {
       const row = await get(b.id);
       if (!row.prepostagem_id) throw fail('Esta reversa não chegou a ser registrada nos Correios');
       const { cf } = await cws();
-      const one: any = await cf(`/prepostagem/v1/prepostagens/${encodeURIComponent(row.prepostagem_id)}`, { method: 'GET' });
+      let one: any = null;
+      const tries = [`/prepostagem/v1/prepostagens?codigoObjeto=${encodeURIComponent(row.codigo_objeto || '')}&page=0&size=1`, `/prepostagem/v1/prepostagens?id=${encodeURIComponent(row.prepostagem_id)}&page=0&size=1`];
+      const errs: string[] = [];
+      for (const p of tries) { try { const r: any = await cf(p, { method: 'GET' }); one = r?.itens?.[0] || r?.content?.[0] || r; break; } catch (e) { errs.push(e instanceof Error ? e.message : String(e)); } }
+      if (!one) one = { errors: errs };
       let label: any = null;
       const recibo = row.response?.label_recibo;
       if (recibo) { try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); label = d?.pdfBytes ? { pdf: true } : (d && typeof d === 'object' ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[${v.length} chars]` : v])) : d); } catch (e) { label = { error: e instanceof Error ? e.message : String(e) }; } }
