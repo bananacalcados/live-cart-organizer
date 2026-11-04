@@ -21030,6 +21030,33 @@ export type Database = {
           },
         ]
       }
+      purchase_grade_types: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sizes: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sizes?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sizes?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       purchase_invoice_installments: {
         Row: {
           amount: number
@@ -21276,6 +21303,143 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      purchase_request_item_changes: {
+        Row: {
+          added_grades: number
+          changed_at: string
+          changed_by_name: string | null
+          id: string
+          item_id: string
+          new_qty: number
+          previous_qty: number
+        }
+        Insert: {
+          added_grades: number
+          changed_at?: string
+          changed_by_name?: string | null
+          id?: string
+          item_id: string
+          new_qty: number
+          previous_qty: number
+        }
+        Update: {
+          added_grades?: number
+          changed_at?: string
+          changed_by_name?: string | null
+          id?: string
+          item_id?: string
+          new_qty?: number
+          previous_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_request_item_changes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_request_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_request_items: {
+        Row: {
+          brand: string | null
+          color: string | null
+          confirmed_at: string | null
+          confirmed_by_name: string | null
+          created_at: string
+          expected_arrival: string | null
+          grade_name: string
+          grade_sizes: Json
+          grade_type_id: string | null
+          grades_qty: number
+          id: string
+          master_id: string | null
+          notes: string | null
+          pairs_per_grade: number
+          product_code: string | null
+          product_name: string
+          request_id: string
+          status: string
+        }
+        Insert: {
+          brand?: string | null
+          color?: string | null
+          confirmed_at?: string | null
+          confirmed_by_name?: string | null
+          created_at?: string
+          expected_arrival?: string | null
+          grade_name: string
+          grade_sizes?: Json
+          grade_type_id?: string | null
+          grades_qty?: number
+          id?: string
+          master_id?: string | null
+          notes?: string | null
+          pairs_per_grade?: number
+          product_code?: string | null
+          product_name: string
+          request_id: string
+          status?: string
+        }
+        Update: {
+          brand?: string | null
+          color?: string | null
+          confirmed_at?: string | null
+          confirmed_by_name?: string | null
+          created_at?: string
+          expected_arrival?: string | null
+          grade_name?: string
+          grade_sizes?: Json
+          grade_type_id?: string | null
+          grades_qty?: number
+          id?: string
+          master_id?: string | null
+          notes?: string | null
+          pairs_per_grade?: number
+          product_code?: string | null
+          product_name?: string
+          request_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_request_items_grade_type_id_fkey"
+            columns: ["grade_type_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_grade_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_requests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+        }
+        Relationships: []
       }
       push_notification_log: {
         Row: {
@@ -28801,6 +28965,19 @@ export type Database = {
         Returns: undefined
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      purchase_item_add_grades: {
+        Args: { p_add: number; p_by: string; p_item_id: string }
+        Returns: number
+      }
+      purchase_item_set_status: {
+        Args: {
+          p_arrival: string
+          p_by: string
+          p_confirm: boolean
+          p_item_id: string
+        }
+        Returns: undefined
+      }
       quota_check_with_snapshot: {
         Args: {
           p_candidates: Json
