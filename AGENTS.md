@@ -72,3 +72,4 @@
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
+- Expedition buy list (Lista de Compras) keeps a snapshot of the grade sizes on each item and changes quantity/status only via purchase_item_* RPCs, so editing a grade never rewrites past orders and every increase is audited.
