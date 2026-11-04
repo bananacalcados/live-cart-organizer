@@ -21,6 +21,7 @@ const body = z.discriminatedUnion('action', [
     reason: z.string().max(200).optional().nullable(), sale_id: z.string().uuid().optional().nullable(), dry_run: z.boolean().optional(),
   }),
   z.object({ action: z.literal('label'), id: z.string().uuid() }),
+  z.object({ action: z.literal('check'), id: z.string().uuid() }),
   z.object({ action: z.literal('mark_sent'), id: z.string().uuid() }),
   z.object({ action: z.literal('cancel'), id: z.string().uuid() }),
 ]);
@@ -141,6 +142,19 @@ Deno.serve(async (req) => {
       if (!row.prepostagem_id || ['cancelada', 'erro'].includes(row.status)) throw fail('Esta reversa não está ativa');
       if (!row.label_path) row = await emitLabel(row);
       return reply({ item: await withUrl(row) });
+    }
+
+    if (b.action === 'check') {
+      // Read-only: asks Correios what they have registered for this pre-postage.
+      const row = await get(b.id);
+      if (!row.prepostagem_id) throw fail('Esta reversa não chegou a ser registrada nos Correios');
+      const { cf } = await cws();
+      const one: any = await cf(`/prepostagem/v1/prepostagens/${encodeURIComponent(row.prepostagem_id)}`, { method: 'GET' });
+      let label: any = null;
+      const recibo = row.response?.label_recibo;
+      if (recibo) { try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); label = d?.pdfBytes ? { pdf: true } : (d && typeof d === 'object' ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[${v.length} chars]` : v])) : d); } catch (e) { label = { error: e instanceof Error ? e.message : String(e) }; } }
+      const pick = (o: any) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => /codigo|status|valid|prazo|autoriz|tipo|logReversa|servico/i.test(k))) : o;
+      return reply({ correios: pick(one), label });
     }
 
     if (b.action === 'mark_sent') {
