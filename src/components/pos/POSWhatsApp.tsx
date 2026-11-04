@@ -56,6 +56,7 @@ import { ExportConversationDialog } from "@/components/chat/ExportConversationDi
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { PendingCheckoutOrdersBar } from "./PendingCheckoutOrdersBar";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
+import { POSWhatsAppReverseDialog } from "./POSWhatsAppReverseDialog";
 import { POSGenerateBoletoDialog } from "./POSGenerateBoletoDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
@@ -261,6 +262,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showBoleto, setShowBoleto] = useState(false);
+  const [showReverse, setShowReverse] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
@@ -292,7 +294,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
-  const auxiliaryToolOpen = showCheckout || showPix || showBoleto || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
+  const auxiliaryToolOpen = showCheckout || showPix || showBoleto || showReverse || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
   const sideToolOpen = auxiliaryToolOpen || showOrdersModal;
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
@@ -303,6 +305,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     setShowCheckout(false);
     setShowPix(false);
     setShowBoleto(false);
+    setShowReverse(false);
     setShowCatalog(false);
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
@@ -317,12 +320,13 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     setShowOrdersModal(!isMobile);
   }, [resetSideTools]);
 
-  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
+  const openSideTool = useCallback((tool: "checkout" | "pix" | "boleto" | "reverse" | "catalog" | "waitlist" | "export" | "support" | "customer") => {
     resetSideTools();
     setShowOrdersModal(tool === "customer");
     if (tool === "checkout") setShowCheckout(true);
     if (tool === "pix") setShowPix(true);
     if (tool === "boleto") setShowBoleto(true);
+    if (tool === "reverse") setShowReverse(true);
     if (tool === "catalog") setShowCatalog(true);
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
@@ -2721,6 +2725,10 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
                   <FileText className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Boleto</span>
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-sky-600" onClick={() => openSideTool("reverse")} title="Etiqueta de logística reversa Correios" disabled={requiresInstanceSelection}>
+                  <Truck className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Reversa</span>
+                </Button>
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => openSideTool("catalog")} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
@@ -2901,6 +2909,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showReverse && <POSWhatsAppReverseDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showCatalog && <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
               {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} conversation={selectedConversation} />}
