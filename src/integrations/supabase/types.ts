@@ -3909,6 +3909,87 @@ export type Database = {
         }
         Relationships: []
       }
+      correios_reverse_shipments: {
+        Row: {
+          address: Json
+          codigo_objeto: string | null
+          created_at: string
+          created_by: string | null
+          customer_cpf: string | null
+          customer_name: string
+          customer_phone: string
+          error_message: string | null
+          id: string
+          idempotency_key: string | null
+          label_path: string | null
+          package: Json
+          phone_key: string | null
+          prepostagem_id: string | null
+          reason: string | null
+          request: Json | null
+          response: Json | null
+          sale_id: string | null
+          sent_at: string | null
+          servico_codigo: string
+          servico_nome: string | null
+          status: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          address?: Json
+          codigo_objeto?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_name: string
+          customer_phone: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          label_path?: string | null
+          package?: Json
+          phone_key?: string | null
+          prepostagem_id?: string | null
+          reason?: string | null
+          request?: Json | null
+          response?: Json | null
+          sale_id?: string | null
+          sent_at?: string | null
+          servico_codigo: string
+          servico_nome?: string | null
+          status?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          address?: Json
+          codigo_objeto?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_name?: string
+          customer_phone?: string
+          error_message?: string | null
+          id?: string
+          idempotency_key?: string | null
+          label_path?: string | null
+          package?: Json
+          phone_key?: string | null
+          prepostagem_id?: string | null
+          reason?: string | null
+          request?: Json | null
+          response?: Json | null
+          sale_id?: string | null
+          sent_at?: string | null
+          servico_codigo?: string
+          servico_nome?: string | null
+          status?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       correios_settings: {
         Row: {
           ambiente: string
