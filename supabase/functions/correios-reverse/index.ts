@@ -26,6 +26,7 @@ const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('cancel'), id: z.string().uuid() }),
 ]);
 const COLS = 'id,created_at,customer_name,customer_phone,servico_codigo,servico_nome,valid_until,status,codigo_objeto,label_path,error_message,sent_at,reason';
+const NO_PDF_MSG = 'Na logística reversa os Correios não geram PDF antes da postagem: a cliente só informa o código na agência.';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const fail = (msg: string, status = 400) => Object.assign(new Error(msg), { status });
 const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -67,10 +68,6 @@ Deno.serve(async (req) => {
           if (d?.pdfBytes) pdf = d.pdfBytes; else { const s = extractPdfBase64(d); if (s) pdf = fromB64(s); }
         }
         catch (e) { if ((e as any)?.noPdf) throw e; lastErr = e instanceof Error ? e.message : String(e); continue; }
-        continue;
-        // deno-lint-ignore no-unreachable
-        try {}
-        catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
       }
       if (!pdf) throw new Error(lastErr || 'Correios: etiqueta ainda em processamento. Tente de novo em instantes');
       const path = `reversa/${row.id}/etiqueta.pdf`;
@@ -142,14 +139,14 @@ Deno.serve(async (req) => {
         throw fail(msg, 502);
       }
       try { row = await emitLabel(row); }
-      catch (e) { const msg = e instanceof Error ? e.message : 'Falha ao emitir etiqueta'; await db.from('correios_reverse_shipments').update({ error_message: msg }).eq('id', row.id); row.error_message = msg; }
+      catch (e) { if ((e as any)?.noPdf) return reply({ item: await withUrl(row) }); const msg = e instanceof Error ? e.message : 'Falha ao emitir etiqueta'; await db.from('correios_reverse_shipments').update({ error_message: msg }).eq('id', row.id); row.error_message = msg; }
       return reply({ item: await withUrl(row) });
     }
 
     if (b.action === 'label') {
       let row = await get(b.id);
       if (!row.prepostagem_id || ['cancelada', 'erro'].includes(row.status)) throw fail('Esta reversa não está ativa');
-      if (!row.label_path) row = await emitLabel(row);
+      if (!row.label_path) { try { row = await emitLabel(row); } catch (e) { if ((e as any)?.noPdf) throw fail(NO_PDF_MSG); throw e; } }
       return reply({ item: await withUrl(row) });
     }
 
