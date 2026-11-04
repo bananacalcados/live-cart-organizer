@@ -334,7 +334,7 @@ serve(async (req) => {
   // ── Lista de estornos (Expedição > ESTORNOS + aviso do Admin) ──
   // scope: pending | active | history. Todos com permissão leem todos; decisões só admin.
   if (action === "list") {
-    const scope = ["pending", "active", "history"].includes(body?.scope) ? body.scope : null;
+    const scope = ["pending", "active", "history", "failed"].includes(body?.scope) ? body.scope : null;
     const maskPhone = (p: string | null | undefined) => {
       const d = String(p || "").replace(/\D/g, "");
       return d.length >= 8 ? `${d.slice(0, 4)}*****${d.slice(-4)}` : (d ? "****" : "");
@@ -391,6 +391,13 @@ serve(async (req) => {
         const list = data || [];
         hasMore = list.length > limit;
         rows = await enrich(list.slice(0, limit));
+      }
+      if (scope === "failed" && rows.length) {
+        // Some da lista de falhas só quando o mesmo pedido já tem estorno refeito (pendente/andamento/concluído).
+        const ids = [...new Set(rows.map((r) => r.source_id))];
+        const { data: redo } = await supabase.from("gateway_refunds").select("source_id, created_at")
+          .in("source_id", ids).in("status", ["aguardando_aprovacao", "processando", "verificar", "concluido", "concluido_manual"]);
+        rows = rows.filter((r) => !(redo || []).some((x: any) => x.source_id === r.source_id && x.created_at > r.created_at));
       }
       return json({ ok: true, rows: rows.map(({ _search, ...r }) => r), hasMore, isAdmin: !!isAdmin });
     }

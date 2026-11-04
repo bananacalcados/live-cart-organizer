@@ -3,6 +3,7 @@ export const REFUND_LIST_STATUSES: Record<string, string[]> = {
   pending: ["aguardando_aprovacao"],
   active: ["processando", "verificar"],
   history: ["concluido", "concluido_manual", "recusado", "falhou"],
+  failed: ["falhou"],
 };
 
 export function applyRefundListFilters(query: any, params: any) {
@@ -13,7 +14,12 @@ export function applyRefundListFilters(query: any, params: any) {
   let q = query.in("status", statuses);
   if (params.channel === "live") q = q.eq("source", "order");
   if (params.channel === "pdv") q = q.eq("source", "pos_sale");
-  if (typeof params.from === "string" && !isNaN(Date.parse(params.from))) q = q.gte("created_at", params.from);
-  if (typeof params.to === "string" && !isNaN(Date.parse(params.to))) q = q.lte("created_at", params.to);
+  const from = typeof params.from === "string" && !isNaN(Date.parse(params.from)) ? new Date(params.from).toISOString() : null;
+  const to = typeof params.to === "string" && !isNaN(Date.parse(params.to)) ? new Date(params.to).toISOString() : null;
+  if (from || to) {
+    // Data do estorno = quando foi realizado (concluído/aprovado); sem isso, quando foi pedido.
+    const range = (col: string) => [from ? `${col}.gte.${from}` : "", to ? `${col}.lte.${to}` : ""].filter(Boolean).join(",");
+    q = q.or(`and(${range("completed_at")}),and(completed_at.is.null,${range("approved_at")}),and(completed_at.is.null,approved_at.is.null,${range("created_at")})`);
+  }
   return q.order("created_at", { ascending: false }).order("id", { ascending: false });
 }
