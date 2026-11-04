@@ -8,7 +8,9 @@ export function EmbeddedDialog({ embedded, open, onOpenChange, children }: {
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
 }) {
-  return embedded ? <>{open ? children : null}</> : <Dialog open={open} onOpenChange={onOpenChange}>{children}</Dialog>;
+  // Painéis embutidos também precisam do contexto de Dialog: DialogTitle/DialogDescription
+  // lançam erro sem ele. modal={false} dá o contexto sem criar overlay nem portal.
+  return <Dialog open={open} onOpenChange={onOpenChange} modal={embedded === false ? true : false}>{open ? children : null}</Dialog>;
 }
 
 export function EmbeddedDialogContent({ embedded, className, children, ...props }: ComponentProps<typeof DialogContent> & { embedded?: boolean }) {
