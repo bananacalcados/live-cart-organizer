@@ -14,7 +14,9 @@ const GATEWAY_LABELS: Record<string, string> = { mercadopago: "Mercado Pago", ap
 export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundListRow; actions?: ReactNode; onChanged?: () => void; storeId?: string }) {
   const forma = r.card_last4
     ? `Cartão${r.card_brand ? ` ${r.card_brand}` : ""} •••• ${r.card_last4}${r.installments && r.installments > 1 ? ` ${r.installments}x` : ""}`
-    : "Pix";
+    : r.card_brand && r.card_brand.toLowerCase() !== "pix"
+      ? (r.card_brand.toLowerCase() === "cartao" ? "Cartão" : `Cartão ${r.card_brand}`)
+      : r.gateway === "appmax" ? "Cartão" : "Pix";
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-3">
       <div className="min-w-0 space-y-0.5">
