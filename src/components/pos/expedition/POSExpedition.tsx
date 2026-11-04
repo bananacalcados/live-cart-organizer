@@ -33,6 +33,7 @@ import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 import { ExpPurchasePanel } from "./ExpPurchasePanel";
+import { ExpBuyListPanel } from "./ExpBuyListPanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
@@ -88,6 +89,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [stage, setStage] = useState<ExpStage>("novo");
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSimu, setShowSimu] = useState(false);
+  const [showBuyList, setShowBuyList] = useState(false);
   const [showRefunds, setShowRefunds] = useState(() => new URLSearchParams(window.location.search).get("tab") === "estornos");
   const canRefund = useCanRefund();
   const [refundPending, setRefundPending] = useState(0);
@@ -838,7 +840,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             return (
               <button
                 key={s.id}
-                onClick={() => { setStage(s.id); setShowRefunds(false); }}
+                onClick={() => { setStage(s.id); setShowRefunds(false); setShowBuyList(false); }}
                 className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
                   active
                     ? `${stageStyles[s.id].chip} text-white border-transparent shadow-lg scale-[1.02]`
@@ -869,7 +871,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           })}
 
           <button
-            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); setShowRefunds(false); }}
+            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); setShowRefunds(false); setShowBuyList(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showPurchases
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -884,7 +886,22 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             </div>
           </button>
           <button
-            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); setShowRefunds(false); }}
+            onClick={() => { setShowBuyList((v) => !v); setShowPurchases(false); setShowSimu(false); setShowRefunds(false); }}
+            className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
+              showBuyList
+                ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
+                : "bg-pos-elevated border-exp-prep/40 hover:scale-[1.01]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ClipboardList className={`h-6 w-6 ${showBuyList ? "text-white" : "text-exp-prep"}`} />
+              <span className={`text-lg font-black uppercase leading-tight ${showBuyList ? "text-white" : "text-pos-text"}`}>
+                Lista de Compras
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); setShowRefunds(false); setShowBuyList(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showSimu
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -900,7 +917,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           </button>
           {canRefund && (
             <button
-              onClick={() => { setShowRefunds((v) => !v); setShowPurchases(false); setShowSimu(false); }}
+              onClick={() => { setShowRefunds((v) => !v); setShowPurchases(false); setShowSimu(false); setShowBuyList(false); }}
               className={`relative rounded-xl px-3 py-4 text-left transition-all border-2 ${
                 showRefunds
                   ? "bg-violet-600 text-white border-transparent shadow-lg scale-[1.02]"
@@ -1088,7 +1105,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         )}
       </div>
 
-      {!showPurchases && !showSimu && !showRefunds && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && !showSimu && !showRefunds && !showBuyList && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
@@ -1180,6 +1197,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
+      {showBuyList && !showPurchases && !showSimu && !showRefunds && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ExpBuyListPanel />
+        </div>
+      )}
+
       {showSimu && (
         <div className="flex-1 overflow-y-auto p-4">
           <ShipmentSimulations />
@@ -1193,7 +1216,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       )}
 
       {/* List */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu || showRefunds ? "hidden" : ""}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu || showRefunds || showBuyList ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList
