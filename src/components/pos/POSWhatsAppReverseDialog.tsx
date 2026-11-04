@@ -207,6 +207,12 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     </div>
   );
 
-  if (embedded) return <EmbeddedDialog open={open} onOpenChange={onOpenChange}><EmbeddedDialogContent>{content}</EmbeddedDialogContent></EmbeddedDialog>;
-  return <EmbeddedDialog open={open} onOpenChange={onOpenChange}><EmbeddedDialogContent>{content}</EmbeddedDialogContent></EmbeddedDialog>;
+  return (
+    <EmbeddedDialog embedded={embedded} open={open} onOpenChange={onOpenChange}>
+      <EmbeddedDialogContent embedded={embedded} className={embedded ? "h-full overflow-y-auto p-4" : "max-w-md max-h-[90vh] overflow-y-auto"}>
+        {embedded && <Button variant="ghost" size="sm" className="self-start mb-1" onClick={() => onOpenChange(false)}>← Voltar ao chat</Button>}
+        {content}
+      </EmbeddedDialogContent>
+    </EmbeddedDialog>
+  );
 }
