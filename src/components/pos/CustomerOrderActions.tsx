@@ -1,3 +1,4 @@
+import type { PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RotateCcw, ShieldAlert } from "lucide-react";
@@ -34,6 +35,9 @@ interface Props {
   exchanges: ExchangeRecord[];
   /** Após criar troca/devolução ou chargeback (recarregar registros). */
   onChanged?: () => void;
+  /** Instância do chat aberto (para enviar o código de reversa à cliente). */
+  sendVia?: PosSendProvider;
+  selectedNumberId?: string | null;
 }
 
 /**
@@ -52,6 +56,8 @@ export function CustomerOrderActions({
   chargebacks,
   exchanges,
   onChanged,
+  sendVia,
+  selectedNumberId,
 }: Props) {
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [presentialOpen, setPresentialOpen] = useState(false);
@@ -145,6 +151,8 @@ export function CustomerOrderActions({
         open={shippingOpen}
         sellerId={sellerId || undefined}
         initialSaleId={saleId}
+        sendVia={sendVia}
+        selectedNumberId={selectedNumberId}
         onCancel={() => setShippingOpen(false)}
         onDone={() => { setShippingOpen(false); onChanged?.(); }}
       />
