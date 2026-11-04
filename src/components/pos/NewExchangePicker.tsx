@@ -4,6 +4,7 @@
 //        -> (se troca) reposição + reserva -> modo de expedição -> gerar registro + PDF.
 import { useState, useEffect, useCallback } from "react";
 import { POSWhatsAppReverseDialog } from "./POSWhatsAppReverseDialog";
+import type { PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,9 @@ interface Props {
   initialSaleId?: string;
   onCancel: () => void;
   onDone: () => void;
+  /** Instância do chat aberto: habilita "Enviar à cliente" na reversa. */
+  sendVia?: PosSendProvider;
+  selectedNumberId?: string | null;
 }
 
 function orderName(notes: string | null, ext: string | null): string | null {
@@ -95,7 +99,7 @@ function orderName(notes: string | null, ext: string | null): string | null {
   return ext ? `#${ext}` : null;
 }
 
-export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone }: Props) {
+export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone, sendVia, selectedNumberId }: Props) {
   const [phase, setPhase] = useState<"store" | "list" | "config">("store");
   const [storeId, setStoreId] = useState<string>("");
 
@@ -635,6 +639,9 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                     onOpenChange={setReverseOpen}
                     phone={customer.whatsapp}
                     customerName={customer.name}
+                    purpose={tipo}
+                    sendVia={sendVia}
+                    selectedNumberId={selectedNumberId}
                     onUseCode={(code) => { setPostagemReversa(code); toast.success("Código preenchido na troca"); }}
                   />
                 )}

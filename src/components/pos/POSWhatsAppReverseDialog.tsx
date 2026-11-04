@@ -22,6 +22,8 @@ interface Props {
   embedded?: boolean;
   /** Quando informado, mostra "Usar nesta troca" para preencher o código em outra tela. */
   onUseCode?: (code: string) => void;
+  /** Troca ou devolução: define a mensagem. Sem valor, a equipe escolhe na tela. */
+  purpose?: ReversePurpose;
 }
 
 interface ReverseItem {
@@ -53,12 +55,36 @@ async function call(body: Record<string, unknown>) {
 
 export const REVERSE_VALID_DAYS = 7;
 
-export function reverseWhatsAppText(firstName: string, code: string, service: string, validUntil: string) {
-  const hi = firstName ? `Oi, ${firstName}!` : "Oi!";
-  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\n⚠️ Atenção: esse código só vale até essa data. Se não postar até lá, é preciso pedir uma nova etiqueta.\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
+export type ReversePurpose = "troca" | "devolucao";
+
+/** Mensagem da reversa para a cliente (formatação do WhatsApp). Troca e devolução só diferem no prazo final. */
+export function reverseWhatsAppText(code: string, purpose: ReversePurpose, validUntil?: string) {
+  const prazo = purpose === "troca"
+    ? "🔄 *O envio da troca é feito em até 2 dias úteis após o recebimento do produto em nossa loja.*"
+    : "💸 *O estorno da compra é feito em até 2 dias úteis após o recebimento do produto em nossa loja.*";
+  return [
+    "📦 Segue seu código de *logística reversa*:",
+    "",
+    `👉 *${code}*`,
+    "",
+    `⏳ *Ele tem a validade de 7 dias contando a partir de hoje*${validUntil ? ` (até ${validUntil})` : ""}.`,
+    "⚠️ Após esse prazo não é possível gerar um novo código e, por isso, se perde o direito à solicitação feita.",
+    "",
+    prazo,
+    "",
+    "✅ *Como usar é bem simples:*",
+    "1️⃣ Coloque o produto em uma caixa (pode ser a original);",
+    "2️⃣ Embale e lacre bem;",
+    "3️⃣ Leve a uma agência dos Correios.",
+    "",
+    "Apresente o código acima e pronto! Farão a postagem da sua compra 😃",
+  ].join("\n");
 }
 
-export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId = null, embedded = false, onUseCode }: Props) {
+export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId = null, embedded = false, onUseCode, purpose: purposeProp }: Props) {
+  const [purposeSel, setPurposeSel] = useState<ReversePurpose>(purposeProp ?? "devolucao");
+  useEffect(() => { if (purposeProp) setPurposeSel(purposeProp); }, [purposeProp]);
+  const purpose = purposeProp ?? purposeSel;
   const [form, setForm] = useState({ nome: customerName || "", cpf: "", email: "", cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" });
   const [service, setService] = useState("03301");
   const [peso, setPeso] = useState("1000");
@@ -129,8 +155,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     if (!it.codigo_objeto) { toast.error("Código de postagem ainda não disponível"); return; }
     setBusyId(it.id);
     try {
-      const first = (form.nome || it.customer_name).trim().split(/\s+/)[0] || "";
-      await posSendText({ provider: sendVia, phone, numberId: selectedNumberId, message: reverseWhatsAppText(first, it.codigo_objeto, it.servico_nome || "Correios", brDate(it.valid_until)) });
+      await posSendText({ provider: sendVia, phone, numberId: selectedNumberId, message: reverseWhatsAppText(it.codigo_objeto, purpose, brDate(it.valid_until)) });
       if (it.label_url) await posSendMedia({ provider: sendVia, phone, numberId: selectedNumberId, mediaUrl: it.label_url, mediaType: "document", fileName: `etiqueta-devolucao-${it.codigo_objeto}.pdf` }).catch(() => toast.warning("Mensagem enviada, mas o PDF não foi"));
       const r = await call({ action: "mark_sent", id: it.id });
       setItems((prev) => prev.map((x) => (x.id === it.id ? r.item : x)));
@@ -174,6 +199,18 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
               <div><Label className="text-xs">UF</Label><Input value={form.uf} maxLength={2} onChange={set("uf")} /></div>
             </div>
           </div>
+          {sendVia && (
+            <div>
+              <Label className="text-xs">Mensagem para a cliente</Label>
+              {purposeProp ? (
+                <p className="mt-1 text-xs font-medium">{purpose === "troca" ? "Troca" : "Devolução"} (definido na troca/devolução)</p>
+              ) : (
+                <div className="flex gap-1 mt-1">
+                  {(["devolucao", "troca"] as const).map((t) => <Button key={t} type="button" size="sm" variant={purposeSel === t ? "default" : "outline"} onClick={() => setPurposeSel(t)}>{t === "troca" ? "Troca" : "Devolução"}</Button>)}
+                </div>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Serviço</Label>
