@@ -155,6 +155,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
         <DialogTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5" /> Logística reversa Correios</DialogTitle>
       </DialogHeader>
       <p className="text-xs text-muted-foreground">A cliente envia para a loja Pérola, por conta do nosso contrato. Ela só leva o pacote à agência com o código.</p>
+      <p className="rounded-md bg-muted px-2 py-1.5 text-xs font-medium">O código vale {REVERSE_VALID_DAYS} dias para postagem. Depois disso não funciona mais e é preciso gerar outra etiqueta.</p>
       {loading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div> : (
         <>
           <div className="grid grid-cols-2 gap-2">
@@ -194,7 +195,8 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
                     <span className="font-mono font-bold text-sm">{it.codigo_objeto || "sem código"}</span>
                     <Badge variant={it.status === "erro" || it.status === "cancelada" ? "destructive" : "secondary"}>{STATUS[it.status] || it.status}</Badge>
                   </div>
-                  <div className="text-muted-foreground">{it.servico_nome} · válido até {brDate(it.valid_until)} · {new Date(it.created_at).toLocaleDateString("pt-BR")}{it.sent_at ? " · enviado à cliente" : ""}</div>
+                  <div className="text-muted-foreground">{it.servico_nome} · válido até {brDate(it.valid_until)} ({REVERSE_VALID_DAYS} dias) · {new Date(it.created_at).toLocaleDateString("pt-BR")}{it.sent_at ? " · enviado à cliente" : ""}</div>
+                  {expired(it) && <div className="rounded bg-destructive/10 px-2 py-1 font-medium text-destructive">Prazo de {REVERSE_VALID_DAYS} dias vencido em {brDate(it.valid_until)} — gerar nova etiqueta para postar.</div>}
                   {it.error_message && <div className="text-destructive">{it.error_message}</div>}
                   {!["cancelada", "erro"].includes(it.status) && (
                     <div className="flex flex-wrap gap-1 pt-1">
