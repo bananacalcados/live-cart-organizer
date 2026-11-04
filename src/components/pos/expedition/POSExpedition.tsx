@@ -45,7 +45,7 @@ import { lazyNamed } from "@/lib/lazyTab";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import { freightDate, freightCall } from "@/lib/saleFreight";
 import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
-import { Printer } from "lucide-react";
+import { Printer, ClipboardList } from "lucide-react";
 import { getCorreiosLabelFormat, saveCorreiosLabelFormat, normalizeCorreiosLabelFormat, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
