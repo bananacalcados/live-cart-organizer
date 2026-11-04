@@ -36,11 +36,12 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [failed, setFailed] = useState<RefundListRow[]>([]);
   const [period, setPeriod] = useState("30d");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [status, setStatus] = useState("all");
-  const [showFailures,setShowFailures]=useState(false);
+  const [showFailures,setShowFailures]=useState(true);
   const [channel, setChannel] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -61,14 +62,15 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
     const id = ++reqId.current;
     setLoading(true); setError(null);
     try {
-      const [p, a, h] = await Promise.all([
+      const [p, a, h, f] = await Promise.all([
         refundApi.listScope({ scope: "pending", limit: PAGE }),
         refundApi.listScope({ scope: "active", limit: PAGE }),
         refundApi.listScope(historyParams(0)),
+        refundApi.listScope({ scope: "failed", limit: PAGE }),
       ]);
       if (id !== reqId.current) return;
       setIsAdmin(p.isAdmin);
-      setPending(p.rows); setActive(a.rows); setHistory(h.rows); setHasMore(h.hasMore); setPage(0);
+      setPending(p.rows); setActive(a.rows); setFailed(f.rows); setHistory(h.rows); setHasMore(h.hasMore); setPage(0);
     } catch (e: any) {
       if (id === reqId.current) setError(e?.message || "Erro ao carregar estornos");
     } finally { if (id === reqId.current) setLoading(false); }
@@ -103,6 +105,13 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
           </div>
         )}
       </section>
+
+      {failed.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-lg font-black uppercase text-destructive">Deu erro — refazer o estorno ({failed.length})</h3>
+          <div className="space-y-2">{failed.map((r) => <RefundRowCard key={r.id} storeId={storeId} r={r} />)}</div>
+        </section>
+      )}
 
       <section>
         <h3 className="mb-2 text-lg font-black uppercase text-pos-text">Em andamento ({active.length})</h3>

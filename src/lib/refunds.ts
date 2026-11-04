@@ -193,7 +193,7 @@ export function getCompletedRefunds(sourceId: string): Promise<CompletedRefund[]
 }
 
 export interface RefundListParams {
-  scope: "pending" | "active" | "history";
+  scope: "pending" | "active" | "history" | "failed";
   status?: "concluido" | "concluido_manual" | "recusado" | "falhou";
   show_failures?: boolean;
   channel?: "live" | "pdv";
