@@ -3,6 +3,7 @@
 //        -> selecionar itens devolvidos (parcial) -> troca/devolução -> motivo
 //        -> (se troca) reposição + reserva -> modo de expedição -> gerar registro + PDF.
 import { useState, useEffect, useCallback } from "react";
+import { POSWhatsAppReverseDialog } from "./POSWhatsAppReverseDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
