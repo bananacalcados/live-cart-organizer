@@ -1,0 +1,1 @@
+- Expedition buy list (Lista de Compras) keeps a snapshot of the grade sizes on each item and changes quantity/status only via purchase_item_* RPCs, so editing a grade never rewrites past orders and every increase is audited.
