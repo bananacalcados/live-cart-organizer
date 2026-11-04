@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
       const recibo = row.response?.label_recibo;
       if (recibo) { try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); label = d?.pdfBytes ? { pdf: true } : (d && typeof d === 'object' ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[${v.length} chars]` : v])) : d); } catch (e) { label = { error: e instanceof Error ? e.message : String(e) }; } }
       const pick = (o: any) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => /codigo|status|valid|prazo|autoriz|tipo|logReversa|servico/i.test(k))) : o;
-      return reply({ correios: pick(one), label });
+      return reply({ correios: pick(one), raw_keys: one && typeof one === "object" ? Object.keys(one).slice(0, 40) : null, raw: JSON.stringify(one).slice(0, 1500), label });
     }
 
     if (b.action === 'mark_sent') {
