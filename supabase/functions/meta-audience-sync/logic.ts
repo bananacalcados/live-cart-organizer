@@ -9,6 +9,10 @@ async function sha256(s: string): Promise<string> {
 }
 const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+// Públicos de janela móvel trocam muita gente por natureza: só a trava de "regra vazia".
+export const ROLLING_WINDOW_RULES = new Set(["compraram_7d", "nao_pagaram_14d", "sem_compra_60_180d", "incompletos_ultima_live"]);
+export const isRollingWindow = (ruleKey: string) => ROLLING_WINDOW_RULES.has(ruleKey);
+
 export async function buildAudienceRow(c: any, normPhone: (p: string) => string) {
   const parts = strip(String(c.full_name || "").trim().toLowerCase()).split(/\s+/).filter(Boolean);
   const raw = [
@@ -34,14 +38,14 @@ export function planDiff(candidates: { key: string; row_hash: string }[], member
   return { add, remove };
 }
 
-export function checkGuards(p: { replace: boolean; erpCount: number; metaLower: number | null; activeMembers: number; removing: number; force: boolean }) {
+export function checkGuards(p: { replace: boolean; erpCount: number; metaLower: number | null; activeMembers: number; removing: number; force: boolean; rollingWindow?: boolean }) {
   if (p.erpCount === 0) return { ok: false, reason: "Regra devolveu zero pessoas — nada foi alterado" };
   if (p.replace) {
     if (p.metaLower !== null && p.metaLower > 0 && p.erpCount < p.metaLower * REPLACE_MIN)
       return { ok: false, reason: `1ª carga bloqueada: ERP ${p.erpCount} < 70% da lista atual na Meta (${p.metaLower})` };
     return { ok: true };
   }
-  if (!p.force && p.activeMembers >= 50 && p.removing > p.activeMembers * REMOVE_LIMIT)
+  if (!p.force && !p.rollingWindow && p.activeMembers >= 50 && p.removing > p.activeMembers * REMOVE_LIMIT)
     return { ok: false, reason: `Rodada bloqueada: removeria ${p.removing} de ${p.activeMembers} (>20%)` };
   return { ok: true };
 }
