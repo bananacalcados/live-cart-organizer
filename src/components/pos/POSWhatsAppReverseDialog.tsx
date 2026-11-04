@@ -32,6 +32,10 @@ const SERVICES = [
 ];
 const STATUS: Record<string, string> = { criada: "Criada", rotulo_emitido: "Pronta", postada: "Postada", entregue: "Entregue", cancelada: "Cancelada", erro: "Erro" };
 const brDate = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
+/** Verdadeiro quando o prazo de 7 dias já passou e o pacote ainda não foi postado. */
+const expired = (it: ReverseItem) =>
+  !!it.valid_until && !["postada", "entregue", "cancelada"].includes(it.status) &&
+  new Date(`${it.valid_until}T23:59:59-03:00`).getTime() < Date.now();
 
 async function call(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("correios-reverse", { body });
@@ -44,9 +48,11 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
+export const REVERSE_VALID_DAYS = 7;
+
 export function reverseWhatsAppText(firstName: string, code: string, service: string, validUntil: string) {
   const hi = firstName ? `Oi, ${firstName}!` : "Oi!";
-  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
+  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\n⚠️ Atenção: esse código só vale até essa data. Se não postar até lá, é preciso pedir uma nova etiqueta.\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
 }
 
 export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId, embedded = false }: Props) {
