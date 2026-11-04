@@ -32,6 +32,10 @@ const SERVICES = [
 ];
 const STATUS: Record<string, string> = { criada: "Criada", rotulo_emitido: "Pronta", postada: "Postada", entregue: "Entregue", cancelada: "Cancelada", erro: "Erro" };
 const brDate = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
+/** Verdadeiro quando o prazo de 7 dias já passou e o pacote ainda não foi postado. */
+const expired = (it: ReverseItem) =>
+  !!it.valid_until && !["postada", "entregue", "cancelada"].includes(it.status) &&
+  new Date(`${it.valid_until}T23:59:59-03:00`).getTime() < Date.now();
 
 async function call(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("correios-reverse", { body });
@@ -44,9 +48,11 @@ async function call(body: Record<string, unknown>) {
   return data;
 }
 
+export const REVERSE_VALID_DAYS = 7;
+
 export function reverseWhatsAppText(firstName: string, code: string, service: string, validUntil: string) {
   const hi = firstName ? `Oi, ${firstName}!` : "Oi!";
-  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
+  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${code}*\nServiço: ${service}\nVálido até: ${validUntil}\n\n⚠️ Atenção: esse código só vale até essa data. Se não postar até lá, é preciso pedir uma nova etiqueta.\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
 }
 
 export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId, embedded = false }: Props) {
@@ -149,6 +155,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
         <DialogTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5" /> Logística reversa Correios</DialogTitle>
       </DialogHeader>
       <p className="text-xs text-muted-foreground">A cliente envia para a loja Pérola, por conta do nosso contrato. Ela só leva o pacote à agência com o código.</p>
+      <p className="rounded-md bg-muted px-2 py-1.5 text-xs font-medium">O código vale {REVERSE_VALID_DAYS} dias para postagem. Depois disso não funciona mais e é preciso gerar outra etiqueta.</p>
       {loading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div> : (
         <>
           <div className="grid grid-cols-2 gap-2">
@@ -188,7 +195,8 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
                     <span className="font-mono font-bold text-sm">{it.codigo_objeto || "sem código"}</span>
                     <Badge variant={it.status === "erro" || it.status === "cancelada" ? "destructive" : "secondary"}>{STATUS[it.status] || it.status}</Badge>
                   </div>
-                  <div className="text-muted-foreground">{it.servico_nome} · válido até {brDate(it.valid_until)} · {new Date(it.created_at).toLocaleDateString("pt-BR")}{it.sent_at ? " · enviado à cliente" : ""}</div>
+                  <div className="text-muted-foreground">{it.servico_nome} · válido até {brDate(it.valid_until)} ({REVERSE_VALID_DAYS} dias) · {new Date(it.created_at).toLocaleDateString("pt-BR")}{it.sent_at ? " · enviado à cliente" : ""}</div>
+                  {expired(it) && <div className="rounded bg-destructive/10 px-2 py-1 font-medium text-destructive">Prazo de {REVERSE_VALID_DAYS} dias vencido em {brDate(it.valid_until)} — gerar nova etiqueta para postar.</div>}
                   {it.error_message && <div className="text-destructive">{it.error_message}</div>}
                   {!["cancelada", "erro"].includes(it.status) && (
                     <div className="flex flex-wrap gap-1 pt-1">

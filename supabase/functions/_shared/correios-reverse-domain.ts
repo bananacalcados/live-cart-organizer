@@ -6,7 +6,8 @@ export const REVERSE_SERVICES = [
   { codigo: '03247', nome: 'SEDEX Reverso' },
 ];
 export const REVERSE_DEFAULT_PACKAGE = { peso_g: 1000, c: 33, l: 22, a: 13 };
-export const REVERSE_VALID_DAYS = 15;
+/** Prazo de postagem que damos à cliente: 7 dias corridos. */
+export const REVERSE_VALID_DAYS = 7;
 
 export interface ReverseCustomer { nome: string; cpf?: string | null; telefone: string; email?: string | null; cep: string; logradouro: string; numero: string; complemento?: string | null; bairro: string; cidade: string; uf: string }
 
@@ -63,5 +64,5 @@ export function buildReversePayload(input: { customer: ReverseCustomer; store: S
 
 export function reverseMessage(opts: { firstName: string; code: string; service: string; validUntilBr: string }) {
   const hi = opts.firstName ? `Oi, ${opts.firstName}!` : 'Oi!';
-  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${opts.code}*\nServiço: ${opts.service}\nVálido até: ${opts.validUntilBr}\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
+  return `${hi} Sua etiqueta de devolução pelos Correios está pronta 📦\n\nCódigo de postagem: *${opts.code}*\nServiço: ${opts.service}\nVálido até: ${opts.validUntilBr}\n\n⚠️ Atenção: esse código só vale até essa data. Se não postar até lá, é preciso pedir uma nova etiqueta.\n\nÉ só levar o pacote bem fechado a qualquer agência dos Correios e informar esse código. Você não paga nada pelo envio.`;
 }
