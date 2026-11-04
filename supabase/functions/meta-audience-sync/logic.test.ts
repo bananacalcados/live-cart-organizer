@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { planDiff, checkGuards } from "./logic.ts";
+import { planDiff, checkGuards, isRollingWindow } from "./logic.ts";
 
 Deno.test("diferença: só entra quem entrou e sai quem saiu", () => {
   const d = planDiff([{ key: "a", row_hash: "1" }, { key: "b", row_hash: "2" }], [{ key: "a", row_hash: "1" }, { key: "c", row_hash: "3" }]);
@@ -16,4 +16,10 @@ Deno.test("trava 70% na 1ª carga", () => {
 });
 Deno.test("regra vazia nunca esvazia público", () => {
   assertEquals(checkGuards({ replace: false, erpCount: 0, metaLower: null, activeMembers: 0, removing: 0, force: true }).ok, false);
+});
+Deno.test("janela móvel (7 dias) não tem trava de 20%, mas mantém a de regra vazia", () => {
+  assertEquals(checkGuards({ replace: false, erpCount: 326, metaLower: null, activeMembers: 323, removing: 187, force: false, rollingWindow: true }).ok, true);
+  assertEquals(checkGuards({ replace: false, erpCount: 0, metaLower: null, activeMembers: 323, removing: 323, force: false, rollingWindow: true }).ok, false);
+  assertEquals(isRollingWindow("compraram_7d"), true);
+  assertEquals(isRollingWindow("todos_base"), false);
 });
