@@ -20413,6 +20413,11 @@ export type Database = {
           letter: string
           master_id: string
           seq: number
+          shopify_checked_at: string | null
+          shopify_ok: boolean
+          shopify_sizes_ok: number | null
+          shopify_sizes_total: number | null
+          shopify_status: string | null
         }
         Insert: {
           code: string
@@ -20423,6 +20428,11 @@ export type Database = {
           letter: string
           master_id: string
           seq: number
+          shopify_checked_at?: string | null
+          shopify_ok?: boolean
+          shopify_sizes_ok?: number | null
+          shopify_sizes_total?: number | null
+          shopify_status?: string | null
         }
         Update: {
           code?: string
@@ -20433,6 +20443,11 @@ export type Database = {
           letter?: string
           master_id?: string
           seq?: number
+          shopify_checked_at?: string | null
+          shopify_ok?: boolean
+          shopify_sizes_ok?: number | null
+          shopify_sizes_total?: number | null
+          shopify_status?: string | null
         }
         Relationships: [
           {
@@ -26869,6 +26884,8 @@ export type Database = {
           is_current: boolean | null
           product_name: string | null
           sale_price: number | null
+          shopify_ok: boolean | null
+          shopify_status: string | null
           shown_at: string | null
           shown_by: string | null
           source: string | null
@@ -26911,6 +26928,12 @@ export type Database = {
           product_name: string | null
           sale_price: number | null
           seq: number | null
+          shopify_checked_at: string | null
+          shopify_ok: boolean | null
+          shopify_product_id: string | null
+          shopify_sizes_ok: number | null
+          shopify_sizes_total: number | null
+          shopify_status: string | null
           sku_root: string | null
           total_stock: number | null
         }
@@ -29940,6 +29963,15 @@ export type Database = {
       set_active_mp_account: {
         Args: { p_account_id: string }
         Returns: boolean
+      }
+      set_code_shopify_status: {
+        Args: {
+          p_code: string
+          p_sizes_ok?: number
+          p_sizes_total?: number
+          p_status: string
+        }
+        Returns: undefined
       }
       set_customer_access_code: {
         Args: { _code: string; _phone: string }

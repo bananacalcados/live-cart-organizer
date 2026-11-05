@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Minus, Loader2, ChevronDown, ChevronUp, X } from "lucide-react";
+import { codeStatusReason } from "@/lib/codeShopifyStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -95,7 +96,7 @@ export function ProductSelector({
 
   // Busca por código de produto (letra + 3 dígitos, ex.: A097): resolve master+cor
   // e mostra só as variações daquela cor. Não interfere na busca normal.
-  const [codeResult, setCodeResult] = useState<{ products: ShopifyProduct[]; unlinkedName?: string } | null>(null);
+  const [codeResult, setCodeResult] = useState<{ products: ShopifyProduct[]; unlinkedName?: string; reason?: string | null } | null>(null);
   useEffect(() => {
     const m = debouncedSearch.trim().match(/^([a-z])\s*-?\s*(\d{3})$/i);
     if (!m) { setCodeResult(null); return; }
@@ -103,7 +104,7 @@ export function ProductSelector({
     let cancelled = false;
     (async () => {
       const db = supabase as any;
-      const { data: rows } = await db.from("v_product_color_codes").select("master_id, color, product_name").eq("code", code).limit(1);
+      const { data: rows } = await db.from("v_product_color_codes").select("master_id, color, product_name, shopify_ok, shopify_status, shopify_sizes_ok, shopify_sizes_total").eq("code", code).limit(1);
       const row = rows?.[0];
       if (!row) { if (!cancelled) setCodeResult({ products: [] }); return; }
       const [{ data: vars }, { data: masters }] = await Promise.all([
@@ -119,7 +120,7 @@ export function ProductSelector({
         const edges = p.node.variants.edges.filter((e) => vids.has(e.node.id.replace(/\D/g, "")));
         if (edges.length) out.push({ ...p, node: { ...p.node, variants: { ...p.node.variants, edges } } } as ShopifyProduct);
       }
-      if (!cancelled) setCodeResult(out.length ? { products: out } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}` });
+      if (!cancelled) setCodeResult(out.length ? { products: out, reason: codeStatusReason(row) } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}`, reason: codeStatusReason(row) });
     })().catch((e) => { console.error("code search", e); if (!cancelled) setCodeResult({ products: [] }); });
     return () => { cancelled = true; };
   }, [debouncedSearch]);
@@ -264,9 +265,12 @@ export function ProductSelector({
         </div>
       )}
 
+      {codeResult && !codeResult.unlinkedName && codeResult.reason && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">Código não está ok: {codeResult.reason}</div>
+      )}
       {codeResult?.unlinkedName && (
         <p className="rounded-md border border-dashed p-2 text-sm text-muted-foreground">
-          {codeResult.unlinkedName} — sem vínculo com a Shopify
+          {codeResult.unlinkedName} — {codeResult.reason || "sem vínculo com a Shopify"}
         </p>
       )}
 

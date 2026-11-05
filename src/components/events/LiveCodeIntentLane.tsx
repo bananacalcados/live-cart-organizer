@@ -269,6 +269,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
 
   if (rows.length === 0) return null;
 
+  const shopifyBlocked = (r: CodeIntent) => (r.items || []).some((i) => (i.warnings || []).some((w) => /não disponível na shopify/i.test(w)));
   const allWarnings = (r: CodeIntent) => [...(r.warnings || []), ...(r.items || []).flatMap((i) => i.warnings || [])];
   const phoneLabel = (r: CodeIntent) => (r.phone ? r.phone : r.phone_last4 ? `final ${r.phone_last4}` : "sem WhatsApp");
 
@@ -293,7 +294,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
               <span className="truncate text-xs font-semibold">@{r.username}</span>
             </div>
             {(r.items || []).map((it, i) => (
-              <div key={i} className="rounded border bg-muted/40 px-1.5 py-1 text-[11px]">
+              <div key={i} className={cn("rounded border px-1.5 py-1 text-[11px]", (it.warnings || []).some((w) => /não disponível na shopify/i.test(w)) ? "border-destructive bg-destructive/15 text-destructive" : "bg-muted/40")}>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-sm font-black tracking-wide">{it.code}</span>
                   <span className="truncate">{it.product_name}</span>
@@ -332,7 +333,8 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
             <Button
               size="sm"
               className="h-7 gap-1 text-xs"
-              disabled={r.status !== "ready" || confirming === r.id}
+              disabled={r.status !== "ready" || confirming === r.id || shopifyBlocked(r)}
+              title={shopifyBlocked(r) ? "Item fora da Shopify: abra o card e resolva manualmente" : undefined}
               onClick={(e) => { e.stopPropagation(); confirmDirect(r); }}
             >
               {confirming === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Confirmar
@@ -340,7 +342,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
             {allWarnings(r).length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {allWarnings(r).map((w, i) => (
-                  <span key={i} className="rounded bg-amber-400/25 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">{w}</span>
+                  <span key={i} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", /não disponível na shopify/i.test(w) ? "bg-destructive/20 text-destructive" : "bg-amber-400/25 text-amber-800 dark:text-amber-200")}>{w}</span>
                 ))}
               </div>
             )}
