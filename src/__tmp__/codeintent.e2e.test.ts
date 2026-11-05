@@ -8,7 +8,8 @@ it("confirm intent", async () => {
   const s = JSON.parse(fs.readFileSync("/root/.cache/lovable-auth/session.json", "utf8")).session;
   await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
   const db = supabase as any;
-  const { data: intent } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov").in("status", ["ready"]).single();
+  const { data: intent, error: ie } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov").in("status", ["ready"]).single();
+  console.log("IE", JSON.stringify(ie), JSON.stringify((await supabase.auth.getUser()).data.user?.email));
   const { data: cat } = await db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants").eq("event_id", EV).limit(200);
   const products = intent.items.map((it: any) => { const p = matchCatalogItem(it, cat)!; p.quantity = it.quantity || 1; return p; });
   expect(products.every(Boolean)).toBe(true);
