@@ -25137,6 +25137,42 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_signature_state: {
+        Row: {
+          consecutive_valid: number
+          enforced: boolean
+          enforced_at: string | null
+          last_invalid_at: string | null
+          last_valid_at: string | null
+          provider: string
+          total_invalid: number
+          total_valid: number
+          updated_at: string
+        }
+        Insert: {
+          consecutive_valid?: number
+          enforced?: boolean
+          enforced_at?: string | null
+          last_invalid_at?: string | null
+          last_valid_at?: string | null
+          provider: string
+          total_invalid?: number
+          total_valid?: number
+          updated_at?: string
+        }
+        Update: {
+          consecutive_valid?: number
+          enforced?: boolean
+          enforced_at?: string | null
+          last_invalid_at?: string | null
+          last_valid_at?: string | null
+          provider?: string
+          total_invalid?: number
+          total_valid?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       webhook_verification_log: {
         Row: {
           api_amount: number | null
@@ -28058,6 +28094,10 @@ export type Database = {
         Returns: Json
       }
       get_checkout_order: { Args: { p_order_id: string }; Returns: Json }
+      get_checkout_order_has_cashback: {
+        Args: { p_order_id: string; p_token?: string }
+        Returns: boolean
+      }
       get_checkout_registration: { Args: { p_order_id: string }; Returns: Json }
       get_classificacao_summary: { Args: never; Returns: Json }
       get_conversation_counts: {
@@ -29311,6 +29351,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      record_webhook_signature: {
+        Args: { p_provider: string; p_valid: boolean }
+        Returns: boolean
       }
       redeem_internal_cashback: {
         Args: {

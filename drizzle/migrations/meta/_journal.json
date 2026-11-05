@@ -855,6 +855,13 @@
       "when": 1793876037149,
       "tag": "0121_security_user_by_email",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1793876639205,
+      "tag": "0122_webhook_signature_observe_and_checkout_cashback",
+      "breakpoints": true
     }
   ]
 }
