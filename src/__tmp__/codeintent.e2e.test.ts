@@ -1,0 +1,18 @@
+import { it, expect } from "vitest";
+import fs from "fs";
+import { supabase } from "@/integrations/supabase/client";
+import { matchCatalogItem } from "@/components/events/LiveCodeIntentLane";
+import { confirmCodeIntentOrder } from "@/lib/liveCodeOrder";
+const EV = "add5e661-4454-4065-a32a-8ff5f31996f3";
+it("confirm intent", async () => {
+  const s = JSON.parse(fs.readFileSync("/root/.cache/lovable-auth/session.json", "utf8")).session;
+  await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
+  const db = supabase as any;
+  const { data: intent } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov").in("status", ["ready"]).single();
+  const { data: cat } = await db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants").eq("event_id", EV).limit(200);
+  const products = intent.items.map((it: any) => { const p = matchCatalogItem(it, cat)!; p.quantity = it.quantity || 1; return p; });
+  expect(products.every(Boolean)).toBe(true);
+  const id = await confirmCodeIntentOrder(EV, intent, products, "teste-lovable");
+  const { data: o } = await db.from("orders").select("id,products,free_shipping,shipping_cost,cashback_id").eq("id", id).single();
+  console.log("RESULT", JSON.stringify(o));
+}, 60000);
