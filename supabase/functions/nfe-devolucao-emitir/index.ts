@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfe-devolucao-emitir
 // Fase 5 — NF-e de DEVOLUÇÃO (entrada) da Etapa 2 de Trocas/Devoluções.
 //
@@ -100,6 +101,8 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
 
 Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
     const { troca_devolucao_id, ambiente: forcedAmb, cfop_override } = await req.json();

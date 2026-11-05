@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireAuth } from "../_shared/requireAuth.ts";
 // Instalação do app AppMax (OAuth2) na loja do CNPJ.
 // ?action=validate  → URL de validação (AppMax chama server-to-server)
 // ?action=start&env=production|sandbox → gera link de autorização (requer usuário logado)
@@ -58,6 +59,16 @@ Deno.serve(withAccessLog("appmax-install", async (req) => {
       // Descobre o ambiente pela external_key (formato bc-<env>) ou query
       const key = String(body.external_key || body.client_key || "");
       const e: Env = key.includes("sandbox") ? "sandbox" : key.includes("production") ? "production" : env;
+      // Fase 4: só aceita durante uma instalação iniciada por admin (status authorizing, últimos 30 min);
+      // fora disso não grava nada, para ninguém sobrescrever as credenciais do gateway.
+      {
+        const { data: cur } = await sb.from("appmax_installations").select("status, updated_at, external_id").eq("env", e).maybeSingle();
+        const fresh = cur?.status === "authorizing" && Date.now() - new Date(String(cur.updated_at)).getTime() < 30 * 60_000;
+        if (!fresh) {
+          try { await sb.from("security_events").insert({ event: "appmax_validate_blocked", ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null, details: { env: e, status: cur?.status ?? null } }); } catch (_) { /* ignore */ }
+          return json({ external_id: cur?.external_id ?? null, alias: "Banana Calçados" });
+        }
+      }
       const externalId = crypto.randomUUID(); // a cada instalação um valor novo
       const patch: Record<string, unknown> = {
         env: e, external_id: externalId, app_numeric_id: Number(body.app_id) || null,
@@ -74,6 +85,7 @@ Deno.serve(withAccessLog("appmax-install", async (req) => {
     if (action === "start") {
       const auth = await requireUser(req);
       if (!auth.ok) return auth.response;
+      { const denied = await requireAuth(req, [], true); if (denied) return denied; }
       const c = appCreds(env);
       if (!c.id || !c.secret || !c.uuid) return json({ error: `Credenciais do app (${env}) não configuradas` }, 400);
       const token = await oauthToken(env, c.id, c.secret);
@@ -97,6 +109,11 @@ Deno.serve(withAccessLog("appmax-install", async (req) => {
     if (action === "callback") {
       const hash = url.searchParams.get("token");
       if (!hash) return page("Faltou o código", "A AppMax não enviou o código de autorização.", 400);
+      {
+        const { data: cur } = await sb.from("appmax_installations").select("status, updated_at").eq("env", env).maybeSingle();
+        const fresh = cur?.status === "authorizing" && Date.now() - new Date(String(cur.updated_at)).getTime() < 60 * 60_000;
+        if (!fresh) return page("Instalação não iniciada", "Inicie a conexão pelo painel do ERP (Admin) e tente de novo.", 403);
+      }
       const c = appCreds(env);
       const token = await oauthToken(env, c.id, c.secret);
       const r = await fetch(`${HOSTS[env].api}/app/client/generate`, {

@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { analyzeIncomingAttachment } from "../_shared/media-understanding.ts";
@@ -14,6 +15,8 @@ const MAX_TOOL_TURNS = 3;
 
 serve(withAccessLog("automation-ai-respond", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing"], false); if (denied) return denied; }
 
   try {
     const { prompt, messages, mode = 'chat', phone, historyLimit = 30, enableRouting = false, enableTracking = false, messageText, mediaUrl, mediaType, whatsappNumberId, flowId, liveCampaignId: liveCampaignIdInput } = await req.json();

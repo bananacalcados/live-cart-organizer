@@ -1,4 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,6 +11,9 @@ const corsHeaders = {
 
 serve(withAccessLog("ai-classify-transactions", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["management"], false); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "ai-classify-transactions"); if (limited) return limited; }
 
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');

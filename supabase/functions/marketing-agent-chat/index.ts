@@ -1,4 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Marketing Agent (Estrategista) — Anthropic (Claude) como motor principal,
 // fallback automático para Lovable AI Gateway se ANTHROPIC_API_KEY ausente
 // ou se a Anthropic responder erro de crédito/autenticação.
@@ -1190,6 +1192,9 @@ async function callGateway(apiKey: string, model: string, messages: any[]) {
 
 serve(withAccessLog("marketing-agent-chat", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing"], false); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "marketing-agent-chat"); if (limited) return limited; }
 
   try {
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");

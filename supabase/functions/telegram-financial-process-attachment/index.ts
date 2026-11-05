@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Telegram Financial Agent — processa anexos (foto/PDF) via Lovable AI
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -366,6 +367,8 @@ async function processBankStatement(
 
 Deno.serve(withAccessLog("telegram-financial-process-attachment", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, [], true); if (denied) return denied; }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   let receiptId: string | null = null;

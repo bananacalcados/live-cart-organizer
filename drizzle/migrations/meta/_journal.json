@@ -862,6 +862,13 @@
       "when": 1793876639205,
       "tag": "0122_webhook_signature_observe_and_checkout_cashback",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793877365994,
+      "tag": "0123_gateway_amount_snapshot",
+      "breakpoints": true
     }
   ]
 }

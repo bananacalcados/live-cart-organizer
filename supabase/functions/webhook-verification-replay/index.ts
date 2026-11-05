@@ -41,7 +41,7 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
   let q = supabase.from("pos_checkout_attempts").select("sale_id, transaction_id, amount, created_at, metadata")
     .eq("gateway", gw).eq("status", "success").not("transaction_id", "is", null)
     .order("created_at", { ascending: false }).range(offset, offset + limit - 1);
-  if (provider !== "pagarme") q = q.eq("metadata->>source", "webhook");
+  if (provider !== "pagarme" && !body.any_source) q = q.eq("metadata->>source", "webhook");
   const { data: rows, error } = await q;
   if (error) return json({ error: error.message }, 500);
 
@@ -53,7 +53,7 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
     seen.add(tx);
     const id = String(r.sale_id || "");
     const { data: ord } = await supabase.from("orders").select("id, is_paid, appmax_order_id, pagarme_order_id, mercadopago_payment_id").eq("id", id).maybeSingle();
-    const { data: sale } = ord ? { data: null } : await supabase.from("pos_sales").select("id, status, total, appmax_order_id, pagarme_order_id").eq("id", id).maybeSingle();
+    const { data: sale } = ord ? { data: null } : await supabase.from("pos_sales").select("id, status, total, appmax_order_id, pagarme_order_id, mercadopago_payment_id").eq("id", id).maybeSingle();
     const paidNow = ord ? !!ord.is_paid : ["paid", "completed"].includes(String(sale?.status || ""));
     let apiStatus: string | null = null, apiAmount: number | null = null, verified = false, err = "";
     let extRef = "";
@@ -97,12 +97,13 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
       let ok = posAmountOk(apiAmount || 0, expected);
       if (!ok && r.amount != null) ok = posAmountOk(apiAmount || 0, Number(r.amount));
       if (!ok) { decision = "reject_amount"; reason = `api=${apiAmount} total=${expected} tentativa=${r.amount}`; }
+      else if (provider === "mercadopago" && extRef !== sale.id && String((sale as any).mercadopago_payment_id || "") !== tx) { decision = "reject_unverified"; reason = `id_ref_mismatch ref=${extRef}`; }
     } else { decision = "reject_unverified"; reason = "registro_nao_encontrado"; }
 
     const row = {
       provider, source: "replay", event_type: "replay", transaction_id: tx, order_id: ord?.id ?? null, sale_id: sale?.id ?? null,
       verified, api_status: apiStatus, api_amount: apiAmount, expected_amount: expected, old_decision: "confirm",
-      new_decision: decision, reason, strict_mode: false, applied: false, details: { run_id: runId, paid_now: paidNow, attempt_at: r.created_at },
+      new_decision: decision, reason, strict_mode: false, applied: false, details: { run_id: runId, paid_now: paidNow, attempt_at: r.created_at, ext_ref: extRef },
     };
     out.push(row);
   }

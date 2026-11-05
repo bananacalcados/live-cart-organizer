@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // VAPID key generation and push notification sending
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -196,6 +197,7 @@ serve(withAccessLog("push-notifications", async (req) => {
 
     // SEND push notification (authenticated only)
     if (action === 'send') {
+      { const denied = await requireStaffOrInternal(req, ["marketing"]); if (denied) return denied; }
       const body = await req.json();
       const { title, body: msgBody, image_url, click_url, campaign_tag: filterTag } = body;
 
@@ -272,6 +274,7 @@ serve(withAccessLog("push-notifications", async (req) => {
 
     // GET stats
     if (action === 'stats') {
+      { const denied = await requireStaffOrInternal(req, ["marketing"]); if (denied) return denied; }
       const { count: totalSubs } = await supabase
         .from('push_subscriptions')
         .select('*', { count: 'exact', head: true });

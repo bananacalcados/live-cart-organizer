@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireAuth } from "../_shared/requireAuth.ts";
 // ── AustPay (Rinne): cobrança no cartão ───────────────────────────────────
 // Fase 3 do plano — ÚLTIMO degrau da cascata, nunca o primeiro.
 // A Rinne não aceita PAN/CVV em texto puro no host normal, mas oferece o HOST
@@ -67,6 +68,7 @@ serve(withAccessLog("austpay-charge-card", async (req) => {
   try {
     const body = await req.json();
     orderId = String(body?.orderId || "");
+    { const denied = await requireAuth(req, [], true); if (denied) return denied; }
     amount = Number(body?.amount || 0);
     const installments = Math.max(1, Number(body?.installments || 1));
     const mode = String(body?.mode || "credit").toLowerCase();

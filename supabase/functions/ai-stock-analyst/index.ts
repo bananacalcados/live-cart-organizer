@@ -1,4 +1,6 @@
 import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -631,6 +633,9 @@ async function callAI(userContent: string, asJson: boolean) {
 
 Deno.serve(withAccessLog("ai-stock-analyst", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["inventory"], false); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "ai-stock-analyst"); if (limited) return limited; }
 
   try {
     const supabase = createClient(

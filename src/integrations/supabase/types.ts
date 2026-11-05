@@ -15358,6 +15358,8 @@ export type Database = {
           event_id: string | null
           expected_payment_method: string | null
           free_shipping: boolean | null
+          gateway_amount: number | null
+          gateway_snapshot: Json | null
           gift_description: string | null
           has_gift: boolean | null
           has_unread_messages: boolean
@@ -15439,6 +15441,8 @@ export type Database = {
           event_id?: string | null
           expected_payment_method?: string | null
           free_shipping?: boolean | null
+          gateway_amount?: number | null
+          gateway_snapshot?: Json | null
           gift_description?: string | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
@@ -15520,6 +15524,8 @@ export type Database = {
           event_id?: string | null
           expected_payment_method?: string | null
           free_shipping?: boolean | null
+          gateway_amount?: number | null
+          gateway_snapshot?: Json | null
           gift_description?: string | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
@@ -18682,6 +18688,8 @@ export type Database = {
           expedition_waiting_products: boolean
           external_order_id: string | null
           external_source: string | null
+          gateway_amount: number | null
+          gateway_snapshot: Json | null
           gift_added_at: string | null
           gift_after_completion: boolean
           gift_description: string | null
@@ -18790,6 +18798,8 @@ export type Database = {
           expedition_waiting_products?: boolean
           external_order_id?: string | null
           external_source?: string | null
+          gateway_amount?: number | null
+          gateway_snapshot?: Json | null
           gift_added_at?: string | null
           gift_after_completion?: boolean
           gift_description?: string | null
@@ -18898,6 +18908,8 @@ export type Database = {
           expedition_waiting_products?: boolean
           external_order_id?: string | null
           external_source?: string | null
+          gateway_amount?: number | null
+          gateway_snapshot?: Json | null
           gift_added_at?: string | null
           gift_after_completion?: boolean
           gift_description?: string | null

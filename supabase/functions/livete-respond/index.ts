@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { liveteTools, executeToolCall } from "../_shared/livete-tools.ts";
@@ -24,6 +25,8 @@ function sleep(ms: number) {
 
 serve(withAccessLog("livete-respond", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, [], true); if (denied) return denied; }
 
   const startTime = Date.now();
 

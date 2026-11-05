@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Envio MANUAL do template Meta configurado no evento (etapa MENSAGEM do wizard)
 // para o WhatsApp da cliente de um pedido específico.
 // Não altera etapa do pedido, não cria sessão de IA — apenas dispara o template.
@@ -20,6 +21,8 @@ const json = (body: unknown, status = 200) =>
 
 serve(withAccessLog("event-order-template-send", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["chat","pos","events","marketing","expedition"], false); if (denied) return denied; }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

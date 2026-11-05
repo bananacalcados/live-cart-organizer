@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfce-retry-pending
 // Cron a cada 5 min. Reemite NFC-e que ficaram em status='pending_sefaz' (SEFAZ offline).
 // Reinvoca nfce-emitir; se autorizar, status vira 'authorized' (nfce-emitir já cuida disso).
@@ -15,6 +16,8 @@ const MAX_RETRIES = 200; // ~ vários dias
 
 Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","management"], false); if (denied) return denied; }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

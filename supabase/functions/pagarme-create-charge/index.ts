@@ -1,4 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { internalCallHeaders } from "../_shared/requireAuth.ts";
+import { expectedOrderAmounts, orderTolerance, EXACT_TOLERANCE, securityEvent } from "../_shared/webhook-verification.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
@@ -1463,6 +1465,31 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
       console.error("[pagarme] Falha ao aplicar prêmio (ignorado):", prizeErr);
     }
 
+    // ── Fase 4: valor do navegador só é COMPARADO com o calculado no servidor ──
+    {
+      let serverMinCents = 0;
+      if (orderSource === "orders" && order) {
+        const exp = await expectedOrderAmounts(supabase, params.orderId);
+        if (exp) {
+          const cardMin = exp.pixPct > 0 ? exp.min / (1 - exp.pixPct / 100) : exp.min;
+          serverMinCents = Math.round((cardMin - orderTolerance(exp.base)) * 100);
+        }
+      } else {
+        const { data: s0 } = await supabase.from("pos_sales").select("total").eq("id", params.orderId).maybeSingle();
+        serverMinCents = Math.round((Number(s0?.total || 0) - EXACT_TOLERANCE) * 100);
+      }
+      if (serverMinCents > 0 && Math.round(totalCents) < serverMinCents) {
+        await securityEvent(supabase, "price_manipulation_attempt", clientIp, {
+          fn: "pagarme-create-charge", order_id: params.orderId, source: orderSource,
+          client_total_cents: params.totalAmountCents, client_base_cents: params.baseAmountCents ?? null,
+          charged_cents: totalCents, server_min_cents: serverMinCents,
+        });
+        return new Response(JSON.stringify({ success: false, error: "valor divergente" }), {
+          status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ── TRAVA DE PARCELAS: a regra do link manda, não a conta do gateway ──
     try {
       if (params.paymentMode !== "debit" && params.mpPaymentTypeId !== "debit_card" && (params.installments || 1) > 1) {
@@ -1808,7 +1835,7 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              ...(await internalCallHeaders()),
               origin: "https://checkout.bananacalcados.com.br",
             },
             body: JSON.stringify({

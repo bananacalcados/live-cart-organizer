@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Pull a single Shopify order's customer (personal + address) on demand.
 // Given a pos_sales.id (Shopify-origin), fetches the live Shopify order,
 // extracts full personal + address data, upserts a pos_customers record,
@@ -38,6 +39,8 @@ function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
 
 Deno.serve(withAccessLog("shopify-pull-order-customer", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","expedition"], false); if (denied) return denied; }
 
   try {
     const { sale_id } = await req.json().catch(() => ({}));

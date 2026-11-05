@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge: nfce-cancelar
 // Cancela NFC-e (modelo 65) ou NF-e (modelo 55) já autorizada na SEFAZ via BrasilNFe.
 // Body: { fiscal_document_id: uuid, justificativa: string (15-255 chars) }
@@ -17,6 +18,8 @@ const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 
 Deno.serve(withAccessLog("nfce-cancelar", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["management"], false); if (denied) return denied; }
 
   try {
     const { fiscal_document_id, justificativa } = await req.json();

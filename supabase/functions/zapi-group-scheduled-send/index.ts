@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // PLANNER de campanhas para Grupos VIPs (Fila Durável com Delay Agendado)
 // ------------------------------------------------------------------------
 // Este endpoint NÃO envia mensagens diretamente. Ele apenas:
@@ -37,6 +38,8 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 serve(withAccessLog("zapi-group-scheduled-send", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing","events"], false); if (denied) return denied; }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";

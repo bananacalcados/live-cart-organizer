@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
 
@@ -17,6 +18,8 @@ const META_API = "https://graph.instagram.com/v25.0";
  */
 Deno.serve(withAccessLog("instagram-dm-send-buttons", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing","events"], false); if (denied) return denied; }
 
   try {
     const supabase = createClient(

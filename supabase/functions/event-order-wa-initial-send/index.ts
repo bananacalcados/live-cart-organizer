@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Mensagem inicial NÃO-API (uazapi/wasender/zapi) do evento em modo WhatsApp.
 // Escolhe uma das variações configuradas em rodízio (round-robin atômico via
 // RPC next_event_wa_initial_variant), resolve as variáveis do pedido e envia
@@ -29,6 +30,8 @@ const MEMBER_AREA_PUBLIC = "https://checkout.bananacalcados.com.br/minha-area";
 
 Deno.serve(withAccessLog("event-order-wa-initial-send", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["events","chat","pos"], false); if (denied) return denied; }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

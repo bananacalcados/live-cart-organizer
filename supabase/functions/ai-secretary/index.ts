@@ -1,4 +1,6 @@
 import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -199,6 +201,9 @@ function buildToolFallbackReply(toolResults: Array<{ result: any }>) {
 
 serve(withAccessLog("ai-secretary", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, [], true); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "ai-secretary"); if (limited) return limited; }
 
   try {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');

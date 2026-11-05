@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -137,6 +138,8 @@ function prettySource(source?: string, campaignTag?: string, metadata?: any): st
 
 Deno.serve(withAccessLog("marketing-leads-dashboard", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing"], false); if (denied) return denied; }
 
   try {
     const supabase = createClient(

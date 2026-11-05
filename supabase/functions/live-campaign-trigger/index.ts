@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Detecta frase-chave em mensagem incoming e dispara cadastro + sequência
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -19,6 +20,8 @@ function normalize(s: string) {
 
 Deno.serve(withAccessLog("live-campaign-trigger", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, [], true); if (denied) return denied; }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

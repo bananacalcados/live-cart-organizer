@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfe-puxar-destinadas
 // Consulta NF-e em que o CNPJ é destinatário (NFeDistribuicaoDFe via BrasilNFe)
 // e popula public.nfe_received. Pode rodar manual (POST {company_id}) ou via cron (sem body = todas as empresas ativas).
@@ -128,6 +129,8 @@ async function processCompany(supabase: any, company: any) {
 
 Deno.serve(withAccessLog("nfe-puxar-destinadas", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["management"], false); if (denied) return denied; }
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

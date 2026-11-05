@@ -1,21 +1,4 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-serve(withAccessLog("shopify-oauth-install", async (req) => {
-  const shopifyDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN")!;
-  const clientId = Deno.env.get("SHOPIFY_CLIENT_ID")!;
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-
-  const redirectUri = `${supabaseUrl}/functions/v1/shopify-oauth-callback`;
-  const scopes = "write_orders,read_orders,read_products,write_draft_orders,read_draft_orders";
-  const nonce = crypto.randomUUID();
-
-  const installUrl = `https://${shopifyDomain}/admin/oauth/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: installUrl,
-    },
-  });
-}));
+// Fase 4 de segurança: desativada. Era a instalação única do app Shopify (o token já está salvo).
+// A versão antiga aceitava qualquer "shop" e enviava o segredo do app para ele, além de exibir o token na tela.
+Deno.serve(withAccessLog("shopify-oauth-install", () => new Response("Gone", { status: 410 })));

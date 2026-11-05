@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge: nfce-inutilizar
 // Inutiliza faixa de numeração de NFC-e/NF-e na SEFAZ via BrasilNFe.
 // Body: { company_id, modelo, serie, numero_inicial, numero_final, justificativa, ambiente? }
@@ -13,6 +14,8 @@ const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 
 Deno.serve(withAccessLog("nfce-inutilizar", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["management"], false); if (denied) return denied; }
 
   try {
     const body = await req.json();
