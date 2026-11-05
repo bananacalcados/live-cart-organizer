@@ -1,3 +1,4 @@
+import { verifyMetaSignature, checkUrlToken, gateWebhook } from "../_shared/webhook-auth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -312,6 +313,9 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
 
   try {
     const supabase = createClient(SB_URL, SB_KEY);
+    if (!(await gateWebhook(supabase, 'uazapi', checkUrlToken(req, 'UAZAPI_WEBHOOK_TOKEN')))) {
+      return new Response(JSON.stringify({ error: 'invalid signature' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const url = new URL(req.url);
     const payload = (await req.json().catch(() => ({}))) as AnyObj;
     const eventType = (asString(payload.EventType) || asString(payload.event) || "").toLowerCase();
