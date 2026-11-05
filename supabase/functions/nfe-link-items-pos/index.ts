@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -50,6 +51,8 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
     const { invoice_id, store_id, parent_sku, item_ids, dry_run } = await req.json();

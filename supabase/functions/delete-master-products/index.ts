@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Exclusão em massa de produtos do Catálogo Legacy e/ou Unificado, com cascata bidirecional.
 // Input: { master_ids?: string[], parent_skus?: string[] }
 // - Resolve pares (sku_root ↔ parent_sku) e apaga em cascata onde ambos existirem.
@@ -14,6 +15,8 @@ const corsHeaders = {
 
 Deno.serve(withAccessLog("delete-master-products", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["inventory"], true); if (denied) return denied; }
 
   try {
     const body = await req.json().catch(() => ({}));

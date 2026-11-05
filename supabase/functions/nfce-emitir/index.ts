@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfce-emitir
 // Monta payload NFC-e (modelo 65), chama BrasilNFe e persiste em fiscal_documents.
 // Body: { sale_id: uuid, ambiente?: 'homologacao'|'producao' }
@@ -72,6 +73,8 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
 
 Deno.serve(withAccessLog("nfce-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
     const { sale_id, ambiente: forcedAmb } = await req.json();

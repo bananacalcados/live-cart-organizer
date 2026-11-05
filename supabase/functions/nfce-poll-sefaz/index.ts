@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge: nfce-poll-sefaz
 // Cron a cada 10 min — consulta SEFAZ via BrasilNFe para notas pendentes/sent
 // e atualiza o status. Rede de segurança caso o webhook não chegue.
@@ -16,6 +17,8 @@ const BATCH_LIMIT = 50;
 
 Deno.serve(withAccessLog("nfce-poll-sefaz", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["pos","management"], false); if (denied) return denied; }
 
   try {
     const supabase = createClient(
