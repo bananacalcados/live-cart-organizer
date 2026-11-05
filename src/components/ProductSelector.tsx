@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, Plus, Minus, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Plus, Minus, Loader2, ChevronDown, ChevronUp, X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -92,12 +93,44 @@ export function ProductSelector({
     return () => { cancelled = true; };
   }, [debouncedSearch]);
 
+  // Busca por código de produto (letra + 3 dígitos, ex.: A097): resolve master+cor
+  // e mostra só as variações daquela cor. Não interfere na busca normal.
+  const [codeResult, setCodeResult] = useState<{ products: ShopifyProduct[]; unlinkedName?: string } | null>(null);
+  useEffect(() => {
+    const m = debouncedSearch.trim().match(/^([a-z])\s*-?\s*(\d{3})$/i);
+    if (!m) { setCodeResult(null); return; }
+    const code = `${m[1].toUpperCase()}${m[2]}`;
+    let cancelled = false;
+    (async () => {
+      const db = supabase as any;
+      const { data: rows } = await db.from("v_product_color_codes").select("master_id, color, product_name").eq("code", code).limit(1);
+      const row = rows?.[0];
+      if (!row) { if (!cancelled) setCodeResult({ products: [] }); return; }
+      const [{ data: vars }, { data: masters }] = await Promise.all([
+        db.from("product_variants").select("shopify_variant_id, color").eq("master_id", row.master_id).eq("is_active", true).not("shopify_variant_id", "is", null),
+        db.from("products_master").select("shopify_product_id").eq("id", row.master_id).limit(1),
+      ]);
+      const norm = (v: string | null) => (v || "").trim().toLowerCase();
+      const vids = new Set((vars || []).filter((v: any) => !row.color || norm(v.color) === norm(row.color)).map((v: any) => String(v.shopify_variant_id).replace(/\D/g, "")));
+      const pid = String(masters?.[0]?.shopify_product_id || "").replace(/\D/g, "");
+      const prods = pid ? await fetchProducts(5, `id:${pid}`) : [];
+      const out: ShopifyProduct[] = [];
+      for (const p of prods) {
+        const edges = p.node.variants.edges.filter((e) => vids.has(e.node.id.replace(/\D/g, "")));
+        if (edges.length) out.push({ ...p, node: { ...p.node, variants: { ...p.node.variants, edges } } } as ShopifyProduct);
+      }
+      if (!cancelled) setCodeResult(out.length ? { products: out } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}` });
+    })().catch((e) => { console.error("code search", e); if (!cancelled) setCodeResult({ products: [] }); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch]);
+
   // Filter products when search changes
   useEffect(() => {
     if (!debouncedSearch.trim()) {
       setProducts(allProducts);
       return;
     }
+    if (codeResult) { setProducts(codeResult.products); return; }
     const q = debouncedSearch.trim().toLowerCase();
     const isSkuOrGtin = /^[a-z0-9\-]+$/i.test(q) && q.length >= 4 && !q.includes(" ");
 
@@ -145,7 +178,7 @@ export function ProductSelector({
     }
 
     setProducts(filtered);
-  }, [debouncedSearch, allProducts, remoteProducts]);
+  }, [debouncedSearch, allProducts, remoteProducts, codeResult]);
 
   const loadAllProducts = async () => {
     setLoading(true);
@@ -205,6 +238,37 @@ export function ProductSelector({
           className="pl-10"
         />
       </div>
+
+      {selectedProducts.length > 0 && (
+        <div className="space-y-1.5 rounded-md border bg-muted/40 p-2">
+          <p className="text-xs font-medium text-muted-foreground">Selecionados</p>
+          {selectedProducts.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 text-sm">
+              {p.image && <img src={p.image} alt="" className="h-9 w-9 rounded object-cover" />}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{p.title}</p>
+                <p className="truncate text-xs text-muted-foreground">{[p.variant, `R$ ${Number(p.price).toFixed(2)}`].filter(Boolean).join(" · ")}</p>
+              </div>
+              <Button type="button" size="icon" variant="outline" className="h-7 w-7" onClick={() => (p.quantity > 1 ? onUpdateQuantity(p.id, p.quantity - 1) : onRemoveProduct(p.id))}>
+                <Minus className="h-3 w-3" />
+              </Button>
+              <span className="w-5 text-center">{p.quantity}</span>
+              <Button type="button" size="icon" variant="outline" className="h-7 w-7" onClick={() => onUpdateQuantity(p.id, p.quantity + 1)}>
+                <Plus className="h-3 w-3" />
+              </Button>
+              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => onRemoveProduct(p.id)} aria-label="Remover">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {codeResult?.unlinkedName && (
+        <p className="rounded-md border border-dashed p-2 text-sm text-muted-foreground">
+          {codeResult.unlinkedName} — sem vínculo com a Shopify
+        </p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-8">

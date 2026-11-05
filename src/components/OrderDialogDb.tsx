@@ -67,6 +67,8 @@ interface OrderDialogDbProps {
   prefillCommentId?: string;
   /** Telefone do lead (área de membros) — resolve o cliente pelo WhatsApp */
   prefillWhatsapp?: string;
+  /** Final de 4 dígitos usado quando não há telefone completo. */
+  prefillPhoneLast4?: string;
   /** Nome do lead, usado como identificador quando não há @ do Instagram */
   prefillName?: string;
   embedded?: boolean;
@@ -76,7 +78,7 @@ interface OrderDialogDbProps {
   onCreated?: (orderId: string) => void;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillName, embedded = false, prefillProducts, onCreated }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillPhoneLast4, prefillName, embedded = false, prefillProducts, onCreated }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
@@ -282,9 +284,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         } else {
           setPhoneOwnerHandle(normHandle(prefillInstagram));
         }
+      } else if (prefillPhoneLast4 && /^\d{4}$/.test(prefillPhoneLast4)) {
+        setPhoneLast4(prefillPhoneLast4);
       }
     }
-  }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillName]);
+  }, [editingOrder, open, prefillInstagram, prefillWhatsapp, prefillPhoneLast4, prefillName]);
 
 
   // Telefone nunca acompanha a troca de @: se o @ muda e o telefone atual veio
