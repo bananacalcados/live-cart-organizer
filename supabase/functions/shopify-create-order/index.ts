@@ -1,6 +1,9 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuth } from "../_shared/requireAuth.ts";
+import { requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { shopifyOrderBlockReason } from "../_shared/payment-gates.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -103,6 +106,12 @@ serve(withAccessLog("shopify-create-order", async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Fase 4: só funcionário (eventos/PDV) ou chamada interna.
+    const denied = await requireAuth(req, ["events", "pos"]);
+    if (denied) {
+      await securityEvent(supabase, "shopify_order_blocked", requestIp(req), { fn: "shopify-create-order", reason: "auth" });
+      return new Response(denied.body, { status: denied.status, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
     const { orderId } = await req.json();
     if (!orderId) throw new Error("orderId is required");
 
@@ -113,6 +122,11 @@ serve(withAccessLog("shopify-create-order", async (req) => {
       .single();
 
     if (orderError || !order) throw new Error("Order not found");
+    const block = shopifyOrderBlockReason(order);
+    if (block) {
+      await securityEvent(supabase, "shopify_order_blocked", requestIp(req), { fn: "shopify-create-order", order_id: orderId, reason: block });
+      return new Response(JSON.stringify({ error: block === "already_created" ? "Pedido já criado na Shopify" : "Pedido não está pago" }), { status: 409, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
 
     const { data: registration } = await supabase
       .from("customer_registrations")
