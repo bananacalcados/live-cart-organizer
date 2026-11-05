@@ -5,7 +5,7 @@ import { matchCatalogItem } from "@/components/events/LiveCodeIntentLane";
 import { confirmCodeIntentOrder } from "@/lib/liveCodeOrder";
 const EV = "add5e661-4454-4065-a32a-8ff5f31996f3";
 it("confirm intent", async () => {
-  const s = JSON.parse(fs.readFileSync("/root/.cache/lovable-auth/session.json", "utf8")).session;
+  let s: any = JSON.parse(fs.readFileSync("/root/.cache/lovable-auth/session.json", "utf8")).session; if (typeof s === "string") s = JSON.parse(s); if (Array.isArray(s)) s = s[0];
   const ss = await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
   console.log("SS", ss.error?.message, Object.keys(s));
   const db = supabase as any;
