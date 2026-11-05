@@ -126,12 +126,11 @@ export function StepPayment({
   useEffect(() => {
     (async () => {
       // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
-      const { data: ord } = await supabase
-        .from("orders")
-        .select("cashback_id, cashback_amount")
-        .eq("id", orderId)
-        .maybeSingle();
-      if (ord && ((ord as any).cashback_id || Number((ord as any).cashback_amount || 0) > 0)) return;
+      // Leitura auto-escopada ao próprio pedido (sem acesso à tabela de pedidos).
+      const { data: hasCashback, error: cbErr } = await supabase
+        .rpc("get_checkout_order_has_cashback", { p_order_id: orderId });
+      // Na dúvida, não oferece o desconto extra (evita desconto em dobro).
+      if (cbErr || hasCashback !== false) return;
       const { data } = await supabase
         .from("app_settings")
         .select("value")
