@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
+import { type Decision, exactAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -167,8 +168,17 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   // status real na API do Mercado Pago (mais abaixo), usando NOSSO token. Por isso, se a
   // assinatura falhar (ex.: segredo da conta trocou), NÃO descartamos o webhook — apenas
   // registramos um alerta e seguimos. Assim o pagamento não fica preso "pendente" no kanban.
+  const whIp = requestIp(req);
+  const strict = await isStrictMode(supabase);
   if (rawBody && body?.data?.id) {
+    const hasSig = !!req.headers.get("x-signature") && !!Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
     const isValid = await validateMercadoPagoSignature(req, rawBody);
+    if (!isValid && hasSig) {
+      await securityEvent(supabase, "webhook_bad_signature", whIp, { provider: "mercadopago", payment_id: body?.data?.id, strict });
+      if (strict) {
+        return new Response(JSON.stringify({ ok: false, error: "bad_signature" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+    }
     if (!isValid) {
       console.error(
         "[mercadopago] ⚠️ ALERTA: assinatura inválida (segredo do webhook pode estar desatualizado para a conta ativa). " +
@@ -226,6 +236,23 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   if (extRefStr.startsWith(SPLIT_REF_PREFIX)) {
     const splitId = extRefStr.slice(SPLIT_REF_PREFIX.length);
     if (status === "approved") {
+      const { data: part } = await supabase.from("payment_splits").select("charge_amount, amount, order_id, sale_id").eq("id", splitId).maybeSingle();
+      const expectedPart = Number(part?.charge_amount ?? part?.amount ?? 0);
+      const apiAmt = Number(mpPayment.transaction_amount || 0);
+      const okPart = !!part && exactAmountOk(apiAmt, expectedPart);
+      await logVerification(supabase, {
+        provider: "mercadopago", event_type: "split", external_id: extRefStr, transaction_id: mpIdStr,
+        order_id: part?.order_id ?? null, sale_id: part?.sale_id ?? null, verified: true, api_status: status,
+        api_amount: apiAmt, expected_amount: expectedPart, old_decision: "confirm", new_decision: okPart ? "confirm" : "reject_amount",
+        reason: okPart ? "" : `parte=${expectedPart} api=${apiAmt}`, strict_mode: strict, applied: strict ? okPart : true, details: { ip: whIp },
+      });
+      if (!okPart) {
+        await securityEvent(supabase, "amount_mismatch", whIp, { provider: "mercadopago", split_id: splitId, api_amount: apiAmt, expected: expectedPart, strict });
+        if (strict) {
+          if (part?.order_id) await flagReview(supabase, "orders", part.order_id); else if (part?.sale_id) await flagReview(supabase, "pos_sales", part.sale_id);
+          return new Response(JSON.stringify({ ok: true, verified: false, reason: "reject_amount" }), { headers: { "Content-Type": "application/json" } });
+        }
+      }
       try {
         const out = await approveSplitPart(supabase, splitId, "mercadopago", mpIdStr);
         console.log(`[mercadopago] split ${splitId} aprovado`, out);
@@ -323,6 +350,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
   console.log(`[mercadopago] Found ${orders?.length || 0} order(s)`);
   let order = orders && orders.length > 0 ? orders[0] : null;
+  const foundByMpId = !!order;
 
   if (!order && mpPayment?.external_reference) {
     const externalRef = String(mpPayment.external_reference);
@@ -367,6 +395,29 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     const extRef = String(mpPayment.external_reference || "");
     const amountOk = expected > 0 && Math.abs(mpAmount - expected) < 0.01;
     const refOk = extRef === order.id;
+
+    // Regra nova: valor (tolerância do pedido) E referência/ID.
+    const idOk = refOk || foundByMpId;
+    const exp = await expectedOrderAmounts(supabase, order.id);
+    const newAmountOk = !!exp && orderAmountOk(mpAmount, exp);
+    const newDecision: Decision = idOk && newAmountOk ? "confirm" : (idOk ? "reject_amount" : "reject_unverified");
+    const oldDecision = amountOk || refOk ? "confirm" : "reject";
+    await logVerification(supabase, {
+      provider: "mercadopago", event_type: "order", external_id: extRef, transaction_id: mpIdStr, order_id: order.id,
+      verified: true, api_status: status, api_amount: mpAmount, expected_amount: exp?.min ?? expected,
+      old_decision: oldDecision, new_decision: newDecision,
+      reason: newDecision === "confirm" ? "" : `api=${mpAmount} esperado>=${exp?.min} idOk=${idOk}`,
+      strict_mode: strict, applied: strict ? newDecision === "confirm" : oldDecision === "confirm", details: { ip: whIp, foundByMpId },
+    });
+    if (newDecision !== "confirm") {
+      await securityEvent(supabase, newDecision === "reject_amount" ? "amount_mismatch" : "webhook_unverified", whIp, {
+        provider: "mercadopago", order_id: order.id, payment_id: mpIdStr, api_amount: mpAmount, expected: exp?.min, strict,
+      });
+      if (strict) {
+        if (newDecision === "reject_amount") await flagReview(supabase, "orders", order.id);
+        return new Response(JSON.stringify({ ok: true, verified: false, reason: newDecision }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+    }
 
     if (!amountOk && !refOk) {
       const reason = `mp_amount=${mpAmount} vs order_total=${expected} | external_ref='${extRef}' vs order.id='${order.id}'`;
@@ -517,6 +568,30 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
+      }
+
+      // Regra nova PDV: valor exato (±R$0,05) com o total da venda ou da tentativa.
+      const apiAmt = Number(mpPayment.transaction_amount || 0);
+      let posOk = exactAmountOk(apiAmt, Number(sale.total || 0));
+      let attemptAmt: number | null = null;
+      if (!posOk) {
+        const { data: att } = await supabase.from("pos_checkout_attempts").select("amount")
+          .eq("sale_id", sale.id).eq("transaction_id", mpIdStr).not("amount", "is", null).limit(1);
+        attemptAmt = att?.[0]?.amount != null ? Number(att[0].amount) : null;
+        if (attemptAmt != null) posOk = exactAmountOk(apiAmt, attemptAmt);
+      }
+      await logVerification(supabase, {
+        provider: "mercadopago", event_type: "pos_sale", transaction_id: mpIdStr, sale_id: sale.id, verified: true,
+        api_status: status, api_amount: apiAmt, expected_amount: Number(sale.total || 0), old_decision: "confirm",
+        new_decision: posOk ? "confirm" : "reject_amount", reason: posOk ? "" : `api=${apiAmt} total=${sale.total} tentativa=${attemptAmt}`,
+        strict_mode: strict, applied: strict ? posOk : true, details: { ip: whIp },
+      });
+      if (!posOk) {
+        await securityEvent(supabase, "amount_mismatch", whIp, { provider: "mercadopago", sale_id: sale.id, payment_id: mpIdStr, api_amount: apiAmt, expected: sale.total, strict });
+        if (strict) {
+          await flagReview(supabase, "pos_sales", sale.id);
+          return new Response(JSON.stringify({ ok: true, verified: false, reason: "reject_amount" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+        }
       }
 
       const mpTypeId = String(mpPayment.payment_type_id || "");
