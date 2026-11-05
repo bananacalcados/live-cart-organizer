@@ -12,6 +12,13 @@ import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { InstagramDMChat } from "./events/InstagramDMChat";
 import { OrderTagsBar } from "./events/OrderTagsBar";
+import { useOpenAddIntent } from "@/lib/liveCodeOrder";
+
+function NovoAddBadge({ eventId, orderId }: { eventId: string; orderId: string }) {
+  const has = useOpenAddIntent(eventId, orderId);
+  if (!has) return null;
+  return <span className="mb-1 inline-block rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-fuchsia-700 dark:text-fuchsia-300">Novo ADD</span>;
+}
 import { StorePickupWizard } from "./events/StorePickupWizard";
 
 
@@ -628,6 +635,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       </div>
 
       {/* Etiquetas do pedido (reutilizáveis entre lives) */}
+      <NovoAddBadge eventId={order.event_id} orderId={order.id} />
       <OrderTagsBar orderId={order.id} />
 
       {/* AI Paused indicator */}
