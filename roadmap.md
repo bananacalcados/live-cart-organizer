@@ -1,6 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Segurança urgente — 05/11
+- [ ] Complemento Fase 2 somente leitura: referências por função (src/edge/cron/URLs), candidatas sem referências e sinais recentes dos 17 provedores, sem desativação.
 - [x] Fase 1A: dez tabelas protegidas; privilégios destrutivos removidos; anon negado.
 - [x] Fase 1B: 319 funções locais com registro; Admin/Acessos testados, alertas de IP persistidos.
 - [x] Fase 1C: 21 barreiras implantadas e testadas (401); demais incertas log-only; PDV Pérola abriu autenticado.
