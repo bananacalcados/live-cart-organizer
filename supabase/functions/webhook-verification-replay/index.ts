@@ -18,7 +18,14 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(url, key);
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (token !== key) {
+  // Token temporário de execução (app_settings.webhook_replay_token, apagado após o uso).
+  const replayTok = req.headers.get("x-replay-token") || "";
+  let tokOk = false;
+  if (replayTok.length >= 32) {
+    const { data: s } = await supabase.from("app_settings").select("value").eq("key", "webhook_replay_token").maybeSingle();
+    tokOk = typeof s?.value === "string" && s.value === replayTok;
+  }
+  if (token !== key && !tokOk) {
     const { data: u } = await supabase.auth.getUser(token);
     if (!u?.user) return json({ error: "unauthorized" }, 401);
     const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
