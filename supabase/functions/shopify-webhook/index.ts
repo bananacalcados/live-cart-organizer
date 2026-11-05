@@ -68,19 +68,25 @@ Deno.serve(withAccessLog("shopify-webhook", async (req) => {
     const topic = req.headers.get("x-shopify-topic") || "";
     const secret = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") || Deno.env.get("SHOPIFY_CLIENT_SECRET") || "";
 
-    if (secret && hmac) {
-      const ok = await verifyHmac(raw, hmac, secret);
-      if (!ok) {
-        console.warn("Invalid HMAC for topic", topic);
-        return new Response("Invalid HMAC", { status: 401, headers: corsHeaders });
-      }
-    }
-
-    const o = JSON.parse(raw);
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    // Fase 4: HMAC obrigatório. Sem segredo, sem cabeçalho ou assinatura errada → 401.
+    if (!secret || !hmac || !(await verifyHmac(raw, hmac, secret))) {
+      const reason = !secret ? "secret_missing" : !hmac ? "header_missing" : "bad_hmac";
+      console.warn("[shopify-webhook] recusado:", reason, topic);
+      try {
+        await supabase.from("security_events").insert({
+          event: "webhook_bad_signature",
+          ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null,
+          details: { provider: "shopify", reason, topic },
+        });
+      } catch (_) { /* não bloqueia */ }
+      return new Response("Invalid HMAC", { status: 401, headers: corsHeaders });
+    }
+
+    const o = JSON.parse(raw);
 
     const financial = (o.financial_status || "").toLowerCase();
     const topicLc = topic.toLowerCase();
