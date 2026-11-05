@@ -39,6 +39,12 @@ Deno.serve(withAccessLog("sync-code-shopify-status", async (req) => {
     throw new Error("Shopify: limite de requisições");
   };
 
+  const body = await req.json().catch(() => ({}));
+  if (body?.probe) {
+    const d = await gql(`query($id:ID!,$pub:ID!){product(id:$id){id status publishedOnPublication(publicationId:$pub) variants(first:5){nodes{id}}}}`, { id: `gid://shopify/Product/${numId(body.probe)}`, pub: PUBLICATION });
+    return reply(d);
+  }
+
   // 1) Códigos (paginado) e variações ativas do ERP.
   const codes: any[] = [];
   for (let from = 0; ; from += 1000) {
