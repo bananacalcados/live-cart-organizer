@@ -1,4 +1,6 @@
 import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -21,6 +23,9 @@ function getCorsHeaders(req: Request) {
 
 serve(withAccessLog("ai-marketing-master", withRequiredAuth([], false, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: getCorsHeaders(req) });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing"], false); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "ai-marketing-master"); if (limited) return limited; }
 
   try {
     const { objective, audience, instructions, customer_stats } = await req.json();

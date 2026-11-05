@@ -1,4 +1,6 @@
 import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { aiRateLimit } from "../_shared/ai-rate-limit.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -65,6 +67,9 @@ serve(withAccessLog("ai-agent-customers", withRequiredAuth([], false, async (req
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["marketing"], false); if (denied) return denied; }
+  { const limited = await aiRateLimit(req, "ai-agent-customers"); if (limited) return limited; }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
