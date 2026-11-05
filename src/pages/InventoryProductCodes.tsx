@@ -89,7 +89,7 @@ export default function InventoryProductCodes() {
   const syncNow = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-code-shopify-status", { body: {} });
+      const { data, error } = await supabase.functions.invoke("sync-shopify-mirror", { body: {} });
       if (error) throw error;
       toast.success(`Verificado: ${Object.entries((data as any)?.counts || {}).map(([k, v]) => `${v} ${STATUS_LABEL[k] || k}`).join(" · ")}`);
       setReload((x) => x + 1);
