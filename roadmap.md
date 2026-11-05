@@ -12,3 +12,10 @@
 - [ ] B11–B14 destrutivas e conta
 - [ ] C15–C17 disparos e mensageria
 - [ ] D18 gasto e IA
+
+## Fase 4 — status
+- [x] A pagamento/pedidos (implantado)
+- [x] B destrutivas/conta (implantado; rotinas fiscais migradas p/ segredo interno)
+- [x] C disparo/mensagens (implantado; código da live com limite 3/h telefone, 10/h IP)
+- [x] D IA/gasto (implantado; limite de uso por IP)
+- [ ] Pendências: validação de assinatura nos webhooks WhatsApp (item 17); identidade do livete-respond (14); valores server-side em Yampi/boleto; split-payment por token de sessão; shopify-webhook precisa do segredo do painel Shopify; botão antigo de pedido Shopify da live (LiveSessionManager); replay MP/Pagar.me com 0 falso negativo
