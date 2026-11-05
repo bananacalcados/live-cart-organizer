@@ -136,7 +136,9 @@ serve(withAccessLog("mercadopago-create-pix", async (req) => {
     }
 
 
-    let pixDiscountPct = Number(pixDiscountPercent) || 0;
+    // Fase 4: o desconto Pix nunca vem do navegador; só da configuração do sistema (abaixo).
+    void pixDiscountPercent;
+    let pixDiscountPct = 0;
 
 
     // Resolve as contas MP candidatas (ativa primeiro; demais como failover em caso de bloqueio)
@@ -461,7 +463,11 @@ serve(withAccessLog("mercadopago-create-pix", async (req) => {
 
     // Save mercadopago_payment_id + mp_account_id to orders or pos_sales
     const mpId = String(mpPayment.id);
-    const updatePayload: any = { mercadopago_payment_id: mpId };
+    const updatePayload: any = {
+      mercadopago_payment_id: mpId,
+      gateway_amount: totalAmount,
+      gateway_snapshot: { gateway: "mercadopago", method: "pix", payment_id: mpId, amount: totalAmount, pix_discount_pct: pixDiscountPct, shipping: shippingAmount, products, discount_type: discountType, discount_value: discountValue, at: new Date().toISOString() },
+    };
     if (mpAccount.account_id) updatePayload.mp_account_id = mpAccount.account_id;
 
     const { data: orderCheck } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
