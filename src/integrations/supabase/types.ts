@@ -25155,9 +25155,13 @@ export type Database = {
           enforced: boolean
           enforced_at: string | null
           last_invalid_at: string | null
+          last_result: string | null
           last_valid_at: string | null
+          observe_started_at: string | null
           provider: string
           total_invalid: number
+          total_missing: number
+          total_no_secret: number
           total_valid: number
           updated_at: string
         }
@@ -25166,9 +25170,13 @@ export type Database = {
           enforced?: boolean
           enforced_at?: string | null
           last_invalid_at?: string | null
+          last_result?: string | null
           last_valid_at?: string | null
+          observe_started_at?: string | null
           provider: string
           total_invalid?: number
+          total_missing?: number
+          total_no_secret?: number
           total_valid?: number
           updated_at?: string
         }
@@ -25177,9 +25185,13 @@ export type Database = {
           enforced?: boolean
           enforced_at?: string | null
           last_invalid_at?: string | null
+          last_result?: string | null
           last_valid_at?: string | null
+          observe_started_at?: string | null
           provider?: string
           total_invalid?: number
+          total_missing?: number
+          total_no_secret?: number
           total_valid?: number
           updated_at?: string
         }
@@ -29363,6 +29375,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      record_webhook_auth: {
+        Args: { p_provider: string; p_result: string }
+        Returns: boolean
       }
       record_webhook_signature: {
         Args: { p_provider: string; p_valid: boolean }

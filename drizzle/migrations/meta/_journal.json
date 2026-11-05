@@ -869,6 +869,13 @@
       "when": 1793877365994,
       "tag": "0123_gateway_amount_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793880202503,
+      "tag": "0124_webhook_auth_observe",
+      "breakpoints": true
     }
   ]
 }
