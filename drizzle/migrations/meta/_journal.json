@@ -841,6 +841,13 @@
       "when": 1793874548426,
       "tag": "0119_webhook_verification_dry_run",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1793875443409,
+      "tag": "0120_revoke_anon_rpcs",
+      "breakpoints": true
     }
   ]
 }
