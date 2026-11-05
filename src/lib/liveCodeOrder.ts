@@ -33,7 +33,7 @@ export async function computeLiveConditions(
 ): Promise<{ cond: LiveConditions; products: DbOrderProduct[] }> {
   const items = products.map((p, i) => ({
     ref: i, shopify_product_id: productIdOf(p), quantity: p.quantity || 1,
-    price: Number(p.compareAtPrice && !p.promotion ? p.price : p.basePrice ?? p.price),
+    price: Number(p.basePrice ?? p.price),
   }));
   const { data, error } = await db.rpc("compute_live_order_conditions", {
     p_event_id: eventId, p_username: username.replace(/^@/, ""), p_phone: phone || null, p_items: items,

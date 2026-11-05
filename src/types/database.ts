@@ -42,6 +42,10 @@ export interface DbOrderProduct {
   compareAtPrice?: number;
   quantity: number;
   image?: string;
+  /** Preço de tabela antes das condições da live (oferta/promoção). */
+  basePrice?: number;
+  /** Nome da promoção da live aplicada a este item. */
+  promotion?: string;
 }
 
 export type DiscountType = 'fixed' | 'percentage';
