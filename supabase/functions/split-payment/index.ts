@@ -6,6 +6,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getActiveMpAccount, getMpAccountByPaymentId } from "../_shared/mp-account.ts";
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
 import { EXACT_TOLERANCE, expectedOrderAmounts, orderTolerance, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { requireAuth } from "../_shared/requireAuth.ts";
 import { approveSplitPart, splitPaymentEnabled, SPLIT_REF_PREFIX } from "../_shared/split-payment.ts";
 
 const json = (b: unknown, status = 200) =>
@@ -34,6 +35,8 @@ function listParts(sb: any, orderId?: string, saleId?: string) {
 async function staffUser(sb: any, req: Request) {
   const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!tok) return null;
+  // Fase 4: precisa ser funcionário com módulo de PDV/eventos/estornos, não só um login qualquer.
+  if (await requireAuth(req, ["pos", "events", "estornos"])) return null;
   const { data } = await sb.auth.getUser(tok);
   return data?.user ?? null;
 }
@@ -296,8 +299,8 @@ Deno.serve(withAccessLog("split-payment", async (req) => {
 
     // ── refund: equipe estorna uma parte paga (só enquanto o pedido NÃO está 100% pago) ──
     if (action === "refund") {
-      const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      const { data: u } = tok ? await sb.auth.getUser(tok) : { data: null as any };
+      const staff = await staffUser(sb, req);
+      const u = { user: staff };
       if (!u?.user) return json({ error: "Apenas a equipe pode estornar" }, 403);
       const s = await loadSplit(sb, body.splitId);
       if (s.status !== "approved") return json({ error: "Esta parte não está paga" }, 400);
