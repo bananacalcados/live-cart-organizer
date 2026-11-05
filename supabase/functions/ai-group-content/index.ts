@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -6,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(withAccessLog("ai-group-content", async (req) => {
+serve(withAccessLog("ai-group-content", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -98,4 +99,4 @@ Retorne APENAS o prompt em inglês, sem aspas nem explicações.`;
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-}));
+})));

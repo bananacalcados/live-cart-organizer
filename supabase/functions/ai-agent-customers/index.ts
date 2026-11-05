@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -60,7 +61,7 @@ LEADS (nunca compraram)
 # FORMATO DA SUA RESPOSTA
 Sempre estruture sua análise em seções claras conforme o formato solicitado no user prompt. Seja cirúrgico — Matthews não quer relatório, quer ação.`;
 
-serve(withAccessLog("ai-agent-customers", async (req) => {
+serve(withAccessLog("ai-agent-customers", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -285,4 +286,4 @@ ENTREGUE EXATAMENTE NESTE FORMATO:
     return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-}));
+})));

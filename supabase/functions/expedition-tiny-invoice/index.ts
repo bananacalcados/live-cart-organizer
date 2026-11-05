@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -254,7 +255,7 @@ function parseUF(province: string): string {
   return map[province.toLowerCase()] || province;
 }
 
-serve(withAccessLog("expedition-tiny-invoice", async (req) => {
+serve(withAccessLog("expedition-tiny-invoice", withRequiredAuth(["expedition","pos"], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -643,4 +644,4 @@ serve(withAccessLog("expedition-tiny-invoice", async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-}));
+})));

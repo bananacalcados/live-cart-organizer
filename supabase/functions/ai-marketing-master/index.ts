@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -18,7 +19,7 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-serve(withAccessLog("ai-marketing-master", async (req) => {
+serve(withAccessLog("ai-marketing-master", withRequiredAuth([], false, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: getCorsHeaders(req) });
 
   try {
@@ -175,4 +176,4 @@ Use a ferramenta generate_master_directive para responder.`;
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
-}));
+})));

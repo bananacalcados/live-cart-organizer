@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,7 +15,7 @@ const corsHeaders = {
 //   3. Monta os componentes do carrossel com N cards (header IMAGE + body {{1}} + botão).
 //   4. Submete o template à Meta.
 //   5. Faz upsert em templates_carrossel (status PENDING até aprovação).
-serve(withAccessLog("carousel-ladder-create", async (req) => {
+serve(withAccessLog("carousel-ladder-create", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -189,7 +190,7 @@ serve(withAccessLog("carousel-ladder-create", async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-}));
+})));
 
 async function uploadSampleImage(accessToken: string, fileBase64: string, fileType: string) {
   try {

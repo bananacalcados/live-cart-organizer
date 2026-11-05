@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -16,7 +17,7 @@ interface StockItem {
 }
 
 // Ajuste de estoque de trocas 100% interno (pos_products). NÃO usa Tiny.
-serve(withAccessLog("pos-exchange-stock-adjust", async (req) => {
+serve(withAccessLog("pos-exchange-stock-adjust", withRequiredAuth(["pos"], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -93,4 +94,4 @@ serve(withAccessLog("pos-exchange-stock-adjust", async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-}));
+})));

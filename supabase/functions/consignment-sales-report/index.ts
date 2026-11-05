@@ -1,3 +1,4 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -18,7 +19,7 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-Deno.serve(withAccessLog("consignment-sales-report", async (req) => {
+Deno.serve(withAccessLog("consignment-sales-report", withRequiredAuth(["inventory"], false, async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -213,4 +214,4 @@ Deno.serve(withAccessLog("consignment-sales-report", async (req) => {
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
-}));
+})));
