@@ -44,6 +44,19 @@ serve(withAccessLog("live-send-verification", async (req) => {
       });
     }
 
+    // Fase 4: limite de 3 códigos/hora por telefone e 10/hora por IP.
+    {
+      const since = new Date(Date.now() - 3600_000).toISOString();
+      const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
+      const { count: byPhone } = await supabase.from("live_phone_verifications").select("id", { count: "exact", head: true }).eq("phone", phone).gte("created_at", since);
+      const { count: byIp } = ip ? await supabase.from("security_events").select("id", { count: "exact", head: true }).eq("event", "live_verification_sent").eq("ip", ip).gte("created_at", since) : { count: 0 };
+      if ((byPhone || 0) >= 3 || (byIp || 0) >= 10) {
+        await supabase.from("security_events").insert({ event: "live_verification_rate_limited", ip, details: { phone_tail: String(phone).slice(-4) } });
+        return new Response(JSON.stringify({ error: "Muitas tentativas. Tente de novo mais tarde." }), { status: 429, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+      await supabase.from("security_events").insert({ event: "live_verification_sent", ip, details: { phone_tail: String(phone).slice(-4) } });
+    }
+
     // Generate 4-digit code
     const code = String(Math.floor(1000 + Math.random() * 9000));
 
