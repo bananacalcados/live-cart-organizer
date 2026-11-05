@@ -5,6 +5,8 @@ import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { getMpAccountByPaymentId, getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
+import { expectedOrderAmounts, flagReview, isStrictMode, logVerification, posAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { paymentMatchesOrder } from "../_shared/payment-gates.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -159,9 +161,36 @@ serve(withAccessLog("mercadopago-check-payment", async (req) => {
       // Try orders first
       const { data: existingOrder } = await supabase
         .from("orders")
-        .select("is_paid")
+        .select("is_paid, mercadopago_payment_id")
         .eq("id", orderId)
-        .single();
+        .maybeSingle();
+
+      // Fase 4: o pagamento precisa ser DESTE pedido (referência) E ter o valor certo.
+      const strict = await isStrictMode(supabase);
+      const ip = requestIp(req);
+      const mpAmount = Number(mpPayment.transaction_amount || 0);
+      let gateOk = true;
+      if (existingOrder && !existingOrder.is_paid) {
+        const exp = await expectedOrderAmounts(supabase, orderId);
+        const byStoredId = String(existingOrder.mercadopago_payment_id || "") === String(paymentId);
+        const verdict = exp
+          ? paymentMatchesOrder({ reference: byStoredId ? orderId : String(mpPayment.external_reference || ""), metadataOrderId: mpPayment.metadata?.order_id ?? null, amount: mpAmount }, orderId, exp.min, exp.base)
+          : "amount";
+        gateOk = verdict === "ok";
+        await logVerification(supabase, {
+          provider: "mercadopago", event_type: "check-payment", external_id: String(mpPayment.external_reference || ""), transaction_id: String(paymentId), order_id: orderId,
+          verified: true, api_status: status, api_amount: mpAmount, expected_amount: exp?.min ?? null,
+          old_decision: "confirm", new_decision: gateOk ? "confirm" : (verdict === "amount" ? "reject_amount" : "reject_unverified"),
+          reason: gateOk ? "" : verdict, strict_mode: strict, applied: strict ? gateOk : true, details: { ip, fn: "mercadopago-check-payment" },
+        });
+        if (!gateOk) {
+          await securityEvent(supabase, verdict === "amount" ? "amount_mismatch" : "webhook_unverified", ip, { provider: "mercadopago", fn: "mercadopago-check-payment", order_id: orderId, payment_id: String(paymentId), api_amount: mpAmount, expected: exp?.min });
+          if (strict) {
+            await flagReview(supabase, "orders", orderId);
+            return new Response(JSON.stringify({ status: "review_required", verified: false }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+          }
+        }
+      }
 
       if (existingOrder && !existingOrder.is_paid) {
         // Captura forma de pagamento + parcelas direto do Mercado Pago
@@ -219,6 +248,16 @@ serve(withAccessLog("mercadopago-check-payment", async (req) => {
           .single();
 
         if (sale && sale.status !== "paid" && sale.status !== "completed") {
+          const refOk = String(mpPayment.external_reference || "") === String(orderId) || String(sale.mercadopago_payment_id || "") === String(paymentId);
+          const amtOk = posAmountOk(mpAmount, Number(sale.total || 0));
+          if (!refOk || !amtOk) {
+            await securityEvent(supabase, amtOk ? "webhook_unverified" : "amount_mismatch", ip, { provider: "mercadopago", fn: "mercadopago-check-payment", sale_id: orderId, payment_id: String(paymentId), api_amount: mpAmount, expected: sale.total, refOk });
+            await logVerification(supabase, { provider: "mercadopago", event_type: "check-payment-pos", transaction_id: String(paymentId), sale_id: orderId, verified: true, api_status: status, api_amount: mpAmount, expected_amount: Number(sale.total || 0), old_decision: "confirm", new_decision: amtOk ? "reject_unverified" : "reject_amount", reason: `refOk=${refOk} amtOk=${amtOk}`, strict_mode: strict, applied: !strict, details: { ip } });
+            if (strict) {
+              await flagReview(supabase, "pos_sales", orderId);
+              return new Response(JSON.stringify({ status: "review_required", verified: false }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+            }
+          }
           // Extract customer data from payment_details (saved by frontend before PIX generation)
           const pd = (sale.payment_details || {}) as Record<string, any>;
           const customerName = pd.customer_name || sale.customer_name || "";
