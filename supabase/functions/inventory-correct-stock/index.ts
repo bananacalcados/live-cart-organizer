@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -209,7 +210,7 @@ async function buildSiblingZeroRows(
  * Processa a fila inventory_correction_queue gravando o saldo contado direto
  * no pos_products. Auto-reinvoca até concluir.
  */
-serve(async (req) => {
+serve(withAccessLog("inventory-correct-stock", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -571,4 +572,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

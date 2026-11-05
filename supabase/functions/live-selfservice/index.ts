@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Página pública de autoatendimento da live (modo "WhatsApp + Cadastro online").
 // Rota /pedido/:slug. A cliente digita o WhatsApp, vê o pedido reservado,
 // se cadastra e confirma no WhatsApp (#CODIGO); o link do carrinho chega pela resposta
@@ -73,7 +74,7 @@ async function resolveEventNumber(sb: any, eventId: string, fallbackId: string |
   return { id: (link as any)?.whatsapp_number_id || fallbackId || null, targetPhone: (link as any)?.target_phone || null };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-selfservice", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
@@ -877,4 +878,4 @@ Deno.serve(async (req) => {
     console.error("[live-selfservice]", e);
     return json({ ok: false, error: "Erro inesperado. Tente de novo." }, 500);
   }
-});
+}));

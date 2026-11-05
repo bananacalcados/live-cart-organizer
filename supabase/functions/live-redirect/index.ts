@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Live IG redirect — resolves the active broadcasting event and returns the target IG url.
 // O link vale enquanto o evento estiver marcado como AO VIVO (sem TTL). Só muda quando o
 // operador encerra a transmissão ou troca o link manualmente.
@@ -36,7 +37,7 @@ async function validateInstagramUrl(url: string): Promise<boolean> {
   }
 }
 
-serve(async (req) => {
+serve(withAccessLog("live-redirect", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -163,7 +164,7 @@ serve(async (req) => {
     console.error("[live-redirect] error:", err);
     return json({ error: String((err as Error).message || err) }, 500);
   }
-});
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

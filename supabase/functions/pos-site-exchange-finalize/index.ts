@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // pos-site-exchange-finalize
 // Orquestra a "Troca do Site": depois que a venda da vendedora já foi criada no
 // PDV (pos-tiny-create-sale), esta função:
@@ -30,7 +31,7 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-site-exchange-finalize", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -282,4 +283,4 @@ Deno.serve(async (req) => {
     console.error("[pos-site-exchange-finalize]", e);
     return json({ error: (e as Error).message || "Erro interno" }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Redirecionador da Live → WhatsApp com atribuição Meta (2 passos).
 //
 // GET  ?slug=...&fbc=...        → registra o clique (fbc/fbp/UTMs/IP/UA) e devolve
@@ -53,7 +54,7 @@ export function normalizeEnteredPhone(raw: string): { e164: string; key: string 
   return { e164: "55" + d, key: d.slice(0, 2) + d.slice(-8) };
 }
 
-serve(async (req) => {
+serve(withAccessLog("live-whatsapp-redirect", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -237,7 +238,7 @@ serve(async (req) => {
     console.error("[live-whatsapp-redirect] error:", err);
     return json({ error: String((err as Error).message || err) }, 500);
   }
-});
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

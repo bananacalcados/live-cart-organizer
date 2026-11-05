@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Cron: processa fila de despachos pendentes da Live, envia via Z-API na ordem
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
@@ -11,7 +12,7 @@ const corsHeaders = {
 const BATCH = 25;
 const LOCK_SECONDS = 90;
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-campaign-dispatch", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -295,4 +296,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

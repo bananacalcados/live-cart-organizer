@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
@@ -58,7 +59,7 @@ async function fetchGroupParticipantCount(creds: GroupCreds, groupId: string): P
 }
 
 
-serve(async (req) => {
+serve(withAccessLog("cron-check-vip-groups", async (req) => {
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse({});
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -225,4 +226,4 @@ serve(async (req) => {
       status: 500, headers: { 'Content-Type': 'application/json' }
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -12,7 +13,7 @@ const corsHeaders = {
  * Looks up the tiny_id from pos_products, gets the store's tiny_token,
  * and sends a balance (tipo B) update to Tiny.
  */
-serve(async (req) => {
+serve(withAccessLog("expedition-correct-stock", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -105,4 +106,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

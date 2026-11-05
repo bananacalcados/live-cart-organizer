@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Registra clique em um botão da Link Page (server-side, service role).
 // Incrementa contador do item e da página, vincula vendedora/lead.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -7,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("link-page-track-click", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { pageId, itemId, catalogProductId, sellerId, leadId, clickId, utm_source, referrer } = await req.json();
@@ -53,4 +54,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

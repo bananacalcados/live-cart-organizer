@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Envia um template Meta WhatsApp (Cloud API) para um número.
 // Parâmetros vêm já resolvidos pelo caller (ex.: livete-start-order).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -55,7 +56,7 @@ async function getCredentials(supabase: any, whatsappNumberId?: string) {
 }
 
 
-serve(async (req) => {
+serve(withAccessLog("meta-template-send", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -198,4 +199,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

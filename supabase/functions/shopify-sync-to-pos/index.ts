@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { parseShopifyAddress } from "../_shared/shopify-address.ts";
 // Shopify → POS backfill / cron sync
 // Imports Shopify orders as pos_sales rows for the "Tiny Shopify" store.
@@ -40,7 +41,7 @@ function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-sync-to-pos", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -300,4 +301,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

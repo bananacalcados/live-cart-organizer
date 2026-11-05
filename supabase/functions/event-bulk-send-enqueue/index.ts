@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Envio em massa de Template API / Cross-sell por etapa do Kanban (Eventos).
 // Resolve variáveis por destinatário, aplica supressões (bloqueio, opt-out,
 // chargeback), anti-duplicidade e instância vinculada; grava a fila e
@@ -82,7 +83,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-bulk-send-enqueue", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -291,4 +292,4 @@ Deno.serve(async (req) => {
     console.error("[event-bulk-send-enqueue]", e);
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

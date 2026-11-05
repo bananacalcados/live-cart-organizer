@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Captura nome + telefone no gate de uma Link Page vinculada a vendedora.
 // - Se já existe cliente (customers_unified) pelo telefone -> marca origem por vendedora.
 // - Se é lead novo -> cria/atualiza ad_leads com source=link_page + tag da página.
@@ -26,7 +27,7 @@ function last8(raw: string): string {
   return d.slice(-8);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("link-page-capture-lead", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -157,4 +158,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

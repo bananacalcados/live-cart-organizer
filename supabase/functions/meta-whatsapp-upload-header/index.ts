@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -12,7 +13,7 @@ const corsHeaders = {
 //   1. Resolve the App ID from the access token (debug_token).
 //   2. Create an upload session: POST /{appId}/uploads
 //   3. Upload the bytes: POST /{uploadSessionId}  -> returns { h: "<handle>" }
-serve(async (req) => {
+serve(withAccessLog("meta-whatsapp-upload-header", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -131,4 +132,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+}));

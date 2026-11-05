@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Pacote fiscal mensal para o contador: ZIP (XMLs + Sintegra + resumo CSV) salvo
 // no storage privado e enviado por e-mail. Modos: "manual" (admin, botão
 // "Enviar agora") e "scheduled" (cron diário 08:00 SP; envia no 2º dia útil e
@@ -237,7 +238,7 @@ const Manual = z.object({
   force: z.boolean().optional(),
 });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("accountant-monthly-package", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));
@@ -264,4 +265,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

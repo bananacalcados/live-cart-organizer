@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // POS Customer 360° AI Insights
 // Generates a concise sales playbook for a customer based on purchase history
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -10,7 +11,7 @@ const corsHeaders = {
 interface SaleItem { product_name: string; size?: string | null; quantity: number; unit_price: number }
 interface Sale { created_at: string; total: number; status: string; payment_method?: string | null; pos_sale_items?: SaleItem[] }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-customer-360-insights", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const { customer, sales, cashbacks } = await req.json() as {
@@ -87,4 +88,4 @@ DADOS: ${JSON.stringify(summary)}`;
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

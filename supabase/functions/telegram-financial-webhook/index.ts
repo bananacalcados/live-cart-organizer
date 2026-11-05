@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Telegram Financial Agent — webhook receiver
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -1091,7 +1092,7 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
   return "⚠️ Não consegui concluir após várias tentativas.";
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("telegram-financial-webhook", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
@@ -1235,4 +1236,4 @@ Deno.serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-});
+}));

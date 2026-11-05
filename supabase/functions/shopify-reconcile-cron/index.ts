@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // shopify-reconcile-cron
 // Rede de segurança: a cada execução (cron), avança um cursor e reconcilia UMA
 // página de variantes vinculadas chamando shopify-reconcile-stock. Quando chega
@@ -17,7 +18,7 @@ const corsHeaders = {
 const PAGE_LIMIT = 50;
 const CURSOR_KEY = "shopify_reconcile_cursor";
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-reconcile-cron", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -71,4 +72,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

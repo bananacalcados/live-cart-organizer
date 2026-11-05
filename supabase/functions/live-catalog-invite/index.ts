@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Convites do catálogo cross-sell (auto após pagamento / manual pela equipe).
 // Chamado pelo cron 'live-catalog-invites' (x-cron-secret) ou pela equipe logada (módulo Eventos) para acordar o envio manual.
 // Nunca envia direto: enfileira na fila anti-spam do autoatendimento (selfservice_message_queue).
@@ -14,7 +15,7 @@ const cors = {
 };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-catalog-invite", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const SB_URL = Deno.env.get("SUPABASE_URL")!;
   const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -107,4 +108,4 @@ Deno.serve(async (req) => {
     fetch(`${SB_URL}/functions/v1/selfservice-message-worker`, { method: "POST", headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
   }
   return json({ ok: true, processed: Object.keys(results).length, results });
-});
+}));

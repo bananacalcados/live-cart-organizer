@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Área de Clientes pública da Live (link único fixado no Instagram).
 // Identidade = telefone digitado (sem OTP na entrada, para captar leads).
 // OTP funciona como "cofre": só libera leitura/edição dos dados pessoais.
@@ -103,7 +104,7 @@ const PIX_TTL_MS = 300_000;
 
 
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-member-area", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -2100,4 +2101,4 @@ Deno.serve(async (req) => {
     await logFriction("erro_inesperado", String((e as Error)?.message || e));
     return json({ ok: false, error: String((e as Error).message || e) }, 500);
   }
-});
+}));

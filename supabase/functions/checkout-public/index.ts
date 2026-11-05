@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Public checkout proxy — runs all anonymous checkout DB operations server-side
 // with the service_role key, so the underlying tables (pos_sales, pos_sale_items,
 // pos_customers, pos_checkout_attempts) no longer need public/anon access.
@@ -142,7 +143,7 @@ function pick(obj: Record<string, unknown>, allowed: Set<string>) {
   return out;
 }
 
-serve(async (req) => {
+serve(withAccessLog("checkout-public", async (req) => {
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -566,4 +567,4 @@ serve(async (req) => {
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

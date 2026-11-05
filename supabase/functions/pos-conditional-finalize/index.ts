@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // pos-conditional-finalize
 // Finaliza um CONDICIONAL (pedido enviado ao cliente para experimentar).
 // A vendedora puxa o condicional (status='conditional', is_conditional=true,
@@ -31,7 +32,7 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-conditional-finalize", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -159,4 +160,4 @@ Deno.serve(async (req) => {
     console.error("[pos-conditional-finalize]", e);
     return json({ error: (e as Error).message || "Erro interno" }, 500);
   }
-});
+}));

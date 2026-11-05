@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -391,7 +392,7 @@ function isFromGV(collectedData: Record<string, any>): boolean {
 
 // ─── Main Handler ────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serve(withAccessLog("automation-ai-ads-respond", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -1117,4 +1118,4 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

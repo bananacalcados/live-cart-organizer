@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -18,7 +19,7 @@ const json = (b: unknown, status = 200) =>
 const STANDBY_MAX_COUNT = 50;
 const MIN_INTERVAL_MS = 30 * 60 * 1000;
 
-serve(async (req) => {
+serve(withAccessLog("auto-create-vip-group", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -193,4 +194,4 @@ serve(async (req) => {
     console.error("[auto-create] erro:", error);
     return json({ error: "Internal server error", details: (error as Error).message }, 500);
   }
-});
+}));

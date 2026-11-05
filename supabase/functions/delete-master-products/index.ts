@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Exclusão em massa de produtos do Catálogo Legacy e/ou Unificado, com cascata bidirecional.
 // Input: { master_ids?: string[], parent_skus?: string[] }
 // - Resolve pares (sku_root ↔ parent_sku) e apaga em cascata onde ambos existirem.
@@ -11,7 +12,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("delete-master-products", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
     console.error("[delete-master-products]", err);
     return json({ error: String(err?.message || err) }, 500);
   }
-});
+}));
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {

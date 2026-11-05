@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfe-puxar-destinadas
 // Consulta NF-e em que o CNPJ é destinatário (NFeDistribuicaoDFe via BrasilNFe)
 // e popula public.nfe_received. Pode rodar manual (POST {company_id}) ou via cron (sem body = todas as empresas ativas).
@@ -125,7 +126,7 @@ async function processCompany(supabase: any, company: any) {
   return { company_id: company.id, inseridos, ultimoNSU, error: lastError };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfe-puxar-destinadas", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const supabase = createClient(
@@ -157,4 +158,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   resolveUazapiCredentials,
@@ -23,7 +24,7 @@ const corsHeaders = {
  * O endpoint /contact/add da uazapi é lento (~5s cada), então processamos em
  * ondas concorrentes (concurrency) para caber no tempo da edge function.
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-backfill-contacts", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -142,4 +143,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

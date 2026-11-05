@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Cobrança de TESTE isolada na AustPay (cartão, R$ 50,00 fixo no servidor).
 // Não liga a AustPay na cascata, não lê nem grava pedidos/vendas.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -16,7 +17,7 @@ const cors = {
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-serve(async (req) => {
+serve(withAccessLog("austpay-test-charge", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   try {
     const body = await req.json();
@@ -70,4 +71,4 @@ serve(async (req) => {
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

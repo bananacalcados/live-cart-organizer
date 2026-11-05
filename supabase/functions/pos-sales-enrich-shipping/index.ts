@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -6,7 +7,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
  * vindas da Shopify que estão em aberto na Expedição e ficaram sem essa
  * informação. Best-effort: qualquer pedido que falhe é apenas ignorado.
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-sales-enrich-shipping", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const json = (body: unknown, status = 200) =>
@@ -66,4 +67,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
   }
-});
+}));

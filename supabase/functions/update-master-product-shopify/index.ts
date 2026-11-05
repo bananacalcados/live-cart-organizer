@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Shopify data updates preserve all media and linked taxonomy options.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -9,7 +10,7 @@ const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data)
   status, headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("update-master-product-shopify", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return reply({ error: "Método não permitido" }, 405);
   try {
@@ -150,4 +151,4 @@ Deno.serve(async (req) => {
     console.error("Atualização Shopify:", error instanceof Error ? error.message : "Erro inesperado");
     return reply({ error: error instanceof Error ? error.message : "Não foi possível atualizar o produto" }, 409);
   }
-});
+}));

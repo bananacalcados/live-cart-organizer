@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Link de Atendimento dos Grupos VIP: /vip-go/CODE ou ?c=CODE → 302 wa.me
 // Motor independente da Live (/zap) e do redirect de grupo (/vip).
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -20,7 +21,7 @@ function notFound() {
   );
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("vip-go", async (req) => {
   const url = new URL(req.url);
   const seg = url.pathname.split("/").filter(Boolean).pop() || "";
   const code = (url.searchParams.get("c") || (seg !== "vip-go" ? seg : "")).trim().toUpperCase();
@@ -49,4 +50,4 @@ Deno.serve(async (req) => {
     ? `https://wa.me/${to}?text=${encodeURIComponent(row.message_text)}`
     : `https://wa.me/?text=${encodeURIComponent(row.message_text)}`;
   return new Response(null, { status: 302, headers: { Location: target, "Cache-Control": "no-store" } });
-});
+}));

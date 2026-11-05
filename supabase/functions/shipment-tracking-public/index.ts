@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
   DEFAULT_STAGE_CONFIG,
@@ -104,7 +105,7 @@ function legacyTimeline(sim: any, code: string): PublicEvent[] {
   return events;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -373,4 +374,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

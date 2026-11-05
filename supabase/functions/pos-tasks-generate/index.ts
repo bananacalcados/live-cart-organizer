@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Gera/garante as instâncias de tarefa do dia para uma vendedora (ou todas).
 // Chamada on-demand pelo popup do PDV e também pode rodar por cron.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -114,7 +115,7 @@ function appliesToSeller(def: any, seller: any): boolean {
   return false;
 }
 
-serve(async (req) => {
+serve(withAccessLog("pos-tasks-generate", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -242,7 +243,7 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
 
 async function buildContacts(supabase: any, def: any, storeId: string, target: number, dateStr: string, seller?: any) {
   const cfg = def.auto_config || {};

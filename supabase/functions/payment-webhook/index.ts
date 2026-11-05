@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { approveSplitPart, SPLIT_REF_PREFIX } from "../_shared/split-payment.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -38,7 +39,7 @@ async function autoCreateTinyOrder(_supabase: any, _saleId: string, _supabaseUrl
   return;
 }
 
-serve(async (req) => {
+serve(withAccessLog("payment-webhook", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -79,7 +80,7 @@ serve(async (req) => {
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
-});
+}));
 
 async function validateMercadoPagoSignature(req: Request, body: string): Promise<boolean> {
   const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");

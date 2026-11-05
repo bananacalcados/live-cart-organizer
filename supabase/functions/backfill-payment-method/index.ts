@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getMpAccountByPaymentId, getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
@@ -22,7 +23,7 @@ const corsHeaders = {
  *  - limit: número máximo de pedidos por execução (padrão 150)
  *  - gateway: "mercadopago" | "pagarme" | "all" (padrão "all")
  */
-serve(async (req) => {
+serve(withAccessLog("backfill-payment-method", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -154,4 +155,4 @@ serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, result }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

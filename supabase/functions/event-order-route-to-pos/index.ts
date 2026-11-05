@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Routes a paid order from an event with default_store_id (physical channel)
 // into pos_sales as pending_pickup, mirroring SendToPOSDialog logic server-side.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,7 +15,7 @@ const LIVE_SELLER_BY_STORE: Record<string, string> = {
 // Loja "Site/Live" (ex-Tiny Shopify) — usada para eventos de canal 'site' sem loja física padrão.
 const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-order-route-to-pos", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   let releaseFn: (() => Promise<void>) | null = null;
   try {
@@ -249,4 +250,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
 
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // automation-queue-worker
 // Consome public.automation_message_queue de forma SEQUENCIAL, com espaçamento
 // + jitter e teto global de mensagens/minuto. Rodado por pg_cron a cada minuto.
@@ -96,7 +97,7 @@ async function reschedule(
 }
 
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("automation-queue-worker", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -358,4 +359,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

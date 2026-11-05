@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   getServiceClient,
@@ -44,7 +45,7 @@ function json(body: unknown, status = 200) {
  *  - delete:        exclui a instância na uazapi (e opcionalmente a linha local)
  *  - update_events: reconfigura o webhook da instância
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-session", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -306,4 +307,4 @@ serve(async (req) => {
     console.error("[uazapi-session] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

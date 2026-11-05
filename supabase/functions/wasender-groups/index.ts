@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -40,7 +41,7 @@ function groupDigits(raw: string): string {
  *  - leave               → { groupJid }
  *  - sendMessage         → { groupJid, message, mentions?: string[] }
  */
-serve(withGroupSendRouting("wasender", "groups", async (req) => {
+serve(withAccessLog("wasender-groups", withGroupSendRouting("wasender", "groups", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const auth = await requireUser(req);
@@ -223,4 +224,4 @@ serve(withGroupSendRouting("wasender", "groups", async (req) => {
     console.error("[wasender-groups] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-}));
+})));

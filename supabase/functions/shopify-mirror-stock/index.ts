@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // shopify-mirror-stock
 // Push ATIVO de estoque para a Shopify a cada venda (PDV / Site / Live).
 // Disparado pelo trigger apply_pos_sale_stock_movement via net.http_post (event-driven, sem cron).
@@ -27,7 +28,7 @@ function pickPrimaryLocation(locations: Array<{ id: number; name?: string | null
   return preferred || active[0] || locations?.[0] || null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-mirror-stock", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -223,4 +224,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

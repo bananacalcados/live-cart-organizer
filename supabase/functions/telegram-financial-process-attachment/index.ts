@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Telegram Financial Agent — processa anexos (foto/PDF) via Lovable AI
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -363,7 +364,7 @@ async function processBankStatement(
   return { ok: true, inserted };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("telegram-financial-process-attachment", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -509,4 +510,4 @@ Deno.serve(async (req) => {
     if (chatId) await sendMessage(chatId, "❌ Falha ao processar: " + String((e as Error).message ?? e));
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -81,7 +82,7 @@ function mediaField(
   }
 }
 
-serve(withGroupSendRouting("wasender", "media", async (req) => {
+serve(withAccessLog("wasender-send-media", withGroupSendRouting("wasender", "media", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -148,4 +149,4 @@ serve(withGroupSendRouting("wasender", "media", async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-}));
+})));

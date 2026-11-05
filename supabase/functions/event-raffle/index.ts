@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Sorteios do Evento (painel interno).
 // Diferente da Roleta: um pool de participantes concorre a N prêmios, sorteado pela equipe.
 // Públicos: confirmed_orders | payers | live_leads.
@@ -54,7 +55,7 @@ interface PoolEntry {
   entry_value: number;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-raffle", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const authHeader = req.headers.get("Authorization");
@@ -301,4 +302,4 @@ Deno.serve(async (req) => {
     console.error("event-raffle error", e);
     return json({ ok: false, error: String((e as Error).message || e) }, 500);
   }
-});
+}));

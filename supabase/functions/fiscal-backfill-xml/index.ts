@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge: fiscal-backfill-xml
 // Recupera xml_content (e DANFE) de notas já autorizadas cuja resposta da
 // BrasilNFe foi salva mas nunca decodificada — caso das NFC-e (modelo 65)
@@ -15,7 +16,7 @@ const corsHeaders = {
 
 const AUTHORIZED = ["authorized", "autorizada", "autorizado"];
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("fiscal-backfill-xml", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -100,4 +101,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

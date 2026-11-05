@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveUazapiCredentials, uazapiInstance } from "../_shared/uazapi-credentials.ts";
@@ -76,7 +77,7 @@ function chatidVariants(raw: string): string[] {
   return phoneDigitVariants(raw).map((d) => `${d}@s.whatsapp.net`);
 }
 
-serve(async (req) => {
+serve(withAccessLog("uazapi-resync-chat", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
@@ -271,4 +272,4 @@ serve(async (req) => {
     console.error("[uazapi-resync-chat] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

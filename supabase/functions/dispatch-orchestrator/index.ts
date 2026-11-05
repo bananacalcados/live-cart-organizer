@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // dispatch-orchestrator
 // Runs every minute via pg_cron (job: dispatch-orchestrator-every-minute).
 // Looks at active dispatches with pending work and spawns N workers per dispatch
@@ -33,7 +34,7 @@ function isInternalRequest(req: Request, serviceKey: string) {
 const MAX_WORKERS_PER_DISPATCH = 4; // reduzido (10/10): 8 workers derrubavam o banco compartilhado
 const JOBS_PER_WORKER = 600; // 1 worker now covers ~600 pending jobs in 50s (BATCH=45)
 
-serve(async (req) => {
+serve(withAccessLog("dispatch-orchestrator", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -112,4 +113,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { cashbackVars, fetchActiveCashback } from "../_shared/automation-context.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -143,7 +144,7 @@ function fillVars(text: string, vars: Record<string,string>) {
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi,(m,k)=>vars[`{{${String(k).toLowerCase()}}}`] ?? m).replace(/[ \t]{2,}/g," ");
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-crossell-blocks", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders});
   try {
     const parsed = schema.safeParse(await req.json());
@@ -224,4 +225,4 @@ Deno.serve(async (req) => {
     }
     return json({error:"Ação inválida"},400);
   } catch(e) { return json({error:e instanceof Error ? e.message : "Erro no Crossell"},400); }
-});
+}));

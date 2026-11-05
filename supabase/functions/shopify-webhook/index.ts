@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { parseShopifyAddress } from "../_shared/shopify-address.ts";
 // Shopify webhook receiver — orders/paid + orders/updated
 // HMAC validation with SHOPIFY_CLIENT_SECRET (used for Shopify custom app webhooks).
@@ -57,7 +58,7 @@ async function verifyHmac(rawBody: string, hmacHeader: string, secret: string): 
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-webhook", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 
@@ -326,4 +327,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Estorno Mercado Pago pelo sistema — Fase 1.
 // Segurança: exige JWT de usuário logado + permissão "estornos" (user_module_permissions)
 // ou papel admin. Interruptor geral e teto de aprovação na tabela refund_settings
@@ -185,7 +186,7 @@ async function getConfig(supabase: any): Promise<{ enabled: boolean; approval_th
   };
 }
 
-serve(async (req) => {
+serve(withAccessLog("mp-refund", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const authHeader = req.headers.get("Authorization");
@@ -804,4 +805,4 @@ serve(async (req) => {
   }
 
   return json({ error: "Ação inválida." }, 400);
-});
+}));

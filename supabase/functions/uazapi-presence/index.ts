@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
 
@@ -21,7 +22,7 @@ function json(body: unknown, status = 200) {
  *  - presence: 'composing' | 'recording' | 'paused' | 'available' | 'unavailable'
  *  - delay?: number (ms que o estado permanece ativo)
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-presence", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -41,4 +42,4 @@ serve(async (req) => {
     console.error("[uazapi-presence] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

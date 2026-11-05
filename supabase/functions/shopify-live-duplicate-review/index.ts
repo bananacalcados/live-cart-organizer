@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -163,7 +164,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-live-duplicate-review", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -312,4 +313,4 @@ Deno.serve(async (req) => {
     console.error("Error reviewing duplicate live Shopify orders:", message);
     return jsonResponse({ error: message }, 500);
   }
-});
+}));

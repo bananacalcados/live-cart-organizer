@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -30,7 +31,7 @@ function cleanCpf(raw: string | null | undefined) {
   return d.length === 11 ? d : null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("automation-trigger-pos-sale", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const supabase = createClient(
@@ -314,7 +315,7 @@ Deno.serve(async (req) => {
     console.error("automation-trigger-pos-sale error:", err);
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
   }
-});
+}));
 
 async function executeStep(supabase: any, step: any, phone: string, replaceVars: (s: string) => string, flowId: string) {
   const cfg = step.action_config || {};

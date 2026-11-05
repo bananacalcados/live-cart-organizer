@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { Hono } from "hono";
 import { McpServer, StreamableHttpTransport } from "mcp-lite";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -729,4 +730,4 @@ app.all("/*", async (c) => {
   return response;
 });
 
-Deno.serve(app.fetch);
+Deno.serve(withAccessLog("mcp-server", app.fetch));

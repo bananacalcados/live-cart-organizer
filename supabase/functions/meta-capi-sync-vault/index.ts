@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Sync META_CAPI_INTERNAL_SECRET from edge env into DB Vault.
 // Call once after configuring/rotating the secret to keep DB triggers working.
 
@@ -9,7 +10,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-internal-secret",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-sync-vault", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -87,4 +88,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

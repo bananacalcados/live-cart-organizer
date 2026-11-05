@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Helper de teste pra disparar manualmente um envio Purchase pra Meta CAPI Offline.
 // Apenas pra validação interna — usa META_CAPI_INTERNAL_SECRET pra chamar a função real.
 // Não expõe nada sensível ao chamador.
@@ -8,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-test", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -62,4 +63,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

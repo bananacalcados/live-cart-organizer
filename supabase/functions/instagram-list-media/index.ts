@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 interface MediaItem {
@@ -39,7 +40,7 @@ async function fetchEdge(
   }));
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("instagram-list-media", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -79,4 +80,4 @@ Deno.serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { listAllMpAccountsForPolling } from "../_shared/mp-account.ts";
@@ -6,7 +7,7 @@ import { mpGetPayment } from "../_shared/mp-http.ts";
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // Read-only, manually invoked incident audit. No charges, notifications or writes.
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("payment-incident-audit", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const url = Deno.env.get("SUPABASE_URL");
@@ -135,4 +136,4 @@ Deno.serve(async (req) => {
     }
     return json({ entity, since, offset, total: count, nextOffset: offset + results.length < Number(count) ? offset + results.length : null, results });
   } catch { return json({ error: "Auditoria indisponível; nenhum pedido foi alterado" }, 503); }
-});
+}));

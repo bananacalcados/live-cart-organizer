@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfce-retry-pending
 // Cron a cada 5 min. Reemite NFC-e que ficaram em status='pending_sefaz' (SEFAZ offline).
 // Reinvoca nfce-emitir; se autorizar, status vira 'authorized' (nfce-emitir já cuida disso).
@@ -12,7 +13,7 @@ const corsHeaders = {
 
 const MAX_RETRIES = 200; // ~ vários dias
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -76,4 +77,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

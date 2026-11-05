@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Backfill de unificação de clientes — Fase 2
 // Modo padrão: dry-run (apenas relatório). Para gravar: { mode: "execute" }
 //
@@ -75,7 +76,7 @@ const normIg = (raw?: string | null) => {
   return raw.toLowerCase().replace(/^@/, "").trim() || null;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("unify-customers-backfill", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -543,4 +544,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // lead-notify-pdv
 // Ao captar um lead qualificado no Typebot, envia a primeira mensagem pela
 // instância do PDV configurada no typebot. Isso abre a conversa no chat do PDV
@@ -55,7 +56,7 @@ function fmtValue(def: any, value: unknown): string {
   return String(value);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("lead-notify-pdv", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
@@ -201,4 +202,4 @@ Deno.serve(async (req) => {
     console.error("[lead-notify-pdv] error:", e);
     return json({ error: String(e) }, 500);
   }
-});
+}));

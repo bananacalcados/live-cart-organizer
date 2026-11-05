@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ALLOWED_ORIGINS = [
@@ -88,7 +89,7 @@ REGRAS:
 - Defina urgência: countdown timers, estoque limitado`,
 };
 
-serve(async (req) => {
+serve(withAccessLog("ai-channel-specialist", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: getCorsHeaders(req) });
 
   try {
@@ -234,4 +235,4 @@ Use a ferramenta generate_channel_plan para responder. Cada item do content_plan
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
-});
+}));

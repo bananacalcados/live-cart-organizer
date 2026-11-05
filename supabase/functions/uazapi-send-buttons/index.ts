@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
@@ -12,7 +13,7 @@ const corsHeaders = {
  * Envia botões de resposta rápida via uazapi (/send/menu type=button).
  * Para botões de quick-reply o formato de cada item em `choices` é apenas o título.
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-send-buttons", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -82,4 +83,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

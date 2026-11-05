@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -62,7 +63,7 @@ const scenarios = [
   },
 ];
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-expedition-test-orders", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -153,4 +154,4 @@ Deno.serve(async (req) => {
     console.error("[pos-expedition-test-orders]", e);
     return json({ error: String((e as Error)?.message || e) }, 500);
   }
-});
+}));

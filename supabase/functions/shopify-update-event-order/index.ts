@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
@@ -23,7 +24,7 @@ function getCorsHeaders(req: Request) {
  * 2. Chama shopify-create-order — recria com os dados atuais do nosso banco.
  * O número (#XXXX) muda, é inevitável nessa estratégia.
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-update-event-order", async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -122,4 +123,4 @@ Deno.serve(async (req) => {
     console.error("shopify-update-event-order error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

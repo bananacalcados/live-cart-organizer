@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Teste temporário de autenticação da chave AustPay/Rinne em produção.
 // Faz UMA chamada de leitura (GET /v1/transactions) e devolve status + trecho
 // da resposta. Nunca devolve a chave.
@@ -8,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("austpay-ping", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const cfg = getAustpayConfig();
@@ -36,4 +37,4 @@ Deno.serve(async (req) => {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

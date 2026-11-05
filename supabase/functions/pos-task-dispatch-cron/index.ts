@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Dispara templates do WhatsApp pessoal das vendedoras/gerentes com a lista
 // de tarefas pendentes do dia.
 //
@@ -43,7 +44,7 @@ function normalizePhone(raw: string): string {
 
 const WINDOW = 5; // minutos de tolerância (cron a cada 5 min)
 
-serve(async (req) => {
+serve(withAccessLog("pos-task-dispatch-cron", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -183,4 +184,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

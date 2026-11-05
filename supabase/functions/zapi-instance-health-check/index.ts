@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Cron: verifica status de conexão de todas as instâncias Z-API ativas
 // e atualiza whatsapp_numbers.is_online + last_health_check.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -8,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+serve(withAccessLog("zapi-instance-health-check", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -92,4 +93,4 @@ serve(async (req) => {
   return new Response(JSON.stringify({ checked: results.length, results }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

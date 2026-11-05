@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
 
@@ -24,7 +25,7 @@ function json(body: unknown, status = 200) {
  *  - emoji (react — vazio remove a reação)
  *  - phone (react/markread — número do chat)
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-message-actions", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -67,4 +68,4 @@ serve(async (req) => {
     console.error("[uazapi-message-actions] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Cron de fallback: varre pedidos awaiting_payment e consulta o status na API do MP.
 // Suporta multi-conta: itera por todas as contas cadastradas tentando localizar o pagamento.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -15,7 +16,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+serve(withAccessLog("mercadopago-poll-pending", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -290,4 +291,4 @@ serve(async (req) => {
     JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, errors: errors.slice(0, 5) }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Backfill DANFE/XML for already-authorized fiscal_documents whose
 // brasilnfe_response was stored but danfe_url / xml_content were not.
 // Body: { document_id?: uuid, pos_sale_id?: uuid }
@@ -15,7 +16,7 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
   return endpoint.toString();
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("fiscal-backfill-danfe", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { document_id, pos_sale_id } = await req.json().catch(() => ({}));
@@ -87,4 +88,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

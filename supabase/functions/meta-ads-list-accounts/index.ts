@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Lists Meta Ad Accounts accessible by the configured Meta token
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -5,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-ads-list-accounts", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -70,4 +71,4 @@ Deno.serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+}));

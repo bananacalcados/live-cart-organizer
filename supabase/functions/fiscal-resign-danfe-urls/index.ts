@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,7 +10,7 @@ const corsHeaders = {
 // One-time/maintenance: re-sign existing PDF DANFE URLs after the
 // fiscal-documents bucket was switched to private. HTML DANFEs keep using the
 // fiscal-render-document wrapper, so they are skipped.
-serve(async (req) => {
+serve(withAccessLog("fiscal-resign-danfe-urls", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -48,4 +49,4 @@ serve(async (req) => {
     return new Response(JSON.stringify({ ok: false, error: String(e) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { waitReplyExpiresAt } from "../_shared/automation-reply-branches.ts";
 // automation-pos-followups-cron
 // Processa os passos agendados das automações disparadas por venda
@@ -29,7 +30,7 @@ const corsHeaders = {
 
 const BATCH = 100;
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("automation-pos-followups-cron", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
 
@@ -191,4 +192,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

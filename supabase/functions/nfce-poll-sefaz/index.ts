@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge: nfce-poll-sefaz
 // Cron a cada 10 min — consulta SEFAZ via BrasilNFe para notas pendentes/sent
 // e atualiza o status. Rede de segurança caso o webhook não chegue.
@@ -13,7 +14,7 @@ const corsHeaders = {
 const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 const BATCH_LIMIT = 50;
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfce-poll-sefaz", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -120,4 +121,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

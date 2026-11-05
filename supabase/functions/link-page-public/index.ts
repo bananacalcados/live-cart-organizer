@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Endpoint público da Link Page: retorna a página, botões (com WhatsApp resolvido
 // e filtrado por instância ONLINE), catálogo ativo e dados da vendedora.
 // Usa service role para ler whatsapp_numbers sem expor tokens ao cliente.
@@ -16,7 +17,7 @@ function resolvePhone(n: any): string | null {
   return d;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("link-page-public", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -103,4 +104,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

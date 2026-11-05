@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -309,7 +310,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-serve(async (req) => {
+serve(withAccessLog("shopify-create-live-order", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -596,4 +597,4 @@ serve(async (req) => {
 
     return jsonResponse({ error: message }, 500);
   }
-});
+}));

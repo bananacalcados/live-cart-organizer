@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge: nfce-cancelar
 // Cancela NFC-e (modelo 65) ou NF-e (modelo 55) já autorizada na SEFAZ via BrasilNFe.
 // Body: { fiscal_document_id: uuid, justificativa: string (15-255 chars) }
@@ -14,7 +15,7 @@ const corsHeaders = {
 
 const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfce-cancelar", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -103,4 +104,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

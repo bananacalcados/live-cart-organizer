@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -12,7 +13,7 @@ const corsHeaders = {
  *
  * Body: { eventId, automationId, recipientId, whatsapp_number_id? }
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("instagram-dm-automation-run", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -103,4 +104,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

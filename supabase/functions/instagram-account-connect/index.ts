@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -13,7 +14,7 @@ const corsHeaders = {
  * Grava tudo como uma linha provider='instagram' — reaproveitando toda a
  * infra de instâncias (filtro por conversa, roteamento de token, etc).
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("instagram-account-connect", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -196,4 +197,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
@@ -7,7 +8,7 @@ const configSchema = z.object({ usuario: field.optional(), codigo_acesso: z.stri
 function safeConfig(s: CorreiosSettings) {
   return { usuario: s.usuario, codigo_acesso: { configured: !!s.codigo_acesso, last4: s.codigo_acesso.slice(-4) }, cartao_postagem: s.cartao_postagem, contrato: s.contrato, ambiente: s.ambiente, enabled: s.enabled, remetente: s.remetente, servicos: s.servicos, updated_at: s.updated_at };
 }
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("correios-admin", async (req) => {
   const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -42,4 +43,4 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?: number };
     return reply({ error: err.message || 'Não foi possível conectar aos Correios' }, err.status || 400);
   }
-});
+}));

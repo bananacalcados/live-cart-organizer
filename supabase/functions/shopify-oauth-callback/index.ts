@@ -1,6 +1,7 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-serve(async (req) => {
+serve(withAccessLog("shopify-oauth-callback", async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
@@ -63,4 +64,4 @@ serve(async (req) => {
       { status: 500, headers: { "Content-Type": "text/html" } }
     );
   }
-});
+}));

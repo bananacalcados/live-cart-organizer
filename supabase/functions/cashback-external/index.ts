@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Integração de cashback com o site (outro projeto Lovable).
 // Este projeto (PDV) é a FONTE ÚNICA da verdade do cashback.
 // O site chama esta função para VALIDAR e RESGATAR cupons ao vivo.
@@ -19,7 +20,7 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("cashback-external", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -114,4 +115,4 @@ Deno.serve(async (req) => {
     console.error("cashback-external error:", (e as Error).message);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Meta Conversions API — Generic event dispatcher
 // Sends standard events (InitiateCheckout, AddPaymentInfo, AddShippingInfo, Purchase, Lead, etc.)
 // to the ONLINE Meta Pixel via server-side API.
@@ -99,7 +100,7 @@ const STANDARD_EVENTS = new Set([
   "Contact",
 ]);
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-event", async (req) => {
   let failBody: any = null;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -658,4 +659,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
