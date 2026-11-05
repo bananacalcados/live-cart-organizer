@@ -15386,6 +15386,7 @@ export type Database = {
           payment_confirmed_source: string | null
           payment_method_label: string | null
           payment_on_delivery: boolean
+          payment_review_required: boolean
           payment_window_expires_at: string | null
           phone_last4: string | null
           pickup_date: string | null
@@ -15466,6 +15467,7 @@ export type Database = {
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean
+          payment_review_required?: boolean
           payment_window_expires_at?: string | null
           phone_last4?: string | null
           pickup_date?: string | null
@@ -15546,6 +15548,7 @@ export type Database = {
           payment_confirmed_source?: string | null
           payment_method_label?: string | null
           payment_on_delivery?: boolean
+          payment_review_required?: boolean
           payment_window_expires_at?: string | null
           phone_last4?: string | null
           pickup_date?: string | null
@@ -18710,6 +18713,7 @@ export type Database = {
           payment_method: string | null
           payment_method_detail: string | null
           payment_on_delivery: boolean
+          payment_review_required: boolean
           phone_suffix8: string | null
           pickup_date: string | null
           pickup_store_id: string | null
@@ -18817,6 +18821,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          payment_review_required?: boolean
           phone_suffix8?: string | null
           pickup_date?: string | null
           pickup_store_id?: string | null
@@ -18924,6 +18929,7 @@ export type Database = {
           payment_method?: string | null
           payment_method_detail?: string | null
           payment_on_delivery?: boolean
+          payment_review_required?: boolean
           phone_suffix8?: string | null
           pickup_date?: string | null
           pickup_store_id?: string | null
@@ -25128,6 +25134,72 @@ export type Database = {
           resolution_method?: string
           resolved_whatsapp_number_id?: string | null
           sender_phone?: string | null
+        }
+        Relationships: []
+      }
+      webhook_verification_log: {
+        Row: {
+          api_amount: number | null
+          api_status: string | null
+          applied: boolean
+          created_at: string
+          details: Json | null
+          event_type: string | null
+          expected_amount: number | null
+          external_id: string | null
+          id: string
+          new_decision: string | null
+          old_decision: string | null
+          order_id: string | null
+          provider: string
+          reason: string | null
+          sale_id: string | null
+          source: string
+          strict_mode: boolean
+          transaction_id: string | null
+          verified: boolean
+        }
+        Insert: {
+          api_amount?: number | null
+          api_status?: string | null
+          applied?: boolean
+          created_at?: string
+          details?: Json | null
+          event_type?: string | null
+          expected_amount?: number | null
+          external_id?: string | null
+          id?: string
+          new_decision?: string | null
+          old_decision?: string | null
+          order_id?: string | null
+          provider: string
+          reason?: string | null
+          sale_id?: string | null
+          source?: string
+          strict_mode?: boolean
+          transaction_id?: string | null
+          verified?: boolean
+        }
+        Update: {
+          api_amount?: number | null
+          api_status?: string | null
+          applied?: boolean
+          created_at?: string
+          details?: Json | null
+          event_type?: string | null
+          expected_amount?: number | null
+          external_id?: string | null
+          id?: string
+          new_decision?: string | null
+          old_decision?: string | null
+          order_id?: string | null
+          provider?: string
+          reason?: string | null
+          sale_id?: string | null
+          source?: string
+          strict_mode?: boolean
+          transaction_id?: string | null
+          verified?: boolean
         }
         Relationships: []
       }
