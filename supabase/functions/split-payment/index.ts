@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getActiveMpAccount, getMpAccountByPaymentId } from "../_shared/mp-account.ts";
 import { buildMpHeaders, mpGetPayment } from "../_shared/mp-http.ts";
+import { EXACT_TOLERANCE, expectedOrderAmounts, orderTolerance, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 import { approveSplitPart, splitPaymentEnabled, SPLIT_REF_PREFIX } from "../_shared/split-payment.ts";
 
 const json = (b: unknown, status = 200) =>
@@ -104,6 +105,17 @@ Deno.serve(withAccessLog("split-payment", async (req) => {
       const total = r2(Number(body.total));
       const parts = Array.isArray(body.parts) ? body.parts : [];
       if (!(total > 0 && total < 100000)) return json({ error: "Total inválido" }, 400);
+      // Fase 4: o total do navegador só é comparado com o valor do pedido no servidor.
+      {
+        let serverBase = 0;
+        if (orderId) { const exp = await expectedOrderAmounts(sb, orderId); serverBase = exp ? exp.base : 0; }
+        else { const { data: sv } = await sb.from("pos_sales").select("total").eq("id", saleId).maybeSingle(); serverBase = r2(Number(sv?.total || 0)); }
+        const tol = orderId ? orderTolerance(serverBase) : EXACT_TOLERANCE;
+        if (serverBase > 0 && total < serverBase - tol) {
+          await securityEvent(sb, "price_manipulation_attempt", requestIp(req), { fn: "split-payment", order_id: orderId ?? null, sale_id: saleId ?? null, client_total: total, server_total: serverBase });
+          return json({ error: "valor divergente" }, 400);
+        }
+      }
       if (parts.length < 2 || parts.length > MAX_PARTS) return json({ error: `Use de 2 a ${MAX_PARTS} formas` }, 400);
       // VPS (moeda digital sem integração): só a equipe lança, e a diferença não ganha desconto Pix.
       const hasVps = parts.some((p: any) => String(p?.method) === "vps");
