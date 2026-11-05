@@ -19,6 +19,7 @@ import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
+import { LiveShownProductsPanel } from "@/components/events/LiveShownProductsPanel";
 import { LiveContactCards, useLiveNewContacts } from "@/components/events/LiveNewContactsLane";
 import { useEventContactLanes } from "@/hooks/useEventContactLanes";
 import { LiveCardMessageActions } from "@/components/events/LiveCardMessageActions";
@@ -1033,6 +1034,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
               </Button>
             </div>
 
+            {eventId && <LiveShownProductsPanel key={`shown-${eventId}`} eventId={eventId} compact />}
             {eventId && (
               <LiveLaneSection
                 id="order-intents"
@@ -1176,6 +1178,7 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
           </div>
         ) : (
           <>
+          {eventId && <div className="mb-2"><LiveShownProductsPanel key={`shown-${eventId}`} eventId={eventId} compact /></div>}
           {eventId && (
             <div className="mb-2">
               <LiveLaneSection
