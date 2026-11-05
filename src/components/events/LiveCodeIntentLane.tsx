@@ -282,6 +282,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
                     eventId={eventId}
                     prefillInstagram={active.username}
                     prefillWhatsapp={active.phone || undefined}
+                    prefillPhoneLast4={active.phone ? undefined : active.phone_last4 || undefined}
                     prefillProducts={resolved.products}
                     onCreated={(orderId) => resolve(active.id, "confirm", orderId)}
                   />
