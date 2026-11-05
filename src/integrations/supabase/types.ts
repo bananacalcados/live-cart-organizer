@@ -20873,6 +20873,24 @@ export type Database = {
           },
         ]
       }
+      product_variants_link_backup_20261105: {
+        Row: {
+          backed_up_at: string | null
+          id: string | null
+          shopify_variant_id: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          id?: string | null
+          shopify_variant_id?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          id?: string | null
+          shopify_variant_id?: string | null
+        }
+        Relationships: []
+      }
       product_visual_tags: {
         Row: {
           ai_description: string | null
@@ -21154,6 +21172,24 @@ export type Database = {
           category_id?: string | null
           category_source?: string | null
           id?: string | null
+        }
+        Relationships: []
+      }
+      products_master_link_backup_20261105: {
+        Row: {
+          backed_up_at: string | null
+          id: string | null
+          shopify_product_id: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          id?: string | null
+          shopify_product_id?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          id?: string | null
+          shopify_product_id?: string | null
         }
         Relationships: []
       }
@@ -22968,6 +23004,54 @@ export type Database = {
           source?: string
           sync_status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_variant_mirror: {
+        Row: {
+          barcode: string | null
+          image_url: string | null
+          option_color: string | null
+          option_size: string | null
+          price: number | null
+          product_status: string | null
+          product_title: string | null
+          published_lovable: boolean
+          shopify_product_id: string
+          shopify_variant_id: string
+          sku: string | null
+          synced_at: string
+          variant_title: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          image_url?: string | null
+          option_color?: string | null
+          option_size?: string | null
+          price?: number | null
+          product_status?: string | null
+          product_title?: string | null
+          published_lovable?: boolean
+          shopify_product_id: string
+          shopify_variant_id: string
+          sku?: string | null
+          synced_at?: string
+          variant_title?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          image_url?: string | null
+          option_color?: string | null
+          option_size?: string | null
+          price?: number | null
+          product_status?: string | null
+          product_title?: string | null
+          published_lovable?: boolean
+          shopify_product_id?: string
+          shopify_variant_id?: string
+          sku?: string | null
+          synced_at?: string
+          variant_title?: string | null
         }
         Relationships: []
       }
@@ -29520,6 +29604,7 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: undefined
       }
+      relink_products_from_shopify_mirror: { Args: never; Returns: Json }
       reopen_finished_conversation: {
         Args: { p_phone: string; p_whatsapp_number_id?: string }
         Returns: number
