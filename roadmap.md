@@ -140,3 +140,6 @@ Ressalvas dos vídeos (conferir antes de mostrar às clientes): dados de exemplo
 - [x] Fase 1: cartões em lote/cache, janelas só quando abertas, memória estável. Pendente: travadas >200 ms no redesenho do quadro (cartões pesados).
 - [x] Fase 3: PDV WhatsApp incremental (32 → 3–4,6 MB/min)
 - [ ] Fase 2: lote para prêmios/último cadastro/mensagens por telefone (precisa função nova no servidor) e aliviar redesenho do quadro
+
+- [x] Segurança Fase 3: webhooks em modo teste + replay, painel de conferência, RPCs anon revogadas
+- [ ] Ligar webhook_strict_mode — aguardando decisão do dono

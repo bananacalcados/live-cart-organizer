@@ -27,6 +27,7 @@ import { InstagramAccountManager } from "@/components/admin/InstagramAccountMana
 import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
 import { SecurityAccessPanel } from "@/components/admin/SecurityAccessPanel";
 import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
+import { PaymentReviewPanel } from "@/components/admin/PaymentReviewPanel";
 import { RefundApprovalsPanel } from "@/components/admin/RefundApprovalsPanel";
 import { GatewaySplitStatsPanel } from "@/components/admin/GatewaySplitStatsPanel";
 import { CorreiosSettingsPanel } from "@/components/admin/CorreiosSettingsPanel";
@@ -465,6 +466,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="mercadopago" className="mt-4 space-y-6">
+            <PaymentReviewPanel />
             <GatewaySplitPanel />
             <GatewaySplitStatsPanel />
             <MercadoPagoAccountsManager />

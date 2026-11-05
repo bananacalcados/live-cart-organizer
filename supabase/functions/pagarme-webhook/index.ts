@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
+import { type Decision, alreadyApplied, posAmountOk, expectedOrderAmounts, flagReview, hmacHex, isStrictMode, logVerification, orderAmountOk, pagarmeLookup, requestIp, securityEvent, warnMissingSecretOncePerDay } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -44,7 +45,21 @@ serve(withAccessLog("pagarme-webhook", async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    const ip = requestIp(req);
+    // Assinatura (x-hub-signature = sha1=HMAC do corpo) quando o segredo existe.
+    const whSecret = Deno.env.get("PAGARME_WEBHOOK_SECRET");
+    if (whSecret) {
+      const sig = (req.headers.get("x-hub-signature") || "").replace(/^sha1=/, "");
+      const calc = await hmacHex("SHA-1", whSecret, rawBody);
+      if (!sig || sig !== calc) {
+        await securityEvent(supabase, "webhook_bad_signature", ip, { provider: "pagarme" });
+        return new Response(JSON.stringify({ ok: false, error: "bad_signature" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+    } else {
+      await warnMissingSecretOncePerDay(supabase, "pagarme");
+    }
+    const payload = JSON.parse(rawBody || "{}");
     console.log("Pagar.me webhook received:", JSON.stringify(payload).substring(0, 1000));
 
     const eventType = payload.type || payload.event;
@@ -133,6 +148,44 @@ serve(withAccessLog("pagarme-webhook", async (req) => {
 
     let updated = false;
     const resolvedOrderId = order?.id || sale?.id || ourOrderId;
+
+    // ── Verificação independente (Fase 3) ──
+    const alreadyPaid = (order && order.is_paid) || (sale && (sale.status === "paid" || sale.status === "completed"));
+    if (isPaid && orderSource && !alreadyPaid) {
+      const strict = await isStrictMode(supabase);
+      const api = await pagarmeLookup(String(pagarmeOrderId || ourOrderId));
+      let decision: Decision = "confirm";
+      let reason = "";
+      let expected: number | null = null;
+      if (!api.found || !api.paid) { decision = "reject_unverified"; reason = api.error || `api_status=${api.status}`; }
+      else if (orderSource === "orders") {
+        const exp = await expectedOrderAmounts(supabase, order.id);
+        expected = exp?.min ?? null;
+        if (!exp || !orderAmountOk(api.amount || 0, exp)) { decision = "reject_amount"; reason = `api=${api.amount} esperado>=${exp?.min}`; }
+      } else {
+        const { data: s } = await supabase.from("pos_sales").select("total").eq("id", sale.id).maybeSingle();
+        expected = Number(s?.total || 0);
+        if (!posAmountOk(api.amount || 0, expected)) { decision = "reject_amount"; reason = `api=${api.amount} total=${expected}`; }
+      }
+      if (strict && decision === "confirm" && await alreadyApplied(supabase, "pagarme", String(transactionId))) {
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "duplicate_tx" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+      await logVerification(supabase, {
+        provider: "pagarme", event_type: eventType, external_id: String(pagarmeOrderId || ""), transaction_id: String(transactionId),
+        order_id: order?.id ?? null, sale_id: sale?.id ?? null, verified: api.found && api.paid, api_status: api.status,
+        api_amount: api.amount, expected_amount: expected, old_decision: "confirm", new_decision: decision, reason,
+        strict_mode: strict, applied: strict ? decision === "confirm" : true, details: { ip },
+      });
+      if (decision !== "confirm") {
+        await securityEvent(supabase, decision === "reject_amount" ? "amount_mismatch" : "webhook_unverified", ip, {
+          provider: "pagarme", order_id: order?.id, sale_id: sale?.id, pagarme_id: pagarmeOrderId, api_amount: api.amount, expected, strict,
+        });
+        if (strict) {
+          if (decision === "reject_amount") await flagReview(supabase, orderSource as any, resolvedOrderId);
+          return new Response(JSON.stringify({ ok: true, verified: false, reason: decision }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+        }
+      }
+    }
 
     if (orderSource === "orders" && order) {
       // Guard: already paid
