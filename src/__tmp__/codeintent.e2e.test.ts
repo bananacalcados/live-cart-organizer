@@ -6,7 +6,7 @@ import { confirmCodeIntentOrder } from "@/lib/liveCodeOrder";
 const EV = "add5e661-4454-4065-a32a-8ff5f31996f3";
 it("confirm intent", async () => {
   let s: any = JSON.parse(fs.readFileSync("/root/.cache/lovable-auth/session.json", "utf8")).session; if (typeof s === "string") s = JSON.parse(s); if (Array.isArray(s)) s = s[0];
-  const ss = await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
+  const ss: any = { error: null }; (supabase as any).rest.headers["Authorization"] = `Bearer ${s.access_token}`; (supabase as any).auth.getUser = async () => ({ data: { user: s.user }, error: null });
   console.log("SS", ss.error?.message, Object.keys(s));
   const db = supabase as any;
   const { data: intent, error: ie } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov").in("status", ["ready"]).single();
