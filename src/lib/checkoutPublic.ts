@@ -39,8 +39,9 @@ export async function cpGetAttemptStatus(transactionId: string) {
   return call<{ status: string | null; error_message: string | null }>("get_attempt_status", { transactionId });
 }
 
-export async function cpLookupCustomerCpf(cpf: string) {
-  return call<{ customer: any | null }>("lookup_customer_cpf", { cpf });
+export async function cpLookupCustomerCpf(cpf: string, phone?: string) {
+  // O servidor só devolve dados quando CPF e telefone são da mesma cliente.
+  return call<{ customer: any | null }>("lookup_customer_cpf", { cpf, phone: phone || "" });
 }
 
 export async function cpCompleteSale(saleId: string, customer: Record<string, unknown>) {

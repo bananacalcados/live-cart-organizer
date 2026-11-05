@@ -163,7 +163,7 @@ export default function CustomerRegister() {
     setCpfFound(false);
     try {
       // Search in pos_customers by CPF (server-side, service_role)
-      const lookupRes = await cpLookupCustomerCpf(digits);
+      const lookupRes = await cpLookupCustomerCpf(digits, whatsapp);
       const c = lookupRes?.customer;
 
       if (c) {
