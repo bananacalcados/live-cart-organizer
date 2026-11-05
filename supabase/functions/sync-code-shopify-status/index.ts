@@ -57,16 +57,22 @@ Deno.serve(withAccessLog("sync-code-shopify-status", async (req) => {
   }
   const masterIds = [...new Set(codes.map((c) => c.master_id))];
   const variantsByKey = new Map<string, string[]>();
-  for (let i = 0; i < masterIds.length; i += 200) {
-    const { data, error } = await db.from("product_variants").select("master_id,color,shopify_variant_id")
-      .in("master_id", masterIds.slice(i, i + 200)).eq("is_active", true).not("shopify_variant_id", "is", null).limit(10000);
+  // Paginate: the API caps each response at 1000 rows, so a single call silently dropped variants.
+  for (let i = 0; i < masterIds.length; i += 50) {
+   for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("product_variants").select("id,master_id,color,shopify_variant_id")
+      .in("master_id", masterIds.slice(i, i + 50)).eq("is_active", true).not("shopify_variant_id", "is", null)
+      .order("id").range(from, from + 999);
     if (error) return reply({ error: error.message }, 500);
-    for (const v of data || []) {
+    const rows = data || [];
+    for (const v of rows) {
       const k = `${v.master_id}|${colorKey(v.color)}`;
       const arr = variantsByKey.get(k) || [];
       arr.push(numId(v.shopify_variant_id));
       variantsByKey.set(k, arr);
     }
+    if (rows.length < 1000) break;
+   }
   }
 
   // 2) Produtos na Shopify, 25 por consulta.
