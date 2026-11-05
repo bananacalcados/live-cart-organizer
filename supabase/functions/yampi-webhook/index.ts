@@ -38,6 +38,18 @@ serve(withAccessLog("yampi-webhook", async (req) => {
     const eventType = body.event || body.type;
     console.log("Event type:", eventType);
 
+    // Fase 3 de segurança: Yampi sem nenhum evento registrado. O corpo do aviso
+    // NUNCA marca pedido como pago — fica só registrado para conferência manual.
+    const xf = req.headers.get("x-forwarded-for");
+    await supabase.from("security_events").insert({
+      event: "webhook_unverified",
+      ip: xf ? xf.split(",")[0].trim() : null,
+      details: { provider: "yampi", event_type: eventType ?? null, order_id: body?.data?.metadata?.order_id ?? body?.metadata?.order_id ?? null, reason: "yampi_disabled_no_recent_use" },
+    }).then(() => {}, () => {});
+    return new Response(JSON.stringify({ ok: true, verified: false, disabled: true }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+
     // Handle different event types
     // Common Yampi events: order_approved, order_paid, order_cancelled, order_refunded
     if (
