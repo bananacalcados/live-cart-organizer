@@ -342,7 +342,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
             {allWarnings(r).length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {allWarnings(r).map((w, i) => (
-                  <span key={i} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", /não disponível na shopify/i.test(w) ? "bg-destructive/20 text-destructive" : "bg-amber-400/25 text-amber-800 dark:text-amber-200")} data-x= px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200">{w}</span>
+                  <span key={i} className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", /não disponível na shopify/i.test(w) ? "bg-destructive/20 text-destructive" : "bg-amber-400/25 text-amber-800 dark:text-amber-200")}>{w}</span>
                 ))}
               </div>
             )}
