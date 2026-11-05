@@ -53,12 +53,8 @@ export default function Login() {
         void supabase.functions.invoke("security-auth-event", { body: { event: "login_failed", email, reason: error.message } }).catch(() => {});
         toast({
           title: "Erro ao entrar",
-          description:
-            error.message === "Invalid login credentials"
-              ? "Email ou senha incorretos."
-              : error.message === "Email not confirmed"
-                ? "Verifique seu email antes de entrar."
-                : error.message,
+          // Mesma mensagem para qualquer falha: não revela se o e-mail existe.
+          description: "Email ou senha incorretos.",
           variant: "destructive",
         });
         return;
