@@ -24,9 +24,8 @@ DO $$
 DECLARE n text;
 BEGIN
   FOREACH n IN ARRAY ARRAY['public.analyze_catalog_sync_from_pos','public.apply_event_prize_to_order','public.apply_variant_normalization','public.backfill_estoque_from_pos','public.backfill_phones_from_pos_customers','public.delete_pos_divergent_parent','public.execute_merge_unified_duplicates','public.inventory_claim_correction_batch','public.merge_duplicate_zoppy_customers','public.merge_master_duplicates','public.merge_product_color','public.merge_product_size','public.merge_selected_masters','public.merge_tiny_online_duplicates','public.merge_unified_zoppy_duplicates','public.resolve_customer_unified','public.resolve_payment_fee','public.revert_merge_batch','public.simulate_merge_unified_duplicates','public.sync_lead_pix_data','public.unified_inventory_apply_nfe_entry','public.apply_split_payment'] LOOP
-    PERFORM 1;
-    EXECUTE (SELECT string_agg(format('REVOKE EXECUTE ON FUNCTION %s FROM authenticated', p.oid::regprocedure), '; ')
-             FROM pg_proc p WHERE p.oid::regprocedure::text LIKE n || '(%' OR p.proname = split_part(n,'.',2) AND p.pronamespace = 'public'::regnamespace);
+    EXECUTE coalesce((SELECT string_agg(format('REVOKE EXECUTE ON FUNCTION %s FROM authenticated', p.oid::regprocedure), '; ')
+             FROM pg_proc p WHERE p.proname = split_part(n,'.',2) AND p.pronamespace = 'public'::regnamespace), 'SELECT 1');
   END LOOP;
 END $$;
 
@@ -35,8 +34,8 @@ DO $$
 DECLARE n text;
 BEGIN
   FOREACH n IN ARRAY ARRAY['dispatch_link_click','generate_ean13_internal','get_checkout_order','get_checkout_registration','get_customer_checkout_prefill','get_event_checkout_shipping','get_event_installment_config','get_latest_registration_by_customer','get_order_status','get_registration_by_cpf','get_sale_installment_override','has_module_access','has_role','increment_campaign_leads_captured','next_product_sku_root','normalize_address_key','overlay_pull','overlay_shown_products','upsert_landing_customer'] LOOP
-    EXECUTE (SELECT string_agg(format('GRANT EXECUTE ON FUNCTION %s TO anon', p.oid::regprocedure), '; ')
-             FROM pg_proc p WHERE p.proname = n AND p.pronamespace = 'public'::regnamespace);
+    EXECUTE coalesce((SELECT string_agg(format('GRANT EXECUTE ON FUNCTION %s TO anon', p.oid::regprocedure), '; ')
+             FROM pg_proc p WHERE p.proname = n AND p.pronamespace = 'public'::regnamespace), 'SELECT 1');
   END LOOP;
 END $$;
 
