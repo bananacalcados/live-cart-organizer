@@ -827,6 +827,13 @@
       "when": 1793849772309,
       "tag": "0117_security_phase1a_table_lockdown",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1793849812809,
+      "tag": "0118_security_phase1b_access_logs",
+      "breakpoints": true
     }
   ]
 }

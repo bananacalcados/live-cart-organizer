@@ -110,6 +110,66 @@ export type Database = {
         }
         Relationships: []
       }
+      access_log: {
+        Row: {
+          blocked: boolean
+          created_at: string
+          duration_ms: number | null
+          function_name: string
+          http_status: number | null
+          id: string
+          ip: string | null
+          ip_chain: string | null
+          method: string | null
+          origin: string | null
+          path: string | null
+          reason: string | null
+          referer: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          blocked?: boolean
+          created_at?: string
+          duration_ms?: number | null
+          function_name: string
+          http_status?: number | null
+          id?: string
+          ip?: string | null
+          ip_chain?: string | null
+          method?: string | null
+          origin?: string | null
+          path?: string | null
+          reason?: string | null
+          referer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          blocked?: boolean
+          created_at?: string
+          duration_ms?: number | null
+          function_name?: string
+          http_status?: number | null
+          id?: string
+          ip?: string | null
+          ip_chain?: string | null
+          method?: string | null
+          origin?: string | null
+          path?: string | null
+          reason?: string | null
+          referer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       accountant_recipients: {
         Row: {
           ativo: boolean
@@ -586,6 +646,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      admin_access_log: {
+        Row: {
+          created_at: string
+          email: string | null
+          event: string
+          id: string
+          ip: string | null
+          module: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          event: string
+          id?: string
+          ip?: string | null
+          module?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          event?: string
+          id?: string
+          ip?: string | null
+          module?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       agent_calendar: {
         Row: {
@@ -22244,6 +22337,33 @@ export type Database = {
         }
         Relationships: []
       }
+      security_events: {
+        Row: {
+          created_at: string
+          details: Json
+          event: string
+          id: string
+          ip: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          event: string
+          id?: string
+          ip?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          event?: string
+          id?: string
+          ip?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       selfservice_advertising_consents: {
         Row: {
           advertising: boolean
@@ -29097,6 +29217,17 @@ export type Database = {
       recompute_all_group_responsible: { Args: never; Returns: number }
       recompute_group_responsible: { Args: { p_base: string }; Returns: string }
       recompute_needs_review: { Args: never; Returns: number }
+      record_admin_access: {
+        Args: {
+          p_email: string
+          p_event: string
+          p_ip: string
+          p_module: string
+          p_user_agent: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       record_sale_freight_quote: {
         Args: {
           p_context: Json
