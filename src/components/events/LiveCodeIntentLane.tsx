@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { Instagram, Plus, Hash, X } from "lucide-react";
+import { Instagram, Plus, Hash, X, Check, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,9 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { toast } from "sonner";
 import type { DbOrderProduct } from "@/types/database";
 import { fetchProducts, getVariantImage } from "@/lib/shopify";
+import type { DbOrder } from "@/types/database";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
+import { computeLiveConditions, conditionsSummary, confirmCodeIntentOrder, mergeProducts, type LiveConditions } from "@/lib/liveCodeOrder";
 
 const db = supabase as any;
 const brl = (v?: number | null) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -22,10 +25,11 @@ export interface CodeIntentItem {
 export interface CodeIntent {
   id: string; username: string; items: CodeIntentItem[]; phone_last4: string | null; phone: string | null;
   status: string; warnings: string[] | null; last_comment_text: string | null; updated_at: string;
+  kind: string | null; target_order_id: string | null;
 }
 interface CatalogRow { shopify_product_id: string; title: string; image_url: string | null; offer_price: number | null; original_price?: number | null; variants: any[] }
 
-const COLS = "id,username,items,phone_last4,phone,status,warnings,last_comment_text,updated_at";
+const COLS = "id,username,items,phone_last4,phone,status,warnings,last_comment_text,updated_at,kind,target_order_id";
 const numId = (v?: string | null) => String(v || "").split("/").pop() || "";
 
 async function currentUserName(): Promise<string> {
@@ -48,6 +52,7 @@ export function matchCatalogItem(item: CodeIntentItem, catalog: CatalogRow[]): D
         title: p.title,
         variant: v.title || [v.color, v.size].filter(Boolean).join(" / "),
         // Oferta da live vale quando menor que o preço original.
+        basePrice: Number(p.original_price ?? item.price ?? v.price ?? 0) || undefined,
         price: p.offer_price != null && p.original_price != null && Number(p.offer_price) < Number(p.original_price)
           ? Number(p.offer_price)
           : Number(item.price ?? p.offer_price ?? v.price ?? 0),
@@ -57,6 +62,47 @@ export function matchCatalogItem(item: CodeIntentItem, catalog: CatalogRow[]): D
     }
   }
   return null;
+}
+
+async function lookupShopifyHits(intent: CodeIntent, catalog: CatalogRow[]): Promise<Record<string, DbOrderProduct>> {
+  const pending = (intent.items || []).filter((it) => it.shopify_variant_id && it.master_id && !matchCatalogItem(it, catalog));
+  const hits: Record<string, DbOrderProduct> = {};
+  if (pending.length === 0) return hits;
+  try {
+    const masterIds = [...new Set(pending.map((it) => it.master_id as string))];
+    const { data: masters } = await db.from("products_master").select("id, shopify_product_id").in("id", masterIds);
+    const pidByMaster = new Map<string, string>((masters || []).filter((m: any) => m.shopify_product_id).map((m: any) => [m.id, numId(m.shopify_product_id)]));
+    const pids = [...new Set([...pidByMaster.values()])];
+    const prods = pids.length ? await fetchProducts(Math.min(pids.length, 50), pids.map((id) => `id:${id}`).join(" OR ")) : [];
+    for (const it of pending) {
+      const pid = pidByMaster.get(it.master_id as string);
+      const product = prods.find((p) => numId(p.node.id) === pid);
+      const variant = product?.node.variants.edges.find((e) => numId(e.node.id) === numId(it.shopify_variant_id))?.node;
+      if (!product || !variant) continue;
+      const price = parseFloat(variant.price.amount);
+      hits[numId(it.shopify_variant_id)] = {
+        id: `${product.node.id}-${variant.id}`,
+        shopifyId: variant.id,
+        sku: variant.sku || undefined,
+        title: product.node.title,
+        variant: variant.title !== "Default Title" ? variant.title : "",
+        price: Number(it.price ?? price),
+        quantity: 1,
+        image: getVariantImage(product, variant),
+      };
+    }
+  } catch (e) { console.error("code-intent shopify lookup", e); }
+  return hits;
+}
+
+function resolveIntent(intent: CodeIntent, catalog: CatalogRow[], hits: Record<string, DbOrderProduct> | null) {
+  const products: DbOrderProduct[] = []; const missing: CodeIntentItem[] = [];
+  for (const it of intent.items || []) {
+    const m = (it.shopify_variant_id || it.sku ? matchCatalogItem(it, catalog) : null)
+      || (it.shopify_variant_id ? hits?.[numId(it.shopify_variant_id)] : null) || null;
+    if (m) products.push(m); else missing.push(it);
+  }
+  return { products, missing };
 }
 
 export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
@@ -105,52 +151,105 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
   // b) itens não achados no catálogo: products_master.shopify_product_id → Shopify, variação pelo shopify_variant_id.
   useEffect(() => {
     if (!active || !catalog) { setShopifyHits(null); return; }
-    const pending = (active.items || []).filter((it) => it.shopify_variant_id && it.master_id && !matchCatalogItem(it, catalog));
-    if (pending.length === 0) { setShopifyHits({}); return; }
     let stop = false;
     setShopifyHits(null);
-    (async () => {
-      const hits: Record<string, DbOrderProduct> = {};
-      try {
-        const masterIds = [...new Set(pending.map((it) => it.master_id as string))];
-        const { data: masters } = await db.from("products_master").select("id, shopify_product_id").in("id", masterIds);
-        const pidByMaster = new Map<string, string>((masters || []).filter((m: any) => m.shopify_product_id).map((m: any) => [m.id, numId(m.shopify_product_id)]));
-        const pids = [...new Set([...pidByMaster.values()])];
-        const prods = pids.length ? await fetchProducts(Math.min(pids.length, 50), pids.map((id) => `id:${id}`).join(" OR ")) : [];
-        for (const it of pending) {
-          const pid = pidByMaster.get(it.master_id as string);
-          const product = prods.find((p) => numId(p.node.id) === pid);
-          const variant = product?.node.variants.edges.find((e) => numId(e.node.id) === numId(it.shopify_variant_id))?.node;
-          if (!product || !variant) continue;
-          const price = parseFloat(variant.price.amount);
-          hits[numId(it.shopify_variant_id)] = {
-            id: `${product.node.id}-${variant.id}`,
-            shopifyId: variant.id,
-            sku: variant.sku || undefined,
-            title: product.node.title,
-            variant: variant.title !== "Default Title" ? variant.title : "",
-            price: Number(it.price ?? price),
-            quantity: 1,
-            image: getVariantImage(product, variant),
-          };
-        }
-      } catch (e) { console.error("code-intent shopify lookup", e); }
-      if (!stop) setShopifyHits(hits);
-    })();
+    lookupShopifyHits(active, catalog).then((h) => { if (!stop) setShopifyHits(h); });
     return () => { stop = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id, active?.updated_at, catalog]);
 
   const resolved = useMemo(() => {
     if (!active) return { products: [] as DbOrderProduct[], missing: [] as CodeIntentItem[] };
-    const products: DbOrderProduct[] = []; const missing: CodeIntentItem[] = [];
-    for (const it of active.items || []) {
-      const m = (it.shopify_variant_id || it.sku ? matchCatalogItem(it, catalog || []) : null)
-        || (it.shopify_variant_id ? shopifyHits?.[numId(it.shopify_variant_id)] : null) || null;
-      if (m) products.push(m); else missing.push(it);
-    }
-    return { products, missing };
+    return resolveIntent(active, catalog || [], shopifyHits);
   }, [active, catalog, shopifyHits]);
+
+  // Condições (compute) por card: 1 chamada por card, refeita só quando o card muda.
+  const [conds, setConds] = useState<Record<string, { key: string; cond: LiveConditions | null }>>({});
+  const [masterPid, setMasterPid] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const need = [...new Set(rows.flatMap((r) => (r.items || []).map((i) => i.master_id).filter(Boolean) as string[]))].filter((m) => !(m in masterPid));
+    if (need.length === 0) return;
+    db.from("products_master").select("id, shopify_product_id").in("id", need.slice(0, 200)).then(({ data }: any) => {
+      setMasterPid((prev) => {
+        const next = { ...prev };
+        need.forEach((m) => { next[m] = ""; });
+        (data || []).forEach((m: any) => { next[m.id] = numId(m.shopify_product_id); });
+        return next;
+      });
+    });
+  }, [rows, masterPid]);
+  useEffect(() => {
+    let stop = false;
+    for (const r of rows) {
+      const key = `${r.updated_at}|${(r.items || []).map((i) => masterPid[i.master_id || ""] ?? "?").join(",")}`;
+      if (conds[r.id]?.key === key) continue;
+      if ((r.items || []).some((i) => i.master_id && masterPid[i.master_id] === undefined)) continue;
+      const fake: DbOrderProduct[] = (r.items || []).map((i, idx) => ({
+        id: `${masterPid[i.master_id || ""] || "x"}-${i.shopify_variant_id || idx}`, shopifyId: String(i.shopify_variant_id || ""),
+        title: i.product_name || i.code, variant: "", price: Number(i.price || 0), quantity: 1,
+      }));
+      setConds((c) => ({ ...c, [r.id]: { key, cond: c[r.id]?.cond ?? null } }));
+      computeLiveConditions(eventId, r.username, r.phone, fake)
+        .then(({ cond }) => { if (!stop) setConds((c) => ({ ...c, [r.id]: { key, cond } })); })
+        .catch((e) => console.error("compute conditions", e));
+    }
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, masterPid, eventId]);
+
+  // Modal: condições sobre os itens resolvidos (+ carrinho existente quando é ADD).
+  const [modalCond, setModalCond] = useState<{ cond: LiveConditions; products: DbOrderProduct[]; target: DbOrder | null } | null>(null);
+  useEffect(() => {
+    setModalCond(null);
+    if (!active || !orderOpen || !catalog || !shopifyHits) return;
+    let stop = false;
+    (async () => {
+      try {
+        const pre = await computeLiveConditions(eventId, active.username, active.phone, resolved.products);
+        const targetId = active.target_order_id || pre.cond.open_order_id;
+        let target: DbOrder | null = null;
+        if (targetId) {
+          const store = useDbOrderStore.getState();
+          target = store.orders.find((o) => o.id === targetId) || null;
+          if (!target) { await store.fetchOrdersByEvent(eventId); target = useDbOrderStore.getState().orders.find((o) => o.id === targetId) || null; }
+        }
+        if (target) {
+          const full = await computeLiveConditions(eventId, active.username, active.phone, mergeProducts(target.products, resolved.products));
+          if (!stop) setModalCond({ ...full, target });
+        } else if (!stop) setModalCond({ ...pre, target: null });
+      } catch (e) {
+        console.error("compute modal", e);
+        if (!stop) setModalCond({ cond: null as any, products: resolved.products, target: null });
+      }
+    })();
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, orderOpen, catalog, shopifyHits]);
+
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirmDirect = async (r: CodeIntent) => {
+    if (confirming) return;
+    setConfirming(r.id);
+    try {
+      let cat = catalog;
+      if (!cat) {
+        const { data } = await db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants").eq("event_id", eventId).limit(200);
+        cat = (data || []) as CatalogRow[]; setCatalog(cat);
+      }
+      const hits = await lookupShopifyHits(r, cat);
+      const { products, missing } = resolveIntent(r, cat, hits);
+      if (missing.length > 0 || products.length === 0) {
+        toast.warning("Algum item não foi localizado — confira no carrinho.");
+        setOpenId(r.id); setOrderOpen(true);
+        return;
+      }
+      const orderId = await confirmCodeIntentOrder(eventId, r, products, await currentUserName());
+      toast.success(r.kind === "add" ? `Itens adicionados ao carrinho #${orderId.slice(-4)}` : "Pedido criado");
+      load();
+    } catch (e: any) {
+      toast.error(`Não foi possível confirmar: ${e?.message || e}`);
+    } finally { setConfirming(null); }
+  };
 
   const setSize = async (intentId: string, index: number) => {
     const key = `${intentId}:${index}`;
@@ -220,6 +319,24 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
               </div>
             ))}
             <span className="text-[11px] text-muted-foreground">📱 {phoneLabel(r)}</span>
+            {r.kind === "add" && (
+              <span className="rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-fuchsia-700 dark:text-fuchsia-300">
+                Novo ADD → carrinho #{(r.target_order_id || conds[r.id]?.cond?.open_order_id || "????").slice(-4)}
+              </span>
+            )}
+            {conds[r.id]?.cond && (() => { const sm = conditionsSummary(conds[r.id]!.cond!); return (
+              <div className="text-[10px] leading-tight">
+                <b>{sm.subtotal}</b> · {sm.shipping}{sm.cashback ? <> · <span className={conds[r.id]!.cond!.cashback_blocked ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>{sm.cashback}</span></> : null}
+              </div>
+            ); })()}
+            <Button
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              disabled={r.status !== "ready" || confirming === r.id}
+              onClick={(e) => { e.stopPropagation(); confirmDirect(r); }}
+            >
+              {confirming === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Confirmar
+            </Button>
             {allWarnings(r).length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {allWarnings(r).map((w, i) => (
@@ -268,17 +385,22 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
                 )}
                 <div className="flex gap-2 border-t p-3">
                   <Button className="flex-1 gap-1.5" onClick={() => setOrderOpen((v) => !v)}>
-                    <Plus className="h-4 w-4" /> {orderOpen ? "Fechar carrinho" : "Criar carrinho"}
+                    <Plus className="h-4 w-4" /> {orderOpen ? "Fechar carrinho" : (active.kind === "add" || active.target_order_id) ? "Adicionar ao carrinho" : "Criar carrinho"}
                   </Button>
                   <Button variant="outline" className="gap-1.5" onClick={() => resolve(active.id, "dismiss")}>
                     <X className="h-4 w-4" /> Descartar
                   </Button>
                 </div>
               </div>
-              {orderOpen && catalog && shopifyHits && (
+              {orderOpen && catalog && shopifyHits && !modalCond && (
+                <div className="flex flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              )}
+              {orderOpen && catalog && shopifyHits && modalCond && (
                 <div className="min-w-0 flex-1 overflow-y-auto">
                   <OrderDialogDb
-                    key={active.id}
+                    key={`${active.id}-${modalCond.target?.id || "new"}`}
+                    editingOrder={modalCond.target}
+                    liveConditions={modalCond.cond}
                     embedded
                     open
                     onOpenChange={(v) => { if (!v) setOrderOpen(false); }}
@@ -286,7 +408,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
                     prefillInstagram={active.username}
                     prefillWhatsapp={active.phone || undefined}
                     prefillPhoneLast4={active.phone ? undefined : active.phone_last4 || undefined}
-                    prefillProducts={resolved.products}
+                    prefillProducts={modalCond.products}
                     onCreated={(orderId) => resolve(active.id, "confirm", orderId)}
                   />
                 </div>
