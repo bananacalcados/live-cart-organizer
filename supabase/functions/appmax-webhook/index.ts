@@ -5,7 +5,7 @@ import { closeAppmaxRefundsForOrder } from "../_shared/refund-gateways/appmax-cl
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
-import { type Decision, alreadyApplied, appmaxLookup, exactAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { type Decision, alreadyApplied, appmaxLookup, exactAmountOk, posAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -361,7 +361,7 @@ serve(withAccessLog("appmax-webhook", async (req) => {
         if (!ok) { decision = "reject_amount"; reason = `phone_fallback api=${api.amount} esperado=${expected}`; }
       } else if (source === "orders") {
         if (!exp || !orderAmountOk(api.amount || 0, exp)) { decision = "reject_amount"; reason = `api=${api.amount} esperado>=${exp?.min}`; }
-      } else if (!exactAmountOk(api.amount || 0, saleTotal || 0)) { decision = "reject_amount"; reason = `api=${api.amount} total=${saleTotal}`; }
+      } else if (!posAmountOk(api.amount || 0, saleTotal || 0)) { decision = "reject_amount"; reason = `api=${api.amount} total=${saleTotal}`; }
       if (strict && decision === "confirm" && await alreadyApplied(supabase, "appmax", String(transactionId))) {
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "duplicate_tx" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }

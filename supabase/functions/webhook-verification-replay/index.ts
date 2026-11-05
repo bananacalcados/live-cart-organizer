@@ -8,7 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { getMpAccountByPaymentId } from "../_shared/mp-account.ts";
-import { appmaxLookup, exactAmountOk, expectedOrderAmounts, orderAmountOk, pagarmeLookup } from "../_shared/webhook-verification.ts";
+import { appmaxLookup, posAmountOk, expectedOrderAmounts, orderAmountOk, pagarmeLookup } from "../_shared/webhook-verification.ts";
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -83,7 +83,9 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
     } catch (e: any) { err = e?.message || "erro"; }
 
     let decision = "confirm", reason = "", expected: number | null = null;
-    if (!verified) { decision = "reject_unverified"; reason = err || `api_status=${apiStatus}`; }
+    const laterRefund = /estorn|refund|charged_back|chargeback/i.test(String(apiStatus || ""));
+    if (laterRefund) { decision = "skip"; reason = `estornado_depois (${apiStatus})`; }
+    else if (!verified) { decision = "reject_unverified"; reason = err || `api_status=${apiStatus}`; }
     else if (ord) {
       const exp = await expectedOrderAmounts(supabase, ord.id);
       expected = exp?.min ?? null;
@@ -92,8 +94,8 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
       else if (!idOk) { decision = "reject_unverified"; reason = "id_ref_mismatch"; }
     } else if (sale) {
       expected = Number(sale.total || 0);
-      let ok = exactAmountOk(apiAmount || 0, expected);
-      if (!ok && r.amount != null) ok = exactAmountOk(apiAmount || 0, Number(r.amount));
+      let ok = posAmountOk(apiAmount || 0, expected);
+      if (!ok && r.amount != null) ok = posAmountOk(apiAmount || 0, Number(r.amount));
       if (!ok) { decision = "reject_amount"; reason = `api=${apiAmount} total=${expected} tentativa=${r.amount}`; }
     } else { decision = "reject_unverified"; reason = "registro_nao_encontrado"; }
 

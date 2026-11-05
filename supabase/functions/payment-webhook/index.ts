@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
-import { type Decision, exactAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { type Decision, exactAmountOk, posAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -572,13 +572,13 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
       // Regra nova PDV: valor exato (±R$0,05) com o total da venda ou da tentativa.
       const apiAmt = Number(mpPayment.transaction_amount || 0);
-      let posOk = exactAmountOk(apiAmt, Number(sale.total || 0));
+      let posOk = posAmountOk(apiAmt, Number(sale.total || 0));
       let attemptAmt: number | null = null;
       if (!posOk) {
         const { data: att } = await supabase.from("pos_checkout_attempts").select("amount")
           .eq("sale_id", sale.id).eq("transaction_id", mpIdStr).not("amount", "is", null).limit(1);
         attemptAmt = att?.[0]?.amount != null ? Number(att[0].amount) : null;
-        if (attemptAmt != null) posOk = exactAmountOk(apiAmt, attemptAmt);
+        if (attemptAmt != null) posOk = posAmountOk(apiAmt, attemptAmt);
       }
       await logVerification(supabase, {
         provider: "mercadopago", event_type: "pos_sale", transaction_id: mpIdStr, sale_id: sale.id, verified: true,

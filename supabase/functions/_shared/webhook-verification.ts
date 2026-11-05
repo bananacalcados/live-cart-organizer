@@ -193,3 +193,8 @@ export async function appmaxLookup(supabase: any, orderId: string, localTotal: n
   }
   return { found: false, paid: false, status: null, amount: null, error: look.kind === "retry" ? look.error : look.kind };
 }
+
+/** PDV: nunca abaixo do total da venda (−R$0,05); acima é aceito (juros do cartão repassados). */
+export function posAmountOk(apiAmount: number, total: number): boolean {
+  return apiAmount > 0 && total > 0 && apiAmount >= total - EXACT_TOLERANCE;
+}

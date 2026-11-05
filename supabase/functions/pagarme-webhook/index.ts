@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
-import { type Decision, alreadyApplied, exactAmountOk, expectedOrderAmounts, flagReview, hmacHex, isStrictMode, logVerification, orderAmountOk, pagarmeLookup, requestIp, securityEvent, warnMissingSecretOncePerDay } from "../_shared/webhook-verification.ts";
+import { type Decision, alreadyApplied, posAmountOk, expectedOrderAmounts, flagReview, hmacHex, isStrictMode, logVerification, orderAmountOk, pagarmeLookup, requestIp, securityEvent, warnMissingSecretOncePerDay } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -165,7 +165,7 @@ serve(withAccessLog("pagarme-webhook", async (req) => {
       } else {
         const { data: s } = await supabase.from("pos_sales").select("total").eq("id", sale.id).maybeSingle();
         expected = Number(s?.total || 0);
-        if (!exactAmountOk(api.amount || 0, expected)) { decision = "reject_amount"; reason = `api=${api.amount} total=${expected}`; }
+        if (!posAmountOk(api.amount || 0, expected)) { decision = "reject_amount"; reason = `api=${api.amount} total=${expected}`; }
       }
       if (strict && decision === "confirm" && await alreadyApplied(supabase, "pagarme", String(transactionId))) {
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "duplicate_tx" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
