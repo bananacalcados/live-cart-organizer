@@ -179,6 +179,7 @@ export default function Login() {
               {loading ? "Aguarde..." : "Entrar"}
             </Button>
           </form>
+          <button type="button" onClick={handleForgot} className="w-full text-center text-sm text-muted-foreground underline">Esqueci minha senha</button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
