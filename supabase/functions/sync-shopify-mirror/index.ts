@@ -7,8 +7,11 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 
 const PUBLICATION = "gid://shopify/Publication/195361112121";
-const reply = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+const reply = (b: unknown, status = 200) => {
+  if (status >= 400) console.error("sync-shopify-mirror", status, JSON.stringify(b));
+  else console.log("sync-shopify-mirror ok", JSON.stringify(b));
+  return new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+};
 const numId = (v: unknown) => String(v ?? "").split("/").pop()?.replace(/\D/g, "") || "";
 
 const Q = `query($after:String,$pub:ID!){productVariants(first:250,after:$after){pageInfo{hasNextPage endCursor}
