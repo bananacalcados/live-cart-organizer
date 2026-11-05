@@ -1232,7 +1232,9 @@ Deno.serve(withAccessLog("live-member-area", async (req) => {
       }
 
       const known = !!name || (await isKnownCustomer(ph));
-      return json({ ok: true, known, name });
+      // Só o primeiro nome: confirma "é você?" sem expor nome completo/@ a quem testa telefones.
+      const first = name ? String(name).replace(/^@/, "").trim().split(/\s+/)[0] : null;
+      return json({ ok: true, known, name: first });
     }
 
     /**
