@@ -50,6 +50,7 @@ export default function Login() {
         25000
       );
       if (error) {
+        void supabase.functions.invoke("security-auth-event", { body: { event: "login_failed", email, reason: error.message } }).catch(() => {});
         toast({
           title: "Erro ao entrar",
           description:
@@ -62,6 +63,7 @@ export default function Login() {
         });
         return;
       }
+      void supabase.functions.invoke("security-auth-event", { body: { event: "login_ok" } }).catch(() => {});
       navigate("/", { replace: true });
     } catch (err: any) {
       const isConnectionError =
@@ -79,6 +81,17 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgot = async () => {
+    if (!email.trim()) {
+      toast({ title: "Digite seu e-mail", description: "Preencha o e-mail acima e clique de novo." });
+      return;
+    }
+    await supabase.functions.invoke("auth-password-reset", {
+      body: { email, redirect_to: `${window.location.origin}/reset-password` },
+    }).catch(() => {});
+    toast({ title: "Pedido recebido", description: "Se o e-mail existir, enviaremos instruções para redefinir a senha." });
   };
 
   const handleGoogleLogin = async () => {
