@@ -5,6 +5,7 @@ import { closeAppmaxRefundsForOrder } from "../_shared/refund-gateways/appmax-cl
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { logCheckoutFailure } from "../_shared/checkout-failure-log.ts";
+import { type Decision, alreadyApplied, appmaxLookup, exactAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -340,6 +341,47 @@ serve(withAccessLog("appmax-webhook", async (req) => {
     const { source, record } = found;
     const ourOrderId = record.id;
     let updated = false;
+
+    // ── Verificação independente (Fase 3) ──
+    const alreadyPaid = source === "orders" ? record.is_paid === true : (record.status === "paid" || record.status === "completed");
+    if (isPaid && !alreadyPaid) {
+      const ip = requestIp(req);
+      const strict = await isStrictMode(supabase);
+      let decision: Decision = "confirm";
+      let reason = "";
+      let expected: number | null = null;
+      let exp: any = null;
+      let saleTotal: number | null = null;
+      if (source === "orders") { exp = await expectedOrderAmounts(supabase, ourOrderId); expected = exp?.min ?? null; }
+      else { const { data: s } = await supabase.from("pos_sales").select("total").eq("id", ourOrderId).maybeSingle(); saleTotal = Number(s?.total || 0); expected = saleTotal; }
+      const api = appmaxOrderId ? await appmaxLookup(supabase, String(appmaxOrderId), exp?.base ?? saleTotal) : { found: false, paid: false, status: null, amount: null, error: "no_id" };
+      if (!api.found || !api.paid) { decision = "reject_unverified"; reason = api.error || `api_status=${api.status}`; }
+      else if (found.strategy === "phone_amount") {
+        const ok = source === "orders" ? (exp && (exactAmountOk(api.amount || 0, exp.base) || exactAmountOk(api.amount || 0, exp.min))) : exactAmountOk(api.amount || 0, saleTotal || 0);
+        if (!ok) { decision = "reject_amount"; reason = `phone_fallback api=${api.amount} esperado=${expected}`; }
+      } else if (source === "orders") {
+        if (!exp || !orderAmountOk(api.amount || 0, exp)) { decision = "reject_amount"; reason = `api=${api.amount} esperado>=${exp?.min}`; }
+      } else if (!exactAmountOk(api.amount || 0, saleTotal || 0)) { decision = "reject_amount"; reason = `api=${api.amount} total=${saleTotal}`; }
+      if (strict && decision === "confirm" && await alreadyApplied(supabase, "appmax", String(transactionId))) {
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "duplicate_tx" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+      await logVerification(supabase, {
+        provider: "appmax", event_type: event, external_id: String(appmaxOrderId ?? ""), transaction_id: String(transactionId),
+        order_id: source === "orders" ? ourOrderId : null, sale_id: source === "pos_sales" ? ourOrderId : null,
+        verified: api.found && api.paid, api_status: api.status, api_amount: api.amount, expected_amount: expected,
+        old_decision: "confirm", new_decision: decision, reason, strict_mode: strict, applied: strict ? decision === "confirm" : true,
+        details: { ip, strategy: found.strategy, body_total: gatewayTotalSafe },
+      });
+      if (decision !== "confirm") {
+        await securityEvent(supabase, decision === "reject_amount" ? "amount_mismatch" : "webhook_unverified", ip, {
+          provider: "appmax", order_id: ourOrderId, appmax_order_id: appmaxOrderId, api_amount: api.amount, expected, strict,
+        });
+        if (strict) {
+          if (decision === "reject_amount") await flagReview(supabase, source as any, ourOrderId);
+          return new Response(JSON.stringify({ ok: true, verified: false, reason: decision }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+        }
+      }
+    }
 
     console.log(`AppMax: Found order ${ourOrderId} in ${source}`);
 
