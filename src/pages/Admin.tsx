@@ -25,6 +25,7 @@ import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccoun
 import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
+import { SecurityAccessPanel } from "@/components/admin/SecurityAccessPanel";
 import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
 import { RefundApprovalsPanel } from "@/components/admin/RefundApprovalsPanel";
 import { GatewaySplitStatsPanel } from "@/components/admin/GatewaySplitStatsPanel";
@@ -238,13 +239,16 @@ export default function Admin() {
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Pagamentos</TabsTrigger>
             <TabsTrigger value="fiscal" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Fiscal</TabsTrigger>
             <TabsTrigger value="acessos" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Acessos</TabsTrigger>
+            {isAdmin && <TabsTrigger value="admin-audit" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Admin</TabsTrigger>}
             {isAdmin && <TabsTrigger value="correios" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Correios (contrato)</TabsTrigger>}
           </TabsList>
           {isAdmin && <TabsContent value="correios" className="mt-4"><CorreiosSettingsPanel /></TabsContent>}
 
           <TabsContent value="acessos" className="mt-4">
+            {isAdmin && <SecurityAccessPanel />}
             <AccessLogPanel />
           </TabsContent>
+          {isAdmin && <TabsContent value="admin-audit" className="mt-4"><SecurityAccessPanel admin /></TabsContent>}
 
 
           <TabsContent value="users" className="space-y-6 mt-4">

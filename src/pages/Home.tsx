@@ -161,6 +161,8 @@ export default function Home() {
   }, [isReady, session, navigate, toast, reloadKey]);
 
   const handleLogout = async () => {
+    // Best effort, while the session is still valid; never delay staff logout.
+    void supabase.functions.invoke('security-auth-event', { body: { event: 'logout' } }).catch(() => {});
     await supabase.auth.signOut();
     toast({ title: "Logout realizado" });
     navigate("/login");
