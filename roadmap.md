@@ -1,14 +1,14 @@
 # Segurança — Fase 4
-- [ ] A1 shopify-create-order: só pedido pago, dados do banco, auth
-- [ ] A2 shopify-create-live-order: idem
-- [ ] A3 mercadopago-check-payment: referência E valor
-- [ ] A4 mercadopago-create-pix: desconto do servidor, override admin
-- [ ] A5 pagarme-create-charge: valor do body só comparado
-- [ ] A6 split-payment: total comparado, auth nas mutações
-- [ ] A7 shopify-webhook: HMAC obrigatório
-- [ ] A8 checkout-public: update_sale restrito, lookup CPF
-- [ ] A9 payment-confirmed-hook: só pedido pago
-- [ ] A10 yampi-create-payment-link / mp-create-boleto / austpay-charge-card
+- [x] A1 shopify-create-order: só pedido pago, dados do banco, auth
+- [x] A2 shopify-create-live-order: idem
+- [x] A3 mercadopago-check-payment: referência E valor
+- [x] A4 mercadopago-create-pix: desconto do servidor, override admin
+- [x] A5 pagarme-create-charge: valor do body só comparado
+- [x] A6 split-payment: total comparado, auth nas mutações
+- [x] A7 shopify-webhook: HMAC obrigatório
+- [x] A8 checkout-public: update_sale restrito, lookup CPF
+- [x] A9 payment-confirmed-hook: só pedido pago
+- [x] A10 yampi-create-payment-link / mp-create-boleto / austpay-charge-card
 - [ ] B11–B14 destrutivas e conta
 - [ ] C15–C17 disparos e mensageria
 - [ ] D18 gasto e IA
