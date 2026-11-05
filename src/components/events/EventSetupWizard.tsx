@@ -244,6 +244,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
             has_sizes: o.has_sizes,
             original_price: o.original_price != null ? String(o.original_price) : "",
             discount_price: o.discount_price != null ? String(o.discount_price) : "",
+            free_shipping: !!o.free_shipping,
+            promotion_id: o.promotion_id ?? null,
           })),
         );
       });
@@ -299,6 +301,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         has_sizes: o.has_sizes,
         original_price: toNum(o.original_price),
         discount_price: toNum(o.discount_price),
+        free_shipping: !!o.free_shipping,
+        promotion_id: o.promotion_id ?? null,
         position: i,
         is_active: true,
       }));
@@ -1017,6 +1021,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                 <EventCatalogManager eventId={event.id} />
               )}
               <CrossellConfigStep
+                eventId={event.id}
                 noCrossell={crossellNone}
                 offers={crossellOffers}
                 onChange={({ noCrossell, offers }) => {

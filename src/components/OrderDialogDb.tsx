@@ -46,6 +46,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
+import { conditionsSummary, type LiveConditions } from "@/lib/liveCodeOrder";
 import { useCartBuildingTracker } from "@/hooks/events/useCartBuildingPresence";
 
 /** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
@@ -76,9 +77,11 @@ interface OrderDialogDbProps {
   prefillProducts?: DbOrderProduct[];
   /** Chamado com o id do pedido criado (ou existente que recebeu os itens). */
   onCreated?: (orderId: string) => void;
+  /** Condições da live (compute_live_order_conditions) para pré-preencher frete/cashback/preços. */
+  liveConditions?: LiveConditions | null;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillPhoneLast4, prefillName, embedded = false, prefillProducts, onCreated }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId, prefillWhatsapp, prefillPhoneLast4, prefillName, embedded = false, prefillProducts, onCreated, liveConditions }: OrderDialogDbProps) {
 
   const { findCustomerByInstagram, findCustomerByWhatsApp, lookupCustomerByInstagram, lookupCustomerByWhatsApp, createOrUpdateCustomer, updateCustomer, banCustomer, unbanCustomer, customers, fetchCustomers, isLoading: customersLoading } = useCustomerStore();
 
@@ -247,10 +250,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setCartLink(editingOrder.cart_link || "");
       setNotes(editingOrder.notes || "");
       setStage(editingOrder.stage as OrderStage);
-      setLocalProducts([...editingOrder.products]);
+      // Aberto por card "Por código" (NOVO ADD): itens novos entram no carrinho existente.
+      setLocalProducts(prefillProducts?.length ? prefillProducts.map((p) => ({ ...p })) : [...editingOrder.products]);
       setDiscountType(editingOrder.discount_type || "");
       setDiscountValue(editingOrder.discount_value || 0);
-      setFreeShipping(editingOrder.free_shipping || false);
+      setFreeShipping(editingOrder.free_shipping || !!liveConditions?.free_shipping);
       setHasGift(editingOrder.has_gift || false);
       setGiftDescription((editingOrder as any).gift_description || "");
       setCouponCode(editingOrder.coupon_code || "");
@@ -263,6 +267,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     } else {
       resetForm();
       if (prefillProducts?.length) setLocalProducts(prefillProducts.map((p) => ({ ...p })));
+      if (liveConditions?.free_shipping) setFreeShipping(true);
       if (prefillName) setFullName(prefillName);
       if (prefillInstagram) {
         setInstagramHandle(prefillInstagram.replace(/^@/, ""));
@@ -626,6 +631,16 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     }
   }, [editingOrder, eventId]);
 
+  /** Frete/cashback vindos do compute da live (mesmo campo do botão "Abater cashback"). */
+  const liveCashbackPatch = (hasCashback: boolean, hasCustomShipping: boolean): Record<string, unknown> => {
+    if (!liveConditions) return {};
+    const out: Record<string, unknown> = {};
+    if (liveConditions.cashback_blocked) out.cashback_id = null;
+    else if (liveConditions.cashback && !hasCashback) out.cashback_id = liveConditions.cashback.id;
+    if (!hasCustomShipping) out.shipping_cost = (freeShipping || liveConditions.free_shipping) ? 0 : liveConditions.shipping_cost;
+    return out;
+  };
+
   const handleSubmit = async (forceChargeback = false) => {
     if (isSubmitting) return;
     const nameWords = fullName.trim().split(/\s+/).filter(Boolean);
@@ -717,6 +732,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
           is_delivery: isDelivery,
         } as any;
+        Object.assign(orderUpdates, liveCashbackPatch(!!(editingOrder as any).cashback_id, (editingOrder as any).custom_shipping_cost != null));
         
         // If marking as paid externally, also mark as paid (manual source)
         if (paidExternally && !editingOrder.is_paid) {
@@ -738,6 +754,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
 
         toast.success("Pedido atualizado!");
+        onCreated?.(editingOrder.id);
       } else {
         // Nunca cria pedido vazio: ele duplica o card da cliente e não gera link.
         if (localProducts.length === 0) {
@@ -787,6 +804,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               .eq("comment_id", prefillCommentId);
             await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
           }
+          const lp = liveCashbackPatch(!!(activeOrder as any).cashback_id, (activeOrder as any).custom_shipping_cost != null);
+          if (Object.keys(lp).length) await updateOrder(activeOrder.id, lp as Partial<DbOrder>);
           toast.success("Produtos adicionados ao pedido existente!");
           onCreated?.(activeOrder.id);
         } else {
@@ -820,6 +839,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               if (pickupStoreId) extraUpdates.pickup_store_id = pickupStoreId;
             }
             if (isDelivery) extraUpdates.is_delivery = true;
+            Object.assign(extraUpdates, liveCashbackPatch(false, !!customShippingCost));
             if (customShippingCost) extraUpdates.shipping_cost = parseFloat(customShippingCost);
 
             if (Object.keys(extraUpdates).length > 0) {
@@ -916,6 +936,15 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
+          {liveConditions && (() => { const sm = conditionsSummary(liveConditions); return (
+            <div className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs">
+              {editingOrder && prefillProducts?.length ? <div className="mb-1 font-extrabold uppercase text-sky-700 dark:text-sky-300">Novo ADD → carrinho #{editingOrder.id.slice(-4)}</div> : null}
+              <div>Subtotal {sm.subtotal} · {sm.shipping}{sm.cashback ? ` · ${sm.cashback}` : ""}</div>
+              {localProducts.some((p) => p.promotion) && (
+                <div className="mt-1 text-muted-foreground">Promoção: {[...new Set(localProducts.map((p) => p.promotion).filter(Boolean))].join(", ")}</div>
+              )}
+            </div>
+          ); })()}
           {orderChargebacks.length > 0 && (
             <Alert className="border-destructive bg-destructive/10">
               <AlertTriangle className="h-4 w-4 text-destructive" />

@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowDown, ArrowUp, Loader2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { LivePromotionsManager, useEventPromotions, type LivePromotion } from "./LivePromotionsManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface CatalogRow {
   id: string;
@@ -23,9 +25,11 @@ interface CatalogRow {
   variants: CatalogVariant[];
   position: number;
   is_active: boolean;
+  free_shipping: boolean;
+  promotion_id: string | null;
 }
 
-const COLS = "id,shopify_product_id,product_handle,title,image_url,original_price,offer_price,allow_cashback,variants,position,is_active";
+const COLS = "id,shopify_product_id,product_handle,title,image_url,original_price,offer_price,allow_cashback,variants,position,is_active,free_shipping,promotion_id";
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const db = supabase as any;
 
@@ -39,6 +43,7 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const { promos, reload: reloadPromos } = useEventPromotions(eventId);
 
   const load = useCallback(async () => {
     const [ev, cp] = await Promise.all([
@@ -191,7 +196,7 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
       ) : (
         <div className="space-y-3">
           {rows.map((row, idx) => (
-            <CatalogCard key={row.id} row={row} busy={busy === row.id} first={idx === 0} last={idx === rows.length - 1}
+            <CatalogCard key={row.id} row={row} promos={promos} busy={busy === row.id} first={idx === 0} last={idx === rows.length - 1}
               index={idx} total={rows.length} onMoveTo={(n) => moveTo(idx, n)}
               onPatch={(p) => patchRow(row.id, p)} onUp={() => move(idx, -1)} onDown={() => move(idx, 1)}
               onRefresh={() => refreshFromShopify(row)} onRemove={() => remove(row)} />
@@ -199,14 +204,16 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
         </div>
       )}
 
+      <LivePromotionsManager eventId={eventId} onSaved={() => { reloadPromos(); load(); }} />
+
       <ShopifyPicker open={pickerOpen} onOpenChange={setPickerOpen} busyId={busy}
         existing={new Set(rows.map((r) => r.shopify_product_id))} onPick={addProduct} />
     </div>
   );
 }
 
-function CatalogCard({ row, busy, first, last, index, total, onMoveTo, onPatch, onUp, onDown, onRefresh, onRemove }: {
-  row: CatalogRow; busy: boolean; first: boolean; last: boolean; index: number; total: number; onMoveTo: (n: number) => void;
+function CatalogCard({ row, promos, busy, first, last, index, total, onMoveTo, onPatch, onUp, onDown, onRefresh, onRemove }: {
+  row: CatalogRow; promos: LivePromotion[]; busy: boolean; first: boolean; last: boolean; index: number; total: number; onMoveTo: (n: number) => void;
   onPatch: (p: Partial<CatalogRow>) => void; onUp: () => void; onDown: () => void; onRefresh: () => void; onRemove: () => void;
 }) {
   const [offer, setOffer] = useState(row.offer_price != null ? String(row.offer_price) : "");
@@ -260,6 +267,20 @@ function CatalogCard({ row, busy, first, last, index, total, onMoveTo, onPatch, 
           <Label className="text-xs">Preço de oferta (opcional)</Label>
           <Input className="w-32" inputMode="decimal" placeholder="—" value={offer} onChange={(e) => setOffer(e.target.value)}
             onBlur={commitOffer} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitOffer(); } }} />
+        </div>
+        <div className="flex items-center gap-2 pb-2">
+          <Switch checked={!!row.free_shipping} onCheckedChange={(v) => onPatch({ free_shipping: v })} />
+          <Label className="text-xs">Frete grátis</Label>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Promoção</Label>
+          <Select value={row.promotion_id || "none"} onValueChange={(v) => onPatch({ promotion_id: v === "none" ? null : v })}>
+            <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhuma</SelectItem>
+              {promos.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}{p.is_active ? "" : " (inativa)"}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="mt-3">

@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { useEventPromotions } from "./LivePromotionsManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface CrossellOfferDraft {
   id?: string;
@@ -16,9 +18,12 @@ export interface CrossellOfferDraft {
   has_sizes: boolean;
   original_price: string;
   discount_price: string;
+  free_shipping?: boolean;
+  promotion_id?: string | null;
 }
 
 interface Props {
+  eventId?: string;
   noCrossell: boolean;
   offers: CrossellOfferDraft[];
   onChange: (next: { noCrossell: boolean; offers: CrossellOfferDraft[] }) => void;
@@ -42,7 +47,8 @@ function detectHasSizes(p: ShopifyProduct): boolean {
   return (opt.values || []).some((v) => /\b\d{2}([.,]\d)?\b/.test(v));
 }
 
-export function CrossellConfigStep({ noCrossell, offers, onChange }: Props) {
+export function CrossellConfigStep({ eventId, noCrossell, offers, onChange }: Props) {
+  const { promos } = useEventPromotions(eventId);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [results, setResults] = useState<ShopifyProduct[]>([]);
@@ -243,6 +249,19 @@ export function CrossellConfigStep({ noCrossell, offers, onChange }: Props) {
                       <Label htmlFor={`hassize-${idx}`} className="text-[11px] text-muted-foreground">
                         Filtrar pelo tamanho do cliente (calçados)
                       </Label>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Switch checked={!!o.free_shipping} onCheckedChange={(v) => patchOffer(idx, { free_shipping: v })} id={`xsfree-${idx}`} />
+                        <Label htmlFor={`xsfree-${idx}`} className="text-[11px]">Frete grátis</Label>
+                      </div>
+                      <Select value={o.promotion_id || "none"} onValueChange={(v) => patchOffer(idx, { promotion_id: v === "none" ? null : v })}>
+                        <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Promoção" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Promoção: nenhuma</SelectItem>
+                          {promos.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <Button

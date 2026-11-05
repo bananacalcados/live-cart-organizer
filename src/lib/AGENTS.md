@@ -1,0 +1,1 @@
+- Live code-intent confirms only via src/lib/liveCodeOrder.ts; open carts receive items (no 2nd cart).
