@@ -74,4 +74,4 @@
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
 - Chat side panels use EmbeddedDialog, always inside a Dialog root (modal only when not embedded), since DialogTitle throws without it.
 - DB functions: no anon EXECUTE by default; grant anon only to public-page RPCs/policy helpers.
-- Live "Por código" confirmation goes only through src/lib/liveCodeOrder.ts (card and modal): compute_live_order_conditions over the whole resulting cart decides prices/shipping/cashback_id and an open unpaid cart always receives the items, so no second cart or typed cashback discount appears.
+- Live code-intent confirms only via src/lib/liveCodeOrder.ts; open carts receive items (no 2nd cart).
