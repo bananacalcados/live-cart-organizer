@@ -19,6 +19,7 @@ interface ShownRow {
   product_name: string | null;
   color: string | null;
   sale_price: number | null;
+  shopify_ok?: boolean;
 }
 interface CodeRow { code: string; product_name: string | null; color: string | null; sale_price: number | null }
 
@@ -46,7 +47,14 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
       .select("id, code, shown_at, shown_by, source, is_current, product_name, color, sale_price")
       .eq("event_id", eventId).order("shown_at", { ascending: false }).limit(200);
     const list = (data || []) as ShownRow[];
-    const key = list.map((r) => `${r.id}:${r.shown_at}:${r.is_current}`).join("|");
+    // Uma consulta para saber quais códigos marcados seguem ok na Shopify.
+    const codes = [...new Set(list.map((r) => r.code))];
+    if (codes.length) {
+      const { data: st } = await db.from("v_product_color_codes").select("code, shopify_ok").in("code", codes);
+      const ok = new Map<string, boolean>((st || []).map((x: any) => [x.code, !!x.shopify_ok]));
+      list.forEach((r) => { r.shopify_ok = ok.get(r.code) ?? false; });
+    }
+    const key = list.map((r) => `${r.id}:${r.shown_at}:${r.is_current}:${r.shopify_ok}`).join("|");
     if (key !== lastKey.current) { lastKey.current = key; setRows(list); }
     setLoading(false);
   }, [eventId]);
@@ -81,6 +89,7 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
       const { data } = await db.from("v_product_color_codes")
         .select("code, product_name, color, sale_price")
         .or(`code.ilike.${s}%,product_name.ilike.%${s}%,color.ilike.%${s}%`)
+        .eq("shopify_ok", true)
         .order("code").limit(20);
       setResults((data || []) as CodeRow[]);
       setSearching(false);
@@ -144,11 +153,12 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
                 <p className="text-[11px] text-muted-foreground">
                   {hhmm(r.shown_at)} · {r.shown_by || "—"}
                   {r.source === "comment" && <Badge variant="outline" className="ml-2 text-[10px] py-0">detectado pelo comentário</Badge>}
+                  {!r.shopify_ok && <Badge variant="destructive" className="ml-2 text-[10px] py-0">não está na Shopify</Badge>}
                 </p>
               </div>
-              <Button size="sm" variant="outline" disabled={busy === r.code} onClick={() => show(r.code)} className="gap-1">
+              {r.shopify_ok && <Button size="sm" variant="outline" disabled={busy === r.code} onClick={() => show(r.code)} className="gap-1">
                 {busy === r.code ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Mostrar de novo
-              </Button>
+              </Button>}
             </Card>
           ))}
         </div>
