@@ -1,4 +1,5 @@
 # Project architecture rules
+- Security rules: supabase/functions/_shared/security-architecture.md.
 
 - Self-service event shipping is persisted by guarded order-write triggers so previews, payment providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows carry shipping_info.source=event_rule for item/discount recalculation.
 
