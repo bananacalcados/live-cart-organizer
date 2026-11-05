@@ -1,3 +1,4 @@
+import { verifyMetaSignature, checkUrlToken, gateWebhook } from "../_shared/webhook-auth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -56,6 +57,9 @@ serve(withAccessLog("wasender-webhook", async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
+    if (!(await gateWebhook(supabase, 'wasender', checkUrlToken(req, 'WASENDER_WEBHOOK_TOKEN')))) {
+      return new Response(JSON.stringify({ error: 'invalid signature' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     const url = new URL(req.url);
     const numberId = url.searchParams.get("number_id");

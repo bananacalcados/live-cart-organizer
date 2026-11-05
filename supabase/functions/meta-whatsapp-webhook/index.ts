@@ -1,3 +1,4 @@
+import { verifyMetaSignature, checkUrlToken, gateWebhook } from "../_shared/webhook-auth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -184,7 +185,12 @@ serve(withAccessLog("meta-whatsapp-webhook", async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body = await req.json();
+    const rawBody = await req.text();
+    const sigResult = await verifyMetaSignature(rawBody, req.headers.get('x-hub-signature-256'), Deno.env.get('META_APP_SECRET'));
+    if (!(await gateWebhook(supabase, 'meta_whatsapp', sigResult))) {
+      return new Response(JSON.stringify({ error: 'invalid signature' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const body = JSON.parse(rawBody || '{}');
     console.log('Meta webhook received:', JSON.stringify(body));
 
     // LOG BRUTO COMO PRIMEIRA AÇÃO (caixa-preta). Nunca pode bloquear o fluxo.
