@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { internalCallHeaders } from "../_shared/requireAuth.ts";
 import { expectedOrderAmounts, orderTolerance, EXACT_TOLERANCE, securityEvent } from "../_shared/webhook-verification.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -1834,7 +1835,7 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              ...(await internalCallHeaders()),
               origin: "https://checkout.bananacalcados.com.br",
             },
             body: JSON.stringify({
