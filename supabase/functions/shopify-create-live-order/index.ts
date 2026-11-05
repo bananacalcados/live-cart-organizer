@@ -1,6 +1,9 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuth } from "../_shared/requireAuth.ts";
+import { requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { shopifyOrderBlockReason } from "../_shared/payment-gates.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -344,15 +347,41 @@ serve(withAccessLog("shopify-create-live-order", async (req) => {
 
     supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
-    const {
-      items,
-      customer,
-      sessionId: requestSessionId,
-      source: requestSource,
-      dedupeKey: providedDedupeKey,
-      liveViewerId: requestLiveViewerId,
-      orderId: requestOrderId,
-    } = await req.json();
+    // Fase 4: só funcionário ou chamada interna; do corpo só vale o id do pedido.
+    const denied = await requireAuth(req, ["events", "pos"]);
+    if (denied) {
+      await securityEvent(supabaseAdmin, "shopify_order_blocked", requestIp(req), { fn: "shopify-create-live-order", reason: "auth" });
+      return new Response(denied.body, { status: denied.status, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
+    const body = await req.json();
+    const requestOrderId = body?.orderId;
+    const requestSessionId = body?.sessionId;
+    const requestSource = body?.source;
+    const providedDedupeKey = body?.dedupeKey;
+    const requestLiveViewerId = body?.liveViewerId;
+    if (typeof requestOrderId !== "string" || !requestOrderId.trim()) {
+      await securityEvent(supabaseAdmin, "shopify_order_blocked", requestIp(req), { fn: "shopify-create-live-order", reason: "no_order_id" });
+      return new Response(JSON.stringify({ error: "Informe o pedido pago (orderId)" }), { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
+    const { data: dbOrder } = await supabaseAdmin.from("orders")
+      .select("id, products, is_paid, paid_at, payment_confirmed_source, shopify_order_id, customer:customers(full_name, whatsapp, instagram_handle)")
+      .eq("id", requestOrderId).maybeSingle();
+    const gate = dbOrder ? shopifyOrderBlockReason(dbOrder) : "not_found";
+    if (gate) {
+      await securityEvent(supabaseAdmin, "shopify_order_blocked", requestIp(req), { fn: "shopify-create-live-order", order_id: requestOrderId, reason: gate });
+      return new Response(JSON.stringify({ error: gate === "already_created" ? "Pedido já criado na Shopify" : "Pedido não está pago" }), { status: 409, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
+    const { data: reg } = await supabaseAdmin.from("customer_registrations")
+      .select("full_name, whatsapp, email, cpf").eq("order_id", requestOrderId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const items: IncomingItem[] = (Array.isArray(dbOrder.products) ? dbOrder.products : []).map((p: any) => ({
+      variantId: p.shopifyId || p.variantId, title: p.title, price: Number(p.price) || 0, quantity: Number(p.quantity) || 1,
+    })) as any;
+    const customer = {
+      name: reg?.full_name || (dbOrder as any).customer?.full_name || (dbOrder as any).customer?.instagram_handle,
+      phone: reg?.whatsapp || (dbOrder as any).customer?.whatsapp,
+      email: reg?.email, cpf: reg?.cpf,
+    };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw new Error("items array is required");
