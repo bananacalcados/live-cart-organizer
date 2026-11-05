@@ -1,5 +1,11 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
+## Segurança urgente — 05/11
+- [ ] Fase 1A: proteger dez tabelas, remover privilégios destrutivos e testar anon.
+- [ ] Fase 1B: registro universal de acessos, ações administrativas e tela restrita.
+- [ ] Fase 1C: proteger funções perigosas sem bloquear integrações; implantar e testar PDV.
+- [ ] Fase 2: relatório completo de funções, RPCs, políticas, pagamentos e segredos.
+
 ## Conversas sem resposta — 01/11
 - [x] Separar leitura de resposta na live usando sinais existentes, sem consultas extras. 19 testes passaram; conversa real aberta/fechada manteve SEM RESPOSTA e removeu NÃO LIDA. Resposta/nova mensagem verificadas em testes, sem enviar mensagem real nem publicar.
 
