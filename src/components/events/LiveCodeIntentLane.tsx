@@ -23,7 +23,7 @@ export interface CodeIntent {
   id: string; username: string; items: CodeIntentItem[]; phone_last4: string | null; phone: string | null;
   status: string; warnings: string[] | null; last_comment_text: string | null; updated_at: string;
 }
-interface CatalogRow { shopify_product_id: string; title: string; image_url: string | null; offer_price: number | null; variants: any[] }
+interface CatalogRow { shopify_product_id: string; title: string; image_url: string | null; offer_price: number | null; original_price?: number | null; variants: any[] }
 
 const COLS = "id,username,items,phone_last4,phone,status,warnings,last_comment_text,updated_at";
 const numId = (v?: string | null) => String(v || "").split("/").pop() || "";
@@ -47,7 +47,10 @@ export function matchCatalogItem(item: CodeIntentItem, catalog: CatalogRow[]): D
         sku: v.sku || undefined,
         title: p.title,
         variant: v.title || [v.color, v.size].filter(Boolean).join(" / "),
-        price: Number(item.price ?? p.offer_price ?? v.price ?? 0),
+        // Oferta da live vale quando menor que o preço original.
+        price: p.offer_price != null && p.original_price != null && Number(p.offer_price) < Number(p.original_price)
+          ? Number(p.offer_price)
+          : Number(item.price ?? p.offer_price ?? v.price ?? 0),
         quantity: 1,
         image: v.image || p.image_url || undefined,
       };
@@ -92,7 +95,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
       .ilike("username", active.username).order("created_at", { ascending: true }).limit(200)
       .then(({ data }: any) => { if (!stop) setComments(data || []); });
     if (!catalog) {
-      db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,variants")
+      db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants")
         .eq("event_id", eventId).limit(200).then(({ data }: any) => { if (!stop) setCatalog(data || []); });
     }
     return () => { stop = true; };
