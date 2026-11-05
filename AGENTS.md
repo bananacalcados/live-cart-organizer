@@ -73,3 +73,4 @@
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
 - Chat side panels mount through EmbeddedDialog, which must always wrap children in a Dialog root (modal only when not embedded): DialogTitle throws without that context, while embedded content stays a plain div so no overlay appears.
+- Public schema functions: anon EXECUTE is revoked by default (default privileges too); grant anon explicitly only for public-page RPCs, policy helpers and column defaults.
