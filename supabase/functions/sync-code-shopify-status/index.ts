@@ -14,7 +14,7 @@ const colorKey = (v: unknown) => String(v ?? "").trim().toLowerCase();
 
 Deno.serve(withAccessLog("sync-code-shopify-status", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const denied = await requireStaffOrInternal(req, ["estoque"]);
+  const denied = await requireStaffOrInternal(req, ["inventory"]);
   if (denied) return denied;
 
   const domain = Deno.env.get("SHOPIFY_STORE_DOMAIN") || Deno.env.get("SHOPIFY_DOMAIN");

@@ -23,11 +23,31 @@ type CodeRow = {
   category: string | null;
   sale_price: number | null;
   total_stock: number | null;
+  shopify_ok: boolean | null;
+  shopify_status: string | null;
+  shopify_sizes_ok: number | null;
+  shopify_sizes_total: number | null;
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  ok: "ok",
+  partial_sizes: "tamanhos parciais",
+  product_missing: "produto inativo/inexistente",
+  not_published_lovable: "não publicado no Lovable",
+  color_missing: "cor faltando",
+  unlinked: "sem vínculo",
+  pending_check: "aguardando checagem",
+};
+function ShopifyBadge({ r }: { r: CodeRow }) {
+  const st = r.shopify_status || "pending_check";
+  if (st === "ok") return <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">ok</Badge>;
+  if (st === "partial_sizes") return <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400">{r.shopify_sizes_ok ?? 0} de {r.shopify_sizes_total ?? 0} tamanhos</Badge>;
+  return <Badge variant="destructive">{STATUS_LABEL[st] || st}</Badge>;
+}
 type Letter = { letter: string; label: string };
 
 const PAGE = 50;
-const COLS = "code,letter,master_id,product_name,color,category,sale_price,total_stock";
+const COLS = "code,letter,master_id,product_name,color,category,sale_price,total_stock,shopify_ok,shopify_status,shopify_sizes_ok,shopify_sizes_total";
 const brl = (v: number | null) =>
   `R$ ${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const normColor = (c: string | null) => (c ?? "").trim().toLowerCase();
@@ -37,6 +57,10 @@ export default function InventoryProductCodes() {
   const [debounced, setDebounced] = useState("");
   const [letter, setLetter] = useState("all");
   const [onlyStock, setOnlyStock] = useState(false);
+  const [onlyOk, setOnlyOk] = useState(true);
+  const [summary, setSummary] = useState<Record<string, number>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [warnAction, setWarnAction] = useState<null | (() => void)>(null);
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<CodeRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -53,7 +77,28 @@ export default function InventoryProductCodes() {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => setPage(0), [debounced, letter, onlyStock]);
+  useEffect(() => setPage(0), [debounced, letter, onlyStock, onlyOk]);
+
+  // Resumo por status (contagens no servidor).
+  useEffect(() => {
+    const sts = ["ok", "partial_sizes", "color_missing", "unlinked", "product_missing", "not_published_lovable", "pending_check"];
+    Promise.all(sts.map((st) => (supabase.from("v_product_color_codes" as any).select("code", { count: "exact", head: true }) as any).eq("shopify_status", st)))
+      .then((res) => setSummary(Object.fromEntries(sts.map((st, i) => [st, res[i].count ?? 0]))));
+  }, [reload]);
+
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-code-shopify-status", { body: {} });
+      if (error) throw error;
+      toast.success(`Verificado: ${Object.entries((data as any)?.counts || {}).map(([k, v]) => `${v} ${STATUS_LABEL[k] || k}`).join(" · ")}`);
+      setReload((x) => x + 1);
+    } catch (e: any) {
+      toast.error("Erro ao verificar na Shopify: " + (e?.message || e));
+    } finally { setSyncing(false); }
+  };
+  /** Sem o filtro "Somente ok", avisa antes de exportar. */
+  const guardExport = (fn: () => void) => { if (onlyOk) fn(); else setWarnAction(() => fn); };
 
   useEffect(() => {
     supabase.from("product_code_letters").select("letter,label").order("letter").then(({ data }) => setLetters((data as Letter[]) ?? []));
@@ -67,6 +112,7 @@ export default function InventoryProductCodes() {
     }
     if (letter !== "all") q = q.eq("letter", letter);
     if (onlyStock || opts.stock) q = q.gt("total_stock", 0);
+    if (onlyOk) q = q.eq("shopify_ok", true);
     return q.order("letter").order("seq");
   };
 
@@ -84,7 +130,7 @@ export default function InventoryProductCodes() {
       });
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, letter, onlyStock, page, reload]);
+  }, [debounced, letter, onlyStock, onlyOk, page, reload]);
 
   const fetchAll = async (stock = false): Promise<CodeRow[]> => {
     const out: CodeRow[] = [];
@@ -174,7 +220,9 @@ export default function InventoryProductCodes() {
   const exportPdf = async () => {
     setExporting(true);
     try {
-      const list = pdfMode === "selected" ? Array.from(selected.values()) : await fetchAll(pdfMode === "stock");
+      const list = pdfMode === "selected"
+        ? Array.from(selected.values()).filter((r) => !onlyOk || r.shopify_ok === true)
+        : await fetchAll(pdfMode === "stock");
       if (!list.length) { toast.error("Nenhum código para exportar"); return; }
       const doc = new jsPDF({ unit: "mm", format: "a4" });
       const W = 80, H = 50, GAP = 4, cols = 2, rowsPer = 5;
@@ -216,13 +264,22 @@ export default function InventoryProductCodes() {
           <div>
             <h1 className="text-2xl font-bold">Códigos de Produto</h1>
             <p className="text-sm text-muted-foreground">{total.toLocaleString("pt-BR")} códigos · {selected.size} selecionado(s)</p>
+            <p className="text-xs font-medium">
+              {summary.ok ?? 0} ok · {summary.partial_sizes ?? 0} parciais · {summary.color_missing ?? 0} cor faltando · {summary.unlinked ?? 0} sem vínculo
+              {(summary.product_missing ?? 0) > 0 && ` · ${summary.product_missing} produto inativo`}
+              {(summary.not_published_lovable ?? 0) > 0 && ` · ${summary.not_published_lovable} não publicados`}
+              {(summary.pending_check ?? 0) > 0 && ` · ${summary.pending_check} aguardando`}
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={generateMissing} disabled={generating}>
             {generating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1" />} Gerar códigos faltantes
           </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={exporting}>
+          <Button variant="outline" size="sm" onClick={syncNow} disabled={syncing}>
+            {syncing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />} Verificar na Shopify agora
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => guardExport(exportCsv)} disabled={exporting}>
             <Download className="h-4 w-4 mr-1" /> Exportar lista
           </Button>
           <Button size="sm" onClick={() => setPdfOpen(true)}>
@@ -253,6 +310,9 @@ export default function InventoryProductCodes() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={onlyStock} onCheckedChange={v => setOnlyStock(!!v)} /> Com estoque
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={onlyOk} onCheckedChange={v => setOnlyOk(!!v)} /> Somente ok na Shopify
+          </label>
         </CardContent>
       </Card>
 
@@ -264,14 +324,14 @@ export default function InventoryProductCodes() {
                 <tr>
                   <th className="p-2 w-8"><Checkbox checked={allPageSelected} onCheckedChange={togglePage} /></th>
                   <th className="p-2">Código</th><th className="p-2">Produto</th><th className="p-2">Cor</th>
-                  <th className="p-2">Categoria</th><th className="p-2 text-right">Preço</th><th className="p-2 text-right">Estoque</th>
+                  <th className="p-2">Categoria</th><th className="p-2 text-right">Preço</th><th className="p-2 text-right">Estoque</th><th className="p-2">Shopify</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin inline text-muted-foreground" /></td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin inline text-muted-foreground" /></td></tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-muted-foreground"><Hash className="h-5 w-5 inline mr-1" />Nenhum código encontrado</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground"><Hash className="h-5 w-5 inline mr-1" />Nenhum código encontrado</td></tr>
                 ) : rows.map(r => (
                   <tr key={r.code} className="border-t hover:bg-muted/30">
                     <td className="p-2"><Checkbox checked={selected.has(r.code)} onCheckedChange={() => toggle(r)} /></td>
@@ -281,6 +341,7 @@ export default function InventoryProductCodes() {
                     <td className="p-2 text-muted-foreground">{r.category ?? (r.letter ? letterLabel.get(r.letter) : "")}</td>
                     <td className="p-2 text-right whitespace-nowrap">{brl(r.sale_price)}</td>
                     <td className={`p-2 text-right ${Number(r.total_stock ?? 0) > 0 ? "" : "text-muted-foreground"}`}>{r.total_stock ?? 0}</td>
+                    <td className="p-2"><ShopifyBadge r={r} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -305,9 +366,19 @@ export default function InventoryProductCodes() {
             <Label className="flex items-center gap-2 font-normal"><RadioGroupItem value="stock" /> Só os com estoque (dos filtrados)</Label>
           </RadioGroup>
           <DialogFooter>
-            <Button onClick={exportPdf} disabled={exporting}>
+            <Button onClick={() => guardExport(exportPdf)} disabled={exporting}>
               {exporting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Gerar PDF
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!warnAction} onOpenChange={(v) => { if (!v) setWarnAction(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Atenção</DialogTitle></DialogHeader>
+          <p className="text-sm">A exportação inclui códigos que não estão na Shopify.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWarnAction(null)}>Cancelar</Button>
+            <Button onClick={() => { const fn = warnAction; setWarnAction(null); fn?.(); }}>Exportar mesmo assim</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
