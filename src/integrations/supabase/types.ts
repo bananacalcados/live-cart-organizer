@@ -6131,6 +6131,7 @@ export type Database = {
           allow_cashback: boolean
           created_at: string
           event_id: string
+          free_shipping: boolean
           id: string
           image_url: string | null
           images: Json
@@ -6139,6 +6140,7 @@ export type Database = {
           original_price: number
           position: number
           product_handle: string | null
+          promotion_id: string | null
           shopify_product_id: string
           title: string
           updated_at: string
@@ -6148,6 +6150,7 @@ export type Database = {
           allow_cashback?: boolean
           created_at?: string
           event_id: string
+          free_shipping?: boolean
           id?: string
           image_url?: string | null
           images?: Json
@@ -6156,6 +6159,7 @@ export type Database = {
           original_price: number
           position?: number
           product_handle?: string | null
+          promotion_id?: string | null
           shopify_product_id: string
           title: string
           updated_at?: string
@@ -6165,6 +6169,7 @@ export type Database = {
           allow_cashback?: boolean
           created_at?: string
           event_id?: string
+          free_shipping?: boolean
           id?: string
           image_url?: string | null
           images?: Json
@@ -6173,6 +6178,7 @@ export type Database = {
           original_price?: number
           position?: number
           product_handle?: string | null
+          promotion_id?: string | null
           shopify_product_id?: string
           title?: string
           updated_at?: string
@@ -6184,6 +6190,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_catalog_products_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "event_promotions"
             referencedColumns: ["id"]
           },
         ]
@@ -6237,6 +6250,7 @@ export type Database = {
           created_at: string
           discount_price: number
           event_id: string
+          free_shipping: boolean
           has_sizes: boolean
           id: string
           image: string | null
@@ -6244,6 +6258,7 @@ export type Database = {
           original_price: number
           position: number
           product_title: string | null
+          promotion_id: string | null
           shopify_product_id: string
           updated_at: string
           variant_handle: string | null
@@ -6252,6 +6267,7 @@ export type Database = {
           created_at?: string
           discount_price?: number
           event_id: string
+          free_shipping?: boolean
           has_sizes?: boolean
           id?: string
           image?: string | null
@@ -6259,6 +6275,7 @@ export type Database = {
           original_price?: number
           position?: number
           product_title?: string | null
+          promotion_id?: string | null
           shopify_product_id: string
           updated_at?: string
           variant_handle?: string | null
@@ -6267,6 +6284,7 @@ export type Database = {
           created_at?: string
           discount_price?: number
           event_id?: string
+          free_shipping?: boolean
           has_sizes?: boolean
           id?: string
           image?: string | null
@@ -6274,6 +6292,7 @@ export type Database = {
           original_price?: number
           position?: number
           product_title?: string | null
+          promotion_id?: string | null
           shopify_product_id?: string
           updated_at?: string
           variant_handle?: string | null
@@ -6284,6 +6303,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_crossell_offers_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "event_promotions"
             referencedColumns: ["id"]
           },
         ]
@@ -6872,8 +6898,10 @@ export type Database = {
       }
       event_promotions: {
         Row: {
+          blocks_cashback: boolean
           created_at: string
           event_id: string
+          free_shipping: boolean
           id: string
           is_active: boolean
           name: string
@@ -6883,8 +6911,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          blocks_cashback?: boolean
           created_at?: string
           event_id: string
+          free_shipping?: boolean
           id?: string
           is_active?: boolean
           name: string
@@ -6894,8 +6924,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          blocks_cashback?: boolean
           created_at?: string
           event_id?: string
+          free_shipping?: boolean
           id?: string
           is_active?: boolean
           name?: string
@@ -12194,16 +12226,19 @@ export type Database = {
         Row: {
           confirmed_at: string | null
           confirmed_by: string | null
+          confirmed_items: Json
           created_at: string
           event_id: string
           id: string
           items: Json
+          kind: string
           last_comment_text: string | null
           order_id: string | null
           phone: string | null
           phone_last4: string | null
           source_comment_ids: string[]
           status: string
+          target_order_id: string | null
           updated_at: string
           username: string
           warnings: string[]
@@ -12211,16 +12246,19 @@ export type Database = {
         Insert: {
           confirmed_at?: string | null
           confirmed_by?: string | null
+          confirmed_items?: Json
           created_at?: string
           event_id: string
           id?: string
           items?: Json
+          kind?: string
           last_comment_text?: string | null
           order_id?: string | null
           phone?: string | null
           phone_last4?: string | null
           source_comment_ids?: string[]
           status?: string
+          target_order_id?: string | null
           updated_at?: string
           username: string
           warnings?: string[]
@@ -12228,16 +12266,19 @@ export type Database = {
         Update: {
           confirmed_at?: string | null
           confirmed_by?: string | null
+          confirmed_items?: Json
           created_at?: string
           event_id?: string
           id?: string
           items?: Json
+          kind?: string
           last_comment_text?: string | null
           order_id?: string | null
           phone?: string | null
           phone_last4?: string | null
           source_comment_ids?: string[]
           status?: string
+          target_order_id?: string | null
           updated_at?: string
           username?: string
           warnings?: string[]
@@ -27715,6 +27756,15 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: undefined
       }
+      compute_live_order_conditions: {
+        Args: {
+          p_event_id: string
+          p_items: Json
+          p_phone: string
+          p_username: string
+        }
+        Returns: Json
+      }
       compute_pos_sale_channel: {
         Args: {
           p_external_source: string
@@ -27949,6 +27999,10 @@ export type Database = {
       find_customer_prefill_by_phone: {
         Args: { p_phone: string }
         Returns: Json
+      }
+      find_open_live_order: {
+        Args: { p_event_id: string; p_phone?: string; p_username: string }
+        Returns: string
       }
       find_or_create_unified_customer: {
         Args: {
@@ -28706,6 +28760,10 @@ export type Database = {
       }
       has_module_access: {
         Args: { _module: string; _user_id: string }
+        Returns: boolean
+      }
+      has_paid_live_order: {
+        Args: { p_event_id: string; p_phone?: string; p_username: string }
         Returns: boolean
       }
       has_role: {
@@ -29563,16 +29621,19 @@ export type Database = {
         Returns: {
           confirmed_at: string | null
           confirmed_by: string | null
+          confirmed_items: Json
           created_at: string
           event_id: string
           id: string
           items: Json
+          kind: string
           last_comment_text: string | null
           order_id: string | null
           phone: string | null
           phone_last4: string | null
           source_comment_ids: string[]
           status: string
+          target_order_id: string | null
           updated_at: string
           username: string
           warnings: string[]
@@ -30035,16 +30096,19 @@ export type Database = {
         Returns: {
           confirmed_at: string | null
           confirmed_by: string | null
+          confirmed_items: Json
           created_at: string
           event_id: string
           id: string
           items: Json
+          kind: string
           last_comment_text: string | null
           order_id: string | null
           phone: string | null
           phone_last4: string | null
           source_comment_ids: string[]
           status: string
+          target_order_id: string | null
           updated_at: string
           username: string
           warnings: string[]
