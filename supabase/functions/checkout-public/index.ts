@@ -45,8 +45,6 @@ const SALE_PATCH_KEYS = new Set([
   "checkout_step",
   "payment_details",
   "shipping_address",
-  "total",
-  "status",
 ]);
 
 const ATTEMPT_KEYS = new Set([
@@ -216,7 +214,19 @@ serve(withAccessLog("checkout-public", async (req) => {
           const prev = (existing?.payment_details as Record<string, unknown> | null) || {};
           clean.payment_details = { ...prev, ...(clean.payment_details as Record<string, unknown>) };
         }
-        let q = supabase.from("pos_sales").update(clean).eq("id", saleId);
+        // Fase 4: venda paga não muda; total/status nunca vêm do navegador.
+        const { data: cur } = await supabase.from("pos_sales").select("status, subtotal, discount_amount, payment_details").eq("id", saleId).maybeSingle();
+        if (!cur) return json({ error: "not found" }, 404);
+        if (["paid", "completed", "cancelled"].includes(String(cur.status))) return json({ error: "sale locked" }, 409);
+        const shipChanged = clean.payment_details && (clean.payment_details as any).shipping_amount !== undefined
+          && Number((clean.payment_details as any).shipping_amount) !== Number(((cur.payment_details || {}) as any).shipping_amount);
+        if (shipChanged) {
+          const { data: its } = await supabase.from("pos_sale_items").select("unit_price, quantity").eq("sale_id", saleId);
+          const sub = (its || []).reduce((a: number, i: any) => a + Number(i.unit_price) * Number(i.quantity), 0);
+          const ship = Math.max(0, Number((clean.payment_details as any).shipping_amount) || 0);
+          clean.total = Math.round((sub - Number(cur.discount_amount || 0) + ship) * 100) / 100;
+        }
+        let q = supabase.from("pos_sales").update(clean).eq("id", saleId).not("status", "in", "(paid,completed,cancelled)");
         if (isUuid(storeId)) q = q.eq("store_id", storeId);
         const { error } = await q;
         if (error) return json({ error: error.message }, 500);
@@ -246,14 +256,19 @@ serve(withAccessLog("checkout-public", async (req) => {
 
       // ── Customer prefill by CPF (safe subset only) ──
       case "lookup_customer_cpf": {
+        // Fase 4: exige CPF + telefone da própria cliente; devolve só o necessário para preencher.
         const cpf = digits(body?.cpf);
-        if (cpf.length !== 11) return json({ customer: null });
+        const phone = digits(body?.phone);
+        if (cpf.length !== 11 || phone.length < 10) return json({ customer: null });
         const { data } = await supabase
           .from("pos_customers")
-          .select("name, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
+          .select("name, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
           .eq("cpf", cpf)
           .limit(1);
-        return json({ customer: data && data.length > 0 ? data[0] : null });
+        const c = data?.[0];
+        if (!c || digits(c.whatsapp).slice(-8) !== phone.slice(-8)) return json({ customer: null });
+        const { whatsapp: _w, ...min } = c as any;
+        return json({ customer: { ...min, name: String(min.name || "").split(" ")[0] || null } });
       }
 
       // ── Upsert customer by CPF/phone (CustomerRegister) ──
@@ -331,9 +346,10 @@ serve(withAccessLog("checkout-public", async (req) => {
                 : null
         );
 
+        // Fase 4: só conclui venda que o servidor já marcou como paga.
         await supabase.from("pos_sales")
           .update({ status: "completed", customer_id: customerId, ...(paymentMethodLabel ? { payment_method: paymentMethodLabel } : {}) })
-          .eq("id", saleId);
+          .eq("id", saleId).eq("status", "paid");
 
         return json({ ok: true, customerId });
       }
