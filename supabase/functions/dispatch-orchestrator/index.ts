@@ -1,3 +1,4 @@
+import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 // dispatch-orchestrator
 // Runs every minute via pg_cron (job: dispatch-orchestrator-every-minute).
@@ -40,7 +41,7 @@ serve(withAccessLog("dispatch-orchestrator", async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    if (!isInternalRequest(req, serviceKey)) {
+    if (!isInternalRequest(req, serviceKey) && !(await isAuthorizedCron(req))) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

@@ -1,3 +1,4 @@
+import { requireAuth } from "../_shared/requireAuth.ts";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { parseShopifyAddress } from "../_shared/shopify-address.ts";
 // Shopify webhook receiver — orders/paid + orders/updated
@@ -73,7 +74,10 @@ Deno.serve(withAccessLog("shopify-webhook", async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     // Fase 4: HMAC obrigatório. Sem segredo, sem cabeçalho ou assinatura errada → 401.
-    if (!secret || !hmac || !(await verifyHmac(raw, hmac, secret))) {
+    // Reprocessamento interno (shopify-resync-orders): o pedido veio da Admin API.
+    const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const internal = bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") && (await requireAuth(req)) === null;
+    if (!internal && (!secret || !hmac || !(await verifyHmac(raw, hmac, secret)))) {
       const reason = !secret ? "secret_missing" : !hmac ? "header_missing" : "bad_hmac";
       console.warn("[shopify-webhook] recusado:", reason, topic);
       try {
@@ -81,6 +85,13 @@ Deno.serve(withAccessLog("shopify-webhook", async (req) => {
           event: "webhook_bad_signature",
           ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null,
           details: { provider: "shopify", reason, topic },
+        });
+        let orderId: string | null = null;
+        try { const p = JSON.parse(raw); orderId = String(p?.order_id ?? p?.id ?? "") || null; } catch (_) { /* corpo inválido */ }
+        await supabase.from("security_events").insert({
+          event: "shopify_webhook_unsigned",
+          ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null,
+          details: { provider: "shopify", reason, topic, order_id: orderId },
         });
       } catch (_) { /* não bloqueia */ }
       return new Response("Invalid HMAC", { status: 401, headers: corsHeaders });
