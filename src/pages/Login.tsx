@@ -50,18 +50,16 @@ export default function Login() {
         25000
       );
       if (error) {
+        void supabase.functions.invoke("security-auth-event", { body: { event: "login_failed", email, reason: error.message } }).catch(() => {});
         toast({
           title: "Erro ao entrar",
-          description:
-            error.message === "Invalid login credentials"
-              ? "Email ou senha incorretos."
-              : error.message === "Email not confirmed"
-                ? "Verifique seu email antes de entrar."
-                : error.message,
+          // Mesma mensagem para qualquer falha: não revela se o e-mail existe.
+          description: "Email ou senha incorretos.",
           variant: "destructive",
         });
         return;
       }
+      void supabase.functions.invoke("security-auth-event", { body: { event: "login_ok" } }).catch(() => {});
       navigate("/", { replace: true });
     } catch (err: any) {
       const isConnectionError =
@@ -79,6 +77,17 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgot = async () => {
+    if (!email.trim()) {
+      toast({ title: "Digite seu e-mail", description: "Preencha o e-mail acima e clique de novo." });
+      return;
+    }
+    await supabase.functions.invoke("auth-password-reset", {
+      body: { email, redirect_to: `${window.location.origin}/reset-password` },
+    }).catch(() => {});
+    toast({ title: "Pedido recebido", description: "Se o e-mail existir, enviaremos instruções para redefinir a senha." });
   };
 
   const handleGoogleLogin = async () => {
@@ -166,6 +175,7 @@ export default function Login() {
               {loading ? "Aguarde..." : "Entrar"}
             </Button>
           </form>
+          <button type="button" onClick={handleForgot} className="w-full text-center text-sm text-muted-foreground underline">Esqueci minha senha</button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

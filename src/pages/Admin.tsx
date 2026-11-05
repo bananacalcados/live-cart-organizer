@@ -26,6 +26,7 @@ import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import { AccessLogPanel } from "@/components/admin/AccessLogPanel";
 import { SecurityAccessPanel } from "@/components/admin/SecurityAccessPanel";
+import { AuthSecurityEvents } from "@/components/admin/AuthSecurityEvents";
 import { GatewaySplitPanel } from "@/components/admin/GatewaySplitPanel";
 import { PaymentReviewPanel } from "@/components/admin/PaymentReviewPanel";
 import { RefundApprovalsPanel } from "@/components/admin/RefundApprovalsPanel";
@@ -246,6 +247,7 @@ export default function Admin() {
           {isAdmin && <TabsContent value="correios" className="mt-4"><CorreiosSettingsPanel /></TabsContent>}
 
           <TabsContent value="acessos" className="mt-4">
+            {isAdmin && <AuthSecurityEvents />}
             {isAdmin && <SecurityAccessPanel />}
             <AccessLogPanel />
           </TabsContent>

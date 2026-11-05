@@ -7,6 +7,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy } from "react";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import { TeamChat } from "./components/TeamChat";
 import { InstallPrompt } from "./components/InstallPrompt";
@@ -108,6 +109,7 @@ const App = () => (
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/checkout/order/:orderId" element={<TransparentCheckout />} />
               <Route path="/checkout/live" element={<TransparentCheckout />} />
               <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
