@@ -1,10 +1,11 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Segurança urgente — 05/11
-- [ ] Fase 1A: proteger dez tabelas, remover privilégios destrutivos e testar anon.
-- [ ] Fase 1B: registro universal de acessos, ações administrativas e tela restrita.
-- [ ] Fase 1C: proteger funções perigosas sem bloquear integrações; implantar e testar PDV.
-- [ ] Fase 2: relatório completo de funções, RPCs, políticas, pagamentos e segredos.
+- [x] Fase 1A: dez tabelas protegidas; privilégios destrutivos removidos; anon negado.
+- [x] Fase 1B: 319 funções locais com registro; Admin/Acessos testados, alertas de IP persistidos.
+- [x] Fase 1C: 21 barreiras implantadas e testadas (401); demais incertas log-only; PDV Pérola abriu autenticado.
+- [x] Fase 2: SECURITY_AUDIT.md com 319 funções, 441 assinaturas anon, policies e pagamentos; classificação estática conservadora.
+- [ ] Cobrir chat-payment-followup/livete-followup-cron: cron chama endpoints sem fonte local; bloqueio é ausência de fonte para preservar operação.
 
 ## Conversas sem resposta — 01/11
 - [x] Separar leitura de resposta na live usando sinais existentes, sem consultas extras. 19 testes passaram; conversa real aberta/fechada manteve SEM RESPOSTA e removeu NÃO LIDA. Resposta/nova mensagem verificadas em testes, sem enviar mensagem real nem publicar.
