@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireAuth } from "../_shared/requireAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
@@ -74,6 +75,8 @@ function formatMpDate(d: Date): string {
 
 serve(withAccessLog("mercadopago-create-boleto", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireAuth(req, ["pos"], false); if (denied) return denied; }
 
   const headers = { ...cors(req), "Content-Type": "application/json" };
 

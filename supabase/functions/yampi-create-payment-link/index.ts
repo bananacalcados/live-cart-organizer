@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireAuth } from "../_shared/requireAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
@@ -217,6 +218,8 @@ serve(withAccessLog("yampi-create-payment-link", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireAuth(req, ["pos"], false); if (denied) return denied; }
 
   try {
     const YAMPI_USER_TOKEN = Deno.env.get("YAMPI_USER_TOKEN");
