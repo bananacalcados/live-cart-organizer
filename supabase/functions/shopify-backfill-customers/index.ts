@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Backfill de dados de cliente (CPF, e-mail, endereço) em pos_sales de origem Shopify.
 // Reprocessa vendas antigas que só possuem o nome, buscando o pedido completo na Admin API.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -30,7 +31,7 @@ function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-backfill-customers", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -156,4 +157,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

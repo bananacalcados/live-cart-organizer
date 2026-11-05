@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -13,7 +14,7 @@ const corsHeaders = {
  * 2. Decrease stock in source deposit (balanço to current - qty)
  * 3. Increase stock in Site deposit (balanço to current + qty)
  */
-serve(async (req) => {
+serve(withAccessLog("expedition-transfer-stock", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -160,4 +161,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

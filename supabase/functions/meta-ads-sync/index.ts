@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
@@ -7,7 +8,7 @@ const json = (b: unknown, status = 200) =>
 
 const isDate = (s: unknown) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-ads-sync", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -152,4 +153,4 @@ Deno.serve(async (req) => {
   const errs = [refreshErr, adsetError].filter(Boolean).join(" | ") || null;
   await admin.from("meta_ads_sync_runs").insert({ status: "ok", since, until, rows_upserted: upserted + adsetUpserted, error: errs });
   return json({ status: "ok", rows_upserted: upserted, adset_rows_upserted: adsetUpserted, adset_error: adsetError, since, until, token_refresh: tokenRefresh });
-});
+}));

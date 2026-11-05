@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // cron-scheduled-dispatches
 // Compatibility shim. The new orchestrator handles everything (scheduled promotion,
 // worker spawning, and completion). Kept so legacy pg_cron entries don't 404.
@@ -10,7 +11,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(withAccessLog("cron-scheduled-dispatches", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
 
@@ -36,4 +37,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

@@ -1,6 +1,7 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-serve(async (req) => {
+serve(withAccessLog("shopify-oauth-install", async (req) => {
   const shopifyDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN")!;
   const clientId = Deno.env.get("SHOPIFY_CLIENT_ID")!;
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -17,4 +18,4 @@ serve(async (req) => {
       Location: installUrl,
     },
   });
-});
+}));

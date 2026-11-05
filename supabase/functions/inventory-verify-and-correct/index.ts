@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -41,7 +42,7 @@ function queueNextBatch(
  * Self-invokes until all items are verified — no browser needed.
  * A watchdog cron re-triggers if stalled for >3 min.
  */
-serve(async (req) => {
+serve(withAccessLog("inventory-verify-and-correct", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -236,4 +237,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

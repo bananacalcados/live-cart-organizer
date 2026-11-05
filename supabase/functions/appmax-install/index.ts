@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Instalação do app AppMax (OAuth2) na loja do CNPJ.
 // ?action=validate  → URL de validação (AppMax chama server-to-server)
 // ?action=start&env=production|sandbox → gera link de autorização (requer usuário logado)
@@ -43,7 +44,7 @@ const page = (title: string, msg: string, s = 200) =>
     { status: s, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("appmax-install", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "validate";
@@ -123,4 +124,4 @@ Deno.serve(async (req) => {
     console.error("[appmax-install]", e);
     return json({ error: String((e as Error).message || e) }, 500);
   }
-});
+}));

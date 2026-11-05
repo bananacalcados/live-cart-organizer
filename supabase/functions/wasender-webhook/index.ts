@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { WASENDER_BASE, rehostMedia } from "../_shared/wasender-credentials.ts";
@@ -40,7 +41,7 @@ const MEDIA_KEYS: Record<string, string> = {
   stickerMessage: "sticker",
 };
 
-serve(async (req) => {
+serve(withAccessLog("wasender-webhook", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -501,4 +502,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

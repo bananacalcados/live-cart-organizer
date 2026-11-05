@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Pagamento dividido — checkout público paga uma parte de cada vez (Mercado Pago).
 // Pedidos sem partes não passam por aqui (fluxo atual intacto).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -43,7 +44,7 @@ async function loadSplit(sb: any, splitId: string) {
   return data;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("split-payment", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   try {
@@ -310,4 +311,4 @@ Deno.serve(async (req) => {
     console.error("[split-payment]", e);
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));

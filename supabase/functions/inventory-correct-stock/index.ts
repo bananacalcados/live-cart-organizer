@@ -1,3 +1,5 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireAuth, internalCallHeaders } from "../_shared/requireAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,14 +13,15 @@ function queueNextBatch(
   authKey: string,
   payload: { count_id: string; batch_size: number; final: boolean },
 ) {
-  const nextRun = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
+  const nextRun = internalCallHeaders().then(headers => fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${authKey}`,
+      ...headers,
     },
     body: JSON.stringify(payload),
-  }).then(async (r) => {
+  })).then(async (r) => {
     await r.text(); // consume body
   }).catch(e => console.error('Self-invoke failed:', e));
 
@@ -209,10 +212,13 @@ async function buildSiblingZeroRows(
  * Processa a fila inventory_correction_queue gravando o saldo contado direto
  * no pos_products. Auto-reinvoca até concluir.
  */
-serve(async (req) => {
+serve(withAccessLog("inventory-correct-stock", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const denied = await requireAuth(req, ['inventory']);
+  if (denied) return denied;
 
   try {
     const { count_id, batch_size = 100, final = true, prepare = false } = await req.json();
@@ -571,4 +577,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

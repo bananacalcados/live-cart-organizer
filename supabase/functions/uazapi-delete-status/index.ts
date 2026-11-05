@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   resolveUazapiCredentials,
@@ -16,7 +17,7 @@ const corsHeaders = {
  * Usa o mesmo endpoint de revogação de mensagens (/message/delete) com o
  * messageid do status. Também remove o registro de whatsapp_status_posts.
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-delete-status", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -69,4 +70,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

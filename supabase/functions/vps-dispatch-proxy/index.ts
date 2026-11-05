@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // vps-dispatch-proxy
 // Now a thin enqueue + kickstart endpoint.
 // 1. Marks the dispatch as 'sending' (idempotent)
@@ -49,7 +50,7 @@ async function requireStaffOrInternal(req: Request, serviceKey: string) {
   return { ok: true as const };
 }
 
-serve(async (req) => {
+serve(withAccessLog("vps-dispatch-proxy", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -133,4 +134,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

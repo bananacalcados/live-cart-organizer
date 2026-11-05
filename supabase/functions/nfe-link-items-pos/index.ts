@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -45,7 +46,7 @@ function baseNameFromVariant(name: string): string {
  *
  * Body: { invoice_id, store_id, parent_sku, item_ids: string[] }
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -307,4 +308,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

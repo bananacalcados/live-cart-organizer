@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: brasilnfe-webhook
 // Recebe callbacks da BrasilNFe com mudanças de status de notas fiscais.
 // PÚBLICA (verify_jwt = false). Identifica a nota por IdentificadorInterno (POS-<sale_id>) ou ChaveNF.
@@ -23,7 +24,7 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
   return endpoint.toString();
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("brasilnfe-webhook", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") {
     return new Response(JSON.stringify({ ok: true, service: "brasilnfe-webhook" }), {
@@ -200,4 +201,4 @@ Deno.serve(async (req) => {
       status: 200, // 200 pra BrasilNFe não ficar reenviando
     });
   }
-});
+}));

@@ -1,3 +1,5 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 // Edge: contact-erase
 // "EXCLUIR CONTATO": apaga um contato de TODAS as bases de contato/lead/CRM/chat
@@ -127,7 +129,7 @@ const IG_TARGETS: Target[] = [
   { table: "catalog_lead_registrations", col: "instagram_handle" },
 ];
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("contact-erase", withRequiredAuth([], true, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -198,4 +200,4 @@ Deno.serve(async (req) => {
     console.error("[contact-erase]", e);
     return json({ error: e?.message || "internal_error" }, 500);
   }
-});
+})));

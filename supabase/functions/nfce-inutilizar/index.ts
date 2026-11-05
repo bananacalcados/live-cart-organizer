@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge: nfce-inutilizar
 // Inutiliza faixa de numeração de NFC-e/NF-e na SEFAZ via BrasilNFe.
 // Body: { company_id, modelo, serie, numero_inicial, numero_final, justificativa, ambiente? }
@@ -10,7 +11,7 @@ const corsHeaders = {
 
 const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfce-inutilizar", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -94,4 +95,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

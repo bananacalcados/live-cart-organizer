@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Meta CAPI — Retry / Reconcile Purchase events for Live orders.
 //
 // Two modes:
@@ -91,7 +92,7 @@ async function dispatchOne(supabase: any, supabaseUrl: string, serviceKey: strin
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-purchase-retry", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -182,4 +183,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

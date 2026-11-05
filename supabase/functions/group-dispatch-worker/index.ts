@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // WORKER reentrante de disparo VIP (Fila Durável com Delay Agendado)
 // ------------------------------------------------------------------
 // Consome a tabela group_campaign_block_dispatches:
@@ -23,7 +24,7 @@ const RETRY_DELAY_MS = 8_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-serve(async (req) => {
+serve(withAccessLog("group-dispatch-worker", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -354,4 +355,4 @@ serve(async (req) => {
     JSON.stringify({ success: true, processed, elapsedMs: Date.now() - start }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
-});
+}));

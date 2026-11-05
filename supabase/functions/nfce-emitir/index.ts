@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfce-emitir
 // Monta payload NFC-e (modelo 65), chama BrasilNFe e persiste em fiscal_documents.
 // Body: { sale_id: uuid, ambiente?: 'homologacao'|'producao' }
@@ -69,7 +70,7 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
   return endpoint.toString();
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfce-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -402,4 +403,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500,
     });
   }
-});
+}));

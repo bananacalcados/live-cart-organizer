@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Helper público pra disparar o backfill OFFLINE (usa service role internamente).
 // Útil quando você não tem acesso ao secret/vault e precisa rodar manualmente.
 const corsHeaders = {
@@ -5,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-trigger-backfill", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -30,4 +31,4 @@ Deno.serve(async (req) => {
     status: resp.status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

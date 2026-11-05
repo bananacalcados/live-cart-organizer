@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
@@ -22,7 +23,7 @@ const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const fail = (msg: string, status = 400) => Object.assign(new Error(msg), { status });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("correios-shipment", async (req) => {
   const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -300,4 +301,4 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?: number };
     return reply({ error: err.message || 'Falha no envio Correios' }, err.status || 400);
   }
-});
+}));

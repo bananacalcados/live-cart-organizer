@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
 
@@ -12,7 +13,7 @@ const corsHeaders = {
  * Instagram DM. Skips (status=skipped) when order is paid, cancelled or
  * customer replied after config was created (stop_on_reply).
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-followup-dispatcher", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -224,7 +225,7 @@ Deno.serve(async (req) => {
   }
 
   return json({ ok: true, processed: due.length, sent, skipped, failed });
-});
+}));
 
 type TokenContext = Record<string, string>;
 

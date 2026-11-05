@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -13,7 +14,7 @@ function genToken(len = 10) {
   return s;
 }
 
-serve(async (req) => {
+serve(withAccessLog("review-send-link", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -103,4 +104,4 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: e.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Marketing Agent (Estrategista) — Anthropic (Claude) como motor principal,
 // fallback automático para Lovable AI Gateway se ANTHROPIC_API_KEY ausente
 // ou se a Anthropic responder erro de crédito/autenticação.
@@ -1187,7 +1188,7 @@ async function callGateway(apiKey: string, model: string, messages: any[]) {
   throw new Error("Gateway exhausted retries");
 }
 
-serve(async (req) => {
+serve(withAccessLog("marketing-agent-chat", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -1377,4 +1378,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Meta Conversions API — OFFLINE Events (Visita Loja Física)
 // Envia eventos Purchase de vendas físicas do PDV para o Conjunto de Eventos Offline da Meta.
 //
@@ -220,7 +221,7 @@ async function routeToWebsitePixel(
 // ============ Handler ============
 
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-offline", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // SEGURANÇA: aceita Authorization Bearer com SERVICE_ROLE_KEY OU
@@ -633,4 +634,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

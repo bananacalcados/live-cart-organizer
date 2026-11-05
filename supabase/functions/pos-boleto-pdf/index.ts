@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -22,7 +23,7 @@ const json = (body: unknown, status = 200) =>
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 
-serve(async (req) => {
+serve(withAccessLog("pos-boleto-pdf", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -93,4 +94,4 @@ serve(async (req) => {
     console.error("[pos-boleto-pdf]", err);
     return json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Meta Conversions API — Lead & CompleteRegistration events
 // Dispara eventos de Lead (entrada no WhatsApp) ou CompleteRegistration
 // (final da sequência de mensagens automáticas) para o Pixel da Meta via CAPI.
@@ -54,7 +55,7 @@ function splitName(full: string | null | undefined): { first?: string; last?: st
   return { first: parts[0], last: parts.slice(1).join(" ") };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-lead", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -241,4 +242,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

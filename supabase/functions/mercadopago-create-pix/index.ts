@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPaymentAccountsWithFallback } from "../_shared/mp-account.ts";
@@ -81,7 +82,7 @@ function getCorsHeaders(req: Request) {
 const PIX_COOLDOWN_MS = 20_000;
 const recentPix = new Map<string, { ts: number; payload: unknown }>();
 
-serve(async (req) => {
+serve(withAccessLog("mercadopago-create-pix", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -541,4 +542,4 @@ serve(async (req) => {
     );
 
   }
-});
+}));

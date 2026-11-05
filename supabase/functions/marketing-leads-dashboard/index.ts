@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -134,7 +135,7 @@ function prettySource(source?: string, campaignTag?: string, metadata?: any): st
   return raw;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("marketing-leads-dashboard", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -1091,4 +1092,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

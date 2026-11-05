@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   resolveUazapiCredentials,
@@ -16,7 +17,7 @@ const corsHeaders = {
  * Necessário para que o cliente esteja em "Meus contatos" e possa visualizar
  * os status/stories publicados pela loja (privacidade do status = meus contatos).
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-add-contact", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -59,4 +60,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

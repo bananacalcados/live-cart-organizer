@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfe-manifestar
 // Envia manifestação do destinatário para uma NF-e recebida.
 // Tipos: ciencia | confirmacao | desconhecimento | nao_realizada
@@ -20,7 +21,7 @@ const TIPO_EVENTO_MAP: Record<string, { code: string; label: string; precisaJust
 
 const digits = (s: any) => String(s ?? "").replace(/\D/g, "");
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfe-manifestar", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const { nfe_received_id, tipo, justificativa } = await req.json();
@@ -106,4 +107,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

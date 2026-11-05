@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // ── AustPay (Rinne): webhook de transações ────────────────────────────────
 // Recebe transaction.created / transaction.status-changed e reflete o
 // pagamento no pedido (orders) ou na venda do PDV (pos_sales), igual aos
@@ -50,7 +51,7 @@ async function validSignature(req: Request, raw: string): Promise<boolean> {
   }
 }
 
-serve(async (req) => {
+serve(withAccessLog("austpay-webhook", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   const supabase = createClient(
@@ -226,4 +227,4 @@ serve(async (req) => {
     console.error("[austpay-webhook] erro:", error);
     return json({ ok: false, error: "Não foi possível verificar o pagamento." }, 503);
   }
-});
+}));

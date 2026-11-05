@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Worker da fila de mensagens automáticas do modo whatsapp_autoatendimento.
 //
 // Drena public.selfservice_message_queue respeitando:
@@ -34,7 +35,7 @@ function extractMid(d: any): string | null {
   return c != null ? String(c) : null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("selfservice-message-worker", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
    const SB_URL = Deno.env.get("SUPABASE_URL");
    const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -141,4 +142,4 @@ Deno.serve(async (req) => {
     }).catch(() => {});
   }
   return json({ ok: true, processed, remaining: left || 0 });
-});
+}));

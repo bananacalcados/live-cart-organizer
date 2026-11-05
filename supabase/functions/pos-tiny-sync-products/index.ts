@@ -1,3 +1,5 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -36,7 +38,7 @@ function extractVariantFromName(name: string): { baseName: string; variant: stri
   return { baseName: name, variant: '', size: null, color: null };
 }
 
-serve(async (req) => {
+serve(withAccessLog("pos-tiny-sync-products", withRequiredAuth(["pos","inventory"], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -205,4 +207,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+})));

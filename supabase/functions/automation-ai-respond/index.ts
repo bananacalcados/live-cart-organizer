@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { analyzeIncomingAttachment } from "../_shared/media-understanding.ts";
@@ -11,7 +12,7 @@ const corsHeaders = {
 
 const MAX_TOOL_TURNS = 3;
 
-serve(async (req) => {
+serve(withAccessLog("automation-ai-respond", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -342,7 +343,7 @@ ANÁLISE DE IMAGENS E DOCUMENTOS:
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));
 
 // ─── Jess Mode: Tool Calling ───
 async function handleJessMode(

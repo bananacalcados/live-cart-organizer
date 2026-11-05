@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -12,7 +13,7 @@ const ME_HEADERS = (token: string) => ({
   'User-Agent': 'Livete CRM (contato@livete.com.br)',
 });
 
-serve(async (req) => {
+serve(withAccessLog("melhor-envio-test", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -232,4 +233,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

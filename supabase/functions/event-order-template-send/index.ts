@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Envio MANUAL do template Meta configurado no evento (etapa MENSAGEM do wizard)
 // para o WhatsApp da cliente de um pedido específico.
 // Não altera etapa do pedido, não cria sessão de IA — apenas dispara o template.
@@ -17,7 +18,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-serve(async (req) => {
+serve(withAccessLog("event-order-template-send", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -281,4 +282,4 @@ serve(async (req) => {
     console.error('[event-order-template-send] error:', e);
     return json({ error: String(e) }, 500);
   }
-});
+}));

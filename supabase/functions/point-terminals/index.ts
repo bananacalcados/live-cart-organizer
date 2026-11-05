@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Mercado Pago Point — painel de diagnóstico das maquininhas (Point Smart).
 //
 // Ações:
@@ -24,7 +25,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("point-terminals", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -128,4 +129,4 @@ Deno.serve(async (req) => {
     console.error("[point-terminals] fatal", err?.message);
     return json({ error: err?.message || "Erro interno" }, 500);
   }
-});
+}));

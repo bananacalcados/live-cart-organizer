@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
 import { requireUser } from "../_shared/require-user.ts";
@@ -18,7 +19,7 @@ function json(body: unknown, status = 200) {
  * wasender-check-number — verifica se um número está no WhatsApp.
  * Body: { phone, whatsapp_number_id }
  */
-serve(async (req) => {
+serve(withAccessLog("wasender-check-number", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const auth = await requireUser(req);
@@ -45,4 +46,4 @@ serve(async (req) => {
     console.error("[wasender-check-number] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Roleta de Prêmios do Evento (público).
 // Dois públicos: "payers" (quem pagou no evento, acima de X) e "participants" (leads da live).
 // Regras: evento precisa estar ativo/dentro da janela, roleta ativa, 1 giro por telefone (configurável),
@@ -36,7 +37,7 @@ function couponCode() {
   return code;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-prize-wheel", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -540,4 +541,4 @@ Deno.serve(async (req) => {
     console.error("[event-prize-wheel]", e);
     return json({ ok: false, error: String((e as Error).message || e) }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -22,7 +23,7 @@ function normalizePhoneBR(raw: string) {
   return p;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-link-payment-confirmation", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -154,4 +155,4 @@ Deno.serve(async (req) => {
     if (saleId) await supabase.from("pos_link_confirmation_sent").delete().eq("sale_id", saleId).is("sent_at", null);
     return json({ error: String((e as Error)?.message || e) }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
@@ -167,7 +168,7 @@ async function fetchLiveMediaForAccount(account: IgAccountRow, token: string) {
   return { media: [] as LiveMediaItem[], errors };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("instagram-live-sync", async (req) => {
   runDeadline = Date.now() + 20_000;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -326,4 +327,4 @@ Deno.serve(async (req) => {
     console.error("instagram-live-sync error:", err);
     return json({ error: "internal_error", details: (err as Error).message }, 500);
   }
-});
+}));

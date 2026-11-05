@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
@@ -30,7 +31,7 @@ async function frenetQuote(settings: any, p: FreightPackage, destination: string
   if (!options.length) throw new Error('Frenet: nenhum frete disponível para este pacote/CEP');
   return options;
 }
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("sale-freight-quote", async (req) => {
   const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -127,4 +128,4 @@ Deno.serve(async (req) => {
     const err = e as Error & { status?:number };
     return reply({ error:err.message || 'Não foi possível cotar os fretes' }, err.status || 400);
   }
-});
+}));

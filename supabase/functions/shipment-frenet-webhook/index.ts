@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Recebe os avisos de rastreio da Frenet e atualiza o acompanhamento do cliente.
 // A Frenet envia apenas o ÚLTIMO evento a cada mudança de status.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
@@ -9,7 +10,7 @@ const corsHeaders = {
 
 const TOKEN_HEADER = 'frenet_integration';
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const expected = Deno.env.get('FRENET_WEBHOOK_TOKEN');
@@ -110,4 +111,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

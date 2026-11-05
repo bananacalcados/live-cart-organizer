@@ -1,3 +1,5 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { internalCallHeaders } from "../_shared/requireAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
@@ -15,7 +17,7 @@ const AUDIT_STALL_THRESHOLD_MS = 4 * 60 * 1000;
  * and re-triggers the appropriate edge function.
  * Should be called every 2 minutes via pg_cron.
  */
-serve(async (req) => {
+serve(withAccessLog("cron-inventory-watchdog", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -74,6 +76,7 @@ serve(async (req) => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
+            ...await internalCallHeaders(),
           },
           body: JSON.stringify({ count_id: count.id, batch_size: 50, final: isFinal }),
         }).then(async (r) => {
@@ -100,4 +103,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

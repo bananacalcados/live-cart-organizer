@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { sendEmail, requireAdminOrService } from "../_shared/email-send.ts";
@@ -16,7 +17,7 @@ const Body = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("send-email", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const json = (b: unknown, status = 200) =>
     new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -25,4 +26,4 @@ Deno.serve(async (req) => {
   if (!parsed.success) return json({ error: parsed.error.flatten().fieldErrors }, 400);
   const r = await sendEmail(parsed.data as any);
   return json(r, r.ok ? 200 : 502);
-});
+}));

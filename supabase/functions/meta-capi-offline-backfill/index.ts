@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Backfill de eventos Purchase OFFLINE pra Meta CAPI — VERSÃO INLINE
 // Envia direto pra Meta CAPI (sem invocar outra edge function),
 // evitando rate limit do Supabase Edge Functions.
@@ -56,7 +57,7 @@ async function hashIfPresent(raw: string | null | undefined) {
   return await sha256Hex(t);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-offline-backfill", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -330,4 +331,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

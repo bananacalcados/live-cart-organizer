@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // PLANNER de campanhas para Grupos VIPs (Fila Durável com Delay Agendado)
 // ------------------------------------------------------------------------
 // Este endpoint NÃO envia mensagens diretamente. Ele apenas:
@@ -34,7 +35,7 @@ const LONG_PAUSE_MAX_MS = 70_000;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
-serve(async (req) => {
+serve(withAccessLog("zapi-group-scheduled-send", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -312,4 +313,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfe-devolucao-emitir
 // Fase 5 — NF-e de DEVOLUÇÃO (entrada) da Etapa 2 de Trocas/Devoluções.
 //
@@ -97,7 +98,7 @@ function buildRenderableDanfeUrl(url: string | null | undefined) {
   return endpoint.toString();
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -523,4 +524,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500,
     });
   }
-});
+}));

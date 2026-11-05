@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -112,7 +113,7 @@ async function filterChangedRows(supabase: any, source: string, batch: any[]): P
 const TIME_LIMIT_MS = 55_000;
 const NAME_SIMILARITY_THRESHOLD = 0.5; // At least 50% of name tokens must match
 
-serve(async (req) => {
+serve(withAccessLog("sync-pos-shopify-to-rfm", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const functionStart = Date.now();
@@ -334,4 +335,4 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Internal error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-});
+}));

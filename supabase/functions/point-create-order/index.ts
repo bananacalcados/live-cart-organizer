@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Mercado Pago Point — cobranças integradas na maquininha (Orders API).
 //
 // Ações:
@@ -57,7 +58,7 @@ function genExternalRef(): string {
   return `BCPT-${ts}-${rand}`.slice(0, 64);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("point-create-order", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -310,4 +311,4 @@ Deno.serve(async (req) => {
     console.error("[point-create-order] fatal", err?.message);
     return json({ error: err?.message || "Erro interno" }, 500);
   }
-});
+}));

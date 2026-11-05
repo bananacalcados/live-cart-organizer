@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Sincroniza públicos personalizados da Meta a partir das regras do ERP.
 // Ações: "run" (cron ou admin), "status" (admin: token + contagens na Meta),
 // "create_missing" (admin: cria os públicos "ERP –" sem id).
@@ -228,7 +229,7 @@ async function stepRun(runId: string, token: string): Promise<"more" | "done"> {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-audience-sync", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const body = await req.json().catch(() => ({}));
   const cron = await isAuthorizedCron(req);
@@ -296,4 +297,4 @@ Deno.serve(async (req) => {
   const { data: defs } = await q.order("rule_key");
   background(Promise.all((defs || []).map((d: any) => invokeSelf({ action: "sync_one", definition_id: d.id }))));
   return json({ dispatched: (defs || []).map((d: any) => d.name) });
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Pull a single Shopify order's customer (personal + address) on demand.
 // Given a pos_sales.id (Shopify-origin), fetches the live Shopify order,
 // extracts full personal + address data, upserts a pos_customers record,
@@ -35,7 +36,7 @@ function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-pull-order-customer", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -208,4 +209,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

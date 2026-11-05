@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Transferência de estoque entre lojas (motor atômico pos_transfer_stock).
 // Ações: preview | execute | reverse (admin) | history | resolve | execute_request.
 // Não chama a Shopify: ela recebe a soma das lojas, que não muda numa transferência.
@@ -40,7 +41,7 @@ async function runTransfer(db: any, args: Record<string, unknown>) {
   return data;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-stock-transfer-v2", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const { db, userId } = await freightAuth(req);
@@ -148,4 +149,4 @@ Deno.serve(async (req) => {
     const status = (e as any)?.status || 500;
     return json({ ok: false, error: (e as Error).message }, status);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Mercado Pago Point — webhook de notificações das maquininhas (Orders API).
 //
 // O Mercado Pago envia um POST com query (?data.id=ORD...&type=order) e corpo
@@ -34,7 +35,7 @@ function mapStatus(orderStatus: string | undefined | null): { status: string; pa
   return { status: s || "unknown", paid: false };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("point-webhook", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Sempre responder 200 rápido pro MP não reenviar em loop.
@@ -141,4 +142,4 @@ Deno.serve(async (req) => {
     console.error("[point-webhook] fatal", err?.message);
     return json({ ok: true, error: err?.message });
   }
-});
+}));

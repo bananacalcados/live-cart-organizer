@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
@@ -113,7 +114,7 @@ async function callAnthropic(anthropicKey: string, userPrompt: string): Promise<
   };
 }
 
-serve(async (req) => {
+serve(withAccessLog("ai-agent-customers-cron", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -375,4 +376,4 @@ ENTREGUE EXATAMENTE NESTE FORMATO:
     return new Response(JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-});
+}));

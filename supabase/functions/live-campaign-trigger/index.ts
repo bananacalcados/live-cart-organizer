@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Detecta frase-chave em mensagem incoming e dispara cadastro + sequência
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -16,7 +17,7 @@ function normalize(s: string) {
     .trim();
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-campaign-trigger", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -582,4 +583,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

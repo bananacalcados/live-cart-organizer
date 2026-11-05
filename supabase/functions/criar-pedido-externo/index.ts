@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -20,7 +21,7 @@ function getCorsHeaders(req: Request) {
 
 const AGENT_KEY = (Deno.env.get("MCP_AGENT_KEY") || "").trim();
 
-serve(async (req) => {
+serve(withAccessLog("criar-pedido-externo", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -269,4 +270,4 @@ serve(async (req) => {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
-});
+}));

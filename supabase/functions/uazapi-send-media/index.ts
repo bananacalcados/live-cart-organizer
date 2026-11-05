@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { withGroupSendRouting } from "../_shared/group-send-routing.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveUazapiCredentials, uazapiInstance, formatUazapiNumber } from "../_shared/uazapi-credentials.ts";
@@ -32,7 +33,7 @@ function buildUazapiFilePayload(mediaUrl: string, _type: string): string {
   return mediaUrl;
 }
 
-serve(withGroupSendRouting("uazapi", "media", async (req) => {
+serve(withAccessLog("uazapi-send-media", withGroupSendRouting("uazapi", "media", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -94,4 +95,4 @@ serve(withGroupSendRouting("uazapi", "media", async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-}));
+})));

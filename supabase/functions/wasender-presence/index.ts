@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
 
@@ -27,7 +28,7 @@ function formatJid(phone: string): string {
  *  - phone, whatsapp_number_id
  *  - presence: 'composing' | 'recording' | 'paused' | 'available' | 'unavailable'
  */
-serve(async (req) => {
+serve(withAccessLog("wasender-presence", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -47,4 +48,4 @@ serve(async (req) => {
     console.error("[wasender-presence] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

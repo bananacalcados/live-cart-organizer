@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Vincula produtos JÁ EXISTENTES na Shopify ao nosso catálogo (product_variants).
 // Casa por GTIN (barcode) primeiro e por SKU como segundo critério.
 //
@@ -31,7 +32,7 @@ function nextPageInfo(linkHeader: string | null): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-link-products", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -236,4 +237,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

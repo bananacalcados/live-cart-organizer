@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Mensagem inicial NÃO-API (uazapi/wasender/zapi) do evento em modo WhatsApp.
 // Escolhe uma das variações configuradas em rodízio (round-robin atômico via
 // RPC next_event_wa_initial_variant), resolve as variáveis do pedido e envia
@@ -26,7 +27,7 @@ interface Variant {
 
 const MEMBER_AREA_PUBLIC = "https://checkout.bananacalcados.com.br/minha-area";
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-order-wa-initial-send", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -229,4 +230,4 @@ Deno.serve(async (req) => {
     console.error("[event-order-wa-initial-send] error:", e);
     return json({ error: String(e) }, 500);
   }
-});
+}));

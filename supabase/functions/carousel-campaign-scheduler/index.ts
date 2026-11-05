@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Daily scheduler for recurring WhatsApp carousel campaigns (Etapa 3).
 //
 // For each ACTIVE campaign whose `dias_semana` includes today's weekday
@@ -47,7 +48,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("carousel-campaign-scheduler", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
@@ -138,4 +139,4 @@ Deno.serve(async (req) => {
   }
 
   return json({ ok: true, weekday: today, processed: results });
-});
+}));

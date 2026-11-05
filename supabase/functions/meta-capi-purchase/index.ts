@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Meta Conversions API — Purchase event
 // Sends a Purchase event to Meta Pixel via server-side API after a sale is concluded.
 //
@@ -113,7 +114,7 @@ function extractClientIp(req: Request): string | undefined {
 
 // ============ Handler ============
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-capi-purchase", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -446,4 +447,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

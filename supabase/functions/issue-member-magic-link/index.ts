@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
 
@@ -9,7 +10,7 @@ const corsHeaders = {
 
 // Gera o link autenticado da Área de Membros para um telefone.
 // Requer usuário autenticado (verify_jwt padrão) — uso interno do PDV/Eventos.
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("issue-member-magic-link", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -34,4 +35,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

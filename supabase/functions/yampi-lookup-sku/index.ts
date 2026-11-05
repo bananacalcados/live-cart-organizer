@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ALLOWED_ORIGINS = [
@@ -27,7 +28,7 @@ interface YampiSkuResult {
   found: boolean;
 }
 
-serve(async (req) => {
+serve(withAccessLog("yampi-lookup-sku", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -120,4 +121,4 @@ serve(async (req) => {
       }
     );
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Called from WhatsApp webhooks to detect referral signals in incoming messages.
 // Detects: 1) coupon code INDICA-XXXXX in text  2) phone match with pending referral
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -14,7 +15,7 @@ function suffix8(p: string) {
   return (p || '').replace(/\D/g, '').slice(-8);
 }
 
-serve(async (req) => {
+serve(withAccessLog("referral-detect-incoming", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const supabase = createClient(
@@ -76,4 +77,4 @@ serve(async (req) => {
     return new Response(JSON.stringify({ matched: false, error: e.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-});
+}));

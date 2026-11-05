@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
@@ -1013,7 +1014,7 @@ async function executeToolCall(
 
 // ─── Main handler ────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serve(withAccessLog("concierge-respond", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -1939,4 +1940,4 @@ REGRAS GERAIS:
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Captação de lead das Landing Pages públicas (ex.: /lp/conforto).
 // Grava no MESMO log de captação que alimenta o Leads Dashboard (lp_leads),
 // sem deduplicar (re-cadastros são preservados para análise de jornada).
@@ -77,7 +78,7 @@ async function sendCapiLead(args: {
   else console.log("[lp-capture-lead] capi ok:", out);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("lp-capture-lead", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method not allowed" }, 405);
 
@@ -170,4 +171,4 @@ Deno.serve(async (req) => {
     console.error("[lp-capture-lead]", e);
     return json({ success: false, error: String(e) }, 500);
   }
-});
+}));

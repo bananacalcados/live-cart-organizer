@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // ── AustPay (Rinne): cobrança no cartão ───────────────────────────────────
 // Fase 3 do plano — ÚLTIMO degrau da cascata, nunca o primeiro.
 // A Rinne não aceita PAN/CVV em texto puro no host normal, mas oferece o HOST
@@ -50,7 +51,7 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-serve(async (req) => {
+serve(withAccessLog("austpay-charge-card", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: getCorsHeaders(req) });
 
   const supabase = createClient(
@@ -244,4 +245,4 @@ serve(async (req) => {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
-});
+}));

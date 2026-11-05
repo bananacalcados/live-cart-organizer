@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Worker da fila de envios em massa por evento (Template API / Cross-sell).
 // Claim atômico (SKIP LOCKED), envio sequencial com pausa, retry limitado.
 // Acionado logo após o enqueue e por cron a cada minuto.
@@ -15,7 +16,7 @@ const MAX_ATTEMPTS = 3;
 const DELAY_MS = 1200;
 const RUN_BUDGET_MS = 50_000;
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-bulk-send-worker", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const started = Date.now();
@@ -146,4 +147,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

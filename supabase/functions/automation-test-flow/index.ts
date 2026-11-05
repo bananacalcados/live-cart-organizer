@@ -1,3 +1,5 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { waitReplyBranches, waitReplyExpiresAt, continuationIndices } from "../_shared/automation-reply-branches.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -7,7 +9,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(withAccessLog("automation-test-flow", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -409,4 +411,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+})));

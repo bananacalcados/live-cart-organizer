@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // dispatch-worker
 // Stateless durable worker: claims a small lease of dispatch_recipients,
 // sends them via Meta Graph API, marks done. Designed to be spawned in parallel.
@@ -336,7 +337,7 @@ function buildRenderedMessage(
   return parts.join('\n\n');
 }
 
-serve(async (req) => {
+serve(withAccessLog("dispatch-worker", async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const startedAt = Date.now();
@@ -775,4 +776,4 @@ serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

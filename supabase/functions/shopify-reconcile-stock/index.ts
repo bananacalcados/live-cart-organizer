@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // shopify-reconcile-stock
 // Tarefa pontual (one-off) para reconciliar TODO o estoque da Shopify com o
 // estoque real do nosso sistema (pos_products), para os produtos JÁ vinculados
@@ -29,7 +30,7 @@ function pickPrimaryLocation(locations: Array<{ id: number; name?: string | null
   return preferred || active[0] || locations?.[0] || null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("shopify-reconcile-stock", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -191,4 +192,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

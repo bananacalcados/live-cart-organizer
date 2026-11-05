@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
@@ -44,7 +45,7 @@ async function getPayPalAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-serve(async (req) => {
+serve(withAccessLog("paypal-create-order", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -217,4 +218,4 @@ serve(async (req) => {
       }
     );
   }
-});
+}));

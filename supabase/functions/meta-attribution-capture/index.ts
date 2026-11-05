@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Etapa 3 — captura pública dos sinais de clique da Meta.
 //
 // Usada por páginas de captação que gravam o lead direto do navegador
@@ -21,7 +22,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("meta-attribution-capture", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -56,4 +57,4 @@ Deno.serve(async (req) => {
     // Atribuição nunca pode quebrar a captação do lead.
     return json({ ok: false, saved: false });
   }
-});
+}));

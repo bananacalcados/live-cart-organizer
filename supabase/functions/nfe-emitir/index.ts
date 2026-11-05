@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Edge function: nfe-emitir
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
@@ -191,7 +192,7 @@ async function tinyGetOrderData(
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("nfe-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -838,4 +839,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500,
     });
   }
-});
+}));

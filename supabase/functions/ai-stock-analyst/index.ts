@@ -1,3 +1,5 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -627,7 +629,7 @@ async function callAI(userContent: string, asJson: boolean) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("ai-stock-analyst", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -754,4 +756,4 @@ ${JSON.stringify(filtrado, null, 2)}
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+})));

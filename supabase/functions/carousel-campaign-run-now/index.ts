@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Manual immediate trigger for a single carousel campaign ("Iniciar disparos agora").
 //
 // Called from the POS UI by an authenticated user. It:
@@ -35,7 +36,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("carousel-campaign-run-now", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -160,4 +161,4 @@ Deno.serve(async (req) => {
     console.error("[run-now] unexpected error:", msg, (e as Error)?.stack);
     return json({ error: `Falha ao iniciar disparos: ${msg}` }, 500);
   }
-});
+}));

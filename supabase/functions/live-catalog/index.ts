@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Catálogo cross-sell da live (modo "WhatsApp + Cadastro online").
 // Página pública /pedido/:slug/catalogo/:token. Todas as leituras/escritas passam aqui (service role).
 // Pedidos criados aqui têm origin='catalog' e pulam o gatilho de carrinho/DM do Instagram.
@@ -34,7 +35,7 @@ function orderTotal(o: any) {
   return { sub: r2(sub), total: r2(Math.max(0, sub - disc) + ship) };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("live-catalog", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const SB_URL = Deno.env.get("SUPABASE_URL")!;
   const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -310,4 +311,4 @@ Deno.serve(async (req) => {
     console.error("[live-catalog]", e);
     return json({ ok: false, error: "internal" }, 500);
   }
-});
+}));

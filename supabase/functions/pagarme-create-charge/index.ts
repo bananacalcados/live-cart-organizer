@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
@@ -1217,7 +1218,7 @@ async function chargeAppmaxV2(
 }
 
 // ── Main handler ────────────────────────────────────────────────
-serve(async (req) => {
+serve(withAccessLog("pagarme-create-charge", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -2021,4 +2022,4 @@ serve(async (req) => {
       { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
-});
+}));

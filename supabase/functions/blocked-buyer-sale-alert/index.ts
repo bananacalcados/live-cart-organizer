@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   getServiceClient,
@@ -15,7 +16,7 @@ const ALERT_INSTANCE_ID = "0833dc6c-6bd4-4b2f-8cb2-1889a5993e9c";
 // Admin que recebe o alerta
 const ALERT_ADMIN_PHONE = "5533991955003";
 
-serve(async (req) => {
+serve(withAccessLog("blocked-buyer-sale-alert", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -107,4 +108,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

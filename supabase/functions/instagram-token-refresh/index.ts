@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
@@ -19,7 +20,7 @@ const corsHeaders = {
  * Pode ser chamada por cron (x-cron-secret), pelo service role, ou por um
  * usuário autenticado (botão "Renovar" no admin).
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("instagram-token-refresh", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -132,4 +133,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ success: true, results }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

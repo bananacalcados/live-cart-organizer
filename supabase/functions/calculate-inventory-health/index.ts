@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -5,7 +6,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2h
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("calculate-inventory-health", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
     console.error('unhandled:', e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {

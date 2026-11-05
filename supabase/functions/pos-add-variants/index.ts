@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -15,7 +16,7 @@ const corsHeaders = {
  *
  * Body: { master_id, store_id, variant_ids: string[] }
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("pos-add-variants", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -140,4 +141,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

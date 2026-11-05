@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -13,7 +14,7 @@ const corsHeaders = {
  * Uses ON CONFLICT DO NOTHING on the (config_id, order_id) unique index so
  * running many times a minute is safe.
  */
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("event-followup-scheduler", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
     console.error("[scheduler] error:", err?.message || err);
     return json({ ok: false, error: err?.message || "internal" }, 500);
   }
-});
+}));
 
 function pickTriggerTime(cfg: any, o: any): Date | null {
   const src = cfg.trigger_source || "auto";

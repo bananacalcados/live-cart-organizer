@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -31,7 +32,7 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-serve(async (req) => {
+serve(withAccessLog("checkout-prize-preview", async (req) => {
   const headers = { ...cors(req), "Content-Type": "application/json" };
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
 
@@ -88,4 +89,4 @@ serve(async (req) => {
     console.error("[checkout-prize-preview]", err);
     return new Response(JSON.stringify({ prize: null }), { headers });
   }
-});
+}));

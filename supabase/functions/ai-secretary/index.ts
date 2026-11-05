@@ -1,3 +1,5 @@
+import { withRequiredAuth } from "../_shared/withRequiredAuth.ts";
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveZApiCredentials, normalizePhone } from "../_shared/zapi-credentials.ts";
@@ -195,7 +197,7 @@ function buildToolFallbackReply(toolResults: Array<{ result: any }>) {
   return `Consegui executar sua solicitação, mas a IA ficou instável ao montar a resposta final.\n\n${lines.join('\n')}`;
 }
 
-serve(async (req) => {
+serve(withAccessLog("ai-secretary", withRequiredAuth([], false, async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -381,7 +383,7 @@ Regras:
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+})));
 
 async function executeToolCall(supabase: any, toolName: string, input: any, userId: string, settings: any) {
   switch (toolName) {

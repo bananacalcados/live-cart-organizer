@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 // Avisos automáticos na live do Instagram quando um carrinho é montado no Eventos.
 // Fila: ig_live_cart_notifications (preenchida por trigger em orders).
@@ -111,7 +112,7 @@ async function sendRegisterDm(sb: any, job: any, order: any, accounts: any[], li
   return done("failed", { error: `direct: ${r.err}`.slice(0, 900), message: text });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("ig-live-cart-notify", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -221,4 +222,4 @@ Deno.serve(async (req) => {
     await new Promise((r) => setTimeout(r, 500));
   }
   return json({ ok: true, results });
-});
+}));

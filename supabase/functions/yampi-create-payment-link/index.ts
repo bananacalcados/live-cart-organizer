@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
@@ -212,7 +213,7 @@ async function resolveYampiSkuId(
   return { skuId: yampiSkuId };
 }
 
-serve(async (req) => {
+serve(withAccessLog("yampi-create-payment-link", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -427,4 +428,4 @@ serve(async (req) => {
       }
     );
   }
-});
+}));

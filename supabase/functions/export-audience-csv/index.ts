@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -54,7 +55,7 @@ function normZip(raw: string | null | undefined): string {
   return d.length === 8 ? d : "";
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("export-audience-csv", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -297,4 +298,4 @@ Deno.serve(async (req) => {
       headers: corsHeaders,
     });
   }
-});
+}));

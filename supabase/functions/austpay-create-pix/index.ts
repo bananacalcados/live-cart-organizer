@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // ── AustPay (Rinne): cobrança Pix ─────────────────────────────────────────
 // Fase 1 do plano. Só responde quando a chave `austpay_enabled` está ligada
 // e as credenciais existem. É o DEGRAU SEGUINTE ao Mercado Pago — nunca o
@@ -48,7 +49,7 @@ function getCorsHeaders(req: Request) {
 
 const PIX_EXPIRATION_SECONDS = 3600;
 
-serve(async (req) => {
+serve(withAccessLog("austpay-create-pix", async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
   }
@@ -194,4 +195,4 @@ serve(async (req) => {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
-});
+}));

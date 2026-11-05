@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Etapa 4 — Worker de envio das campanhas de carrossel recorrentes.
 //
 // Processa as linhas `pendente` de `campanha_envios` que já podem ser enviadas
@@ -102,7 +103,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("carousel-campaign-sender", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
 
@@ -516,4 +517,4 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, processed: pendentes.length, sent, failed, skipped, toppedUp });
 
-});
+}));

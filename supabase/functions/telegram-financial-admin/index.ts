@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Telegram Financial Agent — admin tools (register webhook, generate invite token)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -18,7 +19,7 @@ async function deriveWebhookSecret(token: string): Promise<string> {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("telegram-financial-admin", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Auth: require logged-in admin
@@ -88,4 +89,4 @@ Deno.serve(async (req) => {
     console.error(e);
     return new Response(JSON.stringify({ error: String((e as Error).message ?? e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-});
+}));

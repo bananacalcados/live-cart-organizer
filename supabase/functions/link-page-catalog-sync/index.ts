@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Sincroniza o catálogo de produtos de uma Link Page a partir da Shopify.
 // Regras: só produtos COM FOTO e com grade de tamanhos >= 60% disponível.
 // Modos: 'manual' (apenas reavalia grade dos já marcados), 'lancamentos',
@@ -113,7 +114,7 @@ async function shopify(query: string, variables: Record<string, unknown>) {
   return data.data;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("link-page-catalog-sync", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -236,4 +237,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

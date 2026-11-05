@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
 
@@ -23,7 +24,7 @@ function json(body: unknown, status = 200) {
  *  - text (edit)
  *  - messageIds: string[] (read)
  */
-serve(async (req) => {
+serve(withAccessLog("wasender-message-actions", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -62,4 +63,4 @@ serve(async (req) => {
     console.error("[wasender-message-actions] error:", e);
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 // Edge: fiscal-recover-by-identifier
 // Quando a BrasilNFe responde "Já foi emitida uma nota fiscal com o identificador
@@ -20,7 +21,7 @@ const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-Deno.serve(async (req) => {
+Deno.serve(withAccessLog("fiscal-recover-by-identifier", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -193,4 +194,4 @@ Deno.serve(async (req) => {
     console.error("[fiscal-recover]", e);
     return json({ error: e?.message || "internal_error" }, 500);
   }
-});
+}));

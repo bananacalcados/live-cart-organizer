@@ -1,3 +1,4 @@
+import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   resolveUazapiCredentials,
@@ -31,7 +32,7 @@ function typeFromMime(mime: string | null, mediaType: string | null): "image" | 
  * (/message/download), re-hospeda no bucket e grava em whatsapp_status_posts.
  * Body: { whatsapp_number_id, message_ids: string[], fallbacks?: Record<id,{type,media_url}> }
  */
-serve(async (req) => {
+serve(withAccessLog("uazapi-backfill-status", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -107,4 +108,4 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-});
+}));
