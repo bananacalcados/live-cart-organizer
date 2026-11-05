@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { internalCallHeaders } from "../_shared/requireAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
@@ -75,6 +76,7 @@ serve(withAccessLog("cron-inventory-watchdog", async (req) => {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
+            ...await internalCallHeaders(),
           },
           body: JSON.stringify({ count_id: count.id, batch_size: 50, final: isFinal }),
         }).then(async (r) => {
