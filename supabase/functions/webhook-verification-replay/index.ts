@@ -41,7 +41,7 @@ serve(withAccessLog("webhook-verification-replay", async (req) => {
   let q = supabase.from("pos_checkout_attempts").select("sale_id, transaction_id, amount, created_at, metadata")
     .eq("gateway", gw).eq("status", "success").not("transaction_id", "is", null)
     .order("created_at", { ascending: false }).range(offset, offset + limit - 1);
-  if (provider !== "pagarme") q = q.eq("metadata->>source", "webhook");
+  if (provider !== "pagarme" && !body.any_source) q = q.eq("metadata->>source", "webhook");
   const { data: rows, error } = await q;
   if (error) return json({ error: error.message }, 500);
 
