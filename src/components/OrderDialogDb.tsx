@@ -754,6 +754,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
 
         toast.success("Pedido atualizado!");
+        onCreated?.(editingOrder.id);
       } else {
         // Nunca cria pedido vazio: ele duplica o card da cliente e não gera link.
         if (localProducts.length === 0) {
