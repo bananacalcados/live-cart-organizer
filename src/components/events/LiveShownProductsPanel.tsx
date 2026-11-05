@@ -1,6 +1,6 @@
 import { LiveCodeSettingsSection } from "./LiveCodeSettingsSection";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Search, RotateCcw, Radio } from "lucide-react";
+import { Loader2, Search, RotateCcw, Radio, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,11 @@ async function currentUserName(): Promise<string> {
   return (u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || "Equipe") as string;
 }
 
-export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
+// Marcador de "excluído da exibição" sem mudar o banco: marcar de novo grava o nome de quem marcou e o item volta.
+const HIDDEN = "__excluido__";
+
+export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: string; compact?: boolean }) {
+  const [tab, setTab] = useState<"shown" | "hidden">("shown");
   const [rows, setRows] = useState<ShownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -109,16 +113,32 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
     load();
   };
 
-  const sorted = [...rows].sort((a, b) => Number(!!b.is_current) - Number(!!a.is_current));
+  const hide = async (r: ShownRow) => {
+    setBusy(r.code);
+    const { error } = await db.from("live_shown_products").update({ shown_by: HIDDEN, is_current: false }).eq("id", r.id);
+    setBusy(null);
+    if (error) { toast.error("Não foi possível excluir: " + error.message); return; }
+    toast.success(`${r.code} saiu da exibição`);
+    load();
+  };
 
-  return (
-    <div className="space-y-3">
-      <LiveCodeSettingsSection eventId={eventId} />
-      <div className="relative">
+  const visible = rows.filter((r) => r.shown_by !== HIDDEN);
+  const hidden = rows.filter((r) => r.shown_by === HIDDEN);
+  const sorted = [...(tab === "shown" ? visible : hidden)].sort((a, b) => Number(!!b.is_current) - Number(!!a.is_current));
+
+  const tabs = (
+    <div className="flex gap-1 shrink-0">
+      <Button size="sm" variant={tab === "shown" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setTab("shown")}>Em exibição ({visible.length})</Button>
+      <Button size="sm" variant={tab === "hidden" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setTab("hidden")}>Excluídos ({hidden.length})</Button>
+    </div>
+  );
+
+  const searchBox = (
+      <div className={cn("relative", compact && "w-72 shrink-0")}>
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, cor ou código (ex.: T001)" className="pl-8" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, cor ou código (ex.: T001)" className={cn("pl-8", compact && "h-9 text-sm")} />
         {(searching || results.length > 0) && (
-          <Card className="absolute z-20 mt-1 w-full max-h-80 overflow-auto p-1">
+          <Card className={cn("absolute z-30 mt-1 max-h-80 overflow-auto p-1", compact ? "w-96" : "w-full")}>
             {searching && <div className="p-2 text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Buscando…</div>}
             {results.map((r) => (
               <button key={r.code} disabled={!!busy} onClick={() => show(r.code)}
@@ -134,11 +154,56 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
           </Card>
         )}
       </div>
+  );
+
+  if (compact) {
+    return (
+      <Card className="p-2 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold shrink-0">Produtos em exibição</span>
+          {searchBox}
+          {tabs}
+        </div>
+        {loading ? (
+          <div className="flex justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+        ) : sorted.length === 0 ? (
+          <p className="text-xs text-muted-foreground px-1">{tab === "shown" ? "Nenhum produto em exibição." : "Nenhum produto excluído."}</p>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {sorted.map((r) => (
+              <div key={r.id} className={cn("relative w-44 shrink-0 rounded-md border bg-card p-2", r.is_current && "border-primary ring-2 ring-primary/40 bg-primary/5")}>
+                {tab === "shown" && (
+                  <button aria-label={`Excluir ${r.code}`} disabled={busy === r.code} onClick={() => hide(r)}
+                    className="absolute right-1 top-1 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <div className="flex items-center gap-1 pr-4">
+                  <span className="text-sm font-extrabold">{r.code}</span>
+                  {r.is_current && <Badge className="h-4 px-1 text-[9px]">Agora</Badge>}
+                  {!r.shopify_ok && <Badge variant="destructive" className="h-4 px-1 text-[9px]">fora Shopify</Badge>}
+                </div>
+                <p className="text-xs font-medium truncate" title={r.product_name || ""}>{r.product_name || "—"}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{r.color || "—"}</p>
+                <p className="text-xs font-semibold">{BRL(r.sale_price)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <LiveCodeSettingsSection eventId={eventId} />
+      {searchBox}
+      {tabs}
 
       {loading ? (
         <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center p-6">Nenhum produto exibido nesta live ainda.</p>
+        <p className="text-sm text-muted-foreground text-center p-6">{tab === "shown" ? "Nenhum produto exibido nesta live ainda." : "Nenhum produto excluído."}</p>
       ) : (
         <div className="space-y-2">
           {sorted.map((r) => (
@@ -151,11 +216,12 @@ export function LiveShownProductsPanel({ eventId }: { eventId: string }) {
                 <p className="text-sm font-medium truncate">{r.product_name || "—"}</p>
                 <p className="text-xs text-muted-foreground">{r.color || "—"} · {BRL(r.sale_price)}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {hhmm(r.shown_at)} · {r.shown_by || "—"}
+                  {hhmm(r.shown_at)} · {r.shown_by === HIDDEN ? "excluído" : r.shown_by || "—"}
                   {r.source === "comment" && <Badge variant="outline" className="ml-2 text-[10px] py-0">detectado pelo comentário</Badge>}
                   {!r.shopify_ok && <Badge variant="destructive" className="ml-2 text-[10px] py-0">não está na Shopify</Badge>}
                 </p>
               </div>
+              {tab === "shown" && <Button size="sm" variant="ghost" disabled={busy === r.code} onClick={() => hide(r)} className="gap-1 text-muted-foreground"><X className="h-3 w-3" /> Excluir</Button>}
               {r.shopify_ok && <Button size="sm" variant="outline" disabled={busy === r.code} onClick={() => show(r.code)} className="gap-1">
                 {busy === r.code ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Mostrar de novo
               </Button>}
