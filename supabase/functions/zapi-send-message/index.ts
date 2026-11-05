@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
@@ -12,6 +13,8 @@ serve(withAccessLog("zapi-send-message", async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+// Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
+{ const denied = await requireStaffOrInternal(req, ["chat","pos","events","marketing","expedition"], false); if (denied) return denied; }
 
   try {
     const { phone, message, whatsapp_number_id, quotedMessageId, linkPreview } = await req.json();
