@@ -71,6 +71,8 @@ Deno.serve(withAccessLog("sync-code-shopify-status", async (req) => {
       arr.push(numId(v.shopify_variant_id));
       variantsByKey.set(k, arr);
     }
+    if (rows.length < 1000) break;
+   }
   }
 
   // 2) Produtos na Shopify, 25 por consulta.
