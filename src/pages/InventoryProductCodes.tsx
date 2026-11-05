@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash } from "lucide-react";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type CodeRow = {
   code: string;
@@ -38,11 +39,31 @@ const STATUS_LABEL: Record<string, string> = {
   unlinked: "sem vínculo",
   pending_check: "aguardando checagem",
 };
-function ShopifyBadge({ r }: { r: CodeRow }) {
+const STATUS_REASON: Record<string, string> = {
+  product_missing: "O produto não foi encontrado na Shopify ou não está ativo lá.",
+  not_published_lovable: "O produto existe na Shopify, mas não está publicado no canal Lovable.",
+  color_missing: "Nenhum SKU desta cor do ERP foi encontrado no produto da Shopify.",
+  unlinked: "Nenhum SKU deste produto do ERP foi encontrado na Shopify.",
+  pending_check: "Ainda não foi verificado na Shopify.",
+};
+function ShopifyBadge({ r, sku }: { r: CodeRow; sku?: string }) {
   const st = r.shopify_status || "pending_check";
   if (st === "ok") return <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">ok</Badge>;
   if (st === "partial_sizes") return <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400">{r.shopify_sizes_ok ?? 0} de {r.shopify_sizes_total ?? 0} tamanhos</Badge>;
-  return <Badge variant="destructive">{STATUS_LABEL[st] || st}</Badge>;
+  const showSku = st === "product_missing" || st === "color_missing";
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex cursor-help"><Badge variant="destructive">{STATUS_LABEL[st] || st}</Badge></span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>{STATUS_REASON[st] || STATUS_LABEL[st] || st}</p>
+          {showSku && <p className="mt-1">SKU de exemplo no ERP: <b>{sku || "sem SKU"}</b></p>}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 type Letter = { letter: string; label: string };
 
@@ -72,6 +93,27 @@ export default function InventoryProductCodes() {
   const [pdfMode, setPdfMode] = useState<"filtered" | "selected" | "stock">("filtered");
   const [exporting, setExporting] = useState(false);
   const [reload, setReload] = useState(0);
+  const [exampleSku, setExampleSku] = useState<Record<string, string>>({});
+
+  // SKU de exemplo (1ª variação da cor) só para os códigos visíveis com problema: 1 consulta por página.
+  useEffect(() => {
+    const bad = rows.filter((r) => r.shopify_status === "product_missing" || r.shopify_status === "color_missing");
+    if (!bad.length) { setExampleSku({}); return; }
+    let cancel = false;
+    supabase.from("product_variants").select("master_id,color,size,sku")
+      .in("master_id", [...new Set(bad.map((r) => r.master_id))]).eq("is_active", true)
+      .order("size").limit(1000)
+      .then(({ data }) => {
+        if (cancel) return;
+        const out: Record<string, string> = {};
+        for (const v of (data as any[]) ?? []) {
+          const k = `${v.master_id}|${normColor(v.color)}`;
+          if (!out[k] && v.sku) out[k] = v.sku;
+        }
+        setExampleSku(out);
+      });
+    return () => { cancel = true; };
+  }, [rows]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -91,7 +133,7 @@ export default function InventoryProductCodes() {
     try {
       const { data, error } = await supabase.functions.invoke("sync-shopify-mirror", { body: {} });
       if (error) throw error;
-      toast.success(`Verificado: ${Object.entries((data as any)?.counts || {}).map(([k, v]) => `${v} ${STATUS_LABEL[k] || k}`).join(" · ")}`);
+      toast.success(`Verificado: ${Object.entries((data as any)?.by_status || (data as any)?.counts || {}).map(([k, v]) => `${v} ${STATUS_LABEL[k] || k}`).join(" · ")}`);
       setReload((x) => x + 1);
     } catch (e: any) {
       toast.error("Erro ao verificar na Shopify: " + (e?.message || e));
@@ -341,7 +383,7 @@ export default function InventoryProductCodes() {
                     <td className="p-2 text-muted-foreground">{r.category ?? (r.letter ? letterLabel.get(r.letter) : "")}</td>
                     <td className="p-2 text-right whitespace-nowrap">{brl(r.sale_price)}</td>
                     <td className={`p-2 text-right ${Number(r.total_stock ?? 0) > 0 ? "" : "text-muted-foreground"}`}>{r.total_stock ?? 0}</td>
-                    <td className="p-2"><ShopifyBadge r={r} /></td>
+                    <td className="p-2"><ShopifyBadge r={r} sku={exampleSku[`${r.master_id}|${normColor(r.color)}`]} /></td>
                   </tr>
                 ))}
               </tbody>
