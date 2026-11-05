@@ -1,6 +1,7 @@
 # Rodada de ajustes — modo WhatsApp + Cadastro online
 
 ## Segurança urgente — 05/11
+- [x] Complemento Fase 2 somente leitura: 319 funções com referências completas; 899 ocorrências src/edge, 600 invoke/fetch sintáticos; 51 jobs consultados; 47 candidatas com zero referências internas (triagem, não autorização); 17 provedores com nomes configurados e últimas evidências reais. Nenhuma desativação/publicação. Psql sem acesso a cron; SELECT autorizado usado. Também identificada chamada SQL a tiny-mirror-stock sem fonte local.
 - [x] Fase 1A: dez tabelas protegidas; privilégios destrutivos removidos; anon negado.
 - [x] Fase 1B: 319 funções locais com registro; Admin/Acessos testados, alertas de IP persistidos.
 - [x] Fase 1C: 21 barreiras implantadas e testadas (401); demais incertas log-only; PDV Pérola abriu autenticado.
