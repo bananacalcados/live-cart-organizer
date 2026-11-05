@@ -29668,6 +29668,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      security_user_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          id: string
+          last_sign_in_at: string
+        }[]
+      }
       select_campaign_batch: {
         Args: {
           p_campanha_id: string

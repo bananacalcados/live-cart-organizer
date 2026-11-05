@@ -848,6 +848,13 @@
       "when": 1793875443409,
       "tag": "0120_revoke_anon_rpcs",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1793876037149,
+      "tag": "0121_security_user_by_email",
+      "breakpoints": true
     }
   ]
 }
