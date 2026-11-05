@@ -19,7 +19,7 @@ const db = supabase as any;
 const brl = (v?: number | null) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 
 export interface CodeIntentItem {
-  code: string; product_name?: string; color?: string; size?: string | null; price?: number;
+  code: string; quantity?: number; product_name?: string; color?: string; size?: string | null; price?: number;
   sku?: string; shopify_variant_id?: string | null; master_id?: string | null; stock?: number; status?: string; warnings?: string[];
 }
 export interface CodeIntent {
@@ -56,7 +56,7 @@ export function matchCatalogItem(item: CodeIntentItem, catalog: CatalogRow[]): D
         price: p.offer_price != null && p.original_price != null && Number(p.offer_price) < Number(p.original_price)
           ? Number(p.offer_price)
           : Number(item.price ?? p.offer_price ?? v.price ?? 0),
-        quantity: 1,
+        quantity: Number(item.quantity) || 1,
         image: v.image || p.image_url || undefined,
       };
     }
@@ -87,7 +87,7 @@ async function lookupShopifyHits(intent: CodeIntent, catalog: CatalogRow[]): Pro
         title: product.node.title,
         variant: variant.title !== "Default Title" ? variant.title : "",
         price: Number(it.price ?? price),
-        quantity: 1,
+        quantity: Number(it.quantity) || 1,
         image: getVariantImage(product, variant),
       };
     }

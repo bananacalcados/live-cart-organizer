@@ -9,10 +9,10 @@ it("confirm intent", async () => {
   const ss: any = { error: null }; (supabase as any).rest.headers["Authorization"] = `Bearer ${s.access_token}`; (supabase as any).auth.getSession = async () => ({ data: { session: s }, error: null }); (supabase as any).auth.getUser = async () => ({ data: { user: s.user }, error: null });
   console.log("SS", ss.error?.message, Object.keys(s));
   const db = supabase as any;
-  const { data: intent, error: ie } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov").in("status", ["ready"]).single();
+  const { data: intent, error: ie } = await db.from("live_order_intents").select("*").eq("event_id", EV).eq("username", "teste_codigo_lov2").in("status", ["ready"]).single();
   console.log("IE", JSON.stringify(ie), JSON.stringify((await supabase.auth.getUser()).data.user?.email));
   const { data: cat } = await db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants").eq("event_id", EV).limit(200);
-  const products = intent.items.map((it: any) => { const p = matchCatalogItem(it, cat)!; p.quantity = it.quantity || 1; return p; });
+  const products = intent.items.map((it: any) => { const p = matchCatalogItem(it, cat)!; return p; });
   expect(products.every(Boolean)).toBe(true);
   const id = await confirmCodeIntentOrder(EV, intent, products, "teste-lovable");
   const { data: o } = await db.from("orders").select("id,products,free_shipping,shipping_cost,cashback_id").eq("id", id).single();
