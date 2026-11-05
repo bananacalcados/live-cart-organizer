@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
-import { type Decision, exactAmountOk, posAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { type Decision, exactAmountOk, posAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, observeSignature, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -173,9 +173,9 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   if (rawBody && body?.data?.id) {
     const hasSig = !!req.headers.get("x-signature") && !!Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
     const isValid = await validateMercadoPagoSignature(req, rawBody);
-    if (!isValid && hasSig) {
-      await securityEvent(supabase, "webhook_bad_signature", whIp, { provider: "mercadopago", payment_id: body?.data?.id, strict });
-      if (strict) {
+    if (Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET")) {
+      const reject = await observeSignature(supabase, "mercadopago", isValid && hasSig, whIp, { payment_id: body?.data?.id });
+      if (reject) {
         return new Response(JSON.stringify({ ok: false, error: "bad_signature" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
     }

@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
-import { type Decision, alreadyApplied, posAmountOk, expectedOrderAmounts, flagReview, hmacHex, isStrictMode, logVerification, orderAmountOk, pagarmeLookup, requestIp, securityEvent, warnMissingSecretOncePerDay } from "../_shared/webhook-verification.ts";
+import { type Decision, alreadyApplied, posAmountOk, expectedOrderAmounts, flagReview, hmacHex, isStrictMode, logVerification, observeSignature, orderAmountOk, pagarmeLookup, requestIp, securityEvent, warnMissingSecretOncePerDay } from "../_shared/webhook-verification.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -52,8 +52,8 @@ serve(withAccessLog("pagarme-webhook", async (req) => {
     if (whSecret) {
       const sig = (req.headers.get("x-hub-signature") || "").replace(/^sha1=/, "");
       const calc = await hmacHex("SHA-1", whSecret, rawBody);
-      if (!sig || sig !== calc) {
-        await securityEvent(supabase, "webhook_bad_signature", ip, { provider: "pagarme" });
+      const reject = await observeSignature(supabase, "pagarme", !!sig && sig === calc, ip);
+      if (reject) {
         return new Response(JSON.stringify({ ok: false, error: "bad_signature" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
     } else {

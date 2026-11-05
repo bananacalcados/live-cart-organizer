@@ -22,8 +22,11 @@ let strictCache: { v: boolean; at: number } | null = null;
 export async function isStrictMode(supabase: any): Promise<boolean> {
   if (strictCache && Date.now() - strictCache.at < 30_000) return strictCache.v;
   try {
-    const { data } = await supabase.from("app_settings").select("value").eq("key", "webhook_strict_mode").maybeSingle();
-    const v = data?.value === true || data?.value === "true";
+    // Chave de valor/referência (webhook_strict_amount); a antiga webhook_strict_mode vale como fallback.
+    const { data: rows } = await supabase.from("app_settings").select("key, value")
+      .in("key", ["webhook_strict_amount", "webhook_strict_mode"]);
+    const on = (k: string) => { const r = (rows || []).find((x: any) => x.key === k); return r ? (r.value === true || r.value === "true") : null; };
+    const v = on("webhook_strict_amount") ?? on("webhook_strict_mode") ?? false;
     strictCache = { v, at: Date.now() };
     return v;
   } catch {
@@ -44,6 +47,21 @@ export async function warnMissingSecretOncePerDay(supabase: any, provider: strin
       .contains("details", { provider }).limit(1);
     if (!data?.length) await securityEvent(supabase, "webhook_secret_missing", null, { provider });
   } catch (_) { /* ignore */ }
+}
+
+/**
+ * Assinatura em modo "observar": grava o resultado; a rejeição só liga para o
+ * provedor após 20 avisos reais válidos seguidos (feito no banco, atômico).
+ * Assinatura inválida antes disso só gera alerta. Devolve true se deve rejeitar.
+ */
+export async function observeSignature(supabase: any, provider: string, valid: boolean, ip: string | null, details: Record<string, unknown> = {}): Promise<boolean> {
+  let enforced = false;
+  try {
+    const { data } = await supabase.rpc("record_webhook_signature", { p_provider: provider, p_valid: valid });
+    enforced = data === true;
+  } catch (_) { enforced = false; }
+  if (!valid) await securityEvent(supabase, "webhook_bad_signature", ip, { provider, enforced, ...details });
+  return !valid && enforced;
 }
 
 export async function hmacHex(algo: "SHA-1" | "SHA-256", secret: string, body: string): Promise<string> {
