@@ -1,10 +1,10 @@
 # Project architecture rules
 - Security rules: supabase/functions/_shared/security-architecture.md.
 
-- Self-service event shipping is persisted by guarded order-write triggers so previews, payment providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows carry shipping_info.source=event_rule for item/discount recalculation.
+- Guarded order-write triggers persist self-service event shipping so previews, providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows use shipping_info.source=event_rule for recalculation.
 
 
-- Staff self-service drafts use the server last-ten-digit phone key without an order, event-scoped membership with orders; manual cart sends save the exact registration without claiming WhatsApp confirmation, so provisional phones never pick another cart.
+- Staff self-service drafts use server last-ten-digit phone keys (event-scoped with orders, no order otherwise); manual cart sends save the exact registration without WhatsApp confirmation or cross-phone cart selection.
 
 - Self-service registration derives submission validity and inline field errors from one validation helper; invalid submissions focus the first error without sending registration requests, preserving existing acceptance rules.
 - Self-service preview and no-order screens share the registration form and draft effect; retain confirmed/expired guards and explicit-submit registration, so combining screens cannot turn capture or autosave into WhatsApp confirmation.
@@ -13,7 +13,7 @@
 
 - Live lanes project exact registration phones via batches; carts override incomplete stages. Unread follows the chat channel; unanswered compares inbound/outbound independently of reads. Reuse broadcasts/indexed summaries, never per-message queries.
 
-- Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram or unique conflict-free last four digits, reuse saved registration without overwriting staff fields, and notify through the existing cart queue; repairs link already-sent orders without resending. Payment messages in this mode use the source order's cart URL, never cached cart links or a generic member-area fallback.
+- Self-service late orders resolve one event-scoped verified access by exact order/phone/Instagram or unique conflict-free last four digits, reuse registration without overwriting staff fields, notify via cart queue, and repair sent orders without resending; payment messages use only the source order's cart URL.
 
 - Self-service queue pacing is sampled/persisted atomically per instance; claims reserve only the FIFO head. Minute recovery is armed on enqueue and removed after drain, using the shared cron guard, so crashes cannot strand work or require permanent polling.
 
@@ -52,12 +52,12 @@
 
 - Live board cards use batched/cached reads (src/lib/orderCardBatches) and mount dialogs only when open; POS WhatsApp list syncs incrementally (full reload on scope change/10 min): per-card work froze lives.
 - Subdirectories have their own `AGENTS.md`; read it before changing files there.
-- Self-service capture is idempotent/service-only; provisional last-four matches are display-only and revalidated against the sender. Lead uniqueness conflicts cannot roll back WhatsApp confirmation: preserve acquisition rows, annotate conflict, never merge identities.
-- Self-service greetings resolve Instagram through the current event's orders, never arbitrary shared-phone profiles; phone keys match event_phone_key and each fresh confirmation code resets only that access's reply lifecycle. Prize uploads reuse event-landing-assets and the prize banner is shared between product and registration screens.
-- Self-service live mode (/pedido/:slug): public page never sets eligible_for_prize or registered_at; registration ends in WhatsApp #CODE confirmation and payment only on the cart link; form_draft is debounce-saved and mirrored to CustomerFichaPanel without overwriting staff edits; alt_address only goes to the order's registration.
+- Self-service capture is idempotent/service-only; provisional last-four matches are display-only and sender-revalidated. Lead uniqueness conflicts preserve acquisition rows and WhatsApp confirmation, annotate conflict, and never merge identities.
+- Self-service greetings resolve Instagram only through current-event orders; phone keys match event_phone_key and fresh confirmation codes reset only that access's replies. Prize uploads reuse event-landing-assets; product and registration screens share the prize banner.
+- Self-service live mode (/pedido/:slug): public pages never set eligible_for_prize/registered_at; registration requires WhatsApp #CODE and payment uses the cart link; debounce-saved form_draft mirrors CustomerFichaPanel without overwriting staff edits; alt_address stays on the order registration.
 
 - Self-service cashback is per source order, service-only and transactionally idempotent; the first provider-confirmed cart send is immutable, and exact linked payment evidence determines the credit. Both POS automation and live confirmation use the shared grant to prevent divergent amounts.
-- Self-service advertising: legal basis validated by the controller, so full hashed CAPI matching (em/ph/fn/ln/ct/st/zp/external_id + fbc/fbp/ip/ua) is the default, gated per event by events.capi_advanced_matching (default on); a registered refusal (selfservice_advertising_consents.advertising=false) blocks the send entirely. Exact order registration only, no shared-phone enrichment, CPF never sent. Browser purchase requires server-confirmed value and the same deterministic event ID.
+- Self-service advertising: controller-validated legal basis; full hashed CAPI matching (em/ph/fn/ln/ct/st/zp/external_id + fbc/fbp/ip/ua) defaults on per events.capi_advanced_matching; registered advertising refusal blocks sending. Use exact order registration only, no shared-phone enrichment or CPF; browser purchases require server-confirmed value and the same deterministic event ID.
 - Expedition "waiting products" tag is recomputed from item conference/completed quantities after every stage move (waitingFlag.ts), never set unconditionally, so complete orders never show it.
 
 - Self-service registration DMs use one ig_live_cart_notifications row per event+@ (unique index), atomic claim and no automatic retry; only staff resend (capped) — duplicate Instagram DMs previously reached customers unseen.
