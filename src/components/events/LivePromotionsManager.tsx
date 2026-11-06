@@ -43,6 +43,7 @@ export function LivePromotionsManager({ eventId, onSaved }: { eventId: string; o
   const { promos, reload } = useEventPromotions(eventId);
   const [editing, setEditing] = useState<LivePromotion | null>(null);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const toggle = async (p: LivePromotion, v: boolean) => {
     const { error } = await db.from("event_promotions").update({ is_active: v }).eq("id", p.id);
