@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Import, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { ImportPromotionDialog } from "./ImportPromotionDialog";
 
 const db = supabase as any;
 const numId = (v?: string | null) => String(v || "").split("/").pop()?.replace(/\D/g, "") || "";
@@ -42,6 +43,7 @@ export function LivePromotionsManager({ eventId, onSaved }: { eventId: string; o
   const { promos, reload } = useEventPromotions(eventId);
   const [editing, setEditing] = useState<LivePromotion | null>(null);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const toggle = async (p: LivePromotion, v: boolean) => {
     const { error } = await db.from("event_promotions").update({ is_active: v }).eq("id", p.id);
@@ -50,12 +52,15 @@ export function LivePromotionsManager({ eventId, onSaved }: { eventId: string; o
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">Promoções progressivas</h3>
           <p className="text-xs text-muted-foreground">Qualquer cor dos produtos escolhidos conta no mesmo grupo. O preço da faixa é o total do grupo.</p>
         </div>
-        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}><Plus className="mr-1 h-4 w-4" />Nova promoção</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}><Import className="mr-1 h-4 w-4" />Importar de outra live</Button>
+          <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}><Plus className="mr-1 h-4 w-4" />Nova promoção</Button>
+        </div>
       </div>
       {promos.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma promoção.</p> : (
         <div className="space-y-2">
@@ -81,6 +86,10 @@ export function LivePromotionsManager({ eventId, onSaved }: { eventId: string; o
       {open && (
         <PromotionDialog eventId={eventId} promo={editing} onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); reload(); onSaved?.(); }} />
+      )}
+      {importOpen && (
+        <ImportPromotionDialog eventId={eventId} existingPromotions={promos} onClose={() => setImportOpen(false)}
+          onSaved={() => { reload(); onSaved?.(); }} />
       )}
     </div>
   );

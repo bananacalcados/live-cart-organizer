@@ -1,3 +1,9 @@
+# Promoções progressivas — reaproveitamento
+- [x] Listar e buscar promoções de outras lives, com resumo
+- [x] Copiar promoção e produtos sem alterar a original, tratando nome duplicado
+- [x] Vincular a cópia ao catálogo e às ofertas da live atual e informar divergências
+- [x] Testar “3 por 200” de 05/11 para 07/11 e conferir os vínculos
+
 # Segurança — Fase 4
 - [x] A1 shopify-create-order: só pedido pago, dados do banco, auth
 - [x] A2 shopify-create-live-order: idem
