@@ -61,10 +61,17 @@ async function call(body: Record<string, unknown>) {
 
 export const REVERSE_VALID_DAYS = 7;
 
+/** Prazo informado à cliente: o do PRIMEIRO código gerado para ela (reemissões não renovam o prazo). */
+export function firstReverseDeadline(all: { codigo_objeto?: string | null; valid_until: string | null; created_at: string }[], it: { valid_until: string | null }) {
+  const firsts = all.filter((x) => x.codigo_objeto && x.valid_until).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const first = firsts[0]?.valid_until || null;
+  return first && (!it.valid_until || first < it.valid_until) ? first : it.valid_until;
+}
+
 export type ReversePurpose = "troca" | "devolucao";
 
 /** Mensagem da reversa para a cliente (formatação do WhatsApp). Troca e devolução só diferem no prazo final. */
-export function reverseWhatsAppText(code: string, purpose: ReversePurpose, validUntil?: string) {
+export function reverseWhatsAppText(code: string, purpose: ReversePurpose, validUntil?: string, reissued = false) {
   const prazo = purpose === "troca"
     ? "🔄 *O envio da troca é feito em até 2 dias úteis após o recebimento do produto em nossa loja.*"
     : "💸 *O estorno da compra é feito em até 2 dias úteis após o recebimento do produto em nossa loja.*";
@@ -73,7 +80,9 @@ export function reverseWhatsAppText(code: string, purpose: ReversePurpose, valid
     "",
     `👉 *${code}*`,
     "",
-    `⏳ *Ele tem a validade de 7 dias contando a partir de hoje*${validUntil ? ` (até ${validUntil})` : ""}.`,
+    reissued && validUntil
+      ? `⏳ *Este é um código novo, mas o prazo continua o mesmo do primeiro código: até ${validUntil}.*`
+      : `⏳ *Ele tem a validade de 7 dias contando a partir de hoje*${validUntil ? ` (até ${validUntil})` : ""}.`,
     "⚠️ Após esse prazo não é possível gerar um novo código e, por isso, se perde o direito à solicitação feita.",
     "",
     prazo,
@@ -174,7 +183,8 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     if (!it.codigo_objeto) { toast.error("Código de postagem ainda não disponível"); return; }
     setBusyId(it.id);
     try {
-      const text = reverseWhatsAppText(it.codigo_objeto, purpose, brDate(it.valid_until));
+      const deadline = firstReverseDeadline(items, it);
+      const text = reverseWhatsAppText(it.codigo_objeto, purpose, brDate(deadline), deadline !== it.valid_until);
       const mid = await posSendText({ provider: sendVia, phone, numberId: selectedNumberId, message: text });
       // Registra no histórico do chat (o envio pela API não volta sozinho para a conversa).
       try {
