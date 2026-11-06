@@ -7,7 +7,17 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // a página de pagamento existente do autoatendimento.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeBrPhone } from "../_shared/access-code.ts";
-import { computeCatalogCashback, type Coupon } from "./cashback.ts";
+
+// Mesma regra de live-catalog/cashback.ts (itens promocionais não contam; mínimo de compra; teto no elegível).
+interface Coupon { id: string; cashback_amount: number; min_purchase: number; expires_at?: string }
+function computeCatalogCashback(items: { price: number; quantity: number; promo?: boolean }[], coupon: Coupon | null) {
+  const r2c = (n: number) => Math.round(n * 100) / 100;
+  const eligible = r2c(items.filter((i) => !i.promo).reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 1), 0));
+  if (!coupon || Number(coupon.cashback_amount) <= 0) return { cashback_id: null as string | null, amount: 0 };
+  const min = Number(coupon.min_purchase || 0);
+  if (eligible <= 0 || eligible < min) return { cashback_id: null as string | null, amount: 0 };
+  return { cashback_id: coupon.id as string | null, amount: r2c(Math.min(Number(coupon.cashback_amount), eligible)) };
+}
 
 const MODE = "whatsapp_autoatendimento";
 const cors = {
