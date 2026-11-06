@@ -87,6 +87,10 @@ export function LivePromotionsManager({ eventId, onSaved }: { eventId: string; o
         <PromotionDialog eventId={eventId} promo={editing} onClose={() => setOpen(false)}
           onSaved={() => { setOpen(false); reload(); onSaved?.(); }} />
       )}
+      {importOpen && (
+        <ImportPromotionDialog eventId={eventId} existingPromotions={promos} onClose={() => setImportOpen(false)}
+          onSaved={() => { reload(); onSaved?.(); }} />
+      )}
     </div>
   );
 }
