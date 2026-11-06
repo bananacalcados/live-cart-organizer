@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { PublicCatalogLinkPanel } from "./PublicCatalogLinkPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { mergeVariants, pricingFromShopify, variantsFromShopify, type CatalogVariant } from "@/lib/liveCatalog";
