@@ -73,4 +73,10 @@
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
 - Chat side panels use EmbeddedDialog, always inside a Dialog root (modal only when not embedded), since DialogTitle throws without it.
-- DB functions: no anon EXECUTE by default; grant anon only to public-page RPCs/policy helpers.
+## Permanent security rules
+- New public tables: RLS, no anon, explicit policies/grants; backups/temp are service_role-only.
+- New SQL functions: revoke PUBLIC/anon EXECUTE, grant explicitly; DEFINER requires has_role/permission check.
+- New edges: withAccessLog + requireAuth/requireStaff/requireInternal/webhook signature; verify_jwt=false ≠ public.
+- Financial values/status never come from the browser; server recalculates.
+- Frontend edge calls always use the session token.
+- Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
