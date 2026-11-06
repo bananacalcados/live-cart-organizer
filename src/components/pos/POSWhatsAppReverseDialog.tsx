@@ -29,6 +29,12 @@ interface Props {
 interface ReverseItem {
   id: string; created_at: string; customer_name: string; servico_nome: string | null; valid_until: string | null;
   status: string; codigo_objeto: string | null; label_url: string | null; error_message: string | null; sent_at: string | null; reason: string | null;
+  sale_id?: string | null;
+  nfe_devolucao?: { status: string; numero: number | null; chave: string | null; danfe_url: string | null; erro: string | null } | null;
+}
+interface SaleOption {
+  id: string; created_at: string; total: number | null; nfe: { numero: number | null; modelo: number } | null;
+  items: { id: string; product_name: string | null; quantity: number; unit_price: number }[];
 }
 
 const SERVICES = [
@@ -94,6 +100,9 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
   const [busyId, setBusyId] = useState<string | null>(null);
   const [items, setItems] = useState<ReverseItem[]>([]);
   const [idemKey, setIdemKey] = useState(() => crypto.randomUUID());
+  const [sales, setSales] = useState<SaleOption[]>([]);
+  const [saleId, setSaleId] = useState<string | null>(null);
+  const [qty, setQty] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!open || !phone) return;
@@ -101,9 +110,10 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     setLoading(true);
     (async () => {
       try {
-        const [known, list] = await Promise.all([
+        const [known, list, sl] = await Promise.all([
           loadKnownCustomerByPhone(phone, null).catch(() => null),
           call({ action: "list", phone }).catch(() => ({ items: [] })),
+          call({ action: "sales", phone }).catch(() => ({ sales: [] })),
         ]);
         if (!alive) return;
         if (known) setForm((f) => ({
@@ -111,6 +121,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
           numero: known.address_number || "", complemento: known.complement || "", bairro: known.neighborhood || "", cidade: known.city || "", uf: (known.state || "").slice(0, 2).toUpperCase(),
         }));
         setItems(list.items || []);
+        setSales(sl.sales || []);
       } finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
@@ -131,8 +142,13 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
     if (form.cep.replace(/\D/g, "").length !== 8) m.push("CEP");
     for (const [k, l] of [["logradouro", "rua"], ["numero", "número"], ["bairro", "bairro"], ["cidade", "cidade"]] as const) if (!form[k].trim()) m.push(l);
     if (!/^[A-Za-z]{2}$/.test(form.uf)) m.push("UF");
+    if (form.cpf.replace(/\D/g, "").length !== 11) m.push("CPF");
+    if (!saleId) m.push("venda original");
+    else if (!Object.values(qty).some((q) => q > 0)) m.push("itens devolvidos");
     return m;
-  }, [form]);
+  }, [form, saleId, qty]);
+  const sale = sales.find((x) => x.id === saleId) || null;
+  const pickSale = (id: string) => { setSaleId(id); const s = sales.find((x) => x.id === id); setQty(s && s.items.length === 1 ? { [s.items[0].id]: 1 } : {}); };
 
   const create = async () => {
     if (missing.length) { toast.error(`Falta: ${missing.join(", ")}`); return; }
@@ -142,6 +158,8 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
         action: "create", idempotency_key: idemKey, service_code: service, reason: reason || null,
         package: { peso_g: Math.max(100, Math.round(Number(peso) || 1000)), c: 33, l: 22, a: 13 },
         customer: { ...form, telefone: phone, uf: form.uf.toUpperCase() },
+        sale_id: saleId,
+        return_items: Object.entries(qty).filter(([, q]) => q > 0).map(([sale_item_id, quantidade]) => ({ sale_item_id, quantidade })),
       });
       setItems((prev) => [data.item, ...prev.filter((i) => i.id !== data.item.id)]);
       setIdemKey(crypto.randomUUID());
@@ -164,11 +182,19 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
           message_id: mid || null, whatsapp_number_id: selectedNumberId || null,
         } as any);
       } catch { /* histórico não deve quebrar o envio */ }
+      const danfe = it.nfe_devolucao?.status === "authorized" ? it.nfe_devolucao.danfe_url : null;
+      if (danfe) await posSendMedia({ provider: sendVia, phone, numberId: selectedNumberId, mediaUrl: danfe, mediaType: "document", fileName: `nota-devolucao-${it.nfe_devolucao?.numero || ""}.pdf` }).catch(() => toast.warning("Mensagem enviada, mas a nota de devolução não foi"));
       if (it.label_url) await posSendMedia({ provider: sendVia, phone, numberId: selectedNumberId, mediaUrl: it.label_url, mediaType: "document", fileName: `etiqueta-devolucao-${it.codigo_objeto}.pdf` }).catch(() => toast.warning("Mensagem enviada, mas o PDF não foi"));
       const r = await call({ action: "mark_sent", id: it.id });
       setItems((prev) => prev.map((x) => (x.id === it.id ? r.item : x)));
       toast.success("Enviado para a cliente");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao enviar"); }
+    finally { setBusyId(null); }
+  };
+  const retry = async (it: ReverseItem) => {
+    setBusyId(it.id);
+    try { const r = await call({ action: "retry", id: it.id }); setItems((p) => p.map((x) => (x.id === it.id ? r.item : x))); toast.success("Reversa gerada"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Falha ao tentar de novo"); const l = await call({ action: "list", phone }).catch(() => null); if (l) setItems(l.items || []); }
     finally { setBusyId(null); }
   };
   const reprint = async (it: ReverseItem) => {
@@ -190,13 +216,13 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5" /> Logística reversa Correios</DialogTitle>
       </DialogHeader>
-      <p className="text-xs text-muted-foreground">A cliente envia para a loja Pérola, por conta do nosso contrato. Ela só leva o pacote à agência com o código.</p>
+      <p className="text-xs text-muted-foreground">A cliente é a remetente e envia para a loja Pérola, por conta do nosso contrato. Antes do código, o sistema emite a nota de devolução, que vai junto com a mensagem.</p>
       <p className="rounded-md bg-muted px-2 py-1.5 text-xs font-medium">O código vale {REVERSE_VALID_DAYS} dias para postagem. Depois disso não funciona mais e é preciso gerar outra etiqueta.</p>
       {loading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div> : (
         <>
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2"><Label className="text-xs">Nome completo</Label><Input value={form.nome} onChange={set("nome")} /></div>
-            <div><Label className="text-xs">CPF</Label><Input value={form.cpf} onChange={set("cpf")} /></div>
+            <div><Label className="text-xs">CPF (obrigatório)</Label><Input value={form.cpf} onChange={set("cpf")} /></div>
             <div><Label className="text-xs">CEP</Label><Input value={form.cep} onChange={set("cep")} onBlur={lookupCep} /></div>
             <div className="col-span-2"><Label className="text-xs">Rua</Label><Input value={form.logradouro} onChange={set("logradouro")} /></div>
             <div><Label className="text-xs">Número</Label><Input value={form.numero} onChange={set("numero")} /></div>
@@ -206,6 +232,31 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
               <div><Label className="text-xs">Cidade</Label><Input value={form.cidade} onChange={set("cidade")} /></div>
               <div><Label className="text-xs">UF</Label><Input value={form.uf} maxLength={2} onChange={set("uf")} /></div>
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Venda original (a nota de devolução referencia a nota dela)</Label>
+            {sales.length === 0 ? <p className="text-xs text-destructive">Nenhuma venda encontrada para este telefone.</p> : (
+              <div className="space-y-1">
+                {sales.map((s) => (
+                  <button key={s.id} type="button" disabled={!s.nfe} onClick={() => pickSale(s.id)}
+                    className={`w-full rounded-md border px-2 py-1 text-left text-xs ${saleId === s.id ? "border-primary bg-primary/5" : ""} ${!s.nfe ? "opacity-50" : ""}`}>
+                    {new Date(s.created_at).toLocaleDateString("pt-BR")} · R$ {Number(s.total || 0).toFixed(2).replace(".", ",")} · {s.nfe ? `NF ${s.nfe.numero ?? ""}` : "sem nota autorizada"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {sale && (
+              <div className="space-y-1 rounded-md bg-muted p-2">
+                <p className="text-xs font-medium">Quantos de cada item ela devolve?</p>
+                {sale.items.map((i) => (
+                  <div key={i.id} className="flex items-center gap-2 text-xs">
+                    <Input type="number" min={0} max={i.quantity} className="h-7 w-14" value={qty[i.id] ?? 0}
+                      onChange={(e) => setQty((q) => ({ ...q, [i.id]: Math.max(0, Math.min(i.quantity, Math.round(Number(e.target.value) || 0))) }))} />
+                    <span className="flex-1">{i.product_name} <span className="text-muted-foreground">(comprou {i.quantity})</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {sendVia && (
             <div>
@@ -245,7 +296,10 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
                   </div>
                   <div className="text-muted-foreground">{it.servico_nome} · válido até {brDate(it.valid_until)} ({REVERSE_VALID_DAYS} dias) · {new Date(it.created_at).toLocaleDateString("pt-BR")}{it.sent_at ? " · enviado à cliente" : ""}</div>
                   {expired(it) && <div className="rounded bg-destructive/10 px-2 py-1 font-medium text-destructive">Prazo de {REVERSE_VALID_DAYS} dias vencido em {brDate(it.valid_until)} — gerar nova etiqueta para postar.</div>}
+                  {it.nfe_devolucao?.status === "authorized" && <div>Nota de devolução nº {it.nfe_devolucao.numero}{it.nfe_devolucao.danfe_url && <> · <a className="underline" href={it.nfe_devolucao.danfe_url} target="_blank" rel="noreferrer">abrir nota</a></>}</div>}
+                  {!it.nfe_devolucao && it.status !== "cancelada" && <div className="text-muted-foreground">Sem nota de devolução (etiqueta antiga — gere de novo)</div>}
                   {it.error_message && <div className="text-destructive">{it.error_message}</div>}
+                  {it.status === "erro" && it.sale_id && <Button size="sm" variant="outline" className="h-7" onClick={() => retry(it)} disabled={busyId === it.id}>Tentar de novo</Button>}
                   {!["cancelada", "erro"].includes(it.status) && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {onUseCode && it.codigo_objeto && <Button size="sm" className="h-7" onClick={() => { onUseCode(it.codigo_objeto!); onOpenChange(false); }}>Usar nesta troca</Button>}
