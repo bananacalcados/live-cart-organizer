@@ -4011,6 +4011,7 @@ export type Database = {
           customer_cpf: string | null
           customer_name: string
           customer_phone: string
+          devolucao_doc_id: string | null
           error_message: string | null
           id: string
           idempotency_key: string | null
@@ -4021,6 +4022,7 @@ export type Database = {
           reason: string | null
           request: Json | null
           response: Json | null
+          return_items: Json | null
           sale_id: string | null
           sent_at: string | null
           servico_codigo: string
@@ -4037,6 +4039,7 @@ export type Database = {
           customer_cpf?: string | null
           customer_name: string
           customer_phone: string
+          devolucao_doc_id?: string | null
           error_message?: string | null
           id?: string
           idempotency_key?: string | null
@@ -4047,6 +4050,7 @@ export type Database = {
           reason?: string | null
           request?: Json | null
           response?: Json | null
+          return_items?: Json | null
           sale_id?: string | null
           sent_at?: string | null
           servico_codigo: string
@@ -4063,6 +4067,7 @@ export type Database = {
           customer_cpf?: string | null
           customer_name?: string
           customer_phone?: string
+          devolucao_doc_id?: string | null
           error_message?: string | null
           id?: string
           idempotency_key?: string | null
@@ -4073,6 +4078,7 @@ export type Database = {
           reason?: string | null
           request?: Json | null
           response?: Json | null
+          return_items?: Json | null
           sale_id?: string | null
           sent_at?: string | null
           servico_codigo?: string

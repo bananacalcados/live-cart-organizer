@@ -1,0 +1,3 @@
+ALTER TABLE public.correios_reverse_shipments ADD COLUMN IF NOT EXISTS return_items jsonb, ADD COLUMN IF NOT EXISTS devolucao_doc_id uuid;
+COMMENT ON COLUMN public.correios_reverse_shipments.return_items IS 'Itens da venda original que a cliente devolve (sale_item_id, quantidade, nome, sku, barcode, valor) — base da NF-e de devolução e da declaração.';
+COMMENT ON COLUMN public.correios_reverse_shipments.devolucao_doc_id IS 'NF-e de devolução (fiscal_documents) emitida antes da pré-postagem.';

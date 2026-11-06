@@ -25,3 +25,22 @@ describe('Prazo de postagem da reversa', () => {
     expect(msg).toContain('só vale até essa data');
   });
 });
+
+import { reverseReturnItems } from '../../supabase/functions/_shared/correios-reverse-domain';
+describe('reverseReturnItems', () => {
+  const items = [{ id: 'a', product_name: 'Tenis', quantity: 2, unit_price: 100 }, { id: 'b', product_name: 'Bolsa', quantity: 1, unit_price: 100 }];
+  it('usa o valor pago com desconto rateado', () => {
+    const r = reverseReturnItems(items, [{ sale_item_id: 'a', quantidade: 1 }], 30);
+    expect(r.problems).toEqual([]);
+    expect(r.items[0]).toMatchObject({ quantidade: 1, valor_unitario: 100, valor_pago: 90 });
+  });
+  it('recusa item de outra venda ou quantidade maior que a comprada', () => {
+    expect(reverseReturnItems(items, [{ sale_item_id: 'x', quantidade: 1 }], 0).problems.length).toBe(1);
+    expect(reverseReturnItems(items, [{ sale_item_id: 'b', quantidade: 2 }], 0).problems.length).toBe(1);
+  });
+});
+it('inclui a nota de devolução na pré-postagem', async () => {
+  const { buildReversePayload } = await import('../../supabase/functions/_shared/correios-reverse-domain');
+  const { payload } = buildReversePayload({ customer: { nome: 'Ana Souza', telefone: '31991177671', cep: '35010000', logradouro: 'Rua A', numero: '1', bairro: 'Centro', cidade: 'GV', uf: 'MG' }, store: { nome: 'Banana', cnpj: '12345678000199', telefone: '3332710000', cep: '35010000', logradouro: 'Rua B', numero: '2', bairro: 'Centro', cidade: 'GV', uf: 'MG' } as any, serviceCode: '03301', pkg: { peso_g: 1000, c: 33, l: 22, a: 13 }, items: [], validUntilBr: '01/01/2027', reference: 'abcd1234', invoice: { numero: 123, chave: '3'.repeat(44) } });
+  expect(payload).toMatchObject({ numeroNotaFiscal: '123', chaveNFe: '3'.repeat(44) });
+});

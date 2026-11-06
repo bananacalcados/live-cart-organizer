@@ -105,20 +105,46 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { troca_devolucao_id, ambiente: forcedAmb, cfop_override } = await req.json();
-    if (!troca_devolucao_id) throw new Error("troca_devolucao_id obrigatório");
+    const { troca_devolucao_id: trocaIdIn, reverse_shipment_id, ambiente: forcedAmb, cfop_override } = await req.json();
+    if (!trocaIdIn && !reverse_shipment_id) throw new Error("troca_devolucao_id obrigatório");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // 1. Carrega o evento de troca/devolução + itens
-    const { data: evt, error: evtErr } = await supabase
-      .from("trocas_devolucoes")
-      .select("*, trocas_devolucoes_itens(*)")
-      .eq("id", troca_devolucao_id).single();
-    if (evtErr || !evt) throw new Error(`Evento não encontrado: ${evtErr?.message}`);
+    // Modo REVERSA (logística reversa Correios): a nota é emitida ANTES da postagem,
+    // com os itens que a cliente vai devolver (gravados na reversa), para viajar com o pacote.
+    const isReverse = !trocaIdIn && !!reverse_shipment_id;
+    const troca_devolucao_id: string | null = isReverse ? null : trocaIdIn;
+    let rv: any = null;
+    let evt: any = null;
+    if (isReverse) {
+      const { data: r } = await supabase.from("correios_reverse_shipments")
+        .select("id, sale_id, return_items, devolucao_doc_id, customer_cpf, address").eq("id", reverse_shipment_id).maybeSingle();
+      if (!r) throw new Error("Reversa não encontrada");
+      if (!r.sale_id) throw new Error("Reversa sem venda original vinculada");
+      rv = r;
+      evt = {
+        pedido_original_id: r.sale_id, devolucao_doc_id: r.devolucao_doc_id, chave_acesso_original: null,
+        trocas_devolucoes_itens: (Array.isArray(r.return_items) ? r.return_items : []).map((i: any) => ({
+          direcao: "devolvido", estado_estoque: "retornado_vendavel", quantidade: Number(i.quantidade || 0),
+          sku: i.sku || null, barcode: i.barcode || null, produto_nome: i.nome || null, valor_unitario: Number(i.valor_unitario || 0),
+        })),
+      };
+    } else {
+      // 1. Carrega o evento de troca/devolução + itens
+      const { data: e1, error: evtErr } = await supabase
+        .from("trocas_devolucoes")
+        .select("*, trocas_devolucoes_itens(*)")
+        .eq("id", troca_devolucao_id).single();
+      if (evtErr || !e1) throw new Error(`Evento não encontrado: ${evtErr?.message}`);
+      evt = e1;
+    }
+    const linkDoc = async (patch: Record<string, unknown>, reversePatch: Record<string, unknown> | null) => {
+      if (isReverse) { if (reversePatch) await supabase.from("correios_reverse_shipments").update(reversePatch).eq("id", reverse_shipment_id); }
+      else await supabase.from("trocas_devolucoes").update(patch).eq("id", troca_devolucao_id);
+    };
 
     // 1b. Idempotência: se já existe devolução AUTORIZADA, não reemite.
     if ((evt as any).devolucao_doc_id) {
@@ -290,11 +316,15 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     //    (customer_state/city/cep + shipping_address). Se faltar UF/CEP, cai no fallback loja
     //    para não travar a devolução por dado de cadastro incompleto (a NF continua idônea:
     //    devolução para o próprio estoque via CNPJ do emitente).
-    const cpfDest = digits((sale as any).customer_cpf || (sale as any).pos_customers?.cpf);
+    const cpfDest = digits((sale as any).customer_cpf || (sale as any).pos_customers?.cpf || rv?.customer_cpf);
     const hasCpf = cpfDest.length === 11;
     const ieEmitente = digits(company.ie);
 
-    const pc: any = (sale as any).pos_customers || {};
+    // Reversa: o endereço de coleta informado pela equipe tem prioridade (é de onde a cliente posta).
+    const ra: any = rv?.address || null;
+    const pc: any = ra
+      ? { ...((sale as any).pos_customers || {}), state: ra.uf, cep: ra.cep, city: ra.cidade, address: ra.logradouro, address_number: ra.numero, neighborhood: ra.bairro }
+      : ((sale as any).pos_customers || {});
     const sa: any = (sale as any).shipping_address || {};
     const pick = (...vals: any[]) => {
       for (const v of vals) {
@@ -319,6 +349,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     const clienteComEndereco = hasCpf && !!ufDest && cepDest.length === 8;
     const ibgeDest = clienteComEndereco && cityDest ? await lookupIbge(cityDest, ufDest!) : null;
     const clienteIdentificado = clienteComEndereco;
+    if (isReverse && !clienteComEndereco) throw new Error("Para a nota de devolução da reversa é preciso CPF e endereço completo da cliente");
 
     const cliente: any = clienteComEndereco
       ? {
@@ -377,9 +408,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
-    await supabase.from("trocas_devolucoes")
-      .update({ devolucao_doc_id: doc.id, fase2_erro: null })
-      .eq("id", troca_devolucao_id);
+    await linkDoc({ devolucao_doc_id: doc.id, fase2_erro: null }, { devolucao_doc_id: doc.id });
 
     // 8. Payload BrasilNFe (devolução)
     const payload: any = {
@@ -390,7 +419,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       NFReferencia: [chaveOriginal],
       ConsumidorFinal: true,
       IndicadorPresenca: clienteIdentificado ? 1 : 9,
-      IdentificadorInterno: `DEV-${troca_devolucao_id}`,
+      IdentificadorInterno: isReverse ? `DEVREV-${reverse_shipment_id}` : `DEV-${troca_devolucao_id}`,
       Emitente: {
         CpfCnpj: digits(company.cnpj),
         ...(ieEmitente ? { Ie: ieEmitente } : {}),
@@ -502,12 +531,12 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }).eq("id", doc.id);
 
     // Atualiza o evento: grava a chave da devolução quando autorizada; senão registra erro.
-    await supabase.from("trocas_devolucoes").update({
+    await linkDoc({
       chave_devolucao: ok ? chave : null,
       fase2_erro: ok ? null : (sefazOffline
         ? "Devolução em contingência (SEFAZ indisponível)"
         : `Devolução rejeitada: ${(errorMsg || "erro desconhecido").slice(0, 200)}`),
-    }).eq("id", troca_devolucao_id);
+    }, null);
 
     const httpResp = ok ? 200 : (sefazOffline ? 202 : 422);
     return new Response(JSON.stringify({
