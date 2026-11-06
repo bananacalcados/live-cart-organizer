@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { PublicCatalogLinkPanel } from "./PublicCatalogLinkPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { mergeVariants, pricingFromShopify, variantsFromShopify, type CatalogVariant } from "@/lib/liveCatalog";
@@ -172,6 +173,8 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
         </div>
         <Button type="button" size="sm" onClick={() => setPickerOpen(true)}><Plus className="mr-1 h-4 w-4" />Adicionar produto</Button>
       </div>
+
+      <PublicCatalogLinkPanel eventId={eventId} products={rows.map((r: any) => ({ id: r.id, title: r.title }))} />
 
       <div className="space-y-2 rounded-md border border-dashed p-3">
         <div className="flex items-center gap-2">

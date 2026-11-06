@@ -66,6 +66,7 @@ const LiveMemberArea = lazy(() => import("./pages/LiveMemberArea"));
 const SelfServiceOrderPage = lazy(() => import("./pages/SelfServiceOrderPage"));
 const SelfServiceCartPage = lazy(() => import("./pages/SelfServiceCartPage"));
 const LiveCatalogPage = lazy(() => import("./pages/LiveCatalogPage"));
+const LiveCatalogPublicPage = lazy(() => import("./pages/LiveCatalogPublicPage"));
 const AustpayTestPage = lazy(() => import("./pages/AustpayTestPage"));
 
 const Companies = lazy(() => import("./pages/admin/Companies"));
@@ -148,6 +149,7 @@ const App = () => (
               <Route path="/pedido/:eventSlug" element={<SelfServiceOrderPage />} />
               <Route path="/pedido/:eventSlug/carrinho/:orderId" element={<SelfServiceCartPage />} />
               <Route path="/pedido/:eventSlug/catalogo/:token" element={<LiveCatalogPage />} />
+              <Route path="/pedido/:eventSlug/vitrine" element={<LiveCatalogPublicPage />} />
               <Route path="/teste-austpay/:token" element={<AustpayTestPage />} />
               <Route path="/events/:eventId/capture" element={<ProtectedRoute requiredModule="events"><EventCaptureBuilder /></ProtectedRoute>} />
 

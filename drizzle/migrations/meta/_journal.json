@@ -876,6 +876,13 @@
       "when": 1793880202503,
       "tag": "0124_webhook_auth_observe",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793984010233,
+      "tag": "0125_public_catalog_vitrine",
+      "breakpoints": true
     }
   ]
 }
