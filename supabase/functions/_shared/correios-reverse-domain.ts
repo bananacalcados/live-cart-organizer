@@ -31,8 +31,32 @@ export function reverseValidity(now: Date, days = REVERSE_VALID_DAYS) {
   return { br: `${dd}/${m}/${y}`, iso: `${y}-${m}-${dd}` };
 }
 
+export interface SaleItemForReturn { id: string; product_name: string | null; quantity: number; unit_price: number; sku?: string | null; barcode?: string | null }
+export interface ReturnItem { sale_item_id: string; nome: string; quantidade: number; valor_unitario: number; valor_pago: number; sku: string | null; barcode: string | null }
+/**
+ * Itens que a cliente devolve, com o valor REALMENTE pago (desconto da venda rateado).
+ * valor_unitario = preço da nota original (a NF-e de devolução espelha a original);
+ * valor_pago = total pago na linha, usado na declaração de conteúdo dos Correios.
+ */
+export function reverseReturnItems(saleItems: SaleItemForReturn[], selection: { sale_item_id: string; quantidade: number }[], saleDiscount: number) {
+  const problems: string[] = [];
+  const bruto = saleItems.reduce((a, i) => a + Number(i.unit_price) * Number(i.quantity), 0);
+  const ratio = saleDiscount > 0 && bruto > 0 ? Math.min(1, saleDiscount / bruto) : 0;
+  const out: ReturnItem[] = [];
+  for (const sel of selection) {
+    const it = saleItems.find((i) => i.id === sel.sale_item_id);
+    if (!it) { problems.push('Item não pertence a esta venda'); continue; }
+    const q = Math.round(Number(sel.quantidade));
+    if (!(q >= 1) || q > Number(it.quantity)) { problems.push(`Quantidade inválida para ${it.product_name || 'item'}`); continue; }
+    const unit = Math.round(Number(it.unit_price) * 100) / 100;
+    out.push({ sale_item_id: it.id, nome: it.product_name || 'Calcado', quantidade: q, valor_unitario: unit, valor_pago: Math.round(unit * q * (1 - ratio) * 100) / 100, sku: it.sku || null, barcode: it.barcode || null });
+  }
+  if (!out.length && !problems.length) problems.push('Escolha pelo menos um item que a cliente vai devolver');
+  return { items: out, problems };
+}
+
 /** Reverse: the CUSTOMER is the sender (remetente) and the store is the recipient. */
-export function buildReversePayload(input: { customer: ReverseCustomer; store: Sender; serviceCode: string; pkg: { peso_g: number; c: number; l: number; a: number }; items: { conteudo: string; quantidade: number; valor: number }[]; validUntilBr: string; reference: string }) {
+export function buildReversePayload(input: { customer: ReverseCustomer; store: Sender; serviceCode: string; pkg: { peso_g: number; c: number; l: number; a: number }; items: { conteudo: string; quantidade: number; valor: number }[]; validUntilBr: string; reference: string; invoice?: { numero: string | number; chave: string } | null }) {
   const { customer: c, store: s, pkg } = input;
   const problems: string[] = [];
   if (!REVERSE_SERVICES.some((x) => x.codigo === input.serviceCode)) problems.push('Serviço de reversa inválido');
@@ -42,12 +66,15 @@ export function buildReversePayload(input: { customer: ReverseCustomer; store: S
   if (cpf && !validCpf(cpf)) problems.push('CPF da cliente inválido');
   if (!phoneParts(c.telefone).dddCelular && !phoneParts(c.telefone).dddTelefone) problems.push('Telefone da cliente inválido');
   const items = input.items.filter((i) => i.quantidade > 0 && clip(i.conteudo, 60).length >= 2);
+  const inv = input.invoice ? { numero: digits(input.invoice.numero).slice(0, 12), chave: digits(input.invoice.chave) } : null;
+  if (inv && (inv.chave.length !== 44 || !inv.numero)) problems.push('NF-e de devolução inválida');
   const payload = {
     remetente: { nome: name, ...(cpf ? { cpfCnpj: cpf } : {}), ...phoneParts(c.telefone), ...(c.email && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(c.email.trim()) ? { email: c.email.trim().slice(0, 255) } : {}),
       endereco: { cep: digits(c.cep), logradouro: clip(c.logradouro, 50), numero: clip(c.numero, 6) || 'SN', ...(c.complemento ? { complemento: clip(c.complemento, 30) } : {}), bairro: clip(c.bairro, 30), cidade: clip(c.cidade, 30), uf: clip(c.uf, 2).toUpperCase() } },
     destinatario: { nome: clip(s.nome, 50), cpfCnpj: digits(s.cnpj).slice(0, 14), ...phoneParts(s.telefone),
       endereco: { cep: digits(s.cep), logradouro: clip(s.logradouro, 50), numero: clip(s.numero, 6), ...(s.complemento ? { complemento: clip(s.complemento, 30) } : {}), bairro: clip(s.bairro, 30), cidade: clip(s.cidade, 30), uf: clip(s.uf, 2).toUpperCase() } },
     codigoServico: input.serviceCode,
+    ...(inv ? { numeroNotaFiscal: inv.numero, chaveNFe: inv.chave } : {}),
     itensDeclaracaoConteudo: (items.length ? items : [{ conteudo: 'Calcados', quantidade: 1, valor: 0 }]).slice(0, 50).map((i) => ({ conteudo: clip(i.conteudo, 60), quantidade: String(Math.round(i.quantidade)), valor: Math.max(0, Number(i.valor) || 0).toFixed(2) })),
     pesoInformado: String(Math.ceil(pkg.peso_g)),
     codigoFormatoObjetoInformado: '2',
