@@ -4,7 +4,8 @@ import { z } from 'npm:zod@3';
 import { freightAuth } from '../_shared/freight-auth.ts';
 import { loadCorreiosSettings, getCorreiosToken, createCorreiosFetch } from '../_shared/correios.ts';
 import { extractPdfBase64 } from '../_shared/correios-prepost-domain.ts';
-import { buildReversePayload, reverseValidity, REVERSE_SERVICES, REVERSE_DEFAULT_PACKAGE } from '../_shared/correios-reverse-domain.ts';
+import { buildReversePayload, reverseValidity, reverseReturnItems, REVERSE_SERVICES, REVERSE_DEFAULT_PACKAGE } from '../_shared/correios-reverse-domain.ts';
+import { internalCallHeaders } from '../_shared/requireAuth.ts';
 
 const BUCKET = 'correios-labels';
 const customer = z.object({
@@ -18,15 +19,17 @@ const body = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('create'), idempotency_key: z.string().min(8).max(80), customer, service_code: z.string().regex(/^\d{5}$/),
     package: z.object({ peso_g: z.number().int().min(100).max(30000), c: z.number().min(15).max(100), l: z.number().min(10).max(100), a: z.number().min(1).max(100) }).optional(),
-    items: z.array(z.object({ conteudo: z.string().max(60), quantidade: z.number().int().min(1).max(99), valor: z.number().min(0).max(100000) })).max(20).optional(),
-    reason: z.string().max(200).optional().nullable(), sale_id: z.string().uuid().optional().nullable(), dry_run: z.boolean().optional(),
+    return_items: z.array(z.object({ sale_item_id: z.string().uuid(), quantidade: z.number().int().min(1).max(99) })).min(1).max(30),
+    reason: z.string().max(200).optional().nullable(), sale_id: z.string().uuid(), dry_run: z.boolean().optional(),
   }),
+  z.object({ action: z.literal('sales'), phone: z.string().min(8).max(20) }),
+  z.object({ action: z.literal('retry'), id: z.string().uuid() }),
   z.object({ action: z.literal('label'), id: z.string().uuid() }),
   z.object({ action: z.literal('check'), id: z.string().uuid() }),
   z.object({ action: z.literal('mark_sent'), id: z.string().uuid() }),
   z.object({ action: z.literal('cancel'), id: z.string().uuid() }),
 ]);
-const COLS = 'id,created_at,customer_name,customer_phone,servico_codigo,servico_nome,valid_until,status,codigo_objeto,label_path,error_message,sent_at,reason';
+const COLS = 'id,created_at,customer_name,customer_phone,servico_codigo,servico_nome,valid_until,status,codigo_objeto,label_path,error_message,sent_at,reason,sale_id,devolucao_doc_id';
 const NO_PDF_MSG = 'Na logística reversa os Correios não geram PDF antes da postagem: a cliente só informa o código na agência.';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const fail = (msg: string, status = 400) => Object.assign(new Error(msg), { status });
@@ -41,7 +44,14 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
     if (!parsed.success) return reply({ error: 'Requisição inválida', details: parsed.error.flatten().fieldErrors }, 400);
     const b = parsed.data;
     const sign = async (p: string | null) => p ? (await db.storage.from(BUCKET).createSignedUrl(p, 3600)).data?.signedUrl || null : null;
-    const withUrl = async (r: any) => ({ ...r, label_url: await sign(r.label_path) });
+    const docInfo = async (ids: string[]) => {
+      const m = new Map<string, any>();
+      const u = [...new Set(ids.filter(Boolean))];
+      if (u.length) { const { data } = await db.from('fiscal_documents').select('id,status,numero,chave_acesso,danfe_url,rejection_message').in('id', u); for (const d of data || []) m.set(d.id, d); }
+      return m;
+    };
+    const decorate = (r: any, docs: Map<string, any>) => { const d = r.devolucao_doc_id ? docs.get(r.devolucao_doc_id) : null; return { nfe_devolucao: d ? { status: d.status, numero: d.numero, chave: d.chave_acesso, danfe_url: d.danfe_url, erro: d.rejection_message } : null }; };
+    const withUrl = async (r: any) => ({ ...r, label_url: await sign(r.label_path), ...decorate(r, await docInfo([r.devolucao_doc_id])) });
     const get = async (id: string) => {
       const { data } = await db.from('correios_reverse_shipments').select('*').eq('id', id).maybeSingle();
       if (!data) throw fail('Reversa não encontrada', 404);
@@ -101,7 +111,21 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const key = b.phone.replace(/\D/g, '').slice(-8);
       const { data, error } = await db.from('correios_reverse_shipments').select(COLS).eq('phone_key', key).order('created_at', { ascending: false }).limit(20);
       if (error) throw new Error('Não foi possível listar as reversas');
-      return reply({ items: await Promise.all((data || []).map(withUrl)) });
+      const docs = await docInfo((data || []).map((r: any) => r.devolucao_doc_id));
+      return reply({ items: await Promise.all((data || []).map(async (r: any) => ({ ...r, label_url: await sign(r.label_path), ...decorate(r, docs) }))) });
+    }
+
+    if (b.action === 'sales') {
+      // Vendas da cliente (últimas 15, por final do telefone) com NF-e autorizada — base da devolução.
+      const key = b.phone.replace(/\D/g, '').slice(-8);
+      const { data: sales } = await db.from('pos_sales').select('id,created_at,total,discount,customer_name,customer_cpf').eq('phone_suffix8', key).order('created_at', { ascending: false }).limit(15);
+      const ids = (sales || []).map((x: any) => x.id);
+      if (!ids.length) return reply({ sales: [] });
+      const [{ data: its }, { data: nfs }] = await Promise.all([
+        db.from('pos_sale_items').select('id,sale_id,product_name,quantity,unit_price,sku,barcode').in('sale_id', ids).limit(500),
+        db.from('fiscal_documents').select('pos_sale_id,numero,modelo,chave_acesso').in('pos_sale_id', ids).eq('status', 'authorized').eq('tipo_operacao', 'saida').in('modelo', [55, 65]).not('chave_acesso', 'is', null),
+      ]);
+      return reply({ sales: (sales || []).map((x: any) => ({ ...x, nfe: (nfs || []).find((n: any) => n.pos_sale_id === x.id) || null, items: (its || []).filter((i: any) => i.sale_id === x.id) })) });
     }
 
     if (b.action === 'create') {
