@@ -128,29 +128,28 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       return reply({ sales: (sales || []).map((x: any) => ({ ...x, nfe: (nfs || []).find((n: any) => n.pos_sale_id === x.id) || null, items: (its || []).filter((i: any) => i.sale_id === x.id) })) });
     }
 
-    if (b.action === 'create') {
-      const svc = REVERSE_SERVICES.find((s) => s.codigo === b.service_code);
-      if (!svc) throw fail('Serviço de reversa inválido');
-      const { data: existing } = await db.from('correios_reverse_shipments').select('*').eq('idempotency_key', b.idempotency_key).maybeSingle();
-      if (existing && !b.dry_run) return reply({ item: await withUrl(existing), existing: true });
+    // Emite (ou reaproveita) a NF-e de devolução e só então registra a pré-postagem nos Correios.
+    const finish = async (row: any) => {
       const settings = await loadCorreiosSettings(db);
       const store = { ...(settings.remetente as any), nome: (settings.remetente as any)?.nome_etiqueta || 'Banana Calçados' };
+      const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw fail(msg, 502); };
+      let nf: any = null;
+      try {
+        const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nfe-devolucao-emitir`, { method: 'POST', headers: { ...(await internalCallHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reverse_shipment_id: row.id }) });
+        nf = await r.json().catch(() => null);
+      } catch (e) { nf = { error: e instanceof Error ? e.message : String(e) }; }
+      if (nf?.skip) await markErr('A venda não tem NF-e autorizada; sem ela não dá para emitir a nota de devolução');
+      if (nf?.status !== 'authorized') await markErr(nf?.contingencia ? 'Nota de devolução na fila da SEFAZ (fora do ar). Tente "Tentar de novo" em alguns minutos' : `Nota de devolução não autorizada: ${String(nf?.error || nf?.message || 'erro desconhecido').slice(0, 220)}`);
+      const { data: doc } = await db.from('fiscal_documents').select('id,numero,chave_acesso').eq('id', nf.document_id).maybeSingle();
+      if (!doc?.chave_acesso || !doc?.numero) await markErr('Nota de devolução autorizada sem número/chave — confira no Fiscal');
+      const ad = row.address || {};
+      const cust = { nome: row.customer_name, cpf: row.customer_cpf, telefone: row.customer_phone, email: row.request?.remetente?.email || null, cep: ad.cep, logradouro: ad.logradouro, numero: ad.numero, complemento: ad.complemento, bairro: ad.bairro, cidade: ad.cidade, uf: ad.uf };
       const valid = reverseValidity(new Date());
-      const pkg = b.package || REVERSE_DEFAULT_PACKAGE;
-      const { payload, problems } = buildReversePayload({ customer: b.customer, store, serviceCode: svc.codigo, pkg, items: b.items || [], validUntilBr: valid.br, reference: b.idempotency_key.slice(0, 8) });
-      if (b.dry_run) return reply({ dry_run: true, ok: !problems.length, problems, payload });
-      if (problems.length) throw fail(problems.join('; '));
-      const ins = await db.from('correios_reverse_shipments').insert({
-        created_by: userId, customer_name: b.customer.nome, customer_phone: b.customer.telefone, customer_cpf: b.customer.cpf || null,
-        address: { cep: b.customer.cep, logradouro: b.customer.logradouro, numero: b.customer.numero, complemento: b.customer.complemento, bairro: b.customer.bairro, cidade: b.customer.cidade, uf: b.customer.uf },
-        sale_id: b.sale_id || null, reason: b.reason || null, servico_codigo: svc.codigo, servico_nome: svc.nome, package: pkg, valid_until: valid.iso, request: payload, idempotency_key: b.idempotency_key,
-      }).select('*').single();
-      if (ins.error) {
-        const { data: again } = await db.from('correios_reverse_shipments').select('*').eq('idempotency_key', b.idempotency_key).maybeSingle();
-        if (again) return reply({ item: await withUrl(again), existing: true });
-        throw new Error('Não foi possível registrar a reversa');
-      }
-      let row: any = ins.data;
+      const decl = (row.return_items || []).map((i: any) => ({ conteudo: i.nome, quantidade: i.quantidade, valor: i.valor_pago }));
+      const { payload, problems } = buildReversePayload({ customer: cust, store, serviceCode: row.servico_codigo, pkg: row.package || REVERSE_DEFAULT_PACKAGE, items: decl, validUntilBr: valid.br, reference: row.idempotency_key.slice(0, 8), invoice: { numero: doc!.numero, chave: doc!.chave_acesso } });
+      if (problems.length) await markErr(problems.join('; '));
+      await db.from('correios_reverse_shipments').update({ request: payload, valid_until: valid.iso, status: 'criada', error_message: null, updated_at: new Date().toISOString() }).eq('id', row.id);
+      row = { ...row, request: payload, valid_until: valid.iso, status: 'criada', error_message: null };
       try {
         const { cf } = await cws();
         const res: any = await cf('/prepostagem/v1/prepostagens', { method: 'POST', body: JSON.stringify({ ...payload, numeroCartaoPostagem: settings.cartao_postagem }) });
@@ -159,13 +158,56 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
         await db.from('correios_reverse_shipments').update(patch).eq('id', row.id);
         row = { ...row, ...patch };
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Correios: falha ao criar a reversa';
-        await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id);
-        throw fail(msg, 502);
+        if ((e as any)?.status) throw e;
+        await markErr(e instanceof Error ? e.message : 'Correios: falha ao criar a reversa');
       }
       try { row = await emitLabel(row); }
-      catch (e) { if ((e as any)?.noPdf) return reply({ item: await withUrl(row) }); const msg = e instanceof Error ? e.message : 'Falha ao emitir etiqueta'; await db.from('correios_reverse_shipments').update({ error_message: msg }).eq('id', row.id); row.error_message = msg; }
-      return reply({ item: await withUrl(row) });
+      catch (e) { if ((e as any)?.noPdf) return row; const msg = e instanceof Error ? e.message : 'Falha ao emitir etiqueta'; await db.from('correios_reverse_shipments').update({ error_message: msg }).eq('id', row.id); row.error_message = msg; }
+      return row;
+    };
+
+    if (b.action === 'create') {
+      const svc = REVERSE_SERVICES.find((s) => s.codigo === b.service_code);
+      if (!svc) throw fail('Serviço de reversa inválido');
+      const { data: existing } = await db.from('correios_reverse_shipments').select('*').eq('idempotency_key', b.idempotency_key).maybeSingle();
+      if (existing && !b.dry_run) return reply({ item: await withUrl(existing), existing: true });
+      const key = b.customer.telefone.replace(/\D/g, '').slice(-8);
+      const { data: sale } = await db.from('pos_sales').select('id,discount,phone_suffix8').eq('id', b.sale_id).maybeSingle();
+      if (!sale) throw fail('Venda original não encontrada');
+      if (sale.phone_suffix8 && sale.phone_suffix8 !== key) throw fail('Esta venda não é deste telefone');
+      const { data: saleItems } = await db.from('pos_sale_items').select('id,product_name,quantity,unit_price,sku,barcode').eq('sale_id', sale.id).limit(200);
+      const ret = reverseReturnItems(saleItems || [], b.return_items, Number(sale.discount || 0));
+      if (ret.problems.length) throw fail(ret.problems.join('; '));
+      const cpf = String(b.customer.cpf || '').replace(/\D/g, '');
+      if (cpf.length !== 11) throw fail('CPF da cliente é obrigatório: ela é a remetente e a nota de devolução sai no nome dela');
+      const settings = await loadCorreiosSettings(db);
+      const store = { ...(settings.remetente as any), nome: (settings.remetente as any)?.nome_etiqueta || 'Banana Calçados' };
+      const valid = reverseValidity(new Date());
+      const pkg = b.package || REVERSE_DEFAULT_PACKAGE;
+      // Prévia sem nota (a nota real entra em finish): valida os dados antes de emitir qualquer documento fiscal.
+      const decl = ret.items.map((i) => ({ conteudo: i.nome, quantidade: i.quantidade, valor: i.valor_pago }));
+      const { payload, problems } = buildReversePayload({ customer: b.customer, store, serviceCode: svc.codigo, pkg, items: decl, validUntilBr: valid.br, reference: b.idempotency_key.slice(0, 8) });
+      if (b.dry_run) return reply({ dry_run: true, ok: !problems.length, problems, payload, return_items: ret.items });
+      if (problems.length) throw fail(problems.join('; '));
+      const ins = await db.from('correios_reverse_shipments').insert({
+        created_by: userId, customer_name: b.customer.nome, customer_phone: b.customer.telefone, customer_cpf: cpf,
+        address: { cep: b.customer.cep, logradouro: b.customer.logradouro, numero: b.customer.numero, complemento: b.customer.complemento, bairro: b.customer.bairro, cidade: b.customer.cidade, uf: b.customer.uf },
+        sale_id: sale.id, return_items: ret.items, reason: b.reason || null, servico_codigo: svc.codigo, servico_nome: svc.nome, package: pkg, valid_until: valid.iso, request: payload, idempotency_key: b.idempotency_key,
+      }).select('*').single();
+      if (ins.error) {
+        const { data: again } = await db.from('correios_reverse_shipments').select('*').eq('idempotency_key', b.idempotency_key).maybeSingle();
+        if (again) return reply({ item: await withUrl(again), existing: true });
+        throw new Error('Não foi possível registrar a reversa');
+      }
+      return reply({ item: await withUrl(await finish(ins.data)) });
+    }
+
+    if (b.action === 'retry') {
+      // Reaproveita a mesma reversa (e a mesma nota, se já autorizada) — nunca emite nota em dobro.
+      const row = await get(b.id);
+      if (row.prepostagem_id || row.status !== 'erro') throw fail('Esta reversa não está com erro');
+      if (!row.sale_id || !row.return_items) throw fail('Reversa antiga sem venda vinculada: gere uma nova');
+      return reply({ item: await withUrl(await finish(row)) });
     }
 
     if (b.action === 'label') {
