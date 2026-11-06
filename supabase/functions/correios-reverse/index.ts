@@ -132,7 +132,7 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
     const finish = async (row: any) => {
       const settings = await loadCorreiosSettings(db);
       const store = { ...(settings.remetente as any), nome: (settings.remetente as any)?.nome_etiqueta || 'Banana Calçados' };
-      const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw fail(msg, 502); };
+      const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw Object.assign(fail(msg, 502), { marked: true }); };
       let nf: any = null;
       try {
         const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nfe-devolucao-emitir`, { method: 'POST', headers: { ...(await internalCallHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reverse_shipment_id: row.id }) });
@@ -158,7 +158,7 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
         await db.from('correios_reverse_shipments').update(patch).eq('id', row.id);
         row = { ...row, ...patch };
       } catch (e) {
-        if ((e as any)?.status) throw e;
+        if ((e as any)?.marked) throw e;
         await markErr(e instanceof Error ? e.message : 'Correios: falha ao criar a reversa');
       }
       try { row = await emitLabel(row); }
