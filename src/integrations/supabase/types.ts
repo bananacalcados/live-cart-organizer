@@ -7356,6 +7356,8 @@ export type Database = {
           operation_mode: string
           overlay_token: string | null
           payment_window_on_assembly: boolean
+          public_catalog_enabled: boolean
+          public_catalog_until: string | null
           self_service_prize_image_url: string | null
           self_service_prize_name: string | null
           self_service_product_notice: string
@@ -7425,6 +7427,8 @@ export type Database = {
           operation_mode?: string
           overlay_token?: string | null
           payment_window_on_assembly?: boolean
+          public_catalog_enabled?: boolean
+          public_catalog_until?: string | null
           self_service_prize_image_url?: string | null
           self_service_prize_name?: string | null
           self_service_product_notice?: string
@@ -7494,6 +7498,8 @@ export type Database = {
           operation_mode?: string
           overlay_token?: string | null
           payment_window_on_assembly?: boolean
+          public_catalog_enabled?: boolean
+          public_catalog_until?: string | null
           self_service_prize_image_url?: string | null
           self_service_prize_name?: string | null
           self_service_product_notice?: string
@@ -21314,6 +21320,45 @@ export type Database = {
           },
         ]
       }
+      public_catalog_visits: {
+        Row: {
+          catalog_product_id: string | null
+          created_at: string
+          dispatch_code: string | null
+          event_id: string
+          group_id: string | null
+          id: string
+          kind: string
+          order_id: string | null
+          utm_campaign: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          catalog_product_id?: string | null
+          created_at?: string
+          dispatch_code?: string | null
+          event_id: string
+          group_id?: string | null
+          id?: string
+          kind: string
+          order_id?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          catalog_product_id?: string | null
+          created_at?: string
+          dispatch_code?: string | null
+          event_id?: string
+          group_id?: string | null
+          id?: string
+          kind?: string
+          order_id?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
       purchase_grade_types: {
         Row: {
           created_at: string
@@ -29467,6 +29512,19 @@ export type Database = {
         Returns: undefined
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      public_catalog_report: {
+        Args: { p_event_id: string }
+        Returns: {
+          group_id: string
+          group_name: string
+          opens: number
+          orders: number
+          paid: number
+          paid_value: number
+          utm_campaign: string
+          views: number
+        }[]
+      }
       purchase_item_add_grades: {
         Args: { p_add: number; p_by: string; p_item_id: string }
         Returns: number
