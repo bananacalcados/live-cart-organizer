@@ -157,7 +157,7 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       if (!row.prepostagem_id) throw fail('Esta reversa não chegou a ser registrada nos Correios');
       const { cf } = await cws();
       let one: any = null;
-      const tries = [`/prepostagem/v1/prepostagens?codigoObjeto=${encodeURIComponent(row.codigo_objeto || '')}&page=0&size=1`, `/prepostagem/v1/prepostagens?id=${encodeURIComponent(row.prepostagem_id)}&page=0&size=1`];
+      const tries = [`/prepostagem/v2/prepostagens?codigoObjeto=${encodeURIComponent(row.codigo_objeto || '')}&page=0&size=1`, `/prepostagem/v2/prepostagens?id=${encodeURIComponent(row.prepostagem_id)}&page=0&size=1`];
       const errs: string[] = [];
       for (const p of tries) { try { const r: any = await cf(p, { method: 'GET' }); one = r?.itens?.[0] || r?.content?.[0] || r; break; } catch (e) { errs.push(e instanceof Error ? e.message : String(e)); } }
       if (!one) one = { errors: errs };
