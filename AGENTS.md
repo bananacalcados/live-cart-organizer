@@ -80,3 +80,4 @@
 - Financial values/status never come from the browser; server recalculates.
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
+- Public live catalog (/pedido/:slug/vitrine) runs only through live-catalog-public: server prices/stock, events.public_catalog_enabled/until gate, cashback only when typed CPF matches the phone's saved registration, open unpaid cart reused, visits in public_catalog_visits (service-written), payment via the existing self-service cart page.
