@@ -1,3 +1,9 @@
+# Reemissão de logística reversa
+- [ ] Conferir vínculo da compra, itens e conversa das clientes restantes; separar dúvidas
+- [ ] Reemitir somente casos comprovados com NF-e e código; preservar prazo original
+- [ ] Enviar código e DANFE espaçados, confirmar registro e listar resultados
+- [ ] Andreia fora (Frenet); Gilda e Michelly já enviadas, não reenviar
+
 # Promoções progressivas — reaproveitamento
 - [x] Listar e buscar promoções de outras lives, com resumo
 - [x] Copiar promoção e produtos sem alterar a original, tratando nome duplicado
