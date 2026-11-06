@@ -142,6 +142,10 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       if (nf?.status !== 'authorized') await markErr(nf?.contingencia ? 'Nota de devolução na fila da SEFAZ (fora do ar). Tente "Tentar de novo" em alguns minutos' : `Nota de devolução não autorizada: ${String(nf?.error || nf?.message || 'erro desconhecido').slice(0, 220)}`);
       const { data: doc } = await db.from('fiscal_documents').select('id,numero,chave_acesso').eq('id', nf.document_id).maybeSingle();
       if (!doc?.chave_acesso || !doc?.numero) await markErr('Nota de devolução autorizada sem número/chave — confira no Fiscal');
+      row.devolucao_doc_id = doc!.id;
+      // Quem recebe a mercadoria é quem emitiu a nota de entrada: o CNPJ do destinatário precisa ser o da chave da nota.
+      const emitCnpj = String(doc!.chave_acesso).slice(6, 20);
+      if (/^\d{14}$/.test(emitCnpj)) store.cnpj = emitCnpj;
       const ad = row.address || {};
       const cust = { nome: row.customer_name, cpf: row.customer_cpf, telefone: row.customer_phone, email: row.request?.remetente?.email || null, cep: ad.cep, logradouro: ad.logradouro, numero: ad.numero, complemento: ad.complemento, bairro: ad.bairro, cidade: ad.cidade, uf: ad.uf };
       const valid = reverseValidity(new Date());
