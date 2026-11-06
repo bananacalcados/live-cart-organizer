@@ -79,8 +79,11 @@ const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Application root is missing");
 const root = createRoot(rootElement);
 
-import("./lib/edgeAuthFetch").then((m) => m.installEdgeAuthFetch()).catch(() => {});
-import("./App.tsx").then(({ default: App }) => {
+import("./lib/edgeAuthFetch")
+  .then((m) => m.installEdgeAuthFetch())
+  .catch(() => {})
+  .then(() => import("./App.tsx"))
+  .then(({ default: App }) => {
   root.render(<App />);
 }).catch((error: unknown) => {
   if (!recoverModuleLoad(error)) root.render(<AppLoadFailure />);
