@@ -41,6 +41,7 @@ import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { fetchInstanceInfo, instanceKeys, syncInstanceGroups } from "@/lib/marketing/instanceGroups";
 import { findMirrorUpdates, type MirrorUpdate } from "@/lib/marketing/mirrorGroupMedia";
+import { hasVipLinkWithoutMode } from "@/lib/marketing/vipLinkDraft";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
 const isTransientNetworkError = (e: unknown): boolean => {
@@ -161,7 +162,7 @@ function validateDraftLocally(anchor: ScheduledMessage, siblings: ScheduledMessa
   if (blocks.some(b => b.message_type === 'contact' && !b.contact_phone)) return 'missing_contact_phone';
   if (!anchor.scheduled_at) return 'missing_schedule';
   if (!anchor.whatsapp_number_id && !campaignNumberId) return 'missing_instance';
-  if (anchor.vip_link_mode === 'none' && blocks.some(b => (b.message_content || '').includes('{{link_atendimento}}'))) return 'vip_link_without_mode';
+  if (hasVipLinkWithoutMode(blocks)) return 'vip_link_without_mode';
   return null;
 }
 
