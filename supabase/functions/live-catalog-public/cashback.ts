@@ -1,3 +1,4 @@
+// Cópia de live-catalog/cashback.ts (mesma regra; manter as duas iguais).
 // Regra de cashback do catálogo cross-sell (pura, testada em src/test/liveCatalogCashback.test.ts).
 // Itens promocionais nunca contam; o cupom só vale se o elegível atingir a compra mínima,
 // e o abatimento nunca passa do valor elegível.

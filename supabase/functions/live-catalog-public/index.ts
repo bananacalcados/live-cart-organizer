@@ -7,7 +7,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // a página de pagamento existente do autoatendimento.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeBrPhone } from "../_shared/access-code.ts";
-import { computeCatalogCashback, type Coupon } from "../_shared/catalog-cashback.ts";
+import { computeCatalogCashback, type Coupon } from "./cashback.ts";
 
 const MODE = "whatsapp_autoatendimento";
 const cors = {
