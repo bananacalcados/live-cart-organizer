@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Import, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { ImportPromotionDialog } from "./ImportPromotionDialog";
 
 const db = supabase as any;
 const numId = (v?: string | null) => String(v || "").split("/").pop()?.replace(/\D/g, "") || "";
