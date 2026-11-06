@@ -1303,9 +1303,10 @@ export function MassTemplateDispatcher() {
       } catch { /* sem cashback */ }
       const testRecipient: Recipient = { phone: tp, name: 'Teste', firstName: 'Teste', lastName: '', source: 'crm', cashback: testCb };
       const components = buildComponentsForRecipient(testRecipient);
+      const { data: sess } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
         method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Authorization': `Bearer ${sess.session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: testPhone.replace(/\D/g, ''),
           templateName: selectedTemplate.name,
