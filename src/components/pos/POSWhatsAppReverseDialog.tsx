@@ -80,10 +80,11 @@ export function reverseWhatsAppText(code: string, purpose: ReversePurpose, valid
     "",
     "✅ *Como usar é bem simples:*",
     "1️⃣ Coloque o produto em uma caixa (pode ser a original);",
-    "2️⃣ Embale e lacre bem;",
-    "3️⃣ Leve a uma agência dos Correios.",
+    "2️⃣ Imprima a *nota fiscal de devolução* que vai logo abaixo e coloque junto, por fora da caixa ou na mão para mostrar no balcão;",
+    "3️⃣ Embale e lacre bem;",
+    "4️⃣ Leve a uma agência dos Correios.",
     "",
-    "Apresente o código acima e pronto! Farão a postagem da sua compra 😃",
+    "Apresente o código e a nota e pronto! Farão a postagem da sua compra 😃",
   ].join("\n");
 }
 
