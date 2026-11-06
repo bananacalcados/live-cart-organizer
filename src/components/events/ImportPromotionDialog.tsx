@@ -134,13 +134,17 @@ export function ImportPromotionDialog({
 
       const names = new Map<string, string>();
       if (plan.missingProductIds.length) {
-        const [sourceCatalog, sourceCrosssell] = await Promise.all([
+        const [sourceCatalog, sourceCrosssell, masters] = await Promise.all([
           db.from("event_catalog_products").select("shopify_product_id,title").eq("event_id", source.event_id).limit(200),
           db.from("event_crossell_offers").select("shopify_product_id,product_title").eq("event_id", source.event_id).limit(200),
+          db.from("products_master").select("shopify_product_id,name").in("shopify_product_id", plan.missingProductIds.flatMap((id) => [id, `gid://shopify/Product/${id}`])).limit(100),
         ]);
         for (const row of sourceCatalog.data || []) names.set(numericShopifyId(row.shopify_product_id), row.title);
         for (const row of sourceCrosssell.data || []) {
           if (!names.has(numericShopifyId(row.shopify_product_id))) names.set(numericShopifyId(row.shopify_product_id), row.product_title);
+        }
+        for (const row of masters.data || []) {
+          if (!names.has(numericShopifyId(row.shopify_product_id))) names.set(numericShopifyId(row.shopify_product_id), row.name);
         }
       }
 
