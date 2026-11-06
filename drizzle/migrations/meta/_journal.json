@@ -883,6 +883,13 @@
       "when": 1793984010233,
       "tag": "0125_public_catalog_vitrine",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793985439331,
+      "tag": "0126_fix_group_draft_vip_link_validation",
+      "breakpoints": true
     }
   ]
 }
