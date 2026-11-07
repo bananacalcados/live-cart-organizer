@@ -80,3 +80,4 @@
 - Financial values/status never come from the browser; server recalculates.
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
+- Product code search resolves matches server-side via search_product_code_keys (accent/case-insensitive, typo-tolerant, capped at 200), so the Codes screen never filters full lists in the browser.
