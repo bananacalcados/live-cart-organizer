@@ -1242,6 +1242,111 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_link: {
+        Row: {
+          ck: string | null
+          color: string | null
+          gtin: string | null
+          linked_ok: boolean | null
+          master_id: string | null
+          shopify_product_id: string | null
+          shopify_variant_id: string | null
+          size: string | null
+          sk: string | null
+          sku: string | null
+          skuk: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          ck?: string | null
+          color?: string | null
+          gtin?: string | null
+          linked_ok?: boolean | null
+          master_id?: string | null
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          size?: string | null
+          sk?: string | null
+          sku?: string | null
+          skuk?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          ck?: string | null
+          color?: string | null
+          gtin?: string | null
+          linked_ok?: boolean | null
+          master_id?: string | null
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          size?: string | null
+          sk?: string | null
+          sku?: string | null
+          skuk?: string | null
+          variant_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_mirror: {
+        Row: {
+          barcode: string | null
+          ck: string | null
+          image_url: string | null
+          option_color: string | null
+          option_size: string | null
+          price: number | null
+          product_status: string | null
+          product_title: string | null
+          published_lovable: boolean | null
+          shopify_product_id: string | null
+          shopify_variant_id: string | null
+          sk: string | null
+          sku: string | null
+          skuk: string | null
+          synced_at: string | null
+          taken: boolean | null
+          variant_title: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          ck?: string | null
+          image_url?: string | null
+          option_color?: string | null
+          option_size?: string | null
+          price?: number | null
+          product_status?: string | null
+          product_title?: string | null
+          published_lovable?: boolean | null
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          sk?: string | null
+          sku?: string | null
+          skuk?: string | null
+          synced_at?: string | null
+          taken?: boolean | null
+          variant_title?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          ck?: string | null
+          image_url?: string | null
+          option_color?: string | null
+          option_size?: string | null
+          price?: number | null
+          product_status?: string | null
+          product_title?: string | null
+          published_lovable?: boolean | null
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          sk?: string | null
+          sku?: string | null
+          skuk?: string | null
+          synced_at?: string | null
+          taken?: boolean | null
+          variant_title?: string | null
+        }
+        Relationships: []
+      }
       automation_ai_sessions: {
         Row: {
           created_at: string
@@ -20485,6 +20590,45 @@ export type Database = {
           },
         ]
       }
+      product_color_shopify_alias: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          erp_color_key: string
+          master_id: string
+          shopify_color: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          erp_color_key: string
+          master_id: string
+          shopify_color: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          erp_color_key?: string
+          master_id?: string
+          shopify_color?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_color_shopify_alias_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_color_shopify_alias_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
+          },
+        ]
+      }
       product_colors: {
         Row: {
           created_at: string
@@ -29353,6 +29497,7 @@ export type Database = {
       norm_email: { Args: { raw: string }; Returns: string }
       norm_identity_text: { Args: { p: string }; Returns: string }
       norm_instagram: { Args: { raw: string }; Returns: string }
+      norm_key: { Args: { t: string }; Returns: string }
       norm_phone_br: { Args: { raw: string }; Returns: string }
       norm_txt: { Args: { t: string }; Returns: string }
       normalize_address_key: {
@@ -29633,6 +29778,10 @@ export type Database = {
       }
       refresh_group_admin_send_routes: {
         Args: { p_limit?: number }
+        Returns: number
+      }
+      refresh_open_live_intents: {
+        Args: { p_event_id?: string }
         Returns: number
       }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
