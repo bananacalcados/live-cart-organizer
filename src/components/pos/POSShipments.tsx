@@ -94,7 +94,7 @@ export function POSShipments({ storeId }: Props) {
   const [showTrackingDialog, setShowTrackingDialog] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [fiscalMap, setFiscalMap] = useState<Record<string, { status: string; danfe_url: string | null; numero: number | null }>>({});
+  const [fiscalMap, setFiscalMap] = useState<Record<string, { status: string; danfe_url: string | null; numero: number | null; company_cnpj: string | null }>>({});
   const [emittingId, setEmittingId] = useState<string | null>(null);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingWa, setSendingWa] = useState(false);
@@ -141,15 +141,15 @@ export function POSShipments({ storeId }: Props) {
               .order('created_at', { ascending: false })
           : { data: [] },
         supabase.from('fiscal_documents')
-          .select('pos_sale_id, status, danfe_url, numero, created_at')
+          .select('pos_sale_id, status, danfe_url, numero, created_at, companies(cnpj)')
           .in('pos_sale_id', saleIds)
           .in('status', ['authorized', 'autorizada', 'autorizado'])
           .order('created_at', { ascending: false }),
       ]);
 
-      const fmap: Record<string, { status: string; danfe_url: string | null; numero: number | null }> = {};
+      const fmap: Record<string, { status: string; danfe_url: string | null; numero: number | null; company_cnpj: string | null }> = {};
       (fiscalRes.data || []).forEach((f: any) => {
-        if (!fmap[f.pos_sale_id]) fmap[f.pos_sale_id] = { status: f.status, danfe_url: f.danfe_url, numero: f.numero };
+        if (!fmap[f.pos_sale_id]) fmap[f.pos_sale_id] = { status: f.status, danfe_url: f.danfe_url, numero: f.numero, company_cnpj: f.companies?.cnpj || null };
       });
       setFiscalMap(fmap);
 
@@ -548,14 +548,14 @@ export function POSShipments({ storeId }: Props) {
                                   toast.error(e?.message || 'Erro ao abrir DANFE');
                                 });
                               }}>
-                                <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} <ExternalLink className="h-3 w-3" />
+                                <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} · CNPJ {f.company_cnpj || '—'} <ExternalLink className="h-3 w-3" />
                               </Button>
                             );
                           }
                           if (f) {
                             return (
                               <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs">
-                                <CheckCircle2 className="h-3 w-3 mr-1" /> NF-e autorizada
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> NF-e autorizada · CNPJ {f.company_cnpj || '—'}
                               </Badge>
                             );
                           }
