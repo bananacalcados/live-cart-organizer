@@ -8934,6 +8934,9 @@ export type Database = {
           cancelled_at: string | null
           chave_acesso: string | null
           company_id: string
+          company_selection_details: Json | null
+          company_selection_gateway: string | null
+          company_selection_rule: string | null
           contingencia_motivo: string | null
           cpf_destinatario: string | null
           created_at: string
@@ -8974,6 +8977,9 @@ export type Database = {
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id: string
+          company_selection_details?: Json | null
+          company_selection_gateway?: string | null
+          company_selection_rule?: string | null
           contingencia_motivo?: string | null
           cpf_destinatario?: string | null
           created_at?: string
@@ -9014,6 +9020,9 @@ export type Database = {
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id?: string
+          company_selection_details?: Json | null
+          company_selection_gateway?: string | null
+          company_selection_rule?: string | null
           contingencia_motivo?: string | null
           cpf_destinatario?: string | null
           created_at?: string
@@ -9113,6 +9122,115 @@ export type Database = {
             columns: ["troca_devolucao_id"]
             isOneToOne: false
             referencedRelation: "trocas_devolucoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_emission_pendings: {
+        Row: {
+          company_ids: string[]
+          created_at: string
+          gateways: string[]
+          id: string
+          reason: string
+          resolved_at: string | null
+          source_id: string
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_ids?: string[]
+          created_at?: string
+          gateways?: string[]
+          id?: string
+          reason: string
+          resolved_at?: string | null
+          source_id: string
+          source_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_ids?: string[]
+          created_at?: string
+          gateways?: string[]
+          id?: string
+          reason?: string
+          resolved_at?: string | null
+          source_id?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fiscal_gateway_company_config: {
+        Row: {
+          default_company_id: string
+          emit_by_gateway: boolean
+          id: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          default_company_id: string
+          emit_by_gateway?: boolean
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          default_company_id?: string
+          emit_by_gateway?: boolean
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_gateway_company_config_default_company_id_fkey"
+            columns: ["default_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_gateway_company_map: {
+        Row: {
+          company_id: string
+          created_at: string
+          gateway: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          gateway: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          gateway?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_gateway_company_map_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]

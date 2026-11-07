@@ -13,6 +13,7 @@ import { generateFiscalPdf } from "@/lib/fiscal/exportFiscalPdf";
 import { exportFiscalXmlZip } from "@/lib/fiscal/exportFiscalXml";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
 import { AccountantSendSection } from "./AccountantSendSection";
+import { FiscalGatewayCompanyPanel } from "@/components/fiscal/FiscalGatewayCompanyPanel";
 
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
 }
 
 interface CompanyRow {
-  id: string; legal_name: string; cnpj: string; ie: string | null; ie_isento: boolean | null;
+  id: string; legal_name: string; cnpj: string; is_active: boolean; ie: string | null; ie_isento: boolean | null;
   address_street: string | null; address_number: string | null; address_complement: string | null;
   address_neighborhood: string | null; address_cep: string | null; address_city: string | null;
   address_state: string | null; phone: string | null;
@@ -60,7 +61,7 @@ export function POSFiscalTab({ periodRange }: Props) {
     try {
       const { data: comps } = await supabase
         .from("companies")
-        .select("id, legal_name, cnpj, ie, ie_isento, address_street, address_number, address_complement, address_neighborhood, address_cep, address_city, address_state, phone")
+        .select("id, legal_name, cnpj, is_active, ie, ie_isento, address_street, address_number, address_complement, address_neighborhood, address_cep, address_city, address_state, phone")
         .order("legal_name");
       setCompanies((comps as any) || []);
 
@@ -253,6 +254,7 @@ export function POSFiscalTab({ periodRange }: Props) {
             ))}
           </SelectContent>
         </Select>
+        <FiscalGatewayCompanyPanel companies={companies} />
         <span className="text-xs text-zinc-400">Período: {periodRange.label}</span>
         <ChangeAreaPasswordButton area="fiscal" label="Alterar senha da aba Fiscal" />
         <div className="ml-auto flex items-center gap-2">

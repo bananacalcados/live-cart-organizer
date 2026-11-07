@@ -390,7 +390,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const loadNfeDoc = async () => {
     const { data } = await supabase
       .from('fiscal_documents')
-      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, rejection_message')
+      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, rejection_message, companies(cnpj, legal_name)')
       .eq('order_id', order.id)
       .eq('modelo', 55)
       .order('created_at', { ascending: false })
@@ -691,7 +691,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                 {nfeDoc?.status === 'pending' && <Badge variant="secondary">Pendente</Badge>}
               </div>
               {nfeDoc?.numero && (
-                <p className="text-xs text-muted-foreground">Nº {nfeDoc.numero} • Série {nfeDoc.serie}{nfeDoc.chave_acesso ? ` • Chave ${nfeDoc.chave_acesso}` : ''}</p>
+                <p className="text-xs text-muted-foreground">Nº {nfeDoc.numero} • Série {nfeDoc.serie} • CNPJ {nfeDoc.companies?.cnpj || '—'}{nfeDoc.chave_acesso ? ` • Chave ${nfeDoc.chave_acesso}` : ''}</p>
               )}
               {nfeDoc?.status === 'rejected' && nfeDoc?.rejection_message && (
                 <p className="text-xs text-destructive">{nfeDoc.rejection_message}</p>

@@ -1,5 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
+import { resolveFiscalCompanyForSource, recordFiscalMixedPending, FISCAL_MIXED_COMPANIES_REASON } from "../_shared/fiscal/gateway-company.ts";
 // Edge function: nfce-retry-pending
 // Cron a cada 5 min. Reemite NFC-e que ficaram em status='pending_sefaz' (SEFAZ offline).
 // Reinvoca nfce-emitir; se autorizar, status vira 'authorized' (nfce-emitir já cuida disso).
@@ -57,6 +58,12 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
     }).eq("id", doc.id).eq("status", "pending_sefaz");
 
     try {
+      const issuer = await resolveFiscalCompanyForSource(supabase, { saleId: doc.pos_sale_id });
+      if (issuer.mixed) {
+        await recordFiscalMixedPending(supabase, { sourceType: "pos_sale", sourceId: doc.pos_sale_id, choice: issuer });
+        results.push({ sale_id: doc.pos_sale_id, skipped: true, error: FISCAL_MIXED_COMPANIES_REASON });
+        continue;
+      }
       // Reinvoca o emit (cria NOVO fiscal_document — mas o anterior fica como histórico)
       // ⚠️ Decisão: em vez de criar duplicado, apagamos o doc antigo logo antes de reemitir
       // pra manter um único registro por venda. nfce-emitir vai recriar.

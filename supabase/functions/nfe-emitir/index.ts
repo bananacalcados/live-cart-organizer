@@ -1,5 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
+import { resolveFiscalCompanyForSource, recordFiscalMixedPending, resolveFiscalPending, FISCAL_MIXED_COMPANIES_REASON } from "../_shared/fiscal/gateway-company.ts";
 // Edge function: nfe-emitir
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
@@ -466,8 +467,28 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     const numero = firstUsable([ship.number, split.numero, "S/N"], 1).slice(0, 10) || "S/N";
     const bairro = firstUsable([ship.neighborhood, ship.address2, ship.bairro, cepInfo?.bairro, "Centro"], 2).slice(0, 60) || "Centro";
 
-    // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
-    const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
+    // 2. Empresa: regra por gateway somente quando o interruptor estiver ligado.
+    const issuer = await resolveFiscalCompanyForSource(supabase, {
+      saleId: order.source === "sale" ? order.source_id : null,
+      orderId: order.source === "order" ? order.source_id : null,
+      storeCompanyId: order.store_company_id,
+      forcedCompanyId: forcedCompany || null,
+    });
+    if (issuer.mixed) {
+      await recordFiscalMixedPending(supabase, {
+        sourceType: order.source === "sale" ? "pos_sale" : "order",
+        sourceId: order.source_id,
+        choice: issuer,
+      });
+      return new Response(JSON.stringify({
+        ok: false, code: "mixed_companies", error: FISCAL_MIXED_COMPANIES_REASON,
+        gateways: issuer.gateways, company_ids: issuer.companyIds,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+    }
+    const companyId = issuer.companyId || forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
+    const selectionRule = issuer.enabled ? issuer.rule : "legacy";
+    const selectionGateway = issuer.gateways.join(",") || null;
+    const selectionDetails = { evidence: issuer.evidence || null, gateways: issuer.gateways, candidate_company_ids: issuer.companyIds };
     const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).single();
     if (!company) throw new Error("Empresa não encontrada");
     if (!company.brasilnfe_token) throw new Error("Empresa sem token BrasilNFe");
@@ -647,6 +668,9 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       numero: null, ambiente, status: "pending",
       valor_total: valorTotalNota, cpf_destinatario: cpfDest,
       nome_destinatario: order.customer_name || "CONSUMIDOR",
+      company_selection_rule: selectionRule,
+      company_selection_gateway: selectionGateway,
+      company_selection_details: selectionDetails,
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
@@ -798,6 +822,10 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       retry_count: 0,
     }).eq("id", doc.id);
 
+    if (ok || sefazOffline) {
+      await resolveFiscalPending(supabase, order.source === "sale" ? "pos_sale" : "order", order.source_id);
+    }
+
     // Rejeição "já foi emitida com o identificador interno": a nota EXISTE na BrasilNFe.
     // Recupera XML/DANFE automaticamente em vez de travar a expedição.
     if (!ok && msgLow.includes("identificador interno")) {
@@ -832,6 +860,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     return new Response(JSON.stringify({
       ok, contingencia: sefazOffline, document_id: doc.id, numero: numeroRet,
       chave_acesso: chave, protocolo, error: ok ? null : errorMsg,
+      company_id: companyId, company_cnpj: company.cnpj,
+      company_selection_rule: selectionRule, company_selection_gateway: selectionGateway,
       message: sefazOffline ? "SEFAZ indisponível — nota em fila de contingência, será reemitida automaticamente" : null,
       response: respJson,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: httpResp });

@@ -1,3 +1,11 @@
+# Fiscal — CNPJ emissor pelo gateway
+- [x] Mapear emissões automáticas/manuais, NF-e/NFC-e, cancelamentos, correções e devoluções
+- [x] Criar configuração segura gateway→empresa, padrão, interruptor desligado e pendência de CNPJs diferentes
+- [x] Aplicar seleção e log na emissão sem alterar o comportamento enquanto desligado
+- [x] Adicionar configuração, filtro e CNPJ emissor nas telas fiscais e listas/modais de notas
+- [x] Desativar somente as duas empresas de teste indicadas
+- [x] Testar regras sem emitir notas e simular os últimos 7 dias por CNPJ e pagamentos divididos
+
 # Vínculo ERP ↔ Shopify e de-para de cores
 - [x] Rodar relink e refresh dos intents abertos após cada sincronização, retornando o resultado da relink
 - [x] Bloquear confirmação do card somente pelos avisos de item definidos, sem duplicar aviso do intent

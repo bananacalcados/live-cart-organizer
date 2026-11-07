@@ -12,6 +12,7 @@ export interface POSCustomerOrder {
   orderName?: string;
   status?: string;
   trackingCode?: string;
+  issuerCnpj?: string;
   totalPrice?: number;
   createdAt?: string;
   storeName?: string;
@@ -263,6 +264,7 @@ function OrderCard({
             ) : null}
           </div>
           {order.createdAt ? <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}{order.storeName ? ` · ${order.storeName}` : ""}</p> : null}
+          {order.issuerCnpj ? <p className="text-xs text-muted-foreground">CNPJ emissor: <span className="font-mono">{order.issuerCnpj}</span></p> : null}
           {order.items?.length ? (
             <ul className="space-y-0.5">
               {order.items.map((item, index) => (

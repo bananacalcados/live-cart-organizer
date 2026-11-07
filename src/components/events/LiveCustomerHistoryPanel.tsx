@@ -134,13 +134,18 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
 
         const saleIds = posSales.map((item) => item.id);
         const storeIds = Array.from(new Set(posSales.map((item) => item.store_id).filter(Boolean))) as string[];
-        const [storesRes, itemsRes, cashbackRes, mpPayments] = await Promise.all([
+        const [storesRes, itemsRes, cashbackRes, mpPayments, fiscalRes] = await Promise.all([
           storeIds.length ? supabase.from("pos_stores").select("id,name").in("id", storeIds) : Promise.resolve({ data: [] as any[] }),
           saleIds.length ? supabase.from("pos_sale_items").select("sale_id,product_name,variant_name,size,quantity").in("sale_id", saleIds) : Promise.resolve({ data: [] as any[] }),
           phone ? supabase.rpc("lookup_cashback_by_phones" as any, { p_phones: [phone] }) : Promise.resolve({ data: [] as any[] }),
           loadMpSalePayments(supabase, posSales),
+          saleIds.length ? supabase.from("fiscal_documents").select("pos_sale_id,created_at,companies(cnpj)").in("pos_sale_id", saleIds).in("status", ["authorized", "autorizada", "autorizado"]).order("created_at", { ascending: false }) : Promise.resolve({ data: [] as any[] }),
         ]);
         const stores = new Map((storesRes.data || []).map((item: any) => [item.id, item.name]));
+        const issuerBySale = new Map<string, string>();
+        for (const doc of (fiscalRes.data || []) as any[]) {
+          if (!issuerBySale.has(doc.pos_sale_id) && doc.companies?.cnpj) issuerBySale.set(doc.pos_sale_id, doc.companies.cnpj);
+        }
         const saleItems = new Map<string, POSCustomerOrder["items"]>();
         for (const item of (itemsRes.data || []) as any[]) {
           const list = saleItems.get(item.sale_id) || [];
@@ -171,6 +176,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           orderName: `${sale.sale_type === "live" ? "Live" : sale.sale_type === "pos" ? "PDV" : "Online"}${sale.tiny_order_number || sale.nfce_number || sale.invoice_number ? ` #${sale.tiny_order_number || sale.nfce_number || sale.invoice_number}` : ""}`,
           status: sale.status,
           trackingCode: sale.tracking_code || undefined,
+          issuerCnpj: issuerBySale.get(sale.id),
           totalPrice: sale.total == null ? undefined : Number(sale.total),
           createdAt: sale.created_at,
           storeName: sale.store_id ? stores.get(sale.store_id) : undefined,
