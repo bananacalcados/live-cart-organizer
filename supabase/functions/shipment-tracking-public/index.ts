@@ -169,8 +169,8 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
     const localDelivery = sim.kind === 'order' &&
       isGovernadorValadares(sim.destination_city, sim.destination_state);
 
-    // Consulta sob demanda: cada abertura do link com código real consulta a Frenet.
-    // Não usamos cache temporal aqui para não esconder movimentações recentes.
+    // Consulta sob demanda: etiquetas do contrato próprio usam o Rastro/SRO;
+    // as demais continuam na Frenet. O vínculo exato pedido + código evita trocar a origem.
     if (
       sim.kind === 'order' &&
       !localDelivery &&
@@ -178,10 +178,28 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
       !sim.delivered_at
     ) {
       try {
-        const fetched = await fetchFrenetEvents(
-          String(sim.real_tracking_code),
-          (sim.real_service_code as string | null) || guessServiceCode(sim.real_carrier as string | null),
-        );
+        const trackingCode = String(sim.real_tracking_code).trim().toUpperCase();
+        let nativeShipment: { servico_codigo: string } | null = null;
+        if (sim.sale_id && /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(trackingCode)) {
+          const { data, error: nativeError } = await supabase
+            .from('correios_shipments')
+            .select('servico_codigo')
+            .eq('codigo_objeto', trackingCode)
+            .contains('sale_ids', [sim.sale_id])
+            .not('status', 'in', '(cancelada,erro)')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (nativeError) throw nativeError;
+          nativeShipment = data;
+        }
+
+        const fetched = nativeShipment
+          ? await fetchCorreiosEvents(supabase, trackingCode)
+          : await fetchFrenetEvents(
+            trackingCode,
+            (sim.real_service_code as string | null) || guessServiceCode(sim.real_carrier as string | null),
+          );
         const patch: Record<string, unknown> = {};
         if (fetched) {
           const merged = mergeRealEvents(
@@ -190,7 +208,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
           );
           const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description));
           patch.real_events = merged;
-          patch.real_service_code = fetched.serviceCode;
+          patch.real_service_code = nativeShipment?.servico_codigo || fetched.serviceCode;
           patch.last_real_sync = now.toISOString();
           if (delivered) {
             patch.delivered_at = delivered.at;
@@ -207,7 +225,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
           await supabase.from('shipment_simulations').update(patch).eq('id', sim.id);
         }
       } catch (e) {
-        console.error('Frenet sync falhou', (e as Error).message);
+        console.error('Sincronização do rastreio falhou', (e as Error).message);
       }
     }
 
