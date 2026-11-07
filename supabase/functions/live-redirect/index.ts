@@ -129,10 +129,9 @@ serve(withAccessLog("live-redirect", async (req) => {
     // O link vale enquanto o evento estiver marcado como AO VIVO — sem expiração por tempo.
     if (activeEvent && targetUrl) {
       const ok = await validateInstagramUrl(targetUrl);
-      if (!ok) {
-        targetUrl = null;
-        reason = "url_unreachable";
-      }
+      // Instagram lento/instável não pode esconder uma live marcada como AO VIVO:
+      // só registramos o motivo e mandamos a cliente mesmo assim.
+      if (!ok) reason = "url_unreachable";
     }
 
     // Fire-and-forget: increment counter + log click
