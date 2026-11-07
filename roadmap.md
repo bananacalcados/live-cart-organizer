@@ -1,3 +1,8 @@
+# Auditoria de cadastro e carrinho da live
+- [x] Conferir registros reais de cadastro, confirmação e fila de mensagens
+- [x] Auditar identificação de pedidos e reproduzir as telas sem cadastrar ou enviar
+- [x] Entregar achados comprovados, riscos e próximos passos sem reenvios automáticos
+
 # Reemissão de logística reversa
 - [ ] Conferir vínculo da compra, itens e conversa das clientes restantes; separar dúvidas
 - [ ] Reemitir somente casos comprovados com NF-e e código; preservar prazo original
