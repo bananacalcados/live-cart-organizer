@@ -29195,6 +29195,14 @@ export type Database = {
       }
       ig_handle_loose: { Args: { _h: string }; Returns: string }
       ig_handle_norm: { Args: { _h: string }; Returns: string }
+      import_shopify_missing_color: {
+        Args: {
+          p_master_id: string
+          p_shopify_color: string
+          p_shopify_product_id: string
+        }
+        Returns: Json
+      }
       increment_campaign_leads_captured: {
         Args: { p_campaign_id: string }
         Returns: undefined
@@ -30441,6 +30449,20 @@ export type Database = {
       shadow_report_period: {
         Args: { p_since?: string; p_until?: string }
         Returns: Json
+      }
+      shopify_missing_colors: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          kind: string
+          master_id: string
+          possible_erp_colors: string[]
+          product_name: string
+          shopify_color: string
+          shopify_product_id: string
+          synced_at: string
+          total_count: number
+          variants: Json
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
