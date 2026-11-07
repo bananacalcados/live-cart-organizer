@@ -409,6 +409,9 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       valor_total: totalLiquido,
       cpf_destinatario: clienteIdentificado ? cpfDest : digits(company.cnpj),
       nome_destinatario: cliente.NmCliente,
+      company_selection_rule: "original_document",
+      company_selection_gateway: null,
+      company_selection_details: { ref_chave_acesso: chaveOriginal, original_company_id: originalCompanyId },
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
