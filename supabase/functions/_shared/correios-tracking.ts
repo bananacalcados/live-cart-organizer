@@ -59,7 +59,7 @@ export async function fetchCorreiosEvents(
   const first = await getCorreiosToken(db);
   const call = async (settings: any, token: string) => {
     const data = await createCorreiosFetch(settings, token)(
-      `/srorastro/v1/objetos/${encodeURIComponent(code)}?resultado=T`,
+      `/srorastro/v1/objetos/${encodeURIComponent(code)}?resultado=T&idioma=pt-BR`,
       { method: 'GET' },
     );
     return normalizeCorreiosEvents(data, code);
