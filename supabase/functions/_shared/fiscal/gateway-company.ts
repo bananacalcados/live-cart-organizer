@@ -62,12 +62,16 @@ export function chooseFiscalCompany(input: {
     if (input.forcedCompanyId) {
       return {
         enabled: true, companyId: input.forcedCompanyId, rule: "manual_split", gateways,
-        companyIds, mixed: false, evidence: input.evidence,
+        companyIds, mixed: false, pendingReason: null, evidence: input.evidence,
       };
     }
+    const unidentified = input.evidence === "gateway_ids_ambiguous";
     return {
-      enabled: true, companyId: null, rule: "mixed_companies", gateways,
-      companyIds, mixed: true, evidence: input.evidence,
+      enabled: true, companyId: null,
+      rule: unidentified ? "unidentified_gateway" : "mixed_companies", gateways,
+      companyIds, mixed: !unidentified,
+      pendingReason: unidentified ? FISCAL_UNIDENTIFIED_GATEWAY_REASON : FISCAL_MIXED_COMPANIES_REASON,
+      evidence: input.evidence,
     };
   }
 
