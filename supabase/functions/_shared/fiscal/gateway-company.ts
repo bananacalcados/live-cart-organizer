@@ -135,13 +135,40 @@ export async function resolveFiscalCompanyForSource(
     gateways = splitGateways;
     evidence = "payment_splits";
   } else {
-    const saleGateway = concreteGateway(sale?.payment_gateway);
-    const snapshotGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(order?.gateway_snapshot?.gateway);
+    // A prioridade é a prova de aprovação, nunca a simples presença de IDs:
+    // snapshot do pedido → mesmo critério do cashback → confirmação da venda → IDs.
+    const orderSnapshotGateway = concreteGateway(order?.gateway_snapshot?.gateway);
+    let confirmedGateway: string | null = null;
+    let confirmedEvidence = "";
+    if (order && !orderSnapshotGateway) {
+      const { data: attempts } = await db.from("pos_checkout_attempts")
+        .select("gateway,status,created_at").eq("sale_id", order.id)
+        .order("created_at", { ascending: false }).limit(20);
+      const approved = pickConfirmedGateway({
+        notes: order.notes,
+        mercadopago_payment_id: null,
+        pagarme_order_id: null,
+        austpay_transaction_id: null,
+        appmax_order_id: null,
+        vindi_transaction_id: null,
+      }, attempts || []);
+      confirmedGateway = concreteGateway(approved);
+      if (confirmedGateway) {
+        confirmedEvidence = (attempts || []).some((a: any) => a.status === "success" && concreteGateway(a.gateway) === confirmedGateway)
+          ? "approved_attempt" : "order_note";
+      }
+    }
+    const saleGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(sale?.payment_gateway);
     const orderGateway = concreteGateway(order?.payment_confirmed_source);
-    const idGateway = gatewayFromIds(sale) || gatewayFromIds(order);
-    if (saleGateway || snapshotGateway || orderGateway || idGateway) {
-      gateways = [saleGateway || snapshotGateway || orderGateway || idGateway!];
-      evidence = saleGateway ? "pos_sale" : snapshotGateway ? "gateway_snapshot" : orderGateway ? "order_confirmation" : "unique_gateway_id";
+    const idGateways = gatewaysFromIds(order, sale);
+    const selected = orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway || idGateways[0] || null;
+    if (selected) {
+      gateways = orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway ? [selected] : idGateways;
+      evidence = orderSnapshotGateway ? "order_gateway_snapshot"
+        : confirmedGateway ? confirmedEvidence
+        : saleGateway ? "pos_sale_confirmation"
+        : orderGateway ? "order_confirmation"
+        : idGateways.length > 1 ? "gateway_ids_ambiguous" : "unique_gateway_id";
     }
   }
 
