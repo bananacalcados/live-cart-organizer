@@ -474,14 +474,14 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       storeCompanyId: order.store_company_id,
       forcedCompanyId: forcedCompany || null,
     });
-    if (issuer.mixed) {
-      await recordFiscalMixedPending(supabase, {
+    if (issuer.pendingReason) {
+      await recordFiscalCompanyPending(supabase, {
         sourceType: order.source === "sale" ? "pos_sale" : "order",
         sourceId: order.source_id,
         choice: issuer,
       });
       return new Response(JSON.stringify({
-        ok: false, code: "mixed_companies", error: FISCAL_MIXED_COMPANIES_REASON,
+        ok: false, code: issuer.rule, error: issuer.pendingReason,
         gateways: issuer.gateways, company_ids: issuer.companyIds,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
     }

@@ -59,9 +59,9 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
 
     try {
       const issuer = await resolveFiscalCompanyForSource(supabase, { saleId: doc.pos_sale_id });
-      if (issuer.mixed) {
-        await recordFiscalMixedPending(supabase, { sourceType: "pos_sale", sourceId: doc.pos_sale_id, choice: issuer });
-        results.push({ sale_id: doc.pos_sale_id, skipped: true, error: FISCAL_MIXED_COMPANIES_REASON });
+      if (issuer.pendingReason) {
+        await recordFiscalCompanyPending(supabase, { sourceType: "pos_sale", sourceId: doc.pos_sale_id, choice: issuer });
+        results.push({ sale_id: doc.pos_sale_id, skipped: true, error: issuer.pendingReason });
         continue;
       }
       // Reinvoca o emit (cria NOVO fiscal_document — mas o anterior fica como histórico)
