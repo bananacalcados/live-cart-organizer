@@ -6,10 +6,11 @@ export const FISCAL_UNIDENTIFIED_GATEWAY_REASON = "gateway não identificado –
 export interface FiscalCompanyChoice {
   enabled: boolean;
   companyId: string | null;
-  rule: "legacy" | "gateway_mapped" | "default_gateway" | "store" | "manual" | "manual_split" | "mixed_companies";
+  rule: "legacy" | "gateway_mapped" | "default_gateway" | "store" | "manual" | "manual_split" | "mixed_companies" | "unidentified_gateway";
   gateways: string[];
   companyIds: string[];
   mixed: boolean;
+  pendingReason?: string | null;
   evidence?: string;
 }
 
