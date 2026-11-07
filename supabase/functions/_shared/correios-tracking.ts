@@ -1,6 +1,5 @@
 // Consulta sob demanda do rastreio de etiquetas emitidas pelo contrato próprio.
 // Credenciais e código real ficam no servidor; a página pública recebe só eventos traduzidos.
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { getCorreiosToken, createCorreiosFetch } from './correios.ts';
 import type { RealEvent } from './frenet-tracking.ts';
 
@@ -46,12 +45,12 @@ export function normalizeCorreiosEvents(payload: any, trackingNumber: string): R
       type: String(event?.codigo || event?.tipo || ''),
     } satisfies RealEvent;
   }).filter((event: RealEvent | null): event is RealEvent => !!event)
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    .sort((a: RealEvent, b: RealEvent) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
 /** Busca o histórico completo no Rastro/SRO, renovando uma credencial vencida uma vez. */
 export async function fetchCorreiosEvents(
-  db: SupabaseClient,
+  db: any,
   trackingNumber: string,
 ): Promise<{ events: RealEvent[] } | null> {
   const code = trackingNumber.trim().toUpperCase();
