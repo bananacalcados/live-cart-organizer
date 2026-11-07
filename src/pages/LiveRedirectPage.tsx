@@ -11,13 +11,22 @@ import { captureAttribution, attributionPayload } from "@/lib/metaAttribution";
  * - Aplica deep-link (intent:// Android, instagram:// iOS) pra abrir o app direto.
  * - Se nenhuma live estiver ativa, mostra tela "em breve".
  */
+const IG_PROFILE = "https://www.instagram.com/bananacalcados/";
+
+const bigBtn: React.CSSProperties = {
+  display: "block", background: "white", color: "#833AB4", textDecoration: "none",
+  padding: "1rem 1.5rem", borderRadius: 50, fontWeight: 800, fontSize: "1.1rem",
+  width: "100%", boxSizing: "border-box", marginTop: "1rem",
+};
+
 export default function LiveRedirectPage() {
   const { slug, code } = useParams<{ slug: string; code?: string }>();
   const [params] = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "redirecting" | "offline" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "redirecting" | "offline" | "error" | "network">("loading");
   const [targetUrl, setTargetUrl] = useState<string | null>(null);
   const [eventName, setEventName] = useState<string | null>(null);
   const [err, setErr] = useState<string>("");
+  const [showHelp, setShowHelp] = useState(false);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -66,6 +75,7 @@ export default function LiveRedirectPage() {
         setTargetUrl(d.target_url);
         setEventName(d.event_name || null);
         setStatus("redirecting");
+        setTimeout(() => setShowHelp(true), 2500);
 
         const ua = navigator.userAgent || "";
         const isAndroid = /Android/i.test(ua);
@@ -95,7 +105,9 @@ export default function LiveRedirectPage() {
         window.location.href = target;
       })
       .catch((e) => {
-        setStatus("error");
+        // Falha de rede não é link inválido: leva ao nosso Instagram.
+        setTargetUrl(IG_PROFILE);
+        setStatus("network");
         setErr(String(e?.message || e));
       });
   }, [slug, code]);
@@ -139,23 +151,13 @@ export default function LiveRedirectPage() {
               Abrindo o Instagram…
             </p>
             {targetUrl && (
-              <a
-                href={targetUrl}
-                style={{
-                  display: "inline-block",
-                  background: "white",
-                  color: "#833AB4",
-                  textDecoration: "none",
-                  padding: ".75rem 1.5rem",
-                  borderRadius: 50,
-                  fontWeight: 700,
-                  width: "100%",
-                  maxWidth: 260,
-                  boxSizing: "border-box",
-                }}
-              >
-                Abrir Instagram
-              </a>
+              <a href={targetUrl} style={bigBtn}>👉 Abrir a live no Instagram</a>
+            )}
+            {showHelp && (
+              <p style={{ fontSize: ".9rem", marginTop: "1rem", opacity: 0.95 }}>
+                Não abriu sozinho? Toque no botão acima. Se mesmo assim não abrir, abra o
+                Instagram e entre no perfil <b>@bananacalcados</b>.
+              </p>
             )}
           </>
         )}
@@ -167,6 +169,17 @@ export default function LiveRedirectPage() {
             <p style={{ opacity: 0.9, margin: ".8rem 0 0", fontSize: ".95rem" }}>
               Nossa próxima live começa em breve. Volte aqui neste mesmo link quando ela começar!
             </p>
+            <a href={IG_PROFILE} style={bigBtn}>Ver @bananacalcados no Instagram</a>
+          </>
+        )}
+
+        {status === "network" && (
+          <>
+            <div style={{ fontSize: "2rem", marginBottom: ".5rem" }}>📶</div>
+            <h2 style={{ margin: 0 }}>Internet lenta</h2>
+            <p style={{ opacity: 0.9, margin: ".8rem 0 0" }}>Toque abaixo para ir direto ao nosso Instagram.</p>
+            <a href={IG_PROFILE} style={bigBtn}>👉 Abrir @bananacalcados</a>
+            <button onClick={() => window.location.reload()} style={{ ...bigBtn, background: "transparent", color: "white", border: "2px solid white" }}>Tentar de novo</button>
           </>
         )}
 
