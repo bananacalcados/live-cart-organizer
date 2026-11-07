@@ -1,4 +1,7 @@
+import { pickConfirmedGateway } from "../selfservice-cashback-rule.ts";
+
 export const FISCAL_MIXED_COMPANIES_REASON = "pagamento em CNPJs diferentes – emitir manualmente";
+export const FISCAL_UNIDENTIFIED_GATEWAY_REASON = "gateway não identificado – escolher CNPJ";
 
 export interface FiscalCompanyChoice {
   enabled: boolean;
