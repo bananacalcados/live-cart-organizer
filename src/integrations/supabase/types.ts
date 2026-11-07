@@ -29933,6 +29933,10 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      search_product_code_keys: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: string[]
+      }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
