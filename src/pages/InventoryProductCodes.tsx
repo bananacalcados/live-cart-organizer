@@ -98,6 +98,7 @@ export default function InventoryProductCodes() {
   const [reload, setReload] = useState(0);
   const [exampleSku, setExampleSku] = useState<Record<string, string>>({});
   const [aliasOpen, setAliasOpen] = useState(false);
+  const [missingColorsOpen, setMissingColorsOpen] = useState(false);
 
   // SKU de exemplo (1ª variação da cor) só para os códigos visíveis com problema: 1 consulta por página.
   useEffect(() => {
