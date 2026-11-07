@@ -158,7 +158,8 @@ export default function InventoryProductCodes() {
   };
 
   useEffect(() => {
-    if (!debounced) { setMatchCodes(null); return; }
+    setMatchCodes(null);
+    if (!debounced) return;
     let cancel = false;
     setLoading(true);
     (supabase.rpc as any)("search_product_code_keys", { p_query: debounced, p_limit: 200 })
