@@ -27613,6 +27613,7 @@ export type Database = {
         }[]
       }
       _dispatch_can_read: { Args: never; Returns: boolean }
+      _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
       ack_group_responsible_alert: {
         Args: { p_id: string }
@@ -27653,6 +27654,10 @@ export type Database = {
       apply_event_prize_to_order: {
         Args: { p_order_id: string }
         Returns: Json
+      }
+      apply_order_gateway_to_pos_sales: {
+        Args: { p_order_id: string; p_pos_sale_id?: string }
+        Returns: number
       }
       apply_sale_price_adjustment: {
         Args: {
@@ -29639,6 +29644,7 @@ export type Database = {
         }[]
       }
       normalize_wa_status: { Args: { raw: string }; Returns: string }
+      order_approved_gateway: { Args: { p_order_id: string }; Returns: string }
       overlay_fixed_token: { Args: never; Returns: string }
       overlay_pull: {
         Args: { p_after_id?: number; p_token: string }
