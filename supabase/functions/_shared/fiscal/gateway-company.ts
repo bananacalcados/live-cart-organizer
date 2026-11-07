@@ -83,8 +83,10 @@ function gatewayFromIds(row: any): string | null {
     [row.mercadopago_payment_id, "mercadopago"],
     [row.vindi_transaction_id, "vindi"],
   ];
-  for (const [id, gateway] of candidates) if (id) return gateway;
-  return null;
+  const present = candidates.filter(([id]) => !!id);
+  // IDs de tentativas recusadas podem coexistir. Sem um único candidato ou outra
+  // evidência de aprovação, não se escolhe um CNPJ pela ordem dos campos.
+  return present.length === 1 ? present[0][1] : null;
 }
 
 export async function resolveFiscalCompanyForSource(
@@ -96,13 +98,13 @@ export async function resolveFiscalCompanyForSource(
   const enabled = !!config?.emit_by_gateway;
 
   const [saleRes, mapRes] = await Promise.all([
-    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, payment_confirmed_source, pagarme_order_id, appmax_order_id, mercadopago_payment_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
+    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, payment_confirmed_source, gateway_snapshot, pagarme_order_id, appmax_order_id, mercadopago_payment_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
     db.from("fiscal_gateway_company_map").select("gateway, company_id").eq("is_active", true),
   ]);
   const sale = saleRes.data;
   const linkedOrderId = sale?.source_order_id || input.orderId || null;
   const { data: order } = linkedOrderId
-    ? await db.from("orders").select("id, payment_confirmed_source, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", linkedOrderId).maybeSingle()
+    ? await db.from("orders").select("id, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", linkedOrderId).maybeSingle()
     : { data: null };
 
   const splitFilters = [input.saleId ? `sale_id.eq.${input.saleId}` : null, order?.id ? `order_id.eq.${order.id}` : null].filter(Boolean);
@@ -118,11 +120,12 @@ export async function resolveFiscalCompanyForSource(
     evidence = "payment_splits";
   } else {
     const saleGateway = concreteGateway(sale?.payment_gateway) || concreteGateway(sale?.payment_confirmed_source);
+    const snapshotGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(order?.gateway_snapshot?.gateway);
     const orderGateway = concreteGateway(order?.payment_confirmed_source);
     const idGateway = gatewayFromIds(sale) || gatewayFromIds(order);
-    if (saleGateway || orderGateway || idGateway) {
-      gateways = [saleGateway || orderGateway || idGateway!];
-      evidence = saleGateway ? "pos_sale" : orderGateway ? "order_confirmation" : "gateway_ids";
+    if (saleGateway || snapshotGateway || orderGateway || idGateway) {
+      gateways = [saleGateway || snapshotGateway || orderGateway || idGateway!];
+      evidence = saleGateway ? "pos_sale" : snapshotGateway ? "gateway_snapshot" : orderGateway ? "order_confirmation" : "unique_gateway_id";
     }
   }
 

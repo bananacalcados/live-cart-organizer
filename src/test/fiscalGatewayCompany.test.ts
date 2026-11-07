@@ -24,7 +24,7 @@ describe("CNPJ emissor pelo gateway", () => {
   });
 
   it("usa a empresa padrão para gateway conhecido sem mapeamento", () => {
-    const result = choose(["shopify"]);
+    const result = choose(["paypal"]);
     expect(result.companyId).toBe(OLD);
     expect(result.rule).toBe("default_gateway");
   });
