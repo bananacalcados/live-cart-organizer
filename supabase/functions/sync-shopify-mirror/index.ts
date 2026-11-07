@@ -85,9 +85,16 @@ Deno.serve(withAccessLog("sync-shopify-mirror", async (req) => {
     const { data: relink, error: rErr } = await db.rpc("relink_products_from_shopify_mirror");
     if (rErr) return reply({ error: `relink: ${rErr.message}` }, 500);
 
+    const { data: refreshed, error: refreshErr } = await db.rpc("refresh_open_live_intents");
+    if (refreshErr) return reply({ error: `refresh_open_live_intents: ${refreshErr.message}` }, 500);
+
     return reply({
       products_mirrored: new Set(rows.map((r) => r.shopify_product_id)).size,
-      variants_mirrored: rows.length, variants_removed: removed ?? 0, ...(relink as object),
+      variants_mirrored: rows.length,
+      variants_removed: removed ?? 0,
+      open_intents_refreshed: refreshed ?? 0,
+      ...(relink as object),
+      relink: relink ?? null,
     });
   } catch (e) {
     return reply({ error: String((e as Error)?.message || e) }, 500);

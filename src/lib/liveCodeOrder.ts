@@ -85,6 +85,17 @@ export interface CodeIntentLike {
   kind?: string | null; target_order_id?: string | null;
 }
 
+const DIRECT_CONFIRM_WARNING = /não disponível na shopify|não está na shopify|não existe nessa cor/i;
+
+/** Somente problemas do próprio item impedem a confirmação direta. */
+export function codeIntentDirectConfirmBlocked(
+  items: Array<{ size?: string | null; warnings?: string[] }>,
+): boolean {
+  return items.some((item) =>
+    item.size == null || (item.warnings || []).some((warning) => DIRECT_CONFIRM_WARNING.test(warning)),
+  );
+}
+
 /**
  * Confirma um card "Por código": adiciona ao carrinho aberto da pessoa nesta live
  * (kind='add' ou carrinho aberto encontrado) ou cria um pedido novo. Recalcula

@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash } from "lucide-react";
+import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ProductColorAliasDialog } from "@/components/inventory/ProductColorAliasDialog";
 
 type CodeRow = {
   code: string;

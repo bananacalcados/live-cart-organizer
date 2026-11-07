@@ -13,7 +13,7 @@ import type { DbOrderProduct } from "@/types/database";
 import { fetchProducts, getVariantImage } from "@/lib/shopify";
 import type { DbOrder } from "@/types/database";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { computeLiveConditions, conditionsSummary, confirmCodeIntentOrder, mergeProducts, type LiveConditions } from "@/lib/liveCodeOrder";
+import { codeIntentDirectConfirmBlocked, computeLiveConditions, conditionsSummary, confirmCodeIntentOrder, mergeProducts, type LiveConditions } from "@/lib/liveCodeOrder";
 
 const db = supabase as any;
 const brl = (v?: number | null) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
