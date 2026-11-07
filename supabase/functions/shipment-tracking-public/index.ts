@@ -26,6 +26,7 @@ import {
   isDeliveredEvent,
   mergeRealEvents,
 } from '../_shared/frenet-tracking.ts';
+import { fetchCorreiosEvents } from '../_shared/correios-tracking.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
