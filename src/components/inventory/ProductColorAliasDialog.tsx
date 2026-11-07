@@ -76,14 +76,15 @@ export function ProductColorAliasDialog({ open, onOpenChange, onSaved }: Props) 
     }
     setSaving(row.code);
     try {
-      const { data: auth, error: authError } = await supabase.auth.getUser();
+      const { data: auth, error: authError } = await supabase.auth.getSession();
       if (authError) throw authError;
-      if (!auth.user) throw new Error("Sessão expirada. Entre novamente.");
+      const user = auth.session?.user;
+      if (!user) throw new Error("Sessão expirada. Entre novamente.");
       const { error } = await db.from("product_color_shopify_alias").upsert({
         master_id: row.master_id,
         erp_color_key: (row.color || "").trim().toLowerCase(),
         shopify_color: shopifyColor,
-        created_by: auth.user.id,
+        created_by: user.id,
       }, { onConflict: "master_id,erp_color_key" });
       if (error) throw error;
       const { error: relinkError } = await db.rpc("relink_products_from_shopify_mirror");
