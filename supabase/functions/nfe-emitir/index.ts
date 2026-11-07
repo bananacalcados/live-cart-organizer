@@ -668,6 +668,9 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       numero: null, ambiente, status: "pending",
       valor_total: valorTotalNota, cpf_destinatario: cpfDest,
       nome_destinatario: order.customer_name || "CONSUMIDOR",
+      company_selection_rule: selectionRule,
+      company_selection_gateway: selectionGateway,
+      company_selection_details: selectionDetails,
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
@@ -819,6 +822,10 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       retry_count: 0,
     }).eq("id", doc.id);
 
+    if (ok || sefazOffline) {
+      await resolveFiscalPending(supabase, order.source === "sale" ? "pos_sale" : "order", order.source_id);
+    }
+
     // Rejeição "já foi emitida com o identificador interno": a nota EXISTE na BrasilNFe.
     // Recupera XML/DANFE automaticamente em vez de travar a expedição.
     if (!ok && msgLow.includes("identificador interno")) {
@@ -853,6 +860,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     return new Response(JSON.stringify({
       ok, contingencia: sefazOffline, document_id: doc.id, numero: numeroRet,
       chave_acesso: chave, protocolo, error: ok ? null : errorMsg,
+      company_id: companyId, company_cnpj: company.cnpj,
+      company_selection_rule: selectionRule, company_selection_gateway: selectionGateway,
       message: sefazOffline ? "SEFAZ indisponível — nota em fila de contingência, será reemitida automaticamente" : null,
       response: respJson,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: httpResp });
