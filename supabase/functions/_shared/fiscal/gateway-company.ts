@@ -98,7 +98,7 @@ export async function resolveFiscalCompanyForSource(
   const enabled = !!config?.emit_by_gateway;
 
   const [saleRes, mapRes] = await Promise.all([
-    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
+    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
     db.from("fiscal_gateway_company_map").select("gateway, company_id").eq("is_active", true),
   ]);
   const sale = saleRes.data;
@@ -124,7 +124,7 @@ export async function resolveFiscalCompanyForSource(
     gateways = splitGateways;
     evidence = "payment_splits";
   } else {
-    const saleGateway = concreteGateway(sale?.payment_gateway) || concreteGateway(sale?.payment_confirmed_source);
+    const saleGateway = concreteGateway(sale?.payment_gateway);
     const snapshotGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(order?.gateway_snapshot?.gateway);
     const orderGateway = concreteGateway(order?.payment_confirmed_source);
     const idGateway = gatewayFromIds(sale) || gatewayFromIds(order);
