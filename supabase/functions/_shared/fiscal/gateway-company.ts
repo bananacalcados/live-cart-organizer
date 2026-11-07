@@ -100,6 +100,45 @@ function gatewaysFromIds(...rows: any[]): string[] {
   return gateways;
 }
 
+export function selectFiscalGatewayEvidence(input: {
+  order?: any;
+  sale?: any;
+  attempts?: { gateway?: string | null; status?: string | null; created_at?: string | null }[];
+}): { gateways: string[]; evidence: string } {
+  const { order, sale, attempts = [] } = input;
+  const orderSnapshotGateway = concreteGateway(order?.gateway_snapshot?.gateway);
+  let confirmedGateway: string | null = null;
+  let confirmedEvidence = "";
+  if (order && !orderSnapshotGateway) {
+    const approved = pickConfirmedGateway({
+      notes: order.notes,
+      mercadopago_payment_id: null,
+      pagarme_order_id: null,
+      austpay_transaction_id: null,
+      appmax_order_id: null,
+      vindi_transaction_id: null,
+    }, attempts);
+    confirmedGateway = concreteGateway(approved);
+    if (confirmedGateway) {
+      confirmedEvidence = attempts.some((a) => a.status === "success" && concreteGateway(a.gateway) === confirmedGateway)
+        ? "approved_attempt" : "order_note";
+    }
+  }
+  const saleGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(sale?.payment_gateway);
+  const orderGateway = concreteGateway(order?.payment_confirmed_source);
+  const idGateways = gatewaysFromIds(order, sale);
+  const selected = orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway || idGateways[0] || null;
+  if (!selected) return { gateways: [], evidence: "none" };
+  return {
+    gateways: orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway ? [selected] : idGateways,
+    evidence: orderSnapshotGateway ? "order_gateway_snapshot"
+      : confirmedGateway ? confirmedEvidence
+      : saleGateway ? "pos_sale_confirmation"
+      : orderGateway ? "order_confirmation"
+      : idGateways.length > 1 ? "gateway_ids_ambiguous" : "unique_gateway_id",
+  };
+}
+
 export async function resolveFiscalCompanyForSource(
   db: any,
   input: { saleId?: string | null; orderId?: string | null; storeCompanyId?: string | null; forcedCompanyId?: string | null },
