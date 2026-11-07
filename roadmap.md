@@ -1,8 +1,8 @@
 # Vínculo ERP ↔ Shopify e de-para de cores
-- [ ] Rodar relink e refresh dos intents abertos após cada sincronização, retornando o resultado da relink
-- [ ] Bloquear confirmação do card somente pelos avisos de item definidos, sem duplicar aviso do intent
-- [ ] Adicionar de-para manual de cores em Estoque → Códigos e religar após salvar
-- [ ] Testar regras, rodar a sincronização uma vez e informar o jsonb retornado
+- [x] Rodar relink e refresh dos intents abertos após cada sincronização, retornando o resultado da relink
+- [x] Bloquear confirmação do card somente pelos avisos de item definidos, sem duplicar aviso do intent
+- [x] Adicionar de-para manual de cores em Estoque → Códigos e religar após salvar
+- [x] Testar regras, rodar a sincronização uma vez e informar o jsonb retornado
 
 # Rastreio do contrato próprio dos Correios
 - [x] Ligar envios próprios à consulta oficial sem expor transportadora/código real
