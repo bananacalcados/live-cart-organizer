@@ -467,8 +467,28 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     const numero = firstUsable([ship.number, split.numero, "S/N"], 1).slice(0, 10) || "S/N";
     const bairro = firstUsable([ship.neighborhood, ship.address2, ship.bairro, cepInfo?.bairro, "Centro"], 2).slice(0, 60) || "Centro";
 
-    // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
-    const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
+    // 2. Empresa: regra por gateway somente quando o interruptor estiver ligado.
+    const issuer = await resolveFiscalCompanyForSource(supabase, {
+      saleId: order.source === "sale" ? order.source_id : null,
+      orderId: order.source === "order" ? order.source_id : null,
+      storeCompanyId: order.store_company_id,
+      forcedCompanyId: forcedCompany || null,
+    });
+    if (issuer.mixed) {
+      await recordFiscalMixedPending(supabase, {
+        sourceType: order.source === "sale" ? "pos_sale" : "order",
+        sourceId: order.source_id,
+        choice: issuer,
+      });
+      return new Response(JSON.stringify({
+        ok: false, code: "mixed_companies", error: FISCAL_MIXED_COMPANIES_REASON,
+        gateways: issuer.gateways, company_ids: issuer.companyIds,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+    }
+    const companyId = issuer.companyId || forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
+    const selectionRule = issuer.enabled ? issuer.rule : "legacy";
+    const selectionGateway = issuer.gateways.join(",") || null;
+    const selectionDetails = { evidence: issuer.evidence || null, gateways: issuer.gateways, candidate_company_ids: issuer.companyIds };
     const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).single();
     if (!company) throw new Error("Empresa não encontrada");
     if (!company.brasilnfe_token) throw new Error("Empresa sem token BrasilNFe");

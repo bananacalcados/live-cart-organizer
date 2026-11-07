@@ -78,7 +78,7 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { sale_id, ambiente: forcedAmb } = await req.json();
+    const { sale_id, ambiente: forcedAmb, company_id: forcedCompany } = await req.json();
     if (!sale_id) throw new Error("sale_id obrigatório");
 
     const supabase = createClient(
@@ -99,8 +99,22 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 
     // 2. Resolve company a partir da store
     const { data: store } = await supabase.from("pos_stores").select("*, company_id").eq("id", sale.store_id).single();
-    const companyId = (store as any)?.company_id;
-    if (!companyId) throw new Error("Loja sem company_id vinculado (Fase 1A)");
+    const storeCompanyId = (store as any)?.company_id;
+    if (!storeCompanyId) throw new Error("Loja sem company_id vinculado (Fase 1A)");
+    const issuer = await resolveFiscalCompanyForSource(supabase, {
+      saleId: sale_id, storeCompanyId, forcedCompanyId: forcedCompany || null,
+    });
+    if (issuer.mixed) {
+      await recordFiscalMixedPending(supabase, { sourceType: "pos_sale", sourceId: sale_id, choice: issuer });
+      return new Response(JSON.stringify({
+        ok: false, code: "mixed_companies", error: FISCAL_MIXED_COMPANIES_REASON,
+        gateways: issuer.gateways, company_ids: issuer.companyIds,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+    }
+    const companyId = issuer.companyId || forcedCompany || storeCompanyId;
+    const selectionRule = issuer.enabled ? issuer.rule : "legacy";
+    const selectionGateway = issuer.gateways.join(",") || null;
+    const selectionDetails = { evidence: issuer.evidence || null, gateways: issuer.gateways, candidate_company_ids: issuer.companyIds };
 
     const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).single();
     if (!company) throw new Error("Empresa não encontrada");

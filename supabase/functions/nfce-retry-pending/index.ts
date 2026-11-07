@@ -58,6 +58,12 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
     }).eq("id", doc.id).eq("status", "pending_sefaz");
 
     try {
+      const issuer = await resolveFiscalCompanyForSource(supabase, { saleId: doc.pos_sale_id });
+      if (issuer.mixed) {
+        await recordFiscalMixedPending(supabase, { sourceType: "pos_sale", sourceId: doc.pos_sale_id, choice: issuer });
+        results.push({ sale_id: doc.pos_sale_id, skipped: true, error: FISCAL_MIXED_COMPANIES_REASON });
+        continue;
+      }
       // Reinvoca o emit (cria NOVO fiscal_document — mas o anterior fica como histórico)
       // ⚠️ Decisão: em vez de criar duplicado, apagamos o doc antigo logo antes de reemitir
       // pra manter um único registro por venda. nfce-emitir vai recriar.
