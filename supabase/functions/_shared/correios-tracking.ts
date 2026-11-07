@@ -5,6 +5,15 @@ import type { RealEvent } from './frenet-tracking.ts';
 
 const OBJECT_CODE = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
 
+/** O SRO exige o idioma no cabeçalho; sem ele responde SRO-018. */
+export function correiosTrackingRequest(trackingNumber: string) {
+  const code = trackingNumber.trim().toUpperCase();
+  return {
+    path: `/srorastro/v1/objetos/${encodeURIComponent(code)}?resultado=T`,
+    init: { method: 'GET', headers: { 'Accept-Language': 'pt-BR' } } satisfies RequestInit,
+  };
+}
+
 /** A API pode omitir o fuso; nesse caso o horário recebido é o de Brasília. */
 export function parseCorreiosDate(value: unknown): string | null {
   const raw = String(value || '').trim();

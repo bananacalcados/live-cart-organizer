@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { normalizeCorreiosEvents, parseCorreiosDate } from './correios-tracking.ts';
+import { correiosTrackingRequest, normalizeCorreiosEvents, parseCorreiosDate } from './correios-tracking.ts';
 
 const CODE = 'AP696893710BR';
 
