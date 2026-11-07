@@ -98,14 +98,19 @@ export async function resolveFiscalCompanyForSource(
   const enabled = !!config?.emit_by_gateway;
 
   const [saleRes, mapRes] = await Promise.all([
-    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, payment_confirmed_source, gateway_snapshot, pagarme_order_id, appmax_order_id, mercadopago_payment_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
+    input.saleId ? db.from("pos_sales").select("id, source_order_id, payment_gateway, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", input.saleId).maybeSingle() : Promise.resolve({ data: null }),
     db.from("fiscal_gateway_company_map").select("gateway, company_id").eq("is_active", true),
   ]);
   const sale = saleRes.data;
   const linkedOrderId = sale?.source_order_id || input.orderId || null;
-  const { data: order } = linkedOrderId
+  let { data: order } = linkedOrderId
     ? await db.from("orders").select("id, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", linkedOrderId).maybeSingle()
     : { data: null };
+  if (!order && input.saleId && !linkedOrderId) {
+    const fallback = await db.from("orders").select("id, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id")
+      .eq("pos_sale_id", input.saleId).order("paid_at", { ascending: false }).limit(1).maybeSingle();
+    order = fallback.data;
+  }
 
   const splitFilters = [input.saleId ? `sale_id.eq.${input.saleId}` : null, order?.id ? `order_id.eq.${order.id}` : null].filter(Boolean);
   const { data: splits } = splitFilters.length
