@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseFiscalCompany, normalizeFiscalGateway } from "../../supabase/functions/_shared/fiscal/gateway-company";
+import { chooseFiscalCompany, normalizeFiscalGateway, selectFiscalGatewayEvidence } from "../../supabase/functions/_shared/fiscal/gateway-company";
 
 const OLD = "febc4662-a126-493e-ada1-4729122760ed";
 const BANANA = "69d3b494-9126-4438-bb05-eb976a8380ad";
