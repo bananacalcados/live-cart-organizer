@@ -208,7 +208,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
           );
           const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description));
           patch.real_events = merged;
-          patch.real_service_code = nativeShipment?.servico_codigo || fetched.serviceCode;
+          patch.real_service_code = nativeShipment?.servico_codigo || ('serviceCode' in fetched ? fetched.serviceCode : null);
           patch.last_real_sync = now.toISOString();
           if (delivered) {
             patch.delivered_at = delivered.at;
