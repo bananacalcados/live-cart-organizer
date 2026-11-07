@@ -946,6 +946,13 @@
       "when": 1794094538767,
       "tag": "0134_pos_sale_inherit_order_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1794094566962,
+      "tag": "0135_fix_order_approved_gateway_text_id",
+      "breakpoints": true
     }
   ]
 }
