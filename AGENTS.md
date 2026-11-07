@@ -80,4 +80,4 @@
 - Financial values/status never come from the browser; server recalculates.
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
-- Code search: server RPC search_product_code_keys (fuzzy, cap 200); never filter in browser.
+- Code search: RPC search_product_code_keys (fuzzy, cap 200).
