@@ -61,6 +61,12 @@ describe("CNPJ emissor pelo gateway", () => {
     expect(result.companyId).toBe(BANANA);
   });
 
+  it("origem gateway_webhook não é confundida com o gateway que pagou", () => {
+    const result = choose(["gateway_webhook"]);
+    expect(result.rule).toBe("store");
+    expect(result.gateways).toEqual([]);
+  });
+
   it("interruptor desligado preserva o comportamento anterior", () => {
     const result = chooseFiscalCompany({ enabled: false, defaultCompanyId: OLD, gateways: ["pagarme"], mappings });
     expect(result.rule).toBe("legacy");

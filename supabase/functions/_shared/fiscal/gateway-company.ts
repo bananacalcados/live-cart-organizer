@@ -21,7 +21,7 @@ function concreteGateway(value: unknown): string | null {
   const gateway = normalizeFiscalGateway(value);
   if (!gateway || [
     "storecheckout", "shopify", "online", "manual", "pixmanual", "pos", "cash",
-    "dinheiro", "vps", "valepresente", "crediario", "delivery", "null", "undefined",
+    "dinheiro", "vps", "valepresente", "crediario", "delivery", "gatewaywebhook", "paymentwebhook", "webhook", "null", "undefined",
   ].includes(gateway)) return null;
   return gateway;
 }
