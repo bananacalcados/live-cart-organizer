@@ -96,6 +96,7 @@ export default function InventoryProductCodes() {
   const [exporting, setExporting] = useState(false);
   const [reload, setReload] = useState(0);
   const [exampleSku, setExampleSku] = useState<Record<string, string>>({});
+  const [aliasOpen, setAliasOpen] = useState(false);
 
   // SKU de exemplo (1ª variação da cor) só para os códigos visíveis com problema: 1 consulta por página.
   useEffect(() => {
@@ -330,6 +331,9 @@ export default function InventoryProductCodes() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAliasOpen(true)}>
+            <Palette className="h-4 w-4 mr-1" /> De-para de cores
+          </Button>
           <Button variant="outline" size="sm" onClick={generateMissing} disabled={generating}>
             {generating ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Wand2 className="h-4 w-4 mr-1" />} Gerar códigos faltantes
           </Button>
@@ -413,6 +417,8 @@ export default function InventoryProductCodes() {
           </div>
         </CardContent>
       </Card>
+
+      <ProductColorAliasDialog open={aliasOpen} onOpenChange={setAliasOpen} onSaved={() => setReload((value) => value + 1)} />
 
       <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
         <DialogContent>
