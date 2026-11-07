@@ -333,6 +333,9 @@ export default function InventoryProductCodes() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setMissingColorsOpen(true)}>
+            <Download className="h-4 w-4 mr-1" /> Cores sem cadastro
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setAliasOpen(true)}>
             <Palette className="h-4 w-4 mr-1" /> De-para de cores
           </Button>
