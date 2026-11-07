@@ -184,14 +184,15 @@ export async function resolveFiscalCompanyForSource(
   });
 }
 
-export async function recordFiscalMixedPending(
+export async function recordFiscalCompanyPending(
   db: any,
   input: { sourceType: "pos_sale" | "order"; sourceId: string; choice: FiscalCompanyChoice },
 ) {
+  if (!input.choice.pendingReason) return;
   await db.from("fiscal_emission_pendings").upsert({
     source_type: input.sourceType,
     source_id: input.sourceId,
-    reason: FISCAL_MIXED_COMPANIES_REASON,
+    reason: input.choice.pendingReason,
     gateways: input.choice.gateways,
     company_ids: input.choice.companyIds,
     status: "open",
