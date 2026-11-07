@@ -82,7 +82,16 @@ const root = createRoot(rootElement);
 import("./lib/edgeAuthFetch")
   .then((m) => m.installEdgeAuthFetch())
   .catch(() => {})
-  .then(() => import("./App.tsx"))
+  .then(async () => {
+    // Internet fraca (navegador do Instagram/WhatsApp): tenta mais vezes antes do aviso.
+    for (let attempt = 0; ; attempt++) {
+      try { return await import("./App.tsx"); }
+      catch (e) {
+        if (attempt >= 3) throw e;
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+  })
   .then(({ default: App }) => {
   root.render(<App />);
 }).catch((error: unknown) => {
