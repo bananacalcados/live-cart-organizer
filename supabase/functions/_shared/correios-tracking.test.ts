@@ -38,3 +38,9 @@ Deno.test('Rastro: preserva o fuso quando a API já o informa', () => {
   assertEquals(parseCorreiosDate('2026-11-04T17:35:20Z'), '2026-11-04T17:35:20.000Z');
   assertEquals(parseCorreiosDate(''), null);
 });
+
+Deno.test('Rastro: pede histórico completo e envia o idioma obrigatório no cabeçalho', () => {
+  const request = correiosTrackingRequest(CODE.toLowerCase());
+  assertEquals(request.path, `/srorastro/v1/objetos/${CODE}?resultado=T`);
+  assertEquals(request.init.headers, { 'Accept-Language': 'pt-BR' });
+});
