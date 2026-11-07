@@ -35,6 +35,19 @@ describe("CNPJ emissor pelo gateway", () => {
     expect(result.rule).toBe("store");
   });
 
+  it("IDs de gateways de CNPJs diferentes sem aprovação viram pendência de CNPJ", () => {
+    const result = choose(["pagarme", "mercadopago"], { evidence: "gateway_ids_ambiguous" });
+    expect(result.rule).toBe("unidentified_gateway");
+    expect(result.companyId).toBeNull();
+    expect(result.pendingReason).toBe("gateway não identificado – escolher CNPJ");
+  });
+
+  it("escolha manual resolve a pendência de gateway ambíguo", () => {
+    const result = choose(["pagarme", "mercadopago"], { evidence: "gateway_ids_ambiguous", forcedCompanyId: BANANA });
+    expect(result.companyId).toBe(BANANA);
+    expect(result.pendingReason).toBeNull();
+  });
+
   it("pagamento dividido entre CNPJs diferentes bloqueia o automático", () => {
     const result = choose(["pagarme", "mercadopago"]);
     expect(result.mixed).toBe(true);
