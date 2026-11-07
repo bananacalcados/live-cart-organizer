@@ -89,7 +89,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const loadNfeStatus = async () => {
     const { data } = await supabase
       .from("fiscal_documents")
-      .select("id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_code, rejection_message")
+      .select("id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_code, rejection_message, companies(cnpj, legal_name)")
       .eq("pos_sale_id", order.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -608,7 +608,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                     )}
                   </div>
                   <p className="text-xs font-semibold text-pos-muted-text mt-1">
-                    NF-e nº {nfeDoc?.numero ?? "—"} • Série {nfeDoc?.serie ?? "—"}
+                    NF-e nº {nfeDoc?.numero ?? "—"} • Série {nfeDoc?.serie ?? "—"} • CNPJ {nfeDoc?.companies?.cnpj || "—"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">

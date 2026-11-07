@@ -25,7 +25,7 @@ export default function FiscalDocuments() {
     setLoading(true);
     const [docsRes, evtRes] = await Promise.all([
       (supabase as any).from("fiscal_documents")
-        .select("*, companies(razao_social, cnpj)")
+        .select("*, companies(legal_name, cnpj)")
         .order("created_at", { ascending: false }).limit(100),
       (supabase as any).from("fiscal_webhook_events")
         .select("*")
@@ -146,7 +146,7 @@ export default function FiscalDocuments() {
                     {rows.map(r => (
                       <TableRow key={r.id}>
                         <TableCell className="text-xs">{new Date(r.created_at).toLocaleString("pt-BR")}</TableCell>
-                        <TableCell className="text-xs">{r.companies?.razao_social}</TableCell>
+                        <TableCell className="text-xs"><div>{r.companies?.legal_name}</div><div className="font-mono text-[10px] text-muted-foreground">{r.companies?.cnpj || "—"}</div></TableCell>
                         <TableCell className="font-mono text-xs">{r.modelo}/{r.serie}/{r.numero}</TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{r.ambiente}</Badge></TableCell>
                         <TableCell>{statusBadge(r.status)}</TableCell>

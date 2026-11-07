@@ -26,6 +26,7 @@ interface FiscalDoc {
   xml_url: string | null;
   xml_content: string | null;
   rejection_message: string | null;
+  companies?: { cnpj: string | null; legal_name: string | null } | null;
 }
 
 export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: Props) {
@@ -40,7 +41,7 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
     setLoading(true);
     const { data } = await supabase
       .from('fiscal_documents')
-      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_message')
+      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_message, companies(cnpj, legal_name)')
       .eq('order_id', targetId)
       .eq('modelo', 55)
       .order('created_at', { ascending: false })
@@ -101,7 +102,7 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-600">
-          <CheckCircle2 className="h-3 w-3" /> NF-e {doc.numero}
+          <CheckCircle2 className="h-3 w-3" /> NF-e {doc.numero} · CNPJ {doc.companies?.cnpj || '—'}
         </Badge>
         {doc.danfe_url && (
           <Button size={size} variant="outline" className="gap-1" onClick={() => {

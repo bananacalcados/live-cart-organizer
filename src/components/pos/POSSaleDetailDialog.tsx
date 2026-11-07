@@ -196,7 +196,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [hasCrediario, setHasCrediario] = useState(false);
   const [printingCarne, setPrintingCarne] = useState(false);
-  const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; modelo?: number | null; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null; ambiente?: string | null; rejection_message?: string | null; rejection_code?: string | null } | null>(null);
+  const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; modelo?: number | null; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null; ambiente?: string | null; rejection_message?: string | null; rejection_code?: string | null; companies?: { cnpj: string | null; legal_name: string | null } | null } | null>(null);
   const [reemittingProd, setReemittingProd] = useState(false);
   const [sendingNfeWa, setSendingNfeWa] = useState(false);
   const [trackingCode, setTrackingCode] = useState<string>(sale?.tracking_code || "");
@@ -321,7 +321,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       // em qualquer tipo de venda. Prioriza sempre o documento AUTORIZADO da venda.
       const { data: authd } = await supabase
         .from('fiscal_documents')
-        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
+        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code, companies(cnpj, legal_name)')
         .eq('pos_sale_id', sale.id)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
@@ -342,7 +342,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       }
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
+        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code, companies(cnpj, legal_name)')
         .eq('pos_sale_id', sale.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -1777,6 +1777,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[11px] text-emerald-900">
                         <p className="font-bold">✅ {fiscalTipoLabel} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
+                        <p className="mt-0.5 text-[10px]">CNPJ emissor: {fiscalDoc.companies?.cnpj || '—'}</p>
                         {fiscalDoc.ambiente === 'homologacao' && (
                           <p className="mt-0.5 inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">⚠️ Homologação — sem valor fiscal</p>
                         )}
