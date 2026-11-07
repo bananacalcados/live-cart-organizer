@@ -15,6 +15,7 @@ import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash, Palette } 
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProductColorAliasDialog } from "@/components/inventory/ProductColorAliasDialog";
+import { ShopifyMissingColorsDialog } from "@/components/inventory/ShopifyMissingColorsDialog";
 
 type CodeRow = {
   code: string;
