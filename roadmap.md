@@ -1,3 +1,7 @@
+# Rastreio do contrato próprio dos Correios
+- [x] Ligar envios próprios à consulta oficial sem expor transportadora/código real
+- [x] Manter Frenet e etapas existentes; testar com envio real e sem publicar
+
 # Auditoria de cadastro e carrinho da live
 - [x] Conferir registros reais de cadastro, confirmação e fila de mensagens
 - [x] Auditar identificação de pedidos e reproduzir as telas sem cadastrar ou enviar
