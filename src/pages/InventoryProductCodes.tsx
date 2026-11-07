@@ -423,6 +423,7 @@ export default function InventoryProductCodes() {
         </CardContent>
       </Card>
 
+      <ShopifyMissingColorsDialog open={missingColorsOpen} onOpenChange={setMissingColorsOpen} onImported={() => setReload((value) => value + 1)} />
       <ProductColorAliasDialog open={aliasOpen} onOpenChange={setAliasOpen} onSaved={() => setReload((value) => value + 1)} />
 
       <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
