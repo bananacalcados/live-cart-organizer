@@ -180,20 +180,26 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     // 3. Chave da nota original (refNFe). Prioriza a gravada no evento; senão busca
     //    o documento fiscal AUTORIZADO da venda original (modelo 55 ou 65).
     let chaveOriginal: string | null = (evt as any).chave_acesso_original || null;
-    let modeloOriginal: number | null = null;
-    if (!chaveOriginal) {
-      const { data: origDoc } = await supabase
-        .from("fiscal_documents")
-        .select("chave_acesso, modelo")
-        .eq("pos_sale_id", pedidoOriginalId)
-        .eq("status", "authorized")
-        .not("chave_acesso", "is", null)
-        .in("modelo", [55, 65])
-        .order("created_at", { ascending: false })
-        .limit(1).maybeSingle();
-      if (origDoc) { chaveOriginal = (origDoc as any).chave_acesso; modeloOriginal = (origDoc as any).modelo; }
+    let originalCompanyId: string | null = null;
+    const { data: origDoc } = await supabase
+      .from("fiscal_documents")
+      .select("chave_acesso, modelo, company_id")
+      .eq("pos_sale_id", pedidoOriginalId)
+      .eq("status", "authorized")
+      .not("chave_acesso", "is", null)
+      .in("modelo", [55, 65])
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (origDoc) {
+      if (!chaveOriginal) chaveOriginal = (origDoc as any).chave_acesso;
+      originalCompanyId = (origDoc as any).company_id;
     }
     if (chaveOriginal) chaveOriginal = digits(chaveOriginal);
+    if (!originalCompanyId && chaveOriginal) {
+      const { data: keyedDoc } = await supabase.from("fiscal_documents")
+        .select("company_id").eq("chave_acesso", chaveOriginal).maybeSingle();
+      originalCompanyId = (keyedDoc as any)?.company_id || null;
+    }
 
     // Venda física sem NF → ramo sem estorno fiscal: não emite devolução, apenas sinaliza.
     if (!chaveOriginal || chaveOriginal.length !== 44) {
@@ -203,11 +209,9 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
     }
 
-    // 4. Empresa (via loja da venda original)
-    const { data: store } = await supabase
-      .from("pos_stores").select("*, company_id").eq("id", (sale as any).store_id).single();
-    const companyId = (store as any)?.company_id;
-    if (!companyId) throw new Error("Loja sem company_id vinculado");
+    // 4. Devolução/troca sempre no mesmo CNPJ da nota original.
+    const companyId = originalCompanyId;
+    if (!companyId) throw new Error("Nota original sem empresa emissora vinculada");
     const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).single();
     if (!company) throw new Error("Empresa não encontrada");
     if (!company.brasilnfe_token) throw new Error("Empresa sem token BrasilNFe");

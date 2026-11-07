@@ -53,6 +53,7 @@ import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
+import { resolveFiscalCompanyForSource, recordFiscalMixedPending, resolveFiscalPending, FISCAL_MIXED_COMPANIES_REASON } from "../_shared/fiscal/gateway-company.ts";
 
 
 const corsHeaders = {

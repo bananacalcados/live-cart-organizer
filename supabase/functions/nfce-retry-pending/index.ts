@@ -1,5 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
+import { resolveFiscalCompanyForSource, recordFiscalMixedPending, FISCAL_MIXED_COMPANIES_REASON } from "../_shared/fiscal/gateway-company.ts";
 // Edge function: nfce-retry-pending
 // Cron a cada 5 min. Reemite NFC-e que ficaram em status='pending_sefaz' (SEFAZ offline).
 // Reinvoca nfce-emitir; se autorizar, status vira 'authorized' (nfce-emitir já cuida disso).

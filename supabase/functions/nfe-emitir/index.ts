@@ -1,5 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
+import { resolveFiscalCompanyForSource, recordFiscalMixedPending, resolveFiscalPending, FISCAL_MIXED_COMPANIES_REASON } from "../_shared/fiscal/gateway-company.ts";
 // Edge function: nfe-emitir
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
