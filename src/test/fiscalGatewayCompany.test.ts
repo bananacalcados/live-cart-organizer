@@ -80,6 +80,33 @@ describe("CNPJ emissor pelo gateway", () => {
     expect(result.gateways).toEqual([]);
   });
 
+  it("snapshot do pedido tem prioridade sobre tentativa e IDs de outro CNPJ", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { gateway_snapshot: { gateway: "pagarme" }, pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [{ gateway: "mercadopago", status: "success", created_at: "2026-11-07" }],
+    });
+    expect(result.gateways).toEqual(["pagarme"]);
+    expect(result.evidence).toBe("order_gateway_snapshot");
+  });
+
+  it("tentativa aprovada decide quando não há snapshot", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [{ gateway: "pagarme", status: "success", created_at: "2026-11-07" }],
+    });
+    expect(result.gateways).toEqual(["pagarme"]);
+    expect(result.evidence).toBe("approved_attempt");
+  });
+
+  it("IDs sozinhos de dois CNPJs continuam ambíguos", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [],
+    });
+    expect(result.gateways).toEqual(["pagarme", "mercadopago"]);
+    expect(result.evidence).toBe("gateway_ids_ambiguous");
+  });
+
   it("interruptor desligado preserva o comportamento anterior", () => {
     const result = chooseFiscalCompany({ enabled: false, defaultCompanyId: OLD, gateways: ["pagarme"], mappings });
     expect(result.rule).toBe("legacy");
