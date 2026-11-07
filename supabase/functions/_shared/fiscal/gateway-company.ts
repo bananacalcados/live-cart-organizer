@@ -82,19 +82,22 @@ export function chooseFiscalCompany(input: {
   };
 }
 
-function gatewayFromIds(row: any): string | null {
-  if (!row) return null;
-  const candidates: Array<[unknown, string]> = [
-    [row.pagarme_order_id, "pagarme"],
-    [row.austpay_transaction_id, "austpay"],
-    [row.appmax_order_id, "appmax"],
-    [row.mercadopago_payment_id, "mercadopago"],
-    [row.vindi_transaction_id, "vindi"],
-  ];
-  const present = candidates.filter(([id]) => !!id);
-  // IDs de tentativas recusadas podem coexistir. Sem um único candidato ou outra
-  // evidência de aprovação, não se escolhe um CNPJ pela ordem dos campos.
-  return present.length === 1 ? present[0][1] : null;
+function gatewaysFromIds(...rows: any[]): string[] {
+  const gateways: string[] = [];
+  for (const row of rows) {
+    if (!row) continue;
+    const candidates: Array<[unknown, string]> = [
+      [row.pagarme_order_id, "pagarme"],
+      [row.austpay_transaction_id, "austpay"],
+      [row.appmax_order_id, "appmax"],
+      [row.mercadopago_payment_id, "mercadopago"],
+      [row.vindi_transaction_id, "vindi"],
+    ];
+    for (const [id, gateway] of candidates) {
+      if (id && !gateways.includes(gateway)) gateways.push(gateway);
+    }
+  }
+  return gateways;
 }
 
 export async function resolveFiscalCompanyForSource(
