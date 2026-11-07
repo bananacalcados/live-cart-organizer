@@ -76,6 +76,7 @@ const normColor = (c: string | null) => (c ?? "").trim().toLowerCase();
 export default function InventoryProductCodes() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [matchCodes, setMatchCodes] = useState<string[] | null>(null);
   const [letter, setLetter] = useState("all");
   const [onlyStock, setOnlyStock] = useState(false);
   const [onlyOk, setOnlyOk] = useState(true);
@@ -148,10 +149,8 @@ export default function InventoryProductCodes() {
 
   const buildQuery = (opts: { stock?: boolean; count?: boolean } = {}) => {
     let q: any = supabase.from("v_product_color_codes" as any).select(COLS, opts.count ? { count: "exact" } : undefined);
-    if (debounced) {
-      const s = debounced.replace(/[%,()]/g, " ");
-      q = q.or(`code.ilike.%${s}%,product_name.ilike.%${s}%,color.ilike.%${s}%`);
-    }
+    // Busca flexível: sem acento, sem maiúsculas e tolerante a erro de digitação (resolvida no servidor).
+    if (debounced) q = q.in("code", matchCodes && matchCodes.length ? matchCodes : ["__none__"]);
     if (letter !== "all") q = q.eq("letter", letter);
     if (onlyStock || opts.stock) q = q.gt("total_stock", 0);
     if (onlyOk) q = q.eq("shopify_ok", true);
@@ -159,6 +158,20 @@ export default function InventoryProductCodes() {
   };
 
   useEffect(() => {
+    if (!debounced) { setMatchCodes(null); return; }
+    let cancel = false;
+    setLoading(true);
+    (supabase.rpc as any)("search_product_code_keys", { p_query: debounced, p_limit: 200 })
+      .then(({ data, error }: any) => {
+        if (cancel) return;
+        if (error) toast.error("Erro na busca: " + error.message);
+        setMatchCodes(((data ?? []) as any[]).map((r) => (typeof r === "string" ? r : r.search_product_code_keys)));
+      });
+    return () => { cancel = true; };
+  }, [debounced]);
+
+  useEffect(() => {
+    if (debounced && matchCodes === null) return;
     let cancel = false;
     setLoading(true);
     buildQuery({ count: true })
@@ -172,7 +185,7 @@ export default function InventoryProductCodes() {
       });
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, letter, onlyStock, onlyOk, page, reload]);
+  }, [matchCodes, letter, onlyStock, onlyOk, page, reload]);
 
   const fetchAll = async (stock = false): Promise<CodeRow[]> => {
     const out: CodeRow[] = [];
