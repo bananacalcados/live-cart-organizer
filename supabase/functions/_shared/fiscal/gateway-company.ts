@@ -1,12 +1,16 @@
+import { pickConfirmedGateway } from "../selfservice-cashback-rule.ts";
+
 export const FISCAL_MIXED_COMPANIES_REASON = "pagamento em CNPJs diferentes – emitir manualmente";
+export const FISCAL_UNIDENTIFIED_GATEWAY_REASON = "gateway não identificado – escolher CNPJ";
 
 export interface FiscalCompanyChoice {
   enabled: boolean;
   companyId: string | null;
-  rule: "legacy" | "gateway_mapped" | "default_gateway" | "store" | "manual" | "manual_split" | "mixed_companies";
+  rule: "legacy" | "gateway_mapped" | "default_gateway" | "store" | "manual" | "manual_split" | "mixed_companies" | "unidentified_gateway";
   gateways: string[];
   companyIds: string[];
   mixed: boolean;
+  pendingReason?: string | null;
   evidence?: string;
 }
 
@@ -58,12 +62,16 @@ export function chooseFiscalCompany(input: {
     if (input.forcedCompanyId) {
       return {
         enabled: true, companyId: input.forcedCompanyId, rule: "manual_split", gateways,
-        companyIds, mixed: false, evidence: input.evidence,
+        companyIds, mixed: false, pendingReason: null, evidence: input.evidence,
       };
     }
+    const unidentified = input.evidence === "gateway_ids_ambiguous";
     return {
-      enabled: true, companyId: null, rule: "mixed_companies", gateways,
-      companyIds, mixed: true, evidence: input.evidence,
+      enabled: true, companyId: null,
+      rule: unidentified ? "unidentified_gateway" : "mixed_companies", gateways,
+      companyIds, mixed: !unidentified,
+      pendingReason: unidentified ? FISCAL_UNIDENTIFIED_GATEWAY_REASON : FISCAL_MIXED_COMPANIES_REASON,
+      evidence: input.evidence,
     };
   }
 
@@ -74,19 +82,61 @@ export function chooseFiscalCompany(input: {
   };
 }
 
-function gatewayFromIds(row: any): string | null {
-  if (!row) return null;
-  const candidates: Array<[unknown, string]> = [
-    [row.pagarme_order_id, "pagarme"],
-    [row.austpay_transaction_id, "austpay"],
-    [row.appmax_order_id, "appmax"],
-    [row.mercadopago_payment_id, "mercadopago"],
-    [row.vindi_transaction_id, "vindi"],
-  ];
-  const present = candidates.filter(([id]) => !!id);
-  // IDs de tentativas recusadas podem coexistir. Sem um único candidato ou outra
-  // evidência de aprovação, não se escolhe um CNPJ pela ordem dos campos.
-  return present.length === 1 ? present[0][1] : null;
+function gatewaysFromIds(...rows: any[]): string[] {
+  const gateways: string[] = [];
+  for (const row of rows) {
+    if (!row) continue;
+    const candidates: Array<[unknown, string]> = [
+      [row.pagarme_order_id, "pagarme"],
+      [row.austpay_transaction_id, "austpay"],
+      [row.appmax_order_id, "appmax"],
+      [row.mercadopago_payment_id, "mercadopago"],
+      [row.vindi_transaction_id, "vindi"],
+    ];
+    for (const [id, gateway] of candidates) {
+      if (id && !gateways.includes(gateway)) gateways.push(gateway);
+    }
+  }
+  return gateways;
+}
+
+export function selectFiscalGatewayEvidence(input: {
+  order?: any;
+  sale?: any;
+  attempts?: { gateway?: string | null; status?: string | null; created_at?: string | null }[];
+}): { gateways: string[]; evidence: string } {
+  const { order, sale, attempts = [] } = input;
+  const orderSnapshotGateway = concreteGateway(order?.gateway_snapshot?.gateway);
+  let confirmedGateway: string | null = null;
+  let confirmedEvidence = "";
+  if (order && !orderSnapshotGateway) {
+    const approved = pickConfirmedGateway({
+      notes: order.notes,
+      mercadopago_payment_id: null,
+      pagarme_order_id: null,
+      austpay_transaction_id: null,
+      appmax_order_id: null,
+      vindi_transaction_id: null,
+    }, attempts);
+    confirmedGateway = concreteGateway(approved);
+    if (confirmedGateway) {
+      confirmedEvidence = attempts.some((a) => a.status === "success" && concreteGateway(a.gateway) === confirmedGateway)
+        ? "approved_attempt" : "order_note";
+    }
+  }
+  const saleGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(sale?.payment_gateway);
+  const orderGateway = concreteGateway(order?.payment_confirmed_source);
+  const idGateways = gatewaysFromIds(order, sale);
+  const selected = orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway || idGateways[0] || null;
+  if (!selected) return { gateways: [], evidence: "none" };
+  return {
+    gateways: orderSnapshotGateway || confirmedGateway || saleGateway || orderGateway ? [selected] : idGateways,
+    evidence: orderSnapshotGateway ? "order_gateway_snapshot"
+      : confirmedGateway ? confirmedEvidence
+      : saleGateway ? "pos_sale_confirmation"
+      : orderGateway ? "order_confirmation"
+      : idGateways.length > 1 ? "gateway_ids_ambiguous" : "unique_gateway_id",
+  };
 }
 
 export async function resolveFiscalCompanyForSource(
@@ -104,10 +154,10 @@ export async function resolveFiscalCompanyForSource(
   const sale = saleRes.data;
   const linkedOrderId = sale?.source_order_id || input.orderId || null;
   let { data: order } = linkedOrderId
-    ? await db.from("orders").select("id, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", linkedOrderId).maybeSingle()
+    ? await db.from("orders").select("id, notes, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id").eq("id", linkedOrderId).maybeSingle()
     : { data: null };
   if (!order && input.saleId && !linkedOrderId) {
-    const fallback = await db.from("orders").select("id, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id")
+    const fallback = await db.from("orders").select("id, notes, payment_confirmed_source, gateway_snapshot, pagarme_order_id, austpay_transaction_id, appmax_order_id, mercadopago_payment_id, vindi_transaction_id")
       .eq("pos_sale_id", input.saleId).order("paid_at", { ascending: false }).limit(1).maybeSingle();
     order = fallback.data;
   }
@@ -124,14 +174,16 @@ export async function resolveFiscalCompanyForSource(
     gateways = splitGateways;
     evidence = "payment_splits";
   } else {
-    const saleGateway = concreteGateway(sale?.payment_gateway);
-    const snapshotGateway = concreteGateway(sale?.gateway_snapshot?.gateway) || concreteGateway(order?.gateway_snapshot?.gateway);
-    const orderGateway = concreteGateway(order?.payment_confirmed_source);
-    const idGateway = gatewayFromIds(sale) || gatewayFromIds(order);
-    if (saleGateway || snapshotGateway || orderGateway || idGateway) {
-      gateways = [saleGateway || snapshotGateway || orderGateway || idGateway!];
-      evidence = saleGateway ? "pos_sale" : snapshotGateway ? "gateway_snapshot" : orderGateway ? "order_confirmation" : "unique_gateway_id";
-    }
+    // A prioridade é a prova de aprovação, nunca a simples presença de IDs:
+    // snapshot do pedido → mesmo critério do cashback → confirmação da venda → IDs.
+    const attempts = order && !concreteGateway(order?.gateway_snapshot?.gateway)
+      ? (await db.from("pos_checkout_attempts")
+        .select("gateway,status,created_at").eq("sale_id", order.id)
+        .order("created_at", { ascending: false }).limit(20)).data || []
+      : [];
+    const selected = selectFiscalGatewayEvidence({ order, sale, attempts });
+    gateways = selected.gateways;
+    evidence = selected.evidence;
   }
 
   const mappings = Object.fromEntries(((mapRes.data || []) as any[]).map((row) => [normalizeFiscalGateway(row.gateway), row.company_id]));
@@ -146,14 +198,15 @@ export async function resolveFiscalCompanyForSource(
   });
 }
 
-export async function recordFiscalMixedPending(
+export async function recordFiscalCompanyPending(
   db: any,
   input: { sourceType: "pos_sale" | "order"; sourceId: string; choice: FiscalCompanyChoice },
 ) {
+  if (!input.choice.pendingReason) return;
   await db.from("fiscal_emission_pendings").upsert({
     source_type: input.sourceType,
     source_id: input.sourceId,
-    reason: FISCAL_MIXED_COMPANIES_REASON,
+    reason: input.choice.pendingReason,
     gateways: input.choice.gateways,
     company_ids: input.choice.companyIds,
     status: "open",

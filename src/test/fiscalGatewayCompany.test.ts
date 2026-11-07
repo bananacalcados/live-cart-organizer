@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseFiscalCompany, normalizeFiscalGateway } from "../../supabase/functions/_shared/fiscal/gateway-company";
+import { chooseFiscalCompany, normalizeFiscalGateway, selectFiscalGatewayEvidence } from "../../supabase/functions/_shared/fiscal/gateway-company";
 
 const OLD = "febc4662-a126-493e-ada1-4729122760ed";
 const BANANA = "69d3b494-9126-4438-bb05-eb976a8380ad";
@@ -35,6 +35,19 @@ describe("CNPJ emissor pelo gateway", () => {
     expect(result.rule).toBe("store");
   });
 
+  it("IDs de gateways de CNPJs diferentes sem aprovação viram pendência de CNPJ", () => {
+    const result = choose(["pagarme", "mercadopago"], { evidence: "gateway_ids_ambiguous" });
+    expect(result.rule).toBe("unidentified_gateway");
+    expect(result.companyId).toBeNull();
+    expect(result.pendingReason).toBe("gateway não identificado – escolher CNPJ");
+  });
+
+  it("escolha manual resolve a pendência de gateway ambíguo", () => {
+    const result = choose(["pagarme", "mercadopago"], { evidence: "gateway_ids_ambiguous", forcedCompanyId: BANANA });
+    expect(result.companyId).toBe(BANANA);
+    expect(result.pendingReason).toBeNull();
+  });
+
   it("pagamento dividido entre CNPJs diferentes bloqueia o automático", () => {
     const result = choose(["pagarme", "mercadopago"]);
     expect(result.mixed).toBe(true);
@@ -65,6 +78,33 @@ describe("CNPJ emissor pelo gateway", () => {
     const result = choose(["gateway_webhook"]);
     expect(result.rule).toBe("store");
     expect(result.gateways).toEqual([]);
+  });
+
+  it("snapshot do pedido tem prioridade sobre tentativa e IDs de outro CNPJ", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { gateway_snapshot: { gateway: "pagarme" }, pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [{ gateway: "mercadopago", status: "success", created_at: "2026-11-07" }],
+    });
+    expect(result.gateways).toEqual(["pagarme"]);
+    expect(result.evidence).toBe("order_gateway_snapshot");
+  });
+
+  it("tentativa aprovada decide quando não há snapshot", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [{ gateway: "pagarme", status: "success", created_at: "2026-11-07" }],
+    });
+    expect(result.gateways).toEqual(["pagarme"]);
+    expect(result.evidence).toBe("approved_attempt");
+  });
+
+  it("IDs sozinhos de dois CNPJs continuam ambíguos", () => {
+    const result = selectFiscalGatewayEvidence({
+      order: { pagarme_order_id: "p1", mercadopago_payment_id: "m1" },
+      attempts: [],
+    });
+    expect(result.gateways).toEqual(["pagarme", "mercadopago"]);
+    expect(result.evidence).toBe("gateway_ids_ambiguous");
   });
 
   it("interruptor desligado preserva o comportamento anterior", () => {

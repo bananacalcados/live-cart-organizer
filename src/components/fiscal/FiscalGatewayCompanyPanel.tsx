@@ -214,7 +214,7 @@ export function FiscalGatewayCompanyPanel({ companies }: { companies: Company[] 
             </div>
           ) : (
             <div className="space-y-3">
-              {!pendings.length ? <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma pendência de CNPJs diferentes.</p> : pendings.map((p) => (
+              {!pendings.length ? <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma pendência de emissão por CNPJ.</p> : pendings.map((p) => (
                 <div key={p.id} className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
@@ -232,7 +232,7 @@ export function FiscalGatewayCompanyPanel({ companies }: { companies: Company[] 
           )}
         </DialogContent>
       </Dialog>
-      <SelectCompanyDialog open={!!manualPending} onClose={() => setManualPending(null)} onConfirm={emitManual} loading={emitting} title="Emitir nota com pagamento em CNPJs diferentes" />
+      <SelectCompanyDialog open={!!manualPending} onClose={() => setManualPending(null)} onConfirm={emitManual} loading={emitting} title="Escolher CNPJ e emitir nota" />
     </>
   );
 }

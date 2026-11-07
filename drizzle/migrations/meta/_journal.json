@@ -925,6 +925,20 @@
       "when": 1794088400506,
       "tag": "0131_fiscal_gateway_company_routing",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1794089778937,
+      "tag": "0132_shopify_missing_colors",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1794089868934,
+      "tag": "0133_fix_shopify_missing_colors_uuid_min",
+      "breakpoints": true
     }
   ]
 }

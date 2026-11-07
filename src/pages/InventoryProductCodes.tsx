@@ -15,6 +15,7 @@ import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash, Palette } 
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProductColorAliasDialog } from "@/components/inventory/ProductColorAliasDialog";
+import { ShopifyMissingColorsDialog } from "@/components/inventory/ShopifyMissingColorsDialog";
 
 type CodeRow = {
   code: string;
@@ -97,6 +98,7 @@ export default function InventoryProductCodes() {
   const [reload, setReload] = useState(0);
   const [exampleSku, setExampleSku] = useState<Record<string, string>>({});
   const [aliasOpen, setAliasOpen] = useState(false);
+  const [missingColorsOpen, setMissingColorsOpen] = useState(false);
 
   // SKU de exemplo (1ª variação da cor) só para os códigos visíveis com problema: 1 consulta por página.
   useEffect(() => {
@@ -331,6 +333,9 @@ export default function InventoryProductCodes() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setMissingColorsOpen(true)}>
+            <Download className="h-4 w-4 mr-1" /> Cores sem cadastro
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setAliasOpen(true)}>
             <Palette className="h-4 w-4 mr-1" /> De-para de cores
           </Button>
@@ -418,6 +423,7 @@ export default function InventoryProductCodes() {
         </CardContent>
       </Card>
 
+      <ShopifyMissingColorsDialog open={missingColorsOpen} onOpenChange={setMissingColorsOpen} onImported={() => setReload((value) => value + 1)} />
       <ProductColorAliasDialog open={aliasOpen} onOpenChange={setAliasOpen} onSaved={() => setReload((value) => value + 1)} />
 
       <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
