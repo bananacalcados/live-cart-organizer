@@ -1,9 +1,9 @@
 # Ajustes atuais — CNPJ e cores Shopify
-- [ ] Priorizar gateway aprovado e criar pendência quando os IDs continuarem ambíguos
-- [ ] Refazer a simulação de 7 dias e medir os 24 casos resolvidos ou pendentes
-- [ ] Listar cores ativas na Shopify ausentes no ERP, separando possíveis grafias
-- [ ] Importar variantes com SKU/numeração/preço e estoque zero; testar Pérola do Samba Cris
-- [ ] Verificar regras, telas e segurança sem emitir notas nem publicar
+- [x] Priorizar gateway aprovado e criar pendência quando os IDs continuarem ambíguos
+- [x] Refazer a simulação de 7 dias e medir os 24 casos resolvidos ou pendentes
+- [x] Listar cores ativas na Shopify ausentes no ERP, separando possíveis grafias
+- [x] Importar variantes com SKU/numeração/preço e estoque zero; testar Pérola do Samba Cris
+- [x] Verificar regras, telas e segurança sem emitir notas nem publicar
 
 # Fiscal — CNPJ emissor pelo gateway
 - [x] Mapear emissões automáticas/manuais, NF-e/NFC-e, cancelamentos, correções e devoluções
