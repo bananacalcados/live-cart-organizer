@@ -55,7 +55,8 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
     if (!numberId) { await ack(); continue; }
     if(simulation){
-      counts[type]+=cfg.types[type].steps.length;
+      const jobCount=type==='F'?1:cfg.types[type].steps.length;
+      counts[type]+=jobCount;
       if(!senders[type].includes(numberId))senders[type].push(numberId);
       if(type==='F') {
         const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
@@ -64,7 +65,7 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
         if(mode==='private_reply')privateReplies++;
         if(mode==='live_ended_no_private_reply')endedPrivateReplies++;
       }
-      scheduled+=cfg.types[type].steps.length;continue;
+      scheduled+=jobCount;continue;
     }
     // B/C are one common initial-cart step, not two independent sequences.
     if (type === 'B' || type === 'C') sequence += ':initial';
