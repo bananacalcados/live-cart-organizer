@@ -49,10 +49,10 @@ F privado permitido **agora: 0**; 21 iniciais bloqueados por live encerrada. Um 
 
 ## Verificação
 
-- 37 testes Vitest passaram (prazos, limite 80/h, janela e F durante live).
+- 39 testes Vitest passaram (prazos, limite 80/h, janela, F durante live e regressão do diálogo de Pix).
 - RPC `live_followup_policy_simulate`: 16 verificações verdadeiras, rollback confirmado, 0 chamadas externas: remetente principal/fallback/ausente, comentário≠DM, live ativa/encerrada, 7 dias posts, 24h DM, reserva privada única, LID resposta/opt-out/manual e isolamento por instância.
-- Aba autenticada carregada no navegador, global desligado e histórico sem erro após correção do resumo.
-- Aba mantém 3 consultas iniciais, sem polling; chat acrescenta 1 contexto por abertura/atualização em tempo real, sem polling.
+- Aba autenticada carregada no navegador, global desligado e histórico sem erro após correção do resumo. Chat principal aberto com cliente que comentou em Reel, exibindo “Sem janela: aguarde ela mandar mensagem”; nenhum envio feito. Dialog da live, chat principal e chat embutido compartilham o contexto; meta-messenger-send também delega Instagram ao mesmo guard.
+- Aba mantém 3 consultas iniciais, sem polling; chat principal acrescenta 2 leituras delimitadas (perfil + contexto) por abertura/atualização, sem polling. Dialog da live acrescenta 1 contexto ao perfil já carregado.
 - Candidato protegido preservado, jobs reais continuam zero.
 
 Entrega real e recebimento de uma nova mensagem LID não foram testados por proibição de mensagens reais. Antes de ligar, conferir em live controlada os sinais de transmissão e a correspondência do provedor. Histórico LID sem par comprovado não foi recuperado.
