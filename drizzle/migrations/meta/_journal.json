@@ -974,6 +974,13 @@
       "when": 1794102832421,
       "tag": "0138_central_trocas_parte1",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1794103625266,
+      "tag": "0139_ig_comment_moderation",
+      "breakpoints": true
     }
   ]
 }

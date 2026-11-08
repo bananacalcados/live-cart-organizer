@@ -24,3 +24,4 @@
 - Public live catalog: only via live-catalog-public (server prices/stock, cashback needs CPF match, reuses open cart, pays on self-service cart page).
 - Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
 - Central de Trocas: reuse exchange_requests; support_links store token hashes only; eligibility never denies alone.
+- IG comment moderation: webhook only enqueues non-live comments not copied to live_comments and wakes ig-comment-moderate (no cron); the worker classifies once, never hides on AI/API failure, reserves the private reply before sending, and pauses the queue on Meta rate limits or AI 402/403.
