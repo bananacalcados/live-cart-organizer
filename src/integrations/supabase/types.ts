@@ -12763,6 +12763,24 @@ export type Database = {
         }
         Relationships: []
       }
+      live_followup_settings: {
+        Row: {
+          id: boolean
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          id?: boolean
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          id?: boolean
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       live_followup_sources: {
         Row: {
           access_id: string | null
@@ -30683,6 +30701,10 @@ export type Database = {
         }
         Returns: string
       }
+      live_followup_admin_summary: {
+        Args: { p_event_id?: string }
+        Returns: Json
+      }
       live_followup_claim: {
         Args: { p_limit?: number }
         Returns: {
@@ -30717,6 +30739,19 @@ export type Database = {
         }
       }
       live_followup_enabled: { Args: { p_event_id?: string }; Returns: boolean }
+      live_followup_failure: {
+        Args: { p_job_id: string; p_reason: string; p_uncertain?: boolean }
+        Returns: undefined
+      }
+      live_followup_job_context: { Args: { p_job_id: string }; Returns: Json }
+      live_followup_source_contexts: {
+        Args: { p_limit?: number }
+        Returns: {
+          changed_at: string
+          context: Json
+          source_key: string
+        }[]
+      }
       live_followup_sources_claim: {
         Args: { p_limit?: number }
         Returns: {
