@@ -206,7 +206,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
             Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [],
             fetched.events,
           );
-          const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description));
+          const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier as string | null));
           patch.real_events = merged;
           patch.real_service_code = nativeShipment?.servico_codigo || ('serviceCode' in fetched ? fetched.serviceCode : null);
           patch.last_real_sync = now.toISOString();
@@ -214,6 +214,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
             patch.delivered_at = delivered.at;
             patch.stage = 'entregue';
             patch.status = 'delivered';
+            patch.delivered_source = 'carrier';
           }
           sim.real_events = merged;
           if (delivered) {

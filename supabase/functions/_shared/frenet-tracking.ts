@@ -115,4 +115,15 @@ export function mergeRealEvents(existing: RealEvent[], incoming: RealEvent[]): R
   return merged;
 }
 
-export const isDeliveredEvent = (description: string) => /entregue|delivered/i.test(description);
+// Entrega confirmada por transportadora. Para estender, acrescente um item aqui
+// (o backfill de 08/11/2026 usou exatamente estes padrões).
+export const CARRIER_DELIVERY_PATTERNS: { carrier: RegExp; description: RegExp }[] = [
+  { carrier: /^J&T/i, description: /^\s*(\[[^\]]*\]\s*)?o pacote foi assinado/i },
+  { carrier: /^Transportadora/i, description: /^\s*entrega realizada/i },
+];
+
+export const isDeliveredEvent = (description: string, carrier?: string | null) =>
+  /entregue|delivered/i.test(description) ||
+  CARRIER_DELIVERY_PATTERNS.some(
+    (p) => !!carrier && p.carrier.test(carrier) && p.description.test(description),
+  );

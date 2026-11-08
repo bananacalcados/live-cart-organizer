@@ -2,6 +2,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Recebe os avisos de rastreio da Frenet e atualiza o acompanhamento do cliente.
 // A Frenet envia apenas o ÚLTIMO evento a cada mudança de status.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { isDeliveredEvent } from '../_shared/frenet-tracking.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,7 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
     if (trackingNumber) {
       const { data } = await supabase
         .from('shipment_simulations')
-        .select('id, real_events, fulfillment, delivered_at')
+        .select('id, real_events, fulfillment, delivered_at, delivered_source, real_carrier')
         .eq('real_tracking_code', trackingNumber)
         .maybeSingle();
       row = data;
@@ -47,7 +48,7 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
     if (!row && orderId) {
       const { data } = await supabase
         .from('shipment_simulations')
-        .select('id, real_events, fulfillment, delivered_at')
+        .select('id, real_events, fulfillment, delivered_at, delivered_source, real_carrier')
         .or(`order_reference.eq.${orderId},sale_id.eq.${orderId}`)
         .maybeSingle();
       row = data;
@@ -83,7 +84,7 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
         (e) => e.at === item.at && e.description === item.description && e.location === item.location,
       );
       if (!dup) merged.push(item);
-      if (/entregue|delivered/i.test(item.description)) delivered = item.at;
+      if (isDeliveredEvent(item.description, row.real_carrier)) delivered = item.at;
     }
 
     merged.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -97,6 +98,7 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
         delivered_at: delivered,
         stage: delivered ? 'entregue' : 'enviado',
         status: delivered ? 'delivered' : 'active',
+        delivered_source: delivered ? (row.delivered_source || 'carrier') : undefined,
       })
       .eq('id', row.id);
     if (error) throw error;

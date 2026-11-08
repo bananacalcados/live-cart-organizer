@@ -967,6 +967,13 @@
       "when": 1794096936854,
       "tag": "0137_fiscal_only_price_reduction",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1794102832421,
+      "tag": "0138_central_trocas_parte1",
+      "breakpoints": true
     }
   ]
 }
