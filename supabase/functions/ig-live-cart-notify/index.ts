@@ -5,6 +5,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Ordem de envio: comentário público na live -> resposta ao último comentário dela -> direct (private reply).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
+import { buildRhVagaMetaMessage } from "../_shared/rh-vaga-automation.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -112,6 +113,60 @@ async function sendRegisterDm(sb: any, job: any, order: any, accounts: any[], li
   return done("failed", { error: `direct: ${r.err}`.slice(0, 900), message: text });
 }
 
+async function sendRhVagaDm(sb: any, job: any, accounts: any[], results: any[]) {
+  const done = async (status: string, error: string | null = null, channel: string | null = null) => {
+    await sb.from("ig_live_cart_notifications").update({
+      status,
+      error,
+      channel,
+      sent_at: status === "sent" ? new Date().toISOString() : null,
+    }).eq("id", job.id).eq("status", "processing");
+    await sb.from("instagram_comment_actions").update({ status: status === "sent" ? "sent" : "error", error_message: error })
+      .eq("comment_id", job.source_key).eq("rule_id", job.rule_id).eq("action_type", "dm");
+    results.push({ id: job.id, kind: job.kind, status, error });
+  };
+
+  const { data: rule } = await sb.from("instagram_comment_rules").select("is_active").eq("id", job.rule_id).maybeSingle();
+  if (!rule?.is_active) return done("failed", "Automação VAGA-RH desativada");
+  const account = accounts.find((a) => String(a.instagram_account_id) === String(job.instagram_account_id))
+    || (accounts.length === 1 ? accounts[0] : null);
+  const token = account?.access_token || (account ? globalIgToken() : null);
+  if (!token) return done("failed", "Conta do Instagram que recebeu o comentário não está disponível");
+  if (!job.comment_id && !job.recipient_id) return done("failed", "Comentário sem destinatário para o Direct");
+
+  let message: unknown;
+  try {
+    message = buildRhVagaMetaMessage(job);
+  } catch (e) {
+    return done("failed", e instanceof Error ? e.message : String(e));
+  }
+  const recipient = job.comment_id ? { comment_id: job.comment_id } : { id: job.recipient_id };
+  let response: any;
+  try {
+    response = await g(`${HOSTS[0]}/me/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient, message, ...(job.comment_id ? {} : { messaging_type: "RESPONSE" }) }),
+    });
+  } catch (e) {
+    return done("failed", `Resultado incerto; não reenviado automaticamente: ${String(e).slice(0, 200)}`);
+  }
+  if (!response.ok) return done("failed", `Direct: ${response.err}`.slice(0, 900));
+
+  await sb.from("whatsapp_messages").insert({
+    phone: response.d?.recipient_id || job.recipient_id,
+    message: job.message,
+    direction: "outgoing",
+    message_id: response.d?.message_id || null,
+    status: "sent",
+    media_type: "text",
+    is_group: false,
+    channel: "instagram",
+    sender_name: job.instagram_handle,
+  });
+  return done("sent", null, job.comment_id ? "private_reply_button" : "direct_button");
+}
+
 Deno.serve(withAccessLog("ig-live-cart-notify", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -146,6 +201,12 @@ Deno.serve(withAccessLog("ig-live-cart-notify", async (req) => {
         await sb.from("ig_live_cart_notifications").update({ status: "failed", error }).eq("id", job.id);
         results.push({ id: job.id, error });
       };
+      // RH não é pedido: precisa sair antes da validação de carrinho e nunca
+      // passar pelo caminho de comentário público da live.
+      if (job.kind === "rh_vaga_link") {
+        await sendRhVagaDm(sb, job, accounts!, results);
+        continue;
+      }
       // pedido ainda válido?
       const { data: order } = await sb.from("orders").select("stage, phone_last4, registered_at, is_paid").eq("id", job.order_id).maybeSingle();
       if (!order || order.is_paid || ["cancelled", "paid", "completed", "shipped"].includes(order.stage)) { await fail("pedido não está mais aberto"); continue; }
