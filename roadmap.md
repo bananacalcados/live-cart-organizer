@@ -90,6 +90,6 @@
 - [x] Fase 2: página /vaga/:codigo + rascunho + envio
 - [x] Fase 3: pontuação no servidor, avaliação IA isolada e testes
 - [x] Fase 4: aba RH, detalhe, senha e configurações; testes e limpeza
-- [ ] Fase 5: aviso WhatsApp único após avaliação, teste manual e reenvio admin; aviso desligado por padrão
-- [ ] Automação Instagram VAGA-RH: variações tolerantes só nesta regra, link por @, Direct com botão e resposta pública
-- [ ] Testes reais de correspondência, idempotência e reserva única; limpar somente dados de teste, preservando o candidato do dono
+- [x] Fase 5: aviso WhatsApp único após avaliação, teste manual e reenvio admin; aviso desligado por padrão
+- [x] Automação Instagram VAGA-RH: variações tolerantes só nesta regra, link por @, Direct com botão e resposta pública
+- [x] Testes reais de correspondência, idempotência e reserva única; limpar somente dados de teste, preservando o candidato do dono
