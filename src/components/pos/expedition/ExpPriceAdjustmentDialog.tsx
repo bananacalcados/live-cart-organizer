@@ -88,7 +88,7 @@ export function ExpPriceAdjustmentDialog({ open, onOpenChange, orders, onDone }:
       });
       if (error) throw error;
       const d = data as any;
-      toast.success(`Valor reduzido em ${d?.applied?.length || 0} pedido(s). Estornar ao cliente: ${brl((d?.applied || []).reduce((s: number, a: any) => s + Number(a.refund), 0))}`);
+      toast.success(`Nota reduzida em ${d?.applied?.length || 0} pedido(s): ${brl((d?.applied || []).reduce((s: number, a: any) => s + Number(a.refund), 0))} a menos na nota`);
       if (d?.skipped?.length) toast.warning(`${d.skipped.length} pedido(s) pulado(s): ${d.skipped.map((s: any) => s.motivo).join(", ")}`);
       onOpenChange(false);
       setValue("");
@@ -106,7 +106,7 @@ export function ExpPriceAdjustmentDialog({ open, onOpenChange, orders, onDone }:
         <DialogHeader>
           <DialogTitle>Reduzir valor da venda</DialogTitle>
           <DialogDescription>
-            O preço de cada produto é reduzido (ex.: R$ 360 com 20% vira R$ 288). A nota fiscal sai com o preço novo. O estorno ao cliente é feito por você no banco.
+            Só a nota fiscal sai com o preço reduzido (ex.: R$ 360 com 20% sai R$ 288 na nota). Venda, faturamento, comissão e o que a cliente vê continuam com o valor cheio.
           </DialogDescription>
         </DialogHeader>
 

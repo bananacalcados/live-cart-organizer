@@ -54,7 +54,7 @@ export function GatewayPriceRulesDialog() {
           <DialogHeader>
             <DialogTitle>Redução automática por gateway</DialogTitle>
             <DialogDescription>
-              Pedidos da live/site pagos nesse gateway já entram na Expedição com o valor reduzido (a nota sai com o valor novo).
+              Pedidos da live/site pagos nesse gateway já entram na Expedição com o valor reduzido (só na nota fiscal; venda, comissão e cliente continuam com o valor cheio).
               Ao salvar, os pedidos abertos sem nota também são reduzidos. Pedido que já teve redução (ou que você desfez) não é mexido de novo.
             </DialogDescription>
           </DialogHeader>
