@@ -33,6 +33,10 @@ Deno.serve(withAccessLog('live-followup-admin',async req=>{
       return json({ok:true});
     }
     const previous=await followupConfig(sb);
+    if(body.config.enabled && !previous.enabled){
+      const {data:active,error}=await sb.from('event_followup_dispatches').select('id').in('status',['processing','locked']).limit(1);
+      if(error)throw error;if(active?.length)return json({error:'Há um lembrete antigo em envio; aguarde antes de ligar.'},409);
+    }
     const value={...body.config,enabled_since:body.config.enabled ? (previous.enabled ? previous.enabled_since : new Date().toISOString()) : previous.enabled_since};
     const r=await sb.from('live_followup_settings').upsert({id:true,value,updated_at:new Date().toISOString()});if(r.error)throw r.error;
     return json({ok:true,config:value});

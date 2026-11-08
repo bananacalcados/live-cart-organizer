@@ -29,7 +29,7 @@ export async function scheduleGlobalFollowups(sb: Client) {
     const a = c.access;
     const ev = c.event;
     if (!ev?.live_followup_enabled) { await ack(); continue; }
-    const phone = normalizePhone(a?.confirmed_phone || a?.entered_phone || c.registration?.whatsapp || c.customer?.whatsapp || '');
+    const phone = normalizePhone(c.registration?.whatsapp || a?.confirmed_phone || a?.entered_phone || c.customer?.whatsapp || '');
     const ig = String(a?.instagram || c.customer?.instagram_handle || '').replace(/^@/, '').toLowerCase();
     const customer = phone ? 'wa:' + phone.slice(2,4) + phone.slice(-8) : 'ig:' + ig;
     const stopped = o && (o.is_paid || o.paid_externally || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length);
@@ -54,7 +54,7 @@ export async function scheduleGlobalFollowups(sb: Client) {
       event_id: ev.id, order_id:o?.id || null, access_id:a?.id || null,
       customer_key:customer, phone:phone || null, instagram:ig || null, whatsapp_number_id:numberId || null,
       channel:type === 'F'?'instagram':'whatsapp', type, step:index, sequence_key:sequence,
-      base_at:base, scheduled_at:scheduleStep(new Date(base),type,step.minutes).toISOString(), status:'pending',
+      base_at:base, scheduled_at:scheduleStep(new Date(base),type,type==='F' && index>0 ? step.minutes+cfg.types.F.steps[0].minutes : step.minutes).toISOString(), status:'pending',
     }));
     const result = await sb.from('live_followup_jobs').upsert(rows,{onConflict:'customer_key,sequence_key,step',ignoreDuplicates:true});
     if (result.error) throw result.error;
@@ -86,6 +86,7 @@ export async function processGlobalFollowups(sb: Client) {
           await sb.from('live_followup_jobs').update({status:'pending',claimed_at:null,scheduled_at:next.toISOString()}).eq('id',job.id).eq('status','processing'); continue;
         }
       }
+      if(job.type==='F' && job.step>0 && !context.initial_sent_at){await stop('initial_not_sent');continue;}
       const step=cfg.types[job.type as FollowupType]?.steps[job.step];
       if(!step || job.variant==null) {await stop('config_changed');continue;}
       const slug=context.event?.self_service_slug;
@@ -135,6 +136,12 @@ export async function processGlobalFollowups(sb: Client) {
       if(job.type==='B' || job.type==='C'){
         const cartFinish=await sb.rpc('live_followup_cart_finish',{p_job_id:job.id,p_message_id:mid});
         if(cartFinish.error)throw cartFinish.error;
+      }
+      if(job.type==='F' && job.step===0){
+        for(let i=1;i<cfg.types.F.steps.length;i++){
+          const stepAt=scheduleStep(new Date(),'F',cfg.types.F.steps[i].minutes);
+          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString(),base_at:new Date().toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
+        }
       }
       const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid}).eq('id',job.id).eq('status','processing');
       if(finish.error) throw new Error('sent_persistence_uncertain');
