@@ -8066,6 +8066,30 @@ export type Database = {
           },
         ]
       }
+      expedition_gateway_price_rules: {
+        Row: {
+          gateway: string
+          is_active: boolean
+          percent: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          gateway: string
+          is_active?: boolean
+          percent: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          gateway?: string
+          is_active?: boolean
+          percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       expedition_grade_purchases: {
         Row: {
           arrival_date: string
@@ -18816,6 +18840,7 @@ export type Database = {
       }
       pos_sale_price_adjustments: {
         Row: {
+          auto_rule_gateway: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -18832,6 +18857,7 @@ export type Database = {
           value: number
         }
         Insert: {
+          auto_rule_gateway?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -18848,6 +18874,7 @@ export type Database = {
           value: number
         }
         Update: {
+          auto_rule_gateway?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -27600,6 +27627,10 @@ export type Database = {
       }
     }
     Functions: {
+      _apply_gateway_price_rule: {
+        Args: { p_actor: string; p_sale_id: string }
+        Returns: boolean
+      }
       _automation_sale_attribution: {
         Args: { p_days: number }
         Returns: {
@@ -28250,6 +28281,10 @@ export type Database = {
           id: string
           message_id: string
         }[]
+      }
+      delete_expedition_gateway_price_rule: {
+        Args: { p_gateway: string }
+        Returns: undefined
       }
       delete_pos_divergent_parent: {
         Args: { p_parent_sku: string }
@@ -30183,6 +30218,10 @@ export type Database = {
           p_whatsapp: string
         }
         Returns: string
+      }
+      save_expedition_gateway_price_rule: {
+        Args: { p_active: boolean; p_gateway: string; p_percent: number }
+        Returns: Json
       }
       search_all_conversations: {
         Args: { p_query: string }

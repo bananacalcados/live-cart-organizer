@@ -953,6 +953,13 @@
       "when": 1794094566962,
       "tag": "0135_fix_order_approved_gateway_text_id",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794096446771,
+      "tag": "0136_expedition_gateway_price_rules",
+      "breakpoints": true
     }
   ]
 }
