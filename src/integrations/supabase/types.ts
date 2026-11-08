@@ -30778,11 +30778,45 @@ export type Database = {
         Args: { p_job_id: string; p_reason: string; p_uncertain?: boolean }
         Returns: undefined
       }
+      live_followup_history: {
+        Args: { p_event_id?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          access_id: string | null
+          base_at: string
+          channel: string
+          claimed_at: string | null
+          created_at: string
+          customer_key: string
+          event_id: string
+          id: string
+          instagram: string | null
+          message: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string | null
+          reason: string | null
+          scheduled_at: string
+          sent_at: string | null
+          sequence_key: string
+          status: string
+          step: number
+          type: string
+          variant: number | null
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "live_followup_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       live_followup_job_context: { Args: { p_job_id: string }; Returns: Json }
       live_followup_mark_manual_cart: {
         Args: { p_message_id: string; p_number_id: string; p_order_id: string }
         Returns: undefined
       }
+      live_followup_simulate: { Args: never; Returns: Json }
       live_followup_source_contexts: {
         Args: { p_limit?: number }
         Returns: {
