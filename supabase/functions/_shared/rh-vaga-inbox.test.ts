@@ -9,7 +9,7 @@ function fixture() {
   const rules = [
     { id: "rh-rule", name: "VAGA-RH", trigger_type: "rh_vaga", media_types: ["post", "REELS", "IGTV", "story", "live"], cooldown_minutes: 60, action_send_dm: true, dm_message_text: "Oii {username}!", min_delay_seconds: 20, max_delay_seconds: 60 },
     { id: "legacy", name: "Antiga", trigger_type: "all", media_types: ["story"], cooldown_minutes: 60, action_send_dm: false },
-  ];
+  ].map((rule) => ({ ...rule, is_active: true }));
   const actions: any[] = [], jobs: any[] = [], reads: string[] = [];
   let submitted = false, linkCalls = 0;
   const sb: any = {
