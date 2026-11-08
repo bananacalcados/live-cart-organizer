@@ -42,7 +42,7 @@ serve(withAccessLog("meta-messenger-send", async (req) => {
       const {data:link,error}=await sb.from('instagram_user_links').select('username').eq('ig_user_id',recipientId).limit(1).maybeSingle();
       if(error)throw error;
       if(!link?.username)return new Response(JSON.stringify({success:false,error:'Perfil não identificado. Aguarde ela mandar mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
-      const r=await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/instagram-dm-send`,{method:'POST',headers:{...(await internalCallHeaders()),'Content-Type':'application/json'},body:JSON.stringify({username:link.username,message,mediaUrl,mediaType:type==='text'?undefined:type,whatsapp_number_id})});
+      const r=await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/instagram-dm-send`,{method:'POST',headers:{...(await internalCallHeaders()),authorization:req.headers.get('authorization') || '', 'Content-Type':'application/json'},body:JSON.stringify({username:link.username,message,mediaUrl,mediaType:type==='text'?undefined:type,whatsapp_number_id,manual:true})});
       const data=await r.json();
       return new Response(JSON.stringify({...data,success:r.ok&&!data.error,error:data.error?(data.message || data.error):undefined}),{status:r.status,headers:{...corsHeaders,'Content-Type':'application/json'}});
     }

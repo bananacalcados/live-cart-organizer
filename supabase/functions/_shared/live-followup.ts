@@ -55,7 +55,8 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
     if (!numberId) { await ack(); continue; }
     if(simulation){
-      counts[type]+=cfg.types[type].steps.length;
+      const jobCount=type==='F'?1:cfg.types[type].steps.length;
+      counts[type]+=jobCount;
       if(!senders[type].includes(numberId))senders[type].push(numberId);
       if(type==='F') {
         const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
@@ -64,12 +65,12 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
         if(mode==='private_reply')privateReplies++;
         if(mode==='live_ended_no_private_reply')endedPrivateReplies++;
       }
-      scheduled+=cfg.types[type].steps.length;continue;
+      scheduled+=jobCount;continue;
     }
     // B/C are one common initial-cart step, not two independent sequences.
     if (type === 'B' || type === 'C') sequence += ':initial';
     else sequence += ':' + type;
-    const rows = cfg.types[type].steps.map((step,index) => ({
+    const rows = (type==='F'?cfg.types.F.steps.slice(0,1):cfg.types[type].steps).map((step,index) => ({
       event_id: ev.id, order_id:o?.id || null, access_id:a?.id || null,
       customer_key:customer, phone:phone || null, instagram:ig || null, whatsapp_number_id:numberId || null,
       channel:type === 'F'?'instagram':'whatsapp', type, step:index, sequence_key:sequence,
@@ -113,7 +114,9 @@ export async function processGlobalFollowups(sb: Client) {
       const cart=slug && job.order_id ? `https://checkout.bananacalcados.com.br/pedido/${slug}/carrinho/${job.order_id.replace(/-/g,'')}` : context.order?.cart_link;
       const registration=slug ? `https://checkout.bananacalcados.com.br/pedido/${slug}` : '';
       if(job.type==='A' ? !registration : !cart && !['D'].includes(job.type)) { await stop('missing_link');continue; }
-      let text=renderFollowup(step.variants[job.variant],context.registration?.full_name || context.access?.form_draft?.full_name || context.customer?.full_name || '',registration,cart || '');
+      const initialF=job.type==='F' && job.step===0;
+      const buttonTitle=cfg.types.F.button_title || 'Quero meu link 🛍️';
+      let text=renderFollowup(step.variants[job.variant],context.registration?.full_name || context.access?.form_draft?.full_name || context.customer?.full_name || '',registration,initialF ? `Toque em “${buttonTitle}” para receber seu link.` : cart || '');
       if (text===context.instance?.last_message) text=text.replace(/😊/g,'🙂').replace(/!/,'.');
       if (!text.trim()) {await stop('empty_text');continue;}
       const headers={...(await internalCallHeaders()),'Content-Type':'application/json','x-force-instance':'true'};
@@ -144,7 +147,7 @@ export async function processGlobalFollowups(sb: Client) {
       sendStarted=true;
       const provider=context.number?.provider;
       const out=job.channel==='instagram'
-        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id,liveFollowup:true,followupStep:job.step,fallbackCommentIds:context.instagram_context?.comment_ids || []})
+        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id,liveFollowup:true,followupStep:job.step,followupJobId:initialF?job.id:undefined,fallbackCommentIds:context.instagram_context?.comment_ids || []})
         : await call(provider==='meta'?'meta-whatsapp-send':`${provider}-send-message`,{phone:job.phone,message:text,type:'text',whatsapp_number_id:job.whatsapp_number_id,linkPreview:false});
       const mid=out.messageId || out.message_id || out.data?.id || null;
       if (!mid) throw new Error('provider_confirmation_missing');
@@ -157,13 +160,7 @@ export async function processGlobalFollowups(sb: Client) {
         const cartFinish=await sb.rpc('live_followup_cart_finish',{p_job_id:job.id,p_message_id:mid});
         if(cartFinish.error)throw cartFinish.error;
       }
-      if(job.type==='F' && job.step===0){
-        for(let i=1;i<cfg.types.F.steps.length;i++){
-          const stepAt=scheduleStep(new Date(),'F',cfg.types.F.steps[i].minutes);
-          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
-        }
-      }
-      const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid}).eq('id',job.id).eq('status','processing');
+      const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid,...(initialF?{reason:'aguardando_toque',button_expires_at:new Date(Date.now()+24*3600000).toISOString()}:{})}).eq('id',job.id).eq('status','processing');
       if(finish.error) throw new Error('sent_persistence_uncertain');
       await sb.from('live_followup_instances').update({consecutive_errors:0,last_message:text}).eq('whatsapp_number_id',job.whatsapp_number_id);
       sent++;

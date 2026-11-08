@@ -161,17 +161,12 @@ Deno.serve(withAccessLog("instagram-resend-live-dm", async (req) => {
     let sent = 0;
     let failed = 0;
 
-    const sendOnce = async (igsid: string, useHumanAgent: boolean) => {
+    const sendOnce = async (igsid: string) => {
       const payload: any = {
         recipient: { id: igsid },
         message: messagePayload,
       };
-      if (useHumanAgent) {
-        payload.messaging_type = "MESSAGE_TAG";
-        payload.tag = "HUMAN_AGENT";
-      } else {
-        payload.messaging_type = "RESPONSE";
-      }
+      payload.messaging_type = "RESPONSE";
       const res = await fetch(`${META_API}/me/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -183,11 +178,8 @@ Deno.serve(withAccessLog("instagram-resend-live-dm", async (req) => {
     for (let i = 0; i < recipients.length; i++) {
       const rcpt = recipients[i];
       try {
-        let attempt = await sendOnce(rcpt.phone, false);
-        // Janela de 24h fechada (code 10) → tenta tag HUMAN_AGENT (até 7 dias)
-        if (!attempt.ok && attempt.data?.error?.code === 10) {
-          attempt = await sendOnce(rcpt.phone, true);
-        }
+        const attempt = await sendOnce(rcpt.phone);
+        // Batch resends stay in the automatic window; never extend with a human tag.
         const res = { ok: attempt.ok };
         const data = attempt.data;
         if (res.ok) {

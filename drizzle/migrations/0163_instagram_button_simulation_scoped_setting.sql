@@ -1,0 +1,1 @@
+DO $$ DECLARE def text; BEGIN SELECT pg_get_functiondef('public.live_followup_button_simulate()'::regprocedure) INTO def; def:=replace(def,$s$SET value=jsonb_set(value,'{enabled}','true');$s$,$s$SET value=jsonb_set(value,'{enabled}','true') WHERE id=true;$s$); EXECUTE def; END $$;

@@ -7,6 +7,8 @@ import { routeMessage, isOperatorCooldownActive } from "../_shared/message-route
 import { processCommentAutomation, processStoryReplyAutomation, handleCommentButtonPostback } from "../_shared/instagram-comment-automation.ts";
 import { resolveIgAccountByAccountId, globalIgToken } from "../_shared/instagram-account.ts";
 import { rhVagaInboxSource } from "../_shared/rh-vaga-automation.ts";
+import {instagramInteractionPayload,followupButtonJob} from '../_shared/instagram-interaction.ts';
+import {handleLiveFollowupButton} from '../_shared/live-followup-button.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -144,6 +146,18 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
 
         // Skip message_edit and delivery events
         if (event.message_edit || event.delivery) continue;
+        const interactionPayload=instagramInteractionPayload(event);
+        const fJob=followupButtonJob(interactionPayload);
+        // New follow-up clicks require a valid provider signature even in legacy shadow mode.
+        if(channel==='instagram' && interactionPayload?.startsWith('livef:')){
+          if(!fJob || sigResult!=='valid' || !entryNumberId || event.message?.is_echo)continue;
+          const clickAt=new Date(event.timestamp || Date.now()).toISOString();
+          const mid=event.message?.mid || `livef:${fJob}:${senderId}:${event.timestamp || ''}`;
+          const saved=await supabase.from('whatsapp_messages').insert({phone:senderId,message:event.message?.text || 'Quero meu link 🛍️',direction:'incoming',channel:'instagram',status:'received',source:'ig_interaction',message_id:mid,whatsapp_number_id:entryNumberId,created_at:clickAt});
+          if(saved.error && saved.error.code!=='23505')continue;
+          await handleLiveFollowupButton(supabase,fJob,senderId,entryNumberId,clickAt);
+          continue;
+        }
 
         // Skip echo messages (messages we sent) — the frontend already inserts
         // the outgoing record after a successful send, so we only insert here
@@ -442,6 +456,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           message: messageText,
           direction: 'incoming',
           message_id: event.message?.mid || null,
+          source: interactionPayload ? 'ig_interaction' : null,
           status: 'received',
           media_type: mediaType,
           media_url: mediaUrl,

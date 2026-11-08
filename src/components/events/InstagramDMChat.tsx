@@ -117,6 +117,7 @@ export function InstagramDMChat({
         await supabase.from("instagram_dm_reads").upsert({
           user_id: user.id,
           username: handle,
+          manual:true,
           last_read_at: new Date().toISOString(),
         }, { onConflict: "user_id,username" });
       }
@@ -350,7 +351,7 @@ export function InstagramDMChat({
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("instagram-dm-send", {
-        body: { username: handle, message: text, eventId, fallbackCommentId: effectiveCommentId, fallbackCommentIds:replyContext?.comment_ids || [], whatsapp_number_id:replyContext?.number_id },
+        body: { username: handle, manual:true, message: text, eventId, fallbackCommentId: effectiveCommentId, fallbackCommentIds:replyContext?.comment_ids || [], whatsapp_number_id:replyContext?.number_id },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);

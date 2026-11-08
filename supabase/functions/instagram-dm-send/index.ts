@@ -1,8 +1,8 @@
-import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { withAccessLog, verifiedIdentity } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
-import { instagramSendMode, instagramFollowupMode } from "../_shared/instagram-window.ts";
+import { instagramManualMode, instagramFollowupMode, instagramMessagingFields } from "../_shared/instagram-window.ts";
 
 
 const corsHeaders = {
@@ -24,15 +24,25 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     );
 
     const body = await req.json();
+    const identity=await verifiedIdentity(req);
+    const manual=body.manual===true && !!identity && !body.liveFollowup;
     const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType, whatsapp_number_id } = body;
     let { mediaUrl } = body;
     if (typeof username !== 'string' || username.length>100 || (message != null && (typeof message !== 'string' || message.length>4000))) return new Response(JSON.stringify({error:'invalid_input'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
     const ctxResult=await supabase.rpc('instagram_reply_context',{p_username:username,p_event_id:eventId || null,p_number_id:whatsapp_number_id || null});
     if(ctxResult.error)throw ctxResult.error;
     let replyContext=ctxResult.data;
-    const mode=body.liveFollowup ? instagramFollowupMode(replyContext,Number(body.followupStep || 0)) : instagramSendMode(replyContext);
-    if(!['direct_dm','private_reply'].includes(mode)) return new Response(JSON.stringify({error:mode,message:mode==='live_ended_no_private_reply'?'A live terminou: comentário não abre a janela de 24h e a resposta privada só funciona durante a transmissão. Aguarde ela mandar uma mensagem.':'Sem janela de 24h e sem comentário elegível não respondido. Aguarde ela mandar uma mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
+    const mode=body.liveFollowup ? instagramFollowupMode(replyContext,Number(body.followupStep || 0)) : instagramManualMode(replyContext,manual);
+    if(!['direct_dm','private_reply','human_agent'].includes(mode)) return new Response(JSON.stringify({error:mode,message:mode==='live_ended_no_private_reply'?'A live terminou: comentário não abre a janela de 24h e a resposta privada só funciona durante a transmissão. Aguarde ela mandar uma mensagem.':manual&&!replyContext.human_agent_approved?'Sem janela de 24h. Resposta humana até 7 dias: aguardando aprovação da Meta.':'Sem janela de 24h e sem comentário elegível não respondido. Aguarde ela mandar uma mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
     const resolvedNumberId=replyContext.number_id || whatsapp_number_id;
+    let quickReply:{content_type:string;title:string;payload:string}|null=null;
+    if(body.followupJobId){
+      if(identity || !body.liveFollowup)return new Response(JSON.stringify({error:'internal_only'}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      const {data:job,error}=await supabase.from('live_followup_jobs').select('id,step,status,instagram,whatsapp_number_id').eq('id',body.followupJobId).maybeSingle();
+      if(error || !job || job.step!==0 || job.status!=='processing' || job.instagram!==username.replace(/^@/,'').toLowerCase() || job.whatsapp_number_id!==resolvedNumberId)throw new Error('invalid_button_job');
+      const {data:settings}=await supabase.from('live_followup_settings').select('value').eq('id',true).single();
+      quickReply={content_type:'text',title:String(settings?.value?.types?.F?.button_title || 'Quero meu link 🛍️').slice(0,20),payload:`livef:${job.id}`};
+    }
 
     // Token por conta: se a conversa estiver vinculada a uma instância de
     // Instagram, usa o token daquela conta. Sem instância (ex.: resposta a
@@ -95,7 +105,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
           : "image";
         return { attachment: { type: attachType, payload: { url: mediaUrl, is_reusable: false } } };
       }
-      return { text: message };
+      return { text: message,...(quickReply?{quick_replies:[quickReply]}:{}) };
     };
 
     function cleanHandleForPath(u: string) {
@@ -167,14 +177,14 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     };
 
     // Tenta DM direto se tem o user ID
-    if (link?.ig_user_id && replyContext.window_open) {
+    if (link?.ig_user_id && (mode==='direct_dm' || mode==='human_agent')) {
       const res = await fetch(`${META_API}/me/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           recipient: { id: link.ig_user_id },
           message: buildMessagePayload(),
-          messaging_type: "RESPONSE",
+          ...instagramMessagingFields(mode),
         }),
       });
       metaResponse = await res.json();
@@ -225,6 +235,10 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     // Salvar no histórico — tenta atualizar a linha do echo (mesmo message_id) primeiro,
     // pois o webhook is_echo costuma chegar antes desta resposta e grava sem media_url.
     const recipientId = link?.ig_user_id || metaResponse?.recipient_id || cleanUsername;
+    if(!link?.ig_user_id && typeof recipientId==='string' && /^\d{5,20}$/.test(recipientId)){
+      const binding=await supabase.from('instagram_user_links').upsert({username:cleanUsername,ig_user_id:recipientId,source:'webhook'},{onConflict:'username',ignoreDuplicates:true});
+      if(binding.error)throw new Error('private_reply_identity_uncertain');
+    }
     const mid = metaResponse?.message_id || null;
     const payload = {
       phone: recipientId,
@@ -236,7 +250,8 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
       sender_name: `@${cleanUsername}`,
       media_url: mediaUrl || null,
       media_type: mediaUrl ? (mediaType || null) : "text",
-      source: "manual",
+      source: manual ? 'manual' : body.liveFollowup ? 'live_followup' : 'automation',
+      sender_user_id: manual ? identity?.userId : null,
       whatsapp_number_id: resolvedNumberId || null,
     };
     let upgraded = false;
