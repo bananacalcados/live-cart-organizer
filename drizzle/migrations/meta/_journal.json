@@ -1037,6 +1037,13 @@
       "when": 1794160986573,
       "tag": "0147_global_live_followup_context_and_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1794161112938,
+      "tag": "0148_global_followup_claim_and_switch_guards",
+      "breakpoints": true
     }
   ]
 }
