@@ -1,5 +1,6 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { decideDevolucao, type ExistingDevolucao } from "../_shared/devolucao-guard.ts";
+import { returnDiscountRatio, returnLineValues, isUndiscountedReverse } from "../_shared/devolucao-values.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfe-devolucao-emitir
 // Fase 5 — NF-e de DEVOLUÇÃO (entrada) da Etapa 2 de Trocas/Devoluções.
@@ -130,6 +131,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
         pedido_original_id: r.sale_id, devolucao_doc_id: r.devolucao_doc_id, chave_acesso_original: null,
         trocas_devolucoes_itens: (Array.isArray(r.return_items) ? r.return_items : []).map((i: any) => ({
           direcao: "devolvido", estado_estoque: "retornado_vendavel", quantidade: Number(i.quantidade || 0),
+          sale_item_id: i.sale_item_id || null,
           sku: i.sku || null, barcode: i.barcode || null, produto_nome: i.nome || null, valor_unitario: Number(i.valor_unitario || 0),
         })),
       };
@@ -153,13 +155,13 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
         .from("fiscal_documents").select("*").eq("id", (evt as any).devolucao_doc_id).maybeSingle();
       // Troca: a nota já vinculada (própria ou vinda da reversa) passa pela trava 6b,
       // que reaproveita se o valor bate com os itens conferidos e bloqueia se divergir.
-      if (prevDoc && (prevDoc as any).status === "authorized" && isReverse) {
+      if (prevDoc && (prevDoc as any).status === "authorized" && isReverse && !dry_run) {
         return new Response(JSON.stringify({
           ok: true, already: true, status: "authorized",
           document_id: (prevDoc as any).id, chave_acesso: (prevDoc as any).chave_acesso,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
       }
-      if (prevDoc && (prevDoc as any).status === "pending_sefaz") {
+      if (prevDoc && (prevDoc as any).status === "pending_sefaz" && !dry_run) {
         return new Response(JSON.stringify({
           ok: false, contingencia: true, status: "pending_sefaz",
           document_id: (prevDoc as any).id,
@@ -234,17 +236,16 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     // Índices dos itens originais para casar SKU/barcode e espelhar snapshot fiscal + preço
     const bySku = new Map<string, any>();
     const byBarcode = new Map<string, any>();
+    const byId = new Map<string, any>();
     for (const oi of origItems) {
+      byId.set(String(oi.id), oi);
       if (oi.sku) bySku.set(String(oi.sku), oi);
       if (oi.barcode) byBarcode.set(String(oi.barcode), oi);
     }
 
     // Desconto proporcional da venda original (mesma fórmula da emissão original) para
     // que a base de cálculo dos impostos da devolução seja idêntica à da venda.
-    const descontoVenda = round2(Number((sale as any).discount || 0));
-    const somaBruta = origItems.reduce(
-      (acc: number, it: any) => acc + Number(it.unit_price) * Number(it.quantity), 0);
-    const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
+    const ratioDesc = returnDiscountRatio(origItems, Number((sale as any).discount || 0));
 
     // CFOP de devolução (entrada): 1.202 mesma UF, 2.202 outra UF (confirmar com contador)
     const ufCliente = String((sale as any).shipping_state || (sale as any).customer_state || ufOrigem).toUpperCase();
@@ -257,16 +258,18 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     let totalDesc = 0;
 
     for (const [idx, di] of devolvidos.entries()) {
-      const oi = (di.sku && bySku.get(String(di.sku)))
+      const oi = (di.sale_item_id && byId.get(String(di.sale_item_id)))
+        || (di.sku && bySku.get(String(di.sku)))
         || (di.barcode && byBarcode.get(String(di.barcode)))
         || null;
 
       // Preço idêntico ao da nota original; se não achar o item original, usa o valor gravado no evento.
-      const unitPrice = round2(Number(oi?.unit_price ?? di.valor_unitario ?? 0));
       const qtd = Number(di.quantidade);
-      const vTotal = round2(unitPrice * qtd);
-      const vDesc = ratioDesc > 0 ? round2(vTotal * ratioDesc) : 0;
-      const vBase = round2(vTotal - vDesc);
+      // The exchange's saved value may already be net. Without a source match,
+      // do not apply the sale discount again to that fallback value.
+      const { unitPrice, gross: vTotal, discount: vDesc, net: vBase } = returnLineValues(
+        Number(oi?.unit_price ?? di.valor_unitario ?? 0), qtd, oi ? ratioDesc : 0,
+      );
       totalProd += vTotal;
       totalDesc += vDesc;
 
@@ -352,13 +355,25 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
           : !otherTroca(d),
       }));
       const decision = decideDevolucao({ valorNovo: totalLiquido, valorOriginal, existentes });
+      const undiscounted = decision.action === "block" && existentes.find((d) => isUndiscountedReverse({
+        reason: decision.reason, reverseLinked: (rvLinks || []).some((r: any) => r.devolucao_doc_id === d.id),
+        authorized: d.status === "authorized" && d.reusable, issued: d.valor_total,
+        gross: round2(totalProd), net: totalLiquido,
+      }));
+      const blockMessage = decision.action === "block"
+        ? (undiscounted
+          ? `A nota da reversa (nº ${undiscounted.numero ?? "?"}) saiu sem o desconto da venda. Fale com o fiscal para conferir a nota já emitida; o sistema não vai cancelar nem emitir outra nota.`
+          : decision.message)
+        : null;
       if (dry_run) {
-        return new Response(JSON.stringify({ dry_run: true, decision, valor_novo: totalLiquido, valor_original: valorOriginal, existentes }),
+        return new Response(JSON.stringify({ dry_run: true, decision, warning: blockMessage,
+          valor_novo: totalLiquido, valor_bruto: round2(totalProd), desconto_rateado: round2(totalDesc),
+          produtos, valor_original: valorOriginal, existentes }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
       }
       if (decision.action === "block") {
-        await linkDoc({ fase2_erro: decision.message }, { error_message: decision.message });
-        return new Response(JSON.stringify({ ok: false, blocked: true, reason: decision.reason, error: decision.message }),
+        await linkDoc({ fase2_erro: blockMessage }, { error_message: blockMessage });
+        return new Response(JSON.stringify({ ok: false, blocked: true, reason: decision.reason, error: blockMessage }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
       }
       if (decision.action === "reuse") {
