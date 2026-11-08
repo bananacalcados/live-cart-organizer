@@ -18,6 +18,13 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { ExchangeNfeActions } from "./ExchangeNfeActions";
+import { ExchangeDispatchDialog } from "./ExchangeDispatchDialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { markExchangesDispatched } from "@/lib/pos/markExchangeDispatched";
 
 type TdEvent = Database["public"]["Tables"]["trocas_devolucoes"]["Row"];
 type TdStatus = Database["public"]["Enums"]["td_status"];
@@ -77,6 +84,10 @@ export function ExchangeSearchList({ open, onClose }: Props) {
   const [loja, setLoja] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [motivo, setMotivo] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dispatchEv, setDispatchEv] = useState<EventRow | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -117,6 +128,7 @@ export function ExchangeSearchList({ open, onClose }: Props) {
         }
       }
       setEvents(rows);
+      setSelectedIds(new Set());
     } catch (e) {
       console.error("[ExchangeSearchList] loadEvents", e);
       toast.error("Erro ao carregar trocas/devoluções");
@@ -147,6 +159,22 @@ export function ExchangeSearchList({ open, onClose }: Props) {
       return true;
     });
   }, [events, cliente, pedido]);
+
+  const pendingVisible = filtered.filter((e) => e.status === "aguardando_envio");
+  const toggleSel = (id: string) => setSelectedIds((prev) => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const runBulk = async () => {
+    setBulkSaving(true);
+    try {
+      const n = await markExchangesDispatched([...selectedIds]);
+      toast.success(`${n} troca(s) marcada(s) como despachada(s).`);
+      setBulkConfirm(false);
+      await loadEvents();
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao marcar em lote");
+    } finally { setBulkSaving(false); }
+  };
 
   const hasActiveFilters =
     codigo || cliente || pedido || postagem ||
@@ -247,8 +275,23 @@ export function ExchangeSearchList({ open, onClose }: Props) {
           </div>
         </div>
 
-        <div className="text-xs text-pos-white/50">
-          {filtered.length} resultado(s)
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-pos-white/50">
+          <span>{filtered.length} resultado(s)</span>
+          {pendingVisible.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 cursor-pointer">
+                <Checkbox
+                  checked={pendingVisible.every((e) => selectedIds.has(e.id))}
+                  onCheckedChange={(c) => setSelectedIds(c ? new Set(pendingVisible.map((e) => e.id)) : new Set())}
+                />
+                Selecionar "Aguardando Envio"
+              </label>
+              <Button size="sm" disabled={selectedIds.size === 0} onClick={() => setBulkConfirm(true)}
+                className="h-7 bg-cyan-600 hover:bg-cyan-700 text-white text-xs">
+                <Truck className="h-3 w-3 mr-1" /> Marcar selecionadas como despachadas ({selectedIds.size})
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Lista */}
@@ -270,6 +313,9 @@ export function ExchangeSearchList({ open, onClose }: Props) {
                 >
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
+                      {e.status === "aguardando_envio" && (
+                        <Checkbox checked={selectedIds.has(e.id)} onCheckedChange={() => toggleSel(e.id)} />
+                      )}
                       <span className="font-mono font-bold text-pos-white text-sm">
                         {e.codigo_devolucao || "—"}
                       </span>
@@ -323,12 +369,38 @@ export function ExchangeSearchList({ open, onClose }: Props) {
                       )}
                     </div>
                   )}
+                  {e.status === "aguardando_envio" && (
+                    <div>
+                      <Button size="sm" variant="outline" onClick={() => setDispatchEv(e)}
+                        className="h-7 text-xs border-cyan-500/40 text-cyan-300">
+                        <Truck className="h-3 w-3 mr-1" /> Marcar como despachada
+                      </Button>
+                    </div>
+                  )}
                   <ExchangeNfeActions ev={e} />
                 </div>
               ))}
             </div>
           )}
         </ScrollArea>
+        <ExchangeDispatchDialog ev={dispatchEv} onClose={() => setDispatchEv(null)}
+          onDone={() => { setDispatchEv(null); loadEvents(); }} />
+        <AlertDialog open={bulkConfirm} onOpenChange={setBulkConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Marcar {selectedIds.size} troca(s) como despachada(s)?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Elas passam para "Concluída", sem rastreio e sem aviso à cliente. Não gera nota nem mexe no estoque.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkSaving}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction disabled={bulkSaving} onClick={(ev) => { ev.preventDefault(); runBulk(); }}>
+                {bulkSaving ? "Marcando..." : `Confirmar (${selectedIds.size})`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

@@ -25812,6 +25812,8 @@ export type Database = {
           codigo_devolucao: string | null
           codigo_postagem_reversa: string | null
           created_at: string
+          despachada_em: string | null
+          despachada_por: string | null
           devolucao_doc_id: string | null
           diferenca: number
           estoque_movimentado: boolean
@@ -25823,6 +25825,7 @@ export type Database = {
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          motivo_excecao_antecipado: string | null
           nfe_reposicao_id: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado: boolean
@@ -25848,6 +25851,8 @@ export type Database = {
           codigo_devolucao?: string | null
           codigo_postagem_reversa?: string | null
           created_at?: string
+          despachada_em?: string | null
+          despachada_por?: string | null
           devolucao_doc_id?: string | null
           diferenca?: number
           estoque_movimentado?: boolean
@@ -25859,6 +25864,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          motivo_excecao_antecipado?: string | null
           nfe_reposicao_id?: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado?: boolean
@@ -25884,6 +25890,8 @@ export type Database = {
           codigo_devolucao?: string | null
           codigo_postagem_reversa?: string | null
           created_at?: string
+          despachada_em?: string | null
+          despachada_por?: string | null
           devolucao_doc_id?: string | null
           diferenca?: number
           estoque_movimentado?: boolean
@@ -25895,6 +25903,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo?: Database["public"]["Enums"]["td_motivo"]
+          motivo_excecao_antecipado?: string | null
           nfe_reposicao_id?: string | null
           origem_canal?: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado?: boolean

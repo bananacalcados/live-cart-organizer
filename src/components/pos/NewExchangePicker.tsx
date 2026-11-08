@@ -123,6 +123,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
   const [postagemReversa, setPostagemReversa] = useState("");
   const [reverseOpen, setReverseOpen] = useState(false);
   const [modoExpedicao, setModoExpedicao] = useState<"aguarda_retorno" | "despacho_antecipado">("aguarda_retorno");
+  const [motivoExcecao, setMotivoExcecao] = useState("");
   const [produtoEmMaos, setProdutoEmMaos] = useState(false);
   const [repos, setRepos] = useState<ReposRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -136,7 +137,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
       setPhase("store"); setStoreId(""); setSales([]); setPage(0);
       setSearch(""); setDebounced(""); setSale(null); setChaveOriginal(null);
       setCustomer(null); setItems([]); setTipo("devolucao"); setMotivo("");
-      setPostagemReversa(""); setModoExpedicao("aguarda_retorno");
+      setPostagemReversa(""); setModoExpedicao("aguarda_retorno"); setMotivoExcecao("");
       setProdutoEmMaos(false); setRepos([]);
     }
   }, [open]);
@@ -324,6 +325,10 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
       if (validos.length === 0) { toast.error("Selecione o(s) produto(s) de reposição"); return; }
     }
 
+    if (tipo === "troca" && modoExpedicao === "despacho_antecipado" && !motivoExcecao.trim()) {
+      toast.error("Informe o motivo da exceção do despacho antecipado"); return;
+    }
+
     setSaving(true);
     try {
       const reposEstoquePadrao = motivoReposEstoquePadrao(motivo);
@@ -371,6 +376,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
         cliente_endereco: customer?.address || null,
         codigo_postagem_reversa: postagemReversa.trim() || null,
         modo_expedicao: modoExpedicao,
+        motivo_excecao_antecipado: tipo === "troca" && modoExpedicao === "despacho_antecipado" ? motivoExcecao.trim().slice(0, 200) : null,
         status: status as any,
         vendedora_troca_id: sellerId || null,
         devolvidos: devolvidosInput,
@@ -717,6 +723,15 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                       Despacho antecipado<br /><span className="text-[10px] text-pos-white/40">Envia a reposição agora</span>
                     </button>
                   </div>
+                  {modoExpedicao === "despacho_antecipado" && (
+                    <Input
+                      value={motivoExcecao}
+                      maxLength={200}
+                      onChange={(e) => setMotivoExcecao(e.target.value)}
+                      placeholder="Motivo da exceção (obrigatório)"
+                      className="mt-2 h-8 text-xs bg-pos-white/5 border-amber-400/40 text-pos-white"
+                    />
+                  )}
                 </div>
               )}
 
