@@ -74,3 +74,9 @@
 - [x] Fila, IA, ocultar, direct de rastreio, tela e testes (interruptor desligado)
 - [ ] Confirmar permissão de ocultar com um comentário de teste real (aguarda o dono ligar)
 - [ ] Conferir se comentários de anúncio exclusivo chegam (aguarda um anúncio real comentado)
+
+# Trava NF-e de devolução duplicada (urgente)
+- [x] Reversa vincula NF à troca aberta; conferência reusa/bloqueia
+- [x] Trava de soma ≤ NF original em nfe-devolucao-emitir
+- [x] Bloqueio de 2ª troca aberta com mesmos itens
+- [x] Backfill de vínculo + relatórios + testes por SQL

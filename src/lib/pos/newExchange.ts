@@ -68,6 +68,24 @@ export function motivoReposEstoquePadrao(motivo: TdMotivo): boolean {
   return motivo !== "defeito_avaria";
 }
 
+type ItemKey = { produto_id?: string | null; sku?: string | null; barcode?: string | null };
+const sameItem = (a: ItemKey, b: ItemKey) =>
+  (!!a.produto_id && a.produto_id === b.produto_id) ||
+  (!!a.barcode && a.barcode === b.barcode) ||
+  (!!a.sku && a.sku === b.sku);
+
+/** Código da troca aberta que já contém algum dos itens devolvidos (ou null). Itens diferentes do mesmo pedido passam. */
+export function findOverlappingExchange(
+  abertas: { codigo_devolucao: string | null; id: string; trocas_devolucoes_itens?: (ItemKey & { direcao: string })[] }[],
+  devolvidos: ItemKey[],
+): string | null {
+  for (const t of abertas) {
+    const itens = (t.trocas_devolucoes_itens || []).filter((i) => i.direcao === "devolvido");
+    if (itens.some((i) => devolvidos.some((d) => sameItem(i, d)))) return t.codigo_devolucao || t.id.slice(0, 8);
+  }
+  return null;
+}
+
 export async function createNewExchange(
   params: CreateExchangeParams,
 ): Promise<CreateExchangeResult> {
@@ -76,6 +94,20 @@ export async function createNewExchange(
     chave_acesso_original, cliente_id, codigo_postagem_reversa,
     modo_expedicao, status, vendedora_troca_id, devolvidos, reposicoes,
   } = params;
+
+  // 0) Trava: o mesmo item do pedido não pode estar em outra troca/devolução aberta.
+  const { data: abertas } = await supabase
+    .from("trocas_devolucoes")
+    .select("id, codigo_devolucao, trocas_devolucoes_itens(direcao, produto_id, sku, barcode)")
+    .eq("pedido_original_id", pedido_original_id)
+    .not("status", "in", "(concluida,cancelada)")
+    .limit(20);
+  const conflito = findOverlappingExchange((abertas || []) as any[], devolvidos);
+  if (conflito) {
+    throw new Error(
+      `Este pedido já tem a troca/devolução ${conflito} aberta com o mesmo item. Finalize ou cancele ${conflito} antes de abrir outra.`,
+    );
+  }
 
   // 1) evento
   const { data: evento, error: evErr } = await supabase

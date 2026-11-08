@@ -25,3 +25,4 @@
 - Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
 - Central de Trocas: reuse exchange_requests; support_links store token hashes only; eligibility never denies alone.
 - IG comment moderation: webhook only enqueues non-live comments not copied to live_comments and wakes ig-comment-moderate (no cron); the worker classifies once, never hides on AI/API failure, reserves the private reply before sending, and pauses the queue on Meta rate limits or AI 402/403.
+- Return NF-e (finalidade 4): nfe-devolucao-emitir runs _shared/devolucao-guard.ts before every emission (troca, reversa, reprocess) — reuse an equal-value note, block divergent ones and any sum above the original note; correios-reverse links its note to the single open troca of the sale.
