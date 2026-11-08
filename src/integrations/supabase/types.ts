@@ -10851,6 +10851,42 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_account_capabilities: {
+        Row: {
+          checked_at: string
+          evidence: string
+          human_agent_approved: boolean
+          whatsapp_number_id: string
+        }
+        Insert: {
+          checked_at?: string
+          evidence?: string
+          human_agent_approved?: boolean
+          whatsapp_number_id: string
+        }
+        Update: {
+          checked_at?: string
+          evidence?: string
+          human_agent_approved?: boolean
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_account_capabilities_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_account_capabilities_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instagram_comment_actions: {
         Row: {
           action_type: string
@@ -12710,6 +12746,8 @@ export type Database = {
         Row: {
           access_id: string | null
           base_at: string
+          button_clicked_at: string | null
+          button_expires_at: string | null
           channel: string
           claimed_at: string | null
           created_at: string
@@ -12734,6 +12772,8 @@ export type Database = {
         Insert: {
           access_id?: string | null
           base_at: string
+          button_clicked_at?: string | null
+          button_expires_at?: string | null
           channel: string
           claimed_at?: string | null
           created_at?: string
@@ -12758,6 +12798,8 @@ export type Database = {
         Update: {
           access_id?: string | null
           base_at?: string
+          button_clicked_at?: string | null
+          button_expires_at?: string | null
           channel?: string
           claimed_at?: string | null
           created_at?: string
@@ -30791,6 +30833,19 @@ export type Database = {
           source_key: string
         }[]
       }
+      live_followup_button_claim: {
+        Args: {
+          p_clicked_at: string
+          p_job_id: string
+          p_number_id: string
+          p_sender_id: string
+        }
+        Returns: string
+      }
+      live_followup_button_finish: {
+        Args: { p_job_id: string; p_message_id: string }
+        Returns: boolean
+      }
       live_followup_cart_finish: {
         Args: { p_job_id: string; p_message_id: string }
         Returns: undefined
@@ -30804,6 +30859,8 @@ export type Database = {
         Returns: {
           access_id: string | null
           base_at: string
+          button_clicked_at: string | null
+          button_expires_at: string | null
           channel: string
           claimed_at: string | null
           created_at: string
@@ -30846,6 +30903,8 @@ export type Database = {
         Returns: {
           access_id: string | null
           base_at: string
+          button_clicked_at: string | null
+          button_expires_at: string | null
           channel: string
           claimed_at: string | null
           created_at: string

@@ -1128,6 +1128,13 @@
       "when": 1794163501526,
       "tag": "0160_followup_policy_simulation_service_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1794164520595,
+      "tag": "0161_instagram_followup_click_and_manual_window",
+      "breakpoints": true
     }
   ]
 }
