@@ -1389,7 +1389,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             {priceAdj[o.id] && (
                               <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                 <Badge className="bg-rose-600 text-white text-sm font-black">
-                                  VALOR REDUZIDO -{brl(priceAdj[o.id].refund_amount)}
+                                  NOTA REDUZIDA -{brl(priceAdj[o.id].refund_amount)}
                                 </Badge>
                                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => revertPriceAdj(o.id)}>
                                   Desfazer
