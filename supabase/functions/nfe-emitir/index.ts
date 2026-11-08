@@ -229,7 +229,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
         .from("pos_sales")
-        .select("id, store_id, customer_id, customer_name, customer_phone, customer_email, customer_cpf, customer_cep, customer_city, customer_state, payment_details, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
+        .select("id, store_id, customer_id, customer_name, customer_phone, customer_email, customer_cpf, customer_cep, customer_city, customer_state, payment_details, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price, fiscal_unit_price)")
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
 
@@ -331,7 +331,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         discount: round2(Number((sale as any).discount || 0)),
         items: ((sale as any).pos_sale_items || []).map((it: any) => ({
           product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
-          quantity: Number(it.quantity), unit_price: Number(it.unit_price),
+          quantity: Number(it.quantity), unit_price: Number(it.fiscal_unit_price ?? it.unit_price), // redução fiscal da Expedição
         })),
         source: "sale", source_id: (sale as any).id,
         store_company_id: storeCompanyId,

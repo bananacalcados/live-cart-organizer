@@ -94,7 +94,8 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
     if (saleErr || !sale) throw new Error(`Venda não encontrada: ${saleErr?.message}`);
 
     if (sale.status === "cancelled") throw new Error("Venda cancelada");
-    const items = sale.pos_sale_items || [];
+    // Redução fiscal da Expedição: só a nota usa fiscal_unit_price; a venda mantém o valor cheio.
+    const items = (sale.pos_sale_items || []).map((it: any) => ({ ...it, unit_price: it.fiscal_unit_price ?? it.unit_price }));
     if (!items.length) throw new Error("Venda sem itens");
 
     // 2. Resolve company a partir da store

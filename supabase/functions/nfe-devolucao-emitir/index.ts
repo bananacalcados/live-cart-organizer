@@ -175,7 +175,8 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       .select("*, pos_sale_items(*), pos_customers(*)")
       .eq("id", pedidoOriginalId).single();
     if (sErr || !sale) throw new Error(`Venda original não encontrada: ${sErr?.message}`);
-    const origItems = (sale as any).pos_sale_items || [];
+    // Mesmo valor da nota original (redução fiscal da Expedição, se houver).
+    const origItems = ((sale as any).pos_sale_items || []).map((it: any) => ({ ...it, unit_price: it.fiscal_unit_price ?? it.unit_price }));
 
     // 3. Chave da nota original (refNFe). Prioriza a gravada no evento; senão busca
     //    o documento fiscal AUTORIZADO da venda original (modelo 55 ou 65).
