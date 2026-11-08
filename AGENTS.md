@@ -81,4 +81,4 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- RH (recrutamento) uses its own rh_* tables: admin-only via has_role RPC/RLS plus the "rh" area password; the public /vaga/:codigo page writes only through the rh-public edge (service-only SQL, per-IP/per-code limits), and scores/status never come from the browser.
+- RH: admin-only rh_* tables + "rh" area password; /vaga writes only via rh-public edge; scores never from browser.
