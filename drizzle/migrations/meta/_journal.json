@@ -1016,6 +1016,13 @@
       "when": 1794154356848,
       "tag": "0144_rh_open_incomplete_candidate",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1794155554860,
+      "tag": "0145_rh_instagram_and_whatsapp_notices",
+      "breakpoints": true
     }
   ]
 }
