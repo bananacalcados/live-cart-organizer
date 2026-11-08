@@ -95,7 +95,7 @@ if (root) import("./lib/edgeAuthFetch")
     }
   })
   .then(({ default: App }) => {
-  root.render(<App />);
+  root!.render(<App />);
 }).catch((error: unknown) => {
-  if (!recoverModuleLoad(error)) root.render(<AppLoadFailure />);
+  if (!recoverModuleLoad(error)) root!.render(<AppLoadFailure />);
 });
