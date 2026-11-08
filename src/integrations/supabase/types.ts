@@ -7656,31 +7656,47 @@ export type Database = {
           ai_interpretation: string | null
           ai_nuance_tags: string[] | null
           auto_approved: boolean | null
+          channel_origin: string | null
           created_at: string
           customer_name: string | null
+          customer_reported_received_at: string | null
           customer_verbatim: string | null
+          deadline_at: string | null
+          delivered_at_used: string | null
+          delivered_source: string | null
           desired_size: string | null
+          eligibility: string
+          eligibility_reason: string | null
+          escalated_reason: string | null
           fit_area: string | null
           fit_detail: string | null
           frenet_quote_id: string | null
           id: string
+          new_sku: string | null
+          new_variant_id: string | null
           order_number: string | null
+          order_ref: string | null
           phone: string
           product_name: string
           product_size: string | null
           product_sku: string | null
+          purchase_order_status: string | null
           reason_category: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory: string | null
+          request_type: string | null
           requires_human_review: boolean | null
+          reverse_shipment_id: string | null
           reverse_shipping_code: string | null
           reverse_tracking_url: string | null
           review_notes: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          sale_id: string | null
           shipping_carrier: string | null
           status: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id: string | null
           tiny_order_id: string | null
+          trocas_devolucoes_id: string | null
           updated_at: string
           whatsapp_number_id: string | null
         }
@@ -7688,31 +7704,47 @@ export type Database = {
           ai_interpretation?: string | null
           ai_nuance_tags?: string[] | null
           auto_approved?: boolean | null
+          channel_origin?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_reported_received_at?: string | null
           customer_verbatim?: string | null
+          deadline_at?: string | null
+          delivered_at_used?: string | null
+          delivered_source?: string | null
           desired_size?: string | null
+          eligibility?: string
+          eligibility_reason?: string | null
+          escalated_reason?: string | null
           fit_area?: string | null
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          new_sku?: string | null
+          new_variant_id?: string | null
           order_number?: string | null
+          order_ref?: string | null
           phone: string
           product_name: string
           product_size?: string | null
           product_sku?: string | null
+          purchase_order_status?: string | null
           reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory?: string | null
+          request_type?: string | null
           requires_human_review?: boolean | null
+          reverse_shipment_id?: string | null
           reverse_shipping_code?: string | null
           reverse_tracking_url?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          sale_id?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id?: string | null
           tiny_order_id?: string | null
+          trocas_devolucoes_id?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }
@@ -7720,31 +7752,47 @@ export type Database = {
           ai_interpretation?: string | null
           ai_nuance_tags?: string[] | null
           auto_approved?: boolean | null
+          channel_origin?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_reported_received_at?: string | null
           customer_verbatim?: string | null
+          deadline_at?: string | null
+          delivered_at_used?: string | null
+          delivered_source?: string | null
           desired_size?: string | null
+          eligibility?: string
+          eligibility_reason?: string | null
+          escalated_reason?: string | null
           fit_area?: string | null
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          new_sku?: string | null
+          new_variant_id?: string | null
           order_number?: string | null
+          order_ref?: string | null
           phone?: string
           product_name?: string
           product_size?: string | null
           product_sku?: string | null
+          purchase_order_status?: string | null
           reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory?: string | null
+          request_type?: string | null
           requires_human_review?: boolean | null
+          reverse_shipment_id?: string | null
           reverse_shipping_code?: string | null
           reverse_tracking_url?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          sale_id?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id?: string | null
           tiny_order_id?: string | null
+          trocas_devolucoes_id?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }
@@ -20978,6 +21026,36 @@ export type Database = {
           },
         ]
       }
+      product_restock_flags: {
+        Row: {
+          id: string
+          note: string | null
+          restock_mode: string
+          shopify_product_id: string | null
+          sku: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          restock_mode?: string
+          shopify_product_id?: string | null
+          sku?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          restock_mode?: string
+          shopify_product_id?: string | null
+          sku?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       product_sizes: {
         Row: {
           created_at: string
@@ -23007,6 +23085,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           delivered_at: string | null
+          delivered_source: string | null
           destination_city: string | null
           destination_state: string | null
           fulfillment: string
@@ -23045,6 +23124,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           delivered_at?: string | null
+          delivered_source?: string | null
           destination_city?: string | null
           destination_state?: string | null
           fulfillment?: string
@@ -23083,6 +23163,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           delivered_at?: string | null
+          delivered_source?: string | null
           destination_city?: string | null
           destination_state?: string | null
           fulfillment?: string
@@ -23124,6 +23205,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shipment_unmapped_last_events: {
+        Row: {
+          last_at: string | null
+          last_description: string | null
+          logged_at: string
+          real_carrier: string | null
+          simulation_id: string
+        }
+        Insert: {
+          last_at?: string | null
+          last_description?: string | null
+          logged_at?: string
+          real_carrier?: string | null
+          simulation_id: string
+        }
+        Update: {
+          last_at?: string | null
+          last_description?: string | null
+          logged_at?: string
+          real_carrier?: string | null
+          simulation_id?: string
+        }
+        Relationships: []
       }
       shipping_rules: {
         Row: {
@@ -23628,6 +23733,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      support_links: {
+        Row: {
+          created_at: string
+          created_by_kind: string
+          created_by_user: string | null
+          customer_phone: string | null
+          expires_at: string
+          id: string
+          order_ref: string
+          request_type: string
+          revoked_at: string | null
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_kind: string
+          created_by_user?: string | null
+          customer_phone?: string | null
+          expires_at?: string
+          id?: string
+          order_ref: string
+          request_type: string
+          revoked_at?: string | null
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_kind?: string
+          created_by_user?: string | null
+          customer_phone?: string | null
+          expires_at?: string
+          id?: string
+          order_ref?: string
+          request_type?: string
+          revoked_at?: string | null
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
+      support_settings: {
+        Row: {
+          central_base_url: string
+          exchange_window_days: number
+          id: boolean
+          max_offer_attempts: number
+          return_window_days: number
+          ship_replacement_when: string
+          updated_at: string
+        }
+        Insert: {
+          central_base_url?: string
+          exchange_window_days?: number
+          id?: boolean
+          max_offer_attempts?: number
+          return_window_days?: number
+          ship_replacement_when?: string
+          updated_at?: string
+        }
+        Update: {
+          central_base_url?: string
+          exchange_window_days?: number
+          id?: boolean
+          max_offer_attempts?: number
+          return_window_days?: number
+          ship_replacement_when?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       support_tickets: {
         Row: {
@@ -27959,6 +28136,14 @@ export type Database = {
             }
             Returns: Json
           }
+      check_exchange_eligibility: {
+        Args: {
+          p_customer_reported_date?: string
+          p_order_ref: string
+          p_request_type: string
+        }
+        Returns: Json
+      }
       check_order_ai_paused: {
         Args: { p_phone: string }
         Returns: {
@@ -28265,6 +28450,15 @@ export type Database = {
       create_product_with_variants: {
         Args: { p_master: Json; p_variants: Json }
         Returns: string
+      }
+      create_support_link: {
+        Args: {
+          p_created_by_kind: string
+          p_customer_phone?: string
+          p_order_ref: string
+          p_request_type: string
+        }
+        Returns: Json
       }
       crm_facet_counts: {
         Args: { p_column: string }
@@ -29149,6 +29343,7 @@ export type Database = {
               vendidos: Json
             }[]
           }
+      get_restock_mode: { Args: { p_sku: string }; Returns: string }
       get_rfm_summary: { Args: never; Returns: Json }
       get_sale_installment_override: {
         Args: { p_sale_id: string }
@@ -29545,6 +29740,7 @@ export type Database = {
         Args: { p_event_id?: string; p_module: string; p_route?: string }
         Returns: undefined
       }
+      log_unmapped_delivery_events: { Args: never; Returns: number }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
@@ -30824,6 +31020,7 @@ export type Database = {
         | "concluido"
         | "recusado"
         | "cancelado"
+        | "escalado"
       ledger_book: "faturamento" | "realidade"
       pedido_motivo_cancelamento: "troca" | "devolucao"
       pedido_status_cancelamento: "ativo" | "cancelado"
@@ -31002,6 +31199,7 @@ export const Constants = {
         "concluido",
         "recusado",
         "cancelado",
+        "escalado",
       ],
       ledger_book: ["faturamento", "realidade"],
       pedido_motivo_cancelamento: ["troca", "devolucao"],
