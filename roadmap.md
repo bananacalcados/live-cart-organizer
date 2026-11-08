@@ -76,7 +76,7 @@
 - [ ] Conferir se comentários de anúncio exclusivo chegam (aguarda um anúncio real comentado)
 
 # Trava NF-e de devolução duplicada (urgente)
-- [ ] Reversa vincula NF à troca aberta; conferência reusa/bloqueia
-- [ ] Trava de soma ≤ NF original em nfe-devolucao-emitir
-- [ ] Bloqueio de 2ª troca aberta com mesmos itens
-- [ ] Backfill de vínculo + relatórios + testes por SQL
+- [x] Reversa vincula NF à troca aberta; conferência reusa/bloqueia
+- [x] Trava de soma ≤ NF original em nfe-devolucao-emitir
+- [x] Bloqueio de 2ª troca aberta com mesmos itens
+- [x] Backfill de vínculo + relatórios + testes por SQL
