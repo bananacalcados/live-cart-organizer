@@ -1,0 +1,10 @@
+DO $$ DECLARE def text; BEGIN
+ SELECT pg_get_functiondef('public.live_followup_admin_summary(uuid)'::regprocedure) INTO def;
+ def:=replace(def,'''paused'',','''missing_numbers'',(SELECT coalesce(jsonb_agg(jsonb_build_object(''id'',e.id,''name'',e.name)),''[]''::jsonb) FROM (SELECT id,name FROM events WHERE live_followup_enabled AND (p_event_id IS NULL OR id=p_event_id) AND live_event_sender(id)->>''id'' IS NULL ORDER BY date DESC LIMIT 100) e),''paused'','); EXECUTE def;
+ SELECT pg_get_functiondef('public.live_followup_source_contexts(integer)'::regprocedure) INTO def;
+ def:=replace(def,'live_followup_source_contexts(p_limit integer DEFAULT 50)','live_followup_audit_contexts(p_event_id uuid, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0)');
+ def:=replace(def,'(SELECT * FROM live_followup_sources ORDER BY changed_at,source_key LIMIT least(greatest(p_limit,1),100)) s','(SELECT ''order:''||o.id source_key,o.created_at changed_at,o.event_id,o.id order_id,NULL::uuid access_id FROM orders o WHERE o.event_id=p_event_id UNION ALL SELECT ''access:''||a.id,a.created_at,a.event_id,NULL::uuid,a.id FROM live_selfservice_accesses a WHERE a.event_id=p_event_id AND cardinality(a.order_ids)=0 ORDER BY source_key LIMIT least(greatest(p_limit,1),100) OFFSET greatest(p_offset,0)) s'); EXECUTE def;
+ SELECT pg_get_functiondef('public.live_followup_job_context(uuid)'::regprocedure) INTO def;
+ def:=replace(def,'m.created_at>j.base_at),','m.created_at>j.base_at AND (j.channel<>''instagram'' OR (coalesce(m.message,'''') NOT LIKE ''💬 Comentário%'' AND NOT EXISTS(SELECT 1 FROM live_comments lc WHERE lc.comment_id=m.message_id)))),'); EXECUTE def;
+END $$;
+REVOKE ALL ON FUNCTION public.live_followup_audit_contexts(uuid,integer,integer) FROM PUBLIC,anon,authenticated; GRANT EXECUTE ON FUNCTION public.live_followup_audit_contexts(uuid,integer,integer) TO service_role;

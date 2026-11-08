@@ -30783,6 +30783,14 @@ export type Database = {
         Args: { p_event_id?: string }
         Returns: Json
       }
+      live_followup_audit_contexts: {
+        Args: { p_event_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          changed_at: string
+          context: Json
+          source_key: string
+        }[]
+      }
       live_followup_cart_finish: {
         Args: { p_job_id: string; p_message_id: string }
         Returns: undefined
