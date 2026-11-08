@@ -30846,6 +30846,7 @@ export type Database = {
         Args: { p_job_id: string; p_message_id: string }
         Returns: boolean
       }
+      live_followup_button_simulate: { Args: never; Returns: Json }
       live_followup_cart_finish: {
         Args: { p_job_id: string; p_message_id: string }
         Returns: undefined
