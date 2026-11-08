@@ -1,5 +1,6 @@
 import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, crossellWindow, type FollowupConfig, type FollowupType } from './live-followup-rules.ts';
 import { internalCallHeaders } from './requireAuth.ts';
+import { instagramFollowupMode } from './instagram-window.ts';
 type Client = any;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
   const { data, error } = await sb.from('live_followup_settings').select('value').eq('id', true).maybeSingle();
@@ -17,12 +18,16 @@ const normalizePhone = (value: string) => {
   return /^55[1-9]\d9\d{8}$/.test(p) ? p : '';
 };
 
-export async function scheduleGlobalFollowups(sb: Client) {
-  const cfg = await followupConfig(sb);
+export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:string;offset:number}) {
+  const saved = await followupConfig(sb);
+  const cfg = simulation ? {...saved,enabled:true,enabled_since:'1970-01-01T00:00:00Z'} : saved;
   if (!cfg.enabled) return { scheduled: 0, enabled: false };
-  const { data: sources, error } = await sb.rpc('live_followup_source_contexts', { p_limit: 50 });
+  const { data: sources, error } = await sb.rpc(simulation?'live_followup_audit_contexts':'live_followup_source_contexts', simulation?{p_event_id:simulation.eventId,p_limit:100,p_offset:simulation.offset}:{ p_limit: 50 });
   if (error) throw error;
   let scheduled = 0;
+  const counts: Record<string,number>={A:0,B:0,C:0,D:0,E:0,F:0};
+  const senders: Record<string,string[]>={A:[],B:[],C:[],D:[],E:[],F:[]};
+  let privateReplies=0, endedPrivateReplies=0;
   for (const source of sources || []) {
     const c = source.context;
     const o = c.order;
@@ -46,7 +51,21 @@ export async function scheduleGlobalFollowups(sb: Client) {
     // No cart exists for a filled registration without an order: never manufacture one.
     if (!type || !base || !cfg.types[type].enabled || !cfg.enabled_since || Date.parse(base)<Date.parse(cfg.enabled_since)) { await ack(); continue; }
     if (!phone && type !== 'F') { await ack(); continue; }
+    // Context uses the same live_event_sender RPC as event-sender.ts, batched in SQL.
     const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
+    if (!numberId) { await ack(); continue; }
+    if(simulation){
+      counts[type]+=cfg.types[type].steps.length;
+      if(!senders[type].includes(numberId))senders[type].push(numberId);
+      if(type==='F') {
+        const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
+        if(igctx.error)throw igctx.error;
+        const mode=instagramFollowupMode(igctx.data);
+        if(mode==='private_reply')privateReplies++;
+        if(mode==='live_ended_no_private_reply')endedPrivateReplies++;
+      }
+      scheduled+=cfg.types[type].steps.length;continue;
+    }
     // B/C are one common initial-cart step, not two independent sequences.
     if (type === 'B' || type === 'C') sequence += ':initial';
     else sequence += ':' + type;
@@ -54,18 +73,19 @@ export async function scheduleGlobalFollowups(sb: Client) {
       event_id: ev.id, order_id:o?.id || null, access_id:a?.id || null,
       customer_key:customer, phone:phone || null, instagram:ig || null, whatsapp_number_id:numberId || null,
       channel:type === 'F'?'instagram':'whatsapp', type, step:index, sequence_key:sequence,
-      base_at:base, scheduled_at:scheduleStep(new Date(base),type,type==='F' && index>0 ? step.minutes+cfg.types.F.steps[0].minutes : step.minutes).toISOString(), status:'pending',
+      base_at:base, scheduled_at:scheduleStep(new Date(base),type,type==='F' && index===0 ? Math.min(step.minutes,2) : type==='F' ? step.minutes+Math.min(cfg.types.F.steps[0].minutes,2) : step.minutes).toISOString(), status:'pending',
     }));
     const result = await sb.from('live_followup_jobs').upsert(rows,{onConflict:'customer_key,sequence_key,step',ignoreDuplicates:true});
     if (result.error) throw result.error;
     scheduled += rows.length;
     await ack();
     async function ack() {
+      if(simulation)return;
       const r = await sb.from('live_followup_sources').delete().eq('source_key',source.source_key).eq('changed_at',source.changed_at);
       if (r.error) throw r.error;
     }
   }
-  return {scheduled,enabled:true};
+  return {scheduled,enabled:true,...(simulation?{simulated:true,scanned:sources?.length || 0,counts,senders,privateReplies,endedPrivateReplies,provider_calls:0}:{})};
 }
 
 export async function processGlobalFollowups(sb: Client) {
@@ -124,7 +144,7 @@ export async function processGlobalFollowups(sb: Client) {
       sendStarted=true;
       const provider=context.number?.provider;
       const out=job.channel==='instagram'
-        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id})
+        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id,liveFollowup:true,followupStep:job.step,fallbackCommentIds:context.instagram_context?.comment_ids || []})
         : await call(provider==='meta'?'meta-whatsapp-send':`${provider}-send-message`,{phone:job.phone,message:text,type:'text',whatsapp_number_id:job.whatsapp_number_id,linkPreview:false});
       const mid=out.messageId || out.message_id || out.data?.id || null;
       if (!mid) throw new Error('provider_confirmation_missing');
@@ -140,7 +160,7 @@ export async function processGlobalFollowups(sb: Client) {
       if(job.type==='F' && job.step===0){
         for(let i=1;i<cfg.types.F.steps.length;i++){
           const stepAt=scheduleStep(new Date(),'F',cfg.types.F.steps[i].minutes);
-          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString(),base_at:new Date().toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
+          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
         }
       }
       const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid}).eq('id',job.id).eq('status','processing');
@@ -159,12 +179,16 @@ export async function processGlobalFollowups(sb: Client) {
       const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:c.manual_recent,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
       if(basic)return basic;
       if(job.channel==='whatsapp' && c.event?.whatsapp_number_id!==job.whatsapp_number_id)return 'instance_changed';
+      if(!job.whatsapp_number_id)return 'live_without_number';
       if(!c.number?.is_active || c.number?.is_online===false)return 'instance_disconnected';
       if(!['uazapi','wasender','zapi','meta','instagram'].includes(c.number.provider))return 'unsupported_provider';
       if(job.type==='F' && c.has_phone)return 'whatsapp_available';
       if(job.type==='F' && o?.registered_at)return 'registration_completed';
       if(['B','C'].includes(job.type) && (o?.selfservice_cart_sent_at || c.cart_sent_at || c.customer_replied))return 'cart_already_contacted';
-      if((job.channel==='instagram' || c.number?.provider==='meta') && !c.window_open)return 'meta_window_closed';
+      if(job.channel==='instagram') {
+        const mode=instagramFollowupMode(c.instagram_context,job.step);
+        if(!['direct_dm','private_reply'].includes(mode))return mode;
+      } else if(c.number?.provider==='meta' && !c.window_open)return 'meta_window_closed';
       return null;
     }
     async function stop(reason: string) {
@@ -172,7 +196,7 @@ export async function processGlobalFollowups(sb: Client) {
         await sb.from('live_followup_jobs').update({status:'skipped',reason}).eq('id',job.id).eq('status','processing');
         return;
       }
-      if(reason==='instance_disconnected') await sb.from('live_followup_instances').update({paused:true,reason}).eq('whatsapp_number_id',job.whatsapp_number_id);
+      if(reason==='instance_disconnected' && job.whatsapp_number_id) await sb.from('live_followup_instances').update({paused:true,reason}).eq('whatsapp_number_id',job.whatsapp_number_id);
       const scope=sb.from('live_followup_jobs').update({status:'cancelled',reason}).eq('customer_key',job.customer_key).eq('event_id',job.event_id).in('status',['pending','processing']);
       if (job.order_id) scope.eq('order_id',job.order_id);
       else scope.eq('sequence_key',job.sequence_key);

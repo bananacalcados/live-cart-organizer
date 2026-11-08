@@ -4,7 +4,7 @@ import { z } from 'npm:zod@3';
 import { withAccessLog } from '../_shared/withAccessLog.ts';
 import { requireAuth } from '../_shared/requireAuth.ts';
 import { DEFAULT_FOLLOWUP_CONFIG } from '../_shared/live-followup-rules.ts';
-import { followupConfig } from '../_shared/live-followup.ts';
+import { followupConfig, scheduleGlobalFollowups } from '../_shared/live-followup.ts';
 const step=z.object({minutes:z.number().int().min(1).max(4320),variants:z.array(z.string().trim().min(1).max(3500)).length(3)});
 const kind=(count:number)=>z.object({enabled:z.boolean(),steps:z.array(step).length(count)});
 const config=z.object({enabled:z.boolean(),types:z.object({A:kind(1),B:kind(1),C:kind(1),D:kind(3),E:kind(3),F:kind(4)}),limits:z.object({interval_min:z.number().int().min(20).max(3600),interval_max:z.number().int().min(20).max(3600),hourly:z.number().int().min(1).max(100),daily_customer:z.number().int().min(1).max(20),typing_min:z.number().int().min(2).max(10),typing_max:z.number().int().min(2).max(10)})}).superRefine((v,c)=>{
@@ -14,6 +14,7 @@ const config=z.object({enabled:z.boolean(),types:z.object({A:kind(1),B:kind(1),C
 const input=z.discriminatedUnion('action',[
   z.object({action:z.literal('get')}),z.object({action:z.literal('save'),config}),
   z.object({action:z.literal('resume'),instance_id:z.string().uuid()}),
+  z.object({action:z.literal('simulate'),event_id:z.string().uuid(),offset:z.number().int().min(0).default(0)}),
 ]);
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...corsHeaders,'Content-Type':'application/json'}});
 Deno.serve(withAccessLog('live-followup-admin',async req=>{
@@ -26,6 +27,7 @@ Deno.serve(withAccessLog('live-followup-admin',async req=>{
     const sb=createClient(url,key);const body=parsed.data;
     if(body.action==='get')return json({config:await followupConfig(sb)});
     const adminDenied=await requireAuth(req,[],true);if(adminDenied)return adminDenied;
+    if(body.action==='simulate')return json(await scheduleGlobalFollowups(sb,{eventId:body.event_id,offset:body.offset}));
     if(body.action==='resume'){
       const {data:uncertain,error}=await sb.from('live_followup_jobs').select('id').eq('whatsapp_number_id',body.instance_id).in('status',['uncertain','processing']).limit(1);
       if(error)throw error;if(uncertain?.length)return json({error:'Há um envio sem confirmação; confira a conversa antes de liberar a instância.'},409);

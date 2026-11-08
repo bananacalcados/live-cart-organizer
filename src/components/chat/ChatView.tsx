@@ -62,6 +62,7 @@ import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
 import { PixCopyMessage } from "./PixCopyMessage";
+import { InstagramWindowStatus } from './InstagramWindowStatus';
 
 /** Format a raw BR phone (digits only) for friendly display in group sender labels. */
 function formatPhoneDisplay(raw: string): string {
@@ -766,6 +767,7 @@ export function ChatView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      {conversation?.channel==='instagram' && <InstagramWindowStatus phone={conversation.phone} numberId={conversation.whatsapp_number_id || null} messageId={messages.at(-1)?.id}/>}
       {/* Back button bar */}
       {onBack && (
         <div className="flex items-center gap-2 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0">

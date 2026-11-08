@@ -1,0 +1,3 @@
+DO $$ DECLARE def text; BEGIN SELECT pg_get_functiondef('public.live_followup_policy_simulate()'::regprocedure) INTO def;
+ def:=replace(def,'result:=result||jsonb_build_object(''private_claim_first''','PERFORM set_config(''request.jwt.claim.role'',''service_role'',true); PERFORM set_config(''request.jwt.claims'',jsonb_build_object(''role'',''service_role'',''sub'',user_id)::text,true); result:=result||jsonb_build_object(''private_claim_first''');
+ EXECUTE def;END $$;

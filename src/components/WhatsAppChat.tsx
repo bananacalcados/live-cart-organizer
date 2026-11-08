@@ -9,6 +9,7 @@ import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
 import { ChatPixButton } from "./ChatPixButton";
+import { InstagramWindowStatus } from './chat/InstagramWindowStatus';
 import type { PixSendChannel } from "@/lib/pix/sendPixMessages";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -1668,6 +1669,7 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {isIgMode && igUserId && <InstagramWindowStatus phone={igUserId} numberId={effectiveNumberId || null}/>}
       {/* Hidden file inputs */}
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
       <MultiImageSendDialog

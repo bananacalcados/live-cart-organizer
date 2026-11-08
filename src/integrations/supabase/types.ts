@@ -27433,6 +27433,42 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_lid_phone_map: {
+        Row: {
+          lid: string
+          phone_key: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          lid: string
+          phone_key: string
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          lid?: string
+          phone_key?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_lid_phone_map_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_lid_phone_map_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           button_payload: string | null
@@ -30493,6 +30529,20 @@ export type Database = {
         Args: { message_id: string }
         Returns: undefined
       }
+      instagram_private_reply_claim: {
+        Args: {
+          p_comment_id: string
+          p_event_id: string
+          p_message: string
+          p_number_id: string
+          p_username: string
+        }
+        Returns: boolean
+      }
+      instagram_reply_context: {
+        Args: { p_event_id?: string; p_number_id?: string; p_username: string }
+        Returns: Json
+      }
       inventory_claim_correction_batch: {
         Args: { p_batch_size: number; p_count_id: string }
         Returns: {
@@ -30728,9 +30778,18 @@ export type Database = {
         }
         Returns: string
       }
+      live_event_sender: { Args: { p_event_id: string }; Returns: Json }
       live_followup_admin_summary: {
         Args: { p_event_id?: string }
         Returns: Json
+      }
+      live_followup_audit_contexts: {
+        Args: { p_event_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          changed_at: string
+          context: Json
+          source_key: string
+        }[]
       }
       live_followup_cart_finish: {
         Args: { p_job_id: string; p_message_id: string }
@@ -30772,6 +30831,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      live_followup_contact_aliases: {
+        Args: { p_ig_id?: string; p_number: string; p_phone: string }
+        Returns: string[]
       }
       live_followup_enabled: { Args: { p_event_id?: string }; Returns: boolean }
       live_followup_failure: {
@@ -30816,6 +30879,7 @@ export type Database = {
         Args: { p_message_id: string; p_number_id: string; p_order_id: string }
         Returns: undefined
       }
+      live_followup_policy_simulate: { Args: never; Returns: Json }
       live_followup_priority: {
         Args: { p_step: number; p_type: string }
         Returns: number

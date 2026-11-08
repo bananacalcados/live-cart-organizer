@@ -33,6 +33,7 @@ import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
+import { InstagramWindowStatus } from '@/components/chat/InstagramWindowStatus';
 import { QuotedMessagePreview, QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
 import { QuotedMessageBubble } from "@/components/chat/QuotedMessageBubble";
 import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversationDialog";
@@ -589,18 +590,9 @@ export default function ChatPage() {
 
   // ── Send via Messenger/Instagram API ──
   const sendViaMessenger = async (recipientId: string, message: string, channel: 'messenger' | 'instagram' = 'instagram', type: string = 'text', mediaUrl?: string): Promise<{ success: boolean; messageId?: string }> => {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-messenger-send`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ recipientId, message, channel, type, mediaUrl, whatsapp_number_id: numbers.find(n => n.provider === 'meta')?.id || null }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      toast.error(data?.error || `Erro ao enviar mensagem via ${channel}`);
+    const {data,error}=await supabase.functions.invoke('meta-messenger-send',{body:{recipientId,message,channel,type,mediaUrl,whatsapp_number_id:getActiveNumberId()}});
+    if (error || !data?.success) {
+      toast.error(data?.error || 'Não foi possível enviar. Confira a janela no topo da conversa.');
       return { success: false };
     }
     toast.success('Mensagem enviada!');
@@ -1189,6 +1181,7 @@ export default function ChatPage() {
           ) : (
             <>
               {/* Chat header */}
+              {getSelectedChannel()==='instagram' && <InstagramWindowStatus phone={selectedPhone} numberId={getActiveNumberId()} messageId={messages.at(-1)?.id}/>}
               <div className="flex items-center gap-3 px-4 py-2 bg-[#202c33] border-b border-[#2a3942]">
                 <Button
                   variant="ghost"

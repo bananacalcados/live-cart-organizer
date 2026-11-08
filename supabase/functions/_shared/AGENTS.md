@@ -1,2 +1,5 @@
 - Payment webhooks (Pagar.me/AppMax/Mercado Pago) re-query the provider and compare amounts via _shared/webhook-verification.ts, logging to webhook_verification_log; enforcement only when app_settings.webhook_strict_amount=true (legacy webhook_strict_mode is the fallback), so rules can be replayed before they can block a real payment. POS accepts overpayment (card interest), never underpayment.
 - Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
+- Event sender is resolved through live_event_sender/event-sender.ts for self-service and follow-up; never infer from unrelated conversations.
+- Instagram reply eligibility is server-resolved by instagram_reply_context; exclude comments from inbound-DM windows and atomically claim private replies before provider calls.
+- WhatsApp LID aliases must come from provider LID+sender_pn pairs, scoped by instance; never infer identity by display name or group participant.
