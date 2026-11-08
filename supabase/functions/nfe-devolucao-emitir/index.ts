@@ -1,4 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
+import { decideDevolucao, type ExistingDevolucao } from "../_shared/devolucao-guard.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfe-devolucao-emitir
 // Fase 5 — NF-e de DEVOLUÇÃO (entrada) da Etapa 2 de Trocas/Devoluções.
@@ -105,7 +106,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { troca_devolucao_id: trocaIdIn, reverse_shipment_id, ambiente: forcedAmb, cfop_override } = await req.json();
+    const { troca_devolucao_id: trocaIdIn, reverse_shipment_id, ambiente: forcedAmb, cfop_override, dry_run } = await req.json();
     if (!trocaIdIn && !reverse_shipment_id) throw new Error("troca_devolucao_id obrigatório");
 
     const supabase = createClient(
@@ -315,6 +316,61 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }
 
     const totalLiquido = round2(totalProd - totalDesc);
+
+    // 6b. TRAVA CONTRA DUPLICIDADE: reaproveita nota já existente (ex.: emitida pela reversa)
+    //     ou recusa se a soma das devoluções passar do valor da nota original.
+    {
+      const { data: origNf } = await supabase.from("fiscal_documents")
+        .select("valor_total").eq("chave_acesso", chaveOriginal).eq("status", "authorized").limit(1).maybeSingle();
+      const valorOriginal = (origNf as any)?.valor_total != null ? Number((origNf as any).valor_total) : (Number((sale as any).total) || null);
+      const { data: devs } = await supabase.from("fiscal_documents")
+        .select("id, status, valor_total, numero, chave_acesso, troca_devolucao_id")
+        .eq("ref_chave_acesso", chaveOriginal).eq("finalidade", 4).in("status", ["authorized", "pending_sefaz"]).limit(50);
+      const devIds = (devs || []).map((d: any) => d.id);
+      const [{ data: tdLinks }, { data: rvLinks }] = devIds.length
+        ? await Promise.all([
+          supabase.from("trocas_devolucoes").select("id, devolucao_doc_id, status, pedido_original_id").in("devolucao_doc_id", devIds),
+          supabase.from("correios_reverse_shipments").select("id, devolucao_doc_id").in("devolucao_doc_id", devIds),
+        ])
+        : [{ data: [] as any[] }, { data: [] as any[] }];
+      const otherTroca = (d: any) => (tdLinks || []).some((t: any) => t.devolucao_doc_id === d.id && t.id !== troca_devolucao_id)
+        || (!!d.troca_devolucao_id && d.troca_devolucao_id !== troca_devolucao_id);
+      const otherReverse = (d: any) => (rvLinks || []).some((r: any) => r.devolucao_doc_id === d.id && r.id !== reverse_shipment_id);
+      // Troca aberta da mesma venda (para a reversa poder usar a nota que a troca já tem).
+      let openTrocaIds: string[] = [];
+      if (isReverse) {
+        const { data: open } = await supabase.from("trocas_devolucoes").select("id")
+          .eq("pedido_original_id", pedidoOriginalId).not("status", "in", "(concluida,cancelada)");
+        openTrocaIds = (open || []).map((t: any) => t.id);
+      }
+      const existentes: ExistingDevolucao[] = (devs || []).map((d: any) => ({
+        id: d.id, status: d.status, valor_total: Number(d.valor_total || 0), numero: d.numero, chave_acesso: d.chave_acesso,
+        reusable: isReverse
+          ? !otherReverse(d) && (!d.troca_devolucao_id || openTrocaIds.includes(d.troca_devolucao_id))
+          : !otherTroca(d),
+      }));
+      const decision = decideDevolucao({ valorNovo: totalLiquido, valorOriginal, existentes });
+      if (dry_run) {
+        return new Response(JSON.stringify({ dry_run: true, decision, valor_novo: totalLiquido, valor_original: valorOriginal, existentes }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+      }
+      if (decision.action === "block") {
+        await linkDoc({ fase2_erro: decision.message }, { error_message: decision.message });
+        return new Response(JSON.stringify({ ok: false, blocked: true, reason: decision.reason, error: decision.message }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+      }
+      if (decision.action === "reuse") {
+        const d = decision.doc;
+        if (isReverse) {
+          await supabase.from("correios_reverse_shipments").update({ devolucao_doc_id: d.id }).eq("id", reverse_shipment_id);
+        } else {
+          await supabase.from("fiscal_documents").update({ troca_devolucao_id }).eq("id", d.id).is("troca_devolucao_id", null);
+          await supabase.from("trocas_devolucoes").update({ devolucao_doc_id: d.id, chave_devolucao: d.chave_acesso, fase2_erro: null }).eq("id", troca_devolucao_id);
+        }
+        return new Response(JSON.stringify({ ok: true, already: true, reused: true, status: "authorized", document_id: d.id, chave_acesso: d.chave_acesso }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+      }
+    }
 
     // 6. Cliente: identificado (CPF) → contraparte com endereço; sem CPF ou sem endereço válido → a própria loja.
     //    Endereço é MONTADO automaticamente do cadastro vivo (pos_customers) + snapshot do pedido
