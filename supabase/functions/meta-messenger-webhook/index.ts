@@ -623,6 +623,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           // ── Save into live_comments (independe do resultado em whatsapp_messages) ──
           // O painel do evento lê SÓ live_comments, então todo comentário que antes
           // aparecia por whatsapp_messages precisa cair aqui também.
+          let copiedToLive = false;
           {
             try {
               // 1º: evento marcado como "Live em curso agora" (live_active_until > now()).
@@ -647,6 +648,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
                 targetEvents = (todayEvents || []) as any[];
               }
 
+              copiedToLive = !!(comment.id && username && targetEvents.length > 0);
               for (const ev of comment.id && username ? targetEvents : []) {
                 const { error: lcErr } = await supabase
                   .from('live_comments')
@@ -687,6 +689,37 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
               }
             } catch (autoErr) {
               console.error('Error processing comment automation:', autoErr);
+            }
+          }
+
+          // ── Moderação: só anota na fila e acorda o worker (nunca live nem cópia para a live) ──
+          if (channel === 'instagram' && comment.id && !isLiveComment && !copiedToLive) {
+            try {
+              const { data: modCfg } = await supabase.from('ig_moderation_settings').select('enabled').maybeSingle();
+              if (modCfg?.enabled) {
+                const { error: modErr } = await supabase.from('ig_comment_moderation').insert({
+                  comment_id: comment.id,
+                  ig_account_id: entry.id ? String(entry.id) : null,
+                  media_id: comment.media?.id || null,
+                  media_product_type: comment.media?.media_product_type || null,
+                  from_id: fromId,
+                  username: username || null,
+                  text_original: text,
+                });
+                if (!modErr) {
+                  const wake = fetch(`${supabaseUrl}/functions/v1/ig-comment-moderate`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                    body: '{}',
+                  }).catch((e) => console.error('wake moderation failed', e));
+                  // deno-lint-ignore no-explicit-any
+                  (globalThis as any).EdgeRuntime?.waitUntil?.(wake);
+                } else if (modErr.code !== '23505') {
+                  console.error('moderation enqueue failed', modErr);
+                }
+              }
+            } catch (modExc) {
+              console.error('moderation enqueue exception', modExc);
             }
           }
 
