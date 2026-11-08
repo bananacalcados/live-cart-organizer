@@ -18,14 +18,13 @@ export function GlobalFollowupPanel({events,numbers}:Props){
  const [cfg,setCfg]=useState<FollowupConfig>(DEFAULT_FOLLOWUP_CONFIG);const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);
  const [filter,setFilter]=useState('all');const [page,setPage]=useState(0);const [jobs,setJobs]=useState<Job[]>([]);const [summary,setSummary]=useState<{sent:number;skipped:number;paid:number;paused:{id:string;label:string;reason:string}[]}>({sent:0,skipped:0,paid:0,paused:[]});
  const loadHistory=useCallback(async()=>{
-   let q=supabase.from('live_followup_jobs').select('id,event_id,customer_key,type,step,variant,whatsapp_number_id,status,reason,created_at,message,phone,instagram').order('created_at',{ascending:false}).order('id',{ascending:false}).range(page*50,page*50+49);
-   if(filter!=='all')q=q.eq('event_id',filter);
+   const q=supabase.rpc('live_followup_history',{p_event_id:filter==='all'?undefined:filter,p_limit:50,p_offset:page*50});
    const [h,s]=await Promise.all([q,supabase.rpc('live_followup_admin_summary',{p_event_id:filter==='all'?undefined:filter})]);
    if(h.error||s.error){toast.error('Não foi possível carregar o histórico');return;}
    setJobs(h.data || []);setSummary(s.data as unknown as typeof summary);
  },[filter,page]);
  useEffect(()=>{loadHistory();},[loadHistory]);
- useEffect(()=>{supabase.functions.invoke('live-followup-admin',{body:{action:'get'}}).then(({data,error})=>{if(error)toast.error('Não foi possível carregar a configuração');else if(data?.config)setCfg(data.config);setLoading(false);});},[]);
+ useEffect(()=>{supabase.from('live_followup_settings').select('value').eq('id',true).maybeSingle().then(({data,error})=>{if(error)toast.error('Não foi possível carregar a configuração');else if(data?.value)setCfg(data.value as unknown as FollowupConfig);setLoading(false);});},[]);
  const save=async()=>{setSaving(true);try{const {data,error}=await supabase.functions.invoke('live-followup-admin',{body:{action:'save',config:cfg}});if(error||data?.error)throw error||new Error(data.error);setCfg(data.config);toast.success('Follow-up salvo');await loadHistory();}catch{toast.error('Não foi possível salvar; confira os prazos e sua permissão');}finally{setSaving(false);}};
  const updateStep=(type:FollowupType,index:number,field:'minutes'|'variants',value:number|string[])=>setCfg(c=>({...c,types:{...c.types,[type]:{...c.types[type],steps:c.types[type].steps.map((s,i)=>i===index?{...s,[field]:value}:s)}}}));
  if(loading)return <div className="flex items-center gap-2 py-8"><Loader2 className="h-5 w-5 animate-spin"/>Carregando follow-up…</div>;

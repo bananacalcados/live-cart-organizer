@@ -487,7 +487,7 @@ const Events = () => {
     <div className="events-corporate min-h-screen bg-background">
       <header className="corp-header sticky top-0 z-50 w-full">
 
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex min-h-16 flex-wrap items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-2">
             <Calendar className="h-6 w-6 text-accent" />
             <h1 className="text-xl font-bold">Eventos / Lives</h1>
@@ -836,8 +836,8 @@ const Events = () => {
       </header>
 
       <main className="container py-6">
-        <Tabs defaultValue="events">
-          <TabsList className="mb-4">
+        <Tabs defaultValue="events" className="min-w-0">
+          <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1">
             <TabsTrigger value="events" className="gap-1">
               <Calendar className="h-4 w-4" /> Eventos
             </TabsTrigger>
