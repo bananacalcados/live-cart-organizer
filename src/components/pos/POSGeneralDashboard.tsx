@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, lazy, Suspense } from "react";
 import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList, QrCode, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,9 @@ import { POSFiscalTab } from "./POSFiscalTab";
 import { POSDreTab } from "./POSDreTab";
 
 
+
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+const RhDashboard = lazy(() => import("@/components/rh/RhDashboard").then(m => ({ default: m.RhDashboard })));
 
 interface Props { onBack: () => void }
 
@@ -113,8 +116,9 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
 };
 
 export function POSGeneralDashboard({ onBack }: Props) {
+  const { isAdmin } = useIsAdmin();
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"overview" | "payroll" | "fiscal" | "dre">("overview");
+  const [view, setView] = useState<"overview" | "payroll" | "fiscal" | "dre" | "rh">("overview");
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
@@ -540,7 +544,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       </div>
 
       {/* Tabs: Visão Geral / Folha */}
-      <div className="flex items-center gap-1 px-4 pt-3 border-b border-zinc-800">
+      <div className="flex items-center gap-1 px-2 sm:px-4 pt-3 border-b border-zinc-800 overflow-x-auto shrink-0">
         {([["overview", "Visão Geral"], ["payroll", "Folha"], ["fiscal", "Fiscal"], ["dre", "DRE"]] as const).map(([id, label]) => (
           <button
             key={id}
@@ -554,9 +558,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
             {label}
           </button>
         ))}
+        {isAdmin && <Button variant="ghost" className="shrink-0" onClick={() => setView("rh")}>RH</Button>}
       </div>
 
-      {view === "payroll" ? (
+      {view === "rh" && isAdmin ? (
+        <ScrollArea className="flex-1"><Suspense fallback={<p className="p-4">Carregando RH…</p>}><RhDashboard /></Suspense></ScrollArea>
+      ) : view === "payroll" ? (
         <ScrollArea className="flex-1">
           <POSPayrollTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
         </ScrollArea>
