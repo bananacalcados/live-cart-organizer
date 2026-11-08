@@ -1,3 +1,11 @@
+# Follow-up automático global das lives
+- [x] Preservar plano RH idêntico; não implementar RH nem apagar candidato protegido
+- [ ] Inventariar lembretes existentes e sobreposição
+- [ ] Configuração global desligada, por tipo e por evento
+- [ ] Agendamento, paradas, deduplicação e fila segura por instância
+- [ ] Histórico, números do dia e testes simulados sem mensagens reais
+- [ ] Relatório de conferência; não publicar
+
 # Ajustes atuais — CNPJ e cores Shopify
 - [x] Vitrine urgente: ignorar estoque, preservar exclusões manuais e testar bolsa + Spezial 40 até pagamento.
 - [x] Priorizar gateway aprovado e criar pendência quando os IDs continuarem ambíguos
