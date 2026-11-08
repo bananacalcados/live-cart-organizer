@@ -7450,6 +7450,7 @@ export type Database = {
           is_live_broadcasting: boolean
           live_active_until: string | null
           live_broadcast_started_at: string | null
+          live_followup_enabled: boolean
           live_url_updated_at: string | null
           manual_pos_routing: boolean
           member_area_notify_enabled: boolean
@@ -7521,6 +7522,7 @@ export type Database = {
           is_live_broadcasting?: boolean
           live_active_until?: string | null
           live_broadcast_started_at?: string | null
+          live_followup_enabled?: boolean
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
           member_area_notify_enabled?: boolean
@@ -7592,6 +7594,7 @@ export type Database = {
           is_live_broadcasting?: boolean
           live_active_until?: string | null
           live_broadcast_started_at?: string | null
+          live_followup_enabled?: boolean
           live_url_updated_at?: string | null
           manual_pos_routing?: boolean
           member_area_notify_enabled?: boolean
@@ -12633,6 +12636,156 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      live_followup_daily: {
+        Row: {
+          day: string
+          event_id: string
+          paid: number
+          sent: number
+          skipped: number
+        }
+        Insert: {
+          day: string
+          event_id: string
+          paid?: number
+          sent?: number
+          skipped?: number
+        }
+        Update: {
+          day?: string
+          event_id?: string
+          paid?: number
+          sent?: number
+          skipped?: number
+        }
+        Relationships: []
+      }
+      live_followup_instances: {
+        Row: {
+          consecutive_errors: number
+          last_message: string | null
+          next_send_at: string
+          paused: boolean
+          reason: string | null
+          whatsapp_number_id: string
+        }
+        Insert: {
+          consecutive_errors?: number
+          last_message?: string | null
+          next_send_at?: string
+          paused?: boolean
+          reason?: string | null
+          whatsapp_number_id: string
+        }
+        Update: {
+          consecutive_errors?: number
+          last_message?: string | null
+          next_send_at?: string
+          paused?: boolean
+          reason?: string | null
+          whatsapp_number_id?: string
+        }
+        Relationships: []
+      }
+      live_followup_jobs: {
+        Row: {
+          access_id: string | null
+          base_at: string
+          channel: string
+          claimed_at: string | null
+          created_at: string
+          customer_key: string
+          event_id: string
+          id: string
+          instagram: string | null
+          message: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string | null
+          reason: string | null
+          scheduled_at: string
+          sent_at: string | null
+          sequence_key: string
+          status: string
+          step: number
+          type: string
+          variant: number | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          access_id?: string | null
+          base_at: string
+          channel: string
+          claimed_at?: string | null
+          created_at?: string
+          customer_key: string
+          event_id: string
+          id?: string
+          instagram?: string | null
+          message?: string | null
+          message_id?: string | null
+          order_id?: string | null
+          phone?: string | null
+          reason?: string | null
+          scheduled_at: string
+          sent_at?: string | null
+          sequence_key: string
+          status?: string
+          step: number
+          type: string
+          variant?: number | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          access_id?: string | null
+          base_at?: string
+          channel?: string
+          claimed_at?: string | null
+          created_at?: string
+          customer_key?: string
+          event_id?: string
+          id?: string
+          instagram?: string | null
+          message?: string | null
+          message_id?: string | null
+          order_id?: string | null
+          phone?: string | null
+          reason?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          sequence_key?: string
+          status?: string
+          step?: number
+          type?: string
+          variant?: number | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      live_followup_sources: {
+        Row: {
+          access_id: string | null
+          changed_at: string
+          event_id: string
+          order_id: string | null
+          source_key: string
+        }
+        Insert: {
+          access_id?: string | null
+          changed_at?: string
+          event_id: string
+          order_id?: string | null
+          source_key: string
+        }
+        Update: {
+          access_id?: string | null
+          changed_at?: string
+          event_id?: string
+          order_id?: string | null
+          source_key?: string
+        }
+        Relationships: []
       }
       live_member_rate_limits: {
         Row: {
@@ -30529,6 +30682,56 @@ export type Database = {
           p_phone: string
         }
         Returns: string
+      }
+      live_followup_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          access_id: string | null
+          base_at: string
+          channel: string
+          claimed_at: string | null
+          created_at: string
+          customer_key: string
+          event_id: string
+          id: string
+          instagram: string | null
+          message: string | null
+          message_id: string | null
+          order_id: string | null
+          phone: string | null
+          reason: string | null
+          scheduled_at: string
+          sent_at: string | null
+          sequence_key: string
+          status: string
+          step: number
+          type: string
+          variant: number | null
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "live_followup_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      live_followup_enabled: { Args: { p_event_id?: string }; Returns: boolean }
+      live_followup_sources_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          access_id: string | null
+          changed_at: string
+          event_id: string
+          order_id: string | null
+          source_key: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "live_followup_sources"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       live_link_open_status: {
         Args: { p_order_ids: string[] }
