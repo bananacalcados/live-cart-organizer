@@ -1,4 +1,6 @@
 # Follow-up automático global das lives
+- [ ] Botão F: toque verificado libera carrinho e sequência; resposta digitada para; testes sem envio
+- [ ] Chat: HUMAN_AGENT manual 24h–7 dias somente com permissão comprovada; status e memória
 - [x] Auditoria: remetente compartilhado, Instagram privado/janela, chat e LID comprovado; simulação 07/11 sem envio e relatório
 - [x] Preservar plano RH idêntico; não implementar RH nem apagar candidato protegido
 - [x] Inventariar lembretes existentes e sobreposição
