@@ -7,7 +7,7 @@ describe('Follow-up das lives',()=>{
  it.each(['A','B','C'] as const)('%s agenda após 5 minutos',type=>expect(scheduleStep(base,type,cfg.types[type].steps[0].minutes,()=>0.5).toISOString()).toBe('2026-11-08T15:05:00.000Z'));
  it('D agenda 10,25,45 minutos após o link',()=>expect(cfg.types.D.steps.map(s=>scheduleStep(base,'D',s.minutes,()=>0.5).toISOString())).toEqual(['2026-11-08T15:10:00.000Z','2026-11-08T15:25:00.000Z','2026-11-08T15:45:00.000Z']));
  it('E agenda 3,6,24 horas',()=>expect(cfg.types.E.steps.map(s=>s.minutes)).toEqual([180,360,1440]));
- it('F tem link inicial e três lembretes',()=>expect(cfg.types.F.steps.map(s=>s.minutes)).toEqual([5,10,25,45]));
+ it('F envia o link em 2 minutos e lembretes dependem da janela',()=>expect(cfg.types.F.steps.map(s=>s.minutes)).toEqual([2,10,25,45]));
  it('E não envia às 19h: adia para 08h do dia seguinte',()=>expect(crossellWindow(new Date('2026-11-08T22:00:00Z'),()=>0).toISOString()).toBe('2026-11-09T11:00:00.000Z'));
  it('E antes de 08h adia para 08h–08h30',()=>expect(crossellWindow(new Date('2026-11-09T10:59:00Z'),()=>0.5).toISOString()).toBe('2026-11-09T11:15:00.000Z'));
  it('E às 08h está permitido',()=>expect(crossellWindow(new Date('2026-11-09T11:00:00Z')).toISOString()).toBe('2026-11-09T11:00:00.000Z'));

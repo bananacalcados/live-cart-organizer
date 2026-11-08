@@ -12,6 +12,7 @@ import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/a
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 import { loadSelfserviceAdvertising, cleanSelfserviceSignals, resolveSelfserviceAdvertising, ordinaryAllowed } from "../_shared/selfservice-advertising.ts";
 import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
+import { resolveEventNumber } from "../_shared/event-sender.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -66,12 +67,6 @@ function orderTotal(o: any) {
     ? (o.discount_type === "percentage" ? sub * (Number(o.discount_value) / 100) : Number(o.discount_value)) : 0;
   const ship = o.free_shipping ? 0 : Number(o.shipping_cost || 0);
   return Math.round((Math.max(0, sub - disc) + ship) * 100) / 100;
-}
-
-// Número oficial do evento: o da "Link da Live → WhatsApp" (etapa Mensagem) vale primeiro.
-async function resolveEventNumber(sb: any, eventId: string, fallbackId: string | null) {
-  const { data: link } = await sb.from("live_whatsapp_links").select("whatsapp_number_id, target_phone").eq("event_id", eventId).order("is_active", { ascending: false }).limit(1).maybeSingle();
-  return { id: (link as any)?.whatsapp_number_id || fallbackId || null, targetPhone: (link as any)?.target_phone || null };
 }
 
 Deno.serve(withAccessLog("live-selfservice", async (req) => {

@@ -32,7 +32,7 @@ export const DEFAULT_FOLLOWUP_CONFIG: FollowupConfig = {
       { minutes: 360, variants: ["{primeiro_nome}, ainda estou com suas peças do catálogo separadas 😊 {link_carrinho}\n\nConsegue finalizar hoje?", "Oi, {primeiro_nome}! Passando pra lembrar do seu carrinho do catálogo: {link_carrinho}\n\nDeu tudo certo por aí?", "{primeiro_nome}, seu carrinho do catálogo continua te esperando 🛍️ {link_carrinho}\n\nFicou alguma dúvida?"] },
       { minutes: 1440, variants: ["{primeiro_nome}, é o último aviso sobre o seu carrinho do catálogo: {link_carrinho}\n\nSe não for ficar, me avisa que eu libero os pares, tá bom?", "Oi, {primeiro_nome}! Vou precisar liberar as peças do seu carrinho do catálogo. Ainda quer ficar com elas? {link_carrinho}", "{primeiro_nome}, suas peças do catálogo estão separadas desde ontem 🙏 Se ainda quiser, finaliza aqui: {link_carrinho}\n\nSe não, me responde pra eu liberar, pode ser?"] },
     ] },
-    F: { enabled: true, steps: [{ minutes: 5, variants: [...BC] }, ...D] },
+    F: { enabled: true, steps: [{ minutes: 2, variants: [...BC] }, ...D] },
   },
 };
 

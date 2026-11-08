@@ -6,6 +6,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { computeCatalogCashback, yourPrice, type Coupon } from "./cashback.ts";
 import { enabledCatalogVariants } from "../_shared/catalog-availability.ts";
+import { resolveEventNumber } from "../_shared/event-sender.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
 const MODE = "whatsapp_autoatendimento";
@@ -277,8 +278,7 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
       if (!to) to = (await regSource())?.whatsapp || null;
       let numberId: string | null = access?.confirmed_number_id || null;
       if (!numberId) {
-        const { data: wl } = await sb.from("live_whatsapp_links").select("whatsapp_number_id").eq("event_id", (ev as any).id).order("is_active", { ascending: false }).limit(1).maybeSingle();
-        numberId = (wl as any)?.whatsapp_number_id || (ev as any).whatsapp_number_id || null;
+        numberId = (await resolveEventNumber(sb, (ev as any).id)).id;
       }
       if (!to || !numberId) { console.error("[live-catalog] sem telefone/instância para avisar o carrinho", orderId); return; }
       const nome = handle || firstName((await regSource())?.full_name) || "";
