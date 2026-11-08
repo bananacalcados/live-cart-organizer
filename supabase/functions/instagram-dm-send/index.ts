@@ -2,6 +2,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
+import { instagramSendMode } from "../_shared/instagram-window.ts";
 
 
 const corsHeaders = {
@@ -18,13 +19,20 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
 
   try {
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
     );
 
     const body = await req.json();
     const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType, whatsapp_number_id } = body;
     let { mediaUrl } = body;
+    if (typeof username !== 'string' || username.length>100 || (message != null && (typeof message !== 'string' || message.length>4000))) return new Response(JSON.stringify({error:'invalid_input'}),{status:400,headers:{...corsHeaders,'Content-Type':'application/json'}});
+    const ctxResult=await supabase.rpc('instagram_reply_context',{p_username:username,p_event_id:eventId || null,p_number_id:whatsapp_number_id || null});
+    if(ctxResult.error)throw ctxResult.error;
+    let replyContext=ctxResult.data;
+    const mode=instagramSendMode(replyContext);
+    if(!['direct_dm','private_reply'].includes(mode)) return new Response(JSON.stringify({error:mode,message:mode==='live_ended_no_private_reply'?'A live terminou: comentário não abre a janela de 24h e a resposta privada só funciona durante a transmissão. Aguarde ela mandar uma mensagem.':'Sem janela de 24h e sem comentário elegível não respondido. Aguarde ela mandar uma mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
+    const resolvedNumberId=replyContext.number_id || whatsapp_number_id;
 
     // Token por conta: se a conversa estiver vinculada a uma instância de
     // Instagram, usa o token daquela conta. Sem instância (ex.: resposta a
@@ -32,9 +40,9 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     // o secret global META_PAGE_ACCESS_TOKEN fica só como último recurso,
     // pois costuma ficar desatualizado em relação aos tokens por conta.
     let token = "";
-    if (whatsapp_number_id) {
+    if (resolvedNumberId) {
       try {
-        const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
+        const acct = await resolveIgAccountByNumberId(supabase, resolvedNumberId);
         if (acct.accessToken) token = acct.accessToken;
       } catch (e) {
         console.error("[ig-dm-send] erro ao resolver token da conta:", e);
@@ -53,8 +61,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     const commentIdCandidates: string[] = Array.from(
       new Set(
         [
-          ...(Array.isArray(fallbackCommentIds) ? fallbackCommentIds : []),
-          fallbackCommentId,
+          ...replyContext.comment_ids,
         ].filter((c): c is string => typeof c === "string" && c.trim().length > 0),
       ),
     );
@@ -125,6 +132,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
 
     let metaResponse: any = null;
     let usedMethod: "direct_dm" | "private_reply" = "direct_dm";
+    let usedCommentId: string | null = null;
 
     // Tenta private_reply em sequência sobre todos os comment_ids candidatos.
     // Retorna { ok, data } do primeiro que funcionar, ou o último erro.
@@ -132,16 +140,24 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
       let lastData: any = null;
       let lastId: string | null = null;
       for (const cid of commentIdCandidates) {
-        const r = await fetch(`${META_API}/me/messages`, {
+        const claim=await supabase.rpc('instagram_private_reply_claim',{p_comment_id:cid,p_username:username,p_event_id:eventId || null,p_number_id:resolvedNumberId || null,p_message:message || '[media]'});
+        if(claim.error)throw claim.error;
+        if(!claim.data)continue;
+        let r: Response;
+        try { r = await fetch(`${META_API}/me/messages`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             recipient: { comment_id: cid },
             message: buildMessagePayload(),
           }),
-        });
+        }); } catch (error) {
+          await supabase.from('live_comment_dms').update({status:'uncertain',error_details:'provider_response_unknown'}).eq('comment_id',cid).eq('status','processing');
+          throw error;
+        }
         const data = await r.json();
-        if (r.ok) return { ok: true, data, commentId: cid };
+        await supabase.from('live_comment_dms').update({status:r.ok?'sent':'uncertain',meta_message_id:data?.message_id || null,error_details:r.ok?null:JSON.stringify(data).slice(0,2000)}).eq('comment_id',cid).eq('status','processing');
+        if (r.ok) { usedCommentId=cid; return { ok: true, data, commentId: cid }; }
         console.warn(`[ig-dm-send] private_reply failed for @${cleanUsername} comment ${cid}:`, JSON.stringify(data));
         lastData = data;
         lastId = cid;
@@ -150,7 +166,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     };
 
     // Tenta DM direto se tem o user ID
-    if (link?.ig_user_id) {
+    if (link?.ig_user_id && replyContext.window_open) {
       const res = await fetch(`${META_API}/me/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -220,6 +236,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
       media_url: mediaUrl || null,
       media_type: mediaUrl ? (mediaType || null) : "text",
       source: "manual",
+      whatsapp_number_id: resolvedNumberId || null,
     };
     let upgraded = false;
     if (mid) {
@@ -273,20 +290,12 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     }
 
     // Registrar em live_comment_dms se temos eventId
-    if (eventId && fallbackCommentId) {
-      await supabase.from("live_comment_dms").insert({
-        event_id: eventId,
-        comment_id: fallbackCommentId,
-        username: `@${cleanUsername}`,
-        message,
-        status: "sent",
-        meta_message_id: metaResponse?.message_id || null,
-      });
-    }
+    // Private reply is recorded atomically by its actual used comment, not by the caller's hint.
 
     return new Response(JSON.stringify({
       success: true,
       method: usedMethod,
+      commentId: usedCommentId,
       messageId: metaResponse?.message_id,
       ig_user_id: recipientId,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

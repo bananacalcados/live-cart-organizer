@@ -497,7 +497,15 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
     // Resolve telefone real quando o chatid é um LID
     if (isLid && !isGroup) {
       const pn = normalizeJid(asString(message.sender_pn)).phone;
-      if (pn) phone = pn;
+      if (pn && pn.length>=10 && pn.length<=13) {
+        phone = pn;
+        if(numberId) {
+          const key=pn.replace(/^55/,'');
+          const phoneKey=key.slice(0,2)+key.slice(-8);
+          const {error:mapError}=await supabase.from('whatsapp_lid_phone_map').upsert({whatsapp_number_id:numberId,lid:chatPhone,phone_key:phoneKey,updated_at:new Date().toISOString()},{onConflict:'whatsapp_number_id,lid'});
+          if(mapError)console.error('[uazapi-webhook] lid mapping failed',mapError.code);
+        }
+      }
     }
 
     const fromMe = Boolean(message.fromMe);
