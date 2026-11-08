@@ -153,7 +153,7 @@ async function sendRhVagaDm(sb: any, job: any, accounts: any[], results: any[]) 
   }
   if (!response.ok) return done("failed", `Direct: ${response.err}`.slice(0, 900));
 
-  await sb.from("whatsapp_messages").insert({
+  const { error: mirrorError } = await sb.from("whatsapp_messages").insert({
     phone: response.d?.recipient_id || job.recipient_id,
     message: job.message,
     direction: "outgoing",
@@ -164,6 +164,7 @@ async function sendRhVagaDm(sb: any, job: any, accounts: any[], results: any[]) 
     channel: "instagram",
     sender_name: job.instagram_handle,
   });
+  if (mirrorError && mirrorError.code !== "23505") console.warn("RH DM mirror failed", mirrorError);
   return done("sent", null, job.comment_id ? "private_reply_button" : "direct_button");
 }
 
