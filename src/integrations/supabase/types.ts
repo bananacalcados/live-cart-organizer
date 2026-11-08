@@ -10573,6 +10573,132 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_comment_moderation: {
+        Row: {
+          ai_class_raw: string | null
+          ai_model: string | null
+          attempts: number
+          class: string | null
+          classified_at: string | null
+          comment_id: string
+          confidence: number | null
+          contact_note: string | null
+          contact_status: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          from_id: string | null
+          hidden_at: string | null
+          hide_response: string | null
+          id: string
+          ig_account_id: string | null
+          media_caption: string | null
+          media_id: string | null
+          media_permalink: string | null
+          media_product_type: string | null
+          media_thumb: string | null
+          private_reply_error: string | null
+          private_reply_sent_at: string | null
+          public_reply_by: string | null
+          public_reply_sent_at: string | null
+          reason: string | null
+          received_at: string
+          review_verdict: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          skip_reason: string | null
+          status: string
+          suggested_reply: string | null
+          text_original: string
+          unhidden_at: string | null
+          unhidden_by: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          ai_class_raw?: string | null
+          ai_model?: string | null
+          attempts?: number
+          class?: string | null
+          classified_at?: string | null
+          comment_id: string
+          confidence?: number | null
+          contact_note?: string | null
+          contact_status?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          from_id?: string | null
+          hidden_at?: string | null
+          hide_response?: string | null
+          id?: string
+          ig_account_id?: string | null
+          media_caption?: string | null
+          media_id?: string | null
+          media_permalink?: string | null
+          media_product_type?: string | null
+          media_thumb?: string | null
+          private_reply_error?: string | null
+          private_reply_sent_at?: string | null
+          public_reply_by?: string | null
+          public_reply_sent_at?: string | null
+          reason?: string | null
+          received_at?: string
+          review_verdict?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          skip_reason?: string | null
+          status?: string
+          suggested_reply?: string | null
+          text_original: string
+          unhidden_at?: string | null
+          unhidden_by?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          ai_class_raw?: string | null
+          ai_model?: string | null
+          attempts?: number
+          class?: string | null
+          classified_at?: string | null
+          comment_id?: string
+          confidence?: number | null
+          contact_note?: string | null
+          contact_status?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          from_id?: string | null
+          hidden_at?: string | null
+          hide_response?: string | null
+          id?: string
+          ig_account_id?: string | null
+          media_caption?: string | null
+          media_id?: string | null
+          media_permalink?: string | null
+          media_product_type?: string | null
+          media_thumb?: string | null
+          private_reply_error?: string | null
+          private_reply_sent_at?: string | null
+          public_reply_by?: string | null
+          public_reply_sent_at?: string | null
+          reason?: string | null
+          received_at?: string
+          review_verdict?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          skip_reason?: string | null
+          status?: string
+          suggested_reply?: string | null
+          text_original?: string
+          unhidden_at?: string | null
+          unhidden_by?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
       ig_live_cart_notifications: {
         Row: {
           attempts: number
@@ -10640,6 +10766,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ig_moderation_daily: {
+        Row: {
+          class: string
+          confirmed: number
+          day: string
+          hidden: number
+          to_contact: number
+          unhidden: number
+        }
+        Insert: {
+          class: string
+          confirmed?: number
+          day: string
+          hidden?: number
+          to_contact?: number
+          unhidden?: number
+        }
+        Update: {
+          class?: string
+          confirmed?: number
+          day?: string
+          hidden?: number
+          to_contact?: number
+          unhidden?: number
+        }
+        Relationships: []
+      }
+      ig_moderation_settings: {
+        Row: {
+          acusacao_min_confidence: number
+          class_enabled: Json
+          enabled: boolean
+          id: boolean
+          own_usernames: string[]
+          paused_until: string | null
+          private_reply_template: string
+          private_reply_tracking_suffix: string
+          public_reply_template: string
+          team_usernames: string[]
+          updated_at: string
+        }
+        Insert: {
+          acusacao_min_confidence?: number
+          class_enabled?: Json
+          enabled?: boolean
+          id?: boolean
+          own_usernames?: string[]
+          paused_until?: string | null
+          private_reply_template?: string
+          private_reply_tracking_suffix?: string
+          public_reply_template?: string
+          team_usernames?: string[]
+          updated_at?: string
+        }
+        Update: {
+          acusacao_min_confidence?: number
+          class_enabled?: Json
+          enabled?: boolean
+          id?: boolean
+          own_usernames?: string[]
+          paused_until?: string | null
+          private_reply_template?: string
+          private_reply_tracking_suffix?: string
+          public_reply_template?: string
+          team_usernames?: string[]
+          updated_at?: string
+        }
+        Relationships: []
       }
       instagram_comment_actions: {
         Row: {
@@ -29433,6 +29628,112 @@ export type Database = {
       }
       ig_handle_loose: { Args: { _h: string }; Returns: string }
       ig_handle_norm: { Args: { _h: string }; Returns: string }
+      ig_moderation_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          ai_class_raw: string | null
+          ai_model: string | null
+          attempts: number
+          class: string | null
+          classified_at: string | null
+          comment_id: string
+          confidence: number | null
+          contact_note: string | null
+          contact_status: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          from_id: string | null
+          hidden_at: string | null
+          hide_response: string | null
+          id: string
+          ig_account_id: string | null
+          media_caption: string | null
+          media_id: string | null
+          media_permalink: string | null
+          media_product_type: string | null
+          media_thumb: string | null
+          private_reply_error: string | null
+          private_reply_sent_at: string | null
+          public_reply_by: string | null
+          public_reply_sent_at: string | null
+          reason: string | null
+          received_at: string
+          review_verdict: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          skip_reason: string | null
+          status: string
+          suggested_reply: string | null
+          text_original: string
+          unhidden_at: string | null
+          unhidden_by: string | null
+          updated_at: string
+          username: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ig_comment_moderation"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      ig_moderation_list: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_tab: string
+        }
+        Returns: {
+          ai_class_raw: string | null
+          ai_model: string | null
+          attempts: number
+          class: string | null
+          classified_at: string | null
+          comment_id: string
+          confidence: number | null
+          contact_note: string | null
+          contact_status: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          from_id: string | null
+          hidden_at: string | null
+          hide_response: string | null
+          id: string
+          ig_account_id: string | null
+          media_caption: string | null
+          media_id: string | null
+          media_permalink: string | null
+          media_product_type: string | null
+          media_thumb: string | null
+          private_reply_error: string | null
+          private_reply_sent_at: string | null
+          public_reply_by: string | null
+          public_reply_sent_at: string | null
+          reason: string | null
+          received_at: string
+          review_verdict: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          skip_reason: string | null
+          status: string
+          suggested_reply: string | null
+          text_original: string
+          unhidden_at: string | null
+          unhidden_by: string | null
+          updated_at: string
+          username: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ig_comment_moderation"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      ig_moderation_summary: { Args: never; Returns: Json }
       import_shopify_missing_color: {
         Args: {
           p_master_id: string
