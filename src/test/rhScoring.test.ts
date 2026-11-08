@@ -1,0 +1,21 @@
+import { describe,it,expect } from 'vitest';
+import { calculate,closesResponse,aiInput } from '../../supabase/functions/rh-score/rules';
+const settings={pesos:{atendimento:50,situacao:20,permanencia:15,transporte:10,computador:5},faixas_permanencia:[{ate_meses:3,pontos:4},{ate_meses:6,pontos:8},{ate_meses:12,pontos:12},{ate_meses:null,pontos:15}],pontos_sem_experiencia:7.5,pontos_transporte:{a_pe:6,moto:6,bicicleta:6,carro:5,onibus:3},pontos_bairro_max:4,teto_transporte:10,pontos_computador:{nunca:0,um_pouco:3,bem:5}};
+const input=()=>({settings,candidato:{nome:'Nunca enviar',whatsapp:'5533999999999',instagram_username:'privado',ja_trabalhou:false,computador:'nunca',bairro:'São Pedro',transporte:'a_pe',aceita_condicoes:true,situacao:'Tentei resolver conversando e segui trabalhando.'},experiencias:[] as any[],respostas:[1,2,3].map(ordem=>({ordem,resposta:'Qual prefere? 💛  ',gabarito:'Perguntar',mensagem:'Quero ver',contexto:null})),bairros:[] as any[]});
+describe('RH: regras concretas',()=>{
+ it('sem experiência vale 7,5',()=>expect(calculate(input()).detalhe.permanencia.pontos).toBe(7.5));
+ it.each([['nunca',0],['um_pouco',3],['bem',5]])('computador %s = %i',(value,points)=>{const i=input();i.candidato.computador=String(value);expect(calculate(i).detalhe.computador.pontos).toBe(points);});
+ it('pergunta com emoji/espaços ganha 3',()=>expect(calculate(input()).detalhe.cenarios[0].fechamento).toBe(3));
+ it('aviso de retorno ganha 3',()=>expect(closesResponse('Voltamos em breve para ver se a compra deu certo. 💛')).toBe(true));
+ it('sem pergunta ou retorno não ganha 3',()=>expect(closesResponse('Obrigada pela mensagem.')).toBe(false));
+ it('200 caracteres ganha 2; 201 não',()=>{const i=input();i.respostas[0].resposta='a'.repeat(200);expect(calculate(i).detalhe.cenarios[0].curta).toBe(2);i.respostas[0].resposta+='a';expect(calculate(i).detalhe.cenarios[0].curta).toBe(0);});
+ it.each([[2,4],[3,8],[6,8],[7,12],[12,12],[13,15]])('média %i meses = %i',(months,pts)=>{const i=input();i.experiencias=[{duracao_meses:months}];expect(calculate(i).detalhe.permanencia.pontos).toBe(pts);});
+ it('média dos empregos não apenas o último',()=>{const i=input();i.experiencias=[{duracao_meses:2},{duracao_meses:14}];expect(calculate(i).detalhe.permanencia.media_meses).toBe(8);});
+ it('bairro sem acento/caixa soma 4; teto 10',()=>{const i=input();i.bairros=[{bairro_norm:'sao pedro',pontos:4,loja:'perola'}];expect(calculate(i).detalhe.transporte.pontos).toBe(10);});
+ it.each([['a_pe',6],['moto',6],['bicicleta',6],['carro',5],['onibus',3]])('transporte %s = %i',(mode,pts)=>{const i=input();i.candidato.transporte=String(mode);expect(calculate(i).detalhe.transporte.pontos).toBe(pts);});
+ it('não topa marca sem mudar nota',()=>{const i=input();const score=calculate(i).nota;i.candidato.aceita_condicoes=false;expect(calculate(i).nota).toBe(score);expect(calculate(i).detalhe.nao_topa).toBe(true);});
+ it('falha da IA salva parcial sem inventar pontos',()=>{const r=calculate(input(),null,'Simulação 429');expect(r.parcial).toBe(true);expect(r.detalhe.cenarios[0].acao_certa).toBe(0);expect(r.detalhe.situacao.pontos).toBe(0);expect(r.ai_error).toBe('Simulação 429');});
+ it('IA ação vale 3/tom 2 e situação ×2',()=>{const r=calculate(input(),{cenarios:[1,2,3].map(()=>({acao_certa:true,tom:2,nota:'ok'})),situacao_nota:8,resumo:['a','b','c'],alertas:[]});expect(r.detalhe.pontos.atendimento).toBe(50);expect(r.detalhe.situacao.pontos).toBe(16);expect(r.parcial).toBe(false);});
+ it('IA só recebe respostas/gabaritos: não nome WhatsApp @',()=>{const data=aiInput(input());expect(Object.keys(data).sort()).toEqual(['cenarios','situacao']);expect(JSON.stringify(data)).not.toMatch(/Nunca enviar|5533999999999|privado/);});
+ it('guarda 1 casa sem arredondar a inteiro',()=>{const r=calculate(input());expect(r.nota).toBe(38.5);});
+});

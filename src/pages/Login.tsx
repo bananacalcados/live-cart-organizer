@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,9 @@ import { useAuthReady } from "@/hooks/useAuthReady";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const candidateReturn = location.state?.rhReturnTo;
+  const returnTo = typeof candidateReturn === "string" && /^\/rh\/candidato\/[0-9a-f-]{36}$/i.test(candidateReturn) ? candidateReturn : "/";
   const { toast } = useToast();
   const { session, isReady } = useAuthReady();
   const userId = session?.user.id;
@@ -34,8 +37,8 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (isReady && userId && !loading) navigate("/", { replace: true });
-  }, [isReady, userId, loading, navigate]);
+    if (isReady && userId && !loading) navigate(returnTo, { replace: true });
+  }, [isReady, userId, loading, navigate, returnTo]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +63,7 @@ export default function Login() {
         return;
       }
       void supabase.functions.invoke("security-auth-event", { body: { event: "login_ok" } }).catch(() => {});
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     } catch (err: any) {
       const isConnectionError =
         err?.message === "Failed to fetch" ||
