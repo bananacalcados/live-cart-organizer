@@ -491,6 +491,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
                 text: messageText,
                 storyId,
                 messageId: event.message?.mid || null,
+                accountId: entry.id ? String(entry.id) : null,
               }, pageAccessToken);
               if (storyAuto.actions.length > 0) {
                 console.log(`Story automations triggered: ${storyAuto.actions.join(', ')}`);
@@ -683,6 +684,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
                 mediaType: isLiveComment ? 'LIVE' : mediaType,
                 mediaId: comment.media?.id || null,
                 isLive: isLiveComment,
+                accountId: entry.id ? String(entry.id) : null,
               }, pageAccessToken);
               if (automationResult.actions.length > 0) {
                 console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
