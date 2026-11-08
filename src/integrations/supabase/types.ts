@@ -18696,6 +18696,7 @@ export type Database = {
           expedition_conference_qty: number
           expedition_picked_qty: number
           expedition_waiting_qty: number
+          fiscal_unit_price: number | null
           id: string
           ncm_snapshot: string | null
           origem_mercadoria: number | null
@@ -18730,6 +18731,7 @@ export type Database = {
           expedition_conference_qty?: number
           expedition_picked_qty?: number
           expedition_waiting_qty?: number
+          fiscal_unit_price?: number | null
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
@@ -18764,6 +18766,7 @@ export type Database = {
           expedition_conference_qty?: number
           expedition_picked_qty?: number
           expedition_waiting_qty?: number
+          fiscal_unit_price?: number | null
           id?: string
           ncm_snapshot?: string | null
           origem_mercadoria?: number | null
