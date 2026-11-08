@@ -1038,7 +1038,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
           {currentStep.key === "followups" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3 border-b pb-4"><Label htmlFor="wizard-followup">Follow-up automático</Label><Switch id="wizard-followup" checked={liveFollowupEnabled} onCheckedChange={async enabled=>{setLiveFollowupEnabled(enabled);if(event){const {error}=await supabase.from('events').update({live_followup_enabled:enabled}).eq('id',event.id);if(error){setLiveFollowupEnabled(!enabled);toast.error('Não foi possível salvar');}}}/></div>
+              <div className="flex items-center justify-between gap-3 border-b pb-4">
+                <Label htmlFor="wizard-followup">Follow-up automático</Label>
+                <Switch id="wizard-followup" checked={liveFollowupEnabled} onCheckedChange={async enabled => {
+                  setLiveFollowupEnabled(enabled);
+                  if (!event) return;
+                  const { error } = await supabase.from('events').update({ live_followup_enabled: enabled }).eq('id', event.id);
+                  if (error) { setLiveFollowupEnabled(!enabled); toast.error('Não foi possível salvar'); }
+                }} />
+              </div>
               {event?.id ? (
                 <EventFollowupsManager eventId={event.id} />
               ) : (
