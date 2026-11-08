@@ -1,5 +1,5 @@
 # Follow-up automático global das lives
-- [ ] Auditoria: corrigir remetente compartilhado, Instagram privado/janela, chat e LID; simular live 07/11 sem envio
+- [x] Auditoria: remetente compartilhado, Instagram privado/janela, chat e LID comprovado; simulação 07/11 sem envio e relatório
 - [x] Preservar plano RH idêntico; não implementar RH nem apagar candidato protegido
 - [x] Inventariar lembretes existentes e sobreposição
 - [x] Configuração global desligada, por tipo e por evento

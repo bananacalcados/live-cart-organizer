@@ -1,6 +1,5 @@
 import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, crossellWindow, type FollowupConfig, type FollowupType } from './live-followup-rules.ts';
 import { internalCallHeaders } from './requireAuth.ts';
-import { resolveEventNumber } from './event-sender.ts';
 import { instagramFollowupMode } from './instagram-window.ts';
 type Client = any;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
@@ -52,7 +51,8 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     // No cart exists for a filled registration without an order: never manufacture one.
     if (!type || !base || !cfg.types[type].enabled || !cfg.enabled_since || Date.parse(base)<Date.parse(cfg.enabled_since)) { await ack(); continue; }
     if (!phone && type !== 'F') { await ack(); continue; }
-    const numberId = type === 'F' ? c.ig_instance_id : (await resolveEventNumber(sb,ev.id)).id;
+    // Context uses the same live_event_sender RPC as event-sender.ts, batched in SQL.
+    const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
     if (!numberId) { await ack(); continue; }
     if(simulation){
       counts[type]+=cfg.types[type].steps.length;
