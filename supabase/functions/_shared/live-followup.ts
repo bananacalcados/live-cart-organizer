@@ -138,6 +138,7 @@ export async function processGlobalFollowups(sb: Client) {
     function check(c: any) {
       if(!c) return 'context_missing';
       const o=c.order;
+      if (c.linked_closed) return 'order_closed';
       const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:c.manual_recent,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
       if(basic)return basic;
       if(job.channel==='whatsapp' && c.event?.whatsapp_number_id!==job.whatsapp_number_id)return 'instance_changed';
