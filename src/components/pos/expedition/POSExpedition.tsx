@@ -38,6 +38,7 @@ import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
+import { GatewayPriceRulesDialog } from "./GatewayPriceRulesDialog";
 import { expeditionPriorityRank, isValadaresOrder, isSedexOrder, isStorePickupOrder } from "@/lib/expeditionPriority";
 import { EXPEDITION_GATEWAYS, expeditionGatewayLabel } from "@/lib/expeditionGateway";
 import { CreditCard, BadgePercent, Undo2 } from "lucide-react";
@@ -952,6 +953,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               ))}
             </SelectContent>
           </Select>
+          <GatewayPriceRulesDialog />
         </div>}
 
         {showFilters && !showRefunds && (
