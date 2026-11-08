@@ -960,6 +960,13 @@
       "when": 1794096446771,
       "tag": "0136_expedition_gateway_price_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794096936854,
+      "tag": "0137_fiscal_only_price_reduction",
+      "breakpoints": true
     }
   ]
 }

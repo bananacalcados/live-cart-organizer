@@ -28,7 +28,7 @@
 - WhatsApp replies must preserve the provider message ID end-to-end (`quoted_message_id`) so quoted context renders for both customer and staff.
 - DRE (PDV > Dashboard Geral) só via RPC dre_period sobre as views v_sale_* (sem grant ao front); custo do item fica em pos_sale_items.cost_price_at_sale via trigger, porque o custo do cadastro muda com o tempo.
 - VIP attendance uses vip_links/daily_destination/clicks/conversations, vip-go and /g/:code; never reuse /zap or /vip engines: matching rules differ.
-- Redução de valor de venda (Expedição) altera pos_sale_items.unit_price via RPC apply_sale_price_adjustment, guardando o preço anterior em pos_sale_price_adjustments, porque a NF-e lê unit_price e o imposto incide só sobre o valor real; bloqueada após NF-e emitida.
+- Redução de valor (Expedição) é só fiscal: grava pos_sale_items.fiscal_unit_price (emissores usam fiscal_unit_price ?? unit_price); unit_price/total ficam cheios para faturamento, comissão e cliente; bloqueada após NF-e.
 - Live panels read live_comments via realtime INSERT. Webhooks persist active-event comments (today as fallback); expire_live_payment_windows syncs server-side only for active lives (one 30s second pass), avoiding browser polling and extra crons.
 - Overlay da Live (/overlay/:token, OBS) lê só a RPC overlay_pull (polling 2 s) sobre live_overlay_settings/live_overlay_events alimentadas por trigger em orders — página pública não toca em orders/comentários/clientes.
 - Raffle eligibility only in RPC event_raffle_pool. Fixed OBS token in live_overlay_templates follows newest event; new events inherit last layout without overwrites; reset queues/cursor on live change.
