@@ -121,6 +121,7 @@ export default function InstagramCommentAutomation() {
     capture_fallback_dm_text: "",
   });
   const isLiveCart = form.trigger_type.startsWith("live_cart");
+  const isRhVaga = form.trigger_type === "rh_vaga";
 
   useEffect(() => {
     loadRules();
@@ -220,7 +221,7 @@ export default function InstagramCommentAutomation() {
     const payload = {
       name: form.name.trim(),
       trigger_type: form.trigger_type,
-      trigger_keywords: form.trigger_keywords
+      trigger_keywords: form.trigger_type === "rh_vaga" ? ["vaga", "vagas"] : form.trigger_keywords
         .split(",")
         .map((k) => k.trim())
         .filter(Boolean),
@@ -238,7 +239,7 @@ export default function InstagramCommentAutomation() {
         .map((b) => ({
           label: b.label.trim(),
           type: b.type,
-          url: b.type === "link" ? (b.url || "").trim() || null : null,
+          url: b.type === "link" ? (form.trigger_type === "rh_vaga" ? "{rh_link}" : (b.url || "").trim() || null) : null,
           tags: b.type === "reply"
             ? (b.tags || []).map((t) => t.trim()).filter(Boolean)
             : [],
@@ -404,7 +405,9 @@ export default function InstagramCommentAutomation() {
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{rule.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {rule.trigger_type === "keyword" && rule.trigger_keywords.length > 0 ? (
+                        {rule.trigger_type === "rh_vaga" ? (
+                          <Badge variant="outline" className="text-[10px] py-0">VAGA · RH</Badge>
+                        ) : rule.trigger_type === "keyword" && rule.trigger_keywords.length > 0 ? (
                           rule.trigger_keywords.slice(0, 3).map((kw) => (
                             <Badge key={kw} variant="outline" className="text-[10px] py-0">
                               {kw}
@@ -537,6 +540,7 @@ export default function InstagramCommentAutomation() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="keyword">Por Palavras-chave</SelectItem>
+                  <SelectItem value="rh_vaga">VAGA — Recrutamento RH</SelectItem>
                   <SelectItem value="all">Todos os Comentários</SelectItem>
                   <SelectItem value="live_cart_ready">Live: carrinho criado com 4 dígitos</SelectItem>
                   <SelectItem value="live_cart_missing_last4">Live: carrinho criado sem 4 dígitos</SelectItem>
@@ -563,6 +567,16 @@ export default function InstagramCommentAutomation() {
                     <Input type="number" min={5} value={form.max_delay_seconds}
                       onChange={(e) => setForm({ ...form, max_delay_seconds: Number(e.target.value) || 0 })} />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {isRhVaga && (
+              <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-3 text-xs text-muted-foreground">
+                <p>Reconhece “vaga” com acentos, repetição e erros comuns, sem alterar as outras regras. O Direct usa um link exclusivo do @; quem já enviou o cadastro recebe só a confirmação.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-xs">Delay mínimo (seg)</Label><Input type="number" min={20} max={60} value={form.min_delay_seconds} onChange={(e) => setForm({ ...form, min_delay_seconds: Number(e.target.value) || 20 })} /></div>
+                  <div><Label className="text-xs">Delay máximo (seg)</Label><Input type="number" min={20} max={60} value={form.max_delay_seconds} onChange={(e) => setForm({ ...form, max_delay_seconds: Number(e.target.value) || 60 })} /></div>
                 </div>
               </div>
             )}
@@ -975,8 +989,9 @@ export default function InstagramCommentAutomation() {
                           </div>
                           {b.type === "link" ? (
                             <Input
-                              value={b.url || ""}
+                              value={isRhVaga ? "{rh_link}" : b.url || ""}
                               onChange={(e) => update({ url: e.target.value })}
+                              readOnly={isRhVaga}
                               placeholder="https://link-do-grupo-vip..."
                               className="h-8 text-sm"
                             />

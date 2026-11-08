@@ -10703,57 +10703,69 @@ export type Database = {
         Row: {
           attempts: number
           channel: string | null
+          comment_id: string | null
           created_at: string
           error: string | null
           event_id: string | null
           id: string
+          instagram_account_id: string | null
           instagram_handle: string
           kind: string
           link_token: string | null
           manual_resends: number
           message: string | null
           order_id: string
+          recipient_id: string | null
           rule_id: string | null
           scheduled_at: string
           sent_at: string | null
+          source_key: string | null
           status: string
           variant_index: number | null
         }
         Insert: {
           attempts?: number
           channel?: string | null
+          comment_id?: string | null
           created_at?: string
           error?: string | null
           event_id?: string | null
           id?: string
+          instagram_account_id?: string | null
           instagram_handle: string
           kind: string
           link_token?: string | null
           manual_resends?: number
           message?: string | null
           order_id: string
+          recipient_id?: string | null
           rule_id?: string | null
           scheduled_at?: string
           sent_at?: string | null
+          source_key?: string | null
           status?: string
           variant_index?: number | null
         }
         Update: {
           attempts?: number
           channel?: string | null
+          comment_id?: string | null
           created_at?: string
           error?: string | null
           event_id?: string | null
           id?: string
+          instagram_account_id?: string | null
           instagram_handle?: string
           kind?: string
           link_token?: string | null
           manual_resends?: number
           message?: string | null
           order_id?: string
+          recipient_id?: string | null
           rule_id?: string | null
           scheduled_at?: string
           sent_at?: string | null
+          source_key?: string | null
           status?: string
           variant_index?: number | null
         }
@@ -22802,30 +22814,39 @@ export type Database = {
       rh_avisos: {
         Row: {
           candidato_id: string
+          claim_token: string | null
           claimed_at: string | null
           created_at: string
           erro: string | null
           estado: string
+          provider_message_id: string | null
           reenvios: number
           sent_at: string | null
+          updated_at: string
         }
         Insert: {
           candidato_id: string
+          claim_token?: string | null
           claimed_at?: string | null
           created_at?: string
           erro?: string | null
           estado?: string
+          provider_message_id?: string | null
           reenvios?: number
           sent_at?: string | null
+          updated_at?: string
         }
         Update: {
           candidato_id?: string
+          claim_token?: string | null
           claimed_at?: string | null
           created_at?: string
           erro?: string | null
           estado?: string
+          provider_message_id?: string | null
           reenvios?: number
           sent_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -23122,6 +23143,10 @@ export type Database = {
           aviso_ativo: boolean
           aviso_instancia_id: string | null
           aviso_numero: string
+          aviso_ultimo_at: string | null
+          aviso_ultimo_erro: string | null
+          aviso_ultimo_status: string | null
+          aviso_ultimo_tipo: string | null
           faixas_permanencia: Json
           guia_atendimento: string
           id: number
@@ -23140,6 +23165,10 @@ export type Database = {
           aviso_ativo?: boolean
           aviso_instancia_id?: string | null
           aviso_numero?: string
+          aviso_ultimo_at?: string | null
+          aviso_ultimo_erro?: string | null
+          aviso_ultimo_status?: string | null
+          aviso_ultimo_tipo?: string | null
           faixas_permanencia?: Json
           guia_atendimento?: string
           id?: number
@@ -23158,6 +23187,10 @@ export type Database = {
           aviso_ativo?: boolean
           aviso_instancia_id?: string | null
           aviso_numero?: string
+          aviso_ultimo_at?: string | null
+          aviso_ultimo_erro?: string | null
+          aviso_ultimo_status?: string | null
+          aviso_ultimo_tipo?: string | null
           faixas_permanencia?: Json
           guia_atendimento?: string
           id?: number
@@ -28996,19 +29029,23 @@ export type Database = {
         Returns: {
           attempts: number
           channel: string | null
+          comment_id: string | null
           created_at: string
           error: string | null
           event_id: string | null
           id: string
+          instagram_account_id: string | null
           instagram_handle: string
           kind: string
           link_token: string | null
           manual_resends: number
           message: string | null
           order_id: string
+          recipient_id: string | null
           rule_id: string | null
           scheduled_at: string
           sent_at: string | null
+          source_key: string | null
           status: string
           variant_index: number | null
         }[]
@@ -31204,6 +31241,20 @@ export type Database = {
         Returns: Json
       }
       rh_area_password_set: { Args: { p_area: string }; Returns: boolean }
+      rh_aviso_claim: {
+        Args: { p_id: string; p_manual?: boolean }
+        Returns: Json
+      }
+      rh_aviso_finish: {
+        Args: {
+          p_error?: string
+          p_id: string
+          p_ok: boolean
+          p_provider_message_id?: string
+          p_token: string
+        }
+        Returns: boolean
+      }
       rh_candidate_detail: { Args: { p_id: string }; Returns: Json }
       rh_counts: { Args: never; Returns: Json }
       rh_create_link: {

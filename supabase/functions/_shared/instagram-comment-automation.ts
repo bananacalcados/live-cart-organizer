@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractBRPhone, textHasDigits } from "./br-phone-extract.ts";
 import { preferredIgToken } from "./instagram-account.ts";
+import { matchesRhVaga } from "./rh-vaga-matcher.ts";
+import { enqueueRhVagaNotification } from "./rh-vaga-automation.ts";
 
 interface CommentData {
   commentId: string;
@@ -10,6 +12,7 @@ interface CommentData {
   mediaType: string; // post, REELS, LIVE, etc
   mediaId?: string | null; // the post/reel id the comment belongs to
   isLive?: boolean; // true when the webhook field was live_comments
+  accountId?: string | null; // Instagram account that received the comment
 }
 
 /**
@@ -348,7 +351,9 @@ export async function processCommentAutomation(
 
     // Check trigger match
     let triggered = false;
-    if (rule.trigger_type === "all") {
+    if (rule.trigger_type === "rh_vaga") {
+      triggered = matchesRhVaga(comment.text);
+    } else if (rule.trigger_type === "all") {
       triggered = true;
     } else if (rule.trigger_type === "keyword") {
       triggered = rule.trigger_keywords.some(kw =>
@@ -392,6 +397,26 @@ export async function processCommentAutomation(
     }
 
     const usernameClean = comment.username?.replace("@", "") || "";
+
+    // RH tem fila e link dinâmico próprios. O reply público abaixo só acontece
+    // depois que o Direct foi reservado; nenhuma regra keyword antiga muda.
+    if (rule.trigger_type === "rh_vaga") {
+      if (!rule.action_send_dm || !rule.dm_message_text) continue;
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "dm");
+      if (!actionId) continue;
+      const queued = await enqueueRhVagaNotification(supabase, {
+        rule,
+        sourceKey: comment.commentId,
+        username: usernameClean,
+        message: applyIgVars(rule.dm_message_text, usernameClean, comment.text),
+        commentId: comment.commentId,
+        recipientId: comment.fromId,
+        accountId: comment.accountId,
+      });
+      await finishReservedAction(supabase, actionId, queued.ok ? "queued" : "error", queued.ok ? null : queued.error || "Direct já reservado");
+      if (!queued.ok) continue;
+      actions.push(`dm_queued:${rule.name}`);
+    }
 
     // ── Captação: salva o lead no evento futuro (origem live_comment) ──
     if (captureEnabled && captureMode === "phone" && extractedPhone) {
@@ -482,7 +507,7 @@ export async function processCommentAutomation(
     // fallback pedindo o número correto, SEM botões. Caso contrário, segue o DM
     // normal da regra (ex.: confirmação + botão do Grupo VIP).
     const dmBaseText = isCaptureFallback ? rule.capture_fallback_dm_text : rule.dm_message_text;
-    const shouldSendDm = isCaptureFallback ? !!rule.capture_fallback_dm_text : (rule.action_send_dm && !!rule.dm_message_text);
+    const shouldSendDm = rule.trigger_type !== "rh_vaga" && (isCaptureFallback ? !!rule.capture_fallback_dm_text : (rule.action_send_dm && !!rule.dm_message_text));
     if (shouldSendDm && dmBaseText) {
       const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, isCaptureFallback ? "dm_fallback" : "dm");
       if (!actionId) continue;
@@ -649,6 +674,7 @@ interface StoryReplyData {
   text: string;            // the reply text
   storyId?: string | null; // the story media id the user replied to
   messageId?: string | null;
+  accountId?: string | null;
 }
 
 /**
@@ -693,7 +719,9 @@ export async function processStoryReplyAutomation(
 
     // Trigger match
     let triggered = false;
-    if (rule.trigger_type === "all") {
+    if (rule.trigger_type === "rh_vaga") {
+      triggered = matchesRhVaga(reply.text);
+    } else if (rule.trigger_type === "all") {
       triggered = true;
     } else if (rule.trigger_type === "keyword") {
       triggered = rule.trigger_keywords.some(kw =>
@@ -709,6 +737,24 @@ export async function processStoryReplyAutomation(
     }
 
     const usernameClean = reply.username?.replace("@", "") || "";
+
+    if (rule.trigger_type === "rh_vaga") {
+      if (!rule.action_send_dm || !rule.dm_message_text) continue;
+      const actionId = await reserveRuleAction(supabase, dedupId, rule.id, "dm");
+      if (!actionId) continue;
+      const queued = await enqueueRhVagaNotification(supabase, {
+        rule,
+        sourceKey: dedupId,
+        username: usernameClean,
+        message: applyIgVars(rule.dm_message_text, usernameClean, reply.text),
+        commentId: null,
+        recipientId: reply.fromId,
+        accountId: reply.accountId,
+      });
+      await finishReservedAction(supabase, actionId, queued.ok ? "queued" : "error", queued.ok ? null : queued.error || "Direct já reservado");
+      if (queued.ok) actions.push(`dm_queued:${rule.name}`);
+      continue;
+    }
 
     // ── Action: Send DM (direct, since story replies arrive in the inbox) ──
     if (rule.action_send_dm && rule.dm_message_text) {
