@@ -235,6 +235,10 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     // Salvar no histórico — tenta atualizar a linha do echo (mesmo message_id) primeiro,
     // pois o webhook is_echo costuma chegar antes desta resposta e grava sem media_url.
     const recipientId = link?.ig_user_id || metaResponse?.recipient_id || cleanUsername;
+    if(!link?.ig_user_id && typeof recipientId==='string' && /^\d{5,20}$/.test(recipientId)){
+      const binding=await supabase.from('instagram_user_links').upsert({username:cleanUsername,ig_user_id:recipientId,source:'webhook'},{onConflict:'username',ignoreDuplicates:true});
+      if(binding.error)throw new Error('private_reply_identity_uncertain');
+    }
     const mid = metaResponse?.message_id || null;
     const payload = {
       phone: recipientId,
