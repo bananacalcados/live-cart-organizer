@@ -65,6 +65,7 @@ Deno.serve(withAccessLog("event-followup-dispatcher", async (req) => {
   let sent = 0, skipped = 0, failed = 0;
 
   for (const row of due) {
+    if (await replacesLegacyFollowups(supabase)) { await markSkipped(supabase,row.id,'replaced_by_global');continue; }
     // Claim atômico: evita que duas execuções simultâneas do cron enviem o
     // mesmo follow-up mais de uma vez.
     const { data: claimed, error: claimErr } = await supabase

@@ -6,6 +6,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
 import { buildRhVagaMetaMessage, rhVagaDirectWindowOpen } from "../_shared/rh-vaga-automation.ts";
+import { replacesLegacyFollowups } from '../_shared/live-followup.ts';
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -211,6 +212,10 @@ Deno.serve(withAccessLog("ig-live-cart-notify", async (req) => {
       // passar pelo caminho de comentário público da live.
       if (job.kind === "rh_vaga_link") {
         await sendRhVagaDm(sb, job, accounts!, results);
+        continue;
+      }
+      if (job.kind==='selfservice_register_dm' && await replacesLegacyFollowups(sb)) {
+        await sb.from('ig_live_cart_notifications').update({status:'skipped',error:'substituído pelo follow-up global'}).eq('id',job.id).eq('status','processing');
         continue;
       }
       // pedido ainda válido?

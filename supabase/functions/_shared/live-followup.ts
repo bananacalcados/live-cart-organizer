@@ -115,16 +115,26 @@ export async function processGlobalFollowups(sb: Client) {
       if(reason) {await stop(reason);continue;}
       const stored=await sb.from('live_followup_jobs').update({message:text}).eq('id',job.id).eq('status','processing').select('id').maybeSingle();
       if(stored.error || !stored.data) throw new Error('claim_lost');
+      if (job.type==='B' || job.type==='C') {
+        const reserve=await sb.rpc('live_followup_cart_reserve',{p_job_id:job.id});
+        if(reserve.error)throw reserve.error;
+        if(reserve.data!==true){await stop('cart_already_contacted');continue;}
+      }
       sendStarted=true;
       const provider=context.number?.provider;
       const out=job.channel==='instagram'
         ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id})
         : await call(provider==='meta'?'meta-whatsapp-send':`${provider}-send-message`,{phone:job.phone,message:text,type:'text',whatsapp_number_id:job.whatsapp_number_id,linkPreview:false});
       const mid=out.messageId || out.message_id || out.data?.id || null;
+      if (!mid) throw new Error('provider_confirmation_missing');
       // Instagram sender already records its outgoing message; WhatsApp transports do not.
       if(job.channel==='whatsapp') {
         const log=await sb.from('whatsapp_messages').insert({phone:job.phone,whatsapp_number_id:job.whatsapp_number_id,message:text,direction:'outgoing',status:'sent',channel:'whatsapp',message_id:mid,source:'live_followup'});
         if(log.error) throw new Error('sent_history_uncertain');
+      }
+      if(job.type==='B' || job.type==='C'){
+        const cartFinish=await sb.rpc('live_followup_cart_finish',{p_job_id:job.id,p_message_id:mid});
+        if(cartFinish.error)throw cartFinish.error;
       }
       const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid}).eq('id',job.id).eq('status','processing');
       if(finish.error) throw new Error('sent_persistence_uncertain');
@@ -152,7 +162,9 @@ export async function processGlobalFollowups(sb: Client) {
     }
     async function stop(reason: string) {
       if(reason==='instance_disconnected') await sb.from('live_followup_instances').update({paused:true,reason}).eq('whatsapp_number_id',job.whatsapp_number_id);
-      const scope=sb.from('live_followup_jobs').update({status:'cancelled',reason}).eq('sequence_key',job.sequence_key).in('status',['pending','processing']);
+      const scope=sb.from('live_followup_jobs').update({status:'cancelled',reason}).eq('customer_key',job.customer_key).eq('event_id',job.event_id).in('status',['pending','processing']);
+      if (job.order_id) scope.eq('order_id',job.order_id);
+      else scope.eq('sequence_key',job.sequence_key);
       await scope;
     }
   }
