@@ -101,8 +101,20 @@ export function useChatSender() {
         const mediaType = isMedia ? (params as SendMediaParams).mediaType : undefined;
 
         let providerMessageId: string | null = null;
+        let serverPersisted=false;
 
-        if (isMessenger) {
+        if (route.channel==='instagram') {
+          const {data:link,error:linkError}=await supabase.from('instagram_user_links').select('username').eq('ig_user_id',phone).limit(1).maybeSingle();
+          if(linkError)throw linkError;
+          if(!link?.username)throw new Error('Não foi possível identificar o perfil do Instagram. Aguarde uma nova mensagem dela.');
+          const {data:context,error:contextError}=await supabase.rpc('instagram_reply_context',{p_username:link.username,p_number_id:route.numberId || undefined});
+          if(contextError)throw contextError;
+          const ctx=context as unknown as {comment_ids:string[]};
+          const {data,error}=await supabase.functions.invoke('instagram-dm-send',{body:{username:link.username,message:text,mediaUrl,mediaType,eventId:undefined,whatsapp_number_id:route.numberId,fallbackCommentIds:ctx.comment_ids}});
+          if(error)throw error;
+          if(data?.error)throw new Error(data.message || data.error);
+          providerMessageId=data?.messageId || null;serverPersisted=true;
+        } else if (isMessenger) {
           // Messenger / Instagram via meta-messenger-send
           const messengerType = !isMedia
             ? 'text'
@@ -224,7 +236,9 @@ export function useChatSender() {
           insertPayload.media_type = mediaType;
           insertPayload.media_url = mediaUrl;
         }
-        const { error: insertErr } = await supabase.from('whatsapp_messages').insert(insertPayload as never);
+        const { error: insertErr } = serverPersisted && providerMessageId
+          ? await supabase.from('whatsapp_messages').update({sender_user_id:senderUserId || null,sender_name:senderName || null}).eq('message_id',providerMessageId)
+          : await supabase.from('whatsapp_messages').insert(insertPayload as never);
         if (insertErr) console.error('[useChatSender] DB insert failed:', insertErr);
 
         // Pausar IA (regra: sempre via automation_ai_sessions, NUNCA endpoint externo)
