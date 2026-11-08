@@ -1,4 +1,5 @@
 # Project architecture rules
+- Live follow-ups: atomic claims; never retry uncertain sends.
 - Security rules: supabase/functions/_shared/security-architecture.md.
 
 - Guarded order-write triggers persist self-service event shipping so previews, providers and POS share one amount; preserve manual shipping/exemptions and never recalculate paid, cancelled or provider-linked attempts. Automatic rows use shipping_info.source=event_rule for recalculation.

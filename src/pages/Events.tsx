@@ -492,7 +492,7 @@ const Events = () => {
             <Calendar className="h-6 w-6 text-accent" />
             <h1 className="text-xl font-bold">Eventos / Lives</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1">
               <Home className="h-4 w-4" />

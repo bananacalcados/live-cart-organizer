@@ -1,10 +1,11 @@
 # Follow-up automático global das lives
 - [x] Preservar plano RH idêntico; não implementar RH nem apagar candidato protegido
-- [ ] Inventariar lembretes existentes e sobreposição
-- [ ] Configuração global desligada, por tipo e por evento
-- [ ] Agendamento, paradas, deduplicação e fila segura por instância
-- [ ] Histórico, números do dia e testes simulados sem mensagens reais
-- [ ] Relatório de conferência; não publicar
+- [x] Inventariar lembretes existentes e sobreposição
+- [x] Configuração global desligada, por tipo e por evento
+- [x] Agendamento, paradas, deduplicação e fila segura por instância
+- [x] Histórico, números do dia e testes simulados sem mensagens reais
+- [x] Relatório de conferência; não publicar
+- [ ] Conferir entrega real em live controlada: aguarda autorização, global permanece desligado
 
 # Ajustes atuais — CNPJ e cores Shopify
 - [x] Vitrine urgente: ignorar estoque, preservar exclusões manuais e testar bolsa + Spezial 40 até pagamento.
