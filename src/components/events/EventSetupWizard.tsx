@@ -100,6 +100,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   // Step state
   const [stepIndex, setStepIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [liveFollowupEnabled, setLiveFollowupEnabled] = useState(true);
 
   // Identificação (etapa 1)
   const [name, setName] = useState("");
@@ -188,6 +189,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     const e = event as any;
     setName(e.name && e.name !== EVENT_DRAFT_NAME ? e.name : "");
     setDescription(e.description || "");
+    setLiveFollowupEnabled(e.live_followup_enabled !== false);
     setStartDate(e.start_date || "");
     setEndDate(e.end_date || "");
     setChannel(e.channel || "site");
@@ -322,6 +324,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     if (key === "general") {
       updates.name = name.trim();
       updates.description = description || null;
+      updates.live_followup_enabled = liveFollowupEnabled;
       updates.start_date = startDate || null;
       updates.end_date = endDate || null;
       updates.channel = channel;
@@ -1035,6 +1038,15 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
           {currentStep.key === "followups" && (
             <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 border-b pb-4">
+                <Label htmlFor="wizard-followup">Follow-up automático</Label>
+                <Switch id="wizard-followup" checked={liveFollowupEnabled} onCheckedChange={async enabled => {
+                  setLiveFollowupEnabled(enabled);
+                  if (!event) return;
+                  const { error } = await supabase.from('events').update({ live_followup_enabled: enabled }).eq('id', event.id);
+                  if (error) { setLiveFollowupEnabled(!enabled); toast.error('Não foi possível salvar'); }
+                }} />
+              </div>
               {event?.id ? (
                 <EventFollowupsManager eventId={event.id} />
               ) : (

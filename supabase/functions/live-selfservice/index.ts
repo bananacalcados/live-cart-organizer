@@ -139,7 +139,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
   async function openOrderRowsFor(eventId: string, ids: string[]) {
     if (!ids.length) return [] as any[];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, selfservice_cart_sent_at, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
@@ -173,6 +173,9 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
   }
 
   async function sendCartMessage(numberId: string, phone: string, greet: string, slug: string, orderIds: string[], cashback: number | null) {
+    const {data:leased,error:leaseError}=await sb.from('live_followup_cart_leases').select('order_id').in('order_id',orderIds).limit(10);
+    if(leaseError)throw leaseError;
+    if(leased?.length===orderIds.length)return;
     const mid = await waSend(numberId, phone, cartText(greet, slug, orderIds, cashback));
     if (!mid) throw new Error("Provedor não confirmou o identificador do envio");
     const { error } = await sb.rpc("selfservice_mark_cart_sent", { p_order_ids: orderIds, p_message_id: mid });
@@ -264,7 +267,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
             if (!o.registered_at) await sb.from("orders").update({ registered_at: regAt }).eq("id", o.id).is("registered_at", null);
           }
         }
-        const open = openRows.map((o) => o.id as string);
+        const open = openRows.filter(o=>!o.selfservice_cart_sent_at).map((o) => o.id as string);
         const greet = greetName(orderInstagram(openRows, a.instagram), await regName(a.order_ids || [], a.entered_phone));
         const cb = openRows.length ? await cashbackHint(openRows.reduce((s, o) => s + orderTotal(o), 0)) : null;
         const confirmText = registerConfirmText(greet);

@@ -1,6 +1,7 @@
 import { MemberAreaLinkBanner } from "@/components/events/MemberAreaLinkBanner";
 import { MemberAreaLeadsPanel } from "@/components/events/MemberAreaLeadsPanel";
 import { GlobalTypebotsPanel } from "@/components/events/GlobalTypebotsPanel";
+import { GlobalFollowupPanel } from '@/components/events/GlobalFollowupPanel';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -93,6 +94,7 @@ const Events = () => {
   const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
   const [channelPreferences, setChannelPreferences] = useState<string[]>(["whatsapp"]);
   const [automationEnabled, setAutomationEnabled] = useState<boolean>(true);
+  const [liveFollowupEnabled, setLiveFollowupEnabled] = useState(true);
   const [metaTemplateName, setMetaTemplateName] = useState<string | null>(null);
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState<string>("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
@@ -316,6 +318,7 @@ const Events = () => {
         channel_preference: primaryChannel,
         channel_preferences: channelPreferences,
         automation_enabled: automationEnabled,
+        live_followup_enabled: liveFollowupEnabled,
         default_store_id: defaultStoreId,
         store_ids: storeIds,
         manual_pos_routing: manualPosRouting,
@@ -338,6 +341,7 @@ const Events = () => {
           channel_preference: primaryChannel,
           channel_preferences: channelPreferences,
           automation_enabled: automationEnabled,
+          live_followup_enabled: liveFollowupEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
           ig_initial_message_buttons: igButtons,
@@ -370,6 +374,7 @@ const Events = () => {
     setChannelPreference("whatsapp");
     setChannelPreferences(["whatsapp"]);
     setAutomationEnabled(true);
+    setLiveFollowupEnabled(true);
     setMetaTemplateName(null);
     setMetaTemplateLanguage("pt_BR");
     setMetaTemplateBodyVars([]);
@@ -398,6 +403,7 @@ const Events = () => {
     const prefsArr = ((event as any).channel_preferences as string[]) || [];
     setChannelPreferences(prefsArr.length > 0 ? prefsArr : [singular]);
     setAutomationEnabled((event as any).automation_enabled !== false);
+    setLiveFollowupEnabled((event as any).live_followup_enabled !== false);
     setMetaTemplateName((event as any).meta_template_name || null);
     setMetaTemplateLanguage((event as any).meta_template_language || "pt_BR");
     setMetaTemplateBodyVars(((event as any).meta_template_body_variables as string[]) || []);
@@ -481,12 +487,12 @@ const Events = () => {
     <div className="events-corporate min-h-screen bg-background">
       <header className="corp-header sticky top-0 z-50 w-full">
 
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex min-h-16 flex-wrap items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-2">
             <Calendar className="h-6 w-6 text-accent" />
             <h1 className="text-xl font-bold">Eventos / Lives</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1">
               <Home className="h-4 w-4" />
@@ -515,6 +521,7 @@ const Events = () => {
                   </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  <div className="flex items-center justify-between gap-3"><Label htmlFor="live-followup">Follow-up automático</Label><Switch id="live-followup" checked={liveFollowupEnabled} onCheckedChange={setLiveFollowupEnabled}/></div>
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome do Evento *</Label>
                     <Input
@@ -829,8 +836,8 @@ const Events = () => {
       </header>
 
       <main className="container py-6">
-        <Tabs defaultValue="events">
-          <TabsList className="mb-4">
+        <Tabs defaultValue="events" className="min-w-0">
+          <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1">
             <TabsTrigger value="events" className="gap-1">
               <Calendar className="h-4 w-4" /> Eventos
             </TabsTrigger>
@@ -856,11 +863,13 @@ const Events = () => {
             <TabsTrigger value="member-leads" className="gap-1">
               <UserPlus className="h-4 w-4" /> Leads Área de Membros
             </TabsTrigger>
+            <TabsTrigger value="followup" className="gap-1"><MessageCircle className="h-4 w-4"/>Follow-up</TabsTrigger>
           </TabsList>
 
           <TabsContent value="typebots">
             <GlobalTypebotsPanel />
           </TabsContent>
+          <TabsContent value="followup"><GlobalFollowupPanel events={events} numbers={whatsappNumbers}/></TabsContent>
 
 
           <TabsContent value="member-leads">

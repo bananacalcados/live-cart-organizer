@@ -295,6 +295,9 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
       try { await sendDirect(numberId, to, text, orderId); } catch (e) { console.error("[live-catalog] envio direto falhou", e); }
     }
     async function sendDirect(numberId: string, ph: string, text: string, orderId: string) {
+      const lease=await sb.from('live_followup_cart_leases').select('order_id').eq('order_id',orderId).maybeSingle();
+      if(lease.error)throw lease.error;
+      if(lease.data)return;
       const { data: num } = await sb.from("whatsapp_numbers").select("provider, is_active").eq("id", numberId).maybeSingle();
       if (!num || !(num as any).is_active) throw new Error("Instância inativa");
       const provider = String((num as any).provider || "");

@@ -1,5 +1,7 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isAuthorizedCron } from '../_shared/cron-guard.ts';
+import { replacesLegacyFollowups, scheduleGlobalFollowups } from '../_shared/live-followup.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +18,7 @@ const corsHeaders = {
  */
 Deno.serve(withAccessLog("event-followup-scheduler", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await isAuthorizedCron(req))) return json({error:'Unauthorized'},401);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -23,6 +26,7 @@ Deno.serve(withAccessLog("event-followup-scheduler", async (req) => {
   );
 
   try {
+    if (await replacesLegacyFollowups(supabase)) return json(await scheduleGlobalFollowups(supabase));
     // Active configs (join events to skip archived/past events if needed)
     const { data: configs, error: cfgErr } = await supabase
       .from("event_followup_configs")

@@ -48,6 +48,11 @@ Deno.serve(withAccessLog("selfservice-message-worker", async (req) => {
 
   /** Envia uma mensagem pelo provider real da instância e grava no histórico do chat. */
   async function sendOne(row: any): Promise<string | null> {
+    if(row.kind==='cart_link' && row.order_id){
+      const lease=await sb.from('live_followup_cart_leases').select('order_id').eq('order_id',row.order_id).maybeSingle();
+      if(lease.error)throw lease.error;
+      if(lease.data)return null;
+    }
     const p = row.payload || {};
     const text = String(p.text || "");
     const copyCode = p.copy_code ? String(p.copy_code) : undefined;

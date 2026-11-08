@@ -1209,6 +1209,10 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
       
       // Auto-move to awaiting_payment when sending a payment link
       if (messageText.includes('/checkout/') || messageText.includes('link_carrinho') || (order.cartLink && messageText.includes(order.cartLink))) {
+        if (result.messageId && effectiveNumberId) {
+          const { error } = await supabase.rpc('live_followup_mark_manual_cart', { p_order_id: order.id, p_message_id: result.messageId, p_number_id: effectiveNumberId });
+          if (error) console.error('[followup manual cart]', error.message);
+        }
         const { moveOrder } = useDbOrderStore.getState();
         moveOrder(order.id, 'awaiting_payment');
       }
