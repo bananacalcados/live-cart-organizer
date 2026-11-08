@@ -86,6 +86,7 @@
 - [x] Backfill de vínculo + relatórios + testes por SQL
 
 # RH (recrutamento)
+- [ ] Complemento VAGA: conferir stories/menções e incluir DM direta sem alterar regras antigas; testar e implantar sem publicar
 - [x] Fase 1: banco, links por @, senha da área
 - [x] Fase 2: página /vaga/:codigo + rascunho + envio
 - [x] Fase 3: pontuação no servidor, avaliação IA isolada e testes
