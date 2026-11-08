@@ -17,7 +17,7 @@ const D = [
 ];
 export const DEFAULT_FOLLOWUP_CONFIG: FollowupConfig = {
   enabled: false,
-  limits: { interval_min: 20, interval_max: 60, hourly: 40, daily_customer: 6, typing_min: 2, typing_max: 5 },
+  limits: { interval_min: 20, interval_max: 60, hourly: 80, daily_customer: 6, typing_min: 2, typing_max: 5 },
   types: {
     A: { enabled: true, steps: [{ minutes: 5, variants: [
       "Oi, {primeiro_nome}! Vi que você começou seu cadastro da live mas não terminou 😊 Aconteceu alguma dificuldade? É só tocar aqui pra continuar: {link_cadastro}\n\nDaqui a pouco volto pra ver se você finalizou o cadastro, tá bom?",
