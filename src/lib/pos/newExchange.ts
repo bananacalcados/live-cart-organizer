@@ -51,6 +51,7 @@ export interface CreateExchangeParams {
   cliente_endereco?: string | null;
   codigo_postagem_reversa?: string | null;
   modo_expedicao: TdModoExpedicao;
+  motivo_excecao_antecipado?: string | null;
   status: TdStatus;
   vendedora_troca_id?: string | null;
   devolvidos: ExchangeItemInput[];
@@ -122,6 +123,7 @@ export async function createNewExchange(
       cliente_id: cliente_id || null,
       codigo_postagem_reversa: codigo_postagem_reversa || null,
       modo_expedicao,
+      motivo_excecao_antecipado: modo_expedicao === "despacho_antecipado" ? (params.motivo_excecao_antecipado?.trim() || null) : null,
       status,
       vendedora_troca_id: vendedora_troca_id || null,
     })
