@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,8 @@ function parseVariants(vs: Variant[]) {
   });
 }
 
+export const normalizeCatalogColor = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[\s-]+/g, "-");
+
 const EMPTY_FORM = { full_name: "", email: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "" };
 
 export default function LiveCatalogPublicPage() {
@@ -62,6 +64,8 @@ export default function LiveCatalogPublicPage() {
     utm_source: params.get("utm_source"), utm_campaign: params.get("utm_campaign"), g: params.get("g"), d: params.get("d"),
   });
   const focusId = params.get("p");
+  const focusColor = params.get("cor");
+  const autoOpened = useRef(false);
   const [ev, setEv] = useState<Ev | null>(null);
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [error, setError] = useState<"expired" | "invalid" | null>(null);
@@ -98,13 +102,20 @@ export default function LiveCatalogPublicPage() {
   }, [catalog, focusId]);
   const focused = focusId && ordered[0] && (ordered[0].id === focusId || ordered[0].shopify_product_id === focusId || ordered[0].shopify_product_id?.endsWith(`/${focusId}`)) ? ordered[0] : null;
 
-  const openProduct = (p: Product) => {
-    setSel(p); setColor(null); setQty(1);
+  const openProduct = useCallback((p: Product, requestedColor?: string | null) => {
+    const selectedColor = requestedColor ? parseVariants(p.variants).find((v) => v.color && normalizeCatalogColor(v.color) === normalizeCatalogColor(requestedColor))?.color ?? null : null;
+    setSel(p); setColor(selectedColor); setQty(1);
     const avail = p.variants.filter((v) => v.available);
     setVariant(p.variants.length === 1 && avail.length === 1 ? avail[0].variant_id : null);
     call({ action: "view", slug, catalog_product_id: p.id, attribution: attribution.current }).catch(() => {});
     trackSelfservice("ViewContent", { content_ids: [p.shopify_product_id], content_type: "product", value: p.offer_price ?? p.original_price, currency: "BRL" });
-  };
+  }, [slug]);
+
+  useEffect(() => {
+    if (!focused || autoOpened.current) return;
+    autoOpened.current = true;
+    openProduct(focused, focusColor);
+  }, [focused, focusColor, openProduct]);
 
   const findLine = (l: Line) => {
     const p = catalog.find((x) => x.id === l.pid);
@@ -123,6 +134,7 @@ export default function LiveCatalogPublicPage() {
       return [...ls, { pid: sel.id, vid: variant, qty }];
     });
     setSel(null);
+    if (focusId) { setStep("cart"); setCartOpen(true); }
     toast.success("Adicionado à sacola");
   };
 
