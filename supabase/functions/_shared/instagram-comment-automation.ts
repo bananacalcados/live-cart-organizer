@@ -675,6 +675,7 @@ interface StoryReplyData {
   storyId?: string | null; // the story media id the user replied to
   messageId?: string | null;
   accountId?: string | null;
+  sourceKind?: "story" | "dm"; // DM opts into RH only; legacy story rules stay unchanged.
 }
 
 /**
@@ -689,11 +690,16 @@ export async function processStoryReplyAutomation(
 ): Promise<{ actions: string[] }> {
   const actions: string[] = [];
 
-  const { data: rules, error } = await supabase
+  const directDm = reply.sourceKind === "dm";
+  // Ordinary DMs must never run legacy comment/story rules.
+  if (directDm && !matchesRhVaga(reply.text)) return { actions };
+  if (isOwnInstagramUsername(reply.username)) return { actions };
+  let query = supabase
     .from("instagram_comment_rules")
     .select("*")
-    .eq("is_active", true)
-    .order("created_at", { ascending: true });
+    .eq("is_active", true);
+  if (directDm) query = query.eq("trigger_type", "rh_vaga");
+  const { data: rules, error } = await query.order("created_at", { ascending: true });
 
   if (error || !rules || rules.length === 0) return { actions };
 
@@ -707,8 +713,8 @@ export async function processStoryReplyAutomation(
   const dedupId = reply.messageId || `${reply.fromId}:${reply.storyId || "story"}`;
 
   for (const rule of rules as Rule[]) {
-    // Only rules opted into stories
-    if (!rule.media_types.some(mt => mt.toLowerCase() === "story")) continue;
+    // Story opt-in remains unchanged; direct DMs are exclusive to RH.
+    if (directDm ? rule.trigger_type !== "rh_vaga" : !rule.media_types.some(mt => mt.toLowerCase() === "story")) continue;
 
     // Per-story targeting
     if (rule.target_media_id) {
