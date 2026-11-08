@@ -179,7 +179,7 @@ Deno.serve(withAccessLog("instagram-resend-live-dm", async (req) => {
       const rcpt = recipients[i];
       try {
         const attempt = await sendOnce(rcpt.phone);
-        // Janela de 24h fechada (code 10) → tenta tag HUMAN_AGENT (até 7 dias)
+        // Batch resends stay in the automatic window; never extend with a human tag.
         const res = { ok: attempt.ok };
         const data = attempt.data;
         if (res.ok) {
