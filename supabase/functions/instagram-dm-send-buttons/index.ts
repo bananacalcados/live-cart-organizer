@@ -108,11 +108,9 @@ Deno.serve(withAccessLog("instagram-dm-send-buttons", async (req) => {
       return { type: "postback", title, payload: String(b.payload || "").slice(0, 1000) };
     });
 
-    const buildPayload = (tag: boolean) => ({
+    const buildPayload = () => ({
       recipient: { id: igUserId },
-      ...(tag
-        ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" }
-        : { messaging_type: "RESPONSE" }),
+      messaging_type: "RESPONSE",
       message: {
         attachment: {
           type: "template",
@@ -125,18 +123,18 @@ Deno.serve(withAccessLog("instagram-dm-send-buttons", async (req) => {
       },
     });
 
-    const post = async (tag: boolean) => {
+    const post = async () => {
       const r = await fetch(`${META_API}/me/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload(tag)),
+        body: JSON.stringify(buildPayload()),
       });
       const j = await r.json().catch(() => ({}));
       return { r, j };
     };
 
     // Automated buttons never use HUMAN_AGENT, even if RESPONSE is rejected.
-    let { r: res, j: data } = await post(false);
+    const { r: res, j: data } = await post();
     if (!res.ok) {
       console.warn("[ig-dm-buttons] RESPONSE failed:", res.status, JSON.stringify(data));
     }
