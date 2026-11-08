@@ -95,6 +95,28 @@ describe('devolução com desconto único — SQL reproduzido em dry_run', () =>
     const ratio = returnDiscountRatio([{ unit_price: 100, quantity: 2 }, { unit_price: 100, quantity: 1 }], 30);
     expect(returnLineValues(100, 1, ratio)).toEqual({ unitPrice: 100, gross: 100, discount: 10, net: 90 });
   });
+  it('vínculo existente associa uma nova nota simulada à única troca aberta', async () => {
+    const source = readFileSync('supabase/functions/correios-reverse/index.ts', 'utf8');
+    const start = source.indexOf("const { data: open } = await db.from('trocas_devolucoes')");
+    const end = source.indexOf("} catch (e) { console.error('[correios-reverse] vínculo", start);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const patches: { table: string; patch: unknown }[] = [];
+    const db = { from(table: string) {
+      const q: any = { select: () => q, eq: () => q, not: () => q, limit: () => q, is: () => q,
+        update: (patch: unknown) => { patches.push({ table, patch }); return q; },
+        then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: [{ id: 'open-td', devolucao_doc_id: null }] }).then(resolve) };
+      return q;
+    } };
+    const js = ts.transpileModule(`(async () => { ${source.slice(start, end)} })()`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+    }).outputText;
+    await runInNewContext(js, { db, row: { sale_id: 'sale' }, doc: { id: 'simulated-doc', chave_acesso: '2'.repeat(44) } });
+    expect(patches).toEqual([
+      { table: 'fiscal_documents', patch: { troca_devolucao_id: 'open-td' } },
+      { table: 'trocas_devolucoes', patch: { devolucao_doc_id: 'simulated-doc', chave_devolucao: '2'.repeat(44) } },
+    ]);
+  });
   it('diagnóstico de desconto ausente exige NF reversa autorizada pelo valor bruto', () => {
     const base = { reason: 'divergente', reverseLinked: true, authorized: true, issued: 359.99, gross: 359.99, net: 323.99 };
     expect(isUndiscountedReverse(base)).toBe(true);
