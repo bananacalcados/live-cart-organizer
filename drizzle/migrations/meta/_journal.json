@@ -1142,6 +1142,13 @@
       "when": 1794164636524,
       "tag": "0162_instagram_button_policy_simulation",
       "breakpoints": true
+    },
+    {
+      "idx": 163,
+      "version": "7",
+      "when": 1794164708750,
+      "tag": "0163_instagram_button_simulation_scoped_setting",
+      "breakpoints": true
     }
   ]
 }
