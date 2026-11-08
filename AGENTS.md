@@ -81,3 +81,5 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
+- Carrier delivery detection lives only in _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (shared by tracking sync and Frenet webhook); delivered_source records carrier/customer_informed/manual so Central de Trocas deadlines know their evidence.
+- Central de Trocas reuses exchange_requests; support_links store only token hashes, and check_exchange_eligibility never denies on its own (only eligible or needs_human).
