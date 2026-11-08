@@ -1,138 +1,83 @@
-# Auditoria do fluxo de TROCA (só leitura)
+# Aba RH (recrutamento) — plano
 
-Nada foi alterado. Este relatório traz como o sistema funciona hoje e, no final, uma sugestão de próximos passos para você aprovar ou não.
+Nada será alterado no que já funciona. Nada será publicado.
 
-## 1. Passo a passo
+## 1. Auditoria (somente leitura)
 
-O site e a loja física usam o mesmo motor. As telas mudam: "Nova Troca" para o site, "Troca Presencial" para quem está no balcão e "Finalizar Troca" para o fim do processo.
+a) **Abas do Dashboard Geral** — `src/components/pos/POSGeneralDashboard.tsx` (linha ~544): lista fixa `overview / payroll / fiscal / dre` e um `view === ...` que escolhe o painel. Folha e Fiscal são protegidas por senha da área, conferida no servidor (`src/lib/areaPassword.ts` → RPC `verify_area_password`, 5 tentativas e bloqueio de 5 min; troca só pelo admin via `change_area_password`). Permissão de admin pelo `has_role(auth.uid(),'admin')`. RH entra como 5ª aba, visível só para admin, e as funções conferem `has_role` no servidor (o botão escondido não é a proteção).
 
-### Etapa 1 — Abrir a troca
-Tela "Nova Troca" (`NewExchangePicker.tsx` → `createNewExchange` em `src/lib/pos/newExchange.ts`).
-- Cria a troca com um código TD-2026-xxxxxx (gerado por gatilho no banco) e os itens: o que volta e o que vai de reposição.
-- O item de reposição fica marcado como "reservado" (modo aguarda retorno) ou "despachado" (modo despacho antecipado). **Essa marcação é só um rótulo: o estoque não muda.**
-- Logística reversa: o código dos Correios é **digitado à mão** no campo "postagem reversa". A reversa nova dos Correios (aba do chat do PDV) é um fluxo separado, sem ligação com a troca.
-- Gera um PDF de instrução para a cliente.
-- Situação inicial:
-  - "aguardando retorno", na maioria dos casos;
-  - "recebido/conferência", se for loja física com o produto em mãos.
+b) **WhatsApp por uazapi** — `supabase/functions/_shared/uazapi-credentials.ts` (`resolveUazapiCredentials`, `uazapiInstance`, `formatUazapiNumber`) resolve a instância e o token sem expor ao navegador. O ritmo/fila por instância fica em `selfservice-message-worker` (reserva atômica, 3–7 s por instância, recuperação após 2 min). Para um aviso interno, um por candidato, o plano é usar a mesma fila em vez de criar outra; se a fila exigir pedido/evento, faço um envio direto e único pelo helper de credenciais (ver Dúvida 2).
 
-### Etapa 2 — Finalizar (conferir o que voltou)
-Tela "Finalizar Troca" (`FinalizeExchangePicker.tsx` → `finalizeExchange` em `src/lib/pos/finalizeExchange.ts`).
-1. Grava a conferência: o item volta como vendável ou avariado.
-2. Emite a **NF-e de devolução** (finalidade 4, entrada, ligada à chave da nota original), pela função `nfe-devolucao-emitir`, sempre no mesmo CNPJ da nota original.
-   - Se a venda original não tem nota, ela pula e segue sem nota.
-   - Se a SEFAZ rejeita, **para tudo aqui**: não mexe no estoque nem no pedido e grava o erro. A troca fica em "recebido/conferência" até alguém tentar de novo.
-3. Dá entrada no estoque dos itens vendáveis que voltaram.
-4. Pedido original: em troca, **nunca é cancelado**. Só a devolução total cancela o pedido.
-5. Diferença de valor: se a cliente paga mais, a diferença vai como faturamento para a vendedora (no site não há vendedora). Se a diferença é a favor da cliente, gera voucher ou estorno no caixa.
-6. Cria a **"venda-espelho" da reposição**, uma nova venda no PDV com tipo "troca":
-   - o preço cheio dos produtos novos entra como subtotal;
-   - o crédito do produto devolvido entra como **desconto**;
-   - o total fica só com a diferença.
-   - Ao entrar os itens dessa venda, o gatilho de estoque **dá baixa no produto novo**.
-7. A troca passa para **"aguardando envio"**.
+c) **IG Automação** — regras de comentário com `trigger_type='keyword'` e `trigger_keywords` em `_shared/instagram-comment-automation.ts` (linhas ~353 e ~699); DM por `instagram-dm-automation-run`. O padrão de "1 linha, reserva atômica, sem nova tentativa" é `ig-live-cart-notify` + RPC `claim_ig_live_cart_notifications` com `kind` (`selfservice_register_dm`, ...). Dá para incluir na fase 2 um novo `kind='rh_vaga_link'` e uma ação de regra "enviar link do RH", sem mudar os `kind` nem as regras atuais.
 
-### Etapa 3 — Nota do produto novo
-Na mesma tela, o botão "Emitir NF-e" gera a nota de saída da venda-espelho, pela função `nfe-emitir`.
+d) **Função pública e IA** — `_shared/withAccessLog.ts`, `requireAuth.ts`, `staff-or-internal.ts`, `ai-rate-limit.ts` e contagem por IP em `auth-security.ts` (`countLastHour`). A IA da moderação está em `supabase/functions/ig-comment-moderate/index.ts`: Lovable AI, modelo Flash, `response_format` com esquema JSON, uma chamada por item, sem nova tentativa automática. Vou reutilizar o mesmo formato.
 
-### Etapa 4 — Rastreio e aviso
-Na mesma tela, a pessoa digita o rastreio e clica em "Enviar WhatsApp e concluir". Só aí acontece:
-- o rastreio é gravado na troca e na venda-espelho;
-- a mensagem vai para a cliente pelo WhatsApp;
-- a data do aviso é registrada;
-- a troca vira **"concluída"**.
+e) **Rota pública** — `src/App.tsx`: `/g/:code`, `/zap/:slug`, `/pedido/:eventSlug...` ficam fora do login. `/vaga/:codigo` segue o mesmo padrão, com página carregada só quando aberta.
 
-**Loja física (Troca Presencial):** o sistema faz as etapas 1 e 2 de uma vez, e a troca também termina em "aguardando envio". Não existe um botão para "cliente levou na mão", então ela fica parada ali.
+## 2. O que será criado
 
-## 2. A venda de reposição passa pela Expedição?
-**Não. A resposta é a (a).**
-- A venda-espelho nasce com tipo "troca". O gatilho `set_pos_sale_expedition_stage` dá "concluído" para todo tipo que não seja live ou online.
-- A aba Expedição só busca vendas live e online, então a venda-espelho **nunca aparece lá**.
-- O "pending" em expedition_status é só o valor padrão da coluna, que nunca é atualizado. Não quer dizer nada.
-- O produto novo é despachado **por fora do sistema**. O rastreio só seria gravado na etapa 4, que quase ninguém faz. Os 8 registros de rastreio foram criados à parte.
+**Tabelas (todas com segurança ligada, sem acesso público; leitura e escrita só admin ou pelas funções do servidor):**
+- `rh_vagas` — título, resumo, ativo. Já nasce com "Vendedor(a) — Live e Lojas".
+- `rh_settings` (1 linha) — guia de atendimento, pesos, faixas de permanência, pontos por transporte e por computador, palavra-chave da fase 2, instância uazapi, número do aviso (padrão 5533991955003), aviso ligado/desligado.
+- `rh_cenarios` — vaga, ordem, contexto, mensagem do cliente, gabarito, ativo.
+- `rh_bairros_proximos` — loja (Pérola/Centro), bairro sem acento, pontos.
+- `rh_links` — código (aleatório, 10+ caracteres), hash do código, @ normalizado, vaga, estado (gerado/aberto/enviado), datas. Único por @ + vaga.
+- `rh_candidatos` — link, nome, WhatsApp, idade, bairro, cidade, transporte, aceita condições, já trabalhou, computador, situação, dispositivo, rascunho, status (novo/em análise/chamado/aprovado/reprovado), observação, consentimento e data, `deleted_at`.
+- `rh_experiencias` — candidato, onde, função, duração em meses (até 10 por candidato).
+- `rh_respostas_teste` — candidato, cenário, texto exato da resposta.
+- `rh_avaliacoes` — candidato, nota final, completa/parcial, detalhamento por critério (JSON), resumo da IA em 3 linhas, sinais de alerta, `ai_attempted_at` (impede nova avaliação automática).
+- `rh_avisos` — candidato (único), estado, reservado em, enviado em, erro, quantidade de reenvios (máximo 3).
+- Índices só para as consultas de lista: (status, nota), (vaga, criado em), @ e nome com busca por similaridade.
 
-## 3. O que é "aguardando envio" e por que tem 122 paradas
-Significa: a nota de devolução está resolvida e a venda-espelho foi criada, mas faltam a nota do produto novo e/ou o rastreio com o aviso.
+**Funções SQL** (sem acesso público; conferem admin, exceto as do servidor):
+- `rh_create_link(username, vaga_id)` — somente servidor, idempotente; usada pela aba e depois pelo Instagram.
+- `rh_list_candidatos(status, busca, limit≤50, offset)` e `rh_list_links(limit, offset)`.
+- `rh_counts()` — novos e pendentes, numa única leitura.
+- `rh_candidato_detalhe(id)`, `rh_update_status(id, status, obs)`, `rh_delete_candidato(id)` (apaga dados pessoais e respostas, mantendo só um registro anônimo de exclusão).
+- `rh_claim_aviso(id)` — reserva atômica do aviso.
 
-O único código que leva a troca para "concluída" é o botão "Enviar WhatsApp e concluir" (`FinalizeExchangePicker.tsx`, linhas 840–863). As outras mudanças de situação são estas:
-- "aguardando retorno" e "recebido/conferência" são definidos na criação da troca;
-- "recebido/conferência" também aparece quando a nota de devolução fica em contingência;
-- "aguardando envio" é definido ao finalizar.
+**Funções do servidor:**
+- `rh-public` (aberta, mas com limite: 30/h por IP e 60/h por código; tudo validado no servidor) — `open` (devolve vaga, cenários e guia; marca "aberto"), `draft` (salva rascunho), `submit` (valida, grava, marca "enviado" e dispara a avaliação em segundo plano). Nunca devolve dados de outros candidatos.
+- `rh-score` (somente servidor/admin) — aplica as regras, faz uma chamada à IA e grava a avaliação. Se a IA falhar, grava nota parcial. Depois reserva e envia o aviso. Botões "Reavaliar com IA" e "Reenviar aviso" passam por aqui, com checagem de admin.
+- `rh-admin` (admin) — criar link e salvar configurações.
 
-**Por que travaram:**
-- 71 das 122 são de **loja física**. A cliente levou o produto na mão, não existe rastreio para digitar e não há botão de "entregue no balcão". Elas ficam paradas para sempre.
-- As do site ficam paradas porque o despacho é feito fora do sistema e ninguém volta na tela para digitar o rastreio.
-- **Não existe sincronização** entre o rastreio ou a Expedição e a situação da troca. Por isso o rastreio da troca está sempre vazio.
+**Telas:**
+- `src/pages/VagaPublicPage.tsx` (`/vaga/:codigo`), feita primeiro para celular.
+- `src/components/pos/rh/RhTab.tsx` com subabas Links, Candidatos e Configurações.
+- `src/pages/RhCandidatoPage.tsx` (`/rh/candidato/:id`, exige login e volta para o mesmo endereço depois de entrar).
+- Alteração mínima em `POSGeneralDashboard.tsx` (nova aba, só para admin) e em `App.tsx` (2 endereços).
 
-## 4. Notas fiscais
+## 3. Pontuação (servidor)
+- **Atendimento, 50 pontos:** 3 cenários × 10. Pergunta no final ou aviso de retorno vale 3 (regra); ação correta vale 3 (IA); até 200 caracteres vale 2 (regra); tom cordial vale 2 (IA).
+- **Situação, 20 pontos:** nota 0–10 da IA × 2.
+- **Permanência, 15 pontos:** média em meses, por faixas configuráveis. Sem experiência dá 7,5 pontos.
+- **Transporte e bairro, 10 pontos:** pontos por meio de transporte + tabela de bairros, com teto de 10.
+- **Computador, 5 pontos:** 0, 3 ou 5.
+- Quem não topa as condições recebe a nota normalmente, mas vai para o fim da lista e ganha uma marca.
+- Instruções fixas para a IA: avaliar só o conteúdo, ignorar características pessoais, descrever com neutralidade. A tela informa: "A IA é apoio; a decisão é sua."
 
-**O que está certo:**
-- Nenhuma troca tem duas notas de devolução autorizadas.
-- Nenhuma venda-espelho tem duas notas de saída autorizadas. As duas funções têm trava para não reemitir quando já existe nota autorizada.
+## 4. Aviso no WhatsApp
+Depois da avaliação (ou com "nota parcial" se a IA não responder em 25 s), envia uma mensagem por candidato: "Novo candidato: {nome} (@{ig}) — nota {n}/100 — vaga {vaga}. Ver respostas: {link do detalhe no ERP}". Usa a instância escolhida; se ela estiver desligada, usa a primeira uazapi conectada. Sem nova tentativa automática; um erro fica visível e pode ser reenviado até 3 vezes.
 
-**Achados importantes:**
-- **A nota do produto novo sai com desconto do crédito.** Das 95 notas de reposição autorizadas:
-  - 44 saíram com valor **R$ 0,00**;
-  - 60 saíram abaixo do preço do produto;
-  - somadas, dão R$ 17.005,88, contra R$ 34.348,91 de produtos.
+## 5. Consultas ao abrir cada tela
+- **Página pública:** 1 chamada ao abrir; rascunho salvo 1,5 s após parar de digitar (só se algo mudou); 1 chamada ao enviar. Sem repetição automática.
+- **Aba RH:** 2 chamadas ao abrir (contadores + 1ª página de 50 candidatos). Links e Configurações fazem 1 chamada cada, somente quando abertos. Sem atualização automática.
+- **Detalhe:** 1 chamada, com tudo junto.
+- **Servidor por candidato enviado:** 1 chamada de IA + 1 mensagem de WhatsApp. Nenhum agendamento novo.
 
-  Como a nota de devolução já anulou a venda original para o fisco, o produto novo pode estar saindo sem imposto ou com imposto menor. **Isso precisa ser confirmado com o contador.**
-- **15 trocas do site "concluídas" no modo despacho antecipado não têm venda-espelho.** Isso vem de um erro antigo, já corrigido no código. Para essas 15:
-  - não existe nota do produto novo;
-  - não foi dada baixa no estoque do produto novo.
-- **As 4 trocas sem nota de devolução** (TD-000020, 022, 049 e 112) estão corretas: a venda original não tinha nota autorizada, então não havia o que devolver para o fisco.
-- **Quando a nota de devolução é rejeitada:**
-  - não há nova emissão automática;
-  - a troca fica travada em "recebido/conferência" até alguém clicar de novo, e cada tentativa cria uma nota nova;
-  - nesse tempo, estoque e pedido não mudam;
-  - no modo despacho antecipado, porém, o produto novo pode já ter saído **sem nota nenhuma**.
+## 6. Fases (cada uma pode ser testada e desfeita separadamente)
+1. **Banco + criação de link.** Teste: criar o mesmo @ duas vezes devolve o mesmo link; um usuário sem permissão não lê nada.
+2. **Página pública + gravação.** Teste no celular (390 px): rascunho, menor de 18, até 10 experiências, link já enviado e limite de acessos.
+3. **Pontuação.** Testes automáticos de cada regra (pesos, sem experiência = metade, computador, "não topa" no fim) + 1 avaliação real com a IA + simulação de falha (nota parcial).
+4. **Aba RH + detalhe.** Teste: paginação, busca no servidor, status e observação, apagar candidato, voltar ao detalhe depois do login.
+5. **Aviso.** Teste: 1 envio para o seu número com candidato de teste, reserva dupla não envia duas vezes, instância de reserva e reenvio limitado. Os dados de teste são apagados no final.
+6. **Fase 2 (só com autorização):** `kind='rh_vaga_link'` em `ig_live_cart_notifications` + ação nas regras de palavra-chave + áudio com transcrição.
 
-### Trocas com pendência fiscal
-
-| Troca | Canal | Modo | Situação | Pendência |
-|---|---|---|---|---|
-| TD-000004 (faa671e8) | site | antecipado | aguardando retorno | devolução rejeitada 2x: UF da cliente vazia |
-| TD-000027 (099e34a1) | site | antecipado | aguardando retorno | devolução rejeitada: código do município inválido |
-| TD-000002 (036887f3) | física | aguarda retorno | recebido/conferência | devolução rejeitada 2x: CST do PIS inválido |
-| TD-000003 (45d3fdf8) | física | antecipado | recebido/conferência | devolução rejeitada 3x: UF vazia |
-| TD-000007 (6d87a8c4) | física | antecipado | recebido/conferência | devolução rejeitada 2x: UF vazia |
-| TD-000040 (7b91de61) | física | antecipado | recebido/conferência | devolução rejeitada: erro no XML (logradouro) |
-| TD-000168 (f988768f) | física | antecipado | recebido/conferência | devolução rejeitada 3x: valor maior que a nota original |
-| TD-000001, 031, 038, 043, 044, 072, 082, 090, 095, 096, 097, 174, 188 | física | misto | aguardando envio | sem nota do produto novo |
-| TD-000085, 086, 098, 099, 100, 101, 103, 110, 111, 141, 162, 170, 197 | site | misto | aguardando envio | sem nota do produto novo |
-| TD-000020, 022, 049, 112 | física | misto | aguardando envio | sem devolução (correto: venda original sem nota) |
-| TD-000008, 102 | física e site | antecipado | aguardando envio | ok; houve 2 e 3 rejeições antes de autorizar |
-
-O caso "valor maior que a nota original" provavelmente acontece porque a devolução usa o preço da venda, e não o valor da nota com desconto ou frete. Para confirmar, é preciso ler o XML da nota original.
-
-## 5. Aviso para a cliente
-- **Existe**, mas só no clique manual "Enviar WhatsApp e concluir" (etapa 4). Não há rotina automática.
-- Como ninguém chega a essa etapa, a data do aviso está vazia em todas as trocas.
-- A loja física nunca precisaria desse aviso, e justamente ela não tem outra forma de concluir.
-
-## 6. Riscos
-1. **Imposto menor ou zerado no produto novo:** a nota de reposição sai com o crédito como desconto, com 44 notas de R$ 0. Esse é o risco fiscal principal. Não vi imposto pago em dobro: a devolução anula a nota original e a nova nota sai sem o crédito.
-2. **Produto despachado sem nota:**
-   - no modo antecipado, o produto novo sai antes da nota de devolução e da nota de reposição, que só existem depois que o produto volta;
-   - hoje, 10 trocas antecipadas ainda não finalizadas já têm itens marcados como "despachado";
-   - nas 26 trocas em "aguardando envio" sem nota de reposição, se o produto já saiu, saiu sem nota.
-3. **Nota de devolução sem o produto ter voltado:** a tela de finalizar já vem com todos os itens marcados como "confirmado". Se alguém finalizar uma troca antecipada antes do pacote chegar, a nota de devolução é emitida sem retorno físico. O código não impede isso.
-4. **Estoque errado no modo antecipado:**
-   - o estoque do produto novo **não baixa** quando ele é enviado; só baixa ao finalizar, quando a venda-espelho é criada;
-   - enquanto isso, o estoque mostra uma peça que já saiu;
-   - se o produto antigo nunca voltar, a baixa do novo nunca acontece;
-   - nas 15 trocas do site concluídas sem venda-espelho, a baixa nunca aconteceu.
-5. **Reversa dos Correios em duplicidade (risco futuro):** a reversa nova também emite nota de devolução para a mesma venda. Ela não está ligada à troca, então a mesma venda pode acabar com duas notas de devolução. Hoje esse caso não aparece no banco, mas o caminho está aberto.
-
-## O que não dá para confirmar só pelo sistema
-- Se as 122 trocas paradas já foram despachadas ou entregues de fato. Isso depende de conferir fisicamente ou no balcão.
-- Se a nota com crédito como desconto está correta para o fisco. Isso depende do contador.
-- O motivo exato de "valor superior à nota devolvida". Isso depende de comparar com o XML da nota original.
-
-## Próximos passos sugeridos (só se você aprovar; nada é feito agora)
-1. Botão "Entregue no balcão" para as trocas da loja física, concluindo sem rastreio. Isso destrava 71 trocas.
-2. Ligar o rastreio e a entrega da venda de reposição à situação da troca.
-3. Depois da resposta do contador, emitir a nota de reposição pelo valor cheio, deixando o crédito só no financeiro.
-4. Modo antecipado: dar baixa no estoque e emitir a nota do produto novo **no envio**, e só emitir a devolução quando o pacote chegar de verdade.
-5. Ligar a reversa dos Correios à troca, para nunca emitir duas devoluções.
-6. Tratar as 15 trocas do site sem venda-espelho e as 7 com devolução rejeitada, principalmente as de UF ou município vazios no cadastro da cliente.
+## 7. Dúvidas e riscos
+1. **Acesso:** a aba deve ser só admin, ou também com senha própria como Folha/Fiscal? Proposta: só admin, sem senha.
+2. **Fila do aviso:** a fila do autoatendimento é ligada a evento/pedido. Proposta: envio direto e único pelo helper de credenciais, porque é 1 mensagem interna por candidato e não é disparo em massa. Confirma?
+3. **Endereço do link:** usar `checkout.bananacalcados.com.br/vaga/...`? Proposta: sim.
+4. **Faixas iniciais de permanência:** menos de 3 meses = 4; 3–6 = 8; 6–12 = 12; mais de 12 = 15. **Transporte:** a pé, moto e bicicleta = 6; carro = 5; ônibus = 3; bairro próximo soma até 4. Confirma?
+5. **Guarda dos dados:** apagar automaticamente candidatos reprovados depois de X meses? Proposta: não apagar sozinho; apagar só pelo botão.
+6. **Risco:** o @ vem do link, e alguém pode repassar o link a outra pessoa. A tela mostra o @ ("Cadastro de @fulana") para reduzir esse risco.
+7. **Fase 2 (Instagram):** a resposta por comentário depende da permissão atual de mensagem privada. Vai ser conferida antes de ligar.
