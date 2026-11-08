@@ -31238,6 +31238,7 @@ export type Database = {
         Args: { p_code: string; p_data: Json }
         Returns: Json
       }
+      rh_save_config: { Args: { p_data: Json }; Returns: boolean }
       rh_score_claim: {
         Args: { p_id: string; p_manual?: boolean }
         Returns: Json
