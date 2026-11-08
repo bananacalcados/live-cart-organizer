@@ -30879,6 +30879,7 @@ export type Database = {
         Args: { p_message_id: string; p_number_id: string; p_order_id: string }
         Returns: undefined
       }
+      live_followup_policy_simulate: { Args: never; Returns: Json }
       live_followup_priority: {
         Args: { p_step: number; p_type: string }
         Returns: number
