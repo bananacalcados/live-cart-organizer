@@ -22746,10 +22746,14 @@ export type Database = {
       rh_avaliacoes: {
         Row: {
           ai_attempted_at: string | null
+          ai_error: string | null
           alertas: Json | null
           candidato_id: string
+          claim_token: string | null
           created_at: string
           detalhe: Json | null
+          evaluating: boolean
+          manual_attempts: number
           nota: number | null
           parcial: boolean
           resumo_ia: string | null
@@ -22757,10 +22761,14 @@ export type Database = {
         }
         Insert: {
           ai_attempted_at?: string | null
+          ai_error?: string | null
           alertas?: Json | null
           candidato_id: string
+          claim_token?: string | null
           created_at?: string
           detalhe?: Json | null
+          evaluating?: boolean
+          manual_attempts?: number
           nota?: number | null
           parcial?: boolean
           resumo_ia?: string | null
@@ -22768,10 +22776,14 @@ export type Database = {
         }
         Update: {
           ai_attempted_at?: string | null
+          ai_error?: string | null
           alertas?: Json | null
           candidato_id?: string
+          claim_token?: string | null
           created_at?: string
           detalhe?: Json | null
+          evaluating?: boolean
+          manual_attempts?: number
           nota?: number | null
           parcial?: boolean
           resumo_ia?: string | null
@@ -23106,6 +23118,7 @@ export type Database = {
       }
       rh_settings: {
         Row: {
+          ai_blocked_reason: string | null
           aviso_ativo: boolean
           aviso_instancia_id: string | null
           aviso_numero: string
@@ -23123,6 +23136,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          ai_blocked_reason?: string | null
           aviso_ativo?: boolean
           aviso_instancia_id?: string | null
           aviso_numero?: string
@@ -23140,6 +23154,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          ai_blocked_reason?: string | null
           aviso_ativo?: boolean
           aviso_instancia_id?: string | null
           aviso_numero?: string
@@ -31182,17 +31197,29 @@ export type Database = {
         Args: { p_sale_id: string }
         Returns: undefined
       }
+      rh_admin_config: { Args: never; Returns: Json }
+      rh_admin_context: { Args: never; Returns: Json }
       rh_admin_create_link: {
         Args: { p_username: string; p_vaga_id: string }
         Returns: Json
       }
       rh_area_password_set: { Args: { p_area: string }; Returns: boolean }
+      rh_candidate_detail: { Args: { p_id: string }; Returns: Json }
       rh_counts: { Args: never; Returns: Json }
       rh_create_link: {
         Args: { p_username: string; p_vaga_id: string }
         Returns: Json
       }
       rh_delete_candidato: { Args: { p_id: string }; Returns: boolean }
+      rh_list_candidatos: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       rh_list_links: {
         Args: { p_estado?: string; p_limit?: number; p_offset?: number }
         Returns: Json
@@ -31210,6 +31237,18 @@ export type Database = {
       rh_public_submit: {
         Args: { p_code: string; p_data: Json }
         Returns: Json
+      }
+      rh_score_claim: {
+        Args: { p_id: string; p_manual?: boolean }
+        Returns: Json
+      }
+      rh_score_finish: {
+        Args: { p_id: string; p_result: Json; p_token: string }
+        Returns: boolean
+      }
+      rh_update_candidato: {
+        Args: { p_id: string; p_observacao?: string; p_status: string }
+        Returns: boolean
       }
       rotate_overlay_token: { Args: { p_event_id: string }; Returns: string }
       sample_variant_normalization: {
