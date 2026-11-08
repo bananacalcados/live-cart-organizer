@@ -1,6 +1,8 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
+import { isAuthorizedCron } from '../_shared/cron-guard.ts';
+import { replacesLegacyFollowups, processGlobalFollowups } from '../_shared/live-followup.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,10 +17,15 @@ const corsHeaders = {
  */
 Deno.serve(withAccessLog("event-followup-dispatcher", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await isAuthorizedCron(req))) return json({error:'Unauthorized'},401);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+  if (await replacesLegacyFollowups(supabase)) {
+    try { return json(await processGlobalFollowups(supabase)); }
+    catch(e) { console.error('[global-followup]', e instanceof Error?e.message:'internal');return json({error:'Follow-up indisponível'},500); }
+  }
 
   const nowIso = new Date().toISOString();
 
