@@ -60,6 +60,7 @@ const MarketingAttributionDashboard = lazyNamed(() => import("@/components/marke
 const AdCampaignManager = lazyTab(() => import("@/components/marketing/AdCampaignManager"));
 const TriggersManager = lazyNamed(() => import("@/components/marketing/TriggersManager"), "TriggersManager");
 const InstagramCommentAutomation = lazyTab(() => import("@/components/marketing/InstagramCommentAutomation"));
+const InstagramCommentModeration = lazyTab(() => import("@/components/marketing/InstagramCommentModeration"));
 import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
 import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 
@@ -2345,7 +2346,14 @@ export default function Marketing() {
 
           {/* ── IG AUTOMAÇÃO ── */}
           <TabsContent value="ig_automation" className="space-y-4">
-            <InstagramCommentAutomation />
+            <Tabs defaultValue="regras">
+              <TabsList>
+                <TabsTrigger value="regras">Regras de comentário</TabsTrigger>
+                <TabsTrigger value="moderacao">Moderação de comentários</TabsTrigger>
+              </TabsList>
+              <TabsContent value="regras"><InstagramCommentAutomation /></TabsContent>
+              <TabsContent value="moderacao"><InstagramCommentModeration /></TabsContent>
+            </Tabs>
           </TabsContent>
 
           {/* ── TRIGGERS DE VENDA ── */}
