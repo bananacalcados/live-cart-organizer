@@ -203,18 +203,17 @@ export default function LiveCatalogPublicPage() {
   const card = (p: Product, big = false) => {
     const promo = p.offer_price != null;
     return (
-      <button key={p.id} type="button" onClick={() => !p.sold_out && openProduct(p)} disabled={p.sold_out}
-        className={`group overflow-hidden rounded-2xl border bg-card text-left shadow-sm transition active:scale-[0.98] ${big ? "col-span-2" : ""} ${p.sold_out ? "opacity-60" : ""}`}>
+        <button key={p.id} type="button" onClick={() => openProduct(p)}
+        className={`group overflow-hidden rounded-2xl border bg-card text-left shadow-sm transition active:scale-[0.98] ${big ? "col-span-2" : ""}`}>
         <div className="relative">
           <ProductImage src={p.image_url} alt={p.title} />
-          {promo && !p.sold_out && <span className="absolute left-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-extrabold text-destructive-foreground">OFERTA</span>}
-          {p.sold_out && <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-foreground/80 py-1 text-center text-sm font-extrabold text-background">ESGOTADO</span>}
+          {promo && <span className="absolute left-2 top-2 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-extrabold text-destructive-foreground">OFERTA</span>}
         </div>
         <div className="space-y-0.5 p-2.5">
           <p className={`line-clamp-2 font-medium leading-snug ${big ? "text-sm" : "text-xs"}`}>{p.title}</p>
           {promo && <p className="text-[11px] text-muted-foreground line-through">{brl(p.original_price)}</p>}
           <p className={`font-extrabold ${big ? "text-xl" : "text-base"}`}>{brl(promo ? p.offer_price! : p.original_price)}</p>
-          <span className="mt-2 flex h-9 w-full items-center justify-center rounded-xl bg-foreground text-xs font-extrabold text-background">{p.sold_out ? "ESGOTADO" : "VER PRODUTO"}</span>
+          <span className="mt-2 flex h-9 w-full items-center justify-center rounded-xl bg-foreground text-xs font-extrabold text-background">VER PRODUTO</span>
         </div>
       </button>
     );
@@ -280,7 +279,7 @@ export default function LiveCatalogPublicPage() {
           {sel && (() => {
             const promo = sel.offer_price != null;
             const baseImgs = sel.images.length ? sel.images : sel.image_url ? [sel.image_url] : [];
-            const parsed = parseVariants(sel.variants);
+            const parsed = parseVariants(sel.variants.filter((v) => v.available));
             const colors = Array.from(new Set(parsed.map((v) => v.color).filter(Boolean))) as string[];
             const activeColor = colors.length ? (color && colors.includes(color) ? color : colors.length === 1 ? colors[0] : null) : null;
             const colorImg = activeColor ? parsed.find((v) => v.color === activeColor && v.image)?.image || null : null;
