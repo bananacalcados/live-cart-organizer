@@ -39,7 +39,7 @@ export async function scheduleGlobalFollowups(sb: Client) {
     let sequence = o ? 'order:' + o.id : 'access:' + a?.id;
     if (o?.origin === 'catalog' && o.attribution?.source !== 'vitrine_grupo' && c.paid_same_day) { type='E'; base=c.first_item_at || o.created_at; }
     else if (o && (o.selfservice_cart_sent_at || c.cart_sent_at)) { type='D'; base=o.selfservice_cart_sent_at || c.cart_sent_at; }
-    else if (a && !a.registered_at && !a.whatsapp_confirmed_at && phone) { type='A'; base=a.created_at; sequence='access:'+a.id; }
+    else if (a && !a.registered_at && !a.whatsapp_confirmed_at && phone) { type='A'; base=a.created_at; sequence='registration:'+ev.id+':'+customer; }
     else if (o && phone && (a?.registered_at || o.registered_at || c.registration)) {
       type=a?.registered_at && !a.whatsapp_confirmed_at ? 'B':'C'; base=a?.registered_at || o.registered_at || o.created_at;
     } else if (o && !phone && ig && !o.registered_at && o.origin !== 'catalog') { type='F'; base=o.created_at; }
