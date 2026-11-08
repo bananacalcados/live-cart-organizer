@@ -143,6 +143,22 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const { data: doc } = await db.from('fiscal_documents').select('id,numero,chave_acesso').eq('id', nf.document_id).maybeSingle();
       if (!doc?.chave_acesso || !doc?.numero) await markErr('Nota de devolução autorizada sem número/chave — confira no Fiscal');
       row.devolucao_doc_id = doc!.id;
+      // Vincula a nota à troca/devolução ABERTA da mesma venda (só se for uma e ainda sem nota),
+      // para a conferência reconhecer a nota e nunca emitir outra.
+      try {
+        const { data: open } = await db.from('trocas_devolucoes').select('id, devolucao_doc_id')
+          .eq('pedido_original_id', row.sale_id).not('status', 'in', '(concluida,cancelada)').limit(2);
+        const alvo = (open || []).length === 1 ? open![0] : null;
+        let livre = !!alvo && !alvo.devolucao_doc_id;
+        if (alvo?.devolucao_doc_id) {
+          const { data: cur } = await db.from('fiscal_documents').select('status').eq('id', alvo.devolucao_doc_id).maybeSingle();
+          livre = !cur || !['authorized', 'pending_sefaz'].includes(String(cur.status));
+        }
+        if (alvo && livre) {
+          await db.from('fiscal_documents').update({ troca_devolucao_id: alvo.id }).eq('id', doc!.id).is('troca_devolucao_id', null);
+          await db.from('trocas_devolucoes').update({ devolucao_doc_id: doc!.id, chave_devolucao: doc!.chave_acesso }).eq('id', alvo.id);
+        }
+      } catch (e) { console.error('[correios-reverse] vínculo com troca falhou', e); }
       // Quem recebe a mercadoria é quem emitiu a nota de entrada: o CNPJ do destinatário precisa ser o da chave da nota.
       const emitCnpj = String(doc!.chave_acesso).slice(6, 20);
       if (/^\d{14}$/.test(emitCnpj)) store.cnpj = emitCnpj;

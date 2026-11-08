@@ -151,7 +151,9 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     if ((evt as any).devolucao_doc_id) {
       const { data: prevDoc } = await supabase
         .from("fiscal_documents").select("*").eq("id", (evt as any).devolucao_doc_id).maybeSingle();
-      if (prevDoc && (prevDoc as any).status === "authorized") {
+      // Troca: a nota já vinculada (própria ou vinda da reversa) passa pela trava 6b,
+      // que reaproveita se o valor bate com os itens conferidos e bloqueia se divergir.
+      if (prevDoc && (prevDoc as any).status === "authorized" && isReverse) {
         return new Response(JSON.stringify({
           ok: true, already: true, status: "authorized",
           document_id: (prevDoc as any).id, chave_acesso: (prevDoc as any).chave_acesso,
