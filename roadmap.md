@@ -69,3 +69,8 @@
 
 # Grupo VIP no link da live
 - [ ] Plano aguardando aprovação (substituído pelo pedido da Central)
+
+# Moderação de comentários do Instagram
+- [x] Fila, IA, ocultar, direct de rastreio, tela e testes (interruptor desligado)
+- [ ] Confirmar permissão de ocultar com um comentário de teste real (aguarda o dono ligar)
+- [ ] Conferir se comentários de anúncio exclusivo chegam (aguarda um anúncio real comentado)
