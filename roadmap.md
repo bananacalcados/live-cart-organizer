@@ -1,3 +1,8 @@
+# Correção fiscal da reversa — desconto da venda
+- [x] Compartilhar cálculo troca/reversa e aviso fiscal, sem mudar trava de duplicidade
+- [x] Conferir oito TDs por SQL e dry_run, simular vínculo sem emissão (25 testes; XML já tinha desconto)
+- [x] Implantar nfe-devolucao-emitir e entregar relatório; preservar notas e planos
+
 # Follow-up automático global das lives
 - [x] Botão F: toque verificado libera carrinho e sequência; resposta digitada para; simulação sem envio
 - [x] Chat: HUMAN_AGENT manual 24h–7 dias somente com permissão comprovada; status e memória
