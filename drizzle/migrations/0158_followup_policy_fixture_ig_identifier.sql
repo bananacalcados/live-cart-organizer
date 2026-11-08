@@ -1,0 +1,1 @@
+DO $$ DECLARE def text; BEGIN SELECT pg_get_functiondef('public.live_followup_policy_simulate()'::regprocedure) INTO def;def:=replace(def,'''simulation-user-''||uname','''888''||substring(replace(ev::text,''-'','''') from 1 for 16)'); EXECUTE def; END $$;

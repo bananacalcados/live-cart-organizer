@@ -1107,6 +1107,13 @@
       "when": 1794163341836,
       "tag": "0157_followup_policy_fixture_comment_text",
       "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1794163373588,
+      "tag": "0158_followup_policy_fixture_ig_identifier",
+      "breakpoints": true
     }
   ]
 }
