@@ -22743,6 +22743,445 @@ export type Database = {
           },
         ]
       }
+      rh_avaliacoes: {
+        Row: {
+          ai_attempted_at: string | null
+          alertas: Json | null
+          candidato_id: string
+          created_at: string
+          detalhe: Json | null
+          nota: number | null
+          parcial: boolean
+          resumo_ia: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_attempted_at?: string | null
+          alertas?: Json | null
+          candidato_id: string
+          created_at?: string
+          detalhe?: Json | null
+          nota?: number | null
+          parcial?: boolean
+          resumo_ia?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_attempted_at?: string | null
+          alertas?: Json | null
+          candidato_id?: string
+          created_at?: string
+          detalhe?: Json | null
+          nota?: number | null
+          parcial?: boolean
+          resumo_ia?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_avaliacoes_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: true
+            referencedRelation: "rh_candidatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_avisos: {
+        Row: {
+          candidato_id: string
+          claimed_at: string | null
+          created_at: string
+          erro: string | null
+          estado: string
+          reenvios: number
+          sent_at: string | null
+        }
+        Insert: {
+          candidato_id: string
+          claimed_at?: string | null
+          created_at?: string
+          erro?: string | null
+          estado?: string
+          reenvios?: number
+          sent_at?: string | null
+        }
+        Update: {
+          candidato_id?: string
+          claimed_at?: string | null
+          created_at?: string
+          erro?: string | null
+          estado?: string
+          reenvios?: number
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_avisos_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: true
+            referencedRelation: "rh_candidatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_bairros_proximos: {
+        Row: {
+          bairro: string
+          bairro_norm: string
+          id: string
+          loja: string
+          pontos: number
+        }
+        Insert: {
+          bairro: string
+          bairro_norm: string
+          id?: string
+          loja: string
+          pontos?: number
+        }
+        Update: {
+          bairro?: string
+          bairro_norm?: string
+          id?: string
+          loja?: string
+          pontos?: number
+        }
+        Relationships: []
+      }
+      rh_candidatos: {
+        Row: {
+          aceita_condicoes: boolean | null
+          bairro: string | null
+          cidade: string | null
+          computador: string | null
+          consentimento_at: string | null
+          created_at: string
+          dispositivo: string | null
+          id: string
+          idade: number | null
+          instagram_username: string
+          ja_trabalhou: boolean | null
+          link_id: string
+          nome: string | null
+          observacao: string | null
+          rascunho: Json | null
+          rascunho_at: string | null
+          situacao: string | null
+          status: string | null
+          submitted_at: string | null
+          transporte: string | null
+          updated_at: string
+          vaga_id: string
+          whatsapp: string | null
+        }
+        Insert: {
+          aceita_condicoes?: boolean | null
+          bairro?: string | null
+          cidade?: string | null
+          computador?: string | null
+          consentimento_at?: string | null
+          created_at?: string
+          dispositivo?: string | null
+          id?: string
+          idade?: number | null
+          instagram_username: string
+          ja_trabalhou?: boolean | null
+          link_id: string
+          nome?: string | null
+          observacao?: string | null
+          rascunho?: Json | null
+          rascunho_at?: string | null
+          situacao?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          transporte?: string | null
+          updated_at?: string
+          vaga_id: string
+          whatsapp?: string | null
+        }
+        Update: {
+          aceita_condicoes?: boolean | null
+          bairro?: string | null
+          cidade?: string | null
+          computador?: string | null
+          consentimento_at?: string | null
+          created_at?: string
+          dispositivo?: string | null
+          id?: string
+          idade?: number | null
+          instagram_username?: string
+          ja_trabalhou?: boolean | null
+          link_id?: string
+          nome?: string | null
+          observacao?: string | null
+          rascunho?: Json | null
+          rascunho_at?: string | null
+          situacao?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          transporte?: string | null
+          updated_at?: string
+          vaga_id?: string
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_candidatos_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: true
+            referencedRelation: "rh_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_candidatos_vaga_id_fkey"
+            columns: ["vaga_id"]
+            isOneToOne: false
+            referencedRelation: "rh_vagas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_cenarios: {
+        Row: {
+          ativo: boolean
+          contexto: string | null
+          created_at: string
+          gabarito: string
+          id: string
+          mensagem_cliente: string
+          ordem: number
+          vaga_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          contexto?: string | null
+          created_at?: string
+          gabarito?: string
+          id?: string
+          mensagem_cliente: string
+          ordem?: number
+          vaga_id: string
+        }
+        Update: {
+          ativo?: boolean
+          contexto?: string | null
+          created_at?: string
+          gabarito?: string
+          id?: string
+          mensagem_cliente?: string
+          ordem?: number
+          vaga_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_cenarios_vaga_id_fkey"
+            columns: ["vaga_id"]
+            isOneToOne: false
+            referencedRelation: "rh_vagas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_experiencias: {
+        Row: {
+          candidato_id: string
+          duracao_meses: number
+          funcao: string
+          id: string
+          onde: string
+          ordem: number
+        }
+        Insert: {
+          candidato_id: string
+          duracao_meses: number
+          funcao: string
+          id?: string
+          onde: string
+          ordem: number
+        }
+        Update: {
+          candidato_id?: string
+          duracao_meses?: number
+          funcao?: string
+          id?: string
+          onde?: string
+          ordem?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_experiencias_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "rh_candidatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_links: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          estado: string
+          id: string
+          instagram_username: string
+          opened_at: string | null
+          submitted_at: string | null
+          vaga_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          id?: string
+          instagram_username: string
+          opened_at?: string | null
+          submitted_at?: string | null
+          vaga_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          id?: string
+          instagram_username?: string
+          opened_at?: string | null
+          submitted_at?: string | null
+          vaga_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_links_vaga_id_fkey"
+            columns: ["vaga_id"]
+            isOneToOne: false
+            referencedRelation: "rh_vagas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_respostas_teste: {
+        Row: {
+          candidato_id: string
+          cenario_id: string | null
+          id: string
+          mensagem_cliente: string
+          ordem: number
+          resposta: string
+        }
+        Insert: {
+          candidato_id: string
+          cenario_id?: string | null
+          id?: string
+          mensagem_cliente: string
+          ordem: number
+          resposta: string
+        }
+        Update: {
+          candidato_id?: string
+          cenario_id?: string | null
+          id?: string
+          mensagem_cliente?: string
+          ordem?: number
+          resposta?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_respostas_teste_candidato_id_fkey"
+            columns: ["candidato_id"]
+            isOneToOne: false
+            referencedRelation: "rh_candidatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_respostas_teste_cenario_id_fkey"
+            columns: ["cenario_id"]
+            isOneToOne: false
+            referencedRelation: "rh_cenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_settings: {
+        Row: {
+          aviso_ativo: boolean
+          aviso_instancia_id: string | null
+          aviso_numero: string
+          faixas_permanencia: Json
+          guia_atendimento: string
+          id: number
+          palavra_chave: string
+          pesos: Json
+          pontos_bairro_max: number
+          pontos_computador: Json
+          pontos_sem_experiencia: number
+          pontos_transporte: Json
+          teto_transporte: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          aviso_ativo?: boolean
+          aviso_instancia_id?: string | null
+          aviso_numero?: string
+          faixas_permanencia?: Json
+          guia_atendimento?: string
+          id?: number
+          palavra_chave?: string
+          pesos?: Json
+          pontos_bairro_max?: number
+          pontos_computador?: Json
+          pontos_sem_experiencia?: number
+          pontos_transporte?: Json
+          teto_transporte?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          aviso_ativo?: boolean
+          aviso_instancia_id?: string | null
+          aviso_numero?: string
+          faixas_permanencia?: Json
+          guia_atendimento?: string
+          id?: number
+          palavra_chave?: string
+          pesos?: Json
+          pontos_bairro_max?: number
+          pontos_computador?: Json
+          pontos_sem_experiencia?: number
+          pontos_transporte?: Json
+          teto_transporte?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      rh_vagas: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          resumo: string
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          resumo?: string
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          resumo?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
       sale_freight_quotes: {
         Row: {
           context: Json
@@ -30742,6 +31181,35 @@ export type Database = {
       revert_sale_price_adjustment: {
         Args: { p_sale_id: string }
         Returns: undefined
+      }
+      rh_admin_create_link: {
+        Args: { p_username: string; p_vaga_id: string }
+        Returns: Json
+      }
+      rh_area_password_set: { Args: { p_area: string }; Returns: boolean }
+      rh_counts: { Args: never; Returns: Json }
+      rh_create_link: {
+        Args: { p_username: string; p_vaga_id: string }
+        Returns: Json
+      }
+      rh_delete_candidato: { Args: { p_id: string }; Returns: boolean }
+      rh_list_links: {
+        Args: { p_estado?: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      rh_norm_username: { Args: { p: string }; Returns: string }
+      rh_public_draft: {
+        Args: { p_code: string; p_draft: Json }
+        Returns: string
+      }
+      rh_public_hit: {
+        Args: { p_code: string; p_ip: string }
+        Returns: boolean
+      }
+      rh_public_open: { Args: { p_code: string }; Returns: Json }
+      rh_public_submit: {
+        Args: { p_code: string; p_data: Json }
+        Returns: Json
       }
       rotate_overlay_token: { Args: { p_event_id: string }; Returns: string }
       sample_variant_normalization: {

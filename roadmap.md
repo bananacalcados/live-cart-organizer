@@ -84,3 +84,8 @@
 - [x] Trava de soma ≤ NF original em nfe-devolucao-emitir
 - [x] Bloqueio de 2ª troca aberta com mesmos itens
 - [x] Backfill de vínculo + relatórios + testes por SQL
+
+# RH (recrutamento)
+- [x] Fase 1: banco, links por @, senha da área
+- [x] Fase 2: página /vaga/:codigo + rascunho + envio
+- [ ] Fases 3–5 (nota, aba RH, aviso) — aguardando autorização
