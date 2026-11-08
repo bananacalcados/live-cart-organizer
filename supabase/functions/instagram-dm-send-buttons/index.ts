@@ -135,12 +135,10 @@ Deno.serve(withAccessLog("instagram-dm-send-buttons", async (req) => {
       return { r, j };
     };
 
-    // 1ª tentativa dentro da janela normal; se a Meta recusar por janela
-    // fechada (2534022 / 10 / 551), tenta com a tag HUMAN_AGENT (7 dias).
+    // Automated buttons never use HUMAN_AGENT, even if RESPONSE is rejected.
     let { r: res, j: data } = await post(false);
     if (!res.ok) {
       console.warn("[ig-dm-buttons] RESPONSE failed:", res.status, JSON.stringify(data));
-      ({ r: res, j: data } = await post(true));
     }
 
     if (!res.ok) {

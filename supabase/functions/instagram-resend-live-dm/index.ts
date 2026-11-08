@@ -185,9 +185,6 @@ Deno.serve(withAccessLog("instagram-resend-live-dm", async (req) => {
       try {
         let attempt = await sendOnce(rcpt.phone, false);
         // Janela de 24h fechada (code 10) → tenta tag HUMAN_AGENT (até 7 dias)
-        if (!attempt.ok && attempt.data?.error?.code === 10) {
-          attempt = await sendOnce(rcpt.phone, true);
-        }
         const res = { ok: attempt.ok };
         const data = attempt.data;
         if (res.ok) {

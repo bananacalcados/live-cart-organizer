@@ -150,7 +150,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
         const fJob=followupButtonJob(interactionPayload);
         // New follow-up clicks require a valid provider signature even in legacy shadow mode.
         if(channel==='instagram' && interactionPayload?.startsWith('livef:')){
-          if(!fJob || !sigResult.valid || !entryNumberId || event.message?.is_echo)continue;
+          if(!fJob || sigResult!=='valid' || !entryNumberId || event.message?.is_echo)continue;
           const clickAt=new Date(event.timestamp || Date.now()).toISOString();
           const mid=event.message?.mid || `livef:${fJob}:${senderId}:${event.timestamp || ''}`;
           const saved=await supabase.from('whatsapp_messages').insert({phone:senderId,message:event.message?.text || 'Quero meu link 🛍️',direction:'incoming',channel:'instagram',status:'received',source:'ig_interaction',message_id:mid,whatsapp_number_id:entryNumberId,created_at:clickAt});

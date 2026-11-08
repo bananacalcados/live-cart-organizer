@@ -110,7 +110,7 @@ export function useChatSender() {
           const {data:context,error:contextError}=await supabase.rpc('instagram_reply_context',{p_username:link.username,p_number_id:route.numberId || undefined});
           if(contextError)throw contextError;
           const ctx=context as unknown as {comment_ids:string[]};
-          const {data,error}=await supabase.functions.invoke('instagram-dm-send',{body:{username:link.username,message:text,mediaUrl,mediaType,eventId:undefined,whatsapp_number_id:route.numberId,fallbackCommentIds:ctx.comment_ids}});
+          const {data,error}=await supabase.functions.invoke('instagram-dm-send',{body:{username:link.username,message:text,mediaUrl,mediaType,manual:true,eventId:undefined,whatsapp_number_id:route.numberId,fallbackCommentIds:ctx.comment_ids}});
           if(error)throw error;
           if(data?.error)throw new Error(data.message || data.error);
           providerMessageId=data?.messageId || null;serverPersisted=true;
