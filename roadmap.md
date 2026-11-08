@@ -88,6 +88,6 @@
 # RH (recrutamento)
 - [x] Fase 1: banco, links por @, senha da área
 - [x] Fase 2: página /vaga/:codigo + rascunho + envio
-- [ ] Fase 3: pontuação no servidor, avaliação IA isolada e testes
-- [ ] Fase 4: aba RH, detalhe, senha e configurações; testes e limpeza
+- [x] Fase 3: pontuação no servidor, avaliação IA isolada e testes
+- [x] Fase 4: aba RH, detalhe, senha e configurações; testes e limpeza
 - [ ] Fase 5: aviso — aguardando autorização
