@@ -5,6 +5,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // O primeiro item de um carrinho novo enfileira UMA mensagem com o link de pagamento; itens seguintes não.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { computeCatalogCashback, yourPrice, type Coupon } from "./cashback.ts";
+import { enabledCatalogVariants } from "../_shared/catalog-availability.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
 const MODE = "whatsapp_autoatendimento";
@@ -197,8 +198,8 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
       const catalog = (await catalogRows()).map((p) => ({
         id: p.id, title: p.title, image_url: p.image_url, images: Array.isArray(p.images) ? p.images : [],
         original_price: Number(p.original_price), offer_price: p.offer_price != null ? Number(p.offer_price) : null, allow_cashback: !!p.allow_cashback,
-        variants: (Array.isArray(p.variants) ? p.variants : []).filter((v: any) => v.enabled).map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null })),
-      }));
+        variants: enabledCatalogVariants<any>(p.variants).map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null })),
+      })).filter((p) => p.variants.length > 0);
       return respond(st, {
         event: {
           name: (ev as any).name, product_notice: (ev as any).self_service_product_notice, official_last4: officialLast4,
@@ -217,7 +218,7 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
       const { data: cp } = await sb.from("event_catalog_products").select("id, shopify_product_id, title, image_url, original_price, offer_price, allow_cashback, variants, is_active")
         .eq("id", String(body.catalog_product_id || "")).eq("event_id", (ev as any).id).maybeSingle();
       const P = cp as any;
-      const V = P?.is_active ? (P.variants || []).find((v: any) => v.variant_id === String(body.variant_id || "") && v.enabled) : null;
+      const V = P?.is_active ? enabledCatalogVariants<any>(P.variants).find((v: any) => v.variant_id === String(body.variant_id || "")) : null;
       if (!V) return json({ ok: false, error: "unavailable" }, 400);
       if (!customerId) return json({ ok: false, error: "customer_not_found" }, 400);
       const st0 = await stateOf();

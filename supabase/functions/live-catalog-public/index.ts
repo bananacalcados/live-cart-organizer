@@ -1,12 +1,13 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Vitrine pública do catálogo da live (/pedido/:slug/vitrine) para Grupos VIP.
 // Sem token de cliente: só abre com events.public_catalog_enabled e dentro de public_catalog_until.
-// Preço, estoque, frete e cashback são decididos aqui (service role); o navegador só manda ids e a ficha.
+// Preço, disponibilidade manual, frete e cashback são decididos aqui; o navegador só manda ids e a ficha.
 // Cashback só é aplicado quando o CPF digitado bate com a ficha já salva daquele WhatsApp.
 // O pedido reaproveita o carrinho aberto da cliente no evento (nunca dois não pagos) e segue para
 // a página de pagamento existente do autoatendimento.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeBrPhone } from "../_shared/access-code.ts";
+import { enabledCatalogVariants } from "../_shared/catalog-availability.ts";
 
 // Mesma regra de live-catalog/cashback.ts (itens promocionais não contam; mínimo de compra; teto no elegível).
 interface Coupon { id: string; cashback_amount: number; min_purchase: number; expires_at?: string }
@@ -85,34 +86,18 @@ Deno.serve(withAccessLog("live-catalog-public", async (req) => {
       const { data } = await q.order("position").limit(200);
       return (data || []) as any[];
     }
-    /** Estoque compartilhado: soma de todas as lojas ativas por SKU (consulta em lote, índice store_id+sku). */
-    async function stockBySku(skus: string[]) {
-      const out = new Map<string, number>();
-      const list = Array.from(new Set(skus.filter(Boolean)));
-      if (!list.length) return out;
-      const { data: stores } = await sb.from("pos_stores").select("id").eq("is_active", true);
-      const storeIds = (stores || []).map((s: any) => s.id);
-      for (let i = 0; i < list.length; i += 300) {
-        const { data } = await sb.from("pos_products").select("sku, stock").in("store_id", storeIds).in("sku", list.slice(i, i + 300));
-        for (const r of (data || []) as any[]) out.set(r.sku, (out.get(r.sku) || 0) + Math.max(0, Number(r.stock || 0)));
-      }
-      return out;
-    }
-    const variantAvailable = (v: any, stock: Map<string, number>) => !v.sku || (stock.get(v.sku) || 0) > 0;
-
     // ───── Abrir vitrine
     if (action === "open") {
       const rows = await catalogRows();
-      const stock = await stockBySku(rows.flatMap((p) => (Array.isArray(p.variants) ? p.variants : []).filter((v: any) => v.enabled).map((v: any) => v.sku)));
       const catalog = rows.map((p) => {
-        const variants = (Array.isArray(p.variants) ? p.variants : []).filter((v: any) => v.enabled)
-          .map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null, available: variantAvailable(v, stock) }));
+        const variants = enabledCatalogVariants<any>(p.variants)
+          .map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null, available: true }));
         return {
           id: p.id, shopify_product_id: p.shopify_product_id, title: p.title, image_url: p.image_url, images: Array.isArray(p.images) ? p.images : [],
           original_price: Number(p.original_price), offer_price: p.offer_price != null ? Number(p.offer_price) : null, allow_cashback: !!p.allow_cashback,
           variants, sold_out: !variants.some((v: any) => v.available),
         };
-      });
+      }).filter((p) => p.variants.length > 0);
       let officialLast4: string | null = null;
       const { data: wl } = await sb.from("live_whatsapp_links").select("whatsapp_number_id, target_phone").eq("event_id", ev.id).order("is_active", { ascending: false }).limit(1).maybeSingle();
       const numId = (wl as any)?.whatsapp_number_id || ev.whatsapp_number_id;
@@ -169,14 +154,10 @@ Deno.serve(withAccessLog("live-catalog-public", async (req) => {
     const resolved: any[] = [];
     for (const w of want) {
       const P = byId.get(w.cp);
-      const V = P ? (P.variants || []).find((v: any) => v.variant_id === w.vid && v.enabled) : null;
+      const V = P ? enabledCatalogVariants<any>(P.variants).find((v: any) => v.variant_id === w.vid) : null;
       if (!V) return json({ ok: false, error: "Um dos produtos não está mais disponível.", sold_out: [w.cp] }, 400);
       resolved.push({ P, V, qty: w.qty });
     }
-    const stock = await stockBySku(resolved.map((r) => r.V.sku));
-    const soldOut = resolved.filter((r) => !variantAvailable(r.V, stock));
-    if (soldOut.length) return json({ ok: false, error: `Esgotou: ${soldOut.map((r) => `${r.P.title} (${r.V.title})`).join(", ")}`, sold_out: soldOut.map((r) => r.P.id) }, 409);
-
     // Ficha: reaproveita a salva só com CPF igual; senão, exige a ficha completa.
     const cpf = digits(body.cpf);
     if (!validCpf(cpf)) return json({ ok: false, field: "cpf", error: "CPF inválido." }, 400);
