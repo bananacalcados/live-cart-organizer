@@ -22,3 +22,4 @@
 - Payment webhooks (Pagar.me/AppMax/Mercado Pago) re-query the provider and compare amounts via _shared/webhook-verification.ts, logging to webhook_verification_log; enforcement only when app_settings.webhook_strict_amount=true (legacy webhook_strict_mode is the fallback), so rules can be replayed before they can block a real payment. POS accepts overpayment (card interest), never underpayment.
 - Password reset only via auth-password-reset (generic reply, 3/h per IP, 2/h per e-mail, security_events log); login_ok/login_failed are browser-declared events in security-auth-event.
 - Public live catalog: only via live-catalog-public (server prices/stock, cashback needs CPF match, reuses open cart, pays on self-service cart page).
+- Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
