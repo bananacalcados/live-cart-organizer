@@ -2,7 +2,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveIgAccountByNumberId, preferredIgToken } from "../_shared/instagram-account.ts";
-import { instagramSendMode } from "../_shared/instagram-window.ts";
+import { instagramSendMode, instagramFollowupMode } from "../_shared/instagram-window.ts";
 
 
 const corsHeaders = {
@@ -30,7 +30,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     const ctxResult=await supabase.rpc('instagram_reply_context',{p_username:username,p_event_id:eventId || null,p_number_id:whatsapp_number_id || null});
     if(ctxResult.error)throw ctxResult.error;
     let replyContext=ctxResult.data;
-    const mode=instagramSendMode(replyContext);
+    const mode=body.liveFollowup ? instagramFollowupMode(replyContext,Number(body.followupStep || 0)) : instagramSendMode(replyContext);
     if(!['direct_dm','private_reply'].includes(mode)) return new Response(JSON.stringify({error:mode,message:mode==='live_ended_no_private_reply'?'A live terminou: comentário não abre a janela de 24h e a resposta privada só funciona durante a transmissão. Aguarde ela mandar uma mensagem.':'Sem janela de 24h e sem comentário elegível não respondido. Aguarde ela mandar uma mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
     const resolvedNumberId=replyContext.number_id || whatsapp_number_id;
 
@@ -61,7 +61,7 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
     const commentIdCandidates: string[] = Array.from(
       new Set(
         [
-          ...replyContext.comment_ids,
+          ...replyContext.comment_ids.filter((id:string)=>!body.liveFollowup || replyContext.live_comment_ids.includes(id)),
         ].filter((c): c is string => typeof c === "string" && c.trim().length > 0),
       ),
     );
@@ -156,7 +156,8 @@ Deno.serve(withAccessLog("instagram-dm-send", async (req) => {
           throw error;
         }
         const data = await r.json();
-        await supabase.from('live_comment_dms').update({status:r.ok?'sent':'uncertain',meta_message_id:data?.message_id || null,error_details:r.ok?null:JSON.stringify(data).slice(0,2000)}).eq('comment_id',cid).eq('status','processing');
+        const persist=await supabase.from('live_comment_dms').update({status:r.ok?'sent':'uncertain',meta_message_id:data?.message_id || null,error_details:r.ok?null:JSON.stringify(data).slice(0,2000)}).eq('comment_id',cid).eq('status','processing');
+        if(persist.error)throw new Error('private_reply_history_uncertain');
         if (r.ok) { usedCommentId=cid; return { ok: true, data, commentId: cid }; }
         console.warn(`[ig-dm-send] private_reply failed for @${cleanUsername} comment ${cid}:`, JSON.stringify(data));
         lastData = data;

@@ -1,7 +1,7 @@
 import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, crossellWindow, type FollowupConfig, type FollowupType } from './live-followup-rules.ts';
 import { internalCallHeaders } from './requireAuth.ts';
 import { resolveEventNumber } from './event-sender.ts';
-import { instagramSendMode } from './instagram-window.ts';
+import { instagramFollowupMode } from './instagram-window.ts';
 type Client = any;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
   const { data, error } = await sb.from('live_followup_settings').select('value').eq('id', true).maybeSingle();
@@ -60,7 +60,7 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
       if(type==='F') {
         const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
         if(igctx.error)throw igctx.error;
-        const mode=instagramSendMode(igctx.data);
+        const mode=instagramFollowupMode(igctx.data);
         if(mode==='private_reply')privateReplies++;
         if(mode==='live_ended_no_private_reply')endedPrivateReplies++;
       }
@@ -144,7 +144,7 @@ export async function processGlobalFollowups(sb: Client) {
       sendStarted=true;
       const provider=context.number?.provider;
       const out=job.channel==='instagram'
-        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id,fallbackCommentIds:context.instagram_context?.comment_ids || []})
+        ? await call('instagram-dm-send',{username:job.instagram,message:text,eventId:job.event_id,whatsapp_number_id:job.whatsapp_number_id,liveFollowup:true,followupStep:job.step,fallbackCommentIds:context.instagram_context?.comment_ids || []})
         : await call(provider==='meta'?'meta-whatsapp-send':`${provider}-send-message`,{phone:job.phone,message:text,type:'text',whatsapp_number_id:job.whatsapp_number_id,linkPreview:false});
       const mid=out.messageId || out.message_id || out.data?.id || null;
       if (!mid) throw new Error('provider_confirmation_missing');
@@ -160,7 +160,7 @@ export async function processGlobalFollowups(sb: Client) {
       if(job.type==='F' && job.step===0){
         for(let i=1;i<cfg.types.F.steps.length;i++){
           const stepAt=scheduleStep(new Date(),'F',cfg.types.F.steps[i].minutes);
-          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString(),base_at:new Date().toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
+          await sb.from('live_followup_jobs').update({scheduled_at:stepAt.toISOString()}).eq('sequence_key',job.sequence_key).eq('step',i).eq('status','pending');
         }
       }
       const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid}).eq('id',job.id).eq('status','processing');
@@ -186,7 +186,7 @@ export async function processGlobalFollowups(sb: Client) {
       if(job.type==='F' && o?.registered_at)return 'registration_completed';
       if(['B','C'].includes(job.type) && (o?.selfservice_cart_sent_at || c.cart_sent_at || c.customer_replied))return 'cart_already_contacted';
       if(job.channel==='instagram') {
-        const mode=instagramSendMode(c.instagram_context,job.step);
+        const mode=instagramFollowupMode(c.instagram_context,job.step);
         if(!['direct_dm','private_reply'].includes(mode))return mode;
       } else if(c.number?.provider==='meta' && !c.window_open)return 'meta_window_closed';
       return null;
