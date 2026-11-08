@@ -86,6 +86,7 @@
 - [x] Backfill de vínculo + relatórios + testes por SQL
 
 # RH (recrutamento)
+- [x] Complemento VAGA: stories/menções conferidos e DM direta incluída; 64 testes passaram e funções implantadas sem publicar, candidato preservado
 - [x] Fase 1: banco, links por @, senha da área
 - [x] Fase 2: página /vaga/:codigo + rascunho + envio
 - [x] Fase 3: pontuação no servidor, avaliação IA isolada e testes

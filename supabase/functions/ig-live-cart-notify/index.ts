@@ -5,7 +5,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 // Ordem de envio: comentário público na live -> resposta ao último comentário dela -> direct (private reply).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
-import { buildRhVagaMetaMessage } from "../_shared/rh-vaga-automation.ts";
+import { buildRhVagaMetaMessage, rhVagaDirectWindowOpen } from "../_shared/rh-vaga-automation.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -133,6 +133,11 @@ async function sendRhVagaDm(sb: any, job: any, accounts: any[], results: any[]) 
   const token = account?.access_token || (account ? globalIgToken() : null);
   if (!token) return done("failed", "Conta do Instagram que recebeu o comentário não está disponível");
   if (!job.comment_id && !job.recipient_id) return done("failed", "Comentário sem destinatário para o Direct");
+  // Inbox replies cannot use the private-comment window. Fail closed after 24h,
+  // including a delayed queue resumed after an outage; never retry automatically.
+  if (!job.comment_id && !rhVagaDirectWindowOpen(job.created_at)) {
+    return done("failed", "Janela de 24 horas do Direct encerrada; não reenviado automaticamente");
+  }
 
   let message: unknown;
   try {

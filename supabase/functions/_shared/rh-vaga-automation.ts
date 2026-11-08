@@ -1,5 +1,20 @@
 const SITE = "https://checkout.bananacalcados.com.br";
 
+/** Only inbound text is eligible; never interpret postbacks, echoes or attachment URLs. */
+export function rhVagaInboxSource(event: {
+  message?: { text?: string; is_echo?: boolean; is_deleted?: boolean; reply_to?: { story?: unknown }; attachments?: Array<{ type?: string }> };
+}): "story" | "dm" | null {
+  const message = event.message;
+  if (!message || message.is_echo || message.is_deleted || !message.text?.trim()) return null;
+  return message.reply_to?.story || message.attachments?.some((a) => a.type === "story_mention" || a.type === "ephemeral")
+    ? "story" : "dm";
+}
+
+export function rhVagaDirectWindowOpen(createdAt: string, now = Date.now()): boolean {
+  const age = now - Date.parse(createdAt);
+  return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000;
+}
+
 interface RhRule {
   id: string;
   min_delay_seconds?: number | null;
@@ -45,7 +60,7 @@ export function buildRhVagaMetaMessage(job: { message?: string | null; link_toke
   };
 }
 
-/** Cria/reutiliza o link e reserva uma única linha por comentário + @. Nunca agenda retry. */
+/** Cria/reutiliza o link e reserva uma única linha por comentário/mensagem + @. Nunca agenda retry. */
 export async function enqueueRhVagaNotification(supabase: any, input: RhQueueInput) {
   const username = String(input.username || "").replace(/^@+/, "").trim().toLowerCase();
   if (!/^[a-z0-9._]{1,40}$/.test(username)) return { ok: false, error: "Instagram ausente ou inválido" };

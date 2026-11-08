@@ -6,6 +6,7 @@ import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { processCommentAutomation, processStoryReplyAutomation, handleCommentButtonPostback } from "../_shared/instagram-comment-automation.ts";
 import { resolveIgAccountByAccountId, globalIgToken } from "../_shared/instagram-account.ts";
+import { rhVagaInboxSource } from "../_shared/rh-vaga-automation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -472,14 +473,15 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
             );
         }
 
-        // ===== STORY REPLY AUTOMATION (keyword rules with media_types=story) =====
+        // Story rules retain their behavior; ordinary inbound DMs opt into RH only.
         if (channel === 'instagram') {
           const srcType = (referralData as any)?.source_type;
           const isStoryReply =
             mediaType === 'story' ||
             srcType === 'story_reply' ||
             srcType === 'story_mention';
-          if (isStoryReply) {
+          const rhInboxSource = rhVagaInboxSource(event);
+          if (isStoryReply || rhInboxSource) {
             try {
               const storyId =
                 event.message?.reply_to?.story?.id ||
@@ -492,6 +494,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
                 storyId,
                 messageId: event.message?.mid || null,
                 accountId: entry.id ? String(entry.id) : null,
+                sourceKind: isStoryReply ? 'story' : rhInboxSource || 'dm',
               }, pageAccessToken);
               if (storyAuto.actions.length > 0) {
                 console.log(`Story automations triggered: ${storyAuto.actions.join(', ')}`);

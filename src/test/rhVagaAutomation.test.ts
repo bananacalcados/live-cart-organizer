@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { matchesRhVaga, normalizeRhVagaText } from "../../supabase/functions/_shared/rh-vaga-matcher";
-import { buildRhVagaMetaMessage, rhVagaUrl } from "../../supabase/functions/_shared/rh-vaga-automation";
+import { buildRhVagaMetaMessage, rhVagaUrl, rhVagaInboxSource, rhVagaDirectWindowOpen } from "../../supabase/functions/_shared/rh-vaga-automation";
 import { buildCandidateNotice } from "../../supabase/functions/rh-score/notice-text";
 
 const cases: Array<[string, boolean]> = [
@@ -24,6 +24,30 @@ describe("VAGA-RH: correspondência exclusiva", () => {
 });
 
 describe("VAGA-RH: link e botão", () => {
+  it("reconhece resposta de story com texto tolerante", () => {
+    const event = { message: { mid: "story-1", text: "😊 V A G A!!", reply_to: { story: { id: "123" } } } };
+    expect(rhVagaInboxSource(event)).toBe("story");
+    expect(matchesRhVaga(event.message.text)).toBe(true);
+  });
+
+  it("reconhece DM direta e menção com palavra VAGA", () => {
+    expect(rhVagaInboxSource({ message: { text: "quero a vagá" } })).toBe("dm");
+    expect(rhVagaInboxSource({ message: { text: "vaja", attachments: [{ type: "story_mention" }] } })).toBe("story");
+  });
+
+  it("não interpreta ecos, exclusões, botões nem menção sem texto", () => {
+    expect(rhVagaInboxSource({ message: { text: "VAGA", is_echo: true } })).toBeNull();
+    expect(rhVagaInboxSource({ message: { text: "VAGA", is_deleted: true } })).toBeNull();
+    expect(rhVagaInboxSource({})).toBeNull();
+    expect(rhVagaInboxSource({ message: { attachments: [{ type: "story_mention" }] } })).toBeNull();
+  });
+
+  it("bloqueia Direct com 24 horas, sem usar a janela de comentário", () => {
+    const now = Date.parse("2026-11-08T16:45:00Z");
+    expect(rhVagaDirectWindowOpen("2026-11-07T16:45:01Z", now)).toBe(true);
+    expect(rhVagaDirectWindowOpen("2026-11-07T16:45:00Z", now)).toBe(false);
+    expect(rhVagaDirectWindowOpen("inválido", now)).toBe(false);
+  });
   it("usa somente o endereço oficial e o código obtido no servidor", () => {
     expect(rhVagaUrl("abc123def4")).toBe("https://checkout.bananacalcados.com.br/vaga/abc123def4");
     expect(() => rhVagaUrl("https://externo.example")).toThrow();
