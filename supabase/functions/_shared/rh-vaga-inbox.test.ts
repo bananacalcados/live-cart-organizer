@@ -28,7 +28,7 @@ function fixture() {
         then(resolve: (v: any) => unknown, reject: (e: unknown) => unknown) {
           try {
             if (update) return Promise.resolve({ error: null }).then(resolve);
-            const pool = table === "instagram_comment_rules" ? rules : table === "instagram_comment_actions" ? actions : table === "ig_live_cart_notifications" ? jobs : [{ id: "vacancy" }];
+            const pool = table === "instagram_comment_rules" ? rules : table === "instagram_comment_actions" ? actions : table === "ig_live_cart_notifications" ? jobs : [{ id: "vacancy", ativo: true }];
             if (write) {
               const duplicate = pool.some((a) => table === "instagram_comment_actions"
                 ? a.comment_id === write.comment_id && a.rule_id === write.rule_id && a.action_type === write.action_type
