@@ -114,3 +114,32 @@ Resultado: 54 testes passaram (28 novos + 26 avaliação RH anterior).
 - Nenhum envio real pelo uazapi.
 - Entrega efetiva e janela da Meta dependem da primeira ocorrência real.
 - Site não publicado.
+
+## Complemento — stories, menções e DM direta (08/11/2026)
+
+O recebimento de resposta a story (`message.reply_to.story`) e menção (`attachments.type=story_mention`) já existia e já chegava à automação RH. Faltava acionar a regra RH por uma DM direta comum; essa entrada foi adicionada sem executar regras antigas de stories em DMs.
+
+- Todas as entradas usam o mesmo matcher, link idempotente, reserva de ação e fila, com intervalo compartilhado de 60 minutos por remetente na regra.
+- Respostas a story, menções com texto e DMs não reservam resposta pública: somente Direct com botão oficial. Menção sem texto não dispara; não buscamos VAGA em imagens ou URLs de mídia.
+- Ecos, mensagens apagadas, eventos de leitura e postbacks não disparam VAGA.
+- O envio de Direct da fila agora bloqueia jobs com 24 horas ou mais; falha fica registrada sem reenvio automático.
+- Nenhuma tela, tabela, permissão ou cron foi criado/alterado neste complemento. As duas funções de recebimento/envio foram implantadas; o site não foi publicado.
+
+### Testes executados
+
+58 testes Vitest (pontuação RH e matcher/entrada/janela) e 6 testes Deno chamando o handler real com armazenamento e credenciais simulados: **64 passaram**.
+
+| Entrada/fluxo | Resultado |
+|---|---|
+| Resposta a story: `😊 V A G A!!` | Uma reserva de Direct com botão, sem comentário público |
+| DM direta: `quero a vagá` | Uma reserva RH, sem executar regra antiga |
+| Menção com texto: `vaja` | Reconhecida como story; handler reserva Direct |
+| Entregas simultâneas da mesma DM + resposta de story do mesmo remetente | Somente um job e uma chamada de link |
+| Cadastro já enviado: `vga` | Confirmação sem botão |
+| DM: `uma vaca` | Zero consultas de automação e nenhum job |
+| Eco com `VAGA`, mensagem apagada ou menção sem texto | Não elegível |
+| Direct com idade de 23h59m59s / 24h | Permitido / bloqueado |
+
+Consultas de tela continuam iguais (RH: 2; detalhe: 1). DM sem correspondência faz zero consultas adicionais de automação. DM VAGA faz uma leitura limitada à regra RH; se elegível, reutiliza as consultas de cooldown, link e reserva já existentes. Sem polling ou cron novo.
+
+Não houve envio real à Meta nem inclusão de dados de teste no banco neste complemento. A entrega final no Instagram depende de um story reply e uma DM real recebidos pelo webhook da conta. Candidato do dono preservado; nenhuma limpeza destrutiva foi feita.
