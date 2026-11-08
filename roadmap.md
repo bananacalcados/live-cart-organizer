@@ -61,3 +61,11 @@
 - [x] C disparo/mensagens (implantado; código da live com limite 3/h telefone, 10/h IP)
 - [x] D IA/gasto (implantado; limite de uso por IP)
 - [ ] Pendências: validação de assinatura nos webhooks WhatsApp (item 17); identidade do livete-respond (14); valores server-side em Yampi/boleto; split-payment por token de sessão; shopify-webhook precisa do segredo do painel Shopify; botão antigo de pedido Shopify da live (LiveSessionManager); replay MP/Pagar.me com 0 falso negativo
+
+# Central de Trocas — Parte 1 (banco + funções)
+- [ ] Entrega confirmada J&T/Transportadora no rastreio + backfill + origem da entrega
+- [ ] Configurações, solicitações, links únicos, elegibilidade e marcador de reposição
+- [ ] Testes pedidos e relatório final
+
+# Grupo VIP no link da live
+- [ ] Plano aguardando aprovação (substituído pelo pedido da Central)
