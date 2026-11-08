@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { accessMetadata } from "../_shared/access-log-data.ts";
+import { internalCallHeaders } from "../_shared/requireAuth.ts";
 import { validateRhSubmission } from "./validate.ts";
 
 const cors = {
@@ -15,9 +16,12 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 const CODE = /^[a-z0-9]{10,20}$/;
 
-/** Ponto de chamada da avaliação (fase 3). Nesta fase não faz nada. */
-async function queueEvaluation(_candidatoId: string): Promise<void> {
-  // fase 3: chamar rh-score em segundo plano
+/** Disparo assíncrono; candidato não aguarda a IA. Sem retries automáticos. */
+async function queueEvaluation(candidatoId: string): Promise<void> {
+  const url = Deno.env.get("SUPABASE_URL");
+  if (!url) return;
+  const headers = await internalCallHeaders();
+  await fetch(`${url}/functions/v1/rh-score`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ candidato_id: candidatoId }) });
 }
 
 Deno.serve(withAccessLog("rh-public", async (req) => {
@@ -64,6 +68,7 @@ Deno.serve(withAccessLog("rh-public", async (req) => {
   const { data, error } = await sb.rpc("rh_public_submit", { p_code: code, p_data: v.data });
   if (error) return json({ error: "unavailable" }, 503);
   if (!data?.ok) return json({ error: data?.error || "failed" }, data?.error === "submitted" ? 409 : 400);
-  await queueEvaluation(String(data.candidato_id));
+  const evaluation = queueEvaluation(String(data.candidato_id)).catch(() => { console.error("rh evaluation dispatch unavailable"); });
+  EdgeRuntime.waitUntil(evaluation);
   return json({ ok: true });
 }));
