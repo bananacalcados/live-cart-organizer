@@ -12637,6 +12637,24 @@ export type Database = {
           },
         ]
       }
+      live_followup_cart_leases: {
+        Row: {
+          created_at: string
+          job_id: string
+          order_id: string
+        }
+        Insert: {
+          created_at?: string
+          job_id: string
+          order_id: string
+        }
+        Update: {
+          created_at?: string
+          job_id?: string
+          order_id?: string
+        }
+        Relationships: []
+      }
       live_followup_daily: {
         Row: {
           day: string
@@ -13191,6 +13209,7 @@ export type Database = {
           id: string
           instagram: string | null
           lead_id: string | null
+          live_followup_phone_at: string | null
           metadata: Json
           order_ids: string[]
           paid_at: string | null
@@ -13217,6 +13236,7 @@ export type Database = {
           id?: string
           instagram?: string | null
           lead_id?: string | null
+          live_followup_phone_at?: string | null
           metadata?: Json
           order_ids?: string[]
           paid_at?: string | null
@@ -13243,6 +13263,7 @@ export type Database = {
           id?: string
           instagram?: string | null
           lead_id?: string | null
+          live_followup_phone_at?: string | null
           metadata?: Json
           order_ids?: string[]
           paid_at?: string | null
@@ -16098,6 +16119,8 @@ export type Database = {
           last_customer_message_at: string | null
           last_sent_message_at: string | null
           link_status: string
+          live_followup_cart_sent_at: string | null
+          live_followup_first_item_at: string | null
           max_installments_override: number | null
           mercadopago_payment_id: string | null
           merged_at: string | null
@@ -16181,6 +16204,8 @@ export type Database = {
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           link_status?: string
+          live_followup_cart_sent_at?: string | null
+          live_followup_first_item_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           merged_at?: string | null
@@ -16264,6 +16289,8 @@ export type Database = {
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           link_status?: string
+          live_followup_cart_sent_at?: string | null
+          live_followup_first_item_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           merged_at?: string | null
@@ -30705,6 +30732,14 @@ export type Database = {
         Args: { p_event_id?: string }
         Returns: Json
       }
+      live_followup_cart_finish: {
+        Args: { p_job_id: string; p_message_id: string }
+        Returns: undefined
+      }
+      live_followup_cart_reserve: {
+        Args: { p_job_id: string }
+        Returns: boolean
+      }
       live_followup_claim: {
         Args: { p_limit?: number }
         Returns: {
@@ -30744,6 +30779,10 @@ export type Database = {
         Returns: undefined
       }
       live_followup_job_context: { Args: { p_job_id: string }; Returns: Json }
+      live_followup_mark_manual_cart: {
+        Args: { p_message_id: string; p_number_id: string; p_order_id: string }
+        Returns: undefined
+      }
       live_followup_source_contexts: {
         Args: { p_limit?: number }
         Returns: {
