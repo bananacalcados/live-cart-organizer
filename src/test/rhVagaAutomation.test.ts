@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchesRhVaga, normalizeRhVagaText } from "../../supabase/functions/_shared/rh-vaga-matcher";
 import { buildRhVagaMetaMessage, rhVagaUrl } from "../../supabase/functions/_shared/rh-vaga-automation";
-import { buildCandidateNotice } from "../../supabase/functions/rh-score/notify";
+import { buildCandidateNotice } from "../../supabase/functions/rh-score/notice-text";
 
 const cases: Array<[string, boolean]> = [
   ["vaga", true], ["VAGA", true], ["Vaga", true], ["vagaa", true],
