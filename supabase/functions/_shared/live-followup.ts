@@ -19,12 +19,16 @@ const normalizePhone = (value: string) => {
   return /^55[1-9]\d9\d{8}$/.test(p) ? p : '';
 };
 
-export async function scheduleGlobalFollowups(sb: Client) {
-  const cfg = await followupConfig(sb);
+export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:string;offset:number}) {
+  const saved = await followupConfig(sb);
+  const cfg = simulation ? {...saved,enabled:true,enabled_since:'1970-01-01T00:00:00Z'} : saved;
   if (!cfg.enabled) return { scheduled: 0, enabled: false };
-  const { data: sources, error } = await sb.rpc('live_followup_source_contexts', { p_limit: 50 });
+  const { data: sources, error } = await sb.rpc(simulation?'live_followup_audit_contexts':'live_followup_source_contexts', simulation?{p_event_id:simulation.eventId,p_limit:100,p_offset:simulation.offset}:{ p_limit: 50 });
   if (error) throw error;
   let scheduled = 0;
+  const counts: Record<string,number>={A:0,B:0,C:0,D:0,E:0,F:0};
+  const senders: Record<string,string[]>={A:[],B:[],C:[],D:[],E:[],F:[]};
+  let privateReplies=0, endedPrivateReplies=0;
   for (const source of sources || []) {
     const c = source.context;
     const o = c.order;
@@ -50,6 +54,18 @@ export async function scheduleGlobalFollowups(sb: Client) {
     if (!phone && type !== 'F') { await ack(); continue; }
     const numberId = type === 'F' ? c.ig_instance_id : (await resolveEventNumber(sb,ev.id)).id;
     if (!numberId) { await ack(); continue; }
+    if(simulation){
+      counts[type]+=cfg.types[type].steps.length;
+      if(!senders[type].includes(numberId))senders[type].push(numberId);
+      if(type==='F') {
+        const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
+        if(igctx.error)throw igctx.error;
+        const mode=instagramSendMode(igctx.data);
+        if(mode==='private_reply')privateReplies++;
+        if(mode==='live_ended_no_private_reply')endedPrivateReplies++;
+      }
+      scheduled+=cfg.types[type].steps.length;continue;
+    }
     // B/C are one common initial-cart step, not two independent sequences.
     if (type === 'B' || type === 'C') sequence += ':initial';
     else sequence += ':' + type;
@@ -64,11 +80,12 @@ export async function scheduleGlobalFollowups(sb: Client) {
     scheduled += rows.length;
     await ack();
     async function ack() {
+      if(simulation)return;
       const r = await sb.from('live_followup_sources').delete().eq('source_key',source.source_key).eq('changed_at',source.changed_at);
       if (r.error) throw r.error;
     }
   }
-  return {scheduled,enabled:true};
+  return {scheduled,enabled:true,...(simulation?{simulated:true,scanned:sources?.length || 0,counts,senders,privateReplies,endedPrivateReplies,provider_calls:0}:{})};
 }
 
 export async function processGlobalFollowups(sb: Client) {
