@@ -2,4 +2,5 @@
 - Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
 - Event sender is resolved through live_event_sender/event-sender.ts for self-service and follow-up; never infer from unrelated conversations.
 - Instagram reply eligibility is server-resolved by instagram_reply_context; exclude comments from inbound-DM windows and atomically claim private replies before provider calls.
+- Instagram F quick-reply/postback is signature-verified and atomically bound to initial job, recipient and account; only confirmed click-cart sends schedule subsequent steps. Interaction source opens the window but never counts as a free-form reply. HUMAN_AGENT requires a verified staff manual request plus server-proven account approval and 24h–7d eligibility; internal automations never inherit it.
 - WhatsApp LID aliases must come from provider LID+sender_pn pairs, scoped by instance; never infer identity by display name or group participant.

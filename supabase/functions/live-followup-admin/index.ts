@@ -6,7 +6,7 @@ import { requireAuth } from '../_shared/requireAuth.ts';
 import { DEFAULT_FOLLOWUP_CONFIG } from '../_shared/live-followup-rules.ts';
 import { followupConfig, scheduleGlobalFollowups } from '../_shared/live-followup.ts';
 const step=z.object({minutes:z.number().int().min(1).max(4320),variants:z.array(z.string().trim().min(1).max(3500)).length(3)});
-const kind=(count:number)=>z.object({enabled:z.boolean(),steps:z.array(step).length(count)});
+const kind=(count:number)=>z.object({enabled:z.boolean(),steps:z.array(step).length(count),button_title:z.string().trim().min(1).max(20).optional()});
 const config=z.object({enabled:z.boolean(),types:z.object({A:kind(1),B:kind(1),C:kind(1),D:kind(3),E:kind(3),F:kind(4)}),limits:z.object({interval_min:z.number().int().min(20).max(3600),interval_max:z.number().int().min(20).max(3600),hourly:z.number().int().min(1).max(100),daily_customer:z.number().int().min(1).max(20),typing_min:z.number().int().min(2).max(10),typing_max:z.number().int().min(2).max(10)})}).superRefine((v,c)=>{
   if(v.limits.interval_max<v.limits.interval_min || v.limits.typing_max<v.limits.typing_min)c.addIssue({code:'custom',message:'Intervalo máximo menor que o mínimo'});
   for(const t of Object.values(v.types))if(t.steps.some((s,i)=>i>0 && s.minutes<=t.steps[i-1].minutes))c.addIssue({code:'custom',message:'Os prazos precisam aumentar a cada passo'});
