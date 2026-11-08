@@ -168,6 +168,10 @@ export async function processGlobalFollowups(sb: Client) {
       return null;
     }
     async function stop(reason: string) {
+      if(reason==='late_step') {
+        await sb.from('live_followup_jobs').update({status:'skipped',reason}).eq('id',job.id).eq('status','processing');
+        return;
+      }
       if(reason==='instance_disconnected') await sb.from('live_followup_instances').update({paused:true,reason}).eq('whatsapp_number_id',job.whatsapp_number_id);
       const scope=sb.from('live_followup_jobs').update({status:'cancelled',reason}).eq('customer_key',job.customer_key).eq('event_id',job.event_id).in('status',['pending','processing']);
       if (job.order_id) scope.eq('order_id',job.order_id);
