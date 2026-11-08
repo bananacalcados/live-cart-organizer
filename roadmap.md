@@ -1,5 +1,5 @@
 # Ajustes atuais — CNPJ e cores Shopify
-- [ ] Vitrine urgente: ignorar estoque, preservar exclusões manuais e testar bolsa + Spezial 40 até pagamento.
+- [x] Vitrine urgente: ignorar estoque, preservar exclusões manuais e testar bolsa + Spezial 40 até pagamento.
 - [x] Priorizar gateway aprovado e criar pendência quando os IDs continuarem ambíguos
 - [x] Refazer a simulação de 7 dias e medir os 24 casos resolvidos ou pendentes
 - [x] Listar cores ativas na Shopify ausentes no ERP, separando possíveis grafias
