@@ -1093,6 +1093,13 @@
       "when": 1794163263673,
       "tag": "0155_followup_warning_and_policy_simulation",
       "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1794163304794,
+      "tag": "0156_followup_policy_simulation_fixture",
+      "breakpoints": true
     }
   ]
 }
