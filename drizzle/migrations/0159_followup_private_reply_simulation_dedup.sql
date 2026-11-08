@@ -1,0 +1,4 @@
+DO $$ DECLARE def text; BEGIN SELECT pg_get_functiondef('public.live_followup_policy_simulate()'::regprocedure) INTO def;
+ def:=replace(def,'UPDATE events SET live_active_until=now()-interval ''1 second'' WHERE id=ev;', 'result:=result||jsonb_build_object(''private_claim_first'',instagram_private_reply_claim(cid,uname,ev,igid,''test''),''private_claim_no_duplicate'',NOT instagram_private_reply_claim(cid,uname,ev,igid,''test'')); UPDATE live_comment_dms SET status=''failed'' WHERE comment_id=cid AND status=''processing''; UPDATE events SET live_active_until=now()-interval ''1 second'' WHERE id=ev;');
+ EXECUTE def;
+END $$;
