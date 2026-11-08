@@ -46,6 +46,47 @@ const Label = ({ children }: { children: React.ReactNode }) => <span className="
 const Err = ({ msg }: { msg?: string }) => (msg ? <p className="mt-1 text-sm text-destructive">{msg}</p> : null);
 const inputCls = "h-12 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground outline-none focus:ring-2 focus:ring-ring";
 
+const ICONES_APOIO = ["📅", "⏰", "📌"];
+
+// Divide o resumo da vaga (separado por "·") em salário em destaque + linhas de apoio.
+function parseResumo(resumo: string) {
+  const itens = resumo.split("·").map((s) => s.trim()).filter(Boolean);
+  const primeiro = itens[0] || "";
+  const m = primeiro.match(/^(R\$\s*[\d.]+(?:,\d{2})?)(.*)$/i);
+  const salario = m
+    ? { valor: m[1].replace(/\s+/g, " ").trim(), resto: m[2].replace(/^[\s·,;–-]+/, "").trim() }
+    : null;
+  return { salario, apoio: salario ? itens.slice(1) : itens };
+}
+
+const Cap = ({ t }: { t: string }) => <>{t.charAt(0).toUpperCase() + t.slice(1)}</>;
+
+const ResumoCard = ({ resumo }: { resumo: string }) => {
+  const { salario, apoio } = parseResumo(resumo);
+  if (!salario && apoio.length === 0) return null;
+  return (
+    <div className="min-w-0 rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-wide text-primary">Condições da vaga</p>
+      {salario && (
+        <div className="mt-1 min-w-0">
+          <p className="break-words text-3xl font-extrabold leading-tight text-foreground">💰 {salario.valor}</p>
+          {salario.resto && <p className="mt-0.5 break-words text-base font-bold text-foreground">{salario.resto}</p>}
+        </div>
+      )}
+      {apoio.length > 0 && (
+        <ul className="mt-3 space-y-2 border-t border-primary/20 pt-3">
+          {apoio.map((t, i) => (
+            <li key={i} className="flex items-start gap-2 text-base font-semibold text-foreground">
+              <span aria-hidden className="shrink-0">{ICONES_APOIO[Math.min(i, ICONES_APOIO.length - 1)]}</span>
+              <span className="min-w-0 break-words"><Cap t={t} /></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 export default function VagaPublicPage() {
   const { codigo = "" } = useParams();
   const code = codigo.trim().toLowerCase();
@@ -172,7 +213,7 @@ export default function VagaPublicPage() {
       <header className="space-y-2">
         <p className="text-sm text-muted-foreground">Cadastro de <strong className="text-foreground">@{info.username}</strong></p>
         <h1 className="text-2xl font-bold leading-tight">{info.titulo}</h1>
-        <p className="rounded-xl bg-muted p-3 text-sm leading-relaxed">{info.resumo.split("·").map((s, i) => <span key={i} className="block">{s.trim()}</span>)}</p>
+        <ResumoCard resumo={info.resumo} />
         <div className="sticky top-0 z-10 -mx-4 bg-background/95 px-4 py-2 backdrop-blur">
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
           <p className="mt-1 text-xs text-muted-foreground">{progress}% preenchido · salvo automaticamente</p>
