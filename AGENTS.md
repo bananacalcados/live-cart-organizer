@@ -81,4 +81,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Automatic gateway price reductions (Expedição) run server-side via _apply_gateway_price_rule on item insert/gateway change, reuse pos_sale_price_adjustments (auto_rule_gateway) and never reapply after any prior/reverted adjustment or NF-e, so manual decisions win.

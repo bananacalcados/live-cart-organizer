@@ -1,1 +1,2 @@
 - Expedition buy list (Lista de Compras) keeps a snapshot of the grade sizes on each item and changes quantity/status only via purchase_item_* RPCs, so editing a grade never rewrites past orders and every increase is audited.
+- Automatic gateway price reductions run server-side (_apply_gateway_price_rule), reuse pos_sale_price_adjustments and never reapply after a prior/reverted adjustment or NF-e, so manual decisions win.
