@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProtectedArea = "fiscal" | "folha";
+export type ProtectedArea = "fiscal" | "folha" | "rh";
 
 const key = (area: ProtectedArea) => `area-unlocked:${area}`;
 
