@@ -23,3 +23,4 @@
 - Password reset only via auth-password-reset (generic reply, 3/h per IP, 2/h per e-mail, security_events log); login_ok/login_failed are browser-declared events in security-auth-event.
 - Public live catalog: only via live-catalog-public (server prices/stock, cashback needs CPF match, reuses open cart, pays on self-service cart page).
 - Carrier delivery detection: only _shared/frenet-tracking.ts CARRIER_DELIVERY_PATTERNS (tracking sync + Frenet webhook), setting delivered_source so exchange deadlines know their evidence.
+- Central de Trocas: reuse exchange_requests; support_links store token hashes only; eligibility never denies alone.

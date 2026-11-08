@@ -81,4 +81,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Central de Trocas: reuse exchange_requests; links store token hashes only; eligibility never denies alone.
