@@ -36,9 +36,9 @@ async function call(body: Record<string, unknown>) {
   return { ok: true as const, data };
 }
 
-const Btn = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+const Btn = ({ active, onClick, children, className = "px-4" }: { active: boolean; onClick: () => void; children: React.ReactNode; className?: string }) => (
   <button type="button" onClick={onClick}
-    className={`min-h-12 rounded-xl border px-4 text-base font-medium transition ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>
+    className={`min-h-12 rounded-xl border text-base font-medium transition ${className} ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}>
     {children}
   </button>
 );
@@ -225,10 +225,11 @@ export default function VagaPublicPage() {
                 <label className="block"><Label>Onde</Label><input className={inputCls} value={x.onde} onChange={(e) => setExp(i, { onde: e.target.value })} /></label>
                 <label className="block"><Label>O que fazia</Label><input className={inputCls} value={x.funcao} onChange={(e) => setExp(i, { funcao: e.target.value })} /></label>
                 <div><Label>Quanto tempo ficou</Label>
-                  <div className="flex gap-2">
-                    <input className={`${inputCls} w-24`} type="number" inputMode="decimal" min={1} value={x.tempo} onChange={(e) => setExp(i, { tempo: e.target.value.slice(0, 4) })} />
-                    <div className="grid flex-1 grid-cols-2 gap-2"><Btn active={x.unidade === "meses"} onClick={() => setExp(i, { unidade: "meses" })}>meses</Btn><Btn active={x.unidade === "anos"} onClick={() => setExp(i, { unidade: "anos" })}>anos</Btn></div>
-                  </div></div>
+                  <div className="flex items-stretch gap-2 min-w-0">
+                    <input className={`${inputCls.replace("w-full", "")} w-24 shrink-0`} type="number" inputMode="decimal" min={1} value={x.tempo} onChange={(e) => setExp(i, { tempo: e.target.value.slice(0, 4) })} />
+                    <Btn className="flex-1 min-w-0 px-2" active={x.unidade === "meses"} onClick={() => setExp(i, { unidade: "meses" })}>meses</Btn>
+                    <Btn className="flex-1 min-w-0 px-2" active={x.unidade === "anos"} onClick={() => setExp(i, { unidade: "anos" })}>anos</Btn>
+                  </div><p className="mt-1 text-xs text-muted-foreground">Escolha meses ou anos</p></div>
                 <Err msg={errors[`experiencias.${i}`]} />
               </div>
             ))}
