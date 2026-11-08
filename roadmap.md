@@ -76,6 +76,9 @@
 - [ ] Confirmar permissão de ocultar com um comentário de teste real (aguarda o dono ligar)
 - [ ] Conferir se comentários de anúncio exclusivo chegam (aguarda um anúncio real comentado)
 
+# Link curto /v/:code para grupos VIP
+- [x] Tabela, função de criar e resolver, rota rápida, teste
+
 # Trava NF-e de devolução duplicada (urgente)
 - [x] Reversa vincula NF à troca aberta; conferência reusa/bloqueia
 - [x] Trava de soma ≤ NF original em nfe-devolucao-emitir

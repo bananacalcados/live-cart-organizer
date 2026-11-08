@@ -23725,6 +23725,51 @@ export type Database = {
         }
         Relationships: []
       }
+      short_links: {
+        Row: {
+          campaign_id: string | null
+          click_count: number
+          code: string
+          created_at: string
+          created_by: string | null
+          draft_batch: string | null
+          expires_at: string | null
+          first_clicked_at: string | null
+          id: string
+          label: string | null
+          last_clicked_at: string | null
+          target_path: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          click_count?: number
+          code: string
+          created_at?: string
+          created_by?: string | null
+          draft_batch?: string | null
+          expires_at?: string | null
+          first_clicked_at?: string | null
+          id?: string
+          label?: string | null
+          last_clicked_at?: string | null
+          target_path: string
+        }
+        Update: {
+          campaign_id?: string | null
+          click_count?: number
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          draft_batch?: string | null
+          expires_at?: string | null
+          first_clicked_at?: string | null
+          id?: string
+          label?: string | null
+          last_clicked_at?: string | null
+          target_path?: string
+        }
+        Relationships: []
+      }
       sticky_notes: {
         Row: {
           bg_color: string
@@ -28646,6 +28691,15 @@ export type Database = {
         Args: { p_master: Json; p_variants: Json }
         Returns: string
       }
+      create_short_link: {
+        Args: {
+          p_campaign_id?: string
+          p_draft_batch?: string
+          p_label?: string
+          p_target_path: string
+        }
+        Returns: string
+      }
       create_support_link: {
         Args: {
           p_created_by_kind: string
@@ -30675,6 +30729,7 @@ export type Database = {
         Args: { p_event: Json; p_order: Json }
         Returns: Json
       }
+      resolve_short_link: { Args: { p_code: string }; Returns: string }
       resolve_typebot_event_id: {
         Args: { p_typebot_id: string }
         Returns: string

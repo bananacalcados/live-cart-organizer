@@ -75,11 +75,13 @@ window.addEventListener("vite:preloadError", (event) => {
   const error = (event as Event & { payload?: unknown }).payload;
   if (recoverModuleLoad(error)) event.preventDefault();
 });
+// Link curto /v/:code é resolvido pelo script inline do index.html, sem carregar o app.
+const isShortLink = (window as { __shortLink?: boolean }).__shortLink === true;
 const rootElement = document.getElementById("root");
-if (!rootElement) throw new Error("Application root is missing");
-const root = createRoot(rootElement);
+if (!rootElement && !isShortLink) throw new Error("Application root is missing");
+const root = isShortLink || !rootElement ? null : createRoot(rootElement);
 
-import("./lib/edgeAuthFetch")
+if (root) import("./lib/edgeAuthFetch")
   .then((m) => m.installEdgeAuthFetch())
   .catch(() => {})
   .then(async () => {
@@ -93,7 +95,7 @@ import("./lib/edgeAuthFetch")
     }
   })
   .then(({ default: App }) => {
-  root.render(<App />);
+  root!.render(<App />);
 }).catch((error: unknown) => {
-  if (!recoverModuleLoad(error)) root.render(<AppLoadFailure />);
+  if (!recoverModuleLoad(error)) root!.render(<AppLoadFailure />);
 });
