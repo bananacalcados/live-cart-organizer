@@ -51,7 +51,7 @@ export function scheduleStep(base: Date, type: FollowupType, minutes: number, ra
 }
 export function renderFollowup(text: string, name: string, registration: string, cart: string): string {
   const first = name.trim().split(/\s+/)[0] || "";
-  let out = text.replaceAll("{primeiro_nome}", first).replaceAll("{link_cadastro}", registration).replaceAll("{link_carrinho}", cart);
+  let out = text.split("{primeiro_nome}").join(first).split("{link_cadastro}").join(registration).split("{link_carrinho}").join(cart);
   if (!first) out = out.replace(/^(?:Oi|Oii|E aí|E então),\s*([!?,])/i, (_m, punctuation) => `Oi${punctuation}`).replace(/^,\s*/, "Oi! ").replace(/,\s*([!?])/g, "$1");
   return out;
 }
