@@ -7,7 +7,10 @@
 // cadastrados em nenhum dos sistemas — controle externo). Retorna ok=false e a
 // lista de itens em falta caso algum item esteja explicitamente sem estoque.
 
+import { inventoryCheckedItems } from "./catalog-availability.ts";
+
 export interface OrderProductLike {
+  catalog_product_id?: string | null;
   sku?: string;
   title?: string;
   variant?: string;
@@ -69,7 +72,8 @@ export async function checkOrderStock(supabase: any, products: OrderProductLike[
   let checked = 0;
   let skipped = 0;
 
-  const items = (products || []).filter(Boolean);
+  // Catalog offers are sold without inventory; mixed carts retain other items' existing policy.
+  const items = inventoryCheckedItems((products || []).filter(Boolean));
   if (items.length === 0) {
     return { ok: true, issues: [], checked: 0, skipped_unknown: 0 };
   }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { enabledCatalogVariants } from "../../supabase/functions/_shared/catalog-availability";
+import { enabledCatalogVariants, inventoryCheckedItems } from "../../supabase/functions/_shared/catalog-availability";
 
 describe("disponibilidade manual do catálogo", () => {
+  it("pagamento não consulta estoque do catálogo e preserva outros itens do pedido", () => {
+    const catalog = { catalog_product_id: "bolsa", sku: "sem-estoque" };
+    const regular = { catalog_product_id: null, sku: "pedido-manual" };
+    expect(inventoryCheckedItems([catalog, regular])).toEqual([regular]);
+  });
   it("bolsa habilitada continua vendável com estoque zero", () => {
     const bag = { variant_id: "bolsa", enabled: true, stock: 0, availableForSale: false };
     expect(enabledCatalogVariants([bag])).toEqual([bag]);
