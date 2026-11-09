@@ -114,6 +114,21 @@ export function codeIntentDirectConfirmBlocked(
 export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntentLike, newProducts: DbOrderProduct[], by: string): Promise<string> {
   const username = intent.username.replace(/^@/, "");
   const phone = intent.phone || null;
+
+  // Revalida no banco no clique: uma numeração pode ter sido bloqueada depois que o card abriu.
+  const codes = [...new Set((intent.items || []).map((item) => item.code).filter(Boolean))];
+  if (codes.length) {
+    const { data: limits, error } = await db.from("live_presenter_products")
+      .select("code,available_sizes").eq("event_id", eventId).in("code", codes);
+    if (error) throw error;
+    const byCode = new Map((limits || []).map((row: any) => [row.code, row.available_sizes as string[] | null]));
+    const blocked = (intent.items || []).find((item) => {
+      if (!byCode.has(item.code) || !item.size) return false;
+      return !isPresenterSizeAllowed(byCode.get(item.code), item.size);
+    });
+    if (blocked) throw new Error(`Numeração ${blocked.size} de ${blocked.code} foi bloqueada no painel da apresentadora`);
+  }
+
   const pre = await computeLiveConditions(eventId, username, phone, newProducts);
 
   // R1: nunca um segundo carrinho para quem já tem carrinho não pago nesta live.
