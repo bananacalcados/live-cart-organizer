@@ -2,6 +2,7 @@ import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, cros
 import { internalCallHeaders } from './requireAuth.ts';
 import { instagramFollowupMode } from './instagram-window.ts';
 type Client = any;
+const MAX_SCHEDULE_BASE_AGE_MIN = 60;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
   const { data, error } = await sb.from('live_followup_settings').select('value').eq('id', true).maybeSingle();
   if (error) throw error;
@@ -51,6 +52,8 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     // No cart exists for a filled registration without an order: never manufacture one.
     if (!type || !base || !cfg.types[type].enabled || !cfg.enabled_since || Date.parse(base)<Date.parse(cfg.enabled_since)) { await ack(); continue; }
     if (!phone && type !== 'F') { await ack(); continue; }
+    // Stale bases (e.g. a source that changed hours later or a recovered backlog) never create late reminders.
+    if (!simulation && Date.now() - Date.parse(base) > MAX_SCHEDULE_BASE_AGE_MIN * 60000) { await ack(); continue; }
     // Context uses the same live_event_sender RPC as event-sender.ts, batched in SQL.
     const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
     if (!numberId) { await ack(); continue; }
