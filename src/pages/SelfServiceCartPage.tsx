@@ -28,7 +28,7 @@ const GoogleG = () => (
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
-  shipping_cost: number; free_shipping: boolean;
+  shipping_cost: number; free_shipping: boolean; checkout_installment_config?: unknown;
 };
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -92,7 +92,8 @@ export default function SelfServiceCartPage() {
     (async () => {
       const { data, error } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
       const base = !error ? parseInstallmentRule(data?.value) : null;
-      if (!cancelled) setInstallmentConfig(base ? resolveSelfServiceInstallments(base, order.total, ev.installment_max, ev.installment_min_value) : null);
+      const orderRule = parseInstallmentRule(order.checkout_installment_config);
+      if (!cancelled) setInstallmentConfig(orderRule || (base ? resolveSelfServiceInstallments(base, order.total, ev.installment_max, ev.installment_min_value) : null));
     })();
     return () => { cancelled = true; };
   }, [ev, order?.id, order?.total]);

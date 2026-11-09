@@ -26,7 +26,7 @@ type Ev = {
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
   total: number; pix_total: number; created_at: string; payment_window_expires_at: string | null; registered_at: string | null;
-  registration_confirmed: boolean; shipping_cost: number; free_shipping: boolean;
+  registration_confirmed: boolean; shipping_cost: number; free_shipping: boolean; checkout_installment_config?: unknown;
 };
 type Screen = "identify" | "product" | "no_order" | "code" | "register" | "confirm_wa";
 
@@ -297,7 +297,8 @@ export default function SelfServiceOrderPage() {
   const items = useMemo(() => orders.flatMap((o) => o.products), [orders]);
   // Cada carrinho é pago separadamente: somar pedidos não libera uma oferta indevida.
   const offers = installmentConfig ? orders.map((o) => {
-    const config = resolveSelfServiceInstallments(installmentConfig, o.total, ev?.installment_max, ev?.installment_min_value);
+    const config = parseInstallmentRule(o.checkout_installment_config)
+      || resolveSelfServiceInstallments(installmentConfig, o.total, ev?.installment_max, ev?.installment_min_value);
     const options = buildInstallmentOptions(o.total, config);
     return { free: options.filter((p) => !p.hasInterest).at(-1), interest: options.filter((p) => p.hasInterest).at(-1) };
   }) : [];
