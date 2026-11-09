@@ -16,8 +16,8 @@ describe("busca de comentários da live", () => {
 
   it("encontra pelo texto ignorando acento", () => {
     expect(matchesSearch(comment, "whatsapp")).toBe(true);
-    expect(matchesSearch(comment, "não responderam")).toBe(true);
-    expect(matchesSearch(comment, "nao responderam")).toBe(true);
+    expect(matchesSearch(comment, "não me responderam")).toBe(true);
+    expect(matchesSearch(comment, "nao me responderam")).toBe(true);
   });
 
   it("termo com @ procura só no @, não no texto", () => {
