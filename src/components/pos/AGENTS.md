@@ -1,0 +1,1 @@
+- Chat "Reversa" opens NewExchangePicker by phone; the reverse dialog inside it is locked to the chosen sale/items and correios-reverse link_troca ties its return NF-e to the new exchange, so no reverse exists without an exchange.

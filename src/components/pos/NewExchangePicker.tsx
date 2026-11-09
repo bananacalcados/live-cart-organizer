@@ -55,10 +55,12 @@ interface Sale {
   customer_cpf: string | null;
   total: number | null;
   created_at: string;
+  store_id?: string | null;
 }
 
 interface SaleItemRow {
   key: string;
+  item_id: string;
   produto_id: string | null;
   sku: string;
   name: string;
@@ -91,6 +93,8 @@ interface Props {
   /** Instância do chat aberto: habilita "Enviar à cliente" na reversa. */
   sendVia?: PosSendProvider;
   selectedNumberId?: string | null;
+  /** Chat do WhatsApp (botão Reversa): lista as vendas deste telefone em todas as lojas, sem escolher loja. */
+  customerPhone?: string;
 }
 
 function orderName(notes: string | null, ext: string | null): string | null {
@@ -99,7 +103,7 @@ function orderName(notes: string | null, ext: string | null): string | null {
   return ext ? `#${ext}` : null;
 }
 
-export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone, sendVia, selectedNumberId }: Props) {
+export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onDone, sendVia, selectedNumberId, customerPhone }: Props) {
   const [phase, setPhase] = useState<"store" | "list" | "config">("store");
   const [storeId, setStoreId] = useState<string>("");
 
@@ -134,7 +138,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
   // reset ao abrir
   useEffect(() => {
     if (open) {
-      setPhase("store"); setStoreId(""); setSales([]); setPage(0);
+      setPhase(customerPhone && !initialSaleId ? "list" : "store"); setStoreId(""); setSales([]); setPage(0);
       setSearch(""); setDebounced(""); setSale(null); setChaveOriginal(null);
       setCustomer(null); setItems([]); setTipo("devolucao"); setMotivo("");
       setPostagemReversa(""); setModoExpedicao("aguarda_retorno"); setMotivoExcecao("");
@@ -148,14 +152,16 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
   }, [search]);
 
   const loadSales = useCallback(async () => {
-    if (!storeId) return;
+    const phoneKey = (customerPhone || "").replace(/\D/g, "").slice(-8);
+    if (!storeId && phoneKey.length !== 8) return;
     setLoadingSales(true);
     try {
       let q = supabase
         .from("pos_sales")
-        .select("id, external_order_id, notes, customer_name, customer_phone, customer_cpf, total, created_at")
-        .eq("store_id", storeId)
-        .neq("status", "cancelled")
+        .select("id, store_id, external_order_id, notes, customer_name, customer_phone, customer_cpf, total, created_at")
+        .neq("status", "cancelled");
+      q = phoneKey.length === 8 ? q.eq("phone_suffix8", phoneKey) : q.eq("store_id", storeId);
+      q = q
         .order("created_at", { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
@@ -181,7 +187,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
     } finally {
       setLoadingSales(false);
     }
-  }, [storeId, page, debounced]);
+  }, [storeId, page, debounced, customerPhone]);
 
   useEffect(() => {
     if (open && phase === "list") loadSales();
@@ -215,11 +221,12 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
 
   const selectSale = async (s: Sale) => {
     setLoadingOrder(s.id);
+    if (s.store_id) setStoreId(s.store_id);
     try {
       // itens
       const { data: rawItems, error: itErr } = await supabase
         .from("pos_sale_items")
-        .select("sku, product_name, variant_name, size, unit_price, quantity, barcode")
+        .select("id, sku, product_name, variant_name, size, unit_price, quantity, barcode")
         .eq("sale_id", s.id);
       if (itErr) throw itErr;
 
@@ -257,6 +264,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
         const resolved = bySku.get(String(i.sku || ""));
         return {
           key: `${s.id}-${idx}`,
+          item_id: i.id,
           produto_id: resolved?.id || null,
           sku: i.sku || "",
           name: i.product_name || "Produto",
@@ -384,6 +392,14 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
       };
 
       const result = await createNewExchange(params);
+
+      // Reversa gerada nesta tela: liga a nota de devolução dela à troca recém-criada (nunca emite outra).
+      if (postagemReversa.trim()) {
+        const { data: lk, error: lkErr } = await supabase.functions.invoke("correios-reverse", {
+          body: { action: "link_troca", troca_id: result.id, codigo_objeto: postagemReversa.trim().toUpperCase() },
+        });
+        if (lkErr || (lk as any)?.error) toast.warning("Troca criada, mas a nota da reversa não foi ligada a ela. Avise o fiscal.");
+      }
 
       // Devolução total: marca o pedido original como cancelado (fora das métricas).
       if (devolucaoTotal) {
@@ -518,7 +534,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
             </ScrollArea>
 
             <div className="flex items-center justify-between">
-              <Button variant="ghost" className="text-pos-white/70" onClick={() => setPhase("store")}>Voltar</Button>
+              <Button variant="ghost" className="text-pos-white/70" onClick={() => (customerPhone ? onCancel() : setPhase("store"))}>{customerPhone ? "Cancelar" : "Voltar"}</Button>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="border-purple-400/30 text-pos-white"
                   disabled={page === 0 || loadingSales} onClick={() => setPage((p) => Math.max(0, p - 1))}>Anterior</Button>
@@ -648,6 +664,8 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                     purpose={tipo}
                     sendVia={sendVia}
                     selectedNumberId={selectedNumberId}
+                    lockedSaleId={sale?.id}
+                    lockedQty={Object.fromEntries(devolvidos.map((i) => [i.item_id, i.quantity]))}
                     onUseCode={(code) => { setPostagemReversa(code); toast.success("Código preenchido na troca"); }}
                   />
                 )}
