@@ -503,6 +503,8 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     const payload: any = {
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 55,
+      Numero: reservedNumber,
+      Serie: 1,
       NaturezaOperacao: "Devolucao de Mercadoria",
       Finalidade: 4,
       NFReferencia: [chaveOriginal],
