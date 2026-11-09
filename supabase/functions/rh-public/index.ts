@@ -1,6 +1,6 @@
 // Página pública de candidatura (/vaga/:codigo). Sem login; tudo validado aqui e gravado por
 // funções SQL service-only. Nunca devolve dados de outro candidato: só o rascunho do próprio link.
-// Limite: 30/h por IP e 60/h por código (rh_public_hit). A nota NÃO é calculada aqui (fase 3).
+// Limite por ação (rh_public_hit): open/submit 60/h por IP; draft 400/h por código; 600/h por código (open+draft); submit só conta submit. A nota NÃO é calculada aqui (fase 3).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { accessMetadata } from "../_shared/access-log-data.ts";
@@ -37,9 +37,9 @@ Deno.serve(withAccessLog("rh-public", async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const ip = accessMetadata(req).ip ?? null;
-  const { data: allowed, error: hitErr } = await sb.rpc("rh_public_hit", { p_ip: ip, p_code: code });
+  const { data: allowed, error: hitErr } = await sb.rpc("rh_public_hit", { p_ip: ip, p_code: code, p_action: action });
   if (hitErr) return json({ error: "unavailable" }, 503);
-  if (!allowed) return json({ error: "rate_limited", message: "Muitos acessos agora. Tente de novo em alguns minutos." }, 429);
+  if (!allowed) return json({ error: "rate_limited", message: "Estamos com muitos acessos. Tente de novo em 1 minuto." }, 429);
 
   if (action === "open") {
     const { data, error } = await sb.rpc("rh_public_open", { p_code: code });
