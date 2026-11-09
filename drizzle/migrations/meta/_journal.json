@@ -1191,6 +1191,13 @@
       "when": 1794227988028,
       "tag": "0169_shipment_delivery_estimates",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1794235123406,
+      "tag": "0170_live_presenter_product_offers",
+      "breakpoints": true
     }
   ]
 }

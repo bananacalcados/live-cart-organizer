@@ -13165,6 +13165,64 @@ export type Database = {
         }
         Relationships: []
       }
+      live_presenter_products: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          event_id: string
+          free_shipping: boolean
+          id: string
+          interest_free_installments: number | null
+          offer_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          free_shipping?: boolean
+          id?: string
+          interest_free_installments?: number | null
+          offer_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          free_shipping?: boolean
+          id?: string
+          interest_free_installments?: number | null
+          offer_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_presenter_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_presenter_products_code_fkey"
+            columns: ["code"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "live_presenter_products_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_redirect_clicks: {
         Row: {
           created_at: string
@@ -13389,6 +13447,7 @@ export type Database = {
           shown_at: string
           shown_by: string | null
           source: string
+          stopped_at: string | null
         }
         Insert: {
           code: string
@@ -13398,6 +13457,7 @@ export type Database = {
           shown_at?: string
           shown_by?: string | null
           source?: string
+          stopped_at?: string | null
         }
         Update: {
           code?: string
@@ -13407,6 +13467,7 @@ export type Database = {
           shown_at?: string
           shown_by?: string | null
           source?: string
+          stopped_at?: string | null
         }
         Relationships: [
           {
@@ -32113,6 +32174,7 @@ export type Database = {
           shown_at: string
           shown_by: string | null
           source: string
+          stopped_at: string | null
         }
         SetofOptions: {
           from: "*"
@@ -32170,6 +32232,10 @@ export type Database = {
           p_user: string
         }
         Returns: string
+      }
+      stop_live_shown_product: {
+        Args: { p_event_id: string }
+        Returns: undefined
       }
       sync_lead_pix_data: {
         Args: {
