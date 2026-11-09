@@ -1226,6 +1226,13 @@
       "when": 1794239383611,
       "tag": "0174_round_progressive_promotion_subtotal",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1794240785855,
+      "tag": "0175_prioritize_manual_live_overlay_product",
+      "breakpoints": true
     }
   ]
 }
