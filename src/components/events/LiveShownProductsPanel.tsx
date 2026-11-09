@@ -106,8 +106,19 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
     let products: CodeRow[] = [];
     if (codes.length) {
       const { data } = await db.from("v_product_color_codes")
-        .select("code,product_name,color,sale_price,shopify_ok").in("code", codes);
+        .select("code,product_name,color,sale_price,shopify_ok,shopify_product_id").in("code", codes);
       products = (data || []) as CodeRow[];
+      // Fotos: só busca códigos ainda não conhecidos (cache), uma consulta em lote.
+      const missing = products.filter((r) => !imageCache.current.has(r.code));
+      const ids = [...new Set(missing.map((r) => r.shopify_product_id).filter(Boolean))] as string[];
+      if (missing.length) {
+        const { data: mirror } = ids.length
+          ? await db.from("shopify_variant_mirror").select("shopify_product_id,option_color,image_url")
+            .in("shopify_product_id", ids).neq("image_url", "").limit(600)
+          : { data: [] };
+        const imgs = buildCodeImageMap(missing, (mirror || []) as MirrorImageRow[]);
+        missing.forEach((r) => imageCache.current.set(r.code, imgs.get(r.code) || null));
+      }
     }
     const productMap = new Map(products.map((r) => [r.code, r]));
     const shownMap = new Map(shown.map((r) => [r.code, r]));
@@ -157,7 +168,8 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
       || Number(!!b.preparedId) - Number(!!a.preparedId)
       || (a.preparedAt || a.shown_at || "").localeCompare(b.preparedAt || b.shown_at || ""));
     const key = merged.map((r) => [r.id, r.is_current, r.offer_price, r.free_shipping,
-      r.interest_free_installments, r.shown_at, r.shopify_ok].join(":")).join("|");
+      r.interest_free_installments, r.shown_at, r.shopify_ok, imageCache.current.get(r.code) || ""].join(":")).join("|");
+    merged.forEach((r) => { r.image = imageCache.current.get(r.code) || null; });
     if (key !== lastKey.current) { lastKey.current = key; setRows(merged); }
     setLoading(false);
   }, [eventId]);
@@ -296,12 +308,12 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
                 <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
                   {r.image && <img src={r.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
                 </span>
-                <span className="w-16 text-lg font-extrabold">{r.code}</span>
+                <span className="w-14 shrink-0 text-lg font-extrabold">{r.code}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{r.product_name}</span>
-                  <span className="block text-xs text-muted-foreground">{r.color || "—"}</span>
+                  <span className="mt-0.5 inline-block max-w-full truncate rounded bg-accent px-1.5 text-xs font-bold uppercase text-accent-foreground">{r.color || "sem cor"}</span>
                 </span>
-                <span className="text-sm font-semibold">{already ? "Na lista" : BRL(r.sale_price)}</span>
+                <span className="shrink-0 whitespace-nowrap text-sm font-semibold">{already ? "Na lista" : BRL(r.sale_price)}</span>
               </button>
             );
           })}
@@ -330,39 +342,41 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
         ) : rows.length === 0 ? (
           <p className="p-4 text-center text-sm text-muted-foreground">Busque os modelos acima para deixar a apresentação pronta.</p>
         ) : (
-          <div className={cn(compact ? "flex gap-2 overflow-x-auto pb-1" : "grid gap-2 lg:grid-cols-2")}>
+          <div className={cn(compact ? "flex gap-2 overflow-x-auto pb-1" : "grid gap-2 sm:grid-cols-2 xl:grid-cols-3")}>
             {rows.map((r) => {
               const hasOffer = r.offer_price != null && r.sale_price != null && r.offer_price < r.sale_price;
               return (
-                <Card key={r.id} className={cn("p-3", compact && "w-72 shrink-0", r.is_current && "border-primary bg-primary/5 ring-2 ring-primary/40")}>
-                  <div className="flex items-start gap-3">
+                <Card key={r.id} className={cn("p-2", compact && "w-64 shrink-0", r.is_current && "border-primary bg-primary/5 ring-2 ring-primary/40")}>
+                  <div className="flex items-start gap-2">
+                    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
+                      {r.image && <img src={r.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-2xl font-extrabold leading-none">{r.code}</span>
-                        {r.is_current && <Badge className="gap-1 text-[10px]"><Radio className="h-3 w-3" /> No overlay</Badge>}
-                        {!r.shopify_ok && <Badge variant="destructive" className="text-[10px]">fora Shopify</Badge>}
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-lg font-extrabold leading-none">{r.code}</span>
+                        {r.is_current && <Badge className="gap-1 px-1 text-[10px]"><Radio className="h-3 w-3" /> No overlay</Badge>}
+                        {!r.shopify_ok && <Badge variant="destructive" className="px-1 text-[10px]">fora Shopify</Badge>}
                       </div>
-                      <p className="mt-1 truncate text-sm font-medium" title={r.product_name || ""}>{r.product_name || "—"}</p>
-                      <p className="truncate text-xs text-muted-foreground">{r.color || "—"}</p>
-                      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                      <p className="truncate text-xs" title={r.product_name || ""}>{r.product_name || "—"}</p>
+                      <span className="inline-block max-w-full truncate rounded bg-accent px-1.5 text-xs font-bold uppercase text-accent-foreground" title={r.color || ""}>{r.color || "sem cor"}</span>
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         {hasOffer ? (
-                          <><span className="text-xs text-muted-foreground line-through">{BRL(r.sale_price)}</span><span className="font-extrabold text-primary">{BRL(r.offer_price)}</span></>
+                          <><span className="text-[11px] text-muted-foreground line-through">{BRL(r.sale_price)}</span><span className="text-sm font-extrabold text-primary">{BRL(r.offer_price)}</span></>
                         ) : <span className="text-sm font-semibold">{BRL(r.sale_price)}</span>}
-                        {r.free_shipping && <Badge variant="secondary" className="text-[10px]">frete grátis</Badge>}
-                        {r.interest_free_installments && <Badge variant="secondary" className="text-[10px]">até {r.interest_free_installments}x sem juros</Badge>}
+                        {r.free_shipping && <Badge variant="secondary" className="px-1 text-[10px]">frete grátis</Badge>}
+                        {r.interest_free_installments && <Badge variant="secondary" className="px-1 text-[10px]">{r.interest_free_installments}x s/ juros</Badge>}
                       </div>
-                      {!compact && <p className="mt-1 text-[11px] text-muted-foreground">{hhmm(r.shown_at)}{r.source === "comment" ? " · detectado pelo comentário" : ""}</p>}
                     </div>
-                    <Button size="icon" variant="ghost" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                   </div>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-1.5 flex gap-2">
                     {r.is_current ? (
-                      <Button size="sm" variant="outline" className="flex-1 gap-1" disabled={busy === r.code} onClick={() => stop(r)} aria-label={`Parar apresentação ${r.code}`}>
-                        {busy === r.code ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />} Parar apresentação
+                      <Button size="sm" variant="outline" className="h-7 flex-1 gap-1 text-xs" disabled={busy === r.code} onClick={() => stop(r)} aria-label={`Parar apresentação ${r.code}`}>
+                        {busy === r.code ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />} Parar apresentação
                       </Button>
                     ) : (
-                      <Button size="sm" className="flex-1 gap-1" disabled={busy === r.code || !r.shopify_ok} onClick={() => show(r)} aria-label={`Apresentar ${r.code}`}>
-                        {busy === r.code ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Apresentar
+                      <Button size="sm" className="h-7 flex-1 gap-1 text-xs" disabled={busy === r.code || !r.shopify_ok} onClick={() => show(r)} aria-label={`Apresentar ${r.code}`}>
+                        {busy === r.code ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Apresentar
                       </Button>
                     )}
                   </div>
