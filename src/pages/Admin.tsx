@@ -33,6 +33,7 @@ import { PaymentReviewPanel } from "@/components/admin/PaymentReviewPanel";
 import { RefundApprovalsPanel } from "@/components/admin/RefundApprovalsPanel";
 import { GatewaySplitStatsPanel } from "@/components/admin/GatewaySplitStatsPanel";
 import { CorreiosSettingsPanel } from "@/components/admin/CorreiosSettingsPanel";
+import { CentralRestockPanel } from "@/components/admin/CentralRestockPanel";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
@@ -244,8 +245,10 @@ export default function Admin() {
             <TabsTrigger value="acessos" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Acessos</TabsTrigger>
             {isAdmin && <TabsTrigger value="admin-audit" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Admin</TabsTrigger>}
             {isAdmin && <TabsTrigger value="correios" className="gap-1.5"><Truck className="h-3.5 w-3.5" /> Correios (contrato)</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="central-restock" className="gap-1.5"><Package className="h-3.5 w-3.5" /> Produtos para troca</TabsTrigger>}
           </TabsList>
           {isAdmin && <TabsContent value="correios" className="mt-4"><CorreiosSettingsPanel /></TabsContent>}
+          {isAdmin && <TabsContent value="central-restock" className="mt-4"><CentralRestockPanel /></TabsContent>}
 
           <TabsContent value="acessos" className="mt-4">
             {isAdmin && <WebhookStrictStatus />}
