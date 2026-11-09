@@ -24,6 +24,9 @@ interface Props {
   onUseCode?: (code: string) => void;
   /** Troca ou devolução: define a mensagem. Sem valor, a equipe escolhe na tela. */
   purpose?: ReversePurpose;
+  /** Aberta de dentro da troca: venda e itens já escolhidos lá (não deixa escolher outra venda). */
+  lockedSaleId?: string;
+  lockedQty?: Record<string, number>;
 }
 
 interface ReverseItem {
@@ -97,7 +100,7 @@ export function reverseWhatsAppText(code: string, purpose: ReversePurpose, valid
   ].join("\n");
 }
 
-export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId = null, embedded = false, onUseCode, purpose: purposeProp }: Props) {
+export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerName, sendVia, selectedNumberId = null, embedded = false, onUseCode, purpose: purposeProp, lockedSaleId, lockedQty }: Props) {
   const [purposeSel, setPurposeSel] = useState<ReversePurpose>(purposeProp ?? "devolucao");
   useEffect(() => { if (purposeProp) setPurposeSel(purposeProp); }, [purposeProp]);
   const purpose = purposeProp ?? purposeSel;
@@ -131,7 +134,12 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
           numero: known.address_number || "", complemento: known.complement || "", bairro: known.neighborhood || "", cidade: known.city || "", uf: (known.state || "").slice(0, 2).toUpperCase(),
         }));
         setItems(list.items || []);
-        setSales(sl.sales || []);
+        const all: SaleOption[] = sl.sales || [];
+        if (lockedSaleId) {
+          const only = all.filter((x) => x.id === lockedSaleId);
+          setSales(only);
+          if (only.length) { setSaleId(lockedSaleId); setQty(lockedQty || {}); }
+        } else setSales(all);
       } finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
@@ -246,7 +254,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Venda original (a nota de devolução referencia a nota dela)</Label>
-            {sales.length === 0 ? <p className="text-xs text-destructive">Nenhuma venda encontrada para este telefone.</p> : (
+            {sales.length === 0 ? <p className="text-xs text-destructive">{lockedSaleId ? "A venda escolhida na troca não tem nota autorizada para este telefone." : "Nenhuma venda encontrada para este telefone."}</p> : (
               <div className="space-y-1">
                 {sales.map((s) => (
                   <button key={s.id} type="button" disabled={!s.nfe} onClick={() => pickSale(s.id)}
@@ -261,7 +269,7 @@ export function POSWhatsAppReverseDialog({ open, onOpenChange, phone, customerNa
                 <p className="text-xs font-medium">Quantos de cada item ela devolve?</p>
                 {sale.items.map((i) => (
                   <div key={i.id} className="flex items-center gap-2 text-xs">
-                    <Input type="number" min={0} max={i.quantity} className="h-7 w-14" value={qty[i.id] ?? 0}
+                    <Input type="number" min={0} max={i.quantity} className="h-7 w-14" value={qty[i.id] ?? 0} disabled={!!lockedSaleId}
                       onChange={(e) => setQty((q) => ({ ...q, [i.id]: Math.max(0, Math.min(i.quantity, Math.round(Number(e.target.value) || 0))) }))} />
                     <span className="flex-1">{i.product_name} <span className="text-muted-foreground">(comprou {i.quantity})</span></span>
                   </div>

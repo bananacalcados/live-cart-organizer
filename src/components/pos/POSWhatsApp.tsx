@@ -56,7 +56,7 @@ import { ExportConversationDialog } from "@/components/chat/ExportConversationDi
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { PendingCheckoutOrdersBar } from "./PendingCheckoutOrdersBar";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
-import { POSWhatsAppReverseDialog } from "./POSWhatsAppReverseDialog";
+import { NewExchangePicker } from "./NewExchangePicker";
 import { POSGenerateBoletoDialog } from "./POSGenerateBoletoDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
@@ -2909,7 +2909,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showBoleto && <POSGenerateBoletoDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
-              {showReverse && <POSWhatsAppReverseDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
+              {showReverse && <NewExchangePicker open customerPhone={selectedPhone} sellerId={selectedSellerId || undefined} onCancel={closeSideTools} onDone={() => { closeSideTools(); refreshRiskRegistries(); }} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showCatalog && <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
               {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} conversation={selectedConversation} />}
