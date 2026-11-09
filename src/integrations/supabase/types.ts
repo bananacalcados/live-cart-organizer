@@ -7679,6 +7679,7 @@ export type Database = {
           new_variant_id: string | null
           order_number: string | null
           order_ref: string | null
+          original_item_id: string | null
           phone: string
           product_name: string
           product_size: string | null
@@ -7686,7 +7687,10 @@ export type Database = {
           purchase_order_status: string | null
           reason_category: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory: string | null
+          replacement_product_id: string | null
+          replacement_reserved_quantity: number | null
           request_type: string | null
+          requested_quantity: number | null
           requires_human_review: boolean | null
           reverse_shipment_id: string | null
           reverse_shipping_code: string | null
@@ -7727,6 +7731,7 @@ export type Database = {
           new_variant_id?: string | null
           order_number?: string | null
           order_ref?: string | null
+          original_item_id?: string | null
           phone: string
           product_name: string
           product_size?: string | null
@@ -7734,7 +7739,10 @@ export type Database = {
           purchase_order_status?: string | null
           reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory?: string | null
+          replacement_product_id?: string | null
+          replacement_reserved_quantity?: number | null
           request_type?: string | null
+          requested_quantity?: number | null
           requires_human_review?: boolean | null
           reverse_shipment_id?: string | null
           reverse_shipping_code?: string | null
@@ -7775,6 +7783,7 @@ export type Database = {
           new_variant_id?: string | null
           order_number?: string | null
           order_ref?: string | null
+          original_item_id?: string | null
           phone?: string
           product_name?: string
           product_size?: string | null
@@ -7782,7 +7791,10 @@ export type Database = {
           purchase_order_status?: string | null
           reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
           reason_subcategory?: string | null
+          replacement_product_id?: string | null
+          replacement_reserved_quantity?: number | null
           request_type?: string | null
+          requested_quantity?: number | null
           requires_human_review?: boolean | null
           reverse_shipment_id?: string | null
           reverse_shipping_code?: string | null
@@ -21475,6 +21487,7 @@ export type Database = {
       }
       product_restock_flags: {
         Row: {
+          central_offer_enabled: boolean
           id: string
           note: string | null
           restock_mode: string
@@ -21484,6 +21497,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          central_offer_enabled?: boolean
           id?: string
           note?: string | null
           restock_mode?: string
@@ -21493,6 +21507,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          central_offer_enabled?: boolean
           id?: string
           note?: string | null
           restock_mode?: string
@@ -24712,6 +24727,7 @@ export type Database = {
           order_ref: string
           request_type: string
           revoked_at: string | null
+          submitted_request_id: string | null
           token_hash: string
           used_at: string | null
         }
@@ -24725,6 +24741,7 @@ export type Database = {
           order_ref: string
           request_type: string
           revoked_at?: string | null
+          submitted_request_id?: string | null
           token_hash: string
           used_at?: string | null
         }
@@ -24738,6 +24755,7 @@ export type Database = {
           order_ref?: string
           request_type?: string
           revoked_at?: string | null
+          submitted_request_id?: string | null
           token_hash?: string
           used_at?: string | null
         }
@@ -24745,7 +24763,9 @@ export type Database = {
       }
       support_settings: {
         Row: {
+          central_auto_reverse: boolean
           central_base_url: string
+          central_public_enabled: boolean
           exchange_window_days: number
           id: boolean
           max_offer_attempts: number
@@ -24754,7 +24774,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          central_auto_reverse?: boolean
           central_base_url?: string
+          central_public_enabled?: boolean
           exchange_window_days?: number
           id?: boolean
           max_offer_attempts?: number
@@ -24763,7 +24785,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          central_auto_reverse?: boolean
           central_base_url?: string
+          central_public_enabled?: boolean
           exchange_window_days?: number
           id?: boolean
           max_offer_attempts?: number
@@ -29109,6 +29133,42 @@ export type Database = {
           id: string
           min_purchase: number
         }[]
+      }
+      central_context: {
+        Args: { p_hash: string; p_type: string }
+        Returns: Json
+      }
+      central_options: {
+        Args: {
+          p_hash: string
+          p_item: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      central_restock_list: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: Json
+      }
+      central_restock_set: {
+        Args: { p_enabled: boolean; p_skus: string[] }
+        Returns: undefined
+      }
+      central_submit_atomic: {
+        Args: {
+          p_detail: string
+          p_hash: string
+          p_item: string
+          p_quantity: number
+          p_reason: string
+          p_replacement?: string
+          p_type: string
+          p_unused?: boolean
+        }
+        Returns: Json
       }
       change_area_password: {
         Args: { p_area: string; p_current: string; p_new: string }
