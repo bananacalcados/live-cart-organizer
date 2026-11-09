@@ -118,17 +118,30 @@ export default function VagaPublicPage() {
     return () => { alive = false; };
   }, [code]);
 
-  // Rascunho no servidor: 1,5 s depois de parar de digitar, só se mudou.
+  // Rascunho no servidor: 6 s depois de parar de digitar (ou ao sair do campo), só se mudou.
+  // 429 no rascunho: silêncio e nova tentativa depois de 60 s.
+  const formRef = useRef(form); formRef.current = form;
+  const retryAt = useRef(0);
+  const saving = useRef(false);
+  const saveDraft = useCallback(async () => {
+    if (!loaded.current || saving.current) return;
+    const snap = JSON.stringify(formRef.current);
+    if (snap === lastSaved.current) return;
+    if (Date.now() < retryAt.current) return;
+    saving.current = true;
+    try {
+      const r = await call({ action: "draft", code, draft: formRef.current });
+      if (r.ok) { lastSaved.current = snap; if ((r.data as any)?.submitted) setState("submitted"); }
+      else if (r.status === 429) { retryAt.current = Date.now() + 60_000; setTimeout(() => { void saveDraftRef.current(); }, 60_500); }
+    } catch { /* silêncio */ } finally { saving.current = false; }
+  }, [code]);
+  const saveDraftRef = useRef(saveDraft); saveDraftRef.current = saveDraft;
   useEffect(() => {
     if (!loaded.current || state !== "form") return;
-    const snap = JSON.stringify(form);
-    if (snap === lastSaved.current) return;
-    const t = setTimeout(async () => {
-      const r = await call({ action: "draft", code, draft: form });
-      if (r.ok) { lastSaved.current = snap; if ((r.data as any)?.submitted) setState("submitted"); }
-    }, 1500);
+    if (JSON.stringify(form) === lastSaved.current) return;
+    const t = setTimeout(() => { void saveDraft(); }, 6000);
     return () => clearTimeout(t);
-  }, [form, code, state]);
+  }, [form, state, saveDraft]);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
   const setExp = (i: number, patch: Partial<Exp>) => setForm((f) => ({ ...f, experiencias: f.experiencias.map((e, j) => (j === i ? { ...e, ...patch } : e)) }));
@@ -185,13 +198,13 @@ export default function VagaPublicPage() {
     setSending(false);
     if (r.ok) { setState("done"); window.scrollTo(0, 0); return; }
     if (r.status === 409) { setState("submitted"); return; }
-    if (r.status === 429) { setErrors({ geral: "Muitos acessos agora. Tente de novo em alguns minutos." }); return; }
+    if (r.status === 429) { setErrors({ geral: "Estamos com muitos acessos. Seus dados estão salvos nesta tela, toque em Enviar de novo em 1 minuto." }); return; }
     if (r.payload?.fields) { setErrors(r.payload.fields); focusFirst(r.payload.fields); return; }
     setErrors({ geral: "Não conseguimos enviar agora. Confira sua internet e tente de novo." });
   }
 
   const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen bg-background text-foreground"><div className="mx-auto max-w-md px-4 py-6">{children}</div></div>
+    <div className="min-h-screen bg-background text-foreground" onBlurCapture={() => { if (state === "form") void saveDraftRef.current(); }}><div className="mx-auto max-w-md px-4 py-6">{children}</div></div>
   );
   const centered = (title: string, text?: string) => shell(
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 text-center">
@@ -201,7 +214,7 @@ export default function VagaPublicPage() {
 
   if (state === "loading") return centered("Carregando…");
   if (state === "notfound") return centered("Link não encontrado", "Confira se o link está completo.");
-  if (state === "limited") return centered("Muitos acessos agora", "Tente de novo em alguns minutos.");
+  if (state === "limited") return centered("Estamos com muitos acessos", "Espere 1 minutinho e abra o link de novo.");
   if (state === "error") return centered("Não conseguimos abrir", "Confira sua internet e tente de novo.");
   if (state === "submitted") return centered("Você já enviou seu cadastro. Obrigado!");
   if (state === "done") return centered("Recebemos!", "Se você for selecionado(a), chamamos pelo WhatsApp ou Instagram.");
