@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 type Ev = { title: string; detail?: string; city: string; state: string; at: string };
+type DeliveryEstimate = {
+  kind: 'estimated' | 'confirmed';
+  start: string;
+  end: string;
+};
+
 type TrackingData = {
   tracking_code: string;
   status: string;
@@ -9,8 +15,14 @@ type TrackingData = {
   destination_city?: string | null;
   destination_state?: string | null;
   local_delivery?: boolean;
+  delivery_estimate?: DeliveryEstimate | null;
+  delivery_estimate_pending?: boolean;
   events: Ev[];
 };
+
+const fmtDate = (dateOnly: string) => new Date(`${dateOnly}T12:00:00`).toLocaleDateString('pt-BR', {
+  day: '2-digit', month: '2-digit', year: 'numeric',
+});
 
 const fmt = (iso: string) => {
   const d = new Date(iso);
@@ -62,10 +74,17 @@ export default function PublicTracking() {
       }
     };
     void loadTracking(true);
-    const refresh = window.setInterval(() => void loadTracking(false), 60_000);
+    const refresh = window.setInterval(() => {
+      if (!document.hidden) void loadTracking(false);
+    }, 60_000);
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void loadTracking(false);
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       alive = false;
       window.clearInterval(refresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [codigo]);
 
@@ -104,6 +123,34 @@ export default function PublicTracking() {
             </div>
           )}
         </section>
+
+        {data?.delivery_estimate_pending && !data.delivery_estimate && !data.local_delivery && (
+          <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-5" aria-label="Previsão de entrega">
+            <p className="text-xs font-medium text-muted-foreground">Previsão de entrega</p>
+            <p className="text-base font-semibold text-foreground mt-1">Calculando uma estimativa para o seu CEP...</p>
+            <p className="text-xs text-muted-foreground mt-1">Ela aparecerá aqui em instantes.</p>
+          </section>
+        )}
+
+        {data?.delivery_estimate && !data.local_delivery && (
+          <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-5" aria-label="Previsão de entrega">
+            <p className="text-xs font-medium text-muted-foreground">Previsão de entrega</p>
+            {data.delivery_estimate.start === data.delivery_estimate.end ? (
+              <p className="text-lg font-bold text-foreground mt-1">
+                Até {fmtDate(data.delivery_estimate.end)}
+              </p>
+            ) : (
+              <p className="text-lg font-bold text-foreground mt-1">
+                Entre {fmtDate(data.delivery_estimate.start)} e {fmtDate(data.delivery_estimate.end)}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {data.delivery_estimate.kind === 'confirmed'
+                ? 'Prazo atualizado com as informações do envio.'
+                : 'Estimativa calculada para o seu CEP. A previsão será atualizada quando o pedido for enviado.'}
+            </p>
+          </section>
+        )}
 
         {loading && <p className="text-sm text-muted-foreground">Consultando...</p>}
         {error && !loading && (

@@ -1,3 +1,9 @@
+# Previsão de entrega no rastreio
+- [x] Auditar onde serviço, CEP e prazo real são gravados e como o link público lê o envio
+- [x] Calcular faixa estimada por cotação: +3 dias úteis fixos, exceto SEDEX; preservar data real quando existir
+- [x] Exibir a faixa no rastreio sem expor transportadora/código e sem consultas repetidas desnecessárias
+- [x] Testar SEDEX, demais modalidades, fins de semana e substituição pela previsão real; não publicar
+
 # Central de Trocas e Devoluções — Fase 2
 - [x] Motor compartilhado, tokens isolados e submissão/reserva atômica, sem fiscal; edges fechadas até limite autorizado
 - [x] Duas páginas públicas, links no pedido e configuração paginada de reposição

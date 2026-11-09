@@ -24023,6 +24023,7 @@ export type Database = {
           customer_phone: string | null
           delivered_at: string | null
           delivered_source: string | null
+          delivery_estimate: Json | null
           destination_city: string | null
           destination_state: string | null
           fulfillment: string
@@ -24062,6 +24063,7 @@ export type Database = {
           customer_phone?: string | null
           delivered_at?: string | null
           delivered_source?: string | null
+          delivery_estimate?: Json | null
           destination_city?: string | null
           destination_state?: string | null
           fulfillment?: string
@@ -24101,6 +24103,7 @@ export type Database = {
           customer_phone?: string | null
           delivered_at?: string | null
           delivered_source?: string | null
+          delivery_estimate?: Json | null
           destination_city?: string | null
           destination_state?: string | null
           fulfillment?: string
@@ -31547,6 +31550,10 @@ export type Database = {
         Args: { p_prize_id: string; p_reason?: string }
         Returns: Json
       }
+      request_shipment_delivery_estimate: {
+        Args: { p_shipment_id: string }
+        Returns: undefined
+      }
       reserve_direct_group_send: {
         Args: { p_fallback?: string; p_jid: string; p_override?: string }
         Returns: Json
@@ -32118,6 +32125,10 @@ export type Database = {
       shadow_cycle_ready_for_report: { Args: never; Returns: Json }
       shadow_report_period: {
         Args: { p_since?: string; p_until?: string }
+        Returns: Json
+      }
+      shipment_delivery_range: {
+        Args: { p_base: string; p_days: string }
         Returns: Json
       }
       shopify_missing_colors: {
