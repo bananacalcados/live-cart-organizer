@@ -299,7 +299,7 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
       <Input value={q} onChange={(e) => setQ(e.target.value)}
         placeholder="Adicionar por nome, cor ou código" className={cn("pl-8", compact && "h-9 text-sm")} />
       {(searching || results.length > 0) && (
-        <Card className={cn("absolute z-30 mt-1 max-h-80 overflow-auto p-1", compact ? "w-96" : "w-full")}>
+        <Card className={cn("absolute right-0 z-30 mt-1 max-h-80 w-[28rem] max-w-[90vw] overflow-auto p-1")}>
           {searching && <div className="flex items-center gap-1 p-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Buscando…</div>}
           {results.map((r) => {
             const already = rows.some((x) => x.code === r.code && x.preparedId);
