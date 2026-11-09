@@ -368,7 +368,7 @@ export default function LiveOverlay() {
           <div className="flex flex-col gap-[0.25em]">
             {shown.current && (
               <div key={shown.current.code + (shown.current.shown_at || "")} className={`${panel} animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.1 }}>
-                <div className="font-black tracking-wide" style={{ fontSize: "2.2em" }}>{shown.current.code}</div>
+                <div className="font-black tracking-wide" style={{ fontSize: "2.2em", whiteSpace: "nowrap" }}>{shown.current.code}</div>
                 <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
                 {shown.current.color && <div style={{ fontSize: "0.5em" }}>{shown.current.color}</div>}
                 {shown.current.offer_price != null ? (
