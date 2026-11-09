@@ -27,6 +27,7 @@ const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('label'), id: z.string().uuid() }),
   z.object({ action: z.literal('check'), id: z.string().uuid() }),
   z.object({ action: z.literal('mark_sent'), id: z.string().uuid() }),
+  z.object({ action: z.literal('link_troca'), troca_id: z.string().uuid(), codigo_objeto: z.string().regex(/^[A-Z]{2}\d{9}[A-Z]{2}$/) }),
   z.object({ action: z.literal('cancel'), id: z.string().uuid() }),
 ]);
 const COLS = 'id,created_at,customer_name,customer_phone,servico_codigo,servico_nome,valid_until,status,codigo_objeto,label_path,error_message,sent_at,reason,sale_id,devolucao_doc_id';
@@ -252,6 +253,25 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       if (recibo) { try { const d: any = await cf(`/prepostagem/v1/prepostagens/rotulo/download/assincrono/${encodeURIComponent(recibo)}`, { method: 'GET' }); label = d?.pdfBytes ? { pdf: true } : (d && typeof d === 'object' ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[${v.length} chars]` : v])) : d); } catch (e) { label = { error: e instanceof Error ? e.message : String(e) }; } }
       const pick = (o: any) => o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => /codigo|status|valid|prazo|autoriz|tipo|logReversa|servico/i.test(k))) : o;
       return reply({ correios: pick(one), raw_keys: one && typeof one === "object" ? Object.keys(one).slice(0, 40) : null, raw: JSON.stringify(one).slice(0, 1500), label });
+    }
+
+    if (b.action === 'link_troca') {
+      // Liga a nota de devolução de uma reversa à troca aberta DA MESMA venda. Nunca emite nota.
+      const { data: rv } = await db.from('correios_reverse_shipments').select('id, sale_id, devolucao_doc_id').eq('codigo_objeto', b.codigo_objeto).neq('status', 'cancelada').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!rv) return reply({ linked: false, reason: 'reversa não encontrada (código digitado à mão)' });
+      const { data: td } = await db.from('trocas_devolucoes').select('id, pedido_original_id, devolucao_doc_id, status').eq('id', b.troca_id).maybeSingle();
+      if (!td) return reply({ error: 'Troca não encontrada' }, 404);
+      if (td.pedido_original_id !== rv.sale_id) return reply({ error: 'A reversa é de outra venda' }, 409);
+      if (!rv.devolucao_doc_id) return reply({ linked: false, reason: 'reversa sem nota de devolução' });
+      if (td.devolucao_doc_id && td.devolucao_doc_id !== rv.devolucao_doc_id) {
+        const { data: cur } = await db.from('fiscal_documents').select('status').eq('id', td.devolucao_doc_id).maybeSingle();
+        if (cur && ['authorized', 'pending_sefaz'].includes(String(cur.status))) return reply({ error: 'A troca já tem outra nota de devolução' }, 409);
+      }
+      const { data: doc } = await db.from('fiscal_documents').select('id, chave_acesso, troca_devolucao_id').eq('id', rv.devolucao_doc_id).maybeSingle();
+      if (doc?.troca_devolucao_id && doc.troca_devolucao_id !== td.id) return reply({ error: 'A nota já está ligada a outra troca' }, 409);
+      await db.from('fiscal_documents').update({ troca_devolucao_id: td.id }).eq('id', rv.devolucao_doc_id).is('troca_devolucao_id', null);
+      await db.from('trocas_devolucoes').update({ devolucao_doc_id: rv.devolucao_doc_id, chave_devolucao: doc?.chave_acesso || null }).eq('id', td.id);
+      return reply({ linked: true });
     }
 
     if (b.action === 'mark_sent') {
