@@ -29450,6 +29450,31 @@ export type Database = {
         Args: { _raffle_id: string }
         Returns: boolean
       }
+      claim_fiscal_emission: {
+        Args: {
+          p_ambiente: string
+          p_company_id: string
+          p_company_selection_details: Json
+          p_company_selection_gateway: string
+          p_company_selection_rule: string
+          p_cpf_destinatario: string
+          p_modelo: number
+          p_nome_destinatario: string
+          p_order_id: string
+          p_pos_sale_id: string
+          p_serie: number
+          p_valor_total: number
+        }
+        Returns: {
+          out_chave_acesso: string
+          out_claimed: boolean
+          out_danfe_url: string
+          out_document_id: string
+          out_numero: number
+          out_protocolo: string
+          out_status: string
+        }[]
+      }
       claim_group_dispatch_job: {
         Args: { p_number_id: string }
         Returns: {

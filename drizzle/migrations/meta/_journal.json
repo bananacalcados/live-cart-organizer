@@ -1247,6 +1247,13 @@
       "when": 1794254686182,
       "tag": "0177_live_followup_manual_cart_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1794259677212,
+      "tag": "0178_fiscal_atomic_emission_claim_and_numbering",
+      "breakpoints": true
     }
   ]
 }

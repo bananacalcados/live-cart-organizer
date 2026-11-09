@@ -470,11 +470,19 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
         };
 
 
-    // 7. Cria o documento fiscal (entrada) pendente e vincula ao evento AGORA
+    // 7. Reserva a mesma sequência das NF-e de venda e cria o documento pendente.
+    // Assim uma devolução não consome um número que uma venda também possa receber.
+    const { data: numberData, error: numberErr } = await supabase.rpc("get_next_fiscal_number", {
+      p_company_id: companyId, p_modelo: 55, p_serie: 1, p_ambiente: ambiente,
+    });
+    const reservedNumber = Number(numberData?.[0]?.next_number);
+    if (numberErr || !Number.isSafeInteger(reservedNumber) || reservedNumber < 1) {
+      throw new Error(`Reserva da numeração fiscal: ${numberErr?.message || "número inválido"}`);
+    }
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
       company_id: companyId,
       pos_sale_id: pedidoOriginalId,
-      modelo: 55, serie: 1, numero: null,
+      modelo: 55, serie: 1, numero: reservedNumber,
       ambiente, status: "pending",
       finalidade: 4,
       tipo_operacao: "entrada",
@@ -495,6 +503,8 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     const payload: any = {
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 55,
+      Numero: reservedNumber,
+      Serie: 1,
       NaturezaOperacao: "Devolucao de Mercadoria",
       Finalidade: 4,
       NFReferencia: [chaveOriginal],

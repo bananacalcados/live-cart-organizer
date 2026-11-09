@@ -1,6 +1,7 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { resolveFiscalCompanyForSource, recordFiscalCompanyPending, resolveFiscalPending } from "../_shared/fiscal/gateway-company.ts";
+import { applyReservedFiscalNumber, fiscalEmissionReuseBody, getFiscalEmissionClaim } from "../_shared/fiscal/emission-claim.ts";
 // Edge function: nfe-emitir
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
@@ -388,6 +389,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       const q = supabase.from("fiscal_documents")
         .select("id, status, chave_acesso, numero, protocolo, danfe_url")
         .eq("status", "authorized")
+        .eq("modelo", 55)
+        .or("finalidade.eq.1,finalidade.is.null")
         .order("created_at", { ascending: false })
         .limit(1);
       if (order.source === "sale") q.eq("pos_sale_id", order.source_id);
@@ -659,26 +662,37 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     }
     const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
-    // 6. Cria registro pendente
-    const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
-      company_id: companyId,
-      order_id: order.source === "order" ? order.source_id : null,
-      pos_sale_id: order.source === "sale" ? order.source_id : null,
-      modelo: 55, serie: 1,
-      numero: null, ambiente, status: "pending",
-      valor_total: valorTotalNota, cpf_destinatario: cpfDest,
-      nome_destinatario: order.customer_name || "CONSUMIDOR",
-      company_selection_rule: selectionRule,
-      company_selection_gateway: selectionGateway,
-      company_selection_details: selectionDetails,
-    }).select().single();
-    if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
+    // 6. Reutiliza uma emissão ativa/autorizada ou reserva número + pendência atomicamente.
+    // A trava no banco impede dois cliques/workers de chamarem o provedor para a mesma venda.
+    const { data: claimData, error: claimErr } = await supabase.rpc("claim_fiscal_emission", {
+      p_company_id: companyId,
+      p_pos_sale_id: order.source === "sale" ? order.source_id : null,
+      p_order_id: order.source === "order" ? order.source_id : null,
+      p_modelo: 55,
+      p_serie: 1,
+      p_ambiente: ambiente,
+      p_valor_total: valorTotalNota,
+      p_cpf_destinatario: cpfDest,
+      p_nome_destinatario: order.customer_name || "CONSUMIDOR",
+      p_company_selection_rule: selectionRule,
+      p_company_selection_gateway: selectionGateway,
+      p_company_selection_details: selectionDetails,
+    });
+    if (claimErr) throw new Error(`Reserva da emissão fiscal: ${claimErr.message}`);
+    const claim = getFiscalEmissionClaim(claimData);
+    if (!claim.out_claimed) {
+      return new Response(JSON.stringify(fiscalEmissionReuseBody(claim)), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: claim.out_status === "authorized" ? 200 : 202,
+      });
+    }
+    const doc = { id: claim.out_document_id, numero: Number(claim.out_numero) };
 
     // 7. Pagamento
     const formaPagamento = "99"; // Outros (NF-e online — pagamento já capturado externamente)
     const ieEmitente = digits(company.ie);
 
-    const payload: any = {
+    const payload: any = applyReservedFiscalNumber({
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 55,
       NaturezaOperacao: "Venda de Mercadoria",
@@ -722,7 +736,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         Descricao: "Pago no checkout online",
         VlPago: valorTotalNota,
       }],
-    };
+    }, claim, 1);
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 

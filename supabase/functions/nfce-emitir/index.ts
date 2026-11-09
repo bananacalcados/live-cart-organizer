@@ -54,6 +54,8 @@ import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
 import { resolveFiscalCompanyForSource, recordFiscalCompanyPending, resolveFiscalPending } from "../_shared/fiscal/gateway-company.ts";
+import { applyReservedFiscalNumber, fiscalEmissionReuseBody, getFiscalEmissionClaim } from "../_shared/fiscal/emission-claim.ts";
+import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 
 
 const corsHeaders = {
@@ -78,8 +80,9 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { sale_id, ambiente: forcedAmb, company_id: forcedCompany } = await req.json();
+    const { sale_id, ambiente: forcedAmb, company_id: forcedCompany, retry_document_id: retryDocumentId } = await req.json();
     if (!sale_id) throw new Error("sale_id obrigatório");
+    if (retryDocumentId && !(await isAuthorizedCron(req))) throw new Error("retry_document_id exige chamada interna");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -251,17 +254,57 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 
     const totalLiquido = round2(totalProd - totalDesc);
 
-    // 4. Cria registro pendente (número/série virão da resposta — o painel BrasilNFe controla a numeração)
-    const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
-      company_id: companyId, pos_sale_id: sale_id, modelo: 65, serie: 1,
-      numero: null, ambiente, status: "pending",
-      valor_total: totalLiquido, cpf_destinatario: cpfDest,
-      nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
-      company_selection_rule: selectionRule,
-      company_selection_gateway: selectionGateway,
-      company_selection_details: selectionDetails,
-    }).select().single();
-    if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
+    // 4. Reutiliza uma emissão ativa/autorizada ou reserva número + pendência atomicamente.
+    let claim;
+    if (retryDocumentId) {
+      // Somente o worker interno retoma uma contingência, sempre no MESMO documento/número.
+      // A transição condicional impede dois workers de reenviarem juntos.
+      const { data: retryDoc, error: retryErr } = await supabase.from("fiscal_documents")
+        .update({ status: "pending" })
+        .eq("id", retryDocumentId)
+        .eq("pos_sale_id", sale_id)
+        .eq("modelo", 65)
+        .eq("status", "pending_sefaz")
+        .select("id, numero, status")
+        .maybeSingle();
+      if (retryErr) throw new Error(`Retomada da emissão fiscal: ${retryErr.message}`);
+      if (retryDoc) {
+        claim = getFiscalEmissionClaim([{
+          out_document_id: retryDoc.id,
+          out_numero: retryDoc.numero,
+          out_status: retryDoc.status,
+          out_claimed: true,
+          out_chave_acesso: null,
+          out_protocolo: null,
+          out_danfe_url: null,
+        }]);
+      }
+    }
+    if (!claim) {
+      const { data: claimData, error: claimErr } = await supabase.rpc("claim_fiscal_emission", {
+        p_company_id: companyId,
+        p_pos_sale_id: sale_id,
+        p_order_id: null,
+        p_modelo: 65,
+        p_serie: 1,
+        p_ambiente: ambiente,
+        p_valor_total: totalLiquido,
+        p_cpf_destinatario: cpfDest,
+        p_nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
+        p_company_selection_rule: selectionRule,
+        p_company_selection_gateway: selectionGateway,
+        p_company_selection_details: selectionDetails,
+      });
+      if (claimErr) throw new Error(`Reserva da emissão fiscal: ${claimErr.message}`);
+      claim = getFiscalEmissionClaim(claimData);
+    }
+    if (!claim.out_claimed) {
+      return new Response(JSON.stringify(fiscalEmissionReuseBody(claim)), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: claim.out_status === "authorized" ? 200 : 202,
+      });
+    }
+    const doc = { id: claim.out_document_id, numero: Number(claim.out_numero) };
 
     // Mapeia método de pagamento -> FormaPagamento (tabela 38 da SEFAZ, como string)
     const pmRaw = (sale.payment_method || "").toLowerCase();
@@ -282,7 +325,7 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 
     // 5. Monta payload BrasilNFe (formato oficial da API)
     const ieEmitente = digits(company.ie);
-    const payload: any = {
+    const payload: any = applyReservedFiscalNumber({
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 65,
       NaturezaOperacao: "Venda ao Consumidor",
@@ -308,7 +351,7 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
         Descricao: descricaoPagamento,
         VlPago: totalLiquido,
       }],
-    };
+    }, claim, 1);
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 
