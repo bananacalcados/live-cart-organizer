@@ -85,6 +85,14 @@ export function withOverlayDefaults(raw: any): OverlayConfig {
 export const fill = (tpl: string, vars: Record<string, string | number>) =>
   tpl.replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined ? String(vars[k]) : ""));
 
+/** A escolha manual aparece mesmo quando os códigos automáticos estão desligados. */
+export function shouldShowCurrentShownProduct(
+  showCodes: boolean,
+  current: { source?: string | null } | null,
+): boolean {
+  return !!current && (showCodes || current.source === "manual");
+}
+
 /** Tempo restante em mm:ss (nunca negativo). */
 export const formatTimer = (ms: number) => {
   const total = Math.max(0, Math.ceil(ms / 1000));

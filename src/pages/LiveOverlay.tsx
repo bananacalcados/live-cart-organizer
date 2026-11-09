@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hiddenByConflict, measureBlocks } from "@/lib/overlayConflicts";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, shouldShowCurrentShownProduct, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
-interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; offer_price?: number | null; free_shipping?: boolean; interest_free_installments?: number | null; shown_at?: string }
+interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; offer_price?: number | null; free_shipping?: boolean; interest_free_installments?: number | null; shown_at?: string; source?: string | null }
 interface ShownData { show_codes: boolean; current: ShownItem | null; previous: ShownItem[] }
 const brl = (v?: number) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 interface Alert { key: number; text: string; duration: number; tone?: "expired" }
@@ -363,10 +363,10 @@ export default function LiveOverlay() {
         </OverlayBlock>
       )}
 
-      {config.shown_product.enabled && shown?.show_codes && (shown.current || shown.previous.length > 0) && (
+      {config.shown_product.enabled && shown && (shouldShowCurrentShownProduct(shown.show_codes, shown.current) || (shown.show_codes && shown.previous.length > 0)) && (
         <OverlayBlock position={config.layout.shown_product} blockKey="shown_product">
           <div className="flex flex-col gap-[0.25em]">
-            {shown.current && (
+            {shouldShowCurrentShownProduct(shown.show_codes, shown.current) && shown.current && (
               <div key={shown.current.code + (shown.current.shown_at || "")} className={`${panel} animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.1 }}>
                 <div className="font-black tracking-wide" style={{ fontSize: "2.2em", whiteSpace: "nowrap" }}>{shown.current.code}</div>
                 <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
@@ -381,7 +381,7 @@ export default function LiveOverlay() {
                 {shown.current.free_shipping && <div className="font-extrabold" style={{ fontSize: "0.48em" }}>FRETE GRÁTIS</div>}
               </div>
             )}
-            {shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (
+            {shown.show_codes && shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (
               <div key={p.code} className={`${panel} font-bold animate-in fade-in duration-500`} style={{ fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {p.code} · {(p.product_name || "").split(" ").slice(0, 3).join(" ")}{p.color ? ` · ${p.color}` : ""}
               </div>

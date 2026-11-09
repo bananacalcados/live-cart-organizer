@@ -1,3 +1,6 @@
+# Prioridade do produto no overlay
+- [x] Corrigir escolha manual escondida pela opção de códigos automáticos e impedir que comentários derrubem o produto atual; E017 visível no overlay, prioridade transacional e 18 testes, sem publicar
+
 # Fila da apresentadora — filtro dos preparados
 - [x] Filtrar somente os produtos já separados por código, nome ou cor, sem novas consultas; testado na live, sem publicar
 

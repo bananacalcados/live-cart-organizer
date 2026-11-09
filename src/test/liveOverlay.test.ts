@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayPosition, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+import { DEFAULT_OVERLAY_LAYOUT, normalizeOverlayPosition, shouldShowCurrentShownProduct, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+
+describe("manual product on the overlay", () => {
+  it("shows the presenter's manual choice even when automatic codes are off", () => {
+    expect(shouldShowCurrentShownProduct(false, { source: "manual" })).toBe(true);
+  });
+  it("keeps automatic codes hidden when their setting is off", () => {
+    expect(shouldShowCurrentShownProduct(false, { source: "comment" })).toBe(false);
+  });
+  it("shows automatic codes only when enabled and never invents a current product", () => {
+    expect(shouldShowCurrentShownProduct(true, { source: "comment" })).toBe(true);
+    expect(shouldShowCurrentShownProduct(true, null)).toBe(false);
+  });
+});
 
 describe("fixed overlay live selection", () => {
   it("resets the cursor only when the fixed link moves to another live", () => {
