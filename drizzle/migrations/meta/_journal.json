@@ -1233,6 +1233,13 @@
       "when": 1794240785855,
       "tag": "0175_prioritize_manual_live_overlay_product",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1794243082433,
+      "tag": "0176_orders_checkout_installment_config",
+      "breakpoints": true
     }
   ]
 }
