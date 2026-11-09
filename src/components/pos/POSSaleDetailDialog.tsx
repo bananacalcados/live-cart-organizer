@@ -22,6 +22,7 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { DeliveryCostDialog } from "./DeliveryCostDialog";
 import { ExpCorreiosShipmentPanel } from "./expedition/ExpCorreiosShipmentPanel";
+import { CentralLinkButtons } from "./CentralLinkButtons";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -1092,6 +1093,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
         <ScrollArea className="max-h-[70vh] pr-2">
           <div className="space-y-4">
+            {!isTinyOnly && <CentralLinkButtons saleId={sale.id} />}
             {/* Date & Seller */}
             <div className="bg-gray-50 rounded-lg p-3 space-y-2">
               <div className="flex items-center justify-between">

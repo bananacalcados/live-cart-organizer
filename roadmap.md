@@ -1,3 +1,10 @@
+# Central de Trocas e Devoluções — Fase 2
+- [x] Motor compartilhado, tokens isolados e submissão/reserva atômica, sem fiscal; edges fechadas até limite autorizado
+- [x] Duas páginas públicas, links no pedido e configuração paginada de reposição
+- [x] 17 testes, páginas simuladas 360px e relatório sem publicar
+- [ ] Conferência real administrativa/transacional: sessão não exibiu aba; atendimento público depende de proteção aprovada
+- [ ] Limites por IP/token: aguarda confirmação do dono sobre proteção ad-hoc
+
 # Correção fiscal da reversa — desconto da venda
 - [x] Compartilhar cálculo troca/reversa e aviso fiscal, sem mudar trava de duplicidade
 - [x] Conferir oito TDs por SQL e dry_run, simular vínculo sem emissão (25 testes; XML já tinha desconto)

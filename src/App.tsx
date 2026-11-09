@@ -51,6 +51,7 @@ const RhCandidatePage = lazy(() => import("./pages/RhCandidatePage"));
 const VagaPublicPage = lazy(() => import("./pages/VagaPublicPage"));
 const LiveOverlay = lazy(() => import("./pages/LiveOverlay"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking"));
+const CentralPublicPage = lazy(() => import("./pages/CentralPublicPage"));
 
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
@@ -121,6 +122,8 @@ const App = () => (
               <Route path="/lp/conforto" element={<ConfortoLP />} />
               <Route path="/lp/:slug" element={<LandingPage />} />
               <Route path="/rastreio/:codigo" element={<PublicTracking />} />
+              <Route path="/central/troca/:token" element={<CentralPublicPage type="troca" />} />
+              <Route path="/central/devolucao/:token" element={<CentralPublicPage type="devolucao" />} />
 
 
               <Route path="/banana-verao" element={<BananaLanding />} />
