@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printProductCodeLabels } from "@/lib/productCodeLabels";
+import { buildCodeImageMap, type MirrorImageRow } from "@/lib/productCodeImages";
 
 interface PreparedRow {
   id: string;
@@ -41,6 +42,8 @@ interface CodeRow {
   color: string | null;
   sale_price: number | null;
   shopify_ok?: boolean;
+  shopify_product_id?: string | null;
+  image?: string | null;
 }
 interface BoardRow extends CodeRow {
   id: string;
@@ -179,10 +182,19 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
       const { data } = await db.rpc("search_product_code_keys", { p_query: term, p_limit: 20 });
       const codes = ((data || []) as any[]).map((r) => typeof r === "string" ? r : r.search_product_code_keys).filter(Boolean);
       const { data: products } = codes.length
-        ? await db.from("v_product_color_codes").select("code,product_name,color,sale_price,shopify_ok")
+        ? await db.from("v_product_color_codes").select("code,product_name,color,sale_price,shopify_ok,shopify_product_id")
           .in("code", codes).eq("shopify_ok", true).order("code").limit(20)
         : { data: [] };
-      setResults((products || []) as CodeRow[]);
+      const found = (products || []) as CodeRow[];
+      // Uma única consulta em lote para as fotos dos códigos encontrados (máx. 20).
+      const productIds = [...new Set(found.map((r) => r.shopify_product_id).filter(Boolean))] as string[];
+      const { data: mirror } = productIds.length
+        ? await db.from("shopify_variant_mirror")
+          .select("shopify_product_id,option_color,image_url")
+          .in("shopify_product_id", productIds).neq("image_url", "").limit(600)
+        : { data: [] };
+      const images = buildCodeImageMap(found, (mirror || []) as MirrorImageRow[]);
+      setResults(found.map((r) => ({ ...r, image: images.get(r.code) || null })));
       setSearching(false);
     }, 300);
     return () => clearTimeout(timeout);
@@ -281,6 +293,9 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
             return (
               <button key={r.code} disabled={!!busy || already} onClick={() => add(r.code)}
                 className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left hover:bg-muted disabled:opacity-50">
+                <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
+                  {r.image && <img src={r.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                </span>
                 <span className="w-16 text-lg font-extrabold">{r.code}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{r.product_name}</span>

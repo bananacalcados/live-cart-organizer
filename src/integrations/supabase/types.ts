@@ -15631,6 +15631,18 @@ export type Database = {
         }
         Relationships: []
       }
+      model_number_tokens: {
+        Row: {
+          token: string
+        }
+        Insert: {
+          token: string
+        }
+        Update: {
+          token?: string
+        }
+        Relationships: []
+      }
       module_access_log: {
         Row: {
           bucket_at: string
@@ -26487,6 +26499,30 @@ export type Database = {
         }
         Relationships: []
       }
+      variant_stock_cache: {
+        Row: {
+          color_key: string
+          master_id: string
+          refreshed_at: string
+          total_stock: number
+          variant_id: string
+        }
+        Insert: {
+          color_key: string
+          master_id: string
+          refreshed_at?: string
+          total_stock?: number
+          variant_id: string
+        }
+        Update: {
+          color_key?: string
+          master_id?: string
+          refreshed_at?: string
+          total_stock?: number
+          variant_id?: string
+        }
+        Relationships: []
+      }
       vip_group_strategies: {
         Row: {
           created_at: string
@@ -31571,6 +31607,7 @@ export type Database = {
         Returns: number
       }
       refresh_participant_score_cache: { Args: never; Returns: undefined }
+      refresh_variant_stock_cache: { Args: never; Returns: number }
       refresh_vip_orphans: { Args: never; Returns: Json }
       refund_badges_for_sources: {
         Args: { order_ids: string[]; sale_ids: string[] }
