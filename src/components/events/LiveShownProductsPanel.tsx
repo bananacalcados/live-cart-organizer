@@ -379,7 +379,7 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2"><Switch checked={freeShipping} onCheckedChange={setFreeShipping} /><Label>Frete grátis para este produto</Label></div>
+              <div className="flex items-center gap-2"><Switch id="presenter-free-shipping" checked={freeShipping} onCheckedChange={setFreeShipping} /><Label htmlFor="presenter-free-shipping">Frete grátis para este produto</Label></div>
               <Button className="w-full" onClick={saveOffer} disabled={savingOffer}>{savingOffer && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar condições</Button>
             </div>
           )}
