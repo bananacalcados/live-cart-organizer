@@ -152,3 +152,7 @@
 - [x] Fase 5: aviso WhatsApp único após avaliação, teste manual e reenvio admin; aviso desligado por padrão
 - [x] Automação Instagram VAGA-RH: variações tolerantes só nesta regra, link por @, Direct com botão e resposta pública
 - [x] Testes reais de correspondência, idempotência e reserva única; limpar somente dados de teste, preservando o candidato do dono
+
+# Pesquisa nos comentários da apresentadora
+- [x] Caixa de busca no painel de comentários: filtra por @ e pelo texto, sem acento/maiúscula, sobre os comentários já carregados (nenhuma consulta nova)
+- [x] Testar no painel real da live: 600 → 46 (origin), 9 (comprei), 19 (@elisangel), limpar volta a 600; 5 testes, sem publicar
