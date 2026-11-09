@@ -51,4 +51,12 @@ describe("edição em grupo dos produtos preparados", () => {
     expect(() => buildBulkPresenterPatch({ offerPrice: "0", freeShipping: "keep" })).toThrow();
     expect(() => buildBulkPresenterPatch({ offerPrice: "abc", freeShipping: "keep" })).toThrow();
   });
+
+  it("não grava produto que já tem exatamente as condições escolhidas", () => {
+    const row = { offer_price: 100, free_shipping: true };
+    expect(presenterConditionsChanged(row, { offer_price: 100, free_shipping: true })).toBe(false);
+    expect(presenterConditionsChanged(row, { offer_price: 100 })).toBe(false);
+    expect(presenterConditionsChanged(row, { free_shipping: false })).toBe(true);
+    expect(presenterConditionsChanged(row, { offer_price: 99.99 })).toBe(true);
+  });
 });

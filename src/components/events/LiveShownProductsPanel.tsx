@@ -361,13 +361,15 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
       const invalid = selectedRows.find((row) => row.sale_price != null && patch.offer_price! >= Number(row.sale_price));
       if (invalid) { toast.error(`A oferta precisa ser menor que o preço cheio de ${invalid.code}`); return; }
     }
+    const changedRows = selectedRows.filter((row) => presenterConditionsChanged(row, patch));
+    if (!changedRows.length) { toast.info("Os produtos selecionados já estão com essas condições"); return; }
     setSavingBulk(true);
     const { error } = await db.from("live_presenter_products")
       .update({ ...patch, updated_at: new Date().toISOString() })
-      .in("id", selectedRows.map((row) => row.preparedId));
+      .in("id", changedRows.map((row) => row.preparedId));
     setSavingBulk(false);
     if (error) { toast.error("Não foi possível salvar em grupo: " + error.message); return; }
-    toast.success(`Condições aplicadas a ${selectedRows.length} produtos`);
+    toast.success(`Condições aplicadas a ${changedRows.length} produtos`);
     setBulkOpen(false);
     setSelectedCodes([]);
     load();
