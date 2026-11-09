@@ -343,50 +343,44 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
         ) : rows.length === 0 ? (
           <p className="p-4 text-center text-sm text-muted-foreground">Busque os modelos acima para deixar a apresentação pronta.</p>
         ) : (
-          <div className={cn(compact ? "flex gap-1.5 overflow-x-auto pb-1" : "grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4")}>
+          <div className={cn(compact ? "flex gap-2 overflow-x-auto pb-1" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6")}>
             {rows.map((r) => {
               const hasOffer = r.offer_price != null && r.sale_price != null && r.offer_price < r.sale_price;
               return (
-                <Card key={r.id} className={cn("p-1.5", compact && "w-56 shrink-0", r.is_current && "border-primary bg-primary/5 ring-1 ring-primary/40")}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
+                <Card key={r.id} className={cn("p-2", compact && "w-52 shrink-0", r.is_current && "border-primary bg-primary/5 ring-1 ring-primary/40")}>
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
                       {r.image && <img src={r.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
                     </span>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex items-center gap-1">
-                        <span className="shrink-0 text-sm font-extrabold leading-none">{r.code}</span>
-                        <p className="min-w-0 flex-1 truncate text-[10px] leading-tight" title={r.product_name || ""}>{r.product_name || "—"}</p>
-                        {r.is_current && <Badge className="shrink-0 gap-0.5 px-1 text-[9px]"><Radio className="h-2.5 w-2.5" /> No ar</Badge>}
-                        {!r.shopify_ok && <Badge variant="destructive" className="shrink-0 px-1 text-[9px]">fora Shopify</Badge>}
-                      </div>
-                      <div className="flex items-center gap-1 overflow-hidden">
-                        <span className="min-w-0 truncate rounded bg-accent px-1 py-0.5 text-[9px] font-bold uppercase leading-none text-accent-foreground" title={r.color || ""}>{r.color || "sem cor"}</span>
-                        <div className="ml-auto flex shrink-0 items-baseline gap-1 whitespace-nowrap">
-                          {hasOffer ? (
-                            <><span className="text-[9px] text-muted-foreground line-through">{BRL(r.sale_price)}</span><span className="text-[11px] font-extrabold text-primary">{BRL(r.offer_price)}</span></>
-                          ) : <span className="text-[11px] font-semibold">{BRL(r.sale_price)}</span>}
-                        </div>
-                      </div>
-                      {(r.free_shipping || !!r.interest_free_installments) && (
-                        <div className="flex gap-1 overflow-hidden">
-                          {r.free_shipping && <Badge variant="secondary" className="shrink-0 px-1 text-[9px]">frete grátis</Badge>}
-                          {r.interest_free_installments && <Badge variant="secondary" className="shrink-0 px-1 text-[9px]">{r.interest_free_installments}x s/ juros</Badge>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col gap-0.5">
-                      <Button size="icon" variant="ghost" className="h-5 w-5" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-3 w-3" /></Button>
-                      {r.is_current ? (
-                        <Button size="sm" variant="outline" className="h-5 gap-0.5 px-1.5 text-[9px]" disabled={busy === r.code} onClick={() => stop(r)} aria-label={`Parar apresentação ${r.code}`}>
-                          {busy === r.code ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Square className="h-2.5 w-2.5" />} Parar
-                        </Button>
-                      ) : (
-                        <Button size="sm" className="h-5 gap-0.5 px-1.5 text-[9px]" disabled={busy === r.code || !r.shopify_ok} onClick={() => show(r)} aria-label={`Apresentar ${r.code}`}>
-                          {busy === r.code ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Play className="h-2.5 w-2.5" />} Apresentar
-                        </Button>
-                      )}
+                    <span className="shrink-0 text-lg font-extrabold leading-none">{r.code}</span>
+                    {r.is_current && <Badge className="gap-0.5 px-1 text-[10px]"><Radio className="h-3 w-3" /> No ar</Badge>}
+                    {!r.shopify_ok && <Badge variant="destructive" className="px-1 text-[10px]">fora Shopify</Badge>}
+                    <Button size="icon" variant="ghost" className="ml-auto h-6 w-6 shrink-0" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  </div>
+                  <p className="mt-1.5 truncate text-xs font-medium" title={r.product_name || ""}>{r.product_name || "—"}</p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="min-w-0 truncate rounded bg-accent px-1.5 py-0.5 text-xs font-bold uppercase leading-none text-accent-foreground" title={r.color || ""}>{r.color || "sem cor"}</span>
+                    <div className="ml-auto flex shrink-0 items-baseline gap-1 whitespace-nowrap">
+                      {hasOffer ? (
+                        <><span className="text-[10px] text-muted-foreground line-through">{BRL(r.sale_price)}</span><span className="text-sm font-extrabold text-primary">{BRL(r.offer_price)}</span></>
+                      ) : <span className="text-sm font-semibold">{BRL(r.sale_price)}</span>}
                     </div>
                   </div>
+                  {(r.free_shipping || !!r.interest_free_installments) && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {r.free_shipping && <Badge variant="secondary" className="px-1 text-[10px]">frete grátis</Badge>}
+                      {r.interest_free_installments && <Badge variant="secondary" className="px-1 text-[10px]">{r.interest_free_installments}x s/ juros</Badge>}
+                    </div>
+                  )}
+                  {r.is_current ? (
+                    <Button size="sm" variant="outline" className="mt-2 h-7 w-full gap-1 text-xs" disabled={busy === r.code} onClick={() => stop(r)} aria-label={`Parar apresentação ${r.code}`}>
+                      {busy === r.code ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />} Parar apresentação
+                    </Button>
+                  ) : (
+                    <Button size="sm" className="mt-2 h-7 w-full gap-1 text-xs" disabled={busy === r.code || !r.shopify_ok} onClick={() => show(r)} aria-label={`Apresentar ${r.code}`}>
+                      {busy === r.code ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Apresentar
+                    </Button>
+                  )}
                 </Card>
               );
             })}

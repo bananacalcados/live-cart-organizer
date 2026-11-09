@@ -6,6 +6,7 @@
 - [x] Testar busca/edição, apresentar/parar, overlay, PDF e cálculo; 30 testes, build limpo, sem publicar
 - [x] Foto do produto na busca da fila: cor do espelho Shopify com reserva pela foto do produto; 5 testes, sem publicar
 - [x] Cards dos produtos com metade da altura e busca mantida aberta para adicionar vários em sequência; testado sem gravar inclusões
+- [ ] Cards mais quadrados e pouco mais altos, com nome, cor e preço maiores e sem sobreposição
 
 # Previsão de entrega no rastreio
 - [x] Auditar onde serviço, CEP e prazo real são gravados e como o link público lê o envio
