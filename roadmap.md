@@ -1,3 +1,9 @@
+# Fila da apresentadora — tamanhos, promoções e edição em grupo
+- [ ] Mostrar numerações grandes por código, salvar liberação manual e impedir tamanho bloqueado no pedido por código
+- [ ] Vincular promoção progressiva ativa da live ao produto preparado, preservando o cálculo e os pedidos existentes
+- [ ] Selecionar vários produtos e aplicar preço especial/frete grátis em uma única ação
+- [ ] Testar regras, edição individual/em grupo, carrinho e leiaute; não publicar
+
 # Enviar cor para a Shopify
 - [x] Criar envio por código com dry-run, confirmação, proteção de duplicidade e sem sincronização completa
 - [x] Integrar botão nos códigos pendentes e ao de-para existente
