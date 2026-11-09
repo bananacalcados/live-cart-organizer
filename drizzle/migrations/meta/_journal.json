@@ -1170,6 +1170,13 @@
       "when": 1794186518265,
       "tag": "0166_central_selfservice_phase2",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1794186686568,
+      "tag": "0167_central_staff_links_guard",
+      "breakpoints": true
     }
   ]
 }

@@ -29157,6 +29157,7 @@ export type Database = {
         Args: { p_enabled: boolean; p_skus: string[] }
         Returns: undefined
       }
+      central_revoke_link: { Args: { p_id: string }; Returns: boolean }
       central_submit_atomic: {
         Args: {
           p_detail: string
