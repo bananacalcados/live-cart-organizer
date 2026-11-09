@@ -1,0 +1,43 @@
+import { z } from 'npm:zod@3';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+
+const base = z.object({ token: z.string().min(32).max(128).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(['troca','devolucao']) });
+const resolveSchema = base.extend({ item_id: z.string().uuid().optional(), search: z.string().trim().max(100).default(''), offset: z.number().int().min(0).max(10000).default(0) });
+const submitSchema = base.extend({ item_id: z.string().uuid(), quantity: z.number().int().min(1).max(100), reason: z.enum(['tamanho','defeito','nao_gostou','produto_errado','outro']), detail: z.string().trim().min(3).max(1000), replacement_id: z.string().uuid().nullable().optional(), unused: z.boolean() });
+type Db = { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: any; error: any }> };
+const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
+export async function hashCentralToken(token: string) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+/** Dependency injection lets tests exercise handlers without providers or production writes. */
+export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () => Promise<boolean>) {
+  return async (req: Request) => {
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+    if (req.method !== 'POST') return response({ error: 'Solicitação inválida.' },405);
+    try {
+      if (Number(req.headers.get('content-length') || 0)>6000) return response({ error: 'Solicitação inválida.' },400);
+      const parsed = (kind==='resolve' ? resolveSchema : submitSchema).safeParse(await req.json());
+      if (!parsed.success) return response({ error: 'Este link não está disponível. Peça um novo link à equipe.' },400);
+      // Fail closed until an approved IP/token limiter is available. No unsafe public rollout.
+      if (!await enabled()) return response({ error: 'A central está em preparação. Fale com a nossa equipe.' },503);
+      const body = parsed.data;
+      const hash = await hashCentralToken(body.token);
+      let name = 'central_context';
+      const args: Record<string, unknown> = { p_hash: hash, p_type: body.type };
+      if (kind==='submit') {
+        const s = submitSchema.parse(body);
+        if (s.type==='devolucao' && s.replacement_id) return response({ error: 'Devolução não tem escolha de produto novo.' },400);
+        name='central_submit_atomic';
+        Object.assign(args,{ p_item:s.item_id,p_quantity:s.quantity,p_reason:s.reason,p_detail:s.detail,p_replacement:s.replacement_id ?? null,p_unused:s.unused });
+      } else {
+        const r=resolveSchema.parse(body);
+        if (r.item_id) { name='central_options'; Object.assign(args,{ p_item:r.item_id,p_search:r.search,p_limit:50,p_offset:r.offset }); }
+      }
+      const { data,error } = await db.rpc(name,args);
+      if (error) return response({ error:'Não foi possível concluir agora. Tente novamente mais tarde.' },500);
+      if (!data) return response({ error:'Este link não está disponível. Peça um novo link à equipe.' },404);
+      return response(data,data.error ? 400 : 200);
+    } catch { return response({ error:'Solicitação inválida.' },400); }
+  };
+}
