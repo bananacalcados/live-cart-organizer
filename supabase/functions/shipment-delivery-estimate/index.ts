@@ -73,7 +73,7 @@ Deno.serve(withAccessLog('shipment-delivery-estimate', async (req) => {
     const attemptedAt = new Date().toISOString();
     const { data: claim, error: claimError } = await db.from('shipment_simulations')
       .update({ delivery_estimate: { kind: 'quoting', attempted_at: attemptedAt } })
-      .eq('id', sim.id).is('delivery_estimate', null).is('real_tracking_code', null)
+      .eq('id', sim.id).is('delivery_estimate', null).is('real_tracking_code', null).is('delivered_at', null)
       .select('id').maybeSingle();
     if (claimError) throw claimError;
     if (!claim) return reply({ ok: true, skipped: 'already_claimed' });

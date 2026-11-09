@@ -99,6 +99,7 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
         stage: delivered ? 'entregue' : 'enviado',
         status: delivered ? 'delivered' : 'active',
         delivered_source: delivered ? (row.delivered_source || 'carrier') : undefined,
+        delivery_estimate: delivered ? null : undefined,
       })
       .eq('id', row.id);
     if (error) throw error;
