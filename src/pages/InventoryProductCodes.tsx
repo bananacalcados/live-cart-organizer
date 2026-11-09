@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import jsPDF from "jspdf";
+import { printProductCodeLabels } from "@/lib/productCodeLabels";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -283,28 +283,7 @@ export default function InventoryProductCodes() {
       const list = pdfMode === "selected"
         ? Array.from(selected.values()).filter((r) => !onlyOk || r.shopify_ok === true)
         : await fetchAll(pdfMode === "stock");
-      if (!list.length) { toast.error("Nenhum código para exportar"); return; }
-      const doc = new jsPDF({ unit: "mm", format: "a4" });
-      const W = 80, H = 50, GAP = 4, cols = 2, rowsPer = 5;
-      const mx = (210 - (cols * W + (cols - 1) * GAP)) / 2;
-      const my = (297 - (rowsPer * H + (rowsPer - 1) * GAP)) / 2;
-      list.forEach((r, i) => {
-        const pos = i % (cols * rowsPer);
-        if (i > 0 && pos === 0) doc.addPage();
-        const x = mx + (pos % cols) * (W + GAP);
-        const y = my + Math.floor(pos / cols) * (H + GAP);
-        doc.setDrawColor(200); doc.setLineWidth(0.1); doc.rect(x, y, W, H);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(64);
-        doc.text(r.code, x + W / 2, y + 22, { align: "center" });
-        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-        const nameLines = doc.splitTextToSize(r.product_name ?? "", W - 6).slice(0, 2);
-        doc.text(nameLines, x + 3, y + 30);
-        let ny = y + 30 + nameLines.length * 3.8;
-        if (r.color) { doc.setFont("helvetica", "bold"); doc.text(doc.splitTextToSize(r.color, W - 6)[0], x + 3, ny); }
-        doc.setFont("helvetica", "bold"); doc.setFontSize(13);
-        doc.text(brl(r.sale_price), x + W - 3, y + H - 3, { align: "right" });
-      });
-      doc.save(`etiquetas-codigos-${new Date().toISOString().slice(0, 10)}.pdf`);
+      printProductCodeLabels(list);
       setPdfOpen(false);
     } catch (e: any) {
       toast.error("Erro ao gerar PDF: " + e.message);

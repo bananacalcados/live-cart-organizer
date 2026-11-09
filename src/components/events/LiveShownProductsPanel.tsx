@@ -1,14 +1,27 @@
 import { LiveCodeSettingsSection } from "./LiveCodeSettingsSection";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Search, RotateCcw, Radio, X } from "lucide-react";
+import { Loader2, Search, Radio, Play, Square, Pencil, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { printProductCodeLabels } from "@/lib/productCodeLabels";
 
+interface PreparedRow {
+  id: string;
+  code: string;
+  offer_price: number | null;
+  free_shipping: boolean;
+  interest_free_installments: number | null;
+  created_at: string;
+}
 interface ShownRow {
   id: string;
   code: string;
@@ -16,16 +29,40 @@ interface ShownRow {
   shown_by: string | null;
   source: string | null;
   is_current: boolean | null;
+  stopped_at: string | null;
   product_name: string | null;
   color: string | null;
   sale_price: number | null;
   shopify_ok?: boolean;
 }
-interface CodeRow { code: string; product_name: string | null; color: string | null; sale_price: number | null }
+interface CodeRow {
+  code: string;
+  product_name: string | null;
+  color: string | null;
+  sale_price: number | null;
+  shopify_ok?: boolean;
+}
+interface BoardRow extends CodeRow {
+  id: string;
+  preparedId: string | null;
+  preparedAt: string | null;
+  offer_price: number | null;
+  free_shipping: boolean;
+  interest_free_installments: number | null;
+  shown_at: string | null;
+  shown_by: string | null;
+  source: string | null;
+  is_current: boolean;
+}
 
-const BRL = (v: number | null) => (v == null ? "—" : `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const BRL = (value: number | null) => value == null
+  ? "—"
+  : `R$ ${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const hhmm = (iso: string | null) => iso
+  ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  : "Ainda não apresentado";
 const db = supabase as any;
+const HIDDEN = "__excluido__";
 
 async function currentUserName(): Promise<string> {
   const { data } = await supabase.auth.getUser();
@@ -33,202 +70,321 @@ async function currentUserName(): Promise<string> {
   return (u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || "Equipe") as string;
 }
 
-// Marcador de "excluído da exibição" sem mudar o banco: marcar de novo grava o nome de quem marcou e o item volta.
-const HIDDEN = "__excluido__";
-
 export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: string; compact?: boolean }) {
-  const [tab, setTab] = useState<"shown" | "hidden">("shown");
-  const [rows, setRows] = useState<ShownRow[]>([]);
+  const [rows, setRows] = useState<BoardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<CodeRow[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<BoardRow | null>(null);
+  const [offerPrice, setOfferPrice] = useState("");
+  const [freeShipping, setFreeShipping] = useState(false);
+  const [installments, setInstallments] = useState("default");
+  const [savingOffer, setSavingOffer] = useState(false);
   const lastKey = useRef("");
 
   const load = useCallback(async () => {
-    const { data } = await db.from("v_live_shown_products")
-      .select("id, code, shown_at, shown_by, source, is_current, product_name, color, sale_price")
-      .eq("event_id", eventId).order("shown_at", { ascending: false }).limit(200);
-    const list = (data || []) as ShownRow[];
-    // Uma consulta para saber quais códigos marcados seguem ok na Shopify.
-    const codes = [...new Set(list.map((r) => r.code))];
-    if (codes.length) {
-      const { data: st } = await db.from("v_product_color_codes").select("code, shopify_ok").in("code", codes);
-      const ok = new Map<string, boolean>((st || []).map((x: any) => [x.code, !!x.shopify_ok]));
-      list.forEach((r) => { r.shopify_ok = ok.get(r.code) ?? false; });
+    const [preparedRes, shownRes] = await Promise.all([
+      db.from("live_presenter_products")
+        .select("id,code,offer_price,free_shipping,interest_free_installments,created_at")
+        .eq("event_id", eventId).order("created_at").limit(200),
+      db.from("v_live_shown_products")
+        .select("id,code,shown_at,shown_by,source,is_current,stopped_at,product_name,color,sale_price,shopify_ok")
+        .eq("event_id", eventId).order("shown_at", { ascending: false }).limit(200),
+    ]);
+    if (preparedRes.error || shownRes.error) {
+      setLoading(false);
+      return;
     }
-    const key = list.map((r) => `${r.id}:${r.shown_at}:${r.is_current}:${r.shopify_ok}`).join("|");
-    if (key !== lastKey.current) { lastKey.current = key; setRows(list); }
+    const prepared = (preparedRes.data || []) as PreparedRow[];
+    const shown = (shownRes.data || []) as ShownRow[];
+    const codes = [...new Set([...prepared.map((r) => r.code), ...shown.map((r) => r.code)])];
+    let products: CodeRow[] = [];
+    if (codes.length) {
+      const { data } = await db.from("v_product_color_codes")
+        .select("code,product_name,color,sale_price,shopify_ok").in("code", codes);
+      products = (data || []) as CodeRow[];
+    }
+    const productMap = new Map(products.map((r) => [r.code, r]));
+    const shownMap = new Map(shown.map((r) => [r.code, r]));
+    const preparedCodes = new Set(prepared.map((r) => r.code));
+    const merged: BoardRow[] = prepared.map((p) => {
+      const s = shownMap.get(p.code);
+      const product = productMap.get(p.code) || s;
+      return {
+        id: p.id,
+        preparedId: p.id,
+        preparedAt: p.created_at,
+        code: p.code,
+        product_name: product?.product_name || null,
+        color: product?.color || null,
+        sale_price: product?.sale_price ?? null,
+        shopify_ok: product?.shopify_ok ?? s?.shopify_ok ?? false,
+        offer_price: p.offer_price,
+        free_shipping: !!p.free_shipping,
+        interest_free_installments: p.interest_free_installments,
+        shown_at: s?.shown_at || null,
+        shown_by: s?.shown_by || null,
+        source: s?.source || null,
+        is_current: !!s?.is_current && !s?.stopped_at,
+      };
+    });
+    shown.filter((s) => !preparedCodes.has(s.code) && s.shown_by !== HIDDEN).forEach((s) => {
+      const product = productMap.get(s.code) || s;
+      merged.push({
+        id: s.id,
+        preparedId: null,
+        preparedAt: null,
+        code: s.code,
+        product_name: product.product_name,
+        color: product.color,
+        sale_price: product.sale_price,
+        shopify_ok: product.shopify_ok ?? s.shopify_ok ?? false,
+        offer_price: null,
+        free_shipping: false,
+        interest_free_installments: null,
+        shown_at: s.shown_at,
+        shown_by: s.shown_by,
+        source: s.source,
+        is_current: !!s.is_current && !s.stopped_at,
+      });
+    });
+    merged.sort((a, b) => Number(b.is_current) - Number(a.is_current)
+      || Number(!!b.preparedId) - Number(!!a.preparedId)
+      || (a.preparedAt || a.shown_at || "").localeCompare(b.preparedAt || b.shown_at || ""));
+    const key = merged.map((r) => [r.id, r.is_current, r.offer_price, r.free_shipping,
+      r.interest_free_installments, r.shown_at, r.shopify_ok].join(":")).join("|");
+    if (key !== lastKey.current) { lastKey.current = key; setRows(merged); }
     setLoading(false);
   }, [eventId]);
 
-  // Tempo real: INSERT/UPDATE em live_shown_products desta live disparam load();
-  // recarregamento de segurança a cada 60 s cobre qualquer evento perdido.
+  // Duas consultas em paralelo + uma em lote para os dados dos códigos; sem consulta por produto.
   useEffect(() => {
     load();
     const channel = supabase
       .channel(`live-shown-${eventId}-${Math.random().toString(36).slice(2)}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "live_shown_products", filter: `event_id=eq.${eventId}` },
-        () => load(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "live_shown_products", filter: `event_id=eq.${eventId}` },
-        () => load(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_shown_products", filter: `event_id=eq.${eventId}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_presenter_products", filter: `event_id=eq.${eventId}` }, () => load())
       .subscribe();
-    const t = setInterval(() => { if (!document.hidden) load(); }, 60000);
-    return () => { clearInterval(t); supabase.removeChannel(channel); };
+    const timer = setInterval(() => { if (!document.hidden) load(); }, 60000);
+    return () => { clearInterval(timer); supabase.removeChannel(channel); };
   }, [load]);
 
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setResults([]); return; }
-    const h = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
       setSearching(true);
-      const s = term.replace(/[%,()]/g, " ");
-      const { data } = await db.from("v_product_color_codes")
-        .select("code, product_name, color, sale_price")
-        .or(`code.ilike.${s}%,product_name.ilike.%${s}%,color.ilike.%${s}%`)
-        .eq("shopify_ok", true)
-        .order("code").limit(20);
-      setResults((data || []) as CodeRow[]);
+      const { data } = await db.rpc("search_product_code_keys", { p_query: term, p_limit: 20 });
+      const codes = ((data || []) as any[]).map((r) => typeof r === "string" ? r : r.search_product_code_keys).filter(Boolean);
+      const { data: products } = codes.length
+        ? await db.from("v_product_color_codes").select("code,product_name,color,sale_price,shopify_ok")
+          .in("code", codes).eq("shopify_ok", true).order("code").limit(20)
+        : { data: [] };
+      setResults((products || []) as CodeRow[]);
       setSearching(false);
     }, 300);
-    return () => clearTimeout(h);
+    return () => clearTimeout(timeout);
   }, [q]);
 
-  const show = async (code: string) => {
-    setBusy(code);
-    const { error } = await db.rpc("set_live_shown_product", {
-      p_event_id: eventId, p_code: code, p_shown_by: await currentUserName(), p_source: "manual",
-    });
+  const add = async (code: string) => {
+    setBusy(`add:${code}`);
+    const { error } = await db.from("live_presenter_products")
+      .upsert({ event_id: eventId, code }, { onConflict: "event_id,code", ignoreDuplicates: true });
     setBusy(null);
-    if (error) { toast.error("Não foi possível marcar: " + error.message); return; }
-    toast.success(`${code} em exibição`);
+    if (error) { toast.error("Não foi possível preparar: " + error.message); return; }
+    toast.success(`${code} pronto para apresentar`);
     setQ(""); setResults([]);
     load();
   };
 
-  const hide = async (r: ShownRow) => {
-    setBusy(r.code);
-    const { error } = await db.from("live_shown_products").update({ shown_by: HIDDEN, is_current: false }).eq("id", r.id);
+  const show = async (row: BoardRow) => {
+    if (!row.shopify_ok) return;
+    setBusy(row.code);
+    if (!row.preparedId) {
+      const { error } = await db.from("live_presenter_products")
+        .upsert({ event_id: eventId, code: row.code }, { onConflict: "event_id,code", ignoreDuplicates: true });
+      if (error) { setBusy(null); toast.error("Não foi possível preparar: " + error.message); return; }
+    }
+    const { error } = await db.rpc("set_live_shown_product", {
+      p_event_id: eventId, p_code: row.code, p_shown_by: await currentUserName(), p_source: "manual",
+    });
     setBusy(null);
-    if (error) { toast.error("Não foi possível excluir: " + error.message); return; }
-    toast.success(`${r.code} saiu da exibição`);
+    if (error) { toast.error("Não foi possível apresentar: " + error.message); return; }
+    toast.success(`${row.code} no overlay`);
     load();
   };
 
-  const visible = rows.filter((r) => r.shown_by !== HIDDEN);
-  const hidden = rows.filter((r) => r.shown_by === HIDDEN);
-  const sorted = [...(tab === "shown" ? visible : hidden)].sort((a, b) => Number(!!b.is_current) - Number(!!a.is_current));
+  const stop = async (row: BoardRow) => {
+    setBusy(row.code);
+    const { error } = await db.rpc("stop_live_shown_product", { p_event_id: eventId });
+    setBusy(null);
+    if (error) { toast.error("Não foi possível parar: " + error.message); return; }
+    toast.success(`${row.code} saiu do overlay e continua na lista`);
+    load();
+  };
 
-  const tabs = (
-    <div className="flex gap-1 shrink-0">
-      <Button size="sm" variant={tab === "shown" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setTab("shown")}>Em exibição ({visible.length})</Button>
-      <Button size="sm" variant={tab === "hidden" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setTab("hidden")}>Excluídos ({hidden.length})</Button>
-    </div>
-  );
+  const openOffer = (row: BoardRow) => {
+    setEditing(row);
+    setOfferPrice(row.offer_price == null ? "" : String(row.offer_price).replace(".", ","));
+    setFreeShipping(row.free_shipping);
+    setInstallments(row.interest_free_installments ? String(row.interest_free_installments) : "default");
+  };
+
+  const saveOffer = async () => {
+    if (!editing) return;
+    const parsed = offerPrice.trim() ? Number(offerPrice.replace(/\./g, "").replace(",", ".")) : null;
+    if (parsed != null && (!Number.isFinite(parsed) || parsed <= 0)) {
+      toast.error("Informe um preço de oferta válido"); return;
+    }
+    if (parsed != null && editing.sale_price != null && parsed >= Number(editing.sale_price)) {
+      toast.error("A oferta precisa ser menor que o preço cheio"); return;
+    }
+    setSavingOffer(true);
+    const payload = {
+      offer_price: parsed,
+      free_shipping: freeShipping,
+      interest_free_installments: installments === "default" ? null : Number(installments),
+      updated_at: new Date().toISOString(),
+    };
+    const response = editing.preparedId
+      ? await db.from("live_presenter_products").update(payload).eq("id", editing.preparedId)
+      : await db.from("live_presenter_products").insert({ event_id: eventId, code: editing.code, ...payload });
+    setSavingOffer(false);
+    if (response.error) { toast.error("Não foi possível salvar: " + response.error.message); return; }
+    toast.success(`Condições de ${editing.code} salvas`);
+    setEditing(null);
+    load();
+  };
+
+  const printable = rows.filter((r) => r.preparedId && r.shopify_ok);
+  const print = () => {
+    try {
+      printProductCodeLabels(printable.map((r) => ({
+        code: r.code, product_name: r.product_name, color: r.color,
+        sale_price: r.sale_price, offer_price: r.offer_price,
+      })));
+    } catch (error: any) { toast.error(error?.message || "Nenhum código para imprimir"); }
+  };
 
   const searchBox = (
-      <div className={cn("relative", compact && "w-72 shrink-0")}>
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, cor ou código (ex.: T001)" className={cn("pl-8", compact && "h-9 text-sm")} />
-        {(searching || results.length > 0) && (
-          <Card className={cn("absolute z-30 mt-1 max-h-80 overflow-auto p-1", compact ? "w-96" : "w-full")}>
-            {searching && <div className="p-2 text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Buscando…</div>}
-            {results.map((r) => (
-              <button key={r.code} disabled={!!busy} onClick={() => show(r.code)}
-                className="w-full flex items-center gap-3 rounded px-2 py-1.5 text-left hover:bg-muted">
-                <span className="text-lg font-extrabold w-16">{r.code}</span>
-                <span className="flex-1 min-w-0">
+    <div className={cn("relative", compact && "w-72 shrink-0")}>
+      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Input value={q} onChange={(e) => setQ(e.target.value)}
+        placeholder="Adicionar por nome, cor ou código" className={cn("pl-8", compact && "h-9 text-sm")} />
+      {(searching || results.length > 0) && (
+        <Card className={cn("absolute z-30 mt-1 max-h-80 overflow-auto p-1", compact ? "w-96" : "w-full")}>
+          {searching && <div className="flex items-center gap-1 p-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Buscando…</div>}
+          {results.map((r) => {
+            const already = rows.some((x) => x.code === r.code && x.preparedId);
+            return (
+              <button key={r.code} disabled={!!busy || already} onClick={() => add(r.code)}
+                className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left hover:bg-muted disabled:opacity-50">
+                <span className="w-16 text-lg font-extrabold">{r.code}</span>
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{r.product_name}</span>
                   <span className="block text-xs text-muted-foreground">{r.color || "—"}</span>
                 </span>
-                <span className="text-sm font-semibold">{BRL(r.sale_price)}</span>
+                <span className="text-sm font-semibold">{already ? "Na lista" : BRL(r.sale_price)}</span>
               </button>
-            ))}
-          </Card>
-        )}
-      </div>
+            );
+          })}
+        </Card>
+      )}
+    </div>
   );
 
-  if (compact) {
-    return (
-      <Card className="p-2 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold shrink-0">Produtos em exibição</span>
-          {searchBox}
-          {tabs}
+  return (
+    <>
+      {!compact && <LiveCodeSettingsSection eventId={eventId} />}
+      <Card className={cn("space-y-3", compact ? "mt-2 p-2" : "mt-3 p-3")}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="shrink-0">
+            <span className="text-xs font-semibold">Produtos preparados ({rows.filter((r) => r.preparedId).length})</span>
+            {!compact && <p className="text-xs text-muted-foreground">Adicione antes da live e clique em Apresentar quando chegar a vez.</p>}
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {searchBox}
+            {!compact && <Button size="sm" variant="outline" disabled={!printable.length} onClick={print} className="gap-1"><Printer className="h-4 w-4" /> Imprimir etiquetas</Button>}
+          </div>
         </div>
+
         {loading ? (
-          <div className="flex justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-        ) : sorted.length === 0 ? (
-          <p className="text-xs text-muted-foreground px-1">{tab === "shown" ? "Nenhum produto em exibição." : "Nenhum produto excluído."}</p>
+          <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
+        ) : rows.length === 0 ? (
+          <p className="p-4 text-center text-sm text-muted-foreground">Busque os modelos acima para deixar a apresentação pronta.</p>
         ) : (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {sorted.map((r) => (
-              <div key={r.id} className={cn("relative w-44 shrink-0 rounded-md border bg-card p-2", r.is_current && "border-primary ring-2 ring-primary/40 bg-primary/5")}>
-                {tab === "shown" && (
-                  <button aria-label={`Excluir ${r.code}`} disabled={busy === r.code} onClick={() => hide(r)}
-                    className="absolute right-1 top-1 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <div className="flex items-center gap-1 pr-4">
-                  <span className="text-sm font-extrabold">{r.code}</span>
-                  {r.is_current && <Badge className="h-4 px-1 text-[9px]">Agora</Badge>}
-                  {!r.shopify_ok && <Badge variant="destructive" className="h-4 px-1 text-[9px]">fora Shopify</Badge>}
-                </div>
-                <p className="text-xs font-medium truncate" title={r.product_name || ""}>{r.product_name || "—"}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{r.color || "—"}</p>
-                <p className="text-xs font-semibold">{BRL(r.sale_price)}</p>
-              </div>
-            ))}
+          <div className={cn(compact ? "flex gap-2 overflow-x-auto pb-1" : "grid gap-2 lg:grid-cols-2")}>
+            {rows.map((r) => {
+              const hasOffer = r.offer_price != null && r.sale_price != null && r.offer_price < r.sale_price;
+              return (
+                <Card key={r.id} className={cn("p-3", compact && "w-72 shrink-0", r.is_current && "border-primary bg-primary/5 ring-2 ring-primary/40")}>
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-2xl font-extrabold leading-none">{r.code}</span>
+                        {r.is_current && <Badge className="gap-1 text-[10px]"><Radio className="h-3 w-3" /> No overlay</Badge>}
+                        {!r.shopify_ok && <Badge variant="destructive" className="text-[10px]">fora Shopify</Badge>}
+                      </div>
+                      <p className="mt-1 truncate text-sm font-medium" title={r.product_name || ""}>{r.product_name || "—"}</p>
+                      <p className="truncate text-xs text-muted-foreground">{r.color || "—"}</p>
+                      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                        {hasOffer ? (
+                          <><span className="text-xs text-muted-foreground line-through">{BRL(r.sale_price)}</span><span className="font-extrabold text-primary">{BRL(r.offer_price)}</span></>
+                        ) : <span className="text-sm font-semibold">{BRL(r.sale_price)}</span>}
+                        {r.free_shipping && <Badge variant="secondary" className="text-[10px]">frete grátis</Badge>}
+                        {r.interest_free_installments && <Badge variant="secondary" className="text-[10px]">até {r.interest_free_installments}x sem juros</Badge>}
+                      </div>
+                      {!compact && <p className="mt-1 text-[11px] text-muted-foreground">{hhmm(r.shown_at)}{r.source === "comment" ? " · detectado pelo comentário" : ""}</p>}
+                    </div>
+                    <Button size="icon" variant="ghost" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    {r.is_current ? (
+                      <Button size="sm" variant="outline" className="flex-1 gap-1" disabled={busy === r.code} onClick={() => stop(r)} aria-label={`Parar apresentação ${r.code}`}>
+                        {busy === r.code ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />} Parar apresentação
+                      </Button>
+                    ) : (
+                      <Button size="sm" className="flex-1 gap-1" disabled={busy === r.code || !r.shopify_ok} onClick={() => show(r)} aria-label={`Apresentar ${r.code}`}>
+                        {busy === r.code ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Apresentar
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </Card>
-    );
-  }
 
-  return (
-    <div className="space-y-3">
-      <LiveCodeSettingsSection eventId={eventId} />
-      {searchBox}
-      {tabs}
-
-      {loading ? (
-        <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
-      ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center p-6">{tab === "shown" ? "Nenhum produto exibido nesta live ainda." : "Nenhum produto excluído."}</p>
-      ) : (
-        <div className="space-y-2">
-          {sorted.map((r) => (
-            <Card key={r.id} className={cn("p-3 flex items-center gap-3", r.is_current && "border-primary ring-2 ring-primary/40 bg-primary/5")}>
-              <div className="w-20 shrink-0">
-                <div className="text-2xl font-extrabold leading-none">{r.code}</div>
-                {r.is_current && <Badge className="mt-1 gap-1 text-[10px]"><Radio className="h-3 w-3" /> Agora</Badge>}
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !savingOffer) setEditing(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Condições de {editing?.code}</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{editing.product_name} · {editing.color || "sem cor"}<br />Preço cheio: <strong>{BRL(editing.sale_price)}</strong></p>
+              <div className="space-y-1">
+                <Label htmlFor="presenter-offer">Preço promocional (opcional)</Label>
+                <Input id="presenter-offer" inputMode="decimal" placeholder="Ex.: 149,90" value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Vazio mantém o preço cheio. Vale nos próximos carrinhos anotados.</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{r.product_name || "—"}</p>
-                <p className="text-xs text-muted-foreground">{r.color || "—"} · {BRL(r.sale_price)}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {hhmm(r.shown_at)} · {r.shown_by === HIDDEN ? "excluído" : r.shown_by || "—"}
-                  {r.source === "comment" && <Badge variant="outline" className="ml-2 text-[10px] py-0">detectado pelo comentário</Badge>}
-                  {!r.shopify_ok && <Badge variant="destructive" className="ml-2 text-[10px] py-0">não está na Shopify</Badge>}
-                </p>
+              <div className="space-y-1">
+                <Label>Parcelamento no cartão</Label>
+                <Select value={installments} onValueChange={setInstallments}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Padrão da live</SelectItem>
+                    {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => <SelectItem key={n} value={String(n)}>Até {n}x sem juros</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              {tab === "shown" && <Button size="sm" variant="ghost" disabled={busy === r.code} onClick={() => hide(r)} className="gap-1 text-muted-foreground"><X className="h-3 w-3" /> Excluir</Button>}
-              {r.shopify_ok && <Button size="sm" variant="outline" disabled={busy === r.code} onClick={() => show(r.code)} className="gap-1">
-                {busy === r.code ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Mostrar de novo
-              </Button>}
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+              <div className="flex items-center gap-2"><Switch checked={freeShipping} onCheckedChange={setFreeShipping} /><Label>Frete grátis para este produto</Label></div>
+              <Button className="w-full" onClick={saveOffer} disabled={savingOffer}>{savingOffer && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar condições</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
