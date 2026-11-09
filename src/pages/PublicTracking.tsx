@@ -127,11 +127,11 @@ export default function PublicTracking() {
           <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-5" aria-label="Previsão de entrega">
             <p className="text-xs font-medium text-muted-foreground">Previsão de entrega</p>
             {data.delivery_estimate.start === data.delivery_estimate.end ? (
-              <p className="text-lg font-bold text-primary mt-1">
+              <p className="text-lg font-bold text-foreground mt-1">
                 Até {fmtDate(data.delivery_estimate.end)}
               </p>
             ) : (
-              <p className="text-lg font-bold text-primary mt-1">
+              <p className="text-lg font-bold text-foreground mt-1">
                 Entre {fmtDate(data.delivery_estimate.start)} e {fmtDate(data.delivery_estimate.end)}
               </p>
             )}
