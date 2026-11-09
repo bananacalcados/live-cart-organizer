@@ -293,6 +293,9 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
             return (
               <button key={r.code} disabled={!!busy || already} onClick={() => add(r.code)}
                 className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left hover:bg-muted disabled:opacity-50">
+                <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded bg-muted" aria-hidden>
+                  {r.image && <img src={r.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                </span>
                 <span className="w-16 text-lg font-extrabold">{r.code}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{r.product_name}</span>
