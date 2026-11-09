@@ -344,6 +344,8 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
   };
 
   const preparedRows = rows.filter((row) => row.preparedId);
+  const visibleRows = rows.filter((row) => !preparedFilter.trim()
+    || (!!row.preparedId && presenterProductMatches(row, preparedFilter)));
   const selectedRows = preparedRows.filter((row) => selectedCodes.includes(row.code));
   const allSelected = preparedRows.length > 0 && selectedRows.length === preparedRows.length;
   const toggleSelected = (code: string, checked: boolean) => {
