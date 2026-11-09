@@ -38,6 +38,7 @@ interface PreparedRow {
 interface ShownRow {
   id: string;
   code: string;
+  master_id?: string | null;
   shown_at: string;
   shown_by: string | null;
   source: string | null;
