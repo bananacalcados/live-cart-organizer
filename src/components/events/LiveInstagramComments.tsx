@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { isPaidOrderStage } from "@/lib/orderPaymentStages";
 
@@ -64,6 +65,16 @@ const classificationConfig: Record<string, { label: string; icon: typeof Message
 };
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
+/** Busca sem depender de acento, maiúscula ou espaços duplicados. */
+const normalizeSearch = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+/** "@fulano" procura só no @; qualquer outro texto procura no @ e no comentário. */
+const matchesSearch = (c: LiveComment, term: string) => {
+  if (!term) return true;
+  const handle = cleanHandle(c.username);
+  if (term.startsWith("@")) return handle.includes(term.slice(1));
+  return handle.includes(term) || normalizeSearch(c.comment_text).includes(term);
+};
 /** Cache de @ → cliente compartilhado entre montagens do painel. */
 const presenterHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt: number }>();
 /** @ sem cadastro voltam a ser consultados após 45 s (cliente pode se cadastrar depois de comentar). */
@@ -75,6 +86,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [statusByHandle, setStatusByHandle] = useState<Map<string, HandleOrderStatus>>(new Map());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
+  const [search, setSearch] = useState("");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
   const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
   const [togglingLive, setTogglingLive] = useState(false);
