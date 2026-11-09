@@ -389,6 +389,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       const q = supabase.from("fiscal_documents")
         .select("id, status, chave_acesso, numero, protocolo, danfe_url")
         .eq("status", "authorized")
+        .eq("modelo", 55)
+        .or("finalidade.eq.1,finalidade.is.null")
         .order("created_at", { ascending: false })
         .limit(1);
       if (order.source === "sale") q.eq("pos_sale_id", order.source_id);

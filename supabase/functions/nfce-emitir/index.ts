@@ -80,8 +80,9 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { sale_id, ambiente: forcedAmb, company_id: forcedCompany } = await req.json();
+    const { sale_id, ambiente: forcedAmb, company_id: forcedCompany, retry_document_id: retryDocumentId } = await req.json();
     if (!sale_id) throw new Error("sale_id obrigatório");
+    if (retryDocumentId && !(await isAuthorizedCron(req))) throw new Error("retry_document_id exige chamada interna");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
