@@ -1240,6 +1240,13 @@
       "when": 1794243082433,
       "tag": "0176_orders_checkout_installment_config",
       "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1794254686182,
+      "tag": "0177_live_followup_manual_cart_trigger",
+      "breakpoints": true
     }
   ]
 }

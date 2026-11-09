@@ -1,0 +1,4 @@
+DROP TRIGGER IF EXISTS live_followup_order_update ON public.orders;
+CREATE TRIGGER live_followup_order_update AFTER UPDATE ON public.orders FOR EACH ROW
+WHEN ((old.products IS DISTINCT FROM new.products) OR (old.registered_at IS DISTINCT FROM new.registered_at) OR (old.selfservice_cart_sent_at IS DISTINCT FROM new.selfservice_cart_sent_at) OR (old.live_followup_cart_sent_at IS DISTINCT FROM new.live_followup_cart_sent_at) OR (old.last_sent_message_at IS DISTINCT FROM new.last_sent_message_at) OR (old.is_paid IS DISTINCT FROM new.is_paid) OR (old.paid_externally IS DISTINCT FROM new.paid_externally) OR (old.stage IS DISTINCT FROM new.stage) OR (old.merged_into_order_id IS DISTINCT FROM new.merged_into_order_id))
+EXECUTE FUNCTION public.live_followup_dirty();
