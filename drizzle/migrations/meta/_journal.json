@@ -1212,6 +1212,13 @@
       "when": 1794239114934,
       "tag": "0172_presenter_sizes_promotions",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1794239331099,
+      "tag": "0173_progressive_promotion_exact_totals",
+      "breakpoints": true
     }
   ]
 }
