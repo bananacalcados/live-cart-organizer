@@ -566,7 +566,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           onClick={() => setFilter("all")}
           className="h-7 text-xs"
         >
-          Todos ({comments.length})
+          Todos ({searched.length})
         </Button>
         <Button
           variant={filter === "orders" ? "default" : "ghost"}
