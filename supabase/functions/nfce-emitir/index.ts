@@ -325,7 +325,7 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 
     // 5. Monta payload BrasilNFe (formato oficial da API)
     const ieEmitente = digits(company.ie);
-    const payload: any = {
+    const payload: any = applyReservedFiscalNumber({
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 65,
       NaturezaOperacao: "Venda ao Consumidor",

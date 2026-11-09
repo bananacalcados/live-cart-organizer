@@ -692,7 +692,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     const formaPagamento = "99"; // Outros (NF-e online — pagamento já capturado externamente)
     const ieEmitente = digits(company.ie);
 
-    const payload: any = {
+    const payload: any = applyReservedFiscalNumber({
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 55,
       NaturezaOperacao: "Venda de Mercadoria",

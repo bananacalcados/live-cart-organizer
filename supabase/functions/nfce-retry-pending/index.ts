@@ -64,11 +64,8 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
         results.push({ sale_id: doc.pos_sale_id, skipped: true, error: issuer.pendingReason });
         continue;
       }
-      // Reinvoca o emit (cria NOVO fiscal_document — mas o anterior fica como histórico)
-      // ⚠️ Decisão: em vez de criar duplicado, apagamos o doc antigo logo antes de reemitir
-      // pra manter um único registro por venda. nfce-emitir vai recriar.
-      await supabase.from("fiscal_documents").delete().eq("id", doc.id);
-
+      // Retoma o MESMO documento e número reservado. Nunca apaga a pendência nem
+      // cria outra numeração: uma resposta incerta não pode virar uma segunda nota.
       const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nfce-emitir`, {
         method: "POST",
         headers: {
