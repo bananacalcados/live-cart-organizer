@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printProductCodeLabels } from "@/lib/productCodeLabels";
+import { buildCodeImageMap, type MirrorImageRow } from "@/lib/productCodeImages";
 
 interface PreparedRow {
   id: string;
@@ -41,6 +42,8 @@ interface CodeRow {
   color: string | null;
   sale_price: number | null;
   shopify_ok?: boolean;
+  shopify_product_id?: string | null;
+  image?: string | null;
 }
 interface BoardRow extends CodeRow {
   id: string;
