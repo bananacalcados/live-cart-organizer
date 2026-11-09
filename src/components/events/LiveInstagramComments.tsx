@@ -4,9 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { isPaidOrderStage } from "@/lib/orderPaymentStages";
+import { matchesSearch, normalizeSearch } from "@/lib/liveCommentSearch";
 
 
 interface LiveComment {
@@ -75,6 +77,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [statusByHandle, setStatusByHandle] = useState<Map<string, HandleOrderStatus>>(new Map());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
+  const [search, setSearch] = useState("");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
   const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
   const [togglingLive, setTogglingLive] = useState(false);
@@ -450,18 +453,25 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     return () => { supabase.removeChannel(channel); };
   }, [eventId, scheduleLoadCarts]);
 
+  // Busca é feita sobre os comentários já carregados (máx. 600): nenhuma consulta nova ao banco.
+  const searchNorm = useMemo(() => normalizeSearch(search), [search]);
+  const searched = useMemo(
+    () => (searchNorm ? comments.filter(c => matchesSearch(c, searchNorm)) : comments),
+    [comments, searchNorm]
+  );
+
   const filtered = useMemo(() => {
-    if (filter === "all") return comments;
-    if (filter === "orders") return comments.filter(c => c.is_order);
-    if (filter === "carts") return comments.filter(c => cartByHandle.has(cleanHandle(c.username)));
-    return comments;
-  }, [comments, filter, cartByHandle]);
+    if (filter === "all") return searched;
+    if (filter === "orders") return searched.filter(c => c.is_order);
+    if (filter === "carts") return searched.filter(c => cartByHandle.has(cleanHandle(c.username)));
+    return searched;
+  }, [searched, filter, cartByHandle]);
 
   const cartMatchCount = useMemo(
-    () => comments.filter(c => cartByHandle.has(cleanHandle(c.username))).length,
-    [comments, cartByHandle]
+    () => searched.filter(c => cartByHandle.has(cleanHandle(c.username))).length,
+    [searched, cartByHandle]
   );
-  const orderCount = useMemo(() => comments.filter(c => c.is_order).length, [comments]);
+  const orderCount = useMemo(() => searched.filter(c => c.is_order).length, [searched]);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -518,6 +528,28 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         </div>
       </div>
 
+      <div className="relative mb-3">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Pesquisar por @ ou pelo que a cliente escreveu"
+          className="h-9 pl-9 pr-9 text-sm bg-background"
+          aria-label="Pesquisar comentários"
+        />
+        {search && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSearch("")}
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
+            title="Limpar busca"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <Button
           variant={filter === "all" ? "default" : "ghost"}
@@ -525,7 +557,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           onClick={() => setFilter("all")}
           className="h-7 text-xs"
         >
-          Todos ({comments.length})
+          Todos ({searched.length})
         </Button>
         <Button
           variant={filter === "orders" ? "default" : "ghost"}
@@ -552,6 +584,8 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
               <CardContent className="p-6 text-center text-muted-foreground text-sm">
                 {comments.length === 0
                   ? "Aguardando comentários do Instagram. Verifique se a extensão Livete está ativa no navegador da live 📲"
+                  : searchNorm
+                  ? `Nenhum comentário encontrado para "${search.trim()}".`
                   : "Nenhum comentário neste filtro."}
               </CardContent>
             </Card>
