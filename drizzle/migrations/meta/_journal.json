@@ -1205,6 +1205,13 @@
       "when": 1794235150258,
       "tag": "0171_live_shown_products_stopped_at_view",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1794239114934,
+      "tag": "0172_presenter_sizes_promotions",
+      "breakpoints": true
     }
   ]
 }

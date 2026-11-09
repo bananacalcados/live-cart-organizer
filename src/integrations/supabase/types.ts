@@ -13167,6 +13167,7 @@ export type Database = {
       }
       live_presenter_products: {
         Row: {
+          available_sizes: string[] | null
           code: string
           created_at: string
           created_by: string | null
@@ -13175,9 +13176,11 @@ export type Database = {
           id: string
           interest_free_installments: number | null
           offer_price: number | null
+          promotion_id: string | null
           updated_at: string
         }
         Insert: {
+          available_sizes?: string[] | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -13186,9 +13189,11 @@ export type Database = {
           id?: string
           interest_free_installments?: number | null
           offer_price?: number | null
+          promotion_id?: string | null
           updated_at?: string
         }
         Update: {
+          available_sizes?: string[] | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -13197,6 +13202,7 @@ export type Database = {
           id?: string
           interest_free_installments?: number | null
           offer_price?: number | null
+          promotion_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -13219,6 +13225,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_presenter_products_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "event_promotions"
             referencedColumns: ["id"]
           },
         ]
