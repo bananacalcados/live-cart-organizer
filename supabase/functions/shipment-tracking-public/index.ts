@@ -27,7 +27,7 @@ import {
   mergeRealEvents,
 } from '../_shared/frenet-tracking.ts';
 import { fetchCorreiosEvents } from '../_shared/correios-tracking.ts';
-import { publicDeliveryEstimate } from '../shipment-delivery-estimate/delivery-estimate.ts';
+import { publicDeliveryEstimate } from '../_shared/delivery-estimate-public.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

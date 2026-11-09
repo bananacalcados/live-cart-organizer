@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { publicDeliveryEstimate } from './delivery-estimate.ts';
+import { publicDeliveryEstimate } from './delivery-estimate-public.ts';
 
 const estimate = { kind: 'confirmed', start: '2026-11-10', end: '2026-11-13' };
 
