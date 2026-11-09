@@ -736,7 +736,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         Descricao: "Pago no checkout online",
         VlPago: valorTotalNota,
       }],
-    };
+    }, claim, 1);
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 

@@ -72,7 +72,7 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
-        body: JSON.stringify({ sale_id: doc.pos_sale_id, ambiente: doc.ambiente }),
+        body: JSON.stringify({ sale_id: doc.pos_sale_id, ambiente: doc.ambiente, retry_document_id: doc.id }),
       });
       const body = await r.json().catch(() => ({}));
       results.push({ sale_id: doc.pos_sale_id, status: r.status, ok: body?.ok, contingencia: body?.contingencia });

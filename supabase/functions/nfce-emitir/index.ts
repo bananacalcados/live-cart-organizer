@@ -351,7 +351,7 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
         Descricao: descricaoPagamento,
         VlPago: totalLiquido,
       }],
-    };
+    }, claim, 1);
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 
