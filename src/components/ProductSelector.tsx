@@ -110,12 +110,19 @@ export function ProductSelector({
       const { data: rows } = await db.from("v_product_color_codes").select("master_id, color, product_name, shopify_ok, shopify_status, shopify_sizes_ok, shopify_sizes_total").eq("code", code).limit(1);
       const row = rows?.[0];
       if (!row) { if (!cancelled) setCodeResult({ products: [] }); return; }
-      const [{ data: vars }, { data: masters }] = await Promise.all([
-        db.from("product_variants").select("shopify_variant_id, color").eq("master_id", row.master_id).eq("is_active", true).not("shopify_variant_id", "is", null),
+      const [{ data: vars }, { data: masters }, { data: presenter }] = await Promise.all([
+        db.from("product_variants").select("shopify_variant_id,color,size").eq("master_id", row.master_id).eq("is_active", true).not("shopify_variant_id", "is", null),
         db.from("products_master").select("shopify_product_id").eq("id", row.master_id).limit(1),
+        eventId
+          ? db.from("live_presenter_products").select("available_sizes").eq("event_id", eventId).eq("code", code).maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
       const norm = (v: string | null) => (v || "").trim().toLowerCase();
-      const vids = new Set((vars || []).filter((v: any) => !row.color || norm(v.color) === norm(row.color)).map((v: any) => String(v.shopify_variant_id).replace(/\D/g, "")));
+      const allowedSizes = presenter?.available_sizes as string[] | null | undefined;
+      const sizeAllowed = (size: string | null) => allowedSizes == null || allowedSizes.some((allowed) => norm(allowed) === norm(size));
+      const vids = new Set((vars || [])
+        .filter((v: any) => (!row.color || norm(v.color) === norm(row.color)) && sizeAllowed(v.size))
+        .map((v: any) => String(v.shopify_variant_id).replace(/\D/g, "")));
       const pid = String(masters?.[0]?.shopify_product_id || "").replace(/\D/g, "");
       const prods = pid ? await fetchProducts(5, `id:${pid}`) : [];
       const out: ShopifyProduct[] = [];
@@ -123,10 +130,13 @@ export function ProductSelector({
         const edges = p.node.variants.edges.filter((e) => vids.has(e.node.id.replace(/\D/g, "")));
         if (edges.length) out.push({ ...p, node: { ...p.node, variants: { ...p.node.variants, edges } } } as ShopifyProduct);
       }
-      if (!cancelled) setCodeResult(out.length ? { products: out, reason: codeStatusReason(row) } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}`, reason: codeStatusReason(row) });
+      const reason = !out.length && allowedSizes != null
+        ? "Nenhuma numeração liberada no painel da apresentadora"
+        : codeStatusReason(row);
+      if (!cancelled) setCodeResult(out.length ? { products: out, reason } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}`, reason });
     })().catch((e) => { console.error("code search", e); if (!cancelled) setCodeResult({ products: [] }); });
     return () => { cancelled = true; };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, eventId]);
 
   // Filter products when search changes
   useEffect(() => {
