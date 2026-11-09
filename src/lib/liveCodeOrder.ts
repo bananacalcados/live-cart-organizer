@@ -4,6 +4,7 @@ import type { DbOrderProduct, DbOrder } from "@/types/database";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
+import { isPresenterSizeAllowed } from "@/lib/livePresenterProducts";
 
 const db = supabase as any;
 const numId = (v?: string | null) => String(v || "").split("/").pop() || "";
@@ -38,8 +39,8 @@ export async function computeLiveConditions(
   eventId: string, username: string, phone: string | null, products: DbOrderProduct[],
 ): Promise<{ cond: LiveConditions; products: DbOrderProduct[] }> {
   const items = products.map((p, i) => ({
-    ref: i, shopify_product_id: productIdOf(p), quantity: p.quantity || 1,
-    price: Number(p.basePrice ?? p.price),
+    ref: i, shopify_product_id: productIdOf(p), shopify_variant_id: String(p.shopifyId || ""),
+    quantity: p.quantity || 1, price: Number(p.basePrice ?? p.price),
   }));
   const { data, error } = await db.rpc("compute_live_order_conditions", {
     p_event_id: eventId, p_username: username.replace(/^@/, ""), p_phone: phone || null, p_items: items,
@@ -91,6 +92,7 @@ export function mergeProducts(existing: DbOrderProduct[], added: DbOrderProduct[
 
 export interface CodeIntentLike {
   id: string; username: string; phone: string | null; phone_last4: string | null;
+  items: Array<{ code: string; size?: string | null }>;
   kind?: string | null; target_order_id?: string | null;
 }
 
@@ -113,6 +115,23 @@ export function codeIntentDirectConfirmBlocked(
 export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntentLike, newProducts: DbOrderProduct[], by: string): Promise<string> {
   const username = intent.username.replace(/^@/, "");
   const phone = intent.phone || null;
+
+  // Revalida no banco no clique: uma numeração pode ter sido bloqueada depois que o card abriu.
+  const codes = [...new Set((intent.items || []).map((item) => item.code).filter(Boolean))];
+  if (codes.length) {
+    const { data: limits, error } = await db.from("live_presenter_products")
+      .select("code,available_sizes").eq("event_id", eventId).in("code", codes);
+    if (error) throw error;
+    const byCode = new Map<string, string[] | null>(
+      (limits || []).map((row: any): [string, string[] | null] => [row.code, row.available_sizes]),
+    );
+    const blocked = (intent.items || []).find((item) => {
+      if (!byCode.has(item.code) || !item.size) return false;
+      return !isPresenterSizeAllowed(byCode.get(item.code), item.size);
+    });
+    if (blocked) throw new Error(`Numeração ${blocked.size} de ${blocked.code} foi bloqueada no painel da apresentadora`);
+  }
+
   const pre = await computeLiveConditions(eventId, username, phone, newProducts);
 
   // R1: nunca um segundo carrinho para quem já tem carrinho não pago nesta live.
