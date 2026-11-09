@@ -86,6 +86,7 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
   const [installments, setInstallments] = useState("default");
   const [savingOffer, setSavingOffer] = useState(false);
   const lastKey = useRef("");
+  const imageCache = useRef(new Map<string, string | null>());
 
   const load = useCallback(async () => {
     const [preparedRes, shownRes] = await Promise.all([
