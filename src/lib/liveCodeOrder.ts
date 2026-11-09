@@ -92,6 +92,7 @@ export function mergeProducts(existing: DbOrderProduct[], added: DbOrderProduct[
 
 export interface CodeIntentLike {
   id: string; username: string; phone: string | null; phone_last4: string | null;
+  items: Array<{ code: string; size?: string | null }>;
   kind?: string | null; target_order_id?: string | null;
 }
 
@@ -121,7 +122,9 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
     const { data: limits, error } = await db.from("live_presenter_products")
       .select("code,available_sizes").eq("event_id", eventId).in("code", codes);
     if (error) throw error;
-    const byCode = new Map((limits || []).map((row: any) => [row.code, row.available_sizes as string[] | null]));
+    const byCode = new Map<string, string[] | null>(
+      (limits || []).map((row: any): [string, string[] | null] => [row.code, row.available_sizes]),
+    );
     const blocked = (intent.items || []).find((item) => {
       if (!byCode.has(item.code) || !item.size) return false;
       return !isPresenterSizeAllowed(byCode.get(item.code), item.size);
