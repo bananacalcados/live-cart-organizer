@@ -1,5 +1,5 @@
 # Fila da apresentadora — filtro dos preparados
-- [ ] Filtrar somente os produtos já separados por código, nome ou cor, sem novas consultas; testar e não publicar
+- [x] Filtrar somente os produtos já separados por código, nome ou cor, sem novas consultas; testado na live, sem publicar
 
 # Fila da apresentadora — tamanhos, promoções e edição em grupo
 - [x] Mostrar numerações grandes por código, salvar liberação manual e impedir tamanho bloqueado no pedido por código
