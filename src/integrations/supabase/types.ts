@@ -16226,6 +16226,7 @@ export type Database = {
           cart_link: string | null
           cashback_amount: number
           cashback_id: string | null
+          checkout_installment_config: Json | null
           checkout_started_at: string | null
           checkout_token: string | null
           confirmed_items_signature: string | null
@@ -16311,6 +16312,7 @@ export type Database = {
           cart_link?: string | null
           cashback_amount?: number
           cashback_id?: string | null
+          checkout_installment_config?: Json | null
           checkout_started_at?: string | null
           checkout_token?: string | null
           confirmed_items_signature?: string | null
@@ -16396,6 +16398,7 @@ export type Database = {
           cart_link?: string | null
           cashback_amount?: number
           cashback_id?: string | null
+          checkout_installment_config?: Json | null
           checkout_started_at?: string | null
           checkout_token?: string | null
           confirmed_items_signature?: string | null

@@ -19,6 +19,7 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function genCode(): string { const b = new Uint8Array(5); crypto.getRandomValues(b); let o = ""; for (const x of b) o += ALPHABET[x % ALPHABET.length]; return o; }
 const firstName = (n?: string | null) => { const f = String(n || "").trim().split(/\s+/)[0] || ""; return f ? f.charAt(0).toUpperCase() + f.slice(1).toLowerCase() : ""; };
 const greetName = (ig?: string | null, name?: string | null) => { const h = String(ig || "").trim().replace(/^@/, ""); return h ? `@${h}` : (firstName(name) || "você"); };
+const normOrderId = (v: unknown) => { const h = String(v || "").trim().toLowerCase().replace(/-/g, ""); return /^[0-9a-f]{32}$/.test(h) ? `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}` : ""; };
 const cartUrl = (slug: string, orderId: string) => `${PUBLIC_BASE}/pedido/${slug}/carrinho/${orderId.replace(/-/g, "")}`;
 const fmtBRL = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 function extractMid(d: any): string | null { const c = d?.messageId ?? d?.data?.messageId ?? d?.data?.messageid ?? d?.data?.id ?? d?.data?.message?.messageid ?? d?.messages?.[0]?.id ?? d?.data?.messages?.[0]?.id ?? null; return c != null ? String(c) : null; }
@@ -436,7 +437,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
     }
     if (action === "meta_signals") {
       const adv = await resolveSelfserviceAdvertising(sb, body.signals);
-      const { data: order } = await sb.from("orders").select("id,is_paid").eq("id", String(body.order_id || "")).eq("event_id", ev.id).maybeSingle();
+      const { data: order } = await sb.from("orders").select("id,is_paid").eq("id", normOrderId(body.order_id)).eq("event_id", ev.id).maybeSingle();
       if (!order) return json({ ok: true, blocked: true });
       // Recusa vale na hora, inclusive para pedido já pago (bloqueia envio pendente).
       if (adv?.mode === "refused") {
@@ -452,8 +453,8 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
     // ───── Página do link do carrinho (pedido deste modo) ─────
     if (action === "cart" || action === "pix" || action === "status") {
-      const orderId = String(body.order_id || "");
-      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
+      const orderId = normOrderId(body.order_id);
+      if (!orderId) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
         .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
