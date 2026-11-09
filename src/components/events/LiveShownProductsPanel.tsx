@@ -220,7 +220,7 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
     setBusy(null);
     if (error) { toast.error("Não foi possível preparar: " + error.message); return; }
     toast.success(`${code} pronto para apresentar`);
-    setQ(""); setResults([]);
+    // Mantém a pesquisa aberta e o termo digitado para adicionar vários em sequência.
     load();
   };
 
