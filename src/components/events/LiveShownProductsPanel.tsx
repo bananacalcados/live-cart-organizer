@@ -19,6 +19,7 @@ import {
   buildBulkPresenterPatch,
   groupPresenterSizes,
   isPresenterSizeAllowed,
+  presenterConditionsChanged,
   presenterVariantKey,
   togglePresenterSize,
   type PresenterVariantSizeRow,

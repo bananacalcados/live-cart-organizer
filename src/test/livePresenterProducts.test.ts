@@ -3,6 +3,7 @@ import {
   buildBulkPresenterPatch,
   groupPresenterSizes,
   isPresenterSizeAllowed,
+  presenterConditionsChanged,
   togglePresenterSize,
 } from "@/lib/livePresenterProducts";
 

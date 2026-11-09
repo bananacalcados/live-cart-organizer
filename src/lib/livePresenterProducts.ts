@@ -47,6 +47,14 @@ export function togglePresenterSize(
   return sorted.length === sortPresenterSizes(allSizes).length ? null : sorted;
 }
 
+export function presenterConditionsChanged(
+  row: { offer_price: number | null; free_shipping: boolean },
+  patch: { offer_price?: number; free_shipping?: boolean },
+): boolean {
+  return (patch.offer_price != null && Number(row.offer_price) !== patch.offer_price)
+    || (patch.free_shipping != null && row.free_shipping !== patch.free_shipping);
+}
+
 export function buildBulkPresenterPatch(input: {
   offerPrice: string;
   freeShipping: "keep" | "yes" | "no";

@@ -51,6 +51,20 @@ BEGIN
   IF (v_result->>'subtotal')::numeric <> 199.99 THEN
     RAISE EXCEPTION 'Grupo misto deveria totalizar 199.99; resultado: %', v_result;
   END IF;
+
+  -- A promoção vinculada no painel vale mesmo sem o produto na lista geral da promoção.
+  UPDATE public.event_promotions SET shopify_product_ids = '{}'
+  WHERE id = v_promotion;
+  INSERT INTO public.live_presenter_products (event_id, code, promotion_id)
+  VALUES (v_event, 'B060', v_promotion);
+  v_result := public.compute_live_order_conditions(
+    v_event, 'teste_inexistente', null,
+    '[{"shopify_product_id":"10404493885497","shopify_variant_id":"50981828198457","quantity":3,"price":199.99}]'::jsonb
+  );
+  IF v_result->'items'->0->>'promotion_id' <> v_promotion::text
+    OR (v_result->>'subtotal')::numeric <> 199.99 THEN
+    RAISE EXCEPTION 'Promoção escolhida no painel não foi aplicada: %', v_result;
+  END IF;
 END $test$;
 
 ROLLBACK;
