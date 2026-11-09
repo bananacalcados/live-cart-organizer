@@ -1,3 +1,6 @@
+# Prioridade do produto no overlay
+- [ ] Reproduzir o envio pelo painel e corrigir a exibição imediata/prioritária do código escolhido, sem alterar o leiaute nem publicar
+
 # Fila da apresentadora — filtro dos preparados
 - [x] Filtrar somente os produtos já separados por código, nome ou cor, sem novas consultas; testado na live, sem publicar
 
