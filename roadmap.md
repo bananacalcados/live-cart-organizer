@@ -1,3 +1,10 @@
+# Fila de produtos da apresentadora
+- [ ] Auditar seleção/overlay, ofertas, carrinho e etiquetas sem alterar comportamento atual
+- [ ] Preparar produtos da live com preço/condição/frete específicos e pausa sem remoção
+- [ ] Aplicar a configuração vigente ao anotar o carrinho, preservando preços manuais e demais modos
+- [ ] Imprimir etiquetas da fila com preço cheio e preço da oferta
+- [ ] Testar regras e fluxo principal, conferir consultas e não publicar
+
 # Previsão de entrega no rastreio
 - [x] Auditar onde serviço, CEP e prazo real são gravados e como o link público lê o envio
 - [x] Calcular faixa estimada por cotação: +3 dias úteis fixos, exceto SEDEX; preservar data real quando existir
