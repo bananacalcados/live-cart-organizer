@@ -4,6 +4,7 @@ import {
   groupPresenterSizes,
   isPresenterSizeAllowed,
   presenterConditionsChanged,
+  presenterProductMatches,
   togglePresenterSize,
 } from "@/lib/livePresenterProducts";
 
@@ -32,6 +33,21 @@ describe("numerações dos produtos da apresentadora", () => {
     ]);
     expect(sizes.get("m1|preto")).toEqual(["34", "38"]);
     expect(sizes.get("m1|branco")).toEqual(["40"]);
+  });
+});
+
+describe("busca dos produtos separados", () => {
+  const row = { code: "T130", product_name: "Tênis Samba Com Renda Liz", color: "Café" };
+
+  it("encontra por código, nome ou cor, ignorando caixa e acentos", () => {
+    expect(presenterProductMatches(row, "t130")).toBe(true);
+    expect(presenterProductMatches(row, "samba renda")).toBe(true);
+    expect(presenterProductMatches(row, "cafe")).toBe(true);
+  });
+
+  it("não mostra produto quando algum termo não pertence a ele", () => {
+    expect(presenterProductMatches(row, "samba preto")).toBe(false);
+    expect(presenterProductMatches(row, "T131")).toBe(false);
   });
 });
 
