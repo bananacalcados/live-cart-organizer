@@ -47,6 +47,19 @@ export function togglePresenterSize(
   return sorted.length === sortPresenterSizes(allSizes).length ? null : sorted;
 }
 
+const normalizePresenterSearch = (value: string | null | undefined) => String(value || "")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+
+/** Busca local dos produtos já carregados; todos os termos precisam aparecer. */
+export function presenterProductMatches(
+  row: { code: string; product_name: string | null; color: string | null },
+  query: string,
+): boolean {
+  const terms = normalizePresenterSearch(query).split(/\s+/).filter(Boolean);
+  const haystack = normalizePresenterSearch([row.code, row.product_name, row.color].filter(Boolean).join(" "));
+  return terms.every((term) => haystack.includes(term));
+}
+
 export function presenterConditionsChanged(
   row: { offer_price: number | null; free_shipping: boolean },
   patch: { offer_price?: number; free_shipping?: boolean },

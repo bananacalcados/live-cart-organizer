@@ -20,6 +20,7 @@ import {
   groupPresenterSizes,
   isPresenterSizeAllowed,
   presenterConditionsChanged,
+  presenterProductMatches,
   presenterVariantKey,
   togglePresenterSize,
   type PresenterVariantSizeRow,
@@ -92,6 +93,7 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [preparedFilter, setPreparedFilter] = useState("");
   const [results, setResults] = useState<CodeRow[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);

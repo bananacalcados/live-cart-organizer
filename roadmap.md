@@ -1,3 +1,6 @@
+# Fila da apresentadora — filtro dos preparados
+- [ ] Filtrar somente os produtos já separados por código, nome ou cor, sem novas consultas; testar e não publicar
+
 # Fila da apresentadora — tamanhos, promoções e edição em grupo
 - [x] Mostrar numerações grandes por código, salvar liberação manual e impedir tamanho bloqueado no pedido por código
 - [x] Vincular promoção progressiva ativa da live ao produto preparado, preservando o cálculo e os pedidos existentes
