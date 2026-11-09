@@ -446,6 +446,15 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
                 <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Limpar seleção" onClick={() => setSelectedCodes([])}><X className="h-4 w-4" /></Button>
               </>
             )}
+            <div className="relative ml-auto w-full sm:w-80">
+              <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+              <Input aria-label="Filtrar produtos separados" value={preparedFilter} onChange={(event) => setPreparedFilter(event.target.value)}
+                placeholder="Filtrar produtos separados" className="h-8 bg-card pl-8 pr-8 text-sm" />
+              {preparedFilter && (
+                <Button size="icon" variant="ghost" aria-label="Limpar filtro de produtos" onClick={() => setPreparedFilter("")}
+                  className="absolute right-1 top-1 h-6 w-6"><X className="h-3.5 w-3.5" /></Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -453,9 +462,11 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
           <div className="flex justify-center p-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : rows.length === 0 ? (
           <p className="p-4 text-center text-sm text-muted-foreground">Busque os modelos acima para deixar a apresentação pronta.</p>
+        ) : visibleRows.length === 0 ? (
+          <p className="p-4 text-center text-sm text-muted-foreground">Nenhum produto separado encontrado com esse filtro.</p>
         ) : (
           <div className={cn(compact ? "flex gap-2 overflow-x-auto pb-1" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6")}>
-            {rows.map((r) => {
+            {visibleRows.map((r) => {
               const hasOffer = r.offer_price != null && r.sale_price != null && r.offer_price < r.sale_price;
               const promotion = activePromos.find((promo) => promo.id === r.promotion_id);
               const selected = selectedCodes.includes(r.code);
