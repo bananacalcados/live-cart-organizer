@@ -1,9 +1,9 @@
 # Fila de produtos da apresentadora
-- [ ] Auditar seleção/overlay, ofertas, carrinho e etiquetas sem alterar comportamento atual
-- [ ] Preparar produtos da live com preço/condição/frete específicos e pausa sem remoção
-- [ ] Aplicar a configuração vigente ao anotar o carrinho, preservando preços manuais e demais modos
-- [ ] Imprimir etiquetas da fila com preço cheio e preço da oferta
-- [ ] Testar regras e fluxo principal, conferir consultas e não publicar
+- [x] Auditar seleção/overlay, ofertas, carrinho e etiquetas sem alterar comportamento atual
+- [x] Preparar produtos da live com preço/condição/frete específicos e pausa sem remoção
+- [x] Aplicar a configuração vigente ao anotar o carrinho, preservando preços manuais e demais modos
+- [x] Imprimir etiquetas da fila com preço cheio e preço da oferta
+- [x] Testar busca/edição, apresentar/parar, overlay, PDF e cálculo; 30 testes, build limpo, sem publicar
 
 # Previsão de entrega no rastreio
 - [x] Auditar onde serviço, CEP e prazo real são gravados e como o link público lê o envio
