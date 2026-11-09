@@ -217,8 +217,13 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       const d = (o.customer?.whatsapp || "").replace(/\D/g, "");
       if (d.length >= 8) set.add(d.slice(-8));
     }
+    // Ficha do pedido: cobre clientes cujo cadastro geral está sem WhatsApp.
+    for (const r of Object.values(paidRegs)) {
+      const d = String(r?.whatsapp || "").replace(/\D/g, "");
+      if (d.length >= 8) set.add(d.slice(-8));
+    }
     return set;
-  }, [orders]);
+  }, [orders, paidRegs]);
 
   // Modo linhas: contatos do link (sem pedido) + marcações manuais (Dúvidas).
   const { contacts: redirectContacts, activity: contactActivity, loading: loadingContacts, reload: reloadContacts } = useLiveNewContacts(
