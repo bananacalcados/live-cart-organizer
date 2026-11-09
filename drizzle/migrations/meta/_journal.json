@@ -1219,6 +1219,13 @@
       "when": 1794239331099,
       "tag": "0173_progressive_promotion_exact_totals",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1794239383611,
+      "tag": "0174_round_progressive_promotion_subtotal",
+      "breakpoints": true
     }
   ]
 }
