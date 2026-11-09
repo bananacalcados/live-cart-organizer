@@ -228,6 +228,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
             patch.stage = 'entregue';
             patch.status = 'delivered';
             patch.delivered_source = 'carrier';
+            patch.delivery_estimate = null;
           }
           sim.real_events = merged;
           if (delivered) {
@@ -386,11 +387,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
     }
 
     const rawEstimate = sim.delivery_estimate as any;
-    const validDate = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-    const deliveryEstimate = (rawEstimate?.kind === 'estimated' || rawEstimate?.kind === 'confirmed') &&
-      validDate(rawEstimate?.start) && validDate(rawEstimate?.end)
-      ? { kind: rawEstimate.kind, start: rawEstimate.start, end: rawEstimate.end }
-      : null;
+    const deliveryEstimate = publicDeliveryEstimate(rawEstimate, sim.delivered_at);
     const visible = [...events].reverse();
 
     return new Response(
@@ -402,7 +399,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
         destination_state: (sim.destination_state as string | null) ?? null,
         local_delivery: localDelivery,
         delivery_estimate: deliveryEstimate,
-        delivery_estimate_pending: rawEstimate?.kind === 'quoting',
+        delivery_estimate_pending: !sim.delivered_at && rawEstimate?.kind === 'quoting',
         order_reference: (sim.order_reference as string | null) ?? null,
         posted_at: events[0]?.at ?? null,
         events: visible,

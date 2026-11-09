@@ -84,7 +84,7 @@ Deno.serve(withAccessLog('shipment-delivery-estimate', async (req) => {
       if (!estimate) throw new Error('Não foi possível calcular a faixa');
       const { data: saved, error: saveError } = await db.from('shipment_simulations')
         .update({ delivery_estimate: estimate })
-        .eq('id', sim.id).eq('delivery_estimate->>kind', 'quoting').is('real_tracking_code', null)
+        .eq('id', sim.id).eq('delivery_estimate->>kind', 'quoting').is('real_tracking_code', null).is('delivered_at', null)
         .select('id').maybeSingle();
       if (saveError) throw saveError;
       return reply(saved
@@ -94,7 +94,7 @@ Deno.serve(withAccessLog('shipment-delivery-estimate', async (req) => {
       console.error('[delivery-estimate] cotação falhou', (quoteError as Error).message);
       await db.from('shipment_simulations').update({
         delivery_estimate: { kind: 'unavailable', attempted_at: new Date().toISOString(), reason: 'quote_failed' },
-      }).eq('id', sim.id).eq('delivery_estimate->>kind', 'quoting').is('real_tracking_code', null);
+      }).eq('id', sim.id).eq('delivery_estimate->>kind', 'quoting').is('real_tracking_code', null).is('delivered_at', null);
       return reply({ error: 'Não foi possível calcular a previsão' }, 502);
     }
   } catch (error) {
