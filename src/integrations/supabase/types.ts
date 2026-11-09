@@ -31789,10 +31789,12 @@ export type Database = {
         Args: { p_code: string; p_draft: Json }
         Returns: string
       }
-      rh_public_hit: {
-        Args: { p_code: string; p_ip: string }
-        Returns: boolean
-      }
+      rh_public_hit:
+        | { Args: { p_code: string; p_ip: string }; Returns: boolean }
+        | {
+            Args: { p_action: string; p_code: string; p_ip: string }
+            Returns: boolean
+          }
       rh_public_open: { Args: { p_code: string }; Returns: Json }
       rh_public_submit: {
         Args: { p_code: string; p_data: Json }
