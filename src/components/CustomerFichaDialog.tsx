@@ -572,6 +572,12 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
         } else {
           await sendViaLiveInstance(order.event_id, phone, message);
         }
+        // Marca o envio manual para os lembretes de pagamento da live começarem a contar.
+        await supabase
+          .from("orders")
+          .update({ live_followup_cart_sent_at: new Date().toISOString() } as any)
+          .eq("id", order.id)
+          .is("live_followup_cart_sent_at", null);
         toast.success("Link do carrinho da live enviado no WhatsApp!");
         return;
       }
