@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Palette, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { PushColorToShopifyButton } from "@/components/inventory/PushColorToShopifyButton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -140,10 +141,14 @@ export function ProductColorAliasDialog({ open, onOpenChange, onSaved }: Props) 
                         {options.map((color) => <SelectItem key={color} value={color}>{color}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" onClick={() => save(row)} disabled={!choices[row.code] || saving !== null}>
-                      {saving === row.code ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
-                      Salvar
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button size="sm" onClick={() => save(row)} disabled={!choices[row.code] || saving !== null}>
+                        {saving === row.code ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+                        Salvar
+                      </Button>
+                      <span className="text-center text-xs text-muted-foreground">A cor não existe na Shopify?</span>
+                      <PushColorToShopifyButton code={row.code} onDone={() => { onSaved(); void load(); }} />
+                    </div>
                   </div>
                 );
               })}
@@ -152,7 +157,7 @@ export function ProductColorAliasDialog({ open, onOpenChange, onSaved }: Props) 
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving !== null}>Esta cor não existe na Shopify</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving !== null}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

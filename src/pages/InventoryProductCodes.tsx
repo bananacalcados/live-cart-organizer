@@ -15,6 +15,7 @@ import { ArrowLeft, Download, FileText, Loader2, Search, Wand2, Hash, Palette } 
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProductColorAliasDialog } from "@/components/inventory/ProductColorAliasDialog";
+import { PushColorToShopifyButton } from "@/components/inventory/PushColorToShopifyButton";
 import { ShopifyMissingColorsDialog } from "@/components/inventory/ShopifyMissingColorsDialog";
 
 type CodeRow = {
@@ -369,14 +370,14 @@ export default function InventoryProductCodes() {
                 <tr>
                   <th className="p-2 w-8"><Checkbox checked={allPageSelected} onCheckedChange={togglePage} /></th>
                   <th className="p-2">Código</th><th className="p-2">Produto</th><th className="p-2">Cor</th>
-                  <th className="p-2">Categoria</th><th className="p-2 text-right">Preço</th><th className="p-2 text-right">Estoque</th><th className="p-2">Shopify</th>
+                  <th className="p-2">Categoria</th><th className="p-2 text-right">Preço</th><th className="p-2 text-right">Estoque</th><th className="p-2">Shopify</th><th className="p-2">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin inline text-muted-foreground" /></td></tr>
+                  <tr><td colSpan={9} className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin inline text-muted-foreground" /></td></tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground"><Hash className="h-5 w-5 inline mr-1" />Nenhum código encontrado</td></tr>
+                  <tr><td colSpan={9} className="p-8 text-center text-muted-foreground"><Hash className="h-5 w-5 inline mr-1" />Nenhum código encontrado</td></tr>
                 ) : rows.map(r => (
                   <tr key={r.code} className="border-t hover:bg-muted/30">
                     <td className="p-2"><Checkbox checked={selected.has(r.code)} onCheckedChange={() => toggle(r)} /></td>
@@ -387,6 +388,11 @@ export default function InventoryProductCodes() {
                     <td className="p-2 text-right whitespace-nowrap">{brl(r.sale_price)}</td>
                     <td className={`p-2 text-right ${Number(r.total_stock ?? 0) > 0 ? "" : "text-muted-foreground"}`}>{r.total_stock ?? 0}</td>
                     <td className="p-2"><ShopifyBadge r={r} sku={exampleSku[`${r.master_id}|${normColor(r.color)}`]} /></td>
+                    <td className="p-2">
+                      {(r.shopify_status === "color_missing" || r.shopify_status === "partial_sizes") && (
+                        <PushColorToShopifyButton code={r.code} onDone={() => setReload((value) => value + 1)} />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
