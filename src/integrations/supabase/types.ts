@@ -28593,6 +28593,7 @@ export type Database = {
           shown_at: string | null
           shown_by: string | null
           source: string | null
+          stopped_at: string | null
           total_stock: number | null
         }
         Relationships: [
