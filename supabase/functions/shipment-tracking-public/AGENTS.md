@@ -1,0 +1,1 @@
+- Native Correios tracking: shipment-tracking-public selects SRO only by exact sale + active correios_shipments object match, sends Accept-Language pt-BR, stores translated events on demand, never exposes the carrier/real code, and preserves Frenet for every other shipment.

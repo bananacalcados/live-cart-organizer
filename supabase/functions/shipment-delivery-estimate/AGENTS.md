@@ -1,0 +1,1 @@
+- Delivery estimates: internal shipment-delivery-estimate quotes PAC/SEDEX delivery time once per shipment, adding 3 business days of preparation except for explicit SEDEX; shipment_simulations.delivery_estimate stores only public date bounds, expedition delivery_days replaces the estimate, and legacy quotes are claimed in background rather than on every public read.
