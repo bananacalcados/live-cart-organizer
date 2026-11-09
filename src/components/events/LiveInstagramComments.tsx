@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { isPaidOrderStage } from "@/lib/orderPaymentStages";
+import { matchesSearch, normalizeSearch } from "@/lib/liveCommentSearch";
 
 
 interface LiveComment {
@@ -65,16 +66,6 @@ const classificationConfig: Record<string, { label: string; icon: typeof Message
 };
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
-/** Busca sem depender de acento, maiúscula ou espaços duplicados. */
-const normalizeSearch = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
-/** "@fulano" procura só no @; qualquer outro texto procura no @ e no comentário. */
-const matchesSearch = (c: LiveComment, term: string) => {
-  if (!term) return true;
-  const handle = cleanHandle(c.username);
-  if (term.startsWith("@")) return handle.includes(term.slice(1));
-  return handle.includes(term) || normalizeSearch(c.comment_text).includes(term);
-};
 /** Cache de @ → cliente compartilhado entre montagens do painel. */
 const presenterHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt: number }>();
 /** @ sem cadastro voltam a ser consultados após 45 s (cliente pode se cadastrar depois de comentar). */
