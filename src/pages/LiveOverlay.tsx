@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hiddenByConflict, measureBlocks } from "@/lib/overlayConflicts";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, shouldShowCurrentShownProduct, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
