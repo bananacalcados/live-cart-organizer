@@ -1,7 +1,8 @@
 # AustPay — duplicidade de NF-e
 - [x] Diagnosticar rejeições 539: numeração reiniciada apesar da sequência do CNPJ já configurada em 2767
 - [x] Criar reserva atômica por venda/modelo e trava contra tentativas simultâneas, sem apagar notas autorizadas
-- [ ] Ligar NF-e/NFC-e à numeração reservada, preservar retry com o mesmo número e testar sem emitir nota real
+- [x] Ligar NF-e/NFC-e/devoluções à numeração reservada, preservar retry com o mesmo número e implantar
+- [x] Validar duas chamadas na mesma venda: mesmo documento 2768, uma só reserva, rollback sem consumir número; 43 testes, sem emitir nota real
 
 # Prioridade do produto no overlay
 - [x] Corrigir escolha manual escondida pela opção de códigos automáticos e impedir que comentários derrubem o produto atual; E017 visível no overlay, prioridade transacional e 18 testes, sem publicar
