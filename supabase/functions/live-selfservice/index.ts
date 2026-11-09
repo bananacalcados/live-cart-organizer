@@ -134,7 +134,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
   async function openOrderRowsFor(eventId: string, ids: string[]) {
     if (!ids.length) return [] as any[];
-    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, selfservice_cart_sent_at, discount_type, discount_value, free_shipping, shipping_cost, customer:customers(instagram_handle)")
+    const { data } = await sb.from("orders").select("id, products, is_paid, paid_externally, merged_into_order_id, stage, registered_at, selfservice_cart_sent_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, customer:customers(instagram_handle)")
       .in("id", ids).eq("event_id", eventId).eq("is_paid", false).neq("stage", "cancelled");
     return ((data || []) as any[]).filter((o) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length);
   }
@@ -292,7 +292,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       }
       // send_cart: pedido novo de cliente que já confirmou no WhatsApp (Caso B → link sai sozinho).
       const orderId = String(body.orderId || "");
-      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost, registered_at, is_paid, paid_externally, stage, selfservice_cart_sent_at").eq("id", orderId).maybeSingle();
+      const { data: o } = await sb.from("orders").select("id, event_id, customer_id, products, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, registered_at, is_paid, paid_externally, stage, selfservice_cart_sent_at").eq("id", orderId).maybeSingle();
       if (!o) return json({ ok: false, sent: false });
       if (o.is_paid || o.paid_externally || o.stage === "cancelled" || !Array.isArray(o.products) || !o.products.length) return json({ ok: true, sent: false });
       const { data: e3 } = await sb.from("events").select("operation_mode, self_service_slug, whatsapp_number_id").eq("id", (o as any).event_id).maybeSingle();
@@ -416,6 +416,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         registration_confirmed: o.registration_confirmed === true,
         discount_type: o.discount_type,
         discount_value: o.discount_value,
+        checkout_installment_config: o.checkout_installment_config || null,
       };
     };
 
@@ -454,7 +455,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const orderId = String(body.order_id || "");
       if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
-        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
+        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
@@ -561,7 +562,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: base } = await sb.from("orders").select("customer_id").eq("id", n.order_id).eq("event_id", ev.id).maybeSingle();
       if (!base?.customer_id) return [];
       const { data } = await sb.from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id).eq("customer_id", base.customer_id).neq("stage", "cancelled").eq("is_paid", false)
         .order("created_at", { ascending: true }).limit(10);
       return (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
@@ -581,13 +582,13 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
         if (!matches?.length) return [];
         const { data: matched } = await sb.from("orders")
-          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
           .eq("event_id", ev.id).in("id", matches);
         return matched || [];
       }
       const { data } = await sb
         .from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
@@ -599,7 +600,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
       if (!matches?.length) return [];
       const { data: matched } = await sb.from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id).in("id", matches);
       return matched || [];
     }

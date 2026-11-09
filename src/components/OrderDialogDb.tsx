@@ -632,12 +632,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   }, [editingOrder, eventId]);
 
   /** Frete/cashback vindos do compute da live (mesmo campo do botão "Abater cashback"). */
-  const liveCashbackPatch = (hasCashback: boolean, hasCustomShipping: boolean): Record<string, unknown> => {
+  const liveCashbackPatch = (hasCashback: boolean, hasCustomShipping: boolean, hasInstallmentRule = false): Record<string, unknown> => {
     if (!liveConditions) return {};
     const out: Record<string, unknown> = {};
     if (liveConditions.cashback_blocked) out.cashback_id = null;
     else if (liveConditions.cashback && !hasCashback) out.cashback_id = liveConditions.cashback.id;
     if (!hasCustomShipping) out.shipping_cost = (freeShipping || liveConditions.free_shipping) ? 0 : liveConditions.shipping_cost;
+    if (liveConditions.installment_config && !hasInstallmentRule) out.checkout_installment_config = liveConditions.installment_config;
     return out;
   };
 
@@ -732,7 +733,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
           is_delivery: isDelivery,
         } as any;
-        Object.assign(orderUpdates, liveCashbackPatch(!!(editingOrder as any).cashback_id, (editingOrder as any).custom_shipping_cost != null));
+        Object.assign(orderUpdates, liveCashbackPatch(!!(editingOrder as any).cashback_id, (editingOrder as any).custom_shipping_cost != null, !!(editingOrder as any).checkout_installment_config));
         
         // If marking as paid externally, also mark as paid (manual source)
         if (paidExternally && !editingOrder.is_paid) {
@@ -804,7 +805,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               .eq("comment_id", prefillCommentId);
             await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
           }
-          const lp = liveCashbackPatch(!!(activeOrder as any).cashback_id, (activeOrder as any).custom_shipping_cost != null);
+          const lp = liveCashbackPatch(!!(activeOrder as any).cashback_id, (activeOrder as any).custom_shipping_cost != null, !!(activeOrder as any).checkout_installment_config);
           if (Object.keys(lp).length) await updateOrder(activeOrder.id, lp as Partial<DbOrder>);
           toast.success("Produtos adicionados ao pedido existente!");
           onCreated?.(activeOrder.id);
@@ -939,7 +940,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           {liveConditions && (() => { const sm = conditionsSummary(liveConditions); return (
             <div className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs">
               {editingOrder && prefillProducts?.length ? <div className="mb-1 font-extrabold uppercase text-sky-700 dark:text-sky-300">Novo ADD → carrinho #{editingOrder.id.slice(-4)}</div> : null}
-              <div>Subtotal {sm.subtotal} · {sm.shipping}{sm.cashback ? ` · ${sm.cashback}` : ""}</div>
+              <div>Subtotal {sm.subtotal} · {sm.shipping}{sm.cashback ? ` · ${sm.cashback}` : ""}{sm.installments ? ` · ${sm.installments}` : ""}</div>
               {localProducts.some((p) => p.promotion) && (
                 <div className="mt-1 text-muted-foreground">Promoção: {[...new Set(localProducts.map((p) => p.promotion).filter(Boolean))].join(", ")}</div>
               )}

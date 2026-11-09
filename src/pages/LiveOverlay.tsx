@@ -6,7 +6,7 @@ import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, t
 import { OverlayBlock } from "@/components/events/OverlayBlock";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
-interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; shown_at?: string }
+interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; offer_price?: number | null; free_shipping?: boolean; interest_free_installments?: number | null; shown_at?: string }
 interface ShownData { show_codes: boolean; current: ShownItem | null; previous: ShownItem[] }
 const brl = (v?: number) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 interface Alert { key: number; text: string; duration: number; tone?: "expired" }
@@ -368,10 +368,17 @@ export default function LiveOverlay() {
           <div className="flex flex-col gap-[0.25em]">
             {shown.current && (
               <div key={shown.current.code + (shown.current.shown_at || "")} className={`${panel} animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.1 }}>
-                <div className="font-black tracking-wide" style={{ fontSize: "2.2em" }}>{shown.current.code}</div>
+                <div className="font-black tracking-wide" style={{ fontSize: "2.2em", whiteSpace: "nowrap" }}>{shown.current.code}</div>
                 <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
                 {shown.current.color && <div style={{ fontSize: "0.5em" }}>{shown.current.color}</div>}
-                {shown.current.sale_price != null && <div className="font-extrabold mt-[0.15em]" style={{ fontSize: "0.75em" }}>{brl(shown.current.sale_price)}</div>}
+                {shown.current.offer_price != null ? (
+                  <div className="mt-[0.15em]">
+                    <div className="font-bold line-through opacity-80" style={{ fontSize: "0.42em" }}>De {brl(shown.current.sale_price)}</div>
+                    <div className="font-extrabold" style={{ fontSize: "0.75em" }}>Por {brl(shown.current.offer_price)}</div>
+                  </div>
+                ) : shown.current.sale_price != null && <div className="font-extrabold mt-[0.15em]" style={{ fontSize: "0.75em" }}>{brl(shown.current.sale_price)}</div>}
+                {!!shown.current.interest_free_installments && <div className="font-bold" style={{ fontSize: "0.42em" }}>em até {shown.current.interest_free_installments}x sem juros</div>}
+                {shown.current.free_shipping && <div className="font-extrabold" style={{ fontSize: "0.48em" }}>FRETE GRÁTIS</div>}
               </div>
             )}
             {shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (

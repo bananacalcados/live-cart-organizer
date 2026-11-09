@@ -16,6 +16,12 @@ export interface LiveConditions {
   shipping_cost: number;
   cashback: { id: string; coupon_code: string; amount: number; min_purchase: number | null } | null;
   cashback_blocked: boolean;
+  installment_config?: {
+    max_installments: number;
+    interest_free_installments: number;
+    monthly_interest_rate: number;
+    source: "live_presenter";
+  } | null;
   open_order_id: string | null;
   paid_before: boolean;
 }
@@ -66,6 +72,9 @@ export function conditionsSummary(cond: LiveConditions) {
     cashback: cond.cashback_blocked
       ? "cashback não se aplica (item em promoção)"
       : cond.cashback ? `cashback ${brl(cond.cashback.amount)}` : null,
+    installments: cond.installment_config
+      ? `até ${cond.installment_config.interest_free_installments}x sem juros`
+      : null,
   };
 }
 
@@ -117,7 +126,7 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
   let orderId: string;
   if (targetId) {
     const { data: ord, error } = await db.from("orders")
-      .select("id,products,free_shipping,custom_shipping_cost,cashback_id").eq("id", targetId).single();
+      .select("id,products,free_shipping,custom_shipping_cost,cashback_id,checkout_installment_config").eq("id", targetId).single();
     if (error) throw error;
     const merged = mergeProducts((ord.products || []) as DbOrderProduct[], newProducts);
     const { cond, products } = await computeLiveConditions(eventId, username, phone, merged);
@@ -126,6 +135,7 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
     if (ord.custom_shipping_cost == null) patch.shipping_cost = free ? 0 : cond.shipping_cost;
     if (cond.cashback_blocked) patch.cashback_id = null;
     else if (cond.cashback && !ord.cashback_id) patch.cashback_id = cond.cashback.id;
+    if (cond.installment_config && !ord.checkout_installment_config) patch.checkout_installment_config = cond.installment_config;
     const { error: upErr } = await db.from("orders").update(patch).eq("id", targetId);
     if (upErr) throw upErr;
     orderId = targetId;
@@ -140,6 +150,7 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
       free_shipping: pre.cond.free_shipping,
       shipping_cost: pre.cond.free_shipping ? 0 : pre.cond.shipping_cost,
       cashback_id: !pre.cond.cashback_blocked && pre.cond.cashback ? pre.cond.cashback.id : null,
+      ...(pre.cond.installment_config ? { checkout_installment_config: pre.cond.installment_config } : {}),
     };
     if (!phone && intent.phone_last4 && /^\d{4}$/.test(intent.phone_last4)) patch.phone_last4 = intent.phone_last4;
     await useDbOrderStore.getState().updateOrder(created.id, patch as Partial<DbOrder>);
