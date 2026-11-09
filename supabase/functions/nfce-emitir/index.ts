@@ -254,17 +254,57 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
 
     const totalLiquido = round2(totalProd - totalDesc);
 
-    // 4. Cria registro pendente (número/série virão da resposta — o painel BrasilNFe controla a numeração)
-    const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
-      company_id: companyId, pos_sale_id: sale_id, modelo: 65, serie: 1,
-      numero: null, ambiente, status: "pending",
-      valor_total: totalLiquido, cpf_destinatario: cpfDest,
-      nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
-      company_selection_rule: selectionRule,
-      company_selection_gateway: selectionGateway,
-      company_selection_details: selectionDetails,
-    }).select().single();
-    if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
+    // 4. Reutiliza uma emissão ativa/autorizada ou reserva número + pendência atomicamente.
+    let claim;
+    if (retryDocumentId) {
+      // Somente o worker interno retoma uma contingência, sempre no MESMO documento/número.
+      // A transição condicional impede dois workers de reenviarem juntos.
+      const { data: retryDoc, error: retryErr } = await supabase.from("fiscal_documents")
+        .update({ status: "pending" })
+        .eq("id", retryDocumentId)
+        .eq("pos_sale_id", sale_id)
+        .eq("modelo", 65)
+        .eq("status", "pending_sefaz")
+        .select("id, numero, status")
+        .maybeSingle();
+      if (retryErr) throw new Error(`Retomada da emissão fiscal: ${retryErr.message}`);
+      if (retryDoc) {
+        claim = getFiscalEmissionClaim([{
+          out_document_id: retryDoc.id,
+          out_numero: retryDoc.numero,
+          out_status: retryDoc.status,
+          out_claimed: true,
+          out_chave_acesso: null,
+          out_protocolo: null,
+          out_danfe_url: null,
+        }]);
+      }
+    }
+    if (!claim) {
+      const { data: claimData, error: claimErr } = await supabase.rpc("claim_fiscal_emission", {
+        p_company_id: companyId,
+        p_pos_sale_id: sale_id,
+        p_order_id: null,
+        p_modelo: 65,
+        p_serie: 1,
+        p_ambiente: ambiente,
+        p_valor_total: totalLiquido,
+        p_cpf_destinatario: cpfDest,
+        p_nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
+        p_company_selection_rule: selectionRule,
+        p_company_selection_gateway: selectionGateway,
+        p_company_selection_details: selectionDetails,
+      });
+      if (claimErr) throw new Error(`Reserva da emissão fiscal: ${claimErr.message}`);
+      claim = getFiscalEmissionClaim(claimData);
+    }
+    if (!claim.out_claimed) {
+      return new Response(JSON.stringify(fiscalEmissionReuseBody(claim)), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: claim.out_status === "authorized" ? 200 : 202,
+      });
+    }
+    const doc = { id: claim.out_document_id, numero: Number(claim.out_numero) };
 
     // Mapeia método de pagamento -> FormaPagamento (tabela 38 da SEFAZ, como string)
     const pmRaw = (sale.payment_method || "").toLowerCase();
