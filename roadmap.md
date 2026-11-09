@@ -1,3 +1,8 @@
+# Enviar cor para a Shopify
+- [ ] Criar envio por código com dry-run, confirmação, proteção de duplicidade e sem sincronização completa
+- [ ] Integrar botão nos códigos pendentes e ao de-para existente
+- [ ] Confirmar bloqueio Por código e testar somente dry-run do T235 e bolsa, se houver
+
 # Fila de produtos da apresentadora
 - [x] Auditar seleção/overlay, ofertas, carrinho e etiquetas sem alterar comportamento atual
 - [x] Preparar produtos da live com preço/condição/frete específicos e pausa sem remoção
