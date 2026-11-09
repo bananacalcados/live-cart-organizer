@@ -74,6 +74,7 @@
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
 - Chat side panels: EmbeddedDialog inside a Dialog root (DialogTitle throws otherwise).
+- Chat "Reversa" opens NewExchangePicker by phone; the reverse dialog inside it is locked to the chosen sale/items and correios-reverse link_troca ties its return NF-e to the new exchange, so no reverse exists without an exchange.
 ## Permanent security rules
 - New public tables: RLS, no anon, explicit policies/grants; backups/temp are service_role-only.
 - New SQL functions: revoke PUBLIC/anon EXECUTE, grant explicitly; DEFINER requires has_role/permission check.
