@@ -180,7 +180,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     const toResolve = wanted.filter((h) => {
       const c = presenterHandleCache.get(h);
       if (!c) return true;
-      if (c.customerId) return false;
+      if (c.customerId && c.whatsapp) return false;
       return now - c.checkedAt > PRESENTER_NEGATIVE_TTL_MS;
     });
     for (let i = 0; i < toResolve.length; i += 300) {
@@ -233,6 +233,24 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       if (data) orders.push(...data);
     }
 
+    // WhatsApp da ficha do pedido (cadastro geral pode estar sem número).
+    const regPhoneByCustomer = new Map<string, string>();
+    const noPhoneOrderIds = orders
+      .filter((o: any) => !(customerById.get(o.customer_id)?.whatsapp || "").trim())
+      .map((o: any) => o.id);
+    for (let i = 0; i < noPhoneOrderIds.length; i += CHUNK) {
+      const { data } = await supabase
+        .from("customer_registrations")
+        .select("order_id, whatsapp")
+        .in("order_id", noPhoneOrderIds.slice(i, i + CHUNK));
+      const byOrder = new Map(orders.map((o: any) => [o.id, o.customer_id]));
+      for (const r of (data || []) as any[]) {
+        const w = String(r.whatsapp || "").trim();
+        const cid = byOrder.get(r.order_id);
+        if (w && cid) regPhoneByCustomer.set(cid, w);
+      }
+    }
+
     // Nome dos eventos anteriores (para mostrar em QUAL live o pedido foi cancelado)
     const otherEventIds = Array.from(
       new Set(orders.filter((o: any) => o.event_id && o.event_id !== eventId).map((o: any) => o.event_id)),
@@ -266,7 +284,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       const isCurrent = o.event_id === eventId;
       const products = (o.products as any[]) || [];
       const total = products.reduce((s, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
-      const whatsapp = (cust.whatsapp || "").trim() || null;
+      const whatsapp = (cust.whatsapp || "").trim() || regPhoneByCustomer.get(o.customer_id) || null;
 
       const st: HandleOrderStatus = statusMap.get(key) || {
         openCurrent: 0, openOther: 0,
