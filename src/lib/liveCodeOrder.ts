@@ -4,6 +4,7 @@ import type { DbOrderProduct, DbOrder } from "@/types/database";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
+import { isPresenterSizeAllowed } from "@/lib/livePresenterProducts";
 
 const db = supabase as any;
 const numId = (v?: string | null) => String(v || "").split("/").pop() || "";

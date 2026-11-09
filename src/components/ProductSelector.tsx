@@ -20,6 +20,8 @@ interface ProductSelectorProps {
   onAddProduct: (product: DbOrderProduct) => void;
   onRemoveProduct: (productId: string) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
+  /** Na live, respeita as numerações liberadas no painel da apresentadora. */
+  eventId?: string;
 }
 
 export function ProductSelector({
@@ -27,6 +29,7 @@ export function ProductSelector({
   onAddProduct,
   onRemoveProduct,
   onUpdateQuantity,
+  eventId,
 }: ProductSelectorProps) {
   const [allProducts, setAllProducts] = useState<ShopifyProduct[]>([]);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);

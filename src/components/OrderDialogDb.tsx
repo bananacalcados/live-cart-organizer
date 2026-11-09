@@ -1206,6 +1206,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 onAddProduct={handleAddLocalProduct}
                 onRemoveProduct={handleRemoveLocalProduct}
                 onUpdateQuantity={handleUpdateLocalQuantity}
+                eventId={eventId}
               />
 
               {/* Discount & Extras - inline below products */}
