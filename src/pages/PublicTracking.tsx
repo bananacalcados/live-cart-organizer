@@ -16,6 +16,7 @@ type TrackingData = {
   destination_state?: string | null;
   local_delivery?: boolean;
   delivery_estimate?: DeliveryEstimate | null;
+  delivery_estimate_pending?: boolean;
   events: Ev[];
 };
 
@@ -122,6 +123,14 @@ export default function PublicTracking() {
             </div>
           )}
         </section>
+
+        {data?.delivery_estimate_pending && !data.delivery_estimate && !data.local_delivery && (
+          <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-5" aria-label="Previsão de entrega">
+            <p className="text-xs font-medium text-muted-foreground">Previsão de entrega</p>
+            <p className="text-base font-semibold text-foreground mt-1">Calculando uma estimativa para o seu CEP...</p>
+            <p className="text-xs text-muted-foreground mt-1">Ela aparecerá aqui em instantes.</p>
+          </section>
+        )}
 
         {data?.delivery_estimate && !data.local_delivery && (
           <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-5" aria-label="Previsão de entrega">

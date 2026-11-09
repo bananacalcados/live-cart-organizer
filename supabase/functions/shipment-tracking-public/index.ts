@@ -169,6 +169,18 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
     const localDelivery = sim.kind === 'order' &&
       isGovernadorValadares(sim.destination_city, sim.destination_state);
 
+    // Pedidos anteriores à estimativa automática são cotados uma única vez,
+    // em segundo plano. A resposta atual não espera a transportadora.
+    if (
+      sim.kind === 'order' && !localDelivery && sim.fulfillment !== 'pickup' &&
+      !sim.real_tracking_code && !sim.delivered_at && sim.delivery_estimate == null
+    ) {
+      const { error: estimateError } = await supabase.rpc('request_shipment_delivery_estimate', {
+        p_shipment_id: sim.id,
+      });
+      if (!estimateError) sim.delivery_estimate = { kind: 'quoting' };
+    }
+
     // Consulta sob demanda: etiquetas do contrato próprio usam o Rastro/SRO;
     // as demais continuam na Frenet. O vínculo exato pedido + código evita trocar a origem.
     if (
@@ -389,6 +401,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
         destination_state: (sim.destination_state as string | null) ?? null,
         local_delivery: localDelivery,
         delivery_estimate: deliveryEstimate,
+        delivery_estimate_pending: rawEstimate?.kind === 'quoting',
         order_reference: (sim.order_reference as string | null) ?? null,
         posted_at: events[0]?.at ?? null,
         events: visible,
