@@ -587,7 +587,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }
 
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
-    const serieRet = ret.Serie ? Number(ret.Serie) : 1;
+    const serieRet = ret.Serie ? Number(ret.Serie) : nfeSerie;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
     const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
