@@ -4006,6 +4006,7 @@ export type Database = {
           is_active: boolean
           is_pilot: boolean
           legal_name: string
+          nfe_serie: number
           notes: string | null
           phone: string | null
           regime_tributario: Database["public"]["Enums"]["regime_tributario"]
@@ -4042,6 +4043,7 @@ export type Database = {
           is_active?: boolean
           is_pilot?: boolean
           legal_name: string
+          nfe_serie?: number
           notes?: string | null
           phone?: string | null
           regime_tributario?: Database["public"]["Enums"]["regime_tributario"]
@@ -4078,6 +4080,7 @@ export type Database = {
           is_active?: boolean
           is_pilot?: boolean
           legal_name?: string
+          nfe_serie?: number
           notes?: string | null
           phone?: string | null
           regime_tributario?: Database["public"]["Enums"]["regime_tributario"]
