@@ -330,7 +330,10 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
     if (devolvidos.length === 0) { toast.error("Selecione ao menos 1 item devolvido"); return; }
     if (tipo === "troca") {
       const validos = repos.filter((r) => r.sku && r.produto_nome);
-      if (validos.length === 0) { toast.error("Selecione o(s) produto(s) de reposição"); return; }
+      // Sem reposição é permitido: a cliente pode escolher o produto depois de postar.
+      if (validos.length === 0 && modoExpedicao === "despacho_antecipado") {
+        toast.error("Despacho antecipado precisa do produto de reposição"); return;
+      }
     }
 
     if (tipo === "troca" && modoExpedicao === "despacho_antecipado" && !motivoExcecao.trim()) {
@@ -680,7 +683,7 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
                       <Plus className="h-3 w-3 mr-1" /> Adicionar
                     </Button>
                   </div>
-                  {repos.length === 0 && <p className="text-[11px] text-pos-white/40">Nenhum produto de reposição.</p>}
+                  {repos.length === 0 && <p className="text-[11px] text-pos-white/40">Nenhum produto de reposição — pode criar a troca assim e escolher o produto depois.</p>}
                   {repos.map((r) => (
                     <div key={r.id} className="flex items-end gap-2">
                       <div className="flex-1">
