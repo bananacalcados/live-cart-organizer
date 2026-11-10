@@ -24754,6 +24754,45 @@ export type Database = {
           },
         ]
       }
+      store_dispatch_tests: {
+        Row: {
+          created_at: string
+          dispatch_id: string | null
+          id: string
+          phone: string | null
+          phone_suffix8: string
+          planned_send_at: string | null
+          recipient_name: string | null
+          test_round: number
+          unified_customer_id: string | null
+          variant: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_id?: string | null
+          id?: string
+          phone?: string | null
+          phone_suffix8: string
+          planned_send_at?: string | null
+          recipient_name?: string | null
+          test_round: number
+          unified_customer_id?: string | null
+          variant: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_id?: string | null
+          id?: string
+          phone?: string | null
+          phone_suffix8?: string
+          planned_send_at?: string | null
+          recipient_name?: string | null
+          test_round?: number
+          unified_customer_id?: string | null
+          variant?: string
+        }
+        Relationships: []
+      }
       strategy_tasks: {
         Row: {
           completed_at: string | null
