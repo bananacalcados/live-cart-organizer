@@ -59,7 +59,7 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, print
   return <div className="space-y-3 rounded-md border border-border p-3">
     <p className="font-bold flex items-center gap-2"><Tag className="h-4 w-4" />Correios (contrato)</p>
     {error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
-    {!shipment && !preview && <Button onClick={openPreview} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Tag className="h-4 w-4 mr-2" />}Gerar etiqueta Correios</Button>}
+    {!shipment && !preview && <Button onClick={() => openPreview()} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Tag className="h-4 w-4 mr-2" />}Gerar etiqueta Correios</Button>}
     {!shipment && preview && <div className="space-y-2 text-sm">
       <p><b>Serviço:</b> {preview.summary.servico} · {Number(preview.summary.price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
       <p><b>Pacote:</b> {preview.summary.package.peso_g} g · {preview.summary.package.c}×{preview.summary.package.l}×{preview.summary.package.a} cm</p>
