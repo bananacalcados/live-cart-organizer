@@ -663,6 +663,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
     // Rejeição 539 (número já usado por outra nota na SEFAZ): reserva o próximo número e tenta de novo.
+    const nfeSerie = Number(company.nfe_serie) >= 1 ? Number(company.nfe_serie) : 1;
     for (let dupAttempt = 0; ; dupAttempt++) {
     // 6. Reutiliza uma emissão ativa/autorizada ou reserva número + pendência atomicamente.
     // A trava no banco impede dois cliques/workers de chamarem o provedor para a mesma venda.
@@ -671,7 +672,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       p_pos_sale_id: order.source === "sale" ? order.source_id : null,
       p_order_id: order.source === "order" ? order.source_id : null,
       p_modelo: 55,
-      p_serie: 1,
+      p_serie: nfeSerie,
       p_ambiente: ambiente,
       p_valor_total: valorTotalNota,
       p_cpf_destinatario: cpfDest,
@@ -738,7 +739,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         Descricao: "Pago no checkout online",
         VlPago: valorTotalNota,
       }],
-    }, claim, 1);
+    }, claim, nfeSerie);
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 
@@ -801,8 +802,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         console.error("[nfe-emitir] base64 decode/upload error", e);
       }
     }
-    const numeroRet = ret.Numero ? Number(ret.Numero) : null;
-    const serieRet = ret.Serie ? Number(ret.Serie) : 1;
+    const numeroRet = ret.Numero ? Number(ret.Numero) : doc.numero;
+    const serieRet = ret.Serie ? Number(ret.Serie) : nfeSerie;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
     const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;

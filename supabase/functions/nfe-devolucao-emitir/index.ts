@@ -472,8 +472,9 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
 
     // 7. Reserva a mesma sequência das NF-e de venda e cria o documento pendente.
     // Assim uma devolução não consome um número que uma venda também possa receber.
+    const nfeSerie = Number(company.nfe_serie) >= 1 ? Number(company.nfe_serie) : 1;
     const { data: numberData, error: numberErr } = await supabase.rpc("get_next_fiscal_number", {
-      p_company_id: companyId, p_modelo: 55, p_serie: 1, p_ambiente: ambiente,
+      p_company_id: companyId, p_modelo: 55, p_serie: nfeSerie, p_ambiente: ambiente,
     });
     const reservedNumber = Number(numberData?.[0]?.next_number);
     if (numberErr || !Number.isSafeInteger(reservedNumber) || reservedNumber < 1) {
@@ -482,7 +483,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
       company_id: companyId,
       pos_sale_id: pedidoOriginalId,
-      modelo: 55, serie: 1, numero: reservedNumber,
+      modelo: 55, serie: nfeSerie, numero: reservedNumber,
       ambiente, status: "pending",
       finalidade: 4,
       tipo_operacao: "entrada",
@@ -504,7 +505,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 55,
       Numero: reservedNumber,
-      Serie: 1,
+      Serie: nfeSerie,
       NaturezaOperacao: "Devolucao de Mercadoria",
       Finalidade: 4,
       NFReferencia: [chaveOriginal],
@@ -586,7 +587,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }
 
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
-    const serieRet = ret.Serie ? Number(ret.Serie) : 1;
+    const serieRet = ret.Serie ? Number(ret.Serie) : nfeSerie;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
     const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
