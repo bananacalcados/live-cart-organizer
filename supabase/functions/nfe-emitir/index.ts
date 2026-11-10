@@ -662,6 +662,8 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     }
     const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
+    // Rejeição 539 (número já usado por outra nota na SEFAZ): reserva o próximo número e tenta de novo.
+    for (let dupAttempt = 0; ; dupAttempt++) {
     // 6. Reutiliza uma emissão ativa/autorizada ou reserva número + pendência atomicamente.
     // A trava no banco impede dois cliques/workers de chamarem o provedor para a mesma venda.
     const { data: claimData, error: claimErr } = await supabase.rpc("claim_fiscal_emission", {
@@ -836,6 +838,12 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       retry_count: 0,
     }).eq("id", doc.id);
 
+    const isNumberDuplicate = !ok && !sefazOffline && (codSefaz === 539 || msgLow.includes("duplicidade de nf-e, com diferen"));
+    if (isNumberDuplicate && dupAttempt < 24) {
+      console.warn(`[nfe-emitir] número ${doc.numero} já usado na SEFAZ; tentando o próximo`);
+      continue;
+    }
+
     if (ok || sefazOffline) {
       await resolveFiscalPending(supabase, order.source === "sale" ? "pos_sale" : "order", order.source_id);
     }
@@ -880,6 +888,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       response: respJson,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: httpResp });
 
+    }
   } catch (err: any) {
     console.error("[nfe-emitir]", err);
     return new Response(JSON.stringify({ error: err.message }), {
